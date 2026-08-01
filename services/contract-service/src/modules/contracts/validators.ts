@@ -49,3 +49,42 @@ export const amendContractBody = z.object({
 export type AmendContractBody = z.infer<typeof amendContractBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const markMilestoneLateBody = z.object({
+  achievedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "achievedDate must be YYYY-MM-DD"),
+  notes: z.string().max(500).optional(),
+});
+export type MarkMilestoneLateBody = z.infer<typeof markMilestoneLateBody>;
+
+export const completeMilestoneBody = z.object({
+  achievedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "achievedDate must be YYYY-MM-DD"),
+});
+export type CompleteMilestoneBody = z.infer<typeof completeMilestoneBody>;
+
+export const milestoneIdParam = z.object({
+  id: z.string().uuid(),
+  milestoneId: z.string().uuid(),
+});
+
+export const registerBondBody = z.object({
+  bondType: z.enum(["performance", "bank_guarantee", "security_deposit"]).default("performance"),
+  amountMinor: z.number().int().positive(),
+  currency: z.string().length(3).default("INR"),
+  issuer: z.string().min(1).max(256),
+  referenceNo: z.string().min(1).max(128),
+  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  validTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  notes: z.string().max(1000).optional(),
+});
+export type RegisterBondBody = z.infer<typeof registerBondBody>;
+
+export const transitionBondBody = z.object({
+  toStatus: z.enum(["released", "claimed", "forfeited"]),
+  notes: z.string().max(1000).optional(),
+});
+export type TransitionBondBody = z.infer<typeof transitionBondBody>;
+
+export const bondIdParam = z.object({
+  id: z.string().uuid(),
+  bondId: z.string().uuid(),
+});

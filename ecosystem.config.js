@@ -224,6 +224,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
 function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js") {
   return {
     name: `${name}-worker`,
+    // Court: dist/worker.js only exports startWorker(); dist/worker-main.js boots it.
     script: scriptFile,
     cwd: `${BASE}/services/${name}-service`,
     log_file: `${LOG_DIR}/${name}-worker.log`,
@@ -344,6 +345,7 @@ module.exports = {
     // the same compiled entrypoint the "pnpm worker" script uses.
     worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
+    worker("works",        "works_svc",        "civitas_works"),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",

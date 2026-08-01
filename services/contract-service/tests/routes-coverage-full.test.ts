@@ -2,6 +2,11 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { runWithTenant } from "@civitasone/db";
+import { db } from "../src/shared/db.js";
+import { contractContracts, contractMilestones, contractAmendments, contractPerformanceBonds } from "../src/modules/contracts/schema.js";
+import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000099";
 const ACTOR2 = "00000000-bbbb-4000-8000-000000000099";
@@ -981,5 +986,336 @@ describe("Error handler", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().correlationId).toBe(corrId);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PERFORMANCE BOND ROUTES
+// ══════════════════════════════════════════════════════════════════════════════
+describe("Performance bond routes", () => {
+  const ACTIVE_ID = "aaaaaaaa-bbbb-4000-8000-0000000000aa";
+  const BOND_ID = "bbbbbbbb-cccc-4000-8000-0000000000bb";
+
+  beforeAll(async () => {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, BOND_ID));
+      await tx.delete(contractContracts).where(eq(contractContracts.id, ACTIVE_ID));
+      await tx.insert(contractContracts).values({
+        id: ACTIVE_ID,
+        tenantId: TENANT,
+        contractNo: "CON-BOND-COV",
+        vendorId: CONTRACT_UUID,
+        title: "Coverage bond contract",
+        valueMinor: 1_000_000n,
+        currency: "INR",
+        startDate: "2026-01-01",
+        expiry: "2027-01-01",
+        status: "active",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+      await tx.insert(contractPerformanceBonds).values({
+        id: BOND_ID,
+        contractId: ACTIVE_ID,
+        tenantId: TENANT,
+        bondType: "performance",
+        amountMinor: 50_000n,
+        currency: "INR",
+        issuer: "SBI",
+        referenceNo: "BG-SEED-COV",
+        validFrom: "2026-01-01",
+        validTo: "2026-12-31",
+        status: "held",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    }));
+  });
+
+  it("GET /bonds → 200", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/contract/contracts/${ACTIVE_ID}/bonds`,
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json().data)).toBe(true);
+  });
+
+  it("POST /bonds → 202 on active contract", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${ACTIVE_ID}/bonds`,
+      headers: authHeader(),
+      payload: {
+        bondType: "bank_guarantee", amountMinor: 100000, currency: "INR",
+        issuer: "SBI", referenceNo: `BG-COV-${randomUUID().slice(0, 8)}`,
+        validFrom: "2026-01-01", validTo: "2026-12-31",
+      },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /bonds → 404 unknown contract", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${CONTRACT_UUID}/bonds`,
+      headers: authHeader(),
+      payload: {
+        bondType: "performance", amountMinor: 100000, currency: "INR",
+        issuer: "SBI", referenceNo: "BG-MISSING", validFrom: "2026-01-01", validTo: "2026-12-31",
+      },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("POST /bonds → 400 invalid body", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${ACTIVE_ID}/bonds`,
+      headers: authHeader(),
+      payload: { amountMinor: -1 },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("POST /bonds/:bondId/transition → 202", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${ACTIVE_ID}/bonds/${BOND_ID}/transition`,
+      headers: authHeader(),
+      payload: { toStatus: "released" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /bonds/:bondId/transition → 404 unknown contract", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${CONTRACT_UUID}/bonds/${BOND_ID}/transition`,
+      headers: authHeader(),
+      payload: { toStatus: "claimed" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("POST /bonds/:bondId/transition → 409 when bond not held", async () => {
+    const releasedId = "cccccccc-dddd-4000-8000-0000000000c1";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, releasedId));
+      await tx.insert(contractPerformanceBonds).values({
+        id: releasedId,
+        contractId: ACTIVE_ID,
+        tenantId: TENANT,
+        bondType: "performance",
+        amountMinor: 10_000n,
+        currency: "INR",
+        issuer: "SBI",
+        referenceNo: "BG-RELEASED",
+        validFrom: "2026-01-01",
+        validTo: "2026-12-31",
+        status: "released",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    }));
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/contract/contracts/${ACTIVE_ID}/bonds/${releasedId}/transition`,
+      headers: authHeader(),
+      payload: { toStatus: "claimed" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_STATUS");
+  });
+
+  it("POST /bonds/:bondId/transition → 404 unknown bond on known contract", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/contract/contracts/${ACTIVE_ID}/bonds/99999999-aaaa-4000-8000-000000000099/transition`,
+      headers: authHeader(),
+      payload: { toStatus: "released" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+
+  it("GET /bonds → 403 wrong role", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/contract/contracts/${ACTIVE_ID}/bonds`,
+      headers: authHeader(["citizen"]),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MILESTONE MUTATIONS + BOND GUARDS (command-path coverage)
+// ══════════════════════════════════════════════════════════════════════════════
+describe("Milestone command routes with seeded rows", () => {
+  const SEED_CONTRACT = "cccccccc-dddd-4000-8000-0000000000cc";
+  const SEED_MS_OPEN = "dddddddd-eeee-4000-8000-0000000000dd";
+  const SEED_MS_DONE = "eeeeeeee-ffff-4000-8000-0000000000ee";
+  const DRAFT_CONTRACT = "ffffffff-aaaa-4000-8000-0000000000ff";
+
+  beforeAll(async () => {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(contractMilestones).where(eq(contractMilestones.contractId, SEED_CONTRACT));
+      await tx.delete(contractAmendments).where(eq(contractAmendments.contractId, SEED_CONTRACT));
+      await tx.delete(contractContracts).where(eq(contractContracts.id, SEED_CONTRACT));
+      await tx.delete(contractContracts).where(eq(contractContracts.id, DRAFT_CONTRACT));
+
+      await tx.insert(contractContracts).values({
+        id: SEED_CONTRACT,
+        tenantId: TENANT,
+        contractNo: "CON-MS-COV",
+        vendorId: CONTRACT_UUID,
+        title: "Milestone coverage contract",
+        valueMinor: 2_000_000n,
+        currency: "INR",
+        startDate: "2026-01-01",
+        expiry: "2027-01-01",
+        status: "active",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+      await tx.insert(contractContracts).values({
+        id: DRAFT_CONTRACT,
+        tenantId: TENANT,
+        contractNo: "CON-DRAFT-COV",
+        vendorId: CONTRACT_UUID,
+        title: "Draft coverage contract",
+        valueMinor: 500_000n,
+        currency: "INR",
+        startDate: "2026-01-01",
+        expiry: "2027-01-01",
+        status: "draft",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+      await tx.insert(contractMilestones).values([
+        {
+          id: SEED_MS_OPEN,
+          contractId: SEED_CONTRACT,
+          tenantId: TENANT,
+          title: "Open milestone",
+          dueDate: "2026-06-01",
+          amountMinor: 500_000n,
+          status: "pending",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        },
+        {
+          id: SEED_MS_DONE,
+          contractId: SEED_CONTRACT,
+          tenantId: TENANT,
+          title: "Done milestone",
+          dueDate: "2026-03-01",
+          amountMinor: 250_000n,
+          status: "completed",
+          achievedDate: "2026-03-01",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        },
+      ]);
+      await tx.insert(contractAmendments).values({
+        id: "a1a1a1a1-b2b2-4000-8000-0000000000a1",
+        contractId: SEED_CONTRACT,
+        tenantId: TENANT,
+        amendmentNo: 1,
+        reason: "coverage",
+        valueDelta: 10_000n,
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    }));
+  });
+
+  it("GET /contracts/:id includes seeded amendments (listAmendments)", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/contract/contracts/${SEED_CONTRACT}`,
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json().amendments)).toBe(true);
+    expect(res.json().amendments.length).toBeGreaterThan(0);
+  });
+
+  it("PATCH milestones/:id/complete → 202 when milestone pending", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/contract/contracts/${SEED_CONTRACT}/milestones/${SEED_MS_OPEN}/complete`,
+      headers: authHeader(),
+      payload: { achievedDate: "2026-06-01" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("PATCH milestones/:id/late → 409 when already completed", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/contract/contracts/${SEED_CONTRACT}/milestones/${SEED_MS_DONE}/late`,
+      headers: authHeader(),
+      payload: { achievedDate: "2026-06-15", notes: "too late" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("ALREADY_COMPLETED");
+  });
+
+  it("PATCH milestones/:id/complete → 404 unknown milestone on known contract", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/contract/contracts/${SEED_CONTRACT}/milestones/${MILESTONE_UUID}/complete`,
+      headers: authHeader(),
+      payload: { achievedDate: "2026-06-01" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+
+  it("PATCH milestones/:id/late → 202 for pending milestone", async () => {
+    // Re-open a dedicated milestone for late path
+    const lateId = "b2b2b2b2-c3c3-4000-8000-0000000000b2";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(contractMilestones).where(eq(contractMilestones.id, lateId));
+      await tx.insert(contractMilestones).values({
+        id: lateId,
+        contractId: SEED_CONTRACT,
+        tenantId: TENANT,
+        title: "Late path",
+        dueDate: "2026-05-01",
+        amountMinor: 100_000n,
+        status: "pending",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    }));
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/contract/contracts/${SEED_CONTRACT}/milestones/${lateId}/late`,
+      headers: authHeader(),
+      payload: { achievedDate: "2026-05-20", notes: "rain" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /bonds → 409 on draft contract", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${DRAFT_CONTRACT}/bonds`,
+      headers: authHeader(),
+      payload: {
+        bondType: "performance", amountMinor: 10000, currency: "INR",
+        issuer: "SBI", referenceNo: "BG-DRAFT", validFrom: "2026-01-01", validTo: "2026-12-31",
+      },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_STATUS");
+  });
+
+  it("POST /bonds → 400 when validTo before validFrom", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/contract/contracts/${SEED_CONTRACT}/bonds`,
+      headers: authHeader(),
+      payload: {
+        bondType: "performance", amountMinor: 10000, currency: "INR",
+        issuer: "SBI", referenceNo: "BG-DATES", validFrom: "2026-12-31", validTo: "2026-01-01",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 });

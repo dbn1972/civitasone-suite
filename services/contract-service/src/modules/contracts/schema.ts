@@ -32,6 +32,8 @@ export const contractMilestones = contractsSchema.table("contract_milestones", {
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("pending"),
   achievedDate: date("achieved_date"),
+  penaltyMinor: bigint("penalty_minor", { mode: "bigint" }).notNull().default(0n),
+  netPayableMinor: bigint("net_payable_minor", { mode: "bigint" }),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -59,4 +61,26 @@ export type ContractRow    = typeof contractContracts.$inferSelect;
 export type ContractInsert = typeof contractContracts.$inferInsert;
 export type AmendmentRow   = typeof contractAmendments.$inferSelect;
 
-export const schema = { contractContracts, contractMilestones, contractAmendments };
+export const contractPerformanceBonds = contractsSchema.table("contract_performance_bonds", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  contractId:   uuid("contract_id").notNull(),
+  tenantId:     uuid("tenant_id").notNull(),
+  bondType:     varchar("bond_type", { length: 32 }).notNull().default("performance"),
+  amountMinor:  bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  currency:     char("currency", { length: 3 }).notNull().default("INR"),
+  issuer:       text("issuer").notNull(),
+  referenceNo:  text("reference_no").notNull(),
+  validFrom:    date("valid_from").notNull(),
+  validTo:      date("valid_to").notNull(),
+  status:       varchar("status", { length: 24 }).notNull().default("held"),
+  notes:        text("notes"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+  updatedBy:    uuid("updated_by").notNull(),
+  version:      integer("version").notNull().default(1),
+});
+
+export type PerformanceBondRow = typeof contractPerformanceBonds.$inferSelect;
+
+export const schema = { contractContracts, contractMilestones, contractAmendments, contractPerformanceBonds };

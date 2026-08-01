@@ -1244,6 +1244,32 @@ export async function getContractById(id: string): Promise<LoaderResult<Record<s
     mapResponse: (payload) => (isRecord(payload) ? payload as Record<string, unknown> : null),
   });
 }
+
+export async function getContractMilestones(id: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>(`/api/v1/contract/contracts/${id}/milestones`, [], {
+    revalidateSeconds: 15,
+    telemetryKey: "contract.milestones",
+    mapResponse: (payload) => {
+      if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+      if (isRecord(payload) && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
+      return [];
+    },
+  });
+}
+
+export async function getContractBonds(id: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>(`/api/v1/contract/contracts/${id}/bonds`, [], {
+    revalidateSeconds: 15,
+    telemetryKey: "contract.bonds",
+    mapResponse: (payload) => {
+      if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+      if (isRecord(payload) && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
+      return [];
+    },
+  });
+}
+
+
 export const getInventoryItems = moduleLoader("/api/v1/inventory/items", "inventory.items");
 export const getTelephonyCalls = moduleLoader("/api/v1/telephony/calls", "telephony.calls");
 export const getLocations = moduleLoader("/api/v1/locations", "locations.list");
