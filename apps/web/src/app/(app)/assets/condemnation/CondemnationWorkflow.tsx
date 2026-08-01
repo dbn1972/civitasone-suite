@@ -87,7 +87,7 @@ function TextInput({
   error?: string;
   placeholder?: string;
   required?: boolean;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
+  inputRef?: React.Ref<HTMLInputElement>;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
