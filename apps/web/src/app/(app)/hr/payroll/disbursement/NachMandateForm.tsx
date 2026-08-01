@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserJson, browserFetch } from "@/lib/api/browserClient";
 
@@ -19,11 +19,16 @@ export function NachMandateForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [employeeRefInvalid, setEmployeeRefInvalid] = useState(false);
+  const [amountInvalid, setAmountInvalid] = useState(false);
+  const [startInvalid, setStartInvalid] = useState(false);
+  const [endInvalid, setEndInvalid] = useState(false);
 
   const [statusRef, setStatusRef] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusResult, setStatusResult] = useState<MandateResult | null>(null);
+  const [statusRefInvalid, setStatusRefInvalid] = useState(false);
 
   const empIdField = useId();
   const amtField = useId();
@@ -33,15 +38,37 @@ export function NachMandateForm() {
   const acctField = useId();
   const errId = useId();
   const refField = useId();
+  const statusErrId = useId();
 
-  const employeeRefInvalid = !!error && !employeeRef.trim();
+  const employeeRefFieldRef = useRef<HTMLInputElement>(null);
+  const amountFieldRef = useRef<HTMLInputElement>(null);
+  const startFieldRef = useRef<HTMLInputElement>(null);
+  const endFieldRef = useRef<HTMLInputElement>(null);
+  const statusRefFieldRef = useRef<HTMLInputElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!employeeRef.trim() || !amountRupees.trim() || !startDate || !endDate) {
+    const empMissing = !employeeRef.trim();
+    const amtMissing = !amountRupees.trim();
+    const startMissing = !startDate;
+    const endMissing = !endDate;
+    setEmployeeRefInvalid(empMissing);
+    setAmountInvalid(amtMissing);
+    setStartInvalid(startMissing);
+    setEndInvalid(endMissing);
+    if (empMissing || amtMissing || startMissing || endMissing) {
       setError("Employee reference, amount, start date and end date are required.");
+      if (empMissing) {
+        employeeRefFieldRef.current?.focus();
+      } else if (amtMissing) {
+        amountFieldRef.current?.focus();
+      } else if (startMissing) {
+        startFieldRef.current?.focus();
+      } else {
+        endFieldRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -81,9 +108,12 @@ export function NachMandateForm() {
     setStatusError(null);
     setStatusResult(null);
     if (!statusRef.trim()) {
+      setStatusRefInvalid(true);
       setStatusError("Enter a mandate reference to check its status.");
+      statusRefFieldRef.current?.focus();
       return;
     }
+    setStatusRefInvalid(false);
     setStatusBusy(true);
     try {
       const res = await browserFetch(`v1/payroll/nach/mandates/${encodeURIComponent(statusRef.trim())}/status`, {
@@ -114,8 +144,12 @@ export function NachMandateForm() {
             </label>
             <input
               id={empIdField}
+              ref={employeeRefFieldRef}
               value={employeeRef}
-              onChange={(e) => setEmployeeRef(e.target.value)}
+              onChange={(e) => {
+                setEmployeeRef(e.target.value);
+                setEmployeeRefInvalid(false);
+              }}
               aria-required="true"
               aria-invalid={employeeRefInvalid || undefined}
               aria-describedby={employeeRefInvalid ? errId : undefined}
@@ -128,12 +162,18 @@ export function NachMandateForm() {
             </label>
             <input
               id={amtField}
+              ref={amountFieldRef}
               type="number"
               min="0"
               step="0.01"
               value={amountRupees}
-              onChange={(e) => setAmountRupees(e.target.value)}
+              onChange={(e) => {
+                setAmountRupees(e.target.value);
+                setAmountInvalid(false);
+              }}
               aria-required="true"
+              aria-invalid={amountInvalid || undefined}
+              aria-describedby={amountInvalid ? errId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
@@ -168,10 +208,16 @@ export function NachMandateForm() {
             </label>
             <input
               id={startField}
+              ref={startFieldRef}
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setStartInvalid(false);
+              }}
               aria-required="true"
+              aria-invalid={startInvalid || undefined}
+              aria-describedby={startInvalid ? errId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
@@ -181,10 +227,16 @@ export function NachMandateForm() {
             </label>
             <input
               id={endField}
+              ref={endFieldRef}
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setEndInvalid(false);
+              }}
               aria-required="true"
+              aria-invalid={endInvalid || undefined}
+              aria-describedby={endInvalid ? errId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
@@ -200,7 +252,7 @@ export function NachMandateForm() {
           </p>
         )}
         {message && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
             {message}
           </p>
         )}
@@ -229,8 +281,14 @@ export function NachMandateForm() {
             <label htmlFor={refField} style={{ fontSize: 13, fontWeight: 600 }}>Check Mandate Status by Reference</label>
             <input
               id={refField}
+              ref={statusRefFieldRef}
               value={statusRef}
-              onChange={(e) => setStatusRef(e.target.value)}
+              onChange={(e) => {
+                setStatusRef(e.target.value);
+                setStatusRefInvalid(false);
+              }}
+              aria-invalid={statusRefInvalid || undefined}
+              aria-describedby={statusRefInvalid ? statusErrId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
@@ -239,12 +297,12 @@ export function NachMandateForm() {
           </button>
         </div>
         {statusError && (
-          <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
+          <p id={statusErrId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
             {statusError}
           </p>
         )}
         {statusResult && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
             Status: {statusResult.status ?? "unknown"}
           </p>
         )}

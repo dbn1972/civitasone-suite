@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -14,16 +14,30 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [result, setResult] = useState<ReturnSummary | null>(null);
+  const [runInvalid, setRunInvalid] = useState(false);
+  const [contentInvalid, setContentInvalid] = useState(false);
 
   const runSelectId = useId();
   const contentId = useId();
+  const errId = useId();
+  const runSelectRef = useRef<HTMLSelectElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setResult(null);
-    if (!runId || !content.trim()) {
+    const runMissing = !runId;
+    const contentMissing = !content.trim();
+    setRunInvalid(runMissing);
+    setContentInvalid(contentMissing);
+    if (runMissing || contentMissing) {
       setError("Select a payroll run and paste the NACH return file content.");
+      if (runMissing) {
+        runSelectRef.current?.focus();
+      } else {
+        contentRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -56,9 +70,15 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
           </label>
           <select
             id={runSelectId}
+            ref={runSelectRef}
             value={runId}
-            onChange={(e) => setRunId(e.target.value)}
+            onChange={(e) => {
+              setRunId(e.target.value);
+              setRunInvalid(false);
+            }}
             aria-required="true"
+            aria-invalid={runInvalid || undefined}
+            aria-describedby={runInvalid ? errId : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           >
             {runs.map((r) => (
@@ -72,10 +92,16 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
           </label>
           <textarea
             id={contentId}
+            ref={contentRef}
             rows={8}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setContentInvalid(false);
+            }}
             aria-required="true"
+            aria-invalid={contentInvalid || undefined}
+            aria-describedby={contentInvalid ? errId : undefined}
             placeholder="Paste the fixed-width bank return file content here…"
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", fontFamily: "monospace", fontSize: 12 }}
           />
@@ -87,12 +113,12 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
         </button>
       </div>
       {error && !confirmOpen && (
-        <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
+        <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
           {error}
         </p>
       )}
       {result && (
-        <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+        <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
           Processed: {result.credited} credited, {result.returned} returned, {result.unmatched} unmatched.
         </p>
       )}

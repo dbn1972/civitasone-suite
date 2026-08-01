@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -16,17 +16,31 @@ export function CreateDdoForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [codeInvalid, setCodeInvalid] = useState(false);
+  const [nameInvalid, setNameInvalid] = useState(false);
 
   const codeField = useId();
   const nameField = useId();
   const deptField = useId();
+  const errId = useId();
+  const codeRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!ddoCode.trim() || !name.trim()) {
+    const codeMissing = !ddoCode.trim();
+    const nameMissing = !name.trim();
+    setCodeInvalid(codeMissing);
+    setNameInvalid(nameMissing);
+    if (codeMissing || nameMissing) {
       setError("DDO code and name are required.");
+      if (codeMissing) {
+        codeRef.current?.focus();
+      } else {
+        nameRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -65,13 +79,33 @@ export function CreateDdoForm() {
             <label htmlFor={codeField} style={{ fontSize: 13, fontWeight: 600 }}>
               DDO Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={codeField} value={ddoCode} onChange={(e) => setDdoCode(e.target.value)} maxLength={32} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={codeField}
+              ref={codeRef}
+              value={ddoCode}
+              onChange={(e) => { setDdoCode(e.target.value); setCodeInvalid(false); }}
+              maxLength={32}
+              aria-required="true"
+              aria-invalid={codeInvalid || undefined}
+              aria-describedby={codeInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameField} style={{ fontSize: 13, fontWeight: 600 }}>
               Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={nameField} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={nameField}
+              ref={nameRef}
+              value={name}
+              onChange={(e) => { setName(e.target.value); setNameInvalid(false); }}
+              maxLength={200}
+              aria-required="true"
+              aria-invalid={nameInvalid || undefined}
+              aria-describedby={nameInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={deptField} style={{ fontSize: 13, fontWeight: 600 }}>Department IDs (comma-separated UUIDs)</label>
@@ -84,10 +118,10 @@ export function CreateDdoForm() {
           </button>
         </div>
         {error && !confirmOpen && (
-          <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
+          <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
         )}
         {message && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
         )}
       </Card>
 

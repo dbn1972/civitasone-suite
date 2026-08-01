@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -34,6 +34,12 @@ const MONEY_LABELS: Record<MoneyField, string> = {
 
 const MONEY_FIELDS = Object.keys(MONEY_LABELS) as MoneyField[];
 
+// Non-money required fields, in tab/focus order, so the "first invalid field"
+// lookup below can walk one flat list instead of a chain of if/else.
+const REQUIRED_TOP_FIELDS = ["employeeId", "separationDate", "completedYears", "leaveBalanceDays", "fyStartYear"] as const;
+type TopField = (typeof REQUIRED_TOP_FIELDS)[number];
+type FieldKey = TopField | MoneyField;
+
 function toMinorString(rupees: string): string {
   const n = Number(rupees || "0");
   return Math.round((Number.isFinite(n) ? n : 0) * 100).toString();
@@ -57,7 +63,9 @@ export function ComputeFnfForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<Set<FieldKey>>(new Set());
 
+  const baseId = useId();
   const empIdField = useId();
   const dateField = useId();
   const sepTypeField = useId();
@@ -67,20 +75,60 @@ export function ComputeFnfForm() {
   const leaveField = useId();
   const remainingField = useId();
   const fyField = useId();
+  const errId = useId();
+
+  const topFieldRefs = useRef<Partial<Record<TopField, HTMLInputElement | null>>>({});
+  const moneyFieldRefs = useRef<Partial<Record<MoneyField, HTMLInputElement | null>>>({});
 
   function setMoneyField(field: MoneyField, value: string) {
     setMoney((prev) => ({ ...prev, [field]: value }));
+    if (invalidFields.has(field)) {
+      setInvalidFields((prev) => {
+        const next = new Set(prev);
+        next.delete(field);
+        return next;
+      });
+    }
+  }
+
+  function clearTopInvalid(field: TopField) {
+    if (invalidFields.has(field)) {
+      setInvalidFields((prev) => {
+        const next = new Set(prev);
+        next.delete(field);
+        return next;
+      });
+    }
   }
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    const missingRequired =
-      !employeeId.trim() || !separationDate || !completedYears || !leaveBalanceDays || !fyStartYear ||
-      REQUIRED_MONEY_FIELDS.some((f) => !money[f].trim());
-    if (missingRequired) {
+
+    const missing = new Set<FieldKey>();
+    if (!employeeId.trim()) missing.add("employeeId");
+    if (!separationDate) missing.add("separationDate");
+    if (!completedYears) missing.add("completedYears");
+    if (!leaveBalanceDays) missing.add("leaveBalanceDays");
+    if (!fyStartYear) missing.add("fyStartYear");
+    for (const f of REQUIRED_MONEY_FIELDS) {
+      if (!money[f].trim()) missing.add(f);
+    }
+
+    setInvalidFields(missing);
+
+    if (missing.size > 0) {
       setError("Employee, separation date, completed years, leave balance, FY start year and the required money fields are all required.");
+      const orderedKeys: FieldKey[] = [...REQUIRED_TOP_FIELDS, ...REQUIRED_MONEY_FIELDS];
+      const firstInvalid = orderedKeys.find((k) => missing.has(k));
+      if (firstInvalid) {
+        if ((REQUIRED_TOP_FIELDS as readonly string[]).includes(firstInvalid)) {
+          topFieldRefs.current[firstInvalid as TopField]?.focus();
+        } else {
+          moneyFieldRefs.current[firstInvalid as MoneyField]?.focus();
+        }
+      }
       return;
     }
     setConfirmOpen(true);
@@ -137,13 +185,32 @@ export function ComputeFnfForm() {
               <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
                 Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input id={empIdField} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input
+                id={empIdField}
+                ref={(el) => { topFieldRefs.current.employeeId = el; }}
+                value={employeeId}
+                onChange={(e) => { setEmployeeId(e.target.value); clearTopInvalid("employeeId"); }}
+                aria-required="true"
+                aria-invalid={invalidFields.has("employeeId") || undefined}
+                aria-describedby={invalidFields.has("employeeId") ? errId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateField} style={{ fontSize: 13, fontWeight: 600 }}>
                 Separation Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input id={dateField} type="date" value={separationDate} onChange={(e) => setSeparationDate(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input
+                id={dateField}
+                ref={(el) => { topFieldRefs.current.separationDate = el; }}
+                type="date"
+                value={separationDate}
+                onChange={(e) => { setSeparationDate(e.target.value); clearTopInvalid("separationDate"); }}
+                aria-required="true"
+                aria-invalid={invalidFields.has("separationDate") || undefined}
+                aria-describedby={invalidFields.has("separationDate") ? errId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={sepTypeField} style={{ fontSize: 13, fontWeight: 600 }}>Separation Type</label>
@@ -168,13 +235,35 @@ export function ComputeFnfForm() {
               <label htmlFor={yearsField} style={{ fontSize: 13, fontWeight: 600 }}>
                 Completed Years <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input id={yearsField} type="number" min={0} value={completedYears} onChange={(e) => setCompletedYears(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input
+                id={yearsField}
+                ref={(el) => { topFieldRefs.current.completedYears = el; }}
+                type="number"
+                min={0}
+                value={completedYears}
+                onChange={(e) => { setCompletedYears(e.target.value); clearTopInvalid("completedYears"); }}
+                aria-required="true"
+                aria-invalid={invalidFields.has("completedYears") || undefined}
+                aria-describedby={invalidFields.has("completedYears") ? errId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={leaveField} style={{ fontSize: 13, fontWeight: 600 }}>
                 Leave Balance (days) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input id={leaveField} type="number" min={0} value={leaveBalanceDays} onChange={(e) => setLeaveBalanceDays(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input
+                id={leaveField}
+                ref={(el) => { topFieldRefs.current.leaveBalanceDays = el; }}
+                type="number"
+                min={0}
+                value={leaveBalanceDays}
+                onChange={(e) => { setLeaveBalanceDays(e.target.value); clearTopInvalid("leaveBalanceDays"); }}
+                aria-required="true"
+                aria-invalid={invalidFields.has("leaveBalanceDays") || undefined}
+                aria-describedby={invalidFields.has("leaveBalanceDays") ? errId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={remainingField} style={{ fontSize: 13, fontWeight: 600 }}>Remaining Months to Retirement</label>
@@ -184,7 +273,17 @@ export function ComputeFnfForm() {
               <label htmlFor={fyField} style={{ fontSize: 13, fontWeight: 600 }}>
                 FY Start Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input id={fyField} type="number" value={fyStartYear} onChange={(e) => setFyStartYear(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input
+                id={fyField}
+                ref={(el) => { topFieldRefs.current.fyStartYear = el; }}
+                type="number"
+                value={fyStartYear}
+                onChange={(e) => { setFyStartYear(e.target.value); clearTopInvalid("fyStartYear"); }}
+                aria-required="true"
+                aria-invalid={invalidFields.has("fyStartYear") || undefined}
+                aria-describedby={invalidFields.has("fyStartYear") ? errId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
             </div>
           </div>
 
@@ -192,8 +291,9 @@ export function ComputeFnfForm() {
             <legend style={{ fontSize: 13, fontWeight: 700, padding: "0 6px" }}>Amounts (₹)</legend>
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
               {MONEY_FIELDS.map((f) => {
-                const id = `fnf-money-${f}`;
+                const id = `${baseId}-${f}`;
                 const required = REQUIRED_MONEY_FIELDS.includes(f);
+                const invalid = invalidFields.has(f);
                 return (
                   <div key={f} style={{ display: "grid", gap: 6 }}>
                     <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -201,12 +301,15 @@ export function ComputeFnfForm() {
                     </label>
                     <input
                       id={id}
+                      ref={(el) => { moneyFieldRefs.current[f] = el; }}
                       type="number"
                       min={0}
                       step="0.01"
                       value={money[f]}
                       onChange={(e) => setMoneyField(f, e.target.value)}
                       aria-required={required}
+                      aria-invalid={invalid || undefined}
+                      aria-describedby={invalid ? errId : undefined}
                       style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                     />
                   </div>
@@ -222,10 +325,10 @@ export function ComputeFnfForm() {
           </div>
 
           {error && !confirmOpen && (
-            <p role="alert" className="pill bad" style={{ width: "fit-content" }}>{error}</p>
+            <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>{error}</p>
           )}
           {message && (
-            <p role="status" aria-live="polite" className="pill good" style={{ width: "fit-content" }}>{message}</p>
+            <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>
           )}
         </div>
       </Card>

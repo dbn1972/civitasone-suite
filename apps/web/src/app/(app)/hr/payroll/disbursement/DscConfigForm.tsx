@@ -31,21 +31,37 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
   const router = useRouter();
   const [passphrase, setPassphrase] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const passRef = useRef<HTMLInputElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Separate error state per action so a delete failure never gets announced
+  // under the upload form's fields (and vice versa).
   const [error, setError] = useState<string | undefined>();
+  const [deleteError, setDeleteError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [fileInvalid, setFileInvalid] = useState(false);
+  const [passInvalid, setPassInvalid] = useState(false);
 
   const fileId = useId();
   const passId = useId();
+  const errId = useId();
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!fileRef.current?.files?.[0] || !passphrase.trim()) {
+    const hasFile = !!fileRef.current?.files?.[0];
+    const hasPass = !!passphrase.trim();
+    setFileInvalid(!hasFile);
+    setPassInvalid(!hasPass);
+    if (!hasFile || !hasPass) {
       setError("Select a P12 file and enter its passphrase.");
+      if (!hasFile) {
+        fileRef.current?.focus();
+      } else {
+        passRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -76,14 +92,14 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
 
   async function remove() {
     setBusy(true);
-    setError(undefined);
+    setDeleteError(undefined);
     try {
       await browserJson("v1/payroll/dsc-config", { method: "DELETE" });
       setDeleteConfirmOpen(false);
       setMessage("DSC configuration removed. This tenant now runs in unsigned mode.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove the DSC configuration.");
+      setDeleteError(err instanceof Error ? err.message : "Could not remove the DSC configuration.");
     } finally {
       setBusy(false);
     }
@@ -127,7 +143,17 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
             <label htmlFor={fileId} style={{ fontSize: 13, fontWeight: 600 }}>
               P12 Keystore File <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={fileId} ref={fileRef} type="file" accept=".p12,.pfx" aria-required="true" style={{ fontSize: 13 }} />
+            <input
+              id={fileId}
+              ref={fileRef}
+              type="file"
+              accept=".p12,.pfx"
+              aria-required="true"
+              aria-invalid={fileInvalid || undefined}
+              aria-describedby={fileInvalid ? errId : undefined}
+              onChange={() => setFileInvalid(false)}
+              style={{ fontSize: 13 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={passId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -135,10 +161,16 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
             </label>
             <input
               id={passId}
+              ref={passRef}
               type="password"
               value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
+              onChange={(e) => {
+                setPassphrase(e.target.value);
+                setPassInvalid(false);
+              }}
               aria-required="true"
+              aria-invalid={passInvalid || undefined}
+              aria-describedby={passInvalid ? errId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
@@ -155,7 +187,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
               style={{ minHeight: 44 }}
               disabled={busy}
               onClick={() => {
-                setError(undefined);
+                setDeleteError(undefined);
                 setDeleteConfirmOpen(true);
               }}
             >
@@ -163,13 +195,13 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
             </button>
           )}
         </div>
-        {error && !confirmOpen && !deleteConfirmOpen && (
-          <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
+        {error && !confirmOpen && (
+          <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
             {error}
           </p>
         )}
         {message && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
             {message}
           </p>
         )}
@@ -192,7 +224,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
           danger
           confirmLabel="Remove certificate"
           busy={busy}
-          errorMessage={error}
+          errorMessage={deleteError}
           description={<>This tenant will revert to unsigned mode until a new certificate is uploaded. This action is irreversible.</>}
           onConfirm={() => void remove()}
           onCancel={() => !busy && setDeleteConfirmOpen(false)}

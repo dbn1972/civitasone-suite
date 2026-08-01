@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -20,6 +20,11 @@ export function CreateLoanForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [loanNoInvalid, setLoanNoInvalid] = useState(false);
+  const [empIdInvalid, setEmpIdInvalid] = useState(false);
+  const [principalInvalid, setPrincipalInvalid] = useState(false);
+  const [emiInvalid, setEmiInvalid] = useState(false);
+  const [tenureInvalid, setTenureInvalid] = useState(false);
 
   const loanNoField = useId();
   const empIdField = useId();
@@ -28,13 +33,41 @@ export function CreateLoanForm() {
   const emiField = useId();
   const tenureField = useId();
   const rateField = useId();
+  const errId = useId();
+
+  const loanNoRef = useRef<HTMLInputElement>(null);
+  const empIdRef = useRef<HTMLInputElement>(null);
+  const principalRef = useRef<HTMLInputElement>(null);
+  const emiRef = useRef<HTMLInputElement>(null);
+  const tenureRef = useRef<HTMLInputElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!loanNo.trim() || !employeeId.trim() || !principalRupees || !emiRupees || !tenureMonths) {
+    const loanNoMissing = !loanNo.trim();
+    const empIdMissing = !employeeId.trim();
+    const principalMissing = !principalRupees;
+    const emiMissing = !emiRupees;
+    const tenureMissing = !tenureMonths;
+    setLoanNoInvalid(loanNoMissing);
+    setEmpIdInvalid(empIdMissing);
+    setPrincipalInvalid(principalMissing);
+    setEmiInvalid(emiMissing);
+    setTenureInvalid(tenureMissing);
+    if (loanNoMissing || empIdMissing || principalMissing || emiMissing || tenureMissing) {
       setError("Loan number, employee, principal, EMI and tenure are required.");
+      if (loanNoMissing) {
+        loanNoRef.current?.focus();
+      } else if (empIdMissing) {
+        empIdRef.current?.focus();
+      } else if (principalMissing) {
+        principalRef.current?.focus();
+      } else if (emiMissing) {
+        emiRef.current?.focus();
+      } else {
+        tenureRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -81,13 +114,32 @@ export function CreateLoanForm() {
             <label htmlFor={loanNoField} style={{ fontSize: 13, fontWeight: 600 }}>
               Loan No. <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={loanNoField} value={loanNo} onChange={(e) => setLoanNo(e.target.value)} maxLength={64} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={loanNoField}
+              ref={loanNoRef}
+              value={loanNo}
+              onChange={(e) => { setLoanNo(e.target.value); setLoanNoInvalid(false); }}
+              maxLength={64}
+              aria-required="true"
+              aria-invalid={loanNoInvalid || undefined}
+              aria-describedby={loanNoInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
               Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={empIdField} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={empIdField}
+              ref={empIdRef}
+              value={employeeId}
+              onChange={(e) => { setEmployeeId(e.target.value); setEmpIdInvalid(false); }}
+              aria-required="true"
+              aria-invalid={empIdInvalid || undefined}
+              aria-describedby={empIdInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={typeField} style={{ fontSize: 13, fontWeight: 600 }}>Loan Type</label>
@@ -102,19 +154,54 @@ export function CreateLoanForm() {
             <label htmlFor={principalField} style={{ fontSize: 13, fontWeight: 600 }}>
               Principal (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={principalField} type="number" min={0} step="0.01" value={principalRupees} onChange={(e) => setPrincipalRupees(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={principalField}
+              ref={principalRef}
+              type="number"
+              min={0}
+              step="0.01"
+              value={principalRupees}
+              onChange={(e) => { setPrincipalRupees(e.target.value); setPrincipalInvalid(false); }}
+              aria-required="true"
+              aria-invalid={principalInvalid || undefined}
+              aria-describedby={principalInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={emiField} style={{ fontSize: 13, fontWeight: 600 }}>
               EMI (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={emiField} type="number" min={0} step="0.01" value={emiRupees} onChange={(e) => setEmiRupees(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={emiField}
+              ref={emiRef}
+              type="number"
+              min={0}
+              step="0.01"
+              value={emiRupees}
+              onChange={(e) => { setEmiRupees(e.target.value); setEmiInvalid(false); }}
+              aria-required="true"
+              aria-invalid={emiInvalid || undefined}
+              aria-describedby={emiInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={tenureField} style={{ fontSize: 13, fontWeight: 600 }}>
               Tenure (months) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={tenureField} type="number" min={1} value={tenureMonths} onChange={(e) => setTenureMonths(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={tenureField}
+              ref={tenureRef}
+              type="number"
+              min={1}
+              value={tenureMonths}
+              onChange={(e) => { setTenureMonths(e.target.value); setTenureInvalid(false); }}
+              aria-required="true"
+              aria-invalid={tenureInvalid || undefined}
+              aria-describedby={tenureInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={rateField} style={{ fontSize: 13, fontWeight: 600 }}>Interest Rate (%)</label>
@@ -127,10 +214,10 @@ export function CreateLoanForm() {
           </button>
         </div>
         {error && !confirmOpen && (
-          <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
+          <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
         )}
         {message && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
         )}
       </Card>
 

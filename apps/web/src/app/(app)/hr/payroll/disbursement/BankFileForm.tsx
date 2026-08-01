@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 
@@ -15,9 +15,12 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [runInvalid, setRunInvalid] = useState(false);
 
   const runSelectId = useId();
   const formatSelectId = useId();
+  const errId = useId();
+  const runSelectRef = useRef<HTMLSelectElement>(null);
 
   const selectedRun = runs.find((r) => r.id === runId);
 
@@ -25,8 +28,11 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
+    setRunInvalid(false);
     if (!runId) {
       setError("Select a payroll run first.");
+      setRunInvalid(true);
+      runSelectRef.current?.focus();
       return;
     }
     setConfirmOpen(true);
@@ -73,9 +79,15 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
           </label>
           <select
             id={runSelectId}
+            ref={runSelectRef}
             value={runId}
-            onChange={(e) => setRunId(e.target.value)}
+            onChange={(e) => {
+              setRunId(e.target.value);
+              setRunInvalid(false);
+            }}
             aria-required="true"
+            aria-invalid={runInvalid || undefined}
+            aria-describedby={runInvalid ? errId : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           >
             {runs.map((r) => (
@@ -108,12 +120,12 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
         </button>
       </div>
       {error && !confirmOpen && (
-        <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
+        <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
           {error}
         </p>
       )}
       {message && (
-        <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+        <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
           {message}
         </p>
       )}

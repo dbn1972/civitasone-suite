@@ -1,7 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
 import { BankFileForm } from "./BankFileForm";
 import { NachMandateForm } from "./NachMandateForm";
 import { NachReturnForm } from "./NachReturnForm";
@@ -80,10 +79,29 @@ export default async function DisbursementPage() {
 
   const anyError = runsResult.source === "error" || sponsorResult.source === "error" || dscResult.source === "error";
 
-  const runColumns: { key: keyof RunRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
+  // NOTE: PayrollRunDetailSchema's grossAmount/netAmount are already RUPEES
+  // (payroll-service's listRuns() divides totalNetMinor by 100 before returning),
+  // unlike every *Minor field elsewhere in the payroll API. DataTable's
+  // cellType:"amount" calls formatMoney(), which treats its input as MINOR
+  // units and divides by 100 again — that would render this run's net pay
+  // 100x too small on the exact screen used to confirm a bank transfer, so we
+  // deliberately do NOT use cellType:"amount" here. Format as rupees directly.
+  const inrFormatter = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  });
+
+  type RunDisplayRow = RunRow & { netAmountDisplay: string };
+  const runRows: RunDisplayRow[] = runs.map((r) => ({
+    ...r,
+    netAmountDisplay: inrFormatter.format(r.netAmount),
+  }));
+
+  const runColumns: { key: keyof RunDisplayRow & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "payPeriod", label: "Pay Period" },
     { key: "employeeCount", label: "Employees", align: "right" },
-    { key: "netAmount", label: "Net Amount", align: "right", cellType: "amount" },
+    { key: "netAmountDisplay", label: "Net Amount", align: "right" },
     { key: "status", label: "Status", cellType: "status" },
   ];
 
@@ -108,9 +126,9 @@ export default async function DisbursementPage() {
       </StatGrid>
 
       <Card title="Payroll Runs">
-        <DataTable<RunRow>
+        <DataTable<RunDisplayRow>
           columns={runColumns}
-          rows={runs}
+          rows={runRows}
           sortable
           filterable
           filterPlaceholder="Filter by pay period…"

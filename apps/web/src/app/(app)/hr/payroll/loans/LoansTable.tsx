@@ -61,6 +61,7 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
           <button
             type="button"
             className="btn secondary sm"
+            aria-label={`Disburse loan ${row.loanNo}`}
             onClick={() => {
               setError(undefined);
               setPendingId(row.id);
@@ -77,7 +78,7 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
   return (
     <div>
       {message && (
-        <p role="status" aria-live="polite" className="pill good" style={{ marginBottom: 10, width: "fit-content" }}>
+        <p role="status" className="pill good" style={{ marginBottom: 10, width: "fit-content" }}>
           {message}
         </p>
       )}

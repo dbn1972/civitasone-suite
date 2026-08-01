@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -26,6 +26,9 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [codeInvalid, setCodeInvalid] = useState(false);
+  const [ifscInvalid, setIfscInvalid] = useState(false);
+  const [acctInvalid, setAcctInvalid] = useState(false);
 
   const codeId = useId();
   const ifscId = useId();
@@ -33,13 +36,30 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
   const offsetId = useId();
   const nachId = useId();
   const apbsId = useId();
+  const errId = useId();
+  const codeRef = useRef<HTMLInputElement>(null);
+  const ifscRef = useRef<HTMLInputElement>(null);
+  const acctRef = useRef<HTMLInputElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!sponsorCode.trim() || !sponsorIfsc.trim() || (!initial && !sponsorAccount.trim())) {
+    const codeMissing = !sponsorCode.trim();
+    const ifscMissing = !sponsorIfsc.trim();
+    const acctMissing = !initial && !sponsorAccount.trim();
+    setCodeInvalid(codeMissing);
+    setIfscInvalid(ifscMissing);
+    setAcctInvalid(acctMissing);
+    if (codeMissing || ifscMissing || acctMissing) {
       setError("Sponsor code, IFSC and sponsor account are required.");
+      if (codeMissing) {
+        codeRef.current?.focus();
+      } else if (ifscMissing) {
+        ifscRef.current?.focus();
+      } else {
+        acctRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -85,10 +105,16 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
           </label>
           <input
             id={codeId}
+            ref={codeRef}
             value={sponsorCode}
-            onChange={(e) => setSponsorCode(e.target.value)}
+            onChange={(e) => {
+              setSponsorCode(e.target.value);
+              setCodeInvalid(false);
+            }}
             maxLength={4}
             aria-required="true"
+            aria-invalid={codeInvalid || undefined}
+            aria-describedby={codeInvalid ? errId : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
         </div>
@@ -98,10 +124,16 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
           </label>
           <input
             id={ifscId}
+            ref={ifscRef}
             value={sponsorIfsc}
-            onChange={(e) => setSponsorIfsc(e.target.value)}
+            onChange={(e) => {
+              setSponsorIfsc(e.target.value);
+              setIfscInvalid(false);
+            }}
             maxLength={11}
             aria-required="true"
+            aria-invalid={ifscInvalid || undefined}
+            aria-describedby={ifscInvalid ? errId : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
         </div>
@@ -111,9 +143,15 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
           </label>
           <input
             id={acctId}
+            ref={acctRef}
             value={sponsorAccount}
-            onChange={(e) => setSponsorAccount(e.target.value)}
+            onChange={(e) => {
+              setSponsorAccount(e.target.value);
+              setAcctInvalid(false);
+            }}
             aria-required={!initial}
+            aria-invalid={acctInvalid || undefined}
+            aria-describedby={acctInvalid ? errId : undefined}
             placeholder={initial ? "Leave blank to keep existing account" : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
@@ -144,12 +182,12 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </button>
       </div>
       {error && !confirmOpen && (
-        <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
+        <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
           {error}
         </p>
       )}
       {message && (
-        <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
+        <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
           {message}
         </p>
       )}

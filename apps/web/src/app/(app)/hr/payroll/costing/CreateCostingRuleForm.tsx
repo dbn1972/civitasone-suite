@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -16,17 +16,31 @@ export function CreateCostingRuleForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [groupInvalid, setGroupInvalid] = useState(false);
+  const [centerInvalid, setCenterInvalid] = useState(false);
 
   const groupField = useId();
   const centerField = useId();
   const splitField = useId();
+  const errId = useId();
+  const groupRef = useRef<HTMLInputElement>(null);
+  const centerRef = useRef<HTMLInputElement>(null);
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    if (!employeeGroup.trim() || !costCenterId.trim()) {
+    const groupMissing = !employeeGroup.trim();
+    const centerMissing = !costCenterId.trim();
+    setGroupInvalid(groupMissing);
+    setCenterInvalid(centerMissing);
+    if (groupMissing || centerMissing) {
       setError("Employee group and cost center are required.");
+      if (groupMissing) {
+        groupRef.current?.focus();
+      } else {
+        centerRef.current?.focus();
+      }
       return;
     }
     setConfirmOpen(true);
@@ -65,13 +79,32 @@ export function CreateCostingRuleForm() {
             <label htmlFor={groupField} style={{ fontSize: 13, fontWeight: 600 }}>
               Employee Group <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={groupField} value={employeeGroup} onChange={(e) => setEmployeeGroup(e.target.value)} maxLength={64} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={groupField}
+              ref={groupRef}
+              value={employeeGroup}
+              onChange={(e) => { setEmployeeGroup(e.target.value); setGroupInvalid(false); }}
+              maxLength={64}
+              aria-required="true"
+              aria-invalid={groupInvalid || undefined}
+              aria-describedby={groupInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={centerField} style={{ fontSize: 13, fontWeight: 600 }}>
               Cost Center ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input id={centerField} value={costCenterId} onChange={(e) => setCostCenterId(e.target.value)} aria-required="true" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            <input
+              id={centerField}
+              ref={centerRef}
+              value={costCenterId}
+              onChange={(e) => { setCostCenterId(e.target.value); setCenterInvalid(false); }}
+              aria-required="true"
+              aria-invalid={centerInvalid || undefined}
+              aria-describedby={centerInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={splitField} style={{ fontSize: 13, fontWeight: 600 }}>Split %</label>
@@ -84,10 +117,10 @@ export function CreateCostingRuleForm() {
           </button>
         </div>
         {error && !confirmOpen && (
-          <p role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
+          <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>
         )}
         {message && (
-          <p role="status" aria-live="polite" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
+          <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>{message}</p>
         )}
       </Card>
 
