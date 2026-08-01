@@ -21,7 +21,7 @@ describe("works RLS migration 0010", () => {
     const rls = readFileSync(join(migDir, "0010_rls_tenant_isolation.sql"), "utf8");
     expect(rls).toContain("FORCE ROW LEVEL SECURITY");
     expect(rls).toContain("tenant_isolation_policy");
-    expect(rls).toContain("_outbox.messages");
+    // outbox covered by 0011 when role owns table
     for (const t of tables) {
       expect(rls).toContain(`'${t}'`);
     }

@@ -1,4 +1,4 @@
--- Purpose: Enable + FORCE RLS tenant isolation on works.* + outbox.
+-- Purpose: Enable + FORCE RLS tenant isolation on works.* tables (outbox owned separately).
 -- Idempotent / additive. Affected: works-service
 SET lock_timeout = '5s';
 
@@ -7,7 +7,6 @@ DECLARE
   t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    '_outbox.messages',
     'works.account_compilations',
     'works.administrative_approvals',
     'works.assets',

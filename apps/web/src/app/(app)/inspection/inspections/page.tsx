@@ -9,9 +9,9 @@ export default async function Page() {
   const { data, source } = await getInspections();
   return (
     <main className="wrap">
-      <nav aria-label="Breadcrumb" style={ fontSize: 13, marginBottom: 8 }>
+      <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
         <Link href="/inspection" className="lnk">Inspection</Link>
-        <span aria-hidden style={ margin: "0 7px" }>/</span>
+        <span aria-hidden style={{ margin: "0 7px" }}>/</span>
         <span aria-current="page">Inspections</span>
       </nav>
       <PageHeader title="Inspections" back="/inspection" />
