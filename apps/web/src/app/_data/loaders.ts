@@ -1269,6 +1269,18 @@ export async function getContractBonds(id: string): Promise<LoaderResult<Record<
   });
 }
 
+export async function getContractObligations(id: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  return fetchJson<unknown, Record<string, unknown>[]>(`/api/v1/contract/obligations?contractId=${id}`, [], {
+    revalidateSeconds: 15,
+    telemetryKey: "contract.obligations",
+    mapResponse: (payload) => {
+      if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+      if (isRecord(payload) && Array.isArray(payload.data)) return payload.data as Record<string, unknown>[];
+      return [];
+    },
+  });
+}
+
 
 export const getInventoryItems = moduleLoader("/api/v1/inventory/items", "inventory.items");
 export const getTelephonyCalls = moduleLoader("/api/v1/telephony/calls", "telephony.calls");

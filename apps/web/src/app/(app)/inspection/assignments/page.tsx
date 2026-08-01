@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getInspectionAssignments } from "../_data/loaders";
+import { AssignmentActions } from "./AssignmentActions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function Page() {
       </nav>
       <PageHeader title="Assignments" back="/inspection" />
       {source === "error" && <DataSourceBadge source={source} />}
+      <AssignmentActions />
       {data.length === 0 ? (
         <EmptyState icon="📭" title="No records" message="No assignments returned from the API." />
       ) : (

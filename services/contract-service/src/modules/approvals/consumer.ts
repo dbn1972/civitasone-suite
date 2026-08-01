@@ -1,3 +1,4 @@
+import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -5,6 +6,8 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { approvalLevels } from "./schema.js";
+
+const log = pino({ name: "contract-approvals-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -75,7 +78,10 @@ export function registerApprovalConsumers(q: Queue): void {
         )
         .returning();
 
-      if (!updated) return;
+      if (!updated) {
+        log.warn({ event: "version_conflict_or_missing", messageId: msg.messageId, tenantId: msg.tenantId }, "approval level update skipped (no row or version mismatch)");
+        return;
+      }
 
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.approvalLevelUpdated, eventType: EVENTS.approvalLevelUpdated,

@@ -10,6 +10,7 @@
  * Requirements: 9.8, 9.9
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withTenantScope } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -17,6 +18,12 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { esignRoutes } from "../src/modules/esign/schema.js";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+
+// The create/sign routes are queue-first CQRS (POST publishes and returns 202;
+// a worker-side consumer performs the actual write). These route tests use
+// `buildApp()` without a running consumer, so route tests that need an
+// existing route seed it directly via the repo instead of going through POST.
+import * as esignRepo from "../src/modules/esign/repo.js";
 
 // Domain imports for unit tests
 import {
@@ -305,7 +312,7 @@ describe("computeEscalationDeadline — domain logic", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/contract/esign — create e-sign routing", () => {
-  it("returns 201 with route data for valid request", async () => {
+  it("returns 202 accepted (queue-first CQRS) for a valid request", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign",
@@ -320,16 +327,14 @@ describe("POST /v1/contract/esign — create e-sign routing", () => {
         ],
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.data.id).toBeDefined();
-    expect(body.data.status).toBe("in_progress");
-    expect(body.data.currentOrdinal).toBe(1);
-    expect(body.data.signatories).toHaveLength(3);
-    expect(body.data.signatories[0].status).toBe("pending");
+    expect(body.id).toBeDefined();
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeDefined();
   });
 
-  it("returns 201 with single signatory", async () => {
+  it("returns 202 accepted for a single signatory", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign",
@@ -340,8 +345,8 @@ describe("POST /v1/contract/esign — create e-sign routing", () => {
         signatories: [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 1 }],
       },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.signatories).toHaveLength(1);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("returns 400 for empty signatories", async () => {
@@ -416,25 +421,31 @@ describe("POST /v1/contract/esign — create e-sign routing", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
-  async function createRoute() {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/contract/esign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        contractId: CONTRACT_ID,
-        ownerId: OWNER,
-        signatories: [
-          { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
-          { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
-        ],
-      },
+  // Sign is queue-first CQRS too: the route only does pre-publish reads/validation
+  // (route status + canSign) and publishes; the actual write lives in the consumer
+  // (see the "e-sign consumer — CQRS wiring" integration suite below). Seed the
+  // route directly via repo so the pre-publish checks have something to read.
+  async function seedRoute(signatories: Array<{ userId: string; ordinal: number; deadlineDays: number; status?: "pending" | "signed" | "overdue"; signedAt?: string | null }>, overrides: Record<string, unknown> = {}) {
+    const route = await esignRepo.insertEsignRoute({
+      id: randomUUID(),
+      tenantId: TENANT,
+      contractId: CONTRACT_ID,
+      signatories: signatories.map((s) => ({ status: "pending" as const, signedAt: null, ...s })),
+      currentOrdinal: 1,
+      status: "in_progress",
+      ownerId: OWNER,
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
+      ...overrides,
     });
-    return res.json().data.id as string;
+    return route.id;
   }
 
-  it("returns 202 when correct signatory signs", async () => {
-    const routeId = await createRoute();
+  it("returns 202 accepted when correct signatory signs (queue-first)", async () => {
+    const routeId = await seedRoute([
+      { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+      { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+    ]);
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
@@ -443,34 +454,15 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     });
     expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.data.signed).toBe(true);
-    expect(body.data.currentOrdinal).toBe(2);
-    expect(body.data.isComplete).toBe(false);
-  });
-
-  it("completes route when last signatory signs", async () => {
-    const routeId = await createRoute();
-    // Sign first
-    await app.inject({
-      method: "POST",
-      url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
-    });
-    // Sign second (last)
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_2 },
-    });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().data.isComplete).toBe(true);
-    expect(res.json().data.status).toBe("completed");
+    expect(body.id).toBe(routeId);
+    expect(body.status).toBe("accepted");
   });
 
   it("returns 422 when wrong signatory tries to sign", async () => {
-    const routeId = await createRoute();
+    const routeId = await seedRoute([
+      { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+      { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+    ]);
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
@@ -492,26 +484,10 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
   });
 
   it("returns 422 when route is already completed", async () => {
-    // Create single-signatory route
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/contract/esign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        contractId: CONTRACT_ID,
-        ownerId: OWNER,
-        signatories: [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 7 }],
-      },
-    });
-    const routeId = createRes.json().data.id;
-    // Sign to complete
-    await app.inject({
-      method: "POST",
-      url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
-    });
-    // Try to sign again
+    const routeId = await seedRoute(
+      [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 7, status: "signed", signedAt: new Date().toISOString() }],
+      { status: "completed", currentOrdinal: 2 },
+    );
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
@@ -538,20 +514,23 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
 
 describe("GET /v1/contract/esign/:id — get route status", () => {
   it("returns 200 with full route data", async () => {
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/contract/esign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        contractId: CONTRACT_ID,
-        ownerId: OWNER,
-        signatories: [
-          { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
-          { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
-        ],
-      },
+    // Create is queue-first CQRS; seed directly via repo for this read-path test,
+    // matching what the esignCreate consumer would produce.
+    const route = await esignRepo.insertEsignRoute({
+      id: randomUUID(),
+      tenantId: TENANT,
+      contractId: CONTRACT_ID,
+      signatories: [
+        { userId: SIGNER_1, ordinal: 1, deadlineDays: 7, status: "pending", signedAt: null },
+        { userId: SIGNER_2, ordinal: 2, deadlineDays: 14, status: "pending", signedAt: null },
+      ],
+      currentOrdinal: 1,
+      status: "in_progress",
+      ownerId: OWNER,
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
     });
-    const routeId = createRes.json().data.id;
+    const routeId = route.id;
 
     const res = await app.inject({
       method: "GET",
@@ -601,21 +580,24 @@ describe("GET /v1/contract/esign/:id — get route status", () => {
 
 describe("POST /v1/contract/esign/:id/check-deadline — deadline enforcement", () => {
   it("returns on_time action when within deadline", async () => {
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/contract/esign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        contractId: CONTRACT_ID,
-        ownerId: OWNER,
-        signatories: [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 30 }],
-      },
+    // Create is queue-first CQRS; seed directly via repo for this read-path
+    // (check-deadline's decision is a synchronous read; only the escalation
+    // write is queue-first, via COMMANDS.esignCheckDeadline).
+    const route = await esignRepo.insertEsignRoute({
+      id: randomUUID(),
+      tenantId: TENANT,
+      contractId: CONTRACT_ID,
+      signatories: [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 30, status: "pending", signedAt: null }],
+      currentOrdinal: 1,
+      status: "in_progress",
+      ownerId: OWNER,
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
     });
-    const routeId = createRes.json().data.id;
 
     const res = await app.inject({
       method: "POST",
-      url: `/v1/contract/esign/${routeId}/check-deadline`,
+      url: `/v1/contract/esign/${route.id}/check-deadline`,
       headers: { authorization: `Bearer ${makeToken()}` },
     });
     expect(res.statusCode).toBe(200);
@@ -633,32 +615,86 @@ describe("POST /v1/contract/esign/:id/check-deadline — deadline enforcement", 
   });
 
   it("returns none action for completed routes", async () => {
-    // Create single-signatory route and complete it
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/contract/esign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        contractId: CONTRACT_ID,
-        ownerId: OWNER,
-        signatories: [{ userId: SIGNER_1, ordinal: 1, deadlineDays: 7 }],
-      },
-    });
-    const routeId = createRes.json().data.id;
-    await app.inject({
-      method: "POST",
-      url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+    const route = await esignRepo.insertEsignRoute({
+      id: randomUUID(),
+      tenantId: TENANT,
+      contractId: CONTRACT_ID,
+      signatories: [
+        { userId: SIGNER_1, ordinal: 1, deadlineDays: 7, status: "signed", signedAt: new Date().toISOString() },
+      ],
+      currentOrdinal: 2,
+      status: "completed",
+      ownerId: OWNER,
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
     });
 
     const res = await app.inject({
       method: "POST",
-      url: `/v1/contract/esign/${routeId}/check-deadline`,
+      url: `/v1/contract/esign/${route.id}/check-deadline`,
       headers: { authorization: `Bearer ${makeToken()}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.action).toBe("none");
     expect(res.json().data.reason).toBe("route not in progress");
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONSUMER — CQRS wiring (integration) — full create → sign → complete flow
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("E-sign consumer — CQRS wiring (integration)", () => {
+  it("create → sign → sign completes the route via queue consumer", { timeout: 20_000 }, async () => {
+    const { MemoryQueue } = await import("@civitasone/queue");
+    const { withTenantConsumer } = await import("@civitasone/db");
+    const { registerEsignConsumers } = await import("../src/modules/esign/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const rawQueue = new MemoryQueue();
+    const rawSubscribe = rawQueue.subscribe.bind(rawQueue);
+    rawQueue.subscribe = ((topic: string, handler: any) =>
+      rawSubscribe(topic, withTenantConsumer(handler) as any)) as typeof rawQueue.subscribe;
+    registerEsignConsumers(rawQueue);
+    await rawQueue.start();
+
+    const routeId = randomUUID();
+    function pub(type: string, payload: Record<string, unknown>) {
+      return rawQueue.publish(type, {
+        messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR,
+        correlationId: "corr-" + randomUUID().slice(0, 8), schemaVersion: "1.0", payload,
+      });
+    }
+
+    async function waitForRoute(want: { status?: string; currentOrdinal?: number }) {
+      for (let i = 0; i < 40; i++) {
+        const row = await withTenantScope(db, TENANT, (tx) =>
+          tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
+        if (row && (want.status === undefined || row.status === want.status)
+          && (want.currentOrdinal === undefined || row.currentOrdinal === want.currentOrdinal)) {
+          return row;
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error(`e-sign route ${routeId} did not reach expected state ${JSON.stringify(want)}`);
+    }
+
+    await pub(COMMANDS.esignCreate, {
+      id: routeId, tenantId: TENANT, contractId: CONTRACT_ID, ownerId: OWNER,
+      signatories: [
+        { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+        { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+      ],
+    });
+    await waitForRoute({ status: "in_progress", currentOrdinal: 1 });
+
+    await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_1 });
+    await waitForRoute({ status: "in_progress", currentOrdinal: 2 });
+
+    await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_2 });
+    const done = await waitForRoute({ status: "completed" });
+    expect((done.signatories as SignatoryEntry[]).every((s) => s.status === "signed")).toBe(true);
+
+    await rawQueue.stop();
   });
 });

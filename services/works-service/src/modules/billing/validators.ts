@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 
 export const issueMbSchema = z.object({
   workId: z.string().uuid(),
@@ -28,8 +29,8 @@ export const createBillSchema = z.object({
   mbId: z.string().uuid().optional(),
   billMode: z.enum(["abstract", "e_mb"]),
   billNumber: z.string().min(1).max(64),
-  grossAmountMinor: z.string().or(z.number()),
-  deductionsMinor: z.string().or(z.number()).optional(),
+  grossAmountMinor: zMoneyMinorString,
+  deductionsMinor: zMoneyMinorString.optional(),
 });
 
 export const finalizeBillSchema = z.object({

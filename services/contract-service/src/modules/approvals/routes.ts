@@ -1,5 +1,6 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
@@ -10,8 +11,8 @@ import {
   resolveApprovalQuery,
 } from "./validators.js";
 import { resolveApprovalLevel, MAX_APPROVAL_LEVELS } from "./domain.js";
+import * as commands from "./commands.js";
 import * as repo from "./repo.js";
-import { cache } from "../../shared/infra.js";
 
 const WRITE_ROLES = ["super_admin", "tenant_admin", "finance_admin", "contract_admin"];
 const READ_ROLES = [...WRITE_ROLES, "audit_officer", "procurement_officer", "finance_officer", "legal_officer"];
@@ -46,35 +47,19 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ── Create approval level ─────────────────────────────────────────────
+  // ── Create approval level — queue-first CQRS write ────────────────────
   app.post("/v1/contract/approval-levels", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createApprovalLevelBody.parse(req.body);
 
-    // Enforce max 5 levels
+    // Enforce max 5 levels (pre-publish read-only validation)
     const count = await repo.countApprovalLevels(ctx.tenantId);
     if (count >= MAX_APPROVAL_LEVELS) {
       throw new HttpError(422, "LEVEL_LIMIT_REACHED", `maximum ${MAX_APPROVAL_LEVELS} approval levels allowed`);
     }
 
-    const id = randomUUID();
-    const level = await repo.insertApprovalLevel({
-      id,
-      tenantId: ctx.tenantId,
-      minValuePaise: BigInt(body.minValuePaise),
-      requiredRole: body.requiredRole,
-      label: body.label,
-      ordinal: count + 1,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    return reply.code(201).send({
-      id: level.id,
-      status: "created",
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createApprovalLevel(ctx, count + 1, body));
   });
 
   // ── List approval levels ──────────────────────────────────────────────
@@ -116,7 +101,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ── Update approval level ─────────────────────────────────────────────
+  // ── Update approval level — queue-first CQRS write ────────────────────
   app.patch("/v1/contract/approval-levels/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -128,43 +113,21 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "approval level not found");
     }
 
-    const updateData: Parameters<typeof repo.updateApprovalLevel>[3] = {
-      updatedBy: ctx.actorId,
-    };
-    if (body.minValuePaise !== undefined) updateData.minValuePaise = BigInt(body.minValuePaise);
-    if (body.requiredRole !== undefined) updateData.requiredRole = body.requiredRole;
-    if (body.label !== undefined) updateData.label = body.label;
-
-    const updated = await repo.updateApprovalLevel(id, ctx.tenantId, body.version, updateData);
-    if (!updated) {
-      throw new HttpError(409, "VERSION_CONFLICT", "approval level was modified by another request");
-    }
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "approval-level", id));
-
-    return reply.code(202).send({
-      id: updated.id,
-      status: "updated",
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateApprovalLevel(ctx, id, body.version, body));
   });
 
-  // ── Delete approval level ─────────────────────────────────────────────
+  // ── Delete approval level — queue-first CQRS write ────────────────────
   app.delete("/v1/contract/approval-levels/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const { id } = approvalLevelIdParam.parse(req.params);
 
-    const deleted = await repo.deleteApprovalLevel(id, ctx.tenantId);
-    if (!deleted) {
+    const existing = await repo.getApprovalLevelById(id, ctx.tenantId);
+    if (!existing) {
       throw new HttpError(404, "NOT_FOUND", "approval level not found");
     }
 
-    return reply.code(202).send({
-      id,
-      status: "deleted",
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteApprovalLevel(ctx, id));
   });
 
   // ── Error handler ─────────────────────────────────────────────────────

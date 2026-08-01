@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
+import * as commands from "./commands.js";
 import { getAwardById } from "./repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward } from "./domain.js";
 
@@ -16,18 +16,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createPreTenderSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.preTenderCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.preTenderCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createPreTenderCommand(ctx, body));
   });
 
   // Add quotation
@@ -35,18 +24,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.addQuotationSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.quotationAdd, {
-      messageId: randomUUID(),
-      type: COMMANDS.quotationAdd,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addQuotationCommand(ctx, body));
   });
 
   // Create award
@@ -54,18 +32,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createAwardSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.awardCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.awardCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createAwardCommand(ctx, body));
   });
 
   // DAO-finalize award (level 1 of two-level agreement finalization)
@@ -78,16 +45,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const check = canDaoFinalizeAward(award.status);
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
-    await queue.publish(COMMANDS.awardDaoFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.awardDaoFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id: body.id },
-    });
-    return reply.status(202).send({ id: body.id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.daoFinalizeAwardCommand(ctx, body.id));
   });
 
   // DO-finalize award (level 2 — requires DAO finalization first)
@@ -100,15 +58,6 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const check = canDoFinalizeAward(award.status);
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
-    await queue.publish(COMMANDS.awardDoFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.awardDoFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id: body.id },
-    });
-    return reply.status(202).send({ id: body.id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.doFinalizeAwardCommand(ctx, body.id));
   });
 }

@@ -8,6 +8,7 @@
  * - Route-level tests: CRUD, auth, validation
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withTenantScope } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -22,6 +23,15 @@ import type { FastifyInstance } from "fastify";
 import { computeReminderSchedule, validateStatusTransition } from "../src/modules/obligations/domain.js";
 import { computeRenewalNotices, isWithinNoticeWindow } from "../src/modules/renewals/domain.js";
 import { resolveApprovalLevel } from "../src/modules/approvals/domain.js";
+
+// Repo imports — the obligations/renewals/approvals routes are queue-first CQRS
+// (POST/PATCH/DELETE publish to the queue and return 202; a worker-side consumer
+// performs the actual write). These route tests use `buildApp()` without a
+// running consumer, so route tests seed fixtures directly via the repo instead
+// of relying on a prior POST having landed in the database.
+import * as obligationRepo from "../src/modules/obligations/repo.js";
+import * as renewalRepo from "../src/modules/renewals/repo.js";
+import * as approvalRepo from "../src/modules/approvals/repo.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-1111-4000-8000-000000000020";
@@ -269,7 +279,7 @@ describe("validateStatusTransition — domain logic", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/contract/obligations — create obligation", () => {
-  it("returns 201 with reminders scheduled", async () => {
+  it("returns 202 accepted (queue-first CQRS)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/obligations",
@@ -282,11 +292,11 @@ describe("POST /v1/contract/obligations — create obligation", () => {
         ownerId: ACTOR,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.id).toBeDefined();
-    expect(body.status).toBe("created");
-    expect(body.remindersScheduled).toBeGreaterThanOrEqual(0);
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeDefined();
   });
 
   it("returns 400 for missing required fields", async () => {
@@ -321,12 +331,12 @@ describe("POST /v1/contract/obligations — create obligation", () => {
 
 describe("GET /v1/contract/obligations — list obligations", () => {
   it("returns 200 with data and meta", async () => {
-    // Seed one obligation first
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/obligations",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { contractId: CONTRACT_ID, title: "Test Oblig", dueDate: "2026-06-01", ownerId: ACTOR },
+    // Writes are queue-first (see POST test above); seed directly via repo
+    // for this read-path test, matching what the obligationCreate consumer does.
+    await obligationRepo.insertObligation({
+      id: randomUUID(), tenantId: TENANT, contractId: CONTRACT_ID, title: "Test Oblig",
+      description: "", dueDate: "2026-06-01", ownerId: ACTOR, status: "pending",
+      createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -343,11 +353,10 @@ describe("GET /v1/contract/obligations — list obligations", () => {
 
   it("filters by contractId", async () => {
     const otherContract = "bbbbbbbb-4444-4000-8000-000000000020";
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/obligations",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { contractId: otherContract, title: "Other", dueDate: "2026-06-01", ownerId: ACTOR },
+    await obligationRepo.insertObligation({
+      id: randomUUID(), tenantId: TENANT, contractId: otherContract, title: "Other",
+      description: "", dueDate: "2026-06-01", ownerId: ACTOR, status: "pending",
+      createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -366,7 +375,7 @@ describe("GET /v1/contract/obligations — list obligations", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/contract/renewals — create renewal", () => {
-  it("returns 201 with notice dates", async () => {
+  it("returns 202 accepted (queue-first CQRS)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/renewals",
@@ -377,12 +386,11 @@ describe("POST /v1/contract/renewals — create renewal", () => {
         advanceNoticeDays: 60,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.id).toBeDefined();
-    expect(body.notices).toBeDefined();
-    expect(body.notices.advanceNoticeDate).toBeDefined();
-    expect(body.notices.finalReminderDate).toBeDefined();
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeDefined();
   });
 
   it("returns 400 for invalid advance notice days", async () => {
@@ -417,11 +425,12 @@ describe("POST /v1/contract/renewals — create renewal", () => {
 
 describe("GET /v1/contract/renewals — list renewals", () => {
   it("returns 200 with data and meta", async () => {
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/renewals",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { contractId: CONTRACT_ID, expiryDate: "2026-12-31", advanceNoticeDays: 30 },
+    // Writes are queue-first (see POST test above); seed directly via repo
+    // for this read-path test, matching what the renewalCreate consumer does.
+    await renewalRepo.insertRenewal({
+      id: randomUUID(), tenantId: TENANT, contractId: CONTRACT_ID,
+      expiryDate: "2026-12-31", advanceNoticeDays: 30, status: "active",
+      createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -441,7 +450,7 @@ describe("GET /v1/contract/renewals — list renewals", () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/contract/approval-levels — create approval level", () => {
-  it("returns 201 with level id", async () => {
+  it("returns 202 accepted (queue-first CQRS)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/approval-levels",
@@ -452,20 +461,19 @@ describe("POST /v1/contract/approval-levels — create approval level", () => {
         label: "Low-value contracts",
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.id).toBeDefined();
-    expect(body.status).toBe("created");
+    expect(body.status).toBe("accepted");
   });
 
   it("returns 422 when exceeding 5 levels", async () => {
-    // Create 5 levels
+    // The count check (MAX_APPROVAL_LEVELS) is a pre-publish read, so seed the
+    // 5 existing levels directly via repo (writes are queue-first CQRS).
     for (let i = 0; i < 5; i++) {
-      await app.inject({
-        method: "POST",
-        url: "/v1/contract/approval-levels",
-        headers: { authorization: `Bearer ${makeToken()}` },
-        payload: { minValuePaise: String((i + 1) * 100000), requiredRole: `role_${i}` },
+      await approvalRepo.insertApprovalLevel({
+        id: randomUUID(), tenantId: TENANT, minValuePaise: BigInt((i + 1) * 100000),
+        requiredRole: `role_${i}`, label: "", ordinal: i + 1, createdBy: ACTOR, updatedBy: ACTOR,
       });
     }
     // 6th should fail
@@ -511,11 +519,11 @@ describe("POST /v1/contract/approval-levels — create approval level", () => {
 
 describe("GET /v1/contract/approval-levels — list levels", () => {
   it("returns 200 with serialized bigint values", async () => {
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/approval-levels",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { minValuePaise: "500000", requiredRole: "director" },
+    // Writes are queue-first (see POST test above); seed directly via repo
+    // for this read-path test, matching what the approvalLevelCreate consumer does.
+    await approvalRepo.insertApprovalLevel({
+      id: randomUUID(), tenantId: TENANT, minValuePaise: 500000n, requiredRole: "director",
+      label: "", ordinal: 1, createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -533,17 +541,15 @@ describe("GET /v1/contract/approval-levels — list levels", () => {
 
 describe("GET /v1/contract/approval-levels/resolve — resolve level", () => {
   it("returns the matching level for a contract value", async () => {
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/approval-levels",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { minValuePaise: "100000", requiredRole: "officer" },
+    // Writes are queue-first (see POST test above); seed directly via repo
+    // for this read-path test, matching what the approvalLevelCreate consumer does.
+    await approvalRepo.insertApprovalLevel({
+      id: randomUUID(), tenantId: TENANT, minValuePaise: 100000n, requiredRole: "officer",
+      label: "", ordinal: 1, createdBy: ACTOR, updatedBy: ACTOR,
     });
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/approval-levels",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { minValuePaise: "500000", requiredRole: "director" },
+    await approvalRepo.insertApprovalLevel({
+      id: randomUUID(), tenantId: TENANT, minValuePaise: 500000n, requiredRole: "director",
+      label: "", ordinal: 2, createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -559,11 +565,9 @@ describe("GET /v1/contract/approval-levels/resolve — resolve level", () => {
   });
 
   it("returns null when no level matches", async () => {
-    await app.inject({
-      method: "POST",
-      url: "/v1/contract/approval-levels",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { minValuePaise: "1000000", requiredRole: "cfo" },
+    await approvalRepo.insertApprovalLevel({
+      id: randomUUID(), tenantId: TENANT, minValuePaise: 1000000n, requiredRole: "cfo",
+      label: "", ordinal: 1, createdBy: ACTOR, updatedBy: ACTOR,
     });
 
     const res = await app.inject({
@@ -578,13 +582,13 @@ describe("GET /v1/contract/approval-levels/resolve — resolve level", () => {
 
 describe("DELETE /v1/contract/approval-levels/:id — delete level", () => {
   it("returns 202 on successful deletion", async () => {
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/contract/approval-levels",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { minValuePaise: "200000", requiredRole: "to_delete" },
+    // Writes are queue-first (see POST test above); seed directly via repo
+    // so the existence check (pre-publish read) finds a row to delete.
+    const seeded = await approvalRepo.insertApprovalLevel({
+      id: randomUUID(), tenantId: TENANT, minValuePaise: 200000n, requiredRole: "to_delete",
+      label: "", ordinal: 1, createdBy: ACTOR, updatedBy: ACTOR,
     });
-    const { id } = createRes.json();
+    const { id } = seeded;
 
     const res = await app.inject({
       method: "DELETE",

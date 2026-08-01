@@ -1,42 +1,23 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createRenewalBody, updateRenewalBody, renewalIdParam, renewalListQuery } from "./validators.js";
 import { computeRenewalNotices } from "./domain.js";
+import * as commands from "./commands.js";
 import * as repo from "./repo.js";
-import { cache } from "../../shared/infra.js";
 
 const WRITE_ROLES = ["procurement_admin", "finance_admin", "super_admin", "legal_officer", "contract_admin"];
 const READ_ROLES = [...WRITE_ROLES, "audit_officer", "procurement_officer", "finance_officer"];
 
 export async function renewalRoutes(app: FastifyInstance): Promise<void> {
-  // ── Create renewal config ─────────────────────────────────────────────
+  // ── Create renewal config — queue-first CQRS write ────────────────────
   app.post("/v1/contract/renewals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createRenewalBody.parse(req.body);
-
-    const notices = computeRenewalNotices(body.expiryDate, body.advanceNoticeDays);
-    const id = randomUUID();
-
-    const renewal = await repo.insertRenewal({
-      id,
-      tenantId: ctx.tenantId,
-      contractId: body.contractId,
-      expiryDate: body.expiryDate,
-      advanceNoticeDays: body.advanceNoticeDays,
-      status: "active",
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    return reply.code(201).send({
-      id: renewal.id,
-      status: "created",
-      notices,
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRenewal(ctx, body));
   });
 
   // ── List renewals ─────────────────────────────────────────────────────
@@ -74,7 +55,7 @@ export async function renewalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: { ...renewal, notices } });
   });
 
-  // ── Update renewal ────────────────────────────────────────────────────
+  // ── Update renewal — queue-first CQRS write ───────────────────────────
   app.patch("/v1/contract/renewals/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -86,30 +67,7 @@ export async function renewalRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "renewal not found");
     }
 
-    const updateData: Parameters<typeof repo.updateRenewal>[3] = {
-      updatedBy: ctx.actorId,
-    };
-    if (body.advanceNoticeDays !== undefined) updateData.advanceNoticeDays = body.advanceNoticeDays;
-    if (body.status !== undefined) {
-      updateData.status = body.status;
-      if (body.status === "renewed") {
-        updateData.renewedAt = new Date();
-        updateData.renewedBy = ctx.actorId;
-      }
-    }
-
-    const updated = await repo.updateRenewal(id, ctx.tenantId, body.version, updateData);
-    if (!updated) {
-      throw new HttpError(409, "VERSION_CONFLICT", "renewal was modified by another request");
-    }
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "renewal", id));
-
-    return reply.code(202).send({
-      id: updated.id,
-      status: "updated",
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateRenewal(ctx, id, body.version, body));
   });
 
   // ── Error handler ─────────────────────────────────────────────────────

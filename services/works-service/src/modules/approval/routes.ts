@@ -1,15 +1,19 @@
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
+import * as commands from "./commands.js";
 import { resolveApprovalType, canFinalize, canEnterTS } from "./domain.js";
 import { countAaForWork, countTsForWork, getAa, getTs } from "./repo.js";
 import { getProposal } from "../proposal/repo.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
+
+const aaAcceptedSchema = acceptedResponseSchema.extend({ approvalType: z.string() });
+const tsAcceptedSchema = acceptedResponseSchema.extend({ sanctionType: z.string() });
 
 export async function approvalRoutes(app: FastifyInstance): Promise<void> {
   // Create AA
@@ -19,18 +23,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const body = v.createAaSchema.parse(req.body);
     const count = await countAaForWork(ctx.tenantId, body.workId);
     const approvalType = resolveApprovalType(count);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.aaCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.aaCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body, approvalType },
-    });
-    return reply.status(202).send({ id, status: "accepted", approvalType });
+    return sendValidated(reply, aaAcceptedSchema, await commands.createAaCommand(ctx, body, approvalType), 202);
   });
 
   // Finalize AA
@@ -44,16 +37,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const check = canFinalize({ id: aa.id, status: aa.status });
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
-    await queue.publish(COMMANDS.aaFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.aaFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id },
-    });
-    return reply.status(202).send({ status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeAaCommand(ctx, id));
   });
 
   // Create TS — requires DAO finalization (BR-011)
@@ -71,18 +55,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
 
     const count = await countTsForWork(ctx.tenantId, body.workId);
     const sanctionType = resolveApprovalType(count);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.tsCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.tsCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body, sanctionType },
-    });
-    return reply.status(202).send({ id, status: "accepted", sanctionType });
+    return sendValidated(reply, tsAcceptedSchema, await commands.createTsCommand(ctx, body, sanctionType), 202);
   });
 
   // Finalize TS
@@ -96,15 +69,6 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const check = canFinalize({ id: ts.id, status: ts.status });
     if (!check.allowed) throw new HttpError(422, "FINALIZATION_BLOCKED", check.reason!);
 
-    await queue.publish(COMMANDS.tsFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.tsFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id },
-    });
-    return reply.status(202).send({ status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeTsCommand(ctx, id));
   });
 }

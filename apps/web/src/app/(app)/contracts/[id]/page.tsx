@@ -4,9 +4,10 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { getContractById } from "../../../_data/loaders";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
-import { getContractMilestones, getContractBonds } from "../../../_data/loaders";
+import { getContractMilestones, getContractBonds, getContractObligations } from "../../../_data/loaders";
 import { MilestoneActions } from "./MilestoneActions";
 import { BondActions } from "./BondActions";
+import { ObligationsPanel } from "./ObligationsPanel";
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -18,10 +19,11 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 export default async function ContractDetailPage({ params }: { params: { id: string } }) {
-  const [{ data: contract, source }, milestonesRes, bondsRes] = await Promise.all([
+  const [{ data: contract, source }, milestonesRes, bondsRes, obligationsRes] = await Promise.all([
     getContractById(params.id),
     getContractMilestones(params.id),
     getContractBonds(params.id),
+    getContractObligations(params.id),
   ]);
 
   if (!contract) {
@@ -155,6 +157,24 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               status: String(b.status ?? "held"),
               amountMinor: b.amountMinor as string | number | undefined,
               bondType: typeof b.bondType === "string" ? b.bondType : undefined,
+            }))}
+          />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h"><h3>Obligations</h3></div>
+        <div className="pad">
+          <ObligationsPanel
+            contractId={params.id}
+            obligations={obligationsRes.data.map((o) => ({
+              id: String(o.id),
+              title: String(o.title ?? "Obligation"),
+              description: typeof o.description === "string" ? o.description : undefined,
+              dueDate: typeof o.dueDate === "string" ? o.dueDate : undefined,
+              status: String(o.status ?? "pending"),
+              ownerId: typeof o.ownerId === "string" ? o.ownerId : undefined,
+              ...(typeof o.version === "number" ? { version: o.version } : {}),
             }))}
           />
         </div>

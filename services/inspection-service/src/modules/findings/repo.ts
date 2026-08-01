@@ -255,8 +255,26 @@ export async function nextFindingSequence(
 // ── Overdue Detection ─────────────────────────────────────────────────────────
 
 /**
+ * Cross-tenant candidate scan for the overdue-findings sweep. MUST be called via
+ * scopedPlatformRead (see shared/db.ts) — a bare/strict-tenant transaction finds
+ * nothing across tenants since current_tenant_id() is NULL with no per-request
+ * GUC set. Returns only distinct tenant ids, not rows: the actual overdue lookup
+ * + state transition for each tenant happens under that tenant's own strict-RLS
+ * GUC via runWithTenant in worker.ts's processOverdueFindings.
+ */
+export async function findOverdueFindingTenantIds(tx: Tx): Promise<string[]> {
+  const rows = await tx
+    .select({ tenantId: findings.tenantId })
+    .from(findings)
+    .where(and(eq(findings.state, "notice_issued"), isNull(findings.deletedAt)))
+    .groupBy(findings.tenantId);
+  return rows.map((r) => r.tenantId);
+}
+
+/**
  * Find all findings in notice_issued state with compliance notices whose due date
- * has passed. Used by the overdue detection job.
+ * has passed. Used by the overdue detection job. Called inside
+ * runWithTenant(tenantId, ...) so the strict tenant-match RLS policy is satisfied.
  *
  * _Validates: Requirement 9.5_
  */

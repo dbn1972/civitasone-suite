@@ -1,30 +1,27 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createEsignRouteBody, esignRouteIdParam, signBody } from "./validators.js";
-import {
-  validateSignatories,
-  canSign,
-  applySignature,
-  checkDeadlineStatus,
-} from "./domain.js";
+import { validateSignatories, canSign, checkDeadlineStatus } from "./domain.js";
 import type { SignatoryEntry } from "./schema.js";
+import * as commands from "./commands.js";
 import * as repo from "./repo.js";
-import { cache, queue } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { queue } from "../../shared/infra.js";
 
 const WRITE_ROLES = ["procurement_admin", "finance_admin", "super_admin", "legal_officer", "contract_admin"];
 const READ_ROLES = [...WRITE_ROLES, "audit_officer", "procurement_officer", "finance_officer"];
 
 export async function esignRoutes(app: FastifyInstance): Promise<void> {
-  // ── Create e-sign routing ─────────────────────────────────────────────
+  // ── Create e-sign routing — queue-first CQRS write ────────────────────
   app.post("/v1/contract/esign", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createEsignRouteBody.parse(req.body);
 
-    // Build signatories with initial status
+    // Build signatories with initial status (for pre-publish validation only)
     const signatories: SignatoryEntry[] = body.signatories.map((s) => ({
       userId: s.userId,
       ordinal: s.ordinal,
@@ -33,37 +30,16 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
       signedAt: null,
     }));
 
-    // Validate signatory constraints
+    // Validate signatory constraints (pre-publish, read-only)
     const validationError = validateSignatories(signatories);
     if (validationError) {
       throw new HttpError(400, "VALIDATION_FAILED", validationError);
     }
 
-    const id = randomUUID();
-    const route = await repo.insertEsignRoute({
-      id,
-      tenantId: ctx.tenantId,
-      contractId: body.contractId,
-      signatories,
-      currentOrdinal: 1,
-      status: "in_progress",
-      ownerId: body.ownerId,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: route.id,
-        contractId: route.contractId,
-        status: route.status,
-        currentOrdinal: route.currentOrdinal,
-        signatories: route.signatories,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createEsignRoute(ctx, body));
   });
 
-  // ── Sign current signatory ────────────────────────────────────────────
+  // ── Sign current signatory — queue-first CQRS write ───────────────────
   app.post("/v1/contract/esign/:id/sign", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...WRITE_ROLES, ...READ_ROLES]);
@@ -85,55 +61,7 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "CANNOT_SIGN", "user is not the current signatory or has already signed");
     }
 
-    const signedAt = new Date().toISOString();
-    const result = applySignature(signatories, route.currentOrdinal, body.userId, signedAt);
-
-    const newStatus = result.isComplete ? "completed" : "in_progress";
-    const updated = await repo.updateEsignRoute(id, ctx.tenantId, route.version, {
-      signatories: result.signatories,
-      currentOrdinal: result.newOrdinal,
-      status: newStatus,
-      updatedBy: ctx.actorId,
-    });
-
-    if (!updated) {
-      throw new HttpError(409, "VERSION_CONFLICT", "e-sign route was modified by another request");
-    }
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "esign_route", id));
-
-    // If not complete, notify next signatory
-    if (!result.isComplete) {
-      const nextSignatory = result.signatories.find((s) => s.ordinal === result.newOrdinal);
-      if (nextSignatory) {
-        await queue.publish("notification.send", {
-          messageId: randomUUID(),
-          type: "notification.send",
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          schemaVersion: "1.0",
-          payload: {
-            recipient: nextSignatory.userId,
-            eventType: "esign_your_turn",
-            contractId: route.contractId,
-            esignRouteId: id,
-            ordinal: nextSignatory.ordinal,
-            deadlineDays: nextSignatory.deadlineDays,
-          },
-        });
-      }
-    }
-
-    return reply.code(202).send({
-      data: {
-        id: updated.id,
-        status: updated.status,
-        currentOrdinal: updated.currentOrdinal,
-        signed: true,
-        isComplete: result.isComplete,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.signEsignRoute(ctx, id, body.userId));
   });
 
   // ── Get e-sign route status ───────────────────────────────────────────
@@ -177,6 +105,9 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Check deadlines (sweep) — internal / cron-triggered ───────────────
+  // Read-only decision here; the actual escalation write (marking the
+  // signatory overdue + emitting contract.esign.escalated) is queue-first
+  // via COMMANDS.esignCheckDeadline (see consumer.ts).
   app.post("/v1/contract/esign/:id/check-deadline", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -241,18 +172,8 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
         },
       });
 
-      // Mark current signatory as overdue
-      const updatedSignatories = signatories.map((s) => {
-        if (s.ordinal === route.currentOrdinal && s.status === "pending") {
-          return { ...s, status: "overdue" as const };
-        }
-        return s;
-      });
-
-      await repo.updateEsignRoute(id, ctx.tenantId, route.version, {
-        signatories: updatedSignatories,
-        updatedBy: ctx.actorId,
-      });
+      // Mark current signatory as overdue — queue-first (no direct repo write here)
+      await commands.checkEsignDeadline(ctx, id);
 
       return reply.send({ data: { action: "escalated", signatoryOrdinal: route.currentOrdinal } });
     }

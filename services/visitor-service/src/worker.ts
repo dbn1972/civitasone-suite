@@ -77,9 +77,12 @@ registerTurnstileControlConsumers(queue);
 registerConfigRegistryConsumers(queue);
 
 await queue.start();
-const relay = startRelay(db, queue);
+// Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
+// _outbox.messages (migration 0013) would otherwise hide all unpublished rows
+// when app.tenant_id is unset.
+const relay = startRelay(scannerDb as unknown as typeof db, queue);
 // Scheduled outbox purge — remove published messages older than 7 days.
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
   batchSize: 1000,
   logger: log,

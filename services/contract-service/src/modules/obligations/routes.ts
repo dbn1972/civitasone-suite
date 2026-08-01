@@ -1,59 +1,23 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createObligationBody, updateObligationBody, obligationIdParam, obligationListQuery } from "./validators.js";
-import { computeReminderSchedule, validateStatusTransition, type ObligationStatus } from "./domain.js";
+import { validateStatusTransition, type ObligationStatus } from "./domain.js";
+import * as commands from "./commands.js";
 import * as repo from "./repo.js";
-import { cache } from "../../shared/infra.js";
 
 const WRITE_ROLES = ["procurement_admin", "finance_admin", "super_admin", "legal_officer", "contract_admin"];
 const READ_ROLES = [...WRITE_ROLES, "audit_officer", "procurement_officer", "finance_officer"];
 
 export async function obligationRoutes(app: FastifyInstance): Promise<void> {
-  // ── Create obligation ─────────────────────────────────────────────────
+  // ── Create obligation — queue-first CQRS write ────────────────────────
   app.post("/v1/contract/obligations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createObligationBody.parse(req.body);
-
-    const id = randomUUID();
-    const today = new Date().toISOString().split("T")[0]!;
-
-    const obligation = await repo.insertObligation({
-      id,
-      tenantId: ctx.tenantId,
-      contractId: body.contractId,
-      title: body.title,
-      description: body.description,
-      dueDate: body.dueDate,
-      ownerId: body.ownerId,
-      status: "pending",
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    // Generate reminders at 30d/14d/7d before due date
-    const schedule = computeReminderSchedule(body.dueDate, today);
-    if (schedule.length > 0) {
-      await repo.insertReminders(
-        schedule.map((s) => ({
-          id: randomUUID(),
-          tenantId: ctx.tenantId,
-          obligationId: id,
-          reminderDate: s.reminderDate,
-          daysBefore: s.daysBefore,
-          sent: "pending" as const,
-        })),
-      );
-    }
-
-    return reply.code(201).send({
-      id: obligation.id,
-      status: "created",
-      remindersScheduled: schedule.length,
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createObligation(ctx, body));
   });
 
   // ── List obligations ──────────────────────────────────────────────────
@@ -91,7 +55,7 @@ export async function obligationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: { ...obligation, reminders } });
   });
 
-  // ── Update obligation ─────────────────────────────────────────────────
+  // ── Update obligation — queue-first CQRS write ────────────────────────
   app.patch("/v1/contract/obligations/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -103,33 +67,14 @@ export async function obligationRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "obligation not found");
     }
 
-    // Validate status transition if status is being changed
+    // Validate status transition if status is being changed (pre-publish read-only check)
     if (body.status && body.status !== existing.status) {
       if (!validateStatusTransition(existing.status as ObligationStatus, body.status)) {
         throw new HttpError(422, "INVALID_TRANSITION", `cannot transition from ${existing.status} to ${body.status}`);
       }
     }
 
-    const updated = await repo.updateObligation(id, ctx.tenantId, body.version, {
-      ...(body.title !== undefined && { title: body.title }),
-      ...(body.description !== undefined && { description: body.description }),
-      ...(body.dueDate !== undefined && { dueDate: body.dueDate }),
-      ...(body.ownerId !== undefined && { ownerId: body.ownerId }),
-      ...(body.status !== undefined && { status: body.status }),
-      updatedBy: ctx.actorId,
-    });
-
-    if (!updated) {
-      throw new HttpError(409, "VERSION_CONFLICT", "obligation was modified by another request");
-    }
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "obligation", id));
-
-    return reply.code(202).send({
-      id: updated.id,
-      status: "updated",
-      correlationId: ctx.correlationId,
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateObligation(ctx, id, body.version, body));
   });
 
   // ── Error handler ─────────────────────────────────────────────────────
