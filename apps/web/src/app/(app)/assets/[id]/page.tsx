@@ -3,6 +3,7 @@ import { getAssetById } from "../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { AssetDetailActions } from "./AssetDetailActions";
+import { AssetFinancialActions } from "./AssetFinancialActions";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 
 export default async function AssetDetailPage({ params }: { params: { id: string } }) {
@@ -12,11 +13,15 @@ export default async function AssetDetailPage({ params }: { params: { id: string
     return (
       <>
         <PageHeader title="Asset not found" back="/assets/list" backLabel="Asset Register" />
-        <EmptyState
-          icon="🔍"
-          title="Asset not found"
-          message="The requested asset could not be found. It may have been disposed or the link is incorrect."
-        />
+        {source === "error" ? (
+          <DataSourceBadge source="error" />
+        ) : (
+          <EmptyState
+            icon="🔍"
+            title="Asset not found"
+            message="The requested asset could not be found. It may have been disposed or the link is incorrect."
+          />
+        )}
       </>
     );
   }
@@ -50,6 +55,9 @@ export default async function AssetDetailPage({ params }: { params: { id: string
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <AssetDetailActions assetId={asset.id} barcode={ext.barcode ?? asset.serialNo} status={asset.status} />
+          {asset.status !== "disposed" && asset.status !== "condemned" ? (
+            <AssetFinancialActions assetId={asset.id} assetCode={asset.assetCode} bookValueMinor={asset.currentValue} />
+          ) : null}
           <div className="card">
             <div className="card-h"><h3>Details</h3></div>
             <div className="fields">

@@ -498,7 +498,11 @@ describe("Insurance routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/insurance/claims → 202", async () => {
+  it("POST /v1/assets/insurance/claims → 404 POLICY_NOT_FOUND for a non-existent policy", async () => {
+    // Money-safety: createClaim now looks up the referenced policy and rejects
+    // when it does not exist (fail closed) rather than accepting an unbounded
+    // claim against a fabricated policyId. See insurance.test.ts for the
+    // happy-path 202 (claim within sum insured) against a real, seeded policy.
     const res = await app.inject({
       method: "POST", url: "/v1/assets/insurance/claims",
       headers: authHeader(),
@@ -507,7 +511,8 @@ describe("Insurance routes", () => {
         claimDate: "2024-06-01", claimAmountMinor: 25000,
       },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("POLICY_NOT_FOUND");
   });
 
   it("POST /v1/assets/insurance/claims → 400 empty body", async () => {
