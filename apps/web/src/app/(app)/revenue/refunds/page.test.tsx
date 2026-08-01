@@ -62,6 +62,22 @@ describe("RefundsPage", () => {
     expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
   });
 
+  it("never presents '0 receipts' as fact when the receipts fetch errored (CRITICAL-2 regression)", async () => {
+    // Receipts fetch fails (e.g. 403) — the stat must show "—", never a fabricated "0".
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/receipts")) return Promise.resolve({ data: [], source: "error" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+    const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    render(ui);
+
+    expect(screen.getByText("Receipts on record")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    // The create form must not render either — never let a checker/clerk act on an unknown receipt set.
+    expect(screen.queryByRole("heading", { name: "Raise Refund" })).not.toBeInTheDocument();
+  });
+
   it("documents the missing list endpoint instead of fabricating a refund register", async () => {
     fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
     const ui = await RefundsPage({ searchParams: {} });

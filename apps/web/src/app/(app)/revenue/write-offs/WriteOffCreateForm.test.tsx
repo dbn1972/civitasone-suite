@@ -23,7 +23,9 @@ describe("WriteOffCreateForm", () => {
     render(<WriteOffCreateForm assesseeId="a1" />);
     fireEvent.click(screen.getByRole("button", { name: "Raise Write-off" }));
     expect(screen.getByText("Please correct the highlighted fields.")).toBeInTheDocument();
-    expect(screen.getByText("Enter a valid amount greater than zero.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Enter a valid amount greater than zero, with at most 2 decimal places."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Reason is required.")).toBeInTheDocument();
   });
 

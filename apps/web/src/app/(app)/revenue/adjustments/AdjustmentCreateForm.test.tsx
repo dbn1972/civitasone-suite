@@ -49,6 +49,18 @@ describe("AdjustmentCreateForm", () => {
     expect(screen.getByText("Destination demand must differ from the source demand.")).toBeInTheDocument();
   });
 
+  it("rejects an amount greater than the source demand's outstanding balance", () => {
+    render(<AdjustmentCreateForm assesseeId="a1" demands={demands} />);
+    fireEvent.change(screen.getByLabelText(/^From Demand/), { target: { value: "d1" } }); // netMinor 500000 = ₹5,000.00
+    fireEvent.change(screen.getByLabelText(/^To Demand/), { target: { value: "d2" } });
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "6000.00" } }); // ₹6,000.00 > ₹5,000.00
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Adjustment" }));
+    expect(
+      screen.getByText("Amount cannot exceed the source demand's outstanding balance of ₹5,000.00."),
+    ).toBeInTheDocument();
+  });
+
   it("applies an adjustment on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "adj-1", status: "accepted" }), { status: 202 }),

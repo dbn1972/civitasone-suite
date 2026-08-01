@@ -5,18 +5,10 @@ import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import type { DemandOption } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
-
-/** Convert a rupees-and-paise decimal string (clerk input) into a minor-unit integer string. */
-function rupeesToMinorString(v: string): string | null {
-  const trimmed = v.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100).toString();
-}
 
 export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: string; demands: DemandOption[] }) {
   const router = useRouter();
@@ -72,7 +64,17 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
     if (fromDemandId && toDemandId && fromDemandId === toDemandId) {
       errors.to = "Destination demand must differ from the source demand.";
     }
-    if (!minorAmount) errors.amount = "Enter a valid amount greater than zero.";
+    if (!minorAmount) {
+      errors.amount = "Enter a valid amount greater than zero, with at most 2 decimal places.";
+    } else if (fromDemand) {
+      try {
+        if (BigInt(minorAmount) > BigInt(fromDemand.netMinor)) {
+          errors.amount = `Amount cannot exceed the source demand's outstanding balance of ${formatMoney(fromDemand.netMinor)}.`;
+        }
+      } catch {
+        // fromDemand.netMinor failed to parse as a bigint — let the server validate.
+      }
+    }
     if (!reason.trim()) errors.reason = "Reason is required.";
     setFieldErrors(errors);
 

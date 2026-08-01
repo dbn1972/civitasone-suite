@@ -5,17 +5,9 @@ import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
-
-/** Convert a rupees-and-paise decimal string (clerk input) into a minor-unit integer string. */
-function rupeesToMinorString(v: string): string | null {
-  const trimmed = v.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100).toString();
-}
 
 export function WriteOffCreateForm({ assesseeId }: { assesseeId: string }) {
   const router = useRouter();
@@ -44,7 +36,7 @@ export function WriteOffCreateForm({ assesseeId }: { assesseeId: string }) {
     e.preventDefault();
     setMessage(null);
     const errors: { amount?: string; reason?: string } = {};
-    if (!minorAmount) errors.amount = "Enter a valid amount greater than zero.";
+    if (!minorAmount) errors.amount = "Enter a valid amount greater than zero, with at most 2 decimal places.";
     if (!reason.trim()) errors.reason = "Reason is required.";
     setFieldErrors(errors);
 

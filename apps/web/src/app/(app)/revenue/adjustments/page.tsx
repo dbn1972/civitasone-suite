@@ -147,7 +147,7 @@ export default async function AdjustmentsPage({
             message="Select an assessee above to move an outstanding balance between two of their demands."
           />
         </Card>
-      ) : demandsResult.source === "error" && demands.length === 0 ? (
+      ) : demandsResult.source === "error" ? (
         <Card title="Demands">
           <DataSourceBadge source="error" />
         </Card>
