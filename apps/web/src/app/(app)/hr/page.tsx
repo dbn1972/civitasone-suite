@@ -35,6 +35,10 @@ const hrTiles: NavTile[] = [
 	{ title: "Income Tax", href: "/hr/payroll/income-tax", description: "IT computation summary" },
 	{ title: "Statutory", href: "/hr/payroll/statutory", description: "PF, ESI, PT deduction breakdown" },
 	{ title: "Arrears", href: "/hr/payroll/arrears", description: "Arrears computation and recovery" },
+	{ title: "Bonus", href: "/hr/payroll/bonus", description: "Bonus computation and payout" },
+	{ title: "Reimbursements", href: "/hr/payroll/reimbursements", description: "Employee reimbursement claims" },
+	{ title: "Flex Benefits", href: "/hr/payroll/flex-benefits", description: "Flexible benefit plans and elections" },
+	{ title: "Salary Revisions", href: "/hr/payroll/salary-revisions", description: "Pay-fixation revisions (from HRMS)" },
 	{ title: "Payroll Period", href: "/hr/payroll/period", description: "Monthly periods and run status" },
 	// Compensation & Benefits
 	{ title: "Benefits", href: "/hr/benefits", description: "HRA, LTC, medical, conveyance enrollment" },
