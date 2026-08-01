@@ -46,6 +46,11 @@ const hrTiles: NavTile[] = [
 	{ title: "Off-Cycle Runs", href: "/hr/payroll/off-cycle", description: "Bonus / incentive / ad-hoc runs" },
 	{ title: "Run Comparison", href: "/hr/payroll/comparison", description: "Period-vs-period payroll deltas" },
 	{ title: "Corrections", href: "/hr/payroll/corrections", description: "Salary corrections and adjustments" },
+	{ title: "Disbursement & Settlement", href: "/hr/payroll/disbursement", description: "Bank file, NACH, sponsor bank, DSC" },
+	{ title: "Full & Final Settlement", href: "/hr/payroll/fnf", description: "F&F computation and settlements" },
+	{ title: "Employee Loans", href: "/hr/payroll/loans", description: "Loan disbursement and recovery" },
+	{ title: "Cost Allocation", href: "/hr/payroll/costing", description: "Payroll cost rules and reports" },
+	{ title: "DDO Management", href: "/hr/payroll/ddos", description: "Drawing & Disbursing Officers" },
 	// Compensation & Benefits
 	{ title: "Benefits", href: "/hr/benefits", description: "HRA, LTC, medical, conveyance enrollment" },
 	{ title: "Loans", href: "/hr/loans", description: "Employee loan applications and EMI" },
