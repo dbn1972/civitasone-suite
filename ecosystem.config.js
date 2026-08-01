@@ -221,10 +221,11 @@ function svc(name, port, dbUser, dbName, extra = {}) {
   };
 }
 
-function worker(name, dbUser, dbName, extra = {}) {
+function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js") {
   return {
     name: `${name}-worker`,
-    script: "dist/worker.js",
+    // Court: dist/worker.js only exports startWorker(); dist/worker-main.js boots it.
+    script: scriptFile,
     cwd: `${BASE}/services/${name}-service`,
     log_file: `${LOG_DIR}/${name}-worker.log`,
     error_file: `${LOG_DIR}/${name}-worker-error.log`,
@@ -329,8 +330,9 @@ module.exports = {
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
-    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }),
+    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
+    worker("works",        "works_svc",        "civitas_works"),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",

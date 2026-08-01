@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker } from "./domain.js";
+import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -172,13 +172,143 @@ export function registerContractConsumers(queue: Queue): void {
       const contract = await repo.findContractByIdTx(tx, p.id);
       if (!contract || contract.tenantId !== p.tenantId) return;
       // Only a draft contract can be submitted to eOffice for award approval.
-      if (contract.status !== "draft") return;
+      assertTransitionAllowed(contract.status ?? "draft", "pending_approval");
       await repo.updateContract(tx, p.id, {
         status: "pending_approval", updatedBy: msg.actorId, version: (contract.version ?? 1) + 1,
       });
       await audit(tx, msg, "submit_for_eoffice_approval", "contract", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+  });
+
+  // ── milestone complete (on-time) ─────────────────────────────────────────
+  queue.subscribe(COMMANDS.milestoneComplete, async (msg) => {
+    const p = msg.payload as { contractId: string; milestoneId: string; tenantId: string; achievedDate: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const contract = await repo.findContractByIdTx(tx, p.contractId);
+      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
+      if (!milestone) throw new Error(`milestone ${p.milestoneId} not found`);
+      if (milestone.status === "completed" || milestone.status === "completed_late") return;
+      await repo.updateMilestone(tx, p.milestoneId, p.tenantId, {
+        status: "completed",
+        achievedDate: p.achievedDate,
+        penaltyMinor: 0n,
+        netPayableMinor: milestone.amountMinor,
+        updatedBy: msg.actorId,
+        version: (milestone.version ?? 1) + 1,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.milestoneCompleted, eventType: EVENTS.milestoneCompleted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          contractId: p.contractId, milestoneId: p.milestoneId, status: "completed",
+          achievedDate: p.achievedDate, penaltyMinor: "0", netPayableMinor: milestone.amountMinor.toString(),
+        },
+      });
+      await audit(tx, msg, "milestone_complete", "milestone", p.milestoneId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+  });
+
+  // ── milestone mark late (SLA penalty, bigint paise) ──────────────────────
+  queue.subscribe(COMMANDS.milestoneMarkLate, async (msg) => {
+    const p = msg.payload as {
+      contractId: string; milestoneId: string; tenantId: string; achievedDate: string; notes?: string | null;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const contract = await repo.findContractByIdTx(tx, p.contractId);
+      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      const milestone = await repo.findMilestoneByIdTx(tx, p.milestoneId, p.contractId, p.tenantId);
+      if (!milestone) throw new Error(`milestone ${p.milestoneId} not found`);
+      if (milestone.status === "completed" || milestone.status === "completed_late") return;
+
+      const sla = (contract.slaTerms ?? {}) as Record<string, unknown>;
+      const penaltyRatePct = typeof sla["penaltyRatePct"] === "number" ? sla["penaltyRatePct"] : 0.5;
+      const maxPenaltyPct = typeof sla["maxPenaltyPct"] === "number" ? sla["maxPenaltyPct"] : 10;
+      const result = computeMilestonePenalty({
+        amountMinor: milestone.amountMinor,
+        dueDate: milestone.dueDate,
+        achievedDate: p.achievedDate,
+        penaltyRatePct,
+        maxPenaltyPct,
+      });
+
+      await repo.updateMilestone(tx, p.milestoneId, p.tenantId, {
+        status: result.status,
+        achievedDate: p.achievedDate,
+        penaltyMinor: result.penaltyMinor,
+        netPayableMinor: result.netPayableMinor,
+        updatedBy: msg.actorId,
+        version: (milestone.version ?? 1) + 1,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.milestoneCompleted, eventType: EVENTS.milestoneCompleted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          contractId: p.contractId, milestoneId: p.milestoneId, status: result.status,
+          achievedDate: p.achievedDate, delayDays: result.delayDays, delayWeeks: result.delayWeeks,
+          penaltyMinor: result.penaltyMinor.toString(), netPayableMinor: result.netPayableMinor.toString(),
+          notes: p.notes ?? null,
+        },
+      });
+      await audit(tx, msg, "milestone_mark_late", "milestone", p.milestoneId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+  });
+
+  // ── performance bond register ────────────────────────────────────────────
+  queue.subscribe(COMMANDS.bondRegister, async (msg) => {
+    const p = msg.payload as {
+      id: string; contractId: string; tenantId: string; bondType: string; amountMinor: number;
+      currency?: string; issuer: string; referenceNo: string; validFrom: string; validTo: string; notes?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const contract = await repo.findContractByIdTx(tx, p.contractId);
+      if (!contract || contract.tenantId !== p.tenantId) throw new Error(`contract ${p.contractId} not found`);
+      await repo.insertBond(tx, {
+        id: p.id, contractId: p.contractId, tenantId: p.tenantId,
+        bondType: p.bondType, amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        issuer: p.issuer, referenceNo: p.referenceNo, validFrom: p.validFrom, validTo: p.validTo,
+        status: "held", notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.bondRegistered, eventType: EVENTS.bondRegistered,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { bondId: p.id, contractId: p.contractId, amountMinor: p.amountMinor, bondType: p.bondType },
+      });
+      await audit(tx, msg, "bond_register", "performance_bond", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+  });
+
+  // ── performance bond transition ──────────────────────────────────────────
+  queue.subscribe(COMMANDS.bondTransition, async (msg) => {
+    const p = msg.payload as {
+      contractId: string; bondId: string; tenantId: string; toStatus: "released" | "claimed" | "forfeited"; notes?: string | null;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const bond = await repo.findBondByIdTx(tx, p.bondId, p.tenantId);
+      if (!bond || bond.contractId !== p.contractId) throw new Error(`bond ${p.bondId} not found`);
+      assertBondTransition(bond.status ?? "held", p.toStatus);
+      await repo.updateBond(tx, p.bondId, p.tenantId, {
+        status: p.toStatus,
+        notes: p.notes ?? bond.notes,
+        updatedBy: msg.actorId,
+        version: (bond.version ?? 1) + 1,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.bondTransitioned, eventType: EVENTS.bondTransitioned,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { bondId: p.bondId, contractId: p.contractId, from: bond.status, to: p.toStatus },
+      });
+      await audit(tx, msg, "bond_transition", "performance_bond", p.bondId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
   });
 }
 
