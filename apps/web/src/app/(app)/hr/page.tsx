@@ -23,6 +23,9 @@ const hrTiles: NavTile[] = [
 	// Payroll
 	{ title: "Payroll Runs", href: "/hr/payroll", description: "Monthly salary processing and status" },
 	{ title: "Salary Slips", href: "/hr/payroll/salary-slips", description: "Individual salary statements" },
+	{ title: "Pay Structures", href: "/hr/payroll/structures", description: "Earning/deduction component structures" },
+	{ title: "CTC Configuration", href: "/hr/payroll/ctc", description: "CTC component rules and calculator" },
+	{ title: "Pay Groups", href: "/hr/payroll/pay-groups", description: "Employee pay-schedule groups" },
 	{ title: "Salary Structure", href: "/hr/salary-structure", description: "Grade-wise component breakdowns" },
 	{ title: "Pay Matrix", href: "/hr/pay-matrix", description: "7th CPC pay band matrix" },
 	{ title: "GPF", href: "/hr/payroll/gpf", description: "General Provident Fund statements" },
