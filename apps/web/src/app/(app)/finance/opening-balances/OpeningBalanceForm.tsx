@@ -35,8 +35,12 @@ export function OpeningBalanceForm({ fyCode }: Props) {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
-  const firstAccountRef = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [invalidRowId, setInvalidRowId] = useState<number | null>(null);
   const errId = useId();
+  function focusRow(id: number | undefined) {
+    if (id != null) rowRefs.current[id]?.focus();
+  }
 
   function updateRow(id: number, patch: Partial<EntryRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -56,22 +60,37 @@ export function OpeningBalanceForm({ fyCode }: Props) {
 
   function validate(): boolean {
     const entries = activeEntries();
+    setInvalidRowId(null);
     if (entries.length === 0) {
       setRowError("Enter at least one account with a debit or credit amount.");
-      firstAccountRef.current?.focus();
+      focusRow(rows[0]?.id);
       return false;
     }
     for (const r of entries) {
       if (!r.accountCode.trim()) {
         setRowError("Every row with an amount needs an account code.");
+        setInvalidRowId(r.id);
+        focusRow(r.id);
         return false;
       }
       const debit = rupeesToPaise(r.debit);
       const credit = rupeesToPaise(r.credit);
       if (debit <= 0 && credit <= 0) {
         setRowError(`Row for account ${r.accountCode} needs a debit or credit amount greater than zero.`);
+        setInvalidRowId(r.id);
+        focusRow(r.id);
         return false;
       }
+    }
+    // Balanced-entry check: opening balances seed the trial balance, so total
+    // debits MUST equal total credits — an unbalanced set corrupts the GL (fail closed).
+    const totalDebit = entries.reduce((s, r) => s + rupeesToPaise(r.debit), 0);
+    const totalCredit = entries.reduce((s, r) => s + rupeesToPaise(r.credit), 0);
+    if (totalDebit !== totalCredit) {
+      const fmt = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      setRowError(`Total debits (${fmt(totalDebit)}) must equal total credits (${fmt(totalCredit)}). Difference: ${fmt(Math.abs(totalDebit - totalCredit))}.`);
+      focusRow(rows[0]?.id);
+      return false;
     }
     setRowError(null);
     return true;
@@ -137,10 +156,12 @@ export function OpeningBalanceForm({ fyCode }: Props) {
                       <label htmlFor={`ob-account-${row.id}`} className="sr-only">Account code, row {idx + 1}</label>
                       <input
                         id={`ob-account-${row.id}`}
-                        ref={idx === 0 ? firstAccountRef : undefined}
+                        ref={(el) => { rowRefs.current[row.id] = el; }}
                         value={row.accountCode}
                         onChange={(e) => updateRow(row.id, { accountCode: e.target.value })}
                         maxLength={20}
+                        aria-invalid={invalidRowId === row.id || undefined}
+                        aria-describedby={invalidRowId === row.id ? errId : undefined}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, width: "100%" }}
                       />
                     </td>

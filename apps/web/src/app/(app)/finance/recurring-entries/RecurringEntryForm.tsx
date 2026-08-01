@@ -46,6 +46,8 @@ export function RecurringEntryForm({ accounts }: Props) {
   const nameId = useId();
   const debitId = useId();
   const creditId = useId();
+  const freqId = useId();
+  const voucherTypeId = useId();
   const amountId = useId();
   const nextRunId = useId();
   const narrationId = useId();
@@ -246,9 +248,9 @@ export function RecurringEntryForm({ accounts }: Props) {
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }} htmlFor="recurring-frequency-select">Frequency</label>
+              <label style={{ fontSize: 13, fontWeight: 600 }} htmlFor={freqId}>Frequency</label>
               <select
-                id="recurring-frequency-select"
+                id={freqId}
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as (typeof FREQUENCIES)[number])}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
@@ -260,9 +262,9 @@ export function RecurringEntryForm({ accounts }: Props) {
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 600 }} htmlFor="recurring-voucher-type">Voucher Type</label>
+              <label style={{ fontSize: 13, fontWeight: 600 }} htmlFor={voucherTypeId}>Voucher Type</label>
               <input
-                id="recurring-voucher-type"
+                id={voucherTypeId}
                 value={voucherType}
                 onChange={(e) => setVoucherType(e.target.value)}
                 maxLength={20}

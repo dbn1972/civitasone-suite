@@ -28,6 +28,8 @@ describe("OpeningBalanceForm", () => {
     render(<OpeningBalanceForm fyCode="2026-27" />);
     fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Account code, row 2"), { target: { value: "2000" } });
+    fireEvent.change(screen.getByLabelText("Credit amount, row 2"), { target: { value: "5000" } });
 
     fireEvent.click(screen.getByText(/Save Opening Balances/));
     await waitFor(() => expect(screen.getByText("Save these opening balances?")).toBeInTheDocument());
@@ -45,6 +47,8 @@ describe("OpeningBalanceForm", () => {
     render(<OpeningBalanceForm fyCode="2026-27" />);
     fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Account code, row 2"), { target: { value: "2000" } });
+    fireEvent.change(screen.getByLabelText("Credit amount, row 2"), { target: { value: "5000" } });
 
     fireEvent.click(screen.getByText(/Save Opening Balances/));
     await waitFor(() => expect(screen.getByText("Save these opening balances?")).toBeInTheDocument());
