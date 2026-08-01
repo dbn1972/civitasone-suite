@@ -1,7 +1,7 @@
 "use client";
 
 import { useConfirmAction, ConfirmDialog } from "../../../_components/ds";
-import { browserFetch } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 interface BankFileActionProps {
   batchId: string;
@@ -24,7 +24,7 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
       const res = await browserFetch(`v1/finance/pfms/${batchId}/bank-file`, { method: "GET" });
-      if (!res.ok) throw new Error(`API_ERROR: ${res.status}`);
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
