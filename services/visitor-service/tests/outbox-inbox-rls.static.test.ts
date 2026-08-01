@@ -1,7 +1,7 @@
 /**
  * Static regression: visitor-service migration 0013 must enable RLS on
- * `_outbox.messages` and `_inbox.processed`, guarded by table-owner checks
- * (safe no-op when the connecting role doesn't own the table).
+ * `_outbox.messages` (and `_inbox.processed` when tenant_id exists),
+ * guarded by table-owner checks.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -38,5 +38,9 @@ describe("visitor outbox/inbox RLS migration 0013", () => {
 
   it("documents scannerDb relay requirement", () => {
     expect(sql.toLowerCase()).toMatch(/scanner/);
+  });
+
+  it("skips inbox RLS when tenant_id column is absent", () => {
+    expect(sql).toContain("no tenant_id column");
   });
 });
