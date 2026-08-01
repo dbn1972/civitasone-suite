@@ -1,11 +1,15 @@
+import { pino } from "pino";
+import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { contractObligations } from "./schema.js";
-import { validateStatusTransition, type ObligationStatus } from "./domain.js";
+import { contractObligations, obligationReminders } from "./schema.js";
+import { computeReminderSchedule, validateStatusTransition, type ObligationStatus } from "./domain.js";
+
+const log = pino({ name: "contract-obligations-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -38,6 +42,22 @@ export function registerObligationConsumers(q: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+
+      // Generate reminders at 30d/14d/7d before due date
+      const today = new Date().toISOString().split("T")[0]!;
+      const schedule = computeReminderSchedule(p.dueDate, today);
+      if (schedule.length > 0) {
+        await tx.insert(obligationReminders).values(
+          schedule.map((s) => ({
+            id: randomUUID(),
+            tenantId: msg.tenantId,
+            obligationId: p.id,
+            reminderDate: s.reminderDate,
+            daysBefore: s.daysBefore,
+            sent: "pending" as const,
+          })),
+        );
+      }
 
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.obligationCreated, eventType: EVENTS.obligationCreated,
@@ -92,7 +112,10 @@ export function registerObligationConsumers(q: Queue): void {
         )
         .returning();
 
-      if (!updated) return;
+      if (!updated) {
+        log.warn({ event: "version_conflict_or_missing", messageId: msg.messageId, tenantId: msg.tenantId }, "obligation update skipped (no row or version mismatch)");
+        return;
+      }
 
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.obligationUpdated, eventType: EVENTS.obligationUpdated,

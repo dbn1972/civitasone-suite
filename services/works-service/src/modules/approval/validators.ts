@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 
 export const createAaSchema = z.object({
   workId: z.string().uuid(),
@@ -6,7 +7,7 @@ export const createAaSchema = z.object({
   aaDate: z.string(),
   approvingAuthorityId: z.string().uuid(),
   approvingOfficeId: z.string().uuid().optional(),
-  approvedAmountMinor: z.string().or(z.number()),
+  approvedAmountMinor: zMoneyMinorString,
   remarks: z.string().max(2048).optional(),
 });
 
@@ -18,7 +19,7 @@ export const createTsSchema = z.object({
   tsOfficeId: z.string().uuid().optional(),
   srYear: z.string().max(16).optional(),
   zone: z.string().max(64).optional(),
-  tsAmountMinor: z.string().or(z.number()),
+  tsAmountMinor: zMoneyMinorString,
   remarks: z.string().max(2048).optional(),
 });
 

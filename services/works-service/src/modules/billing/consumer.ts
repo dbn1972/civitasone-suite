@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -62,8 +63,8 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
-      const gross = BigInt(p.grossAmountMinor as string | number);
-      const deductions = BigInt((p.deductionsMinor as string | number) ?? 0);
+      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
+      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);
 
       await tx.insert(bills).values({

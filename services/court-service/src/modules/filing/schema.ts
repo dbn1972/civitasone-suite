@@ -5,8 +5,9 @@
  * the DDL created by migrations/0001_court_core.sql.
  *
  * Scope: filings. Monetary amounts (filing_fee_minor, court_fee_minor) are BIGINT
- * paise (minor units) — never floats. Drizzle `bigint` with mode "number" surfaces
- * them as JS numbers for the app layer.
+ * paise (minor units) — never floats. Drizzle `bigint` with mode "bigint" surfaces
+ * them as JS BigInt for the app layer, so amounts never lose precision through
+ * the JS number range (mode "number" silently loses precision above 2^53).
  *
  * Standard mutable-entity columns: id (uuid PK), tenant_id, created_at, updated_at,
  * created_by, updated_by, version.
@@ -23,8 +24,9 @@ export const filings = courtSchema.table("filings", {
   tenantId:       uuid("tenant_id").notNull(),
   caseId:         uuid("case_id").notNull(),
   filingType:     varchar("filing_type", { length: 32 }),
-  filingFeeMinor: bigint("filing_fee_minor", { mode: "number" }).notNull().default(0),
-  courtFeeMinor:  bigint("court_fee_minor", { mode: "number" }).notNull().default(0),
+  // BigInt PAISE — server-authoritative fee, never a JS number.
+  filingFeeMinor: bigint("filing_fee_minor", { mode: "bigint" }).notNull().default(0n),
+  courtFeeMinor:  bigint("court_fee_minor", { mode: "bigint" }).notNull().default(0n),
   status:         varchar("status", { length: 32 }).notNull().default("submitted"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

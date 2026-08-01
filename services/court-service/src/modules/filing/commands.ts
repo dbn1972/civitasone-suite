@@ -22,7 +22,16 @@ export async function submitFiling(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { ...body, id: filingId, caseId, tenantId: ctx.tenantId },
+    // BigInt → string: BigInt is not JSON-serialisable, so fee amounts cross the
+    // queue wire as base-10 strings; the consumer decodes them back with parseMinor.
+    payload: {
+      ...body,
+      filingFeeMinor: body.filingFeeMinor.toString(),
+      courtFeeMinor: body.courtFeeMinor.toString(),
+      id: filingId,
+      caseId,
+      tenantId: ctx.tenantId,
+    },
   });
 
   return { accepted: true, filingId };

@@ -1,7 +1,8 @@
 /**
  * SQS/RabbitMQ consumer entrypoint for inspection-service.
- * Subscribes to all COMMANDS + CONSUMED_EVENTS, starts the outbox relay,
- * and handles DLQ routing for messages that fail after max retries.
+ * Subscribes to all COMMANDS + CONSUMED_EVENTS and starts the outbox relay.
+ * Dead-lettering after max retries is handled natively by SQS RedrivePolicy
+ * (see the DLQ handling section below) — this worker does not poll DLQ topics.
  *
  * Graceful shutdown: SIGTERM → stop queue consumers → clear outbox relay → close DB pool.
  *
@@ -14,8 +15,6 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { tenantScoped } from "./shared/tenant-queue.js";
 import { startOutboxPurge } from "@civitasone/outbox";
-import { COMMANDS, CONSUMED_EVENTS } from "./topics.js";
-import { incrementDlqMessage, captureError } from "@civitasone/observability";
 
 const log = pino({ name: "inspection-worker" });
 
@@ -56,33 +55,15 @@ registerSurveyConsumers(queue);
 registerTelemetryConsumers(queue);
 
 // ── DLQ handling ─────────────────────────────────────────────────────────────
-// Subscribe to DLQ topics for observability. Messages that exceed max retries
-// are logged with full context so operators can investigate and replay.
-const allTopics = [...Object.values(COMMANDS), ...Object.values(CONSUMED_EVENTS)];
-
-for (const topic of allTopics) {
-  const dlqTopic = `${topic}.dlq`;
-  queue.subscribe(dlqTopic, async (msg) => {
-    incrementDlqMessage(topic);
-    captureError(new Error(`DLQ message received: ${topic}`), {
-      service: "inspection-service",
-      topic,
-      correlationId: msg.correlationId,
-      messageId: msg.messageId,
-      tenantId: msg.tenantId,
-    });
-    log.error(
-      {
-        event: "dlq_received",
-        topic,
-        messageId: msg.messageId,
-        tenantId: msg.tenantId,
-        correlationId: msg.correlationId,
-      },
-      "message dead-lettered after max retries",
-    );
-  });
-}
+// No per-topic DLQ pollers here. Native SQS RedrivePolicy already dead-letters
+// messages that exceed maxReceiveCount entirely inside SQS, with no consumer
+// involvement required. Subscribing to a per-topic dead-letter queue for every
+// COMMANDS/CONSUMED_EVENTS topic (one extra long-poller per topic — roughly 2x
+// the total topic count) just multiplied this service's SQS ReceiveMessage
+// traffic and open connections for
+// no operational gain: DLQ depth/redrive is ops-side observability (CloudWatch/SQS
+// console alarms on ApproximateNumberOfMessagesVisible), not something this
+// worker needs to poll for.
 
 // ── Start queue, outbox relay, and purge ─────────────────────────────────────
 await queue.start();
@@ -111,66 +92,77 @@ partitionMaint.unref();
 // ── Overdue findings detection (Requirement 9.5) ─────────────────────────────
 // Runs every hour. Finds findings in notice_issued state with past-due compliance
 // notices, transitions them to overdue, and publishes escalation notification events.
-import { findOverdueFindings, updateFindingState } from "./modules/findings/repo.js";
+import { findOverdueFindings, findOverdueFindingTenantIds, updateFindingState } from "./modules/findings/repo.js";
+import { runWithTenant } from "@civitasone/db";
+import { scopedPlatformRead } from "./shared/db.js";
 import { EVENTS } from "./topics.js";
 
 async function processOverdueFindings(): Promise<void> {
   try {
-    // We need to iterate tenants — for now use a direct query to get distinct tenants
-    const tenantRows = await db.execute(sql`SELECT DISTINCT tenant_id FROM findings.findings WHERE state = 'notice_issued' AND deleted_at IS NULL`);
-    const tenantIds = (tenantRows as unknown as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
+    // Step 1: candidate TENANT IDS ONLY via a scoped platform-bypass read (minimal
+    // blast radius — ids, not rows). A bare db.execute()/db.transaction() here sets
+    // no app.tenant_id GUC, so the strict tenant_isolation policy's
+    // `tenant_id = current_tenant_id()` check never matches (current_tenant_id() is
+    // NULL under no GUC) — this silently found ZERO tenants in every environment
+    // before this fix. See shared/db.ts's scopedPlatformRead() doc comment.
+    const tenantIds = await scopedPlatformRead((tx) => findOverdueFindingTenantIds(tx));
 
     for (const tenantId of tenantIds) {
-      const overdueFindings = await findOverdueFindings(tenantId);
+      // Step 2: the actual overdue lookup + state-transition writes run under this
+      // tenant's own strict-RLS GUC via runWithTenant — no bypass policy exists for
+      // UPDATE, so writes always remain tenant-scoped.
+      await runWithTenant(tenantId, async () => {
+        const overdueFindings = await findOverdueFindings(tenantId);
 
-      for (const finding of overdueFindings) {
-        try {
-          await db.transaction(async (tx) => {
-            // Transition to overdue
-            await updateFindingState(tx, finding.id, tenantId, "overdue", "system");
+        for (const finding of overdueFindings) {
+          try {
+            await db.transaction(async (tx) => {
+              // Transition to overdue
+              await updateFindingState(tx, finding.id, tenantId, "overdue", "system");
 
-            // Emit overdue event via outbox for notification escalation
-            const { enqueue: outboxEnqueue } = await import("./shared/outbox.js");
-            await outboxEnqueue(tx, {
-              topic: EVENTS.findingOverdue,
-              eventType: EVENTS.findingOverdue,
-              tenantId,
-              actorId: "system",
-              correlationId: `overdue-check-${finding.id}`,
-              payload: {
-                findingId: finding.id,
-                findingNumber: finding.findingNumber,
-                inspectionId: finding.inspectionId,
-                entityId: finding.inspectionId,
-                dueDate: "past",
-              },
-            });
-
-            // Notification escalation event
-            await outboxEnqueue(tx, {
-              topic: "notification.send",
-              eventType: "notification.send",
-              tenantId,
-              actorId: "system",
-              correlationId: `overdue-notif-${finding.id}`,
-              payload: {
-                type: "finding.overdue_escalation",
-                data: {
+              // Emit overdue event via outbox for notification escalation
+              const { enqueue: outboxEnqueue } = await import("./shared/outbox.js");
+              await outboxEnqueue(tx, {
+                topic: EVENTS.findingOverdue,
+                eventType: EVENTS.findingOverdue,
+                tenantId,
+                actorId: "system",
+                correlationId: `overdue-check-${finding.id}`,
+                payload: {
                   findingId: finding.id,
                   findingNumber: finding.findingNumber,
                   inspectionId: finding.inspectionId,
+                  entityId: finding.inspectionId,
+                  dueDate: "past",
                 },
-              },
-            });
-          });
+              });
 
-          log.info({ event: "finding_transitioned_overdue", findingId: finding.id, tenantId },
-            "finding transitioned to overdue");
-        } catch (err) {
-          log.warn({ err, findingId: finding.id, tenantId, event: "overdue_transition_failed" },
-            "failed to transition finding to overdue");
+              // Notification escalation event
+              await outboxEnqueue(tx, {
+                topic: "notification.send",
+                eventType: "notification.send",
+                tenantId,
+                actorId: "system",
+                correlationId: `overdue-notif-${finding.id}`,
+                payload: {
+                  type: "finding.overdue_escalation",
+                  data: {
+                    findingId: finding.id,
+                    findingNumber: finding.findingNumber,
+                    inspectionId: finding.inspectionId,
+                  },
+                },
+              });
+            });
+
+            log.info({ event: "finding_transitioned_overdue", findingId: finding.id, tenantId },
+              "finding transitioned to overdue");
+          } catch (err) {
+            log.warn({ err, findingId: finding.id, tenantId, event: "overdue_transition_failed" },
+              "failed to transition finding to overdue");
+          }
         }
-      }
+      });
     }
   } catch (err) {
     log.warn({ err, event: "overdue_check_failed" }, "overdue findings detection failed");

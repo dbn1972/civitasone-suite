@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
-import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, calculateNetPayable } from "./domain.js";
+import * as commands from "./commands.js";
+import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence } from "./domain.js";
 import { getMb, getBill, listBillsForWork } from "./repo.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -25,18 +25,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.issueMbSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.mbIssue, {
-      messageId: randomUUID(),
-      type: COMMANDS.mbIssue,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.issueMbCommand(ctx, body));
   });
 
   // Finalize MB
@@ -52,16 +41,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${mb.status}' to '${body.nextStatus}'`);
     }
 
-    await queue.publish(COMMANDS.mbFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.mbFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id: body.id, nextStatus: body.nextStatus },
-    });
-    return reply.status(202).send({ status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeMbCommand(ctx, body.id, body.nextStatus));
   });
 
   // Create bill
@@ -69,18 +49,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createBillSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.billCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.billCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createBillCommand(ctx, body));
   });
 
   // Finalize bill
@@ -96,16 +65,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${bill.status}' to '${body.nextStatus}'`);
     }
 
-    await queue.publish(COMMANDS.billFinalize, {
-      messageId: randomUUID(),
-      type: COMMANDS.billFinalize,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id: body.id, nextStatus: body.nextStatus },
-    });
-    return reply.status(202).send({ status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeBillCommand(ctx, body.id, body.nextStatus));
   });
 
   // Record a measurement against an MB
@@ -113,18 +73,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.recordMeasurementSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.measurementRecord, {
-      messageId: randomUUID(),
-      type: COMMANDS.measurementRecord,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordMeasurementCommand(ctx, body));
   });
 
   // Compile monthly account
@@ -132,17 +81,6 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
     const body = v.compileAccountSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.accountCompile, {
-      messageId: randomUUID(),
-      type: COMMANDS.accountCompile,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.compileAccountCommand(ctx, body));
   });
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getInspectionCapas } from "../_data/loaders";
+import { CapaRowAction } from "./CapaActions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function Page() {
                 <th>ID</th>
                 <th>Status</th>
                 <th>Summary</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -34,6 +36,9 @@ export default async function Page() {
                   <td>{String(row.id).slice(0, 8)}…</td>
                   <td>{String(row.status ?? "—")}</td>
                   <td>{String(row.title ?? row.name ?? row.findingCode ?? row.entityId ?? "—")}</td>
+                  <td>
+                    <CapaRowAction id={String(row.id)} status={String(row.status ?? "")} />
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 
 export const addBoqItemSchema = z.object({
   workId: z.string().uuid(),
@@ -6,7 +7,7 @@ export const addBoqItemSchema = z.object({
   itemDescription: z.string().min(1).max(1024),
   itemCode: z.string().max(64).optional(),
   unit: z.string().min(1).max(64),
-  rate: z.string().or(z.number()),
+  rate: zMoneyMinorString,
   quantity: z.number().positive(),
   numberVal: z.number().optional(),
   lengthVal: z.number().optional(),
@@ -23,12 +24,12 @@ export const recapitulateSchema = z.object({
   workChargePercent: z.number().min(0).max(100),
   qualityControlPercent: z.number().min(0).max(100),
   centagePercent: z.number().min(0).max(100),
-  otherCharges: z.string().or(z.number()).optional(),
+  otherCharges: zMoneyMinorString.optional(),
 });
 
 export const updateBoqItemSchema = z.object({
   id: z.string().uuid(),
-  rate: z.string().or(z.number()).optional(),
+  rate: zMoneyMinorString.optional(),
   quantity: z.number().optional(),
   itemDescription: z.string().max(1024).optional(),
   unit: z.string().max(64).optional(),

@@ -1,4 +1,5 @@
 import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -11,8 +12,10 @@ type SubmitFilingPayload = {
   caseId: string;
   tenantId: string;
   filingType: string;
-  filingFeeMinor: number;
-  courtFeeMinor: number;
+  // BigInt PAISE crosses the queue wire as a base-10 STRING (BigInt is not
+  // JSON-serialisable) — decoded back to bigint below via parseMinor.
+  filingFeeMinor: string;
+  courtFeeMinor: string;
 };
 
 export function registerFilingConsumers(
@@ -28,9 +31,10 @@ export function registerFilingConsumers(
       // authoritative (client-supplied amounts cannot lower/tamper it); a
       // malformed schedule or a negative amount is a poison message.
       const feeCfg = await configRepo.getConfigValueOnTx(tx, p.tenantId, "fee_schedule", p.filingType);
-      let fees: { filingFeeMinor: number; courtFeeMinor: number; source: "config" | "client" };
+      let fees: { filingFeeMinor: bigint; courtFeeMinor: bigint; source: "config" | "client" };
       try {
-        fees = resolveFees(feeCfg, { filingFeeMinor: p.filingFeeMinor, courtFeeMinor: p.courtFeeMinor });
+        const fallback = { filingFeeMinor: parseMinor(p.filingFeeMinor), courtFeeMinor: parseMinor(p.courtFeeMinor) };
+        fees = resolveFees(feeCfg, fallback);
         assertNonNegativeFee(fees.filingFeeMinor);
         assertNonNegativeFee(fees.courtFeeMinor);
       } catch (e) {
@@ -58,8 +62,9 @@ export function registerFilingConsumers(
           caseId: p.caseId,
           filingId: p.id,
           filingType: p.filingType,
-          filingFeeMinor: fees.filingFeeMinor,
-          courtFeeMinor: fees.courtFeeMinor,
+          // BigInt → string for the event payload (not JSON-serialisable).
+          filingFeeMinor: fees.filingFeeMinor.toString(),
+          courtFeeMinor: fees.courtFeeMinor.toString(),
           feeSource: fees.source,
         },
       });

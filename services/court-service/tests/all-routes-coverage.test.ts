@@ -820,7 +820,13 @@ describe("Filing Routes", () => {
   afterAll(async () => { await app.close(); });
 
   beforeEach(() => {
-    mockState.queryResult = [{ id: "f1", caseId: CASE_ID, tenantId: TENANT_ID, filingType: "written_statement", status: "submitted" }];
+    // filingFeeMinor/courtFeeMinor are BigInt PAISE columns — routes.ts's
+    // serializeFiling() calls .toString() on them, so the mock row must carry
+    // real bigints here (as a genuine DB row would), not omit the columns.
+    mockState.queryResult = [{
+      id: "f1", caseId: CASE_ID, tenantId: TENANT_ID, filingType: "written_statement",
+      status: "submitted", filingFeeMinor: 500n, courtFeeMinor: 200n,
+    }];
     mockState.countResult = 1;
   });
 

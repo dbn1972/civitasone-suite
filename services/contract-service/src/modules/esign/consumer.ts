@@ -1,3 +1,4 @@
+import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
@@ -6,6 +7,8 @@ import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { esignRoutes, type SignatoryEntry } from "./schema.js";
 import { validateSignatories, canSign, applySignature, checkDeadlineStatus } from "./domain.js";
+
+const log = pino({ name: "contract-esign-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -94,7 +97,10 @@ export function registerEsignConsumers(q: Queue): void {
         )
         .returning();
 
-      if (!updated) return;
+      if (!updated) {
+        log.warn({ event: "version_conflict_or_missing", messageId: msg.messageId, tenantId: msg.tenantId }, "esign update skipped (no row or version mismatch)");
+        return;
+      }
 
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.esignSigned, eventType: EVENTS.esignSigned,

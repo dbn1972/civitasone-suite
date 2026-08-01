@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
+import * as commands from "./commands.js";
 import { listScopes, listIssues } from "./repo.js";
 import { getAward } from "../tender/repo.js";
 import { canRecordPhysicalCompletion } from "./domain.js";
@@ -35,18 +35,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.addScopeSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.scopeAdd, {
-      messageId: randomUUID(),
-      type: COMMANDS.scopeAdd,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addScopeCommand(ctx, body));
   });
 
   // Record progress
@@ -54,18 +43,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.recordProgressSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.progressRecord, {
-      messageId: randomUUID(),
-      type: COMMANDS.progressRecord,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordProgressCommand(ctx, body));
   });
 
   // Upload photo
@@ -73,18 +51,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.uploadPhotoSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.photoUpload, {
-      messageId: randomUUID(),
-      type: COMMANDS.photoUpload,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.uploadPhotoCommand(ctx, body));
   });
 
   // Create issue
@@ -92,18 +59,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createIssueSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.issueCreate, {
-      messageId: randomUUID(),
-      type: COMMANDS.issueCreate,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createIssueCommand(ctx, body));
   });
 
   // Close work
@@ -111,18 +67,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
     const body = v.closeWorkSchema.parse(req.body);
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.workClose, {
-      messageId: randomUUID(),
-      type: COMMANDS.workClose,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeWorkCommand(ctx, body));
   });
 
   // Record physical completion certificate (SVC-070).
@@ -136,17 +81,6 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     if (!canRecordPhysicalCompletion(hasAgreement)) {
       throw new HttpError(422, "NO_AGREEMENT", "Cannot record physical completion without a finalized agreement");
     }
-    const id = randomUUID();
-
-    await queue.publish(COMMANDS.physicalComplete, {
-      messageId: randomUUID(),
-      type: COMMANDS.physicalComplete,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, ...body },
-    });
-    return reply.status(202).send({ id, status: "accepted" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.physicalCompleteCommand(ctx, body));
   });
 }
