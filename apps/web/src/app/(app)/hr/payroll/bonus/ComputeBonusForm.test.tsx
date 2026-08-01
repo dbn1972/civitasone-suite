@@ -1,0 +1,62 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+const refreshMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
+}));
+
+import { ComputeBonusForm } from "./ComputeBonusForm";
+
+describe("ComputeBonusForm", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("requires an employee id before opening the confirm dialog", () => {
+    render(<ComputeBonusForm />);
+    fireEvent.click(screen.getByRole("button", { name: "Compute Bonus" }));
+    expect(screen.getByText("Employee ID is required.")).toBeInTheDocument();
+  });
+
+  it("computes a bonus on confirm (happy path)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { id: "b1", bonus_amount_minor: 416500, status: "computed" } }),
+        { status: 201 },
+      ),
+    );
+
+    render(<ComputeBonusForm />);
+    fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
+    fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
+    fireEvent.change(screen.getByLabelText(/^Basic Salary/), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compute Bonus" }));
+
+    await waitFor(() => expect(screen.getByText("Compute this bonus?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Compute bonus"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bonus of .* computed\./)).toBeInTheDocument();
+    });
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("surfaces a server error on the confirm dialog (error path)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 422 }));
+
+    render(<ComputeBonusForm />);
+    fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
+    fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
+    fireEvent.change(screen.getByLabelText(/^Basic Salary/), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compute Bonus" }));
+
+    await waitFor(() => expect(screen.getByText("Compute this bonus?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Compute bonus"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/API_ERROR: 422/)).toBeInTheDocument();
+    });
+  });
+});
