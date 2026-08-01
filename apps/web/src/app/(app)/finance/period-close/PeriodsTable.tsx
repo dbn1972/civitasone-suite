@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, StatusPill, ConfirmDialog } from "@/app/_components/ds";
+import { DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -13,6 +13,11 @@ export type PeriodRow = {
   closedBy: string | null;
   closedAt: string | null;
 } & Record<string, unknown>;
+
+type DisplayRow = PeriodRow & {
+  /** Synthetic column key for the row-action cell; value unused (render overrides). */
+  actions: string;
+};
 
 type PeriodAction = "close" | "hard-close" | "reopen";
 
@@ -72,17 +77,19 @@ export function PeriodsTable({ periods }: { periods: PeriodRow[] }) {
     }
   }
 
+  const displayRows: DisplayRow[] = periods.map((p) => ({ ...p, actions: p.period }));
+
   const columns = [
-    { key: "period" as const, label: "Period", render: (row: PeriodRow) => <span className="mono">{row.period}</span> },
-    { key: "fiscalYear" as const, label: "Fiscal Year", render: (row: PeriodRow) => row.fiscalYear || "—" },
+    { key: "period" as const, label: "Period", render: (row: DisplayRow) => <span className="mono">{row.period}</span> },
+    { key: "fiscalYear" as const, label: "Fiscal Year", render: (row: DisplayRow) => row.fiscalYear || "—" },
     { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "closedBy" as const, label: "Closed By", render: (row: PeriodRow) => row.closedBy ?? "—" },
-    { key: "closedAt" as const, label: "Closed At", render: (row: PeriodRow) => (row.closedAt ? formatIndianDate(row.closedAt) : "—") },
+    { key: "closedBy" as const, label: "Closed By", render: (row: DisplayRow) => row.closedBy ?? "—" },
+    { key: "closedAt" as const, label: "Closed At", render: (row: DisplayRow) => (row.closedAt ? formatIndianDate(row.closedAt) : "—") },
     {
-      key: "period" as const,
+      key: "actions" as const,
       label: "Actions",
       sortable: false,
-      render: (row: PeriodRow) => {
+      render: (row: DisplayRow) => {
         const actions = AVAILABLE_ACTIONS[row.status] ?? [];
         if (actions.length === 0) {
           return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
@@ -146,9 +153,9 @@ export function PeriodsTable({ periods }: { periods: PeriodRow[] }) {
           {message}
         </p>
       )}
-      <DataTable<PeriodRow>
+      <DataTable<DisplayRow>
         columns={columns}
-        rows={periods}
+        rows={displayRows}
         sortable
         filterable
         filterPlaceholder="Filter by period, fiscal year, or status…"
