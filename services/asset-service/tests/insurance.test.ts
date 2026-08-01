@@ -19,6 +19,7 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import * as queries from "../src/modules/insurance/queries.js";
+import * as commands from "../src/modules/insurance/commands.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -36,9 +37,21 @@ const MSG_POLICY = "55555555-eeee-4000-8000-0000ac000001";
 const MSG_CLAIM  = "66666666-ffff-4000-8000-0000ac000001";
 const POLICY_2 = "77777777-cccc-4000-8000-0000ac000002";
 const MSG_POLICY_2 = "88888888-eeee-4000-8000-0000ac000002";
+const POLICY_3 = "aaaaaaaa-cccc-4000-8000-0000ac000003";
+const MSG_POLICY_3 = "bbbbbbbb-eeee-4000-8000-0000ac000003";
+const CLAIM_SEED = "cccccccc-dddd-4000-8000-0000ac000003";
+const MSG_CLAIM_SEED = "dddddddd-ffff-4000-8000-0000ac000003";
 
 function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["asset_manager"]) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-insurance" }, SECRET, 3600);
+}
+
+let ctxCounter = 0;
+function ctxFor(tenantId: string, actorId: string): {
+  tenantId: string; actorId: string; actorType: "user"; roles: string[]; correlationId: string;
+} {
+  ctxCounter += 1;
+  return { tenantId, actorId, actorType: "user", roles: ["asset_manager"], correlationId: `corr-cumulative-${ctxCounter}` };
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -54,11 +67,15 @@ async function wipe() {
     await asTenant(tenantId, async (tx) => {
       await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
       await tx.delete(assetClaims).where(eq(assetClaims.id, CLAIM_1));
+      await tx.delete(assetClaims).where(eq(assetClaims.id, CLAIM_SEED));
       await tx.delete(assetPolicies).where(eq(assetPolicies.id, POLICY_1));
       await tx.delete(assetPolicies).where(eq(assetPolicies.id, POLICY_2));
+      await tx.delete(assetPolicies).where(eq(assetPolicies.id, POLICY_3));
       await tx.delete(processed).where(eq(processed.messageId, MSG_POLICY));
       await tx.delete(processed).where(eq(processed.messageId, MSG_CLAIM));
       await tx.delete(processed).where(eq(processed.messageId, MSG_POLICY_2));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_POLICY_3));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_CLAIM_SEED));
     });
   }
 }
@@ -237,6 +254,103 @@ describe("Insurance — claim-vs-coverage enforcement (integration, HTTP)", () =
     expect(res.statusCode).toBe(404);
     expect(res.json().code).toBe("POLICY_NOT_FOUND");
     await app.close();
+  });
+});
+
+// ── Money-safety: CUMULATIVE claims across a policy must not exceed cover ─
+//
+// commands.ts previously compared only the single incoming claim against
+// policy.coverageMinor, so a 10,000 policy would accept a 9,000 claim
+// followed by another 9,000 claim (18,000 total against 10,000 cover).
+// createClaim now sums every non-rejected claim already on the policy via
+// queries.sumClaimsByPolicy and rejects when existingTotal + newAmount would
+// exceed coverage.
+
+describe("Insurance — cumulative claim aggregation across multiple claims", () => {
+  beforeAll(async () => {
+    const q = new MemoryQueue();
+    registerInsuranceConsumers(q);
+    await q.start();
+
+    // POLICY_3: sum insured 1,000,000 minor units.
+    await q.publish(COMMANDS.insurancePolicyCreate, {
+      messageId: MSG_POLICY_3, type: COMMANDS.insurancePolicyCreate,
+      tenantId: TENANT_A, actorId: ACTOR, correlationId: "corr-policy-3", schemaVersion: "1.0",
+      payload: {
+        id: POLICY_3, tenantId: TENANT_A, assetId: ASSET_1,
+        policyNo: "POL-2026-003", insurer: "Oriental Insurance Co",
+        coverageMinor: 1000000, premiumMinor: 40000, currency: "INR",
+        startDate: "2026-04-01", endDate: "2027-03-31", renewalReminderDays: 30,
+      },
+    });
+    // Seed one already-settled/pending claim of 700,000 against POLICY_3 so
+    // the running total starts above zero, the way a real policy would after
+    // its first claim.
+    await q.publish(COMMANDS.insuranceClaimCreate, {
+      messageId: MSG_CLAIM_SEED, type: COMMANDS.insuranceClaimCreate,
+      tenantId: TENANT_A, actorId: ACTOR, correlationId: "corr-claim-seed", schemaVersion: "1.0",
+      payload: {
+        id: CLAIM_SEED, tenantId: TENANT_A, policyId: POLICY_3, assetId: ASSET_1,
+        claimDate: "2026-05-01", claimAmountMinor: 700000, currency: "INR",
+        notes: "First claim — water damage",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 400));
+    await q.stop();
+  });
+  afterAll(async () => {
+    await asTenant(TENANT_A, async (tx) => {
+      await tx.delete(assetClaims).where(eq(assetClaims.id, CLAIM_SEED));
+      await tx.delete(assetPolicies).where(eq(assetPolicies.id, POLICY_3));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_POLICY_3));
+      await tx.delete(processed).where(eq(processed.messageId, MSG_CLAIM_SEED));
+    });
+  });
+
+  it("sumClaimsByPolicy reflects the seeded 700,000 claim", async () => {
+    const total = await runWithTenant(TENANT_A, () => queries.sumClaimsByPolicy(TENANT_A, POLICY_3));
+    expect(total).toBe(700000n);
+  });
+
+  it("rejects a second claim that would push the CUMULATIVE total over the sum insured (700,000 + 400,000 > 1,000,000)", async () => {
+    const ctx = ctxFor(TENANT_A, ACTOR);
+    await expect(
+      runWithTenant(TENANT_A, () =>
+        commands.createClaim(ctx, {
+          policyId: POLICY_3, assetId: ASSET_1,
+          claimDate: "2026-06-15", claimAmountMinor: 400000, currency: "INR",
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 400, code: "CLAIM_EXCEEDS_COVERAGE" });
+
+    // The single-claim amount (400,000) is well within the policy's total
+    // sum insured (1,000,000) — this only fails because of the prior
+    // 700,000 claim. Confirms the check is cumulative, not per-claim.
+    expect(400000).toBeLessThan(1000000);
+  });
+
+  it("the rejection error message states the remaining balance, not just a generic failure", async () => {
+    const ctx = ctxFor(TENANT_A, ACTOR);
+    await expect(
+      runWithTenant(TENANT_A, () =>
+        commands.createClaim(ctx, {
+          policyId: POLICY_3, assetId: ASSET_1,
+          claimDate: "2026-06-15", claimAmountMinor: 400000, currency: "INR",
+        }),
+      ),
+    ).rejects.toMatchObject({ message: expect.stringContaining("remaining: 300000") });
+  });
+
+  it("accepts a second claim that keeps the CUMULATIVE total within the sum insured (700,000 + 300,000 = 1,000,000)", async () => {
+    const ctx = ctxFor(TENANT_A, ACTOR);
+    const result = await runWithTenant(TENANT_A, () =>
+      commands.createClaim(ctx, {
+        policyId: POLICY_3, assetId: ASSET_1,
+        claimDate: "2026-06-15", claimAmountMinor: 300000, currency: "INR",
+      }),
+    );
+    expect(result.status).toBe("accepted");
+    expect(result.id).toBeDefined();
   });
 });
 
