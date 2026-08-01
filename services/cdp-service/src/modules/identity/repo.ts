@@ -83,3 +83,33 @@ export async function reassignProfile(
     .set({ profileId: toProfileId })
     .where(and(eq(identityGraph.profileId, fromProfileId), eq(identityGraph.tenantId, tenantId)));
 }
+
+/**
+ * Remove every identifier edge pointing at a profile.
+ *
+ * DSAR erasure (CDP-011): `identifierHash` is a hash of an email/phone, which is still
+ * personal data under DPDP Act 2023 — an erasure that left the edges in place would let
+ * the same subject be re-resolved onto the profile by the next ingest. The DSAR register
+ * row keeps the audit linkage, so removing the edges loses no evidence.
+ *
+ * Returns the number of edges removed.
+ */
+export async function deleteByProfile(tx: ScopedTx, profileId: string, tenantId: string): Promise<number> {
+  const result = await tx
+    .delete(identityGraph)
+    .where(and(eq(identityGraph.profileId, profileId), eq(identityGraph.tenantId, tenantId)))
+    .returning({ id: identityGraph.id });
+  return result.length;
+}
+
+/**
+ * Read the edges for one identifier hash inside the caller's transaction.
+ *
+ * `findByHash` opens its own transaction (scopedRead), which a consumer cannot reuse once
+ * it has claimed the message: the read, the idempotency claim and the write have to share
+ * one transaction or a crash between them leaves the message marked processed with no write.
+ */
+export async function findByHashTx(tx: ScopedTx, hash: string, tenantId: string): Promise<IdentityGraphRow[]> {
+  return tx.select().from(identityGraph)
+    .where(and(eq(identityGraph.identifierHash, hash), eq(identityGraph.tenantId, tenantId)));
+}

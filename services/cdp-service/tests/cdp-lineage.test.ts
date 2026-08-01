@@ -143,7 +143,7 @@ describe("GET /v1/cdp/profiles/:id/lineage", () => {
 describe("POST /v1/cdp/profiles/:id/lineage", () => {
   const body = { entry: { source: "umang", sourceId: "u-42", timestamp: "2025-06-01T00:00:00.000Z" }, version: 3 };
 
-  it("202 — appends the entry, emits the event, publishes the command", async () => {
+  it("202 — appends the entry and emits the event", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     const app = await buildApp();
     const r = await app.inject({
@@ -156,7 +156,9 @@ describe("POST /v1/cdp/profiles/:id/lineage", () => {
     // The append preserves order and never rewrites existing entries.
     const patch = H.profileUpdateMock.mock.calls[0]?.[3] as { sourceLineage: unknown[] };
     expect(patch.sourceLineage).toEqual([...LINEAGE, body.entry]);
-    expect(H.publishMock).toHaveBeenCalledOnce();
+    // The route no longer publishes a command: the append is synchronous and the
+    // lineage_appended event is the downstream contract.
+    expect(H.publishMock).not.toHaveBeenCalled();
     // Domain event + audit event.
     expect(H.enqueueMock).toHaveBeenCalledTimes(2);
     await app.close();

@@ -95,3 +95,21 @@ export async function relink(
     .returning({ id: deviceTokens.id });
   return result.length > 0;
 }
+
+/**
+ * Revoke every device token held for a profile.
+ *
+ * DPDP Act 2023 erasure: the schema comment states why tokens are stored instead of
+ * fingerprints — a token can be revoked and purged. This is that purge, so it is a real
+ * delete rather than a soft-delete; keeping the row would keep a live device credential
+ * for a subject who asked to be erased.
+ *
+ * Returns the number of tokens revoked.
+ */
+export async function deleteByProfile(tx: ScopedTx, profileId: string, tenantId: string): Promise<number> {
+  const result = await tx
+    .delete(deviceTokens)
+    .where(and(eq(deviceTokens.profileId, profileId), eq(deviceTokens.tenantId, tenantId)))
+    .returning({ id: deviceTokens.id });
+  return result.length;
+}

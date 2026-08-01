@@ -131,7 +131,9 @@ describe("POST /v1/cdp/identity/devices", () => {
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.body).not.toContain(TOKEN);
     expect(JSON.stringify(H.enqueueMock.mock.calls)).not.toContain(TOKEN);
-    expect(JSON.stringify(H.publishMock.mock.calls)).not.toContain(TOKEN);
+    // The route publishes no command (the write is synchronous); the token must not
+    // reach the outbox event either.
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 

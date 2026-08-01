@@ -8,8 +8,8 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
-import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { cache } from "../../shared/infra.js";
+import { EVENTS } from "../../topics.js";
 import * as repo from "./scores-repo.js";
 import * as profilesRepo from "./repo.js";
 
@@ -111,15 +111,11 @@ export async function profileScoreRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    await queue.publish(COMMANDS.upsertScore, {
-      type: COMMANDS.upsertScore,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { profileId: id, scoreType, score: stored, modelVersion: body.modelVersion },
-    });
-
+    // No command is published here. The upsert above IS the authoritative write and
+    // `cdp.profile.score_upserted` (outbox, same transaction) is the downstream contract.
+    // Nothing in this service acts on a stored score asynchronously — segment criteria
+    // evaluate profile attributes, not scores — so a command would only advertise
+    // processing that does not exist.
     await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", id));
 
     return reply.send({

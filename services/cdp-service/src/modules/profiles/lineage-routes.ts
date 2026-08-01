@@ -10,8 +10,8 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
-import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { cache } from "../../shared/infra.js";
+import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const CDP_ROLES = ["cdp_user", "cdp_admin", "super_admin", "tenant_admin"];
@@ -113,15 +113,10 @@ export async function profileLineageRoutes(app: FastifyInstance): Promise<void> 
       });
     });
 
-    await queue.publish(COMMANDS.appendLineage, {
-      type: COMMANDS.appendLineage,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { profileId: id, entry },
-    });
-
+    // No command is published here. The append above IS the authoritative write, and
+    // `cdp.profile.lineage_appended` (emitted through the outbox inside the same
+    // transaction) is what downstream services need. A command carrying the identical
+    // payload had no subscriber and implied processing that never happened.
     await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_lineage", id));
     await cache.invalidate(cache.makeKey(ctx.tenantId, "profile", id));
     await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", id));

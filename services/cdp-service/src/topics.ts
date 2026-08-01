@@ -7,21 +7,33 @@ export const COMMANDS = {
   updateSegment: "cdp.segment.update",
   deleteSegment: "cdp.segment.delete",
   decideMerge: "cdp.steward.decide",
-  /** CDP-001 — append a source-lineage entry to a golden profile. Payload: { profileId, entry }. */
-  appendLineage: "cdp.profile.lineage_append",
-  /** CDP-003 — one command per event in a near-real-time ingest batch. Payload: { profileId, eventType, payload, occurredAt }. */
+  /**
+   * CDP-003 — one command per event in a near-real-time ingest batch.
+   * Payload: { profileId, eventType, payload, occurredAt, source? }.
+   * Consumed by modules/events/consumer.ts, which performs the authoritative
+   * event-store write: the ingest route publishes only, it never writes.
+   */
   ingestEventBatch: "cdp.event.ingest_batch",
-  /** CDP-005 — recompute a segment's materialised membership. Payload: { segmentId }. */
+  /**
+   * CDP-005 — post-recompute fan-out. Payload: { segmentId, memberCount, computedAt }.
+   * Consumed by modules/segments/consumer.ts. The membership recompute itself is done
+   * synchronously by the route; this command carries only the follow-up work
+   * (refreshing the audience snapshot of activations that have not dispatched yet).
+   */
   computeSegment: "cdp.segment.compute",
-  /** CDP-007 — link a device token to a profile. Payload: { profileId, deviceToken, deviceType }. */
-  linkDevice: "cdp.identity.device_link",
-  /** CDP-009 — upsert a predictive score. Payload: { profileId, scoreType, score, modelVersion }. */
-  upsertScore: "cdp.profile.score_upsert",
-  /** CDP-011 — raise a DSAR. Payload: { dsarId, profileId, requestType }. */
+  /**
+   * CDP-011 — raise a DSAR. Payload: { dsarId, profileId, requestType }.
+   * Consumed by modules/dsar/consumer.ts, which performs the fulfilment work the route
+   * defers (status → in_progress plus the purge of the cdp-owned data it covers).
+   */
   raiseDsar: "cdp.dsar.raise",
   /** CDP-011 — discharge a DSAR. Payload: { dsarId, profileId, requestType }. */
   completeDsar: "cdp.dsar.complete",
-  /** CDP-012 — dispatch a segment to a channel. Payload: { activationId, segmentId, channel, scheduledAt }. */
+  /**
+   * CDP-012 — dispatch a segment to a channel.
+   * Payload: { activationId, segmentId, channel, audienceCount, dispatchAt }.
+   * Consumed by modules/activations/consumer.ts, which hands the run to the channel.
+   */
   activateSegment: "cdp.segment.activate",
 } as const;
 
@@ -52,6 +64,12 @@ export const EVENTS = {
   /** CDP-011 — DSAR received. Payload: { dsarId, profileId, requestType, status }. */
   dsarRaised: "cdp.dsar.raised",
   /**
+   * CDP-011 — DSAR fulfilment started and the cdp-owned identifier/audience data covered
+   * by the request was purged. Payload: { dsarId, profileId, requestType, status,
+   * purgeDownstream, purged: { deviceTokens, identityLinks, memberships } }.
+   */
+  dsarInProgress: "cdp.dsar.in_progress",
+  /**
    * CDP-011 — DSAR discharged. Downstream contract: on receipt, segment-service
    * consumers and every activation channel MUST purge the profile from audiences.
    * Payload: { dsarId, profileId, requestType, completedAt }.
@@ -59,13 +77,47 @@ export const EVENTS = {
   dsarCompleted: "cdp.dsar.completed",
   /** CDP-012 — activation run queued for a channel. Payload: { activationId, segmentId, channel, status }. */
   activationRequested: "cdp.activation.requested",
+  /**
+   * CDP-012 — an activation run has been handed to its channel.
+   * Downstream contract: the channel adapter for `channel` pulls the audience from
+   * GET /v1/cdp/segments/{segmentId}/members and performs delivery. CDP does not own
+   * channel delivery, so this event — not a per-recipient message — is the dispatch.
+   * Payload: { activationId, segmentId, channel, audienceCount, dispatchedAt }.
+   */
+  activationDispatched: "cdp.activation.dispatched",
+  /**
+   * CDP-005/012 — the audience snapshot of not-yet-dispatched activation runs was
+   * refreshed after a segment recompute. Payload: { segmentId, memberCount, activationIds }.
+   */
+  activationAudienceRefreshed: "cdp.activation.audience_refreshed",
 } as const;
 
-/** Topics consumed from other services (cross-service stitching). */
+/**
+ * Topics consumed from other services (cross-service stitching).
+ *
+ * crm-service owns both payload shapes below, so both are validated on read and missing
+ * optional fields are tolerated — a foreign publisher must not be able to wedge this
+ * consumer. Neither handler logs any payload field other than ids: these events carry
+ * contact names.
+ */
 export const CONSUMED_EVENTS = {
-  /** CRM contact created — may trigger identity resolution. */
+  /**
+   * CRM contact created → identity resolution (modules/identity/crm-consumer.ts).
+   * Guaranteed: { contactId: uuid }. Optional: { name, email, phone, city, company,
+   * country }. crm-service reuses this topic for bulk-import summaries
+   * ({ batchId, total, ... }), which carry no contactId and are skipped.
+   *
+   * Resolution is deterministic on hashed email/phone: a match links the contact to the
+   * existing golden profile and emits `cdp.identity.resolved` (outcome "linked"), no match
+   * creates a golden profile and emits `cdp.profile.created`, and a split match (email and
+   * phone pointing at different profiles) writes nothing and is left for the steward queue.
+   */
   crmContactCreated: "crm.contact.created",
-  /** CRM contact updated — may update golden profile attributes. */
+  /**
+   * CRM contact updated → golden profile attribute refresh (modules/identity/crm-consumer.ts).
+   * Guaranteed: { contactId: uuid }. Optional: { name, email, phone, city, company,
+   * country, mergedFrom }.
+   */
   crmContactUpdated: "crm.contact.updated",
 } as const;
 

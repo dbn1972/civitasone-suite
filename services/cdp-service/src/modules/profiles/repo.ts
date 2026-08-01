@@ -146,3 +146,17 @@ export async function findByIds(ids: string[], tenantId: string): Promise<Profil
     tx.select().from(profiles).where(and(inArray(profiles.id, ids), eq(profiles.tenantId, tenantId))),
   );
 }
+
+/**
+ * Read a profile inside the caller's transaction.
+ *
+ * `findById` opens its own transaction (scopedRead), which a consumer cannot reuse once it
+ * has claimed the message: the read, the idempotency claim and the write have to share one
+ * transaction or a crash between them leaves the message marked processed with no write.
+ */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<ProfileRow | null> {
+  const rows = await tx.select().from(profiles)
+    .where(and(eq(profiles.id, id), eq(profiles.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}

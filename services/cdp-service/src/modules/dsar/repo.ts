@@ -83,3 +83,28 @@ export async function complete(
     .returning({ id: dsarRequests.id });
   return result.length > 0;
 }
+
+/**
+ * Move a request into `in_progress` under optimistic locking.
+ *
+ * Returns false when the version moved on — another writer (a steward completing it, or a
+ * concurrent delivery) already advanced the request, and the caller must not emit a second
+ * fulfilment event or run the purge outside a transition it owns.
+ */
+export async function startProcessing(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  currentVersion: number,
+): Promise<boolean> {
+  const result = await tx
+    .update(dsarRequests)
+    .set({ status: "in_progress", version: sql`${dsarRequests.version} + 1` })
+    .where(and(
+      eq(dsarRequests.id, id),
+      eq(dsarRequests.tenantId, tenantId),
+      eq(dsarRequests.version, currentVersion),
+    ))
+    .returning({ id: dsarRequests.id });
+  return result.length > 0;
+}

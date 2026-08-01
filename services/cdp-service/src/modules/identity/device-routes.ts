@@ -7,8 +7,8 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
-import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { cache } from "../../shared/infra.js";
+import { EVENTS } from "../../topics.js";
 import * as deviceRepo from "./device-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 
@@ -99,15 +99,10 @@ export async function identityDeviceRoutes(app: FastifyInstance): Promise<void> 
       });
     });
 
-    await queue.publish(COMMANDS.linkDevice, {
-      type: COMMANDS.linkDevice,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { deviceId: id, profileId: body.profileId, deviceType: body.deviceType },
-    });
-
+    // No command is published here. The link/relink above IS the authoritative write and
+    // `cdp.identity.device_linked` (outbox, same transaction) is the downstream contract.
+    // There is no asynchronous follow-up to a device edge, so a command with the same
+    // payload was dead weight.
     await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", body.profileId));
 
     return reply.code(202).send({

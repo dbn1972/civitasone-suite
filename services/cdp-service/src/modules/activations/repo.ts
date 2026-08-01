@@ -80,3 +80,31 @@ export async function updateStatus(
     .returning({ id: activations.id });
   return result.length > 0;
 }
+
+/**
+ * Re-snapshot the audience of runs that have not been dispatched yet.
+ *
+ * A `pending` run has not been handed to its channel, so its recorded reach should still
+ * track the segment. Anything past `pending` is deliberately left alone: the snapshot on a
+ * dispatched run is the evidence of what that run actually sent, and rewriting it would
+ * make a completed run unreconcilable (see the column comment in schema.ts).
+ *
+ * Returns the ids it touched so the caller can report them on the emitted event.
+ */
+export async function refreshPendingAudience(
+  tx: ScopedTx,
+  tenantId: string,
+  segmentId: string,
+  audienceCount: number,
+): Promise<string[]> {
+  const result = await tx
+    .update(activations)
+    .set({ audienceCount, version: sql`${activations.version} + 1` })
+    .where(and(
+      eq(activations.tenantId, tenantId),
+      eq(activations.segmentId, segmentId),
+      eq(activations.status, "pending"),
+    ))
+    .returning({ id: activations.id });
+  return result.map((r) => r.id);
+}

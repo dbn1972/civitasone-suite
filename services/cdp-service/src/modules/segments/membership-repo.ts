@@ -123,3 +123,25 @@ export async function recompute(
 
   return counted[0]?.count ?? 0;
 }
+
+/**
+ * Drop a profile out of every materialised audience it is in.
+ *
+ * Used by DSAR fulfilment (CDP-011): once erasure or rectification is under way the
+ * profile must stop being handed to channels, and membership is the store this service
+ * activates from. A hard delete is correct here — a membership row is derived data that a
+ * later recompute rebuilds, so there is nothing to preserve, and a tombstone would keep
+ * the subject inside the audiences the DPDP request exists to remove them from.
+ *
+ * Returns the number of audiences the profile was removed from.
+ */
+export async function deleteByProfile(tx: ScopedTx, profileId: string, tenantId: string): Promise<number> {
+  const result = await tx
+    .delete(segmentMemberships)
+    .where(and(
+      eq(segmentMemberships.tenantId, tenantId),
+      eq(segmentMemberships.profileId, profileId),
+    ))
+    .returning({ id: segmentMemberships.id });
+  return result.length;
+}
