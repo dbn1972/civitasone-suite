@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -15,6 +15,8 @@ export function CtcCalculatorForm() {
   const [result, setResult] = useState<CalcResult | null>(null);
 
   const ctcId = useId();
+  const errId = useId();
+  const ctcRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,6 +26,7 @@ export function CtcCalculatorForm() {
     const rupees = parseFloat(ctc);
     if (Number.isNaN(rupees) || rupees <= 0) {
       setError("Enter a valid annual CTC amount in rupees.");
+      ctcRef.current?.focus();
       return;
     }
     const ctcMinor = Math.round(rupees * 100);
@@ -46,15 +49,21 @@ export function CtcCalculatorForm() {
     <Card title="CTC Calculator">
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 6, maxWidth: 320 }}>
-          <label htmlFor={ctcId} style={{ fontSize: 13, fontWeight: 600 }}>Annual CTC (₹)</label>
+          <label htmlFor={ctcId} style={{ fontSize: 13, fontWeight: 600 }}>
+            Annual CTC (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          </label>
           <input
             id={ctcId}
+            ref={ctcRef}
             type="number"
             min="0"
             step="0.01"
             value={ctc}
             onChange={(e) => setCtc(e.target.value)}
             placeholder="e.g. 1200000"
+            aria-required="true"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errId : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
         </div>
@@ -66,7 +75,7 @@ export function CtcCalculatorForm() {
         </div>
 
         {error && (
-          <p role="alert" className="pill bad" style={{ width: "fit-content" }}>
+          <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
             {error}
           </p>
         )}
@@ -84,10 +93,11 @@ export function CtcCalculatorForm() {
               </div>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <caption className="sr-only">CTC breakup by component</caption>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Component</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>Amount</th>
+                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Component</th>
+                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>Amount</th>
                 </tr>
               </thead>
               <tbody>

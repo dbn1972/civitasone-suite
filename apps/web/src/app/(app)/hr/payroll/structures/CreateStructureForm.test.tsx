@@ -26,7 +26,7 @@ describe("CreateStructureForm", () => {
     );
 
     render(<CreateStructureForm />);
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Grade Pay A" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Grade Pay A" } });
     fireEvent.click(screen.getByText("Create Structure"));
 
     await waitFor(() => expect(screen.getByText("Create this pay structure?")).toBeInTheDocument());
@@ -42,7 +42,7 @@ describe("CreateStructureForm", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<CreateStructureForm />);
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Grade Pay B" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Grade Pay B" } });
     fireEvent.click(screen.getByText("Create Structure"));
 
     await waitFor(() => expect(screen.getByText("Create this pay structure?")).toBeInTheDocument());

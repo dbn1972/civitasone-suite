@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateStructureForm } from "./CreateStructureForm";
 
 type Row = {
@@ -9,19 +10,18 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
+async function getData(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
     telemetryKey: "payroll.structures",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
 }
 
 export default async function PayStructuresPage() {
-  const structures = await getData();
+  const { data: structures, source } = await getData();
   const active = structures.filter((s) => s.status === "active").length;
   const defaultCount = structures.filter((s) => s.isDefault).length;
 
@@ -43,6 +43,7 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🧱" iconBg="#e6f0ff" label="Total Structures" value={structures.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />

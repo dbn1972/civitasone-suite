@@ -29,7 +29,7 @@ describe("CreatePayGroupForm", () => {
     );
 
     render(<CreatePayGroupForm />);
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Weekly Wage Staff" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Weekly Wage Staff" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Pay Group" }));
 
     await waitFor(() => expect(screen.getByText("Create this pay group?")).toBeInTheDocument());
@@ -45,7 +45,7 @@ describe("CreatePayGroupForm", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 409 }));
 
     render(<CreatePayGroupForm />);
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Duplicate Group" } });
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Duplicate Group" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Pay Group" }));
 
     await waitFor(() => expect(screen.getByText("Create this pay group?")).toBeInTheDocument());

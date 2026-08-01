@@ -30,7 +30,7 @@ describe("CtcCalculatorForm", () => {
     );
 
     render(<CtcCalculatorForm />);
-    fireEvent.change(screen.getByLabelText("Annual CTC (₹)"), { target: { value: "1200000" } });
+    fireEvent.change(screen.getByLabelText(/Annual CTC/), { target: { value: "1200000" } });
     fireEvent.click(screen.getByText("Calculate Breakup"));
 
     await waitFor(() => {
@@ -43,7 +43,7 @@ describe("CtcCalculatorForm", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
     render(<CtcCalculatorForm />);
-    fireEvent.change(screen.getByLabelText("Annual CTC (₹)"), { target: { value: "1200000" } });
+    fireEvent.change(screen.getByLabelText(/Annual CTC/), { target: { value: "1200000" } });
     fireEvent.click(screen.getByText("Calculate Breakup"));
 
     await waitFor(() => {

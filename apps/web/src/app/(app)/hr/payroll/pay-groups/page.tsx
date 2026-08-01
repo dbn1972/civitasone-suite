@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreatePayGroupForm } from "./CreatePayGroupForm";
 
 type Row = {
@@ -11,15 +12,14 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/payroll/pay-groups", [], {
+async function getData(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/payroll/pay-groups", [], {
     telemetryKey: "payroll.pay-groups",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
 }
 
 const FREQUENCY_LABEL: Record<string, string> = {
@@ -29,7 +29,7 @@ const FREQUENCY_LABEL: Record<string, string> = {
 };
 
 export default async function PayGroupsPage() {
-  const groups = await getData();
+  const { data: groups, source } = await getData();
 
   const rows = groups.map((g) => ({
     ...g,
@@ -52,6 +52,7 @@ export default async function PayGroupsPage() {
         subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
         back="/hr/payroll"
       />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="👥" iconBg="#e6f0ff" label="Total Pay Groups" value={groups.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={groups.filter((g) => g.status === "active").length} />

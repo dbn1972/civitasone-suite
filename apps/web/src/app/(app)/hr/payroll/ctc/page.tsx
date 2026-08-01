@@ -1,5 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatMoney } from "@/lib/formatters";
 import { CtcCalculatorForm } from "./CtcCalculatorForm";
 
 type ConfigRow = {
@@ -12,15 +14,14 @@ type ConfigRow = {
   is_active: boolean;
 } & Record<string, unknown>;
 
-async function getData(): Promise<ConfigRow[]> {
-  const r = await fetchJson<unknown, ConfigRow[]>("/api/v1/payroll/ctc/config", [], {
+async function getData(): Promise<LoaderResult<ConfigRow[]>> {
+  return fetchJson<unknown, ConfigRow[]>("/api/v1/payroll/ctc/config", [], {
     telemetryKey: "payroll.ctc.config",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ConfigRow[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
 }
 
 const CALC_TYPE_LABEL: Record<string, string> = {
@@ -31,17 +32,25 @@ const CALC_TYPE_LABEL: Record<string, string> = {
 };
 
 export default async function CtcConfigPage() {
-  const config = await getData();
+  const { data: config, source } = await getData();
 
-  const rows = config.map((c) => ({
-    ...c,
-    calcTypeLabel: CALC_TYPE_LABEL[c.calc_type] ?? c.calc_type,
-    valueDisplay:
-      c.calc_type === "pct_of_basic" || c.calc_type === "pct_of_ctc"
-        ? `${c.value}%`
-        : String(c.value),
-    employerCostLabel: c.is_employer_cost ? "Yes" : "No",
-  }));
+  const rows = config.map((c) => {
+    const isPct = c.calc_type === "pct_of_basic" || c.calc_type === "pct_of_ctc";
+    const numeric = Number(c.value);
+    // Percentages: strip NUMERIC(10,4) trailing zeros ("40.0000" -> "40%").
+    // Fixed/formula amounts are minor-unit rupees -> format as money (never a raw paise integer).
+    const valueDisplay = isPct
+      ? `${numeric}%`
+      : Number.isFinite(numeric)
+        ? formatMoney(c.value as number | string)
+        : String(c.value);
+    return {
+      ...c,
+      calcTypeLabel: CALC_TYPE_LABEL[c.calc_type] ?? c.calc_type,
+      valueDisplay,
+      employerCostLabel: c.is_employer_cost ? "Yes" : "No",
+    };
+  });
 
   type Row = (typeof rows)[number];
 
@@ -62,6 +71,7 @@ export default async function CtcConfigPage() {
         subtitle="Cost-to-Company component rules used to break a CTC figure into pay components."
         back="/hr/payroll"
       />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="⚙️" iconBg="#e6f0ff" label="Configured Components" value={config.length} />
         <StatCard icon="🏛️" iconBg="#fffbe6" label="Employer-Cost Components" value={employerComponents} />
