@@ -39,3 +39,23 @@ export const issueBookBody = z.object({
   dueAt:       z.string().datetime(),
 });
 export type IssueBookBody = z.infer<typeof issueBookBody>;
+
+export const libraryBooksQuery = z.object({
+  limit:  z.coerce.number().int().min(1).max(500).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  search: z.string().min(1).optional(),
+  status: z.enum(["available", "unavailable"]).optional(),
+});
+export type LibraryBooksQuery = z.infer<typeof libraryBooksQuery>;
+
+export const libraryIssuesQuery = z.object({
+  limit:  z.coerce.number().int().min(1).max(500).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  status: z.enum(["issued", "returned", "overdue"]).optional(),
+});
+export type LibraryIssuesQuery = z.infer<typeof libraryIssuesQuery>;
+
+export const renewIssueBody = z.object({
+  dueAt: z.string().datetime(),
+});
+export type RenewIssueBody = z.infer<typeof renewIssueBody>;

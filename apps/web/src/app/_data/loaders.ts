@@ -88,6 +88,8 @@ import type {
   VehicleSummary,
   GuesthouseBookingSummary,
   ComplianceSummary,
+  LibraryBookSummary,
+  LibraryIssueSummary,
   AssetDashboard,
   AssetSummary,
   AssetDetail,
@@ -219,6 +221,9 @@ import {
   VehicleSummaryListSchema,
   GuesthouseBookingSummaryListSchema,
   ComplianceSummaryListSchema,
+  LibraryBookSummaryListSchema,
+  LibraryBookSummarySchema,
+  LibraryIssueSummaryListSchema,
   AssetDashboardSchema,
   AssetSummaryListSchema,
   AssetDetailSchema,
@@ -2721,6 +2726,38 @@ export async function getEstabCompliance(): Promise<LoaderResult<ComplianceSumma
     telemetryKey: "estab.compliance",
     responseSchema: ComplianceSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as ComplianceSummary[] | null,
+  });
+}
+
+export async function getLibraryBooks(query?: { search?: string; status?: "available" | "unavailable" }): Promise<LoaderResult<LibraryBookSummary[]>> {
+  const params = new URLSearchParams();
+  if (query?.search) params.set("search", query.search);
+  if (query?.status) params.set("status", query.status);
+  const qs = params.toString();
+  return fetchJson<unknown, LibraryBookSummary[]>(`/api/v1/estab/library/books${qs ? `?${qs}` : ""}`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "estab.library.books",
+    responseSchema: LibraryBookSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as LibraryBookSummary[] | null,
+  });
+}
+
+export async function getLibraryBookById(id: string): Promise<LoaderResult<LibraryBookSummary | null>> {
+  return fetchJson<unknown, LibraryBookSummary | null>(`/api/v1/estab/library/books/${encodeURIComponent(id)}`, null, {
+    revalidateSeconds: 30,
+    telemetryKey: "estab.library.book.detail",
+    responseSchema: LibraryBookSummarySchema,
+    mapResponse: (p) => (p && typeof p === "object" ? (p as LibraryBookSummary) : null),
+  });
+}
+
+export async function getLibraryIssues(status?: "issued" | "returned" | "overdue"): Promise<LoaderResult<LibraryIssueSummary[]>> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return fetchJson<unknown, LibraryIssueSummary[]>(`/api/v1/estab/library/issues${qs}`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "estab.library.issues",
+    responseSchema: LibraryIssueSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as LibraryIssueSummary[] | null,
   });
 }
 

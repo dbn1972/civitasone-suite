@@ -1121,6 +1121,29 @@ export type ComplianceSummary = {
   remarks?: string;
 };
 
+export type LibraryBookSummary = {
+  id: string;
+  accessionNo: string;
+  title: string;
+  author?: string;
+  isbn?: string;
+  category?: string;
+  copiesTotal: number;
+  copiesAvailable: number;
+  status: "available" | "unavailable";
+};
+
+export type LibraryIssueSummary = {
+  id: string;
+  bookId: string;
+  bookTitle?: string;
+  borrowerRef: string;
+  issuedAt: string;
+  dueAt: string;
+  returnedAt?: string;
+  status: "issued" | "returned" | "overdue";
+};
+
 export type AssetDashboard = {
   totalAssets: number;
   fixedAssets?: number;

@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { checkNoRoomOverlap } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
-import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody } from "./validators.js";
+import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 export type Created = { id: string };
@@ -77,6 +77,11 @@ export async function addBook(ctx: RequestContext, body: AddBookBody): Promise<A
 }
 
 export async function issueBook(ctx: RequestContext, body: IssueBookBody): Promise<Accepted> {
+  const book = await repo.getLibraryBookById(ctx.tenantId, body.bookId);
+  if (!book) throw new HttpError(404, "NOT_FOUND", "book not found");
+  if (book.copiesAvailable <= 0) {
+    throw new HttpError(409, "NO_COPIES_AVAILABLE", "no copies of this book are currently available");
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.libraryIssue, {
     messageId: id, type: COMMANDS.libraryIssue,
@@ -84,4 +89,31 @@ export async function issueBook(ctx: RequestContext, body: IssueBookBody): Promi
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function returnBook(ctx: RequestContext, issueId: string): Promise<Accepted> {
+  const issue = await repo.getIssueById(ctx.tenantId, issueId);
+  if (!issue) throw new HttpError(404, "NOT_FOUND", "issue not found");
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.libraryReturn, {
+    messageId, type: COMMANDS.libraryReturn,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { issueId, tenantId: ctx.tenantId },
+  });
+  return { id: issueId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function renewBook(ctx: RequestContext, issueId: string, body: RenewIssueBody): Promise<Accepted> {
+  const issue = await repo.getIssueById(ctx.tenantId, issueId);
+  if (!issue) throw new HttpError(404, "NOT_FOUND", "issue not found");
+  if (issue.status === "returned") {
+    throw new HttpError(409, "ALREADY_RETURNED", "this issue has already been returned and cannot be renewed");
+  }
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.libraryRenew, {
+    messageId, type: COMMANDS.libraryRenew,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { issueId, tenantId: ctx.tenantId, dueAt: body.dueAt },
+  });
+  return { id: issueId, status: "accepted", correlationId: ctx.correlationId };
 }

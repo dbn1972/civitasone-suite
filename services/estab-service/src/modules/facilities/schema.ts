@@ -92,5 +92,6 @@ export type RoomBookingInsert = typeof estabRoomBookings.$inferInsert;
 export type LibraryBookRow    = typeof estabLibraryBooks.$inferSelect;
 export type LibraryBookInsert = typeof estabLibraryBooks.$inferInsert;
 export type IssueInsert       = typeof estabIssues.$inferInsert;
+export type IssueRow          = typeof estabIssues.$inferSelect;
 
 export const schema = { estabGuesthouses, estabRooms, estabRoomBookings, estabLibraryBooks, estabIssues };

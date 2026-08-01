@@ -104,6 +104,42 @@ export function registerFacilitiesConsumers(queue: Queue): void {
       await audit(tx, msg, "issue", "library_issue", p.id);
     });
   });
+
+  queue.subscribe(COMMANDS.libraryReturn, async (msg) => {
+    const p = msg.payload as { issueId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const issue = await repo.getIssueByIdTx(tx, p.issueId);
+      if (!issue) return;
+      // Idempotent: a second return for the same loan is a no-op (already
+      // returned) — do not double-increment copiesAvailable.
+      if (issue.status === "returned") return;
+      await repo.markIssueReturned(tx, p.issueId, new Date(), msg.actorId);
+      await repo.incrementCopies(tx, issue.bookId);
+      await audit(tx, msg, "return", "library_issue", p.issueId);
+      await enqueue(tx, {
+        topic: EVENTS.libraryReturned, eventType: EVENTS.libraryReturned,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { issueId: p.issueId, bookId: issue.bookId },
+      });
+    });
+  });
+
+  queue.subscribe(COMMANDS.libraryRenew, async (msg) => {
+    const p = msg.payload as { issueId: string; tenantId: string; dueAt: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const issue = await repo.getIssueByIdTx(tx, p.issueId);
+      if (!issue || issue.status === "returned") return;
+      await repo.updateIssueDueAt(tx, p.issueId, new Date(p.dueAt), msg.actorId);
+      await audit(tx, msg, "renew", "library_issue", p.issueId);
+      await enqueue(tx, {
+        topic: EVENTS.libraryRenewed, eventType: EVENTS.libraryRenewed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { issueId: p.issueId, dueAt: p.dueAt },
+      });
+    });
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

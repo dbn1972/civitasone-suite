@@ -35,6 +35,8 @@ export const COMMANDS = {
   roomCheckout:         "estab.room.checkout",
   libraryAdd:           "estab.library.add",
   libraryIssue:         "estab.library.issue",
+  libraryReturn:        "estab.library.return",
+  libraryRenew:         "estab.library.renew",
   courtCaseCreate:      "estab.court_case.create",
   courtCaseNextDate:    "estab.court_case.next_date",
   rtiCreate:            "estab.rti.create",
@@ -107,6 +109,8 @@ export const EVENTS = {
   spaceSeatAllotted:    "estab.space.seat.allotted",
   spaceSeatReleased:    "estab.space.seat.released",
   spaceMaintenanceRaised: "estab.space.maintenance.raised",
+  libraryReturned:      "estab.library.returned",
+  libraryRenewed:       "estab.library.renewed",
 } as const;
 
 /** Topics consumed from other services */
