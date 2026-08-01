@@ -446,3 +446,86 @@ A run is successful when all of these hold:
 Attach the baseline scan, the dry-run, the apply output and the post-scan to the
 change ticket. There is no audit event for this operation (see [§6](#6-rollback-posture)),
 so the ticket is the record.
+
+---
+
+## 10. Phase 0 execution record — dev estate, 2026-08-01
+
+The write-path fix (`packages/db/src/pool.ts`, PR #325) was committed first, which is
+the hard gate in [§2](#2-ordering-the-code-fix-comes-first). The repair was then run
+across the whole dev estate.
+
+### Outcome
+
+| | Distinct rows (partition-deduplicated) |
+|---|---|
+| Corrupt before | 107,995 |
+| **Repaired** | **46,675** |
+| Remaining | 61,320 — all behind append-only / immutability protection |
+| Unparseable | 0 |
+| Legitimate scalars altered | **0** (4 present, all survived) |
+
+Wall time for the estate-wide apply: **77 s**.
+
+### Remaining rows, all blocked by design
+
+| Rows | Location | Blocked by |
+|---|---|---|
+| 51,739 | `civitas_audit` `events.*` (+ partitions, + `events_legacy`) | `trg_events_immutable` |
+| 9,200 | `civitas_workflow` `workflow.transition_history.detail` | `trg_transition_no_update` |
+| 370 | `civitas_tenant` `tenant.consent_ledger.categories` | `trg_consent_ledger_append_only` |
+| 7 | `civitas_tenant` `tenant.tenants.settings` | a poisoned sibling row — see below |
+| 4 | `civitas_finance` `gl.finance_journals.lines` | `trg_journal_no_mutate` |
+
+None of these is a tool failure. Each is an append-only guarantee doing its job, and
+for `civitas_audit` in-place repair is **semantically wrong** rather than merely
+blocked — see [§8](#8-blocked-append-only-and-immutability-triggers). These 61,320
+rows need the decision recorded there, not another repair run.
+
+### Verified after the run
+
+`jsonb_object_keys()` — which raises `cannot call jsonb_object_keys on a scalar`
+against a corrupt column — now succeeds on repaired outbox payloads:
+
+```sql
+-- civitas_crm, after repair (key names only; never select payload contents)
+SELECT k, count(*) AS n FROM _outbox.messages m, jsonb_object_keys(m.payload) k
+ GROUP BY k ORDER BY n DESC LIMIT 5;
+  resourceType 2500 · outcome 2500 · action 2500 · resourceId 2500 · service 2500
+```
+
+The 4 legitimate scalars in `visitor.config_entries.value` are still
+`jsonb_typeof = 'string'` — the repair did not widen into good data.
+
+### Two defects the repair exposed (neither is a repair bug)
+
+**1. `tenant.tenants` has a row violating its own CHECK constraint.**
+`tenants_edition_check` allows `govt|psu|private|ngo|section8|cooperative|small_office`,
+but one row holds `edition = 'govt_dept'`. The constraint was added `NOT VALID`, so the
+offending row was grandfathered in and only surfaces when the row is UPDATEd — which the
+repair did:
+
+```
+ERROR: new row for relation "tenants" violates check constraint "tenants_edition_check"
+```
+
+Fixing it is a **domain decision** (is `govt_dept` a synonym for `govt`, or a missing
+edition?) and was deliberately left alone. Until it is resolved, 7 otherwise-repairable
+rows in that table stay corrupt. Owner: tenant-service.
+
+**2. The tool stops a column on the first batch error.**
+When a batch fails, the per-column loop `break`s. That is right for the audit tables
+(every row is blocked, so continuing would just retry pointlessly) but it means a
+*single* poisoned row halts the rest of its column — even at `--batch-size 1`, which
+repaired 1 row and then stopped with 7 still outstanding. If a future run hits a
+partially-blocked column, isolate it with `--table`/`--column`, fix or exclude the
+offending row, then re-run. Making the loop skip-and-continue instead of break would be
+a reasonable enhancement; it was not changed here because for every currently-known
+blocked column the break is the correct behaviour.
+
+### Also noted
+
+`services/helpdesk-service/src/modules/sla-engine/routes.ts:106` selects
+`t.assigned_to`, but the column is `assignee_id`. It returns a 500 on
+`GET /v1/helpdesk/sla/breaches`. Pre-existing, unrelated to this work, and left for the
+helpdesk owner — recorded here only because it was found while reading repair logs.
