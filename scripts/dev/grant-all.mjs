@@ -37,6 +37,15 @@ const DB_USERS = {
   civitas_tenant: "tenant_svc",
   civitas_theme: "theme_svc",
   civitas_workflow: "workflow_svc",
+  // Async-infra fleet-stitching fix: these services were started manually via
+  // pm2/ecosystem.config.js and migrate-all.mjs now provisions their schemas
+  // (see SERVICES list there), but grant-all.mjs never learned about them, so
+  // a fresh DB would have the tables but no revenue_svc/court_svc/etc grants.
+  civitas_revenue: "revenue_svc",
+  civitas_court: "court_svc",
+  civitas_meeting: "meeting_svc",
+  civitas_ml: "ml_svc",
+  civitas_inspection: "inspection_svc",
 };
 
 const GRANT_SQL = (role) => `

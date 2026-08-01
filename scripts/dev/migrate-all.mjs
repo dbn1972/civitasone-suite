@@ -54,6 +54,15 @@ const SERVICES = [
   { name: "loyalty-service",        db: "civitas_loyalty" },
   { name: "recommendation-service", db: "civitas_recommendation" },
   { name: "ai-agent-service",       db: "civitas_ai_agent" },
+  // Async-infra fleet-stitching fix: these services were started manually via
+  // pm2/ecosystem.config.js but were never added here, so their databases were
+  // never provisioned by migrate-all and hand-run hotfixes (e.g. the
+  // revenue-service outbox/inbox tables) would vanish on any DB rebuild.
+  { name: "revenue-service",    db: "civitas_revenue" },
+  { name: "court-service",      db: "civitas_court" },
+  { name: "meeting-service",    db: "civitas_meeting" },
+  { name: "ml-service",         db: "civitas_ml" },
+  { name: "inspection-service", db: "civitas_inspection" },
 ];
 
 let applied = 0;
@@ -96,8 +105,20 @@ for (const svc of SERVICES) {
         console.log(`[idem] ${svc.name}/${file} (already applied)`);
         applied++;
       } else {
+        // Fail loud AND stop: a broken migration used to be logged as [ERR]
+        // and the loop just kept going onto the service's LATER migrations
+        // (which often depend on the failed one), silently leaving the
+        // schema half-applied while the script kept chugging. Abort this
+        // service's remaining migrations immediately so a failure can never
+        // hide behind a wall of unrelated [ok] lines further down the log.
+        console.error(`
+════════════════════════════════════════════════════`);
         console.error(`[ERR]  ${svc.name}/${file}: ${combined.trim().slice(0, 300)}`);
+        console.error(`[ABORT] ${svc.name}: skipping remaining migrations for this service after failure above`);
+        console.error(`════════════════════════════════════════════════════
+`);
         errors++;
+        break;
       }
     }
   }
