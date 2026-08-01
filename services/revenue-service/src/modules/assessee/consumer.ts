@@ -8,6 +8,15 @@ import { eq, and } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/** Postgres error class 23 = integrity constraint violation (not-null, unique,
+ * foreign-key, check). Re-delivering the same command can never fix one of
+ * these — the message is malformed or conflicts with existing data — so it
+ * must be classified non-retryable rather than left to retry forever. */
+function isConstraintViolation(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && code.startsWith("23");
+}
+
 export function registerAssesseeConsumers(queue: Queue): void {
   // ─── assesseeCreate ─────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.assesseeCreate, async (msg) => {
@@ -26,20 +35,27 @@ export function registerAssesseeConsumers(queue: Queue): void {
         builtUpArea?: bigint | null;
       };
 
-      await tx.insert(assessees).values({
-        tenantId: msg.tenantId,
-        assesseeType: p.assesseeType,
-        identifierNo: p.identifierNo,
-        ownerName: p.ownerName,
-        address: p.address,
-        wardNo: p.wardNo ?? null,
-        zoneNo: p.zoneNo ?? null,
-        connectionSize: p.connectionSize ?? null,
-        propertyType: p.propertyType ?? null,
-        builtUpArea: p.builtUpArea ?? null,
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
+      try {
+        await tx.insert(assessees).values({
+          tenantId: msg.tenantId,
+          assesseeType: p.assesseeType,
+          identifierNo: p.identifierNo,
+          ownerName: p.ownerName,
+          address: p.address,
+          wardNo: p.wardNo ?? null,
+          zoneNo: p.zoneNo ?? null,
+          connectionSize: p.connectionSize ?? null,
+          propertyType: p.propertyType ?? null,
+          builtUpArea: p.builtUpArea ?? null,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      } catch (err) {
+        if (isConstraintViolation(err)) {
+          throw new NonRetryableError("ASSESSEE_CREATE_CONSTRAINT_VIOLATION", err);
+        }
+        throw err;
+      }
 
       await enqueue(tx, {
         topic: EVENTS.assesseeCreated,

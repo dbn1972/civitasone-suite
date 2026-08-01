@@ -135,6 +135,19 @@ describe("Assessee Consumer", () => {
       expect(mockInsert).not.toHaveBeenCalled();
       expect(mockEnqueue).not.toHaveBeenCalled();
     });
+
+    it("wraps a NOT-NULL/constraint violation on insert in NonRetryableError (does not retry forever)", async () => {
+      const pgError = Object.assign(new Error('null value in column "ownerName" violates not-null constraint'), {
+        code: "23502",
+      });
+      mockValues.mockRejectedValueOnce(pgError);
+
+      const msg = buildMsg();
+      await expect(handlers["revenue.assessee.create"]!(msg)).rejects.toThrow(NonRetryableError);
+
+      // A rejected insert must not enqueue the domain/audit events.
+      expect(mockEnqueue).not.toHaveBeenCalled();
+    });
   });
 
   describe("assesseeUpdate", () => {

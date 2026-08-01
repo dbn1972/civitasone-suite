@@ -90,7 +90,13 @@ afterAll(async () => {
 // ── POST /v1/revenue/assessees ────────────────────────────────────────────────
 
 describe("POST /v1/revenue/assessees", () => {
-  const VALID_BODY = { name: "John Doe", contactPhone: "9876543210" };
+  const VALID_BODY = {
+    assesseeType: "property",
+    identifierNo: "PROP-0001",
+    ownerName: "John Doe",
+    address: "1 Main St",
+    contactPhone: "9876543210",
+  };
 
   it("returns 202 with valid body and correct role", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/assessees", headers: AUTH, payload: VALID_BODY });
@@ -98,9 +104,30 @@ describe("POST /v1/revenue/assessees", () => {
     expect(res.json().data).toHaveProperty("messageId");
   });
 
-  it("returns 400 with invalid body (empty name)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/revenue/assessees", headers: AUTH, payload: { name: "" } });
+  it("returns 400 with invalid body (empty ownerName)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/assessees",
+      headers: AUTH,
+      payload: { ...VALID_BODY, ownerName: "" },
+    });
     // ZodError bubbles via app-level schema error handler
+    expect([400, 500]).toContain(res.statusCode);
+  });
+
+  it("returns 400 with invalid body (missing identifierNo)", async () => {
+    const { identifierNo, ...rest } = VALID_BODY;
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/assessees", headers: AUTH, payload: rest });
+    expect([400, 500]).toContain(res.statusCode);
+  });
+
+  it("returns 400 with invalid body (unknown assesseeType)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/revenue/assessees",
+      headers: AUTH,
+      payload: { ...VALID_BODY, assesseeType: "not-a-real-type" },
+    });
     expect([400, 500]).toContain(res.statusCode);
   });
 
