@@ -9,10 +9,19 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { ticketRoutes } from "./modules/tickets/routes.js";
+import { notesRoutes } from "./modules/tickets/notes-routes.js";
+import { linksRoutes } from "./modules/tickets/links-routes.js";
+import { transferRoutes } from "./modules/tickets/transfer-routes.js";
+import { bulkRoutes } from "./modules/tickets/bulk-routes.js";
 import { slaRoutes } from "./modules/sla/routes.js";
 import { automationRoutes } from "./modules/automation/routes.js";
 import { mlBreachRoutes } from "./modules/ml-breach/routes.js";
 import { catalogueRoutes } from "./modules/catalogue/routes.js";
+import { categoriesRoutes } from "./modules/config/categories-routes.js";
+import { statusesRoutes } from "./modules/config/statuses-routes.js";
+import { dispositionsRoutes } from "./modules/config/dispositions-routes.js";
+import { routingRoutes } from "./modules/routing/index.js";
+import { calendarRoutes } from "./modules/sla/calendar-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -43,10 +52,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "helpdesk-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(ticketRoutes);
+  await app.register(notesRoutes);
+  await app.register(linksRoutes);
+  await app.register(transferRoutes);
+  await app.register(bulkRoutes);
   await app.register(slaRoutes);
   await app.register(automationRoutes);
   await app.register(mlBreachRoutes);
   await app.register(catalogueRoutes);
+  await app.register(categoriesRoutes);
+  await app.register(statusesRoutes);
+  await app.register(dispositionsRoutes);
+  await app.register(routingRoutes);
+  await app.register(calendarRoutes);
   const { slaEngineRoutes } = await import("./modules/sla-engine/routes.js");
   await app.register(slaEngineRoutes);
   registerSchemaErrorHandler(app, HttpError);

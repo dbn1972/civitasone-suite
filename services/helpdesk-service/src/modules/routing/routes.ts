@@ -1,0 +1,446 @@
+/**
+ * Routing Module Routes
+ *
+ * Endpoints:
+ *  GET    /v1/helpdesk/routing/rules            — list routing rules
+ *  POST   /v1/helpdesk/routing/rules            — create rule
+ *  PATCH  /v1/helpdesk/routing/rules/:id        — update rule
+ *  DELETE /v1/helpdesk/routing/rules/:id        — soft-delete (disable)
+ *  POST   /v1/helpdesk/routing/evaluate         — dry-run evaluate
+ *  POST   /v1/helpdesk/routing/rules/validate   — detect conflicts
+ *  GET    /v1/helpdesk/routing/agents           — list agents + capacity
+ *  PATCH  /v1/helpdesk/routing/agents/:agentId/capacity — update capacity
+ *  GET    /v1/helpdesk/routing/queues           — list queues
+ *  POST   /v1/helpdesk/routing/queues/enqueue   — add to queue
+ *  POST   /v1/helpdesk/routing/queues/dequeue   — pick next from queue
+ *  GET    /v1/helpdesk/routing/failures         — list failures
+ */
+import type { FastifyInstance } from "fastify";
+import { z, ZodError } from "zod";
+import { eq, and, sql, desc, asc } from "drizzle-orm";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { routingRules } from "./schema.js";
+import { agentCapacity } from "./capacity-schema.js";
+import { holdQueue } from "./queue-schema.js";
+import { routingFailures } from "./failure-log-schema.js";
+import {
+  selectAgent,
+  validateRulePrecedence,
+  detectConflicts,
+  isValidStrategy,
+  VALID_STRATEGIES,
+} from "./domain.js";
+
+const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin", "admin"];
+const ADMIN_ROLES = ["helpdesk_admin", "super_admin", "admin"];
+
+// ─── Validators ───────────────────────────────────────────────────────────────
+
+const createRuleBody = z.object({
+  name: z.string().min(1).max(255),
+  strategy: z.enum(["round_robin", "weighted", "skill_based", "least_busy"]),
+  criteria: z.record(z.unknown()).nullable().optional(),
+  weight: z.number().int().min(0).max(100).default(1),
+  enabled: z.boolean().default(true),
+  ordinal: z.number().int().min(0).default(0),
+});
+
+const updateRuleBody = z.object({
+  name: z.string().min(1).max(255).optional(),
+  strategy: z.enum(["round_robin", "weighted", "skill_based", "least_busy"]).optional(),
+  criteria: z.record(z.unknown()).nullable().optional(),
+  weight: z.number().int().min(0).max(100).optional(),
+  enabled: z.boolean().optional(),
+  ordinal: z.number().int().min(0).optional(),
+});
+
+const evaluateBody = z.object({
+  priority: z.string().min(1).optional(),
+  category: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  ticketId: z.string().uuid().optional(),
+});
+
+const updateCapacityBody = z.object({
+  maxTickets: z.number().int().min(1).max(100).optional(),
+  skills: z.array(z.string()).optional(),
+  available: z.boolean().optional(),
+});
+
+const enqueueBody = z.object({
+  ticketId: z.string().uuid(),
+  queueName: z.string().min(1).max(128).default("default"),
+  priority: z.number().int().min(0).max(10).default(0),
+});
+
+const dequeueBody = z.object({
+  queueName: z.string().min(1).max(128).default("default"),
+});
+
+const paginationQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export async function routingRoutes(app: FastifyInstance): Promise<void> {
+  // ─── Routing Rules CRUD ─────────────────────────────────────────────────
+
+  /** List routing rules for tenant */
+  app.get("/v1/helpdesk/routing/rules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const query = paginationQuery.parse(req.query);
+
+    const rows = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(routingRules)
+        .where(and(eq(routingRules.tenantId, ctx.tenantId), eq(routingRules.enabled, true)))
+        .orderBy(asc(routingRules.ordinal))
+        .limit(query.limit)
+        .offset(query.offset),
+    );
+
+    const [countRow] = await db.transaction((tx) =>
+      tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(routingRules)
+        .where(and(eq(routingRules.tenantId, ctx.tenantId), eq(routingRules.enabled, true))),
+    );
+
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
+    });
+  });
+
+  /** Create routing rule */
+  app.post("/v1/helpdesk/routing/rules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const body = createRuleBody.parse(req.body);
+
+    const [created] = await db.transaction((tx) =>
+      tx.insert(routingRules).values({
+        tenantId: ctx.tenantId,
+        name: body.name,
+        strategy: body.strategy,
+        criteria: body.criteria ?? null,
+        weight: body.weight,
+        enabled: body.enabled,
+        ordinal: body.ordinal,
+        createdBy: ctx.actorId,
+      }).returning(),
+    );
+
+    return reply.code(201).send({ data: created });
+  });
+
+  /** Update routing rule */
+  app.patch("/v1/helpdesk/routing/rules/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = updateRuleBody.parse(req.body);
+
+    const [updated] = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(routingRules)
+        .where(and(eq(routingRules.id, id), eq(routingRules.tenantId, ctx.tenantId)))
+        .limit(1);
+      if (!existing) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
+
+      return tx
+        .update(routingRules)
+        .set({
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.strategy !== undefined && { strategy: body.strategy }),
+          ...(body.criteria !== undefined && { criteria: body.criteria ?? null }),
+          ...(body.weight !== undefined && { weight: body.weight }),
+          ...(body.enabled !== undefined && { enabled: body.enabled }),
+          ...(body.ordinal !== undefined && { ordinal: body.ordinal }),
+          updatedAt: new Date(),
+          version: sql`${routingRules.version} + 1`,
+        })
+        .where(and(eq(routingRules.id, id), eq(routingRules.version, existing.version)))
+        .returning();
+    });
+
+    if (!updated) throw new HttpError(409, "CONFLICT", "concurrent modification detected");
+    return reply.send({ data: updated });
+  });
+
+  /** Soft-delete routing rule (set enabled=false) */
+  app.delete("/v1/helpdesk/routing/rules/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+
+    const [updated] = await db.transaction((tx) =>
+      tx
+        .update(routingRules)
+        .set({ enabled: false, updatedAt: new Date(), version: sql`${routingRules.version} + 1` })
+        .where(and(eq(routingRules.id, id), eq(routingRules.tenantId, ctx.tenantId)))
+        .returning(),
+    );
+
+    if (!updated) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
+    return reply.code(200).send({ data: { id, disabled: true } });
+  });
+
+  /** Evaluate routing — dry-run which agent would be assigned */
+  app.post("/v1/helpdesk/routing/evaluate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const body = evaluateBody.parse(req.body);
+
+    const rules = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(routingRules)
+        .where(and(eq(routingRules.tenantId, ctx.tenantId), eq(routingRules.enabled, true)))
+        .orderBy(asc(routingRules.ordinal)),
+    );
+
+    if (rules.length === 0) {
+      return reply.send({ data: { selectedAgentId: null, ruleName: null, reason: "no_rules_configured" } });
+    }
+
+    const agents = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(agentCapacity)
+        .where(and(eq(agentCapacity.tenantId, ctx.tenantId), eq(agentCapacity.available, true))),
+    );
+
+    // Try rules in ordinal order
+    for (const rule of rules) {
+      const result = selectAgent(rule, agents);
+      if (result.agentId) {
+        return reply.send({
+          data: {
+            selectedAgentId: result.agentId,
+            ruleName: rule.name,
+            strategy: rule.strategy,
+            reason: result.reason,
+          },
+        });
+      }
+    }
+
+    return reply.send({ data: { selectedAgentId: null, ruleName: null, reason: "no_agents_available" } });
+  });
+
+  /** Validate rules — detect conflicts */
+  app.post("/v1/helpdesk/routing/rules/validate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+
+    const rules = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(routingRules)
+        .where(eq(routingRules.tenantId, ctx.tenantId)),
+    );
+
+    const precedenceIssues = validateRulePrecedence(rules);
+    const conflicts = detectConflicts(rules);
+
+    return reply.send({
+      data: {
+        valid: conflicts.length === 0 && precedenceIssues.length === 0,
+        conflicts,
+        precedenceIssues,
+        totalRules: rules.length,
+        enabledRules: rules.filter((r) => r.enabled).length,
+      },
+    });
+  });
+
+  // ─── Agent Capacity ─────────────────────────────────────────────────────
+
+  /** List agents with capacity */
+  app.get("/v1/helpdesk/routing/agents", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const query = paginationQuery.parse(req.query);
+
+    const rows = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(agentCapacity)
+        .where(eq(agentCapacity.tenantId, ctx.tenantId))
+        .limit(query.limit)
+        .offset(query.offset),
+    );
+
+    const [countRow] = await db.transaction((tx) =>
+      tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(agentCapacity)
+        .where(eq(agentCapacity.tenantId, ctx.tenantId)),
+    );
+
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
+    });
+  });
+
+  /** Update agent capacity */
+  app.patch("/v1/helpdesk/routing/agents/:agentId/capacity", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { agentId } = z.object({ agentId: z.string().uuid() }).parse(req.params);
+    const body = updateCapacityBody.parse(req.body);
+
+    const [updated] = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(agentCapacity)
+        .where(and(eq(agentCapacity.agentId, agentId), eq(agentCapacity.tenantId, ctx.tenantId)))
+        .limit(1);
+
+      if (!existing) {
+        // Create capacity record if it doesn't exist
+        return tx.insert(agentCapacity).values({
+          tenantId: ctx.tenantId,
+          agentId,
+          maxTickets: body.maxTickets ?? 10,
+          skills: body.skills ?? [],
+          available: body.available ?? true,
+        }).returning();
+      }
+
+      return tx
+        .update(agentCapacity)
+        .set({
+          ...(body.maxTickets !== undefined && { maxTickets: body.maxTickets }),
+          ...(body.skills !== undefined && { skills: body.skills }),
+          ...(body.available !== undefined && { available: body.available }),
+          updatedAt: new Date(),
+          version: sql`${agentCapacity.version} + 1`,
+        })
+        .where(and(eq(agentCapacity.id, existing.id), eq(agentCapacity.version, existing.version)))
+        .returning();
+    });
+
+    if (!updated) throw new HttpError(409, "CONFLICT", "concurrent modification detected");
+    return reply.send({ data: updated });
+  });
+
+  // ─── Hold Queue ─────────────────────────────────────────────────────────
+
+  /** List queues with counts */
+  app.get("/v1/helpdesk/routing/queues", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+
+    const rows = await db.transaction((tx) =>
+      tx
+        .select({
+          queueName: holdQueue.queueName,
+          count: sql<number>`count(*)::int`,
+          oldestEntry: sql<string>`min(${holdQueue.enteredAt})`,
+          highestPriority: sql<number>`max(${holdQueue.priority})`,
+        })
+        .from(holdQueue)
+        .where(eq(holdQueue.tenantId, ctx.tenantId))
+        .groupBy(holdQueue.queueName),
+    );
+
+    return reply.send({ data: rows });
+  });
+
+  /** Enqueue ticket */
+  app.post("/v1/helpdesk/routing/queues/enqueue", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const body = enqueueBody.parse(req.body);
+
+    const [created] = await db.transaction((tx) =>
+      tx.insert(holdQueue).values({
+        tenantId: ctx.tenantId,
+        ticketId: body.ticketId,
+        queueName: body.queueName,
+        priority: body.priority,
+      }).returning(),
+    );
+
+    return reply.code(201).send({ data: created });
+  });
+
+  /** Dequeue — pick highest-priority, oldest ticket from queue */
+  app.post("/v1/helpdesk/routing/queues/dequeue", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const body = dequeueBody.parse(req.body);
+
+    const dequeued = await db.transaction(async (tx) => {
+      const [next] = await tx
+        .select()
+        .from(holdQueue)
+        .where(and(eq(holdQueue.tenantId, ctx.tenantId), eq(holdQueue.queueName, body.queueName)))
+        .orderBy(desc(holdQueue.priority), asc(holdQueue.enteredAt))
+        .limit(1);
+
+      if (!next) return null;
+
+      await tx.delete(holdQueue).where(eq(holdQueue.id, next.id));
+      return next;
+    });
+
+    if (!dequeued) {
+      return reply.send({ data: null, message: "queue is empty" });
+    }
+
+    return reply.send({ data: dequeued });
+  });
+
+  // ─── Routing Failures ───────────────────────────────────────────────────
+
+  /** List recent routing failures */
+  app.get("/v1/helpdesk/routing/failures", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const query = paginationQuery.parse(req.query);
+
+    const rows = await db.transaction((tx) =>
+      tx
+        .select()
+        .from(routingFailures)
+        .where(eq(routingFailures.tenantId, ctx.tenantId))
+        .orderBy(desc(routingFailures.attemptedAt))
+        .limit(query.limit)
+        .offset(query.offset),
+    );
+
+    const [countRow] = await db.transaction((tx) =>
+      tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(routingFailures)
+        .where(eq(routingFailures.tenantId, ctx.tenantId)),
+    );
+
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
+    });
+  });
+
+  // ─── Error Handler ──────────────────────────────────────────────────────
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: "invalid request", correlationId } });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ error: { code: err.code, message: err.message, correlationId } });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ error: { code: "INTERNAL", message: "internal error", correlationId } });
+  });
+}
