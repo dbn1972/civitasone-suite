@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
-import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 
 type Props = {
