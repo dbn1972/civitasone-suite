@@ -24,3 +24,17 @@ export const claimBody = z.object({
 export type ClaimBody = z.infer<typeof claimBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const policyQueryParams = z.object({
+  assetId: z.string().uuid().optional(),
+  status:  z.string().optional(),
+  limit:   z.coerce.number().int().positive().max(200).default(50),
+  offset:  z.coerce.number().int().nonnegative().default(0),
+});
+
+export const claimQueryParams = z.object({
+  policyId: z.string().uuid().optional(),
+  status:   z.string().optional(),
+  limit:    z.coerce.number().int().positive().max(200).default(50),
+  offset:   z.coerce.number().int().nonnegative().default(0),
+});
