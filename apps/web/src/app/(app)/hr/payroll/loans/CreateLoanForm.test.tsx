@@ -24,7 +24,7 @@ describe("CreateLoanForm", () => {
 
   it("requires the mandatory fields before opening the confirm dialog", () => {
     render(<CreateLoanForm />);
-    fireEvent.click(screen.getByText("Create Loan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
     expect(screen.getByText(/are required/)).toBeInTheDocument();
   });
 
@@ -35,7 +35,7 @@ describe("CreateLoanForm", () => {
 
     render(<CreateLoanForm />);
     fillFields();
-    fireEvent.click(screen.getByText("Create Loan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
 
     await waitFor(() => expect(screen.getByText("Create this loan?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create loan"));
@@ -51,7 +51,7 @@ describe("CreateLoanForm", () => {
 
     render(<CreateLoanForm />);
     fillFields();
-    fireEvent.click(screen.getByText("Create Loan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
 
     await waitFor(() => expect(screen.getByText("Create this loan?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create loan"));

@@ -36,7 +36,8 @@ describe("DisbursementPage", () => {
     const ui = await DisbursementPage();
     render(ui);
 
-    expect(screen.getByText("2026-07")).toBeInTheDocument();
+    // "2026-07" appears both as a table cell and as run-selector option text.
+    expect(screen.getAllByText("2026-07").length).toBeGreaterThan(0);
     expect(screen.getByText("Generate & Download")).toBeInTheDocument();
   });
 

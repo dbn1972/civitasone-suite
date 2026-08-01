@@ -27,7 +27,8 @@ describe("FnfPage", () => {
     const ui = await FnfPage();
     render(ui);
 
-    expect(screen.getByText("retirement")).toBeInTheDocument();
+    // "retirement" appears both as a table cell and as a select option in the compute form.
+    expect(screen.getAllByText("retirement").length).toBeGreaterThan(0);
   });
 
   it("renders an empty state when there are no settlements", async () => {
