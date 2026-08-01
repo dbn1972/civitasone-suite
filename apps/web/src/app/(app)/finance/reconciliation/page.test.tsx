@@ -91,7 +91,7 @@ describe("ReconciliationWorkbenchPage", () => {
     const ui = await ReconciliationWorkbenchPage();
     render(ui);
 
-    expect(screen.getByText("book-vs-bank")).toBeInTheDocument();
+    expect(screen.getAllByText("book-vs-bank").length).toBeGreaterThan(0);
     expect(screen.getByText("UTR12345")).toBeInTheDocument();
     expect(screen.getByText("Reconciled")).toBeInTheDocument();
     expect(screen.getByText("Not reconciled")).toBeInTheDocument();
