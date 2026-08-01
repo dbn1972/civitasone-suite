@@ -1,5 +1,5 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../_components/ds";
-import { DataSourceBadge } from "../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { PeriodSelector } from "./PeriodSelector";

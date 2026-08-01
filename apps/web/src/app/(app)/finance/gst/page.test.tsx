@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -48,6 +48,7 @@ describe("GstConsolePage", () => {
     const ui = await GstConsolePage({ searchParams: { period: "2026-06" } });
     render(ui);
     expect(screen.getByText("GST / ITC Console")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("GST Ledger"));
     expect(screen.getByText("INV-001")).toBeInTheDocument();
   });
 

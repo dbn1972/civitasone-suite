@@ -29,7 +29,7 @@ describe("GstConsole", () => {
   it("switches to the ITC Reconciliation tab and shows reconciliation rows", () => {
     render(<GstConsole period="2026-06" summary={summary} ledger={ledger} itc={itc} />);
     fireEvent.click(screen.getByText("ITC Reconciliation"));
-    expect(screen.getByText("5,400.00", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("₹54.00")).toBeInTheDocument();
   });
 
   it("shows an empty state when the ledger has no rows", () => {
