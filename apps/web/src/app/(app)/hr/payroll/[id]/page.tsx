@@ -1,7 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, DataTable } from "../../../../_components/ds";
 import { getPayrollRunById } from "../../../../_data/loaders";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatRupees, formatIndianDate } from "@/lib/formatters";
 import { PayrollRunActions } from "./PayrollRunActions";
 
 type SalarySlipRow = {
@@ -87,15 +87,15 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           </div>
           <div className="fld">
             <div className="l">Gross Amount</div>
-            <div className="v">{formatMoney(run.grossAmount)}</div>
+            <div className="v">{formatRupees(run.grossAmount)}</div>
           </div>
           <div className="fld">
             <div className="l">Deductions</div>
-            <div className="v">{formatMoney(run.deductions)}</div>
+            <div className="v">{formatRupees(run.deductions)}</div>
           </div>
           <div className="fld">
             <div className="l">Net Amount</div>
-            <div className="v">{formatMoney(run.netAmount)}</div>
+            <div className="v">{formatRupees(run.netAmount)}</div>
           </div>
         </div>
       </Card>

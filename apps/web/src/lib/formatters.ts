@@ -7,6 +7,20 @@ export function formatIndianDate(isoDate: string | null | undefined): string {
 }
 
 /**
+ * Format money already expressed in RUPEES (not paise) as a ₹ string with en-IN
+ * (lakh/crore) grouping and 2 decimals. Use this for the few API fields that return
+ * rupees rather than minor units (e.g. payroll-runs grossAmount/netAmount). Do NOT
+ * pass a rupee value to formatMoney() — that treats it as paise and shows 100x too small.
+ *
+ *   formatRupees(90000) -> "₹90,000.00"
+ */
+export function formatRupees(rupees: number | string): string {
+  const n = typeof rupees === "number" ? rupees : Number(rupees);
+  if (!Number.isFinite(n)) return "₹0.00";
+  return n.toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
  * Format money held in MINOR units (paise) as a ₹ string with en-IN (lakh/crore)
  * grouping and exactly 2 decimal places. Paise-correct: works on bigint, number,
  * or numeric string without floating-point drift on the rupee/paise split.

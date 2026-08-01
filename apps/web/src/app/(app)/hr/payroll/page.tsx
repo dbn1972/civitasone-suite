@@ -1,7 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { formatRupees } from "@/lib/formatters";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import Link from "next/link";
@@ -47,7 +47,7 @@ export default async function PayrollPage() {
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f7f0" label="Total Runs" value={totalRuns} />
         <StatCard icon="👥" iconBg="#e6f0ff" label="Employees Paid" value={totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="#fffbe6" label="Total Gross" value={formatMoney(totalGross)} />
+        <StatCard icon="🏛" iconBg="#fffbe6" label="Total Gross" value={formatRupees(totalGross)} />
         <StatCard icon="📄" iconBg="#f5f5f5" label="Pending" value={pending} />
       </StatGrid>
       <Card title="Payroll Runs">
