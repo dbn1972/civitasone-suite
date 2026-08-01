@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { Card, ConfirmDialog } from "../../../../../_components/ds";
-import { browserFetch } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -37,7 +37,7 @@ export function EcrGeneratorForm() {
     setDialogError(undefined);
     try {
       const res = await browserFetch(`v1/payroll/statutory/ecr?month=${encodeURIComponent(month)}`);
-      if (!res.ok) throw new Error(`API_ERROR: ${res.status}`);
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
