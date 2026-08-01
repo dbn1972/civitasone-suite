@@ -116,6 +116,11 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
       });
       setConfirmOpen(false);
       setJob({ jobId: res.data.jobId, fy: res.data.fy, status: "pending", totalEmployees: 0, generated: 0, failed: 0 });
+      // Client-side polling (below) keeps this card live; router.push separately
+      // re-navigates to ?fy=<res.data.fy> so the server-rendered "Bulk Filing Run"
+      // card downstream also reflects the new job on its own next fetch/refresh —
+      // the two update paths are intentionally independent (poll owns this card,
+      // the server component owns the one below it).
       startPolling(res.data.fy);
       router.push(`/hr/payroll/form16?fy=${encodeURIComponent(res.data.fy)}`);
     } catch (err) {
@@ -134,7 +139,10 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
             <Segmented
               options={["Single employee", "Whole run (bulk)"]}
               value={MODE_LABEL[mode]}
-              onChange={(v) => setMode(LABEL_MODE[v] ?? "single")}
+              onChange={(v) => {
+                setMode(LABEL_MODE[v] ?? "single");
+                setValidationError(null);
+              }}
             />
           </fieldset>
 
@@ -182,7 +190,7 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
           </div>
 
           {validationError && (
-            <p id={errId} role="alert" aria-live="assertive" className="pill bad" style={{ width: "fit-content" }}>
+            <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
               {validationError}
             </p>
           )}

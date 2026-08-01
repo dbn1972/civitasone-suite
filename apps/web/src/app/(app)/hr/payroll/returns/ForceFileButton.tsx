@@ -10,6 +10,12 @@ import { ConfirmDialog } from "../../../../_components/ds";
  * officer explicitly bypass that gate (?force=1) — the server records a
  * force_file_24q audit event with the actor and per-period variance, so the
  * override is never silent. Irreversible filing consequence → ConfirmDialog.
+ *
+ * KNOWN GAP (see PR "BACKEND FOLLOW-UPS"): this is a GET with force=1, not a
+ * POST mutation, so it is not idempotent and the audit event isn't deduped
+ * server-side. ReturnsPage renders <StripForceParam/> after landing here so a
+ * manual page refresh at least can't silently re-trigger it via the address
+ * bar — but a true fix needs a POST endpoint on payroll-service.
  */
 export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }) {
   const router = useRouter();

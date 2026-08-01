@@ -45,18 +45,22 @@ export function VerifyForm16Form() {
     const file = fileRef.current?.files?.[0];
     if (!file) {
       setError("Choose a Form-16 PDF to verify.");
+      fileRef.current?.focus();
       return;
     }
     if (file.type && file.type !== "application/pdf") {
       setError("Only PDF files can be verified.");
+      fileRef.current?.focus();
       return;
     }
     if (file.size === 0) {
       setError("The selected file is empty.");
+      fileRef.current?.focus();
       return;
     }
     if (file.size > MAX_BYTES) {
       setError("PDF exceeds the 2 MB verification limit.");
+      fileRef.current?.focus();
       return;
     }
 
@@ -102,7 +106,7 @@ export function VerifyForm16Form() {
           </div>
 
           {error && (
-            <p id={errId} role="alert" aria-live="assertive" className="pill bad" style={{ width: "fit-content" }}>
+            <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
               {error}
             </p>
           )}
