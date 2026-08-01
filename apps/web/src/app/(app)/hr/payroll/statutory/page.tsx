@@ -1,51 +1,28 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { LinkTiles } from "../../../../_components/LinkTiles";
+import { PageHeader } from "../../../../_components/ds";
+import type { NavTile } from "@civitasone/types";
 
-type Row = {
-  id: string;
-  employee: string;
-  department: string;
-  pfEmployee: string;
-  pfEmployer: string;
-  esi: string;
-  professionalTax: string;
-  nps: string;
-  total: string;
-} & Record<string, unknown>;
+const tiles: NavTile[] = [
+  { title: "PF & ECR", href: "/hr/payroll/statutory/pf", description: "EPF contributions ledger and EPFO ECR file generation" },
+  { title: "ESI", href: "/hr/payroll/statutory/esi", description: "Employees' State Insurance contribution records" },
+  { title: "Professional Tax", href: "/hr/payroll/statutory/pt", description: "State-wise professional tax slabs" },
+  { title: "Labour Welfare Fund", href: "/hr/payroll/statutory/lwf", description: "State-wise LWF contribution configuration" },
+  { title: "Gratuity", href: "/hr/payroll/statutory/gratuity", description: "Gratuity computation on separation" },
+  { title: "Challans & Reconciliation", href: "/hr/payroll/statutory/challans", description: "TDS challan ingestion and deducted-vs-deposited reconciliation" },
+  { title: "Perquisites & Form 12BA", href: "/hr/payroll/statutory/perquisite", description: "Itemised perquisite components (Sec 17(2)) and Form 12BA" },
+  { title: "GPF", href: "/hr/payroll/gpf", description: "General Provident Fund statements" },
+  { title: "NPS", href: "/hr/payroll/nps", description: "National Pension System contributions" },
+];
 
-async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/payroll/statutory-deductions", [], {
-    telemetryKey: "payroll.statutory-deductions",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
-    },
-  });
-  return r.data;
-}
-
-export default async function StatutoryPage() {
-  const items = await getData();
-
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "pfEmployee", label: "PF (Emp)" },
-    { key: "pfEmployer", label: "PF (Empr)" },
-    { key: "esi", label: "ESI" },
-    { key: "professionalTax", label: "Prof. Tax" },
-    { key: "nps", label: "NPS" },
-    { key: "total", label: "Total Statutory", align: "right" },
-  ];
-
+export default function StatutoryHubPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Statutory Deductions" subtitle="PF, ESI, Professional Tax, and NPS contribution breakdown." back="/hr" />
-      <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
-      </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <PageHeader
+        title="Statutory Consoles"
+        subtitle="PF, ESI, professional tax, LWF, gratuity, TDS challans, and perquisite statutory registers."
+        back="/hr/payroll"
+      />
+      <LinkTiles tiles={tiles} columns="three" />
     </main>
   );
 }

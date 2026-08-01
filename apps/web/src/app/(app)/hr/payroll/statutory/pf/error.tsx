@@ -7,9 +7,9 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
     <RouteError
       error={error}
       reset={reset}
-      backHref="/hr/payroll"
-      backLabel="Back to Payroll"
-      area="Statutory Consoles"
+      backHref="/hr/payroll/statutory"
+      backLabel="Back to Statutory"
+      area="PF & ECR"
     />
   );
 }

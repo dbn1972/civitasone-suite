@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/hr/payroll"
       backLabel="Back to Payroll"
-      area="Statutory Consoles"
+      area="Salary Revisions"
     />
   );
 }
