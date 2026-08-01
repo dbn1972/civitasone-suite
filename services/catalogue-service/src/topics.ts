@@ -141,6 +141,22 @@ export const EVENTS = {
    * Payload: { priceBookId, entryCount, totalAmountMinor (STRING paise) }
    */
   priceBookEntriesReplaced: "catalogue.price_book_entries.replaced",
+  /**
+   * Outcome of an inbound `billing.rate.change_requested`. Emitted by
+   * modules/rates/consumer.ts so billing observes an answer instead of silence.
+   * Acceptance records the request as valid — it does NOT move a price; applying a
+   * rate stays behind the governed maker-checker rate endpoints.
+   * Payload: { recordId, requestId, productId, rateId, requestedRateMinor (STRING —
+   * bigint minor units), currency, effectiveFrom, outcome: "accepted" }.
+   */
+  rateChangeRequestAccepted: "catalogue.rate_change_request.accepted",
+  /**
+   * A rate change request the catalogue refused. A business rejection is an EVENT, not
+   * a thrown error: throwing would retry and then dead-letter a decision that can never
+   * succeed.
+   * Payload: as above plus { outcome: "rejected", rejectionCode, rejectionReason }.
+   */
+  rateChangeRequestRejected: "catalogue.rate_change_request.rejected",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
