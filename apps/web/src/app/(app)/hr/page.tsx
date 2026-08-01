@@ -33,6 +33,8 @@ const hrTiles: NavTile[] = [
 	{ title: "Pensioners", href: "/hr/payroll/pensioners", description: "PPO management" },
 	{ title: "Tax Declaration", href: "/hr/payroll/tax-declaration", description: "80C/80D/HRA investment proofs" },
 	{ title: "Income Tax", href: "/hr/payroll/income-tax", description: "IT computation summary" },
+	{ title: "Form 16", href: "/hr/payroll/form16", description: "Form-16 generation and verification" },
+	{ title: "TDS Returns", href: "/hr/payroll/returns", description: "Form 24Q / 26Q quarterly returns" },
 	{ title: "Statutory", href: "/hr/payroll/statutory", description: "PF, ESI, PT deduction breakdown" },
 	{ title: "Arrears", href: "/hr/payroll/arrears", description: "Arrears computation and recovery" },
 	{ title: "Bonus", href: "/hr/payroll/bonus", description: "Bonus computation and payout" },
