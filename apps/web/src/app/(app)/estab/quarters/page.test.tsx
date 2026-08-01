@@ -46,12 +46,14 @@ describe("QuartersPage", () => {
     expect(screen.getByText("No quarters yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge instead of a friendly empty state on error", async () => {
+  it("shows the data-source badge instead of a friendly empty state on error, and never fabricates stat counts", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await QuartersPage();
     render(ui);
 
     expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
     expect(screen.queryByText("No quarters yet")).not.toBeInTheDocument();
+    // StatCards must show "—" (unknown), never a fabricated "0" count, when the source errored.
+    expect(screen.getAllByText("—").length).toBe(4);
   });
 });

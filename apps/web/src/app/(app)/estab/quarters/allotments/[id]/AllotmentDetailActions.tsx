@@ -1,8 +1,9 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -13,6 +14,11 @@ type Props = {
   quarterNo: string;
   employeeRef: string;
   monthlyLicenceFeeMinor: string | null;
+  /** Source of the licence-fee-rate lookup — "error" means the rate could NOT be
+   * verified (distinct from a genuine "no rate configured" which is `source: "api"`
+   * with `monthlyLicenceFeeMinor: null`). An officer confirming Allot/Occupy (which
+   * starts a payroll deduction) must be able to tell these apart. */
+  licenceFeeSource: "api" | "error";
 };
 
 export function AllotmentDetailActions({
@@ -22,6 +28,7 @@ export function AllotmentDetailActions({
   quarterNo,
   employeeRef,
   monthlyLicenceFeeMinor,
+  licenceFeeSource,
 }: Props) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -34,6 +41,27 @@ export function AllotmentDetailActions({
   }
 
   const employeeShort = `${employeeRef.slice(0, 8)}…`;
+
+  const licenceFeeErrored = licenceFeeSource === "error";
+
+  function licenceFeeNote(verb: string): ReactNode {
+    if (licenceFeeErrored) {
+      return (
+        <>
+          {" "}Licence fee <strong>could not be verified</strong> — <DataSourceBadge source="error" /> Confirm the
+          rate separately before proceeding.
+        </>
+      );
+    }
+    if (monthlyLicenceFeeMinor) {
+      return (
+        <>
+          {" "}{verb} <strong>{formatMoney(monthlyLicenceFeeMinor)}</strong>.
+        </>
+      );
+    }
+    return <> No licence-fee rate is configured for this quarter type / pay level.</>;
+  }
 
   // ── Vacation-notice date field (own validation, own ids) ────────────────
   const [vacationDueDate, setVacationDueDate] = useState("");
@@ -122,11 +150,7 @@ export function AllotmentDetailActions({
               confirmDescription={
                 <>
                   Allot quarter <strong>{quarterNo}</strong> to employee <strong className="mono">{employeeShort}</strong>.
-                  {monthlyLicenceFeeMinor && (
-                    <>
-                      {" "}Monthly licence fee on occupation: <strong>{formatMoney(monthlyLicenceFeeMinor)}</strong>.
-                    </>
-                  )}{" "}
+                  {licenceFeeNote("Monthly licence fee on occupation:")}{" "}
                   The server rejects this if the allotting officer is the same person as the applicant.
                 </>
               }
@@ -148,11 +172,8 @@ export function AllotmentDetailActions({
               confirmDescription={
                 <>
                   Mark quarter <strong>{quarterNo}</strong> as occupied by <strong className="mono">{employeeShort}</strong>.
-                  {monthlyLicenceFeeMinor && (
-                    <>
-                      {" "}This starts a monthly licence-fee deduction of <strong>{formatMoney(monthlyLicenceFeeMinor)}</strong> via payroll.
-                    </>
-                  )}
+                  {licenceFeeNote("This starts a monthly licence-fee deduction of")}
+                  {!licenceFeeErrored && monthlyLicenceFeeMinor ? " via payroll." : ""}
                 </>
               }
               confirmLabel="Mark occupied"
@@ -216,7 +237,7 @@ export function AllotmentDetailActions({
           </div>
         )}
 
-        <div role="status" aria-live="polite">
+        <div role="status">
           {message && <p className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
       </div>

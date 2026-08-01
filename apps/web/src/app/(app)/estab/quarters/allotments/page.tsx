@@ -15,6 +15,7 @@ async function getAllotments(): Promise<LoaderResult<AllotmentRow[]>> {
 
 export default async function QuarterAllotmentsPage() {
   const { data: allotments, source } = await getAllotments();
+  const errored = source === "error";
 
   const applied = allotments.filter((a) => a.status === "applied" || a.status === "waitlisted").length;
   const allotted = allotments.filter((a) => a.status === "allotted").length;
@@ -27,18 +28,21 @@ export default async function QuarterAllotmentsPage() {
         title="Quarter Allotments"
         subtitle="Applications, maker-checker allotment decisions, and the occupy / vacation-notice / vacate lifecycle."
         back="/estab/quarters"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
+        actions={errored ? <DataSourceBadge source="error" /> : null}
       />
 
+      {/* Counts below are computed from `allotments`, which is [] whenever the fetch
+          errored — never render them as authoritative facts in that case. */}
+      {errored && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="📝" iconBg="#fffaeb" label="Applied / Waitlisted" value={applied.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Allotted" value={allotted.toLocaleString("en-IN")} />
-        <StatCard icon="🏠" iconBg="#eef2ff" label="Occupied" value={occupied.toLocaleString("en-IN")} />
-        <StatCard icon="🚚" iconBg="#fef2f2" label="Under Vacation Notice" value={vacating.toLocaleString("en-IN")} />
+        <StatCard icon="📝" iconBg="#fffaeb" label="Applied / Waitlisted" value={errored ? "—" : applied.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Allotted" value={errored ? "—" : allotted.toLocaleString("en-IN")} />
+        <StatCard icon="🏠" iconBg="#eef2ff" label="Occupied" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
+        <StatCard icon="🚚" iconBg="#fef2f2" label="Under Vacation Notice" value={errored ? "—" : vacating.toLocaleString("en-IN")} />
       </StatGrid>
 
       <Card title="Allotments">
-        {source === "error" && allotments.length === 0 ? (
+        {errored && allotments.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : (
           <AllotmentsTable allotments={allotments} />

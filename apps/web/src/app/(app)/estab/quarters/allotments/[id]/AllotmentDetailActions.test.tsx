@@ -18,6 +18,7 @@ const BASE_PROPS = {
   quarterNo: "B-14",
   employeeRef: "cccccccc-cccc-cccc-cccc-cccccccccccc",
   monthlyLicenceFeeMinor: "150000",
+  licenceFeeSource: "api" as const,
 };
 
 describe("AllotmentDetailActions", () => {
@@ -59,5 +60,38 @@ describe("AllotmentDetailActions", () => {
     render(<AllotmentDetailActions {...BASE_PROPS} status="vacated" />);
     expect(screen.getByText(/final state/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Allot quarter" })).not.toBeInTheDocument();
+  });
+
+  it("distinguishes an unverifiable licence fee from a genuinely unconfigured one", async () => {
+    render(
+      <AllotmentDetailActions
+        {...BASE_PROPS}
+        status="applied"
+        monthlyLicenceFeeMinor={null}
+        licenceFeeSource="error"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
+
+    expect(await screen.findByText(/could not be verified/)).toBeInTheDocument();
+    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No licence-fee rate is configured/)).not.toBeInTheDocument();
+  });
+
+  it("shows a genuine no-rate-configured message distinct from an error", async () => {
+    render(
+      <AllotmentDetailActions
+        {...BASE_PROPS}
+        status="applied"
+        monthlyLicenceFeeMinor={null}
+        licenceFeeSource="api"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
+
+    expect(await screen.findByText(/No licence-fee rate is configured/)).toBeInTheDocument();
+    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
   });
 });

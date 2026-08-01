@@ -53,6 +53,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   }
 
   const quarterAllotments = allotments.filter((a) => a.quarterId === quarter.id);
+  const allotmentsErrored = allotmentSource === "error";
 
   const allotmentRows = quarterAllotments.map((a) => ({
     id: a.id,
@@ -89,8 +90,11 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
 
       {quarter.status === "vacant" && <ApplyAllotmentForm quarterId={quarter.id} />}
 
-      <Card title="Allotment history for this quarter">
-        {allotmentSource === "error" && quarterAllotments.length === 0 ? (
+      <Card
+        title="Allotment history for this quarter"
+        link={allotmentsErrored ? <DataSourceBadge source="error" /> : undefined}
+      >
+        {allotmentsErrored && quarterAllotments.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : (
           <DataTable

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -16,6 +17,7 @@ async function getQuarters(): Promise<LoaderResult<QuarterRow[]>> {
 
 export default async function QuartersPage() {
   const { data: quarters, source } = await getQuarters();
+  const errored = source === "error";
 
   const total = quarters.length;
   const vacant = quarters.filter((q) => q.status === "vacant").length;
@@ -30,25 +32,28 @@ export default async function QuartersPage() {
         back="/estab"
         actions={
           <>
-            {source === "error" && <DataSourceBadge source="error" />}
-            <a href="/estab/quarters/allotments" className="btn ghost" style={{ minHeight: 44 }}>
+            {errored && <DataSourceBadge source="error" />}
+            <Link href="/estab/quarters/allotments" className="btn ghost" style={{ minHeight: 44 }}>
               Allotment workflow
-            </a>
+            </Link>
           </>
         }
       />
 
+      {/* Counts below are computed from `quarters`, which is [] whenever the fetch
+          errored — never render them as authoritative facts in that case. */}
+      {errored && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🏘️" iconBg="#eff6ff" label="Total Quarters" value={total.toLocaleString("en-IN")} />
-        <StatCard icon="🟢" iconBg="#ecfdf3" label="Vacant" value={vacant.toLocaleString("en-IN")} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Allotted" value={allotted.toLocaleString("en-IN")} />
-        <StatCard icon="🏠" iconBg="#eef2ff" label="Occupied" value={occupied.toLocaleString("en-IN")} />
+        <StatCard icon="🏘️" iconBg="#eff6ff" label="Total Quarters" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="🟢" iconBg="#ecfdf3" label="Vacant" value={errored ? "—" : vacant.toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="#fffaeb" label="Allotted" value={errored ? "—" : allotted.toLocaleString("en-IN")} />
+        <StatCard icon="🏠" iconBg="#eef2ff" label="Occupied" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
       </StatGrid>
 
       <QuarterCreateForm />
 
       <Card title="Quarters">
-        {source === "error" && quarters.length === 0 ? (
+        {errored && quarters.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : (
           <QuartersTable quarters={quarters} />

@@ -116,6 +116,7 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
         quarterNo={quarter ? quarter.quarterNo : allotment.quarterId.slice(0, 8) + "…"}
         employeeRef={allotment.employeeRef}
         monthlyLicenceFeeMinor={applicableRate ? applicableRate.monthlyMinor : null}
+        licenceFeeSource={ratesSource}
       />
     </main>
   );
