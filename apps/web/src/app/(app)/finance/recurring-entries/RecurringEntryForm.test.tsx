@@ -21,7 +21,7 @@ describe("RecurringEntryForm", () => {
 
   it("requires a name, amount, and next run date before opening the confirm dialog", () => {
     render(<RecurringEntryForm accounts={accounts} />);
-    fireEvent.click(screen.getByText("Create Recurring Entry"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Recurring Entry" }));
     expect(screen.getByText("Name is required.")).toBeInTheDocument();
   });
 
@@ -35,7 +35,7 @@ describe("RecurringEntryForm", () => {
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "5000" } });
     fireEvent.change(screen.getByLabelText(/^Next Run Date/), { target: { value: "2026-09-01" } });
 
-    fireEvent.click(screen.getByText("Create Recurring Entry"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Recurring Entry" }));
 
     await waitFor(() => expect(screen.getByText("Create this recurring entry?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create entry"));
@@ -54,7 +54,7 @@ describe("RecurringEntryForm", () => {
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "5000" } });
     fireEvent.change(screen.getByLabelText(/^Next Run Date/), { target: { value: "2026-09-01" } });
 
-    fireEvent.click(screen.getByText("Create Recurring Entry"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Recurring Entry" }));
     await waitFor(() => expect(screen.getByText("Create this recurring entry?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create entry"));
 

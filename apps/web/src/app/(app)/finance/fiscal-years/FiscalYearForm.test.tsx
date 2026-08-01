@@ -17,7 +17,7 @@ describe("FiscalYearForm", () => {
   it("validates the code format before opening the confirm dialog", () => {
     render(<FiscalYearForm />);
     fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "bad-code" } });
-    fireEvent.click(screen.getByText("Create Fiscal Year"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Fiscal Year" }));
     expect(screen.getByText("Code must be in YYYY-YY format, e.g. 2026-27.")).toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe("FiscalYearForm", () => {
     fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: "2026-04-01" } });
     fireEvent.change(screen.getByLabelText(/^End Date/), { target: { value: "2027-03-31" } });
 
-    fireEvent.click(screen.getByText("Create Fiscal Year"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Fiscal Year" }));
     await waitFor(() => expect(screen.getByText("Create this fiscal year?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create fiscal year"));
 
@@ -51,7 +51,7 @@ describe("FiscalYearForm", () => {
     fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: "2026-04-01" } });
     fireEvent.change(screen.getByLabelText(/^End Date/), { target: { value: "2027-03-31" } });
 
-    fireEvent.click(screen.getByText("Create Fiscal Year"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Fiscal Year" }));
     await waitFor(() => expect(screen.getByText("Create this fiscal year?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create fiscal year"));
 
