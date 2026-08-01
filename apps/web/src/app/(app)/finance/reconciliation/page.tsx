@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatusPill } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { RunsTable, type RunRow } from "./RunsTable";
@@ -112,18 +112,19 @@ export default async function ReconciliationWorkbenchPage() {
       </Card>
 
       <Card title="Subledger ↔ GL Reconciliation">
-        {apResult.source === "error" && ar === null && ap === null ? (
-          <DataSourceBadge source="error" />
-        ) : (
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))" }}>
             {([
-              ["AP (Payables)", ap],
-              ["AR (Receivables)", ar],
-            ] as const).map(([label, recon]) => (
+              ["AP (Payables)", ap, apResult.source],
+              ["AR (Receivables)", ar, arResult.source],
+            ] as const).map(([label, recon, side]) => (
               <div key={label} className="pad" style={{ border: "1px solid var(--line)", borderRadius: 12 }}>
-                <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>{label}</h3>
+                <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>{label}</h4>
                 {recon === null ? (
-                  <p style={{ color: "var(--ink2)", fontSize: 13 }}>No data available.</p>
+                  side === "error" ? (
+                    <DataSourceBadge source="error" />
+                  ) : (
+                    <p style={{ color: "var(--ink2)", fontSize: 13 }}>No data available.</p>
+                  )
                 ) : (
                   <dl style={{ display: "grid", gap: 6, margin: 0, fontSize: 13.5 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -146,16 +147,13 @@ export default async function ReconciliationWorkbenchPage() {
                       <dd className="mono">{formatMoney(recon.differenceMinor)}</dd>
                     </div>
                     <div>
-                      <span className={`pill ${recon.isReconciled ? "good" : "bad"}`}>
-                        {recon.isReconciled ? "Reconciled" : "Not reconciled"}
-                      </span>
+                      <StatusPill status={recon.isReconciled ? "cleared" : "breached"} label={recon.isReconciled ? "Reconciled" : "Not reconciled"} />
                     </div>
                   </dl>
                 )}
               </div>
             ))}
           </div>
-        )}
       </Card>
 
       <Card title="Providers">
