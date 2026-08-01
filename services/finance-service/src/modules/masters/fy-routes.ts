@@ -6,7 +6,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
@@ -77,11 +77,21 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const body = createFYBody.parse(req.body);
     const id = randomUUID();
     await db.transaction(async (tx) => {
-      await tx.insert(fiscalYears).values({
+      const inserted = await tx.insert(fiscalYears).values({
         id, tenantId: ctx.tenantId, code: body.code, label: body.label,
         startDate: body.startDate, endDate: body.endDate, status: "active",
         createdBy: ctx.actorId,
-      }).onConflictDoNothing();
+      }).onConflictDoNothing().returning({ id: fiscalYears.id });
+      // A no-op insert means the code already exists for this tenant - surface a
+      // 409 instead of a misleading 201 "created".
+      if (inserted.length === 0) {
+        throw new HttpError(409, "ALREADY_EXISTS", `fiscal year ${body.code} already exists`);
+      }
+      // Only one fiscal year may be active at a time - close every OTHER active
+      // year so a freshly-created (active) year does not leave two active.
+      await tx.update(fiscalYears)
+        .set({ status: "closed" })
+        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.status, "active"), ne(fiscalYears.id, id)));
     });
     return reply.code(201).send({ id, status: "created" });
   });
