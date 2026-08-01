@@ -50,7 +50,7 @@ describe("RefundsPage", () => {
     const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
     render(ui);
 
-    expect(screen.getByText("Raise Refund")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Raise Refund" })).toBeInTheDocument();
     expect(screen.getByText(/RCPT-001/)).toBeInTheDocument();
   });
 

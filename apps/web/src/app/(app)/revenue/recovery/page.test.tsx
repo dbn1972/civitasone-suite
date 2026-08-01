@@ -36,7 +36,7 @@ describe("RecoveryPage", () => {
     const ui = await RecoveryPage({ searchParams: { assesseeId: ASSESSEE.id } });
     render(ui);
 
-    expect(screen.getByText("Refer for Recovery")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Refer for Recovery" })).toBeInTheDocument();
   });
 
   it("shows the data-source badge instead of fabricating data on error", async () => {

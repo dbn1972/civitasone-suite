@@ -36,7 +36,7 @@ describe("WriteOffsPage", () => {
     const ui = await WriteOffsPage({ searchParams: { assesseeId: ASSESSEE.id } });
     render(ui);
 
-    expect(screen.getByText("Raise Write-off")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Raise Write-off" })).toBeInTheDocument();
   });
 
   it("shows the data-source badge instead of fabricating data on error", async () => {

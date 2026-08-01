@@ -44,7 +44,7 @@ describe("AdjustmentsPage", () => {
     const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
     render(ui);
 
-    expect(screen.getByText("Raise Adjustment")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Raise Adjustment" })).toBeInTheDocument();
   });
 
   it("shows the data-source badge instead of fabricating data on error", async () => {
