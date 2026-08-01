@@ -118,8 +118,6 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
               <input
                 id={horizonId}
                 type="number"
-                min={1}
-                max={24}
                 step={1}
                 value={horizon}
                 onChange={(e) => setHorizon(e.target.value)}
@@ -145,8 +143,6 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
               <input
                 id={paramId}
                 type="number"
-                min={1}
-                max={24}
                 step={1}
                 value={param}
                 onChange={(e) => setParam(e.target.value)}

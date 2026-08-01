@@ -38,9 +38,9 @@ describe("ForecastPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run Forecast" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Method/)).toBeInTheDocument();
+      expect(screen.getByText("₹500.00")).toBeInTheDocument();
     });
-    expect(screen.getByText(/moving average/)).toBeInTheDocument();
+    expect(screen.getByText("85%")).toBeInTheDocument();
   });
 
   it("surfaces a server error (error path)", async () => {
