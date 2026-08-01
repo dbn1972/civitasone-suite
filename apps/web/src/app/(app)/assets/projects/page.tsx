@@ -4,40 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { AucForm } from "./AucForm";
 import { AucTable, type AucRow } from "./AucTable";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function mapAucRows(payload: unknown): AucRow[] | null {
-  const rows = Array.isArray(payload)
-    ? payload
-    : isRecord(payload) && Array.isArray((payload as { data?: unknown }).data)
-      ? (payload as { data: unknown[] }).data
-      : null;
-  if (!rows) return null;
-
-  const mapped: AucRow[] = [];
-  for (const raw of rows) {
-    if (!isRecord(raw)) continue;
-    const id = raw.id;
-    const projectCode = raw.projectCode;
-    const name = raw.name;
-    const status = raw.status;
-    if (typeof id !== "string" || typeof projectCode !== "string" || typeof name !== "string" || typeof status !== "string") continue;
-    mapped.push({
-      id,
-      projectCode,
-      name,
-      wbsRef: typeof raw.wbsRef === "string" ? raw.wbsRef : null,
-      // Server returns accumulated_minor as a bigint-serialized string or number; both are paise.
-      accumulatedMinor: typeof raw.accumulatedMinor === "number" || typeof raw.accumulatedMinor === "string" ? raw.accumulatedMinor : 0,
-      status,
-      assetId: typeof raw.assetId === "string" ? raw.assetId : null,
-    });
-  }
-  return mapped;
-}
+import { mapAucRows } from "./aucMapper";
 
 async function getAucProjects(): Promise<LoaderResult<AucRow[]>> {
   // Verified: GET /v1/assets/projects/auc in services/asset-service/src/modules/enterprise/routes.ts
@@ -69,10 +36,21 @@ export default async function ProjectsAucPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value={underConstruction.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value={capitalized.length} />
-        <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value={rows.length} />
-        <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value={formatMoney(accumulatedTotal)} />
+        {source === "error" ? (
+          <>
+            <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value="—" />
+            <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value="—" />
+            <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value="—" />
+            <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value="—" />
+          </>
+        ) : (
+          <>
+            <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value={underConstruction.length} />
+            <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value={capitalized.length} />
+            <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value={rows.length} />
+            <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value={formatMoney(accumulatedTotal)} />
+          </>
+        )}
       </StatGrid>
 
       <AucForm />

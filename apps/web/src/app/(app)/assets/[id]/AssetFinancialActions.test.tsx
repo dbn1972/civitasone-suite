@@ -56,8 +56,11 @@ describe("AssetFinancialActions — impairment", () => {
 
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(String(call[0])).toContain(`v1/asset/assets/${PROPS.assetId}/impairment`);
-    const body = JSON.parse((call[1] as RequestInit).body as string) as { amountMinor: number };
+    const body = JSON.parse((call[1] as RequestInit).body as string) as { amountMinor: number; reason?: string };
     expect(body.amountMinor).toBe(150050);
+    // The mandatory ConfirmDialog authorisation reason must be the one actually sent —
+    // not silently dropped in favour of an (unset) optional form field.
+    expect(body.reason).toBe("Site inspection confirmed damage");
   });
 
   it("surfaces the server's error code/message on failure", async () => {
@@ -111,8 +114,10 @@ describe("AssetFinancialActions — revaluation", () => {
     expect(refreshMock).toHaveBeenCalled();
 
     const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const body = JSON.parse((call[1] as RequestInit).body as string) as { newBookValueMinor: number };
+    const body = JSON.parse((call[1] as RequestInit).body as string) as { newBookValueMinor: number; reason?: string };
     expect(body.newBookValueMinor).toBe(1200000);
+    // The mandatory ConfirmDialog authorisation reason must be the one actually sent.
+    expect(body.reason).toBe("Independent valuer report");
   });
 
   it("shows a downward direction when the new value is below book value", async () => {

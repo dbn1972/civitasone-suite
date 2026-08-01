@@ -42,7 +42,6 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
 
   // --- Impairment state ---
   const [impAmount, setImpAmount] = useState("");
-  const [impReason, setImpReason] = useState("");
   const [impDate, setImpDate] = useState("");
   const [impErrors, setImpErrors] = useState<{ amount?: string; date?: string }>({});
   const [impConfirmOpen, setImpConfirmOpen] = useState(false);
@@ -52,7 +51,6 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
 
   // --- Revaluation state ---
   const [revValue, setRevValue] = useState("");
-  const [revReason, setRevReason] = useState("");
   const [revErrors, setRevErrors] = useState<{ value?: string }>({});
   const [revConfirmOpen, setRevConfirmOpen] = useState(false);
   const [revBusy, setRevBusy] = useState(false);
@@ -60,7 +58,6 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
   const [revMessage, setRevMessage] = useState<string | null>(null);
 
   const impAmountId = useId();
-  const impReasonId = useId();
   const impDateId = useId();
   const impAmountErrId = useId();
   const impDateErrId = useId();
@@ -68,7 +65,6 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
   const impDateRef = useRef<HTMLInputElement>(null);
 
   const revValueId = useId();
-  const revReasonId = useId();
   const revValueErrId = useId();
   const revValueRef = useRef<HTMLInputElement>(null);
 
@@ -100,7 +96,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
     setImpConfirmOpen(true);
   }
 
-  async function confirmImpairment() {
+  async function confirmImpairment(reason?: string) {
     setImpBusy(true);
     setImpDialogError(undefined);
     try {
@@ -110,14 +106,13 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
         method: "POST",
         body: JSON.stringify({
           amountMinor: Number(amountMinor),
-          reason: impReason.trim() || undefined,
+          reason: reason?.trim() || undefined,
           eventDate: impDate.trim() || undefined,
         }),
       });
       setImpConfirmOpen(false);
       setImpMessage(`Impairment of ${formatMoney(amountMinor)} submitted for posting to the GL.`);
       setImpAmount("");
-      setImpReason("");
       setImpDate("");
       setImpErrors({});
       router.refresh();
@@ -148,7 +143,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
     setRevConfirmOpen(true);
   }
 
-  async function confirmRevaluation() {
+  async function confirmRevaluation(reason?: string) {
     setRevBusy(true);
     setRevDialogError(undefined);
     try {
@@ -158,13 +153,12 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
         method: "POST",
         body: JSON.stringify({
           newBookValueMinor: Number(newBookValueMinor),
-          reason: revReason.trim() || undefined,
+          reason: reason?.trim() || undefined,
         }),
       });
       setRevConfirmOpen(false);
       setRevMessage(`Revaluation to ${formatMoney(newBookValueMinor)} submitted for posting to the GL.`);
       setRevValue("");
-      setRevReason("");
       setRevErrors({});
       router.refresh();
     } catch (err) {
@@ -217,16 +211,10 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
               />
               {impErrors.date && <p id={impDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{impErrors.date}</p>}
             </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={impReasonId} style={{ fontSize: 13, fontWeight: 600 }}>Reason</label>
-              <input
-                id={impReasonId}
-                value={impReason}
-                onChange={(e) => setImpReason(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
           </div>
+          <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8, marginBottom: 0 }}>
+            You will be asked for a mandatory authorisation reason before this posts to the GL.
+          </p>
           <div style={{ marginTop: 12 }}>
             <button type="submit" className="btn danger" style={{ minHeight: 44 }} disabled={impBusy}>
               Record impairment
@@ -257,7 +245,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
             </>
           ) : null
         }
-        onConfirm={() => void confirmImpairment()}
+        onConfirm={(reason) => void confirmImpairment(reason)}
         onCancel={() => !impBusy && setImpConfirmOpen(false)}
       />
 
@@ -285,16 +273,10 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
               />
               {revErrors.value && <p id={revValueErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{revErrors.value}</p>}
             </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={revReasonId} style={{ fontSize: 13, fontWeight: 600 }}>Reason</label>
-              <input
-                id={revReasonId}
-                value={revReason}
-                onChange={(e) => setRevReason(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
           </div>
+          <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8, marginBottom: 0 }}>
+            You will be asked for a mandatory authorisation reason before this posts to the GL.
+          </p>
           <div style={{ marginTop: 12 }}>
             <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={revBusy}>
               Record revaluation
@@ -324,7 +306,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
             </>
           ) : null
         }
-        onConfirm={() => void confirmRevaluation()}
+        onConfirm={(reason) => void confirmRevaluation(reason)}
         onCancel={() => !revBusy && setRevConfirmOpen(false)}
       />
     </div>
