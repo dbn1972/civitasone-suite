@@ -13,7 +13,9 @@ interface GstinVerificationResult {
   lastUpdated: string;
 }
 
-const GSTIN_RE = /^.{15}$/;
+// Standard 15-char GSTIN structure: 2-digit state code, 10-char PAN
+// (5 letters + 4 digits + 1 letter), 1-char entity number, literal "Z", 1-char checksum.
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 export function VerifyGstinPanel() {
   const [gstin, setGstin] = useState("");
@@ -31,8 +33,8 @@ export function VerifyGstinPanel() {
     setLookupError(null);
     setResult(null);
 
-    if (!GSTIN_RE.test(gstin)) {
-      setFieldError("Enter a 15-character GSTIN.");
+    if (!GSTIN_RE.test(gstin.toUpperCase())) {
+      setFieldError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
       gstinRef.current?.focus();
       return;
     }

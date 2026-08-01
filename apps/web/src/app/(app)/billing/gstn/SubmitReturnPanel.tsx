@@ -14,7 +14,9 @@ interface GstReturnResult {
   submittedAt: string;
 }
 
-const GSTIN_RE = /^.{15}$/;
+// Standard 15-char GSTIN structure: 2-digit state code, 10-char PAN
+// (5 letters + 4 digits + 1 letter), 1-char entity number, literal "Z", 1-char checksum.
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const PERIOD_RE = /^\d{2}\/\d{4}$/;
 const DIGITS_RE = /^\d+$/;
 
@@ -60,7 +62,7 @@ export function SubmitReturnPanel() {
     setResult(null);
 
     const errors: Record<string, string> = {};
-    if (!GSTIN_RE.test(gstin)) errors.gstin = "Enter a 15-character GSTIN.";
+    if (!GSTIN_RE.test(gstin.toUpperCase())) errors.gstin = "Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).";
     if (!PERIOD_RE.test(returnPeriod)) errors.returnPeriod = "Enter the return period as MM/YYYY, e.g. 04/2026.";
     if (!DIGITS_RE.test(totalTaxableValue)) errors.totalTaxableValue = "Enter the taxable value in paise as digits only.";
     if (!DIGITS_RE.test(totalCgst)) errors.totalCgst = "Enter CGST in paise as digits only.";

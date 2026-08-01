@@ -21,7 +21,15 @@ describe("GstnConsole", () => {
   it("validates required fields before submitting a GST return", () => {
     render(<GstnConsole />);
     fireEvent.click(lastButtonNamed("Submit Return"));
-    expect(screen.getByText("Enter a 15-character GSTIN.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).")).toBeInTheDocument();
+  });
+
+  it("rejects a malformed 15-character GSTIN on the Submit Return tab", () => {
+    render(<GstnConsole />);
+    // Right length, wrong structure (all digits instead of state+PAN+entity+Z+checksum).
+    fireEvent.change(screen.getByLabelText(/^GSTIN/), { target: { value: "123456789012345" } });
+    fireEvent.click(lastButtonNamed("Submit Return"));
+    expect(screen.getByText("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).")).toBeInTheDocument();
   });
 
   it("submits a GST return on valid input (happy path)", async () => {
@@ -102,5 +110,14 @@ describe("GstnConsole", () => {
     await waitFor(() => {
       expect(screen.getByText("Example Pvt Ltd")).toBeInTheDocument();
     });
+  });
+
+  it("rejects a malformed 15-character GSTIN on the Verify GSTIN tab", () => {
+    render(<GstnConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Verify GSTIN" }));
+    // Right length, wrong structure — must not reach the external GSTN API.
+    fireEvent.change(screen.getByLabelText(/^GSTIN/), { target: { value: "123456789012345" } });
+    fireEvent.click(lastButtonNamed("Verify GSTIN"));
+    expect(screen.getByText("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).")).toBeInTheDocument();
   });
 });
