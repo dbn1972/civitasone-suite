@@ -19,16 +19,16 @@ export function ConfigPanel({ config }: { config: PfmsConfig | null }) {
 
   return (
     <Card title="PFMS Configuration" padding>
-      <div className="fields">
+      <dl className="fields">
         <div className="fld">
-          <div className="l">Agency Code</div>
-          <div className="v">{config.agencyCode ?? "—"}</div>
+          <dt className="l">Agency Code</dt>
+          <dd className="v" style={{ margin: 0 }}>{config.agencyCode ?? "—"}</dd>
         </div>
         <div className="fld">
-          <div className="l">Default DDO</div>
-          <div className="v">{config.defaultDdo ?? "—"}</div>
+          <dt className="l">Default DDO</dt>
+          <dd className="v" style={{ margin: 0 }}>{config.defaultDdo ?? "—"}</dd>
         </div>
-      </div>
+      </dl>
     </Card>
   );
 }

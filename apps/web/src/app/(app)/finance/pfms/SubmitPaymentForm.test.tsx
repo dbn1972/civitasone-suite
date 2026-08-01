@@ -7,12 +7,21 @@ describe("SubmitPaymentForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires the core fields before opening the confirm dialog", () => {
+  it("requires the core fields before opening the confirm dialog, with field-specific messages", () => {
     render(<SubmitPaymentForm />);
     fireEvent.click(screen.getByText("Submit Payment"));
+
+    const refInput = screen.getByLabelText(/Reference ID/);
+    expect(screen.getByText("Reference ID is required.")).toBeInTheDocument();
+    expect(refInput).toHaveAttribute("aria-invalid", "true");
+    expect(refInput).toHaveAttribute("aria-describedby", screen.getByText("Reference ID is required.").id);
+    expect(refInput).toHaveFocus();
+
+    // Amount gets its own, field-specific message — not the generic combined text.
+    expect(screen.getByText("Amount must be a numeric paise value (digits only).")).toBeInTheDocument();
     expect(
-      screen.getByText(/Reference ID, beneficiary code, amount \(numeric paise\), and purpose code are required/),
-    ).toBeInTheDocument();
+      screen.queryByText(/Reference ID, beneficiary code, amount \(numeric paise\), and purpose code are required/),
+    ).not.toBeInTheDocument();
   });
 
   it("submits a payment on confirm (happy path)", async () => {

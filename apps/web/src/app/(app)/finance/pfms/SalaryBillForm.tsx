@@ -19,6 +19,14 @@ type SalaryBillResult = {
 
 type FieldKey = "month" | "departmentId" | "totalAmountMinor" | "employeeCount" | "ddoCode";
 
+const FIELD_ERRORS: Record<FieldKey, string> = {
+  month: "Month must be in YYYY-MM format.",
+  departmentId: "Department ID must be a valid UUID.",
+  totalAmountMinor: "Total amount must be a whole number of paise, at least 1.",
+  employeeCount: "Employee count must be a whole number, at least 1.",
+  ddoCode: "DDO code is required.",
+};
+
 /**
  * POST /v1/finance/pfms/salary-bill — submits a monthly salary bill to
  * treasury. Backend note: this is registered as an INTEGRATION STUB
@@ -35,7 +43,7 @@ export function SalaryBillForm() {
   const [ddoCode, setDdoCode] = useState("");
   const [schemeCode, setSchemeCode] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [invalid, setInvalid] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -48,7 +56,6 @@ export function SalaryBillForm() {
   const ddoId = useId();
   const schemeId = useId();
   const remarksId = useId();
-  const errId = useId();
 
   const monthRef = useRef<HTMLInputElement>(null);
   const deptRef = useRef<HTMLInputElement>(null);
@@ -68,15 +75,18 @@ export function SalaryBillForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const nextInvalid: Partial<Record<FieldKey, boolean>> = {
-      month: !/^\d{4}-\d{2}$/.test(month.trim()),
-      departmentId: !uuidRe.test(departmentId.trim()),
-      totalAmountMinor: !/^\d+$/.test(totalAmountMinor.trim()) || Number(totalAmountMinor) < 1,
-      employeeCount: !/^\d+$/.test(employeeCount.trim()) || Number(employeeCount) < 1,
-      ddoCode: !ddoCode.trim(),
-    };
-    setInvalid(nextInvalid);
-    const firstInvalid = (Object.keys(nextInvalid) as FieldKey[]).find((k) => nextInvalid[k]);
+    const nextErrors: Partial<Record<FieldKey, string>> = {};
+    if (!/^\d{4}-\d{2}$/.test(month.trim())) nextErrors.month = FIELD_ERRORS.month;
+    if (!uuidRe.test(departmentId.trim())) nextErrors.departmentId = FIELD_ERRORS.departmentId;
+    if (!/^\d+$/.test(totalAmountMinor.trim()) || Number(totalAmountMinor) < 1) {
+      nextErrors.totalAmountMinor = FIELD_ERRORS.totalAmountMinor;
+    }
+    if (!/^\d+$/.test(employeeCount.trim()) || Number(employeeCount) < 1) {
+      nextErrors.employeeCount = FIELD_ERRORS.employeeCount;
+    }
+    if (!ddoCode.trim()) nextErrors.ddoCode = FIELD_ERRORS.ddoCode;
+    setErrors(nextErrors);
+    const firstInvalid = (Object.keys(nextErrors) as FieldKey[])[0];
     if (firstInvalid) {
       focusRefs[firstInvalid].current?.focus();
       return;
@@ -110,7 +120,7 @@ export function SalaryBillForm() {
       setDdoCode("");
       setSchemeCode("");
       setRemarks("");
-      setInvalid({});
+      setErrors({});
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -137,10 +147,15 @@ export function SalaryBillForm() {
                 placeholder="2026-08"
                 maxLength={7}
                 aria-required="true"
-                aria-invalid={invalid.month || undefined}
-                aria-describedby={invalid.month ? errId : undefined}
+                aria-invalid={!!errors.month || undefined}
+                aria-describedby={errors.month ? `${monthId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.month && (
+                <p id={`${monthId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.month}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -152,10 +167,15 @@ export function SalaryBillForm() {
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
                 aria-required="true"
-                aria-invalid={invalid.departmentId || undefined}
-                aria-describedby={invalid.departmentId ? errId : undefined}
+                aria-invalid={!!errors.departmentId || undefined}
+                aria-describedby={errors.departmentId ? `${deptId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.departmentId && (
+                <p id={`${deptId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.departmentId}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -168,11 +188,16 @@ export function SalaryBillForm() {
                 onChange={(e) => setTotalAmountMinor(e.target.value)}
                 inputMode="numeric"
                 aria-required="true"
-                aria-invalid={invalid.totalAmountMinor || undefined}
-                aria-describedby={invalid.totalAmountMinor ? errId : undefined}
+                aria-invalid={!!errors.totalAmountMinor || undefined}
+                aria-describedby={errors.totalAmountMinor ? `${amountId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {previewAmount && <span style={{ fontSize: 12, color: "var(--muted, #666)" }}>{previewAmount}</span>}
+              {errors.totalAmountMinor && (
+                <p id={`${amountId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.totalAmountMinor}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={countId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -185,10 +210,15 @@ export function SalaryBillForm() {
                 onChange={(e) => setEmployeeCount(e.target.value)}
                 inputMode="numeric"
                 aria-required="true"
-                aria-invalid={invalid.employeeCount || undefined}
-                aria-describedby={invalid.employeeCount ? errId : undefined}
+                aria-invalid={!!errors.employeeCount || undefined}
+                aria-describedby={errors.employeeCount ? `${countId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.employeeCount && (
+                <p id={`${countId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.employeeCount}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -201,10 +231,15 @@ export function SalaryBillForm() {
                 onChange={(e) => setDdoCode(e.target.value)}
                 maxLength={32}
                 aria-required="true"
-                aria-invalid={invalid.ddoCode || undefined}
-                aria-describedby={invalid.ddoCode ? errId : undefined}
+                aria-invalid={!!errors.ddoCode || undefined}
+                aria-describedby={errors.ddoCode ? `${ddoId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.ddoCode && (
+                <p id={`${ddoId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.ddoCode}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={schemeId} style={{ fontSize: 13, fontWeight: 600 }}>Scheme Code</label>
@@ -227,13 +262,6 @@ export function SalaryBillForm() {
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-
-          {Object.values(invalid).some(Boolean) && (
-            <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
-              Month (YYYY-MM), department ID (UUID), total amount (paise), employee count, and DDO
-              code are all required.
-            </p>
-          )}
 
           <div>
             <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>

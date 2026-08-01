@@ -9,10 +9,18 @@ describe("SalaryBillForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires all core fields before opening the confirm dialog", () => {
+  it("requires all core fields before opening the confirm dialog, with field-specific messages", () => {
     render(<SalaryBillForm />);
     fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
-    expect(screen.getByText(/Month \(YYYY-MM\), department ID \(UUID\)/)).toBeInTheDocument();
+
+    const monthInput = screen.getByLabelText(/Month \(YYYY-MM\)/);
+    expect(screen.getByText("Month must be in YYYY-MM format.")).toBeInTheDocument();
+    expect(monthInput).toHaveAttribute("aria-invalid", "true");
+    expect(monthInput).toHaveFocus();
+    expect(screen.getByText("DDO code is required.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Month \(YYYY-MM\), department ID \(UUID\), total amount \(paise\)/),
+    ).not.toBeInTheDocument();
   });
 
   it("generates a salary bill on confirm (happy path)", async () => {

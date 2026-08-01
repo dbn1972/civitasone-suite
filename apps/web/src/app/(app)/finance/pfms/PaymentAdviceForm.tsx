@@ -26,6 +26,15 @@ type AdviceStatusResult = {
 
 type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeIfsc" | "amountMinor" | "purposeCode";
 
+const FIELD_ERRORS: Record<FieldKey, string> = {
+  billId: "Bill ID must be a valid UUID.",
+  payeeName: "Payee name is required.",
+  payeeAccountNo: "Payee account number is required.",
+  payeeIfsc: "IFSC must be exactly 11 characters.",
+  amountMinor: "Amount must be a whole number of paise, at least 1.",
+  purposeCode: "Purpose code is required.",
+};
+
 /**
  * POST /v1/finance/pfms/payment-advice — generates a treasury payment advice.
  * Backend note: registered as an INTEGRATION STUB
@@ -42,7 +51,7 @@ export function PaymentAdviceForm() {
   const [amountMinor, setAmountMinor] = useState("");
   const [purposeCode, setPurposeCode] = useState("");
   const [ddoCode, setDdoCode] = useState("");
-  const [invalid, setInvalid] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -56,7 +65,6 @@ export function PaymentAdviceForm() {
   const amountId = useId();
   const purposeId = useId();
   const ddoId = useId();
-  const errId = useId();
 
   const billRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -78,16 +86,17 @@ export function PaymentAdviceForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const nextInvalid: Partial<Record<FieldKey, boolean>> = {
-      billId: !uuidRe.test(billId.trim()),
-      payeeName: !payeeName.trim(),
-      payeeAccountNo: !payeeAccountNo.trim(),
-      payeeIfsc: payeeIfsc.trim().length !== 11,
-      amountMinor: !/^\d+$/.test(amountMinor.trim()) || Number(amountMinor) < 1,
-      purposeCode: !purposeCode.trim(),
-    };
-    setInvalid(nextInvalid);
-    const firstInvalid = (Object.keys(nextInvalid) as FieldKey[]).find((k) => nextInvalid[k]);
+    const nextErrors: Partial<Record<FieldKey, string>> = {};
+    if (!uuidRe.test(billId.trim())) nextErrors.billId = FIELD_ERRORS.billId;
+    if (!payeeName.trim()) nextErrors.payeeName = FIELD_ERRORS.payeeName;
+    if (!payeeAccountNo.trim()) nextErrors.payeeAccountNo = FIELD_ERRORS.payeeAccountNo;
+    if (payeeIfsc.trim().length !== 11) nextErrors.payeeIfsc = FIELD_ERRORS.payeeIfsc;
+    if (!/^\d+$/.test(amountMinor.trim()) || Number(amountMinor) < 1) {
+      nextErrors.amountMinor = FIELD_ERRORS.amountMinor;
+    }
+    if (!purposeCode.trim()) nextErrors.purposeCode = FIELD_ERRORS.purposeCode;
+    setErrors(nextErrors);
+    const firstInvalid = (Object.keys(nextErrors) as FieldKey[])[0];
     if (firstInvalid) {
       focusRefs[firstInvalid].current?.focus();
       return;
@@ -122,7 +131,7 @@ export function PaymentAdviceForm() {
       setAmountMinor("");
       setPurposeCode("");
       setDdoCode("");
-      setInvalid({});
+      setErrors({});
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -148,10 +157,15 @@ export function PaymentAdviceForm() {
                   value={billId}
                   onChange={(e) => setBillId(e.target.value)}
                   aria-required="true"
-                  aria-invalid={invalid.billId || undefined}
-                  aria-describedby={invalid.billId ? errId : undefined}
+                  aria-invalid={!!errors.billId || undefined}
+                  aria-describedby={errors.billId ? `${billIdId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
+                {errors.billId && (
+                  <p id={`${billIdId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.billId}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -164,10 +178,15 @@ export function PaymentAdviceForm() {
                   onChange={(e) => setPayeeName(e.target.value)}
                   maxLength={256}
                   aria-required="true"
-                  aria-invalid={invalid.payeeName || undefined}
-                  aria-describedby={invalid.payeeName ? errId : undefined}
+                  aria-invalid={!!errors.payeeName || undefined}
+                  aria-describedby={errors.payeeName ? `${nameId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
+                {errors.payeeName && (
+                  <p id={`${nameId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.payeeName}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={acctId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -180,10 +199,15 @@ export function PaymentAdviceForm() {
                   onChange={(e) => setPayeeAccountNo(e.target.value)}
                   maxLength={32}
                   aria-required="true"
-                  aria-invalid={invalid.payeeAccountNo || undefined}
-                  aria-describedby={invalid.payeeAccountNo ? errId : undefined}
+                  aria-invalid={!!errors.payeeAccountNo || undefined}
+                  aria-describedby={errors.payeeAccountNo ? `${acctId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
+                {errors.payeeAccountNo && (
+                  <p id={`${acctId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.payeeAccountNo}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={ifscId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -196,10 +220,15 @@ export function PaymentAdviceForm() {
                   onChange={(e) => setPayeeIfsc(e.target.value)}
                   maxLength={11}
                   aria-required="true"
-                  aria-invalid={invalid.payeeIfsc || undefined}
-                  aria-describedby={invalid.payeeIfsc ? errId : undefined}
+                  aria-invalid={!!errors.payeeIfsc || undefined}
+                  aria-describedby={errors.payeeIfsc ? `${ifscId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, textTransform: "uppercase" }}
                 />
+                {errors.payeeIfsc && (
+                  <p id={`${ifscId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.payeeIfsc}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -212,11 +241,16 @@ export function PaymentAdviceForm() {
                   onChange={(e) => setAmountMinor(e.target.value)}
                   inputMode="numeric"
                   aria-required="true"
-                  aria-invalid={invalid.amountMinor || undefined}
-                  aria-describedby={invalid.amountMinor ? errId : undefined}
+                  aria-invalid={!!errors.amountMinor || undefined}
+                  aria-describedby={errors.amountMinor ? `${amountId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
                 {previewAmount && <span style={{ fontSize: 12, color: "var(--muted, #666)" }}>{previewAmount}</span>}
+                {errors.amountMinor && (
+                  <p id={`${amountId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.amountMinor}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={purposeId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -229,10 +263,15 @@ export function PaymentAdviceForm() {
                   onChange={(e) => setPurposeCode(e.target.value)}
                   maxLength={32}
                   aria-required="true"
-                  aria-invalid={invalid.purposeCode || undefined}
-                  aria-describedby={invalid.purposeCode ? errId : undefined}
+                  aria-invalid={!!errors.purposeCode || undefined}
+                  aria-describedby={errors.purposeCode ? `${purposeId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
+                {errors.purposeCode && (
+                  <p id={`${purposeId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.purposeCode}
+                  </p>
+                )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>DDO Code</label>
@@ -245,13 +284,6 @@ export function PaymentAdviceForm() {
                 />
               </div>
             </div>
-
-            {Object.values(invalid).some(Boolean) && (
-              <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
-                Bill ID, payee name, account number, an 11-character IFSC, amount (paise), and
-                purpose code are all required.
-              </p>
-            )}
 
             <div>
               <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
@@ -357,13 +389,13 @@ function AdviceStatusLookup({ prefillAdviceId }: { prefillAdviceId: string | nul
           </p>
         )}
         {result && (
-          <div className="fields">
-            <div className="fld"><div className="l">Advice ID</div><div className="v">{result.adviceId}</div></div>
-            <div className="fld"><div className="l">Status</div><div className="v">{result.status}</div></div>
-            <div className="fld"><div className="l">PFMS Transaction ID</div><div className="v">{result.pfmsTransactionId}</div></div>
-            <div className="fld"><div className="l">UTR</div><div className="v">{result.utrNumber}</div></div>
-            <div className="fld"><div className="l">Processed At</div><div className="v">{result.processedAt}</div></div>
-          </div>
+          <dl className="fields">
+            <div className="fld"><dt className="l">Advice ID</dt><dd className="v" style={{ margin: 0 }}>{result.adviceId}</dd></div>
+            <div className="fld"><dt className="l">Status</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
+            <div className="fld"><dt className="l">PFMS Transaction ID</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
+            <div className="fld"><dt className="l">UTR</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>
+            <div className="fld"><dt className="l">Processed At</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>
+          </dl>
         )}
       </form>
     </Card>

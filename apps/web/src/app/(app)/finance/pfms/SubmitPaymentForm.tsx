@@ -14,6 +14,13 @@ type SubmitResult = {
 
 type FieldKey = "referenceId" | "beneficiaryCode" | "amount" | "purposeCode";
 
+const FIELD_ERRORS: Record<FieldKey, string> = {
+  referenceId: "Reference ID is required.",
+  beneficiaryCode: "Beneficiary code is required.",
+  amount: "Amount must be a numeric paise value (digits only).",
+  purposeCode: "Purpose code is required.",
+};
+
 /**
  * POST /v1/finance/pfms/payments — submits a payment to PFMS/e-Kuber via the
  * finance-service adapter (services/finance-service/src/modules/pfms/adapter-routes.ts).
@@ -30,7 +37,7 @@ export function SubmitPaymentForm() {
   const [schemeCode, setSchemeCode] = useState("");
   const [ddoCode, setDdoCode] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [invalid, setInvalid] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -46,12 +53,11 @@ export function SubmitPaymentForm() {
     ddo: useId(),
     remarks: useId(),
   };
-  const errId = useId();
   const refInput = useRef<HTMLInputElement>(null);
   const beneficiaryInput = useRef<HTMLInputElement>(null);
   const amountInput = useRef<HTMLInputElement>(null);
   const purposeInput = useRef<HTMLInputElement>(null);
-  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement>> = {
+  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | null>> = {
     referenceId: refInput,
     beneficiaryCode: beneficiaryInput,
     amount: amountInput,
@@ -62,14 +68,13 @@ export function SubmitPaymentForm() {
     e.preventDefault();
     setMessage(null);
     setResult(null);
-    const nextInvalid: Partial<Record<FieldKey, boolean>> = {
-      referenceId: !referenceId.trim(),
-      beneficiaryCode: !beneficiaryCode.trim(),
-      amount: !/^\d+$/.test(amount.trim()),
-      purposeCode: !purposeCode.trim(),
-    };
-    setInvalid(nextInvalid);
-    const firstInvalid = (Object.keys(nextInvalid) as FieldKey[]).find((k) => nextInvalid[k]);
+    const nextErrors: Partial<Record<FieldKey, string>> = {};
+    if (!referenceId.trim()) nextErrors.referenceId = FIELD_ERRORS.referenceId;
+    if (!beneficiaryCode.trim()) nextErrors.beneficiaryCode = FIELD_ERRORS.beneficiaryCode;
+    if (!/^\d+$/.test(amount.trim())) nextErrors.amount = FIELD_ERRORS.amount;
+    if (!purposeCode.trim()) nextErrors.purposeCode = FIELD_ERRORS.purposeCode;
+    setErrors(nextErrors);
+    const firstInvalid = (Object.keys(nextErrors) as FieldKey[])[0];
     if (firstInvalid) {
       focusRefs[firstInvalid].current?.focus();
       return;
@@ -104,7 +109,7 @@ export function SubmitPaymentForm() {
       setSchemeCode("");
       setDdoCode("");
       setRemarks("");
-      setInvalid({});
+      setErrors({});
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -128,10 +133,15 @@ export function SubmitPaymentForm() {
                 onChange={(e) => setReferenceId(e.target.value)}
                 maxLength={64}
                 aria-required="true"
-                aria-invalid={invalid.referenceId || undefined}
-                aria-describedby={invalid.referenceId ? errId : undefined}
+                aria-invalid={!!errors.referenceId || undefined}
+                aria-describedby={errors.referenceId ? `${ids.referenceId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.referenceId && (
+                <p id={`${ids.referenceId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.referenceId}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.beneficiaryCode} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -144,10 +154,15 @@ export function SubmitPaymentForm() {
                 onChange={(e) => setBeneficiaryCode(e.target.value)}
                 maxLength={64}
                 aria-required="true"
-                aria-invalid={invalid.beneficiaryCode || undefined}
-                aria-describedby={invalid.beneficiaryCode ? errId : undefined}
+                aria-invalid={!!errors.beneficiaryCode || undefined}
+                aria-describedby={errors.beneficiaryCode ? `${ids.beneficiaryCode}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.beneficiaryCode && (
+                <p id={`${ids.beneficiaryCode}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.beneficiaryCode}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.amount} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -161,11 +176,16 @@ export function SubmitPaymentForm() {
                 inputMode="numeric"
                 maxLength={32}
                 aria-required="true"
-                aria-invalid={invalid.amount || undefined}
-                aria-describedby={invalid.amount ? errId : undefined}
+                aria-invalid={!!errors.amount || undefined}
+                aria-describedby={errors.amount ? `${ids.amount}-error` : undefined}
                 placeholder="e.g. 1500000 for ₹15,000.00"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.amount && (
+                <p id={`${ids.amount}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.amount}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.purposeCode} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -178,10 +198,15 @@ export function SubmitPaymentForm() {
                 onChange={(e) => setPurposeCode(e.target.value)}
                 maxLength={32}
                 aria-required="true"
-                aria-invalid={invalid.purposeCode || undefined}
-                aria-describedby={invalid.purposeCode ? errId : undefined}
+                aria-invalid={!!errors.purposeCode || undefined}
+                aria-describedby={errors.purposeCode ? `${ids.purposeCode}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.purposeCode && (
+                <p id={`${ids.purposeCode}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                  {errors.purposeCode}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.scheme} style={{ fontSize: 13, fontWeight: 600 }}>Scheme Code</label>
@@ -214,12 +239,6 @@ export function SubmitPaymentForm() {
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-
-          {(invalid.referenceId || invalid.beneficiaryCode || invalid.amount || invalid.purposeCode) && (
-            <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
-              Reference ID, beneficiary code, amount (numeric paise), and purpose code are required.
-            </p>
-          )}
 
           <div>
             <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>

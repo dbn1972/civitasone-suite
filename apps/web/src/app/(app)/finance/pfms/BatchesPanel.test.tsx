@@ -55,16 +55,24 @@ describe("BatchesPanel", () => {
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
   });
 
-  it("surfaces a validation error when signing without required fields", async () => {
+  it("surfaces a field-specific validation error and focuses the empty cert field when signing without required fields", async () => {
     render(<BatchesPanel batches={rows} />);
     fireEvent.click(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByText("Sign batch"));
 
+    const certInput = within(dialog).getByLabelText(/Certificate reference/);
+    const payloadInput = within(dialog).getByLabelText(/Signature payload/);
     await waitFor(() => {
-      expect(within(dialog).getByText(/Certificate reference and signature payload are both required/)).toBeInTheDocument();
+      expect(certInput).toHaveAttribute("aria-invalid", "true");
+      // Focus goes to the first invalid field.
+      expect(certInput).toHaveFocus();
     });
+    // Each empty field gets its own field-specific message (not one generic string).
+    expect(within(dialog).getAllByText("Certificate reference is required.").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText("Signature payload is required.")).toBeInTheDocument();
+    expect(payloadInput).toHaveAttribute("aria-invalid", "true");
   });
 
   it("surfaces a server error when the bank-file download fails", async () => {

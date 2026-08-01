@@ -81,14 +81,14 @@ export function PaymentStatusLookup() {
           </p>
         )}
         {result && (
-          <div className="fields">
-            <div className="fld"><div className="l">Reference</div><div className="v">{result.referenceId}</div></div>
-            <div className="fld"><div className="l">PFMS Transaction ID</div><div className="v">{result.pfmsTransactionId}</div></div>
-            <div className="fld"><div className="l">Status</div><div className="v">{result.status}</div></div>
-            {result.utrNumber && <div className="fld"><div className="l">UTR</div><div className="v">{result.utrNumber}</div></div>}
-            {result.processedAt && <div className="fld"><div className="l">Processed At</div><div className="v">{result.processedAt}</div></div>}
-            {result.failureReason && <div className="fld"><div className="l">Failure Reason</div><div className="v">{result.failureReason}</div></div>}
-          </div>
+          <dl className="fields">
+            <div className="fld"><dt className="l">Reference</dt><dd className="v" style={{ margin: 0 }}>{result.referenceId}</dd></div>
+            <div className="fld"><dt className="l">PFMS Transaction ID</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
+            <div className="fld"><dt className="l">Status</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
+            {result.utrNumber && <div className="fld"><dt className="l">UTR</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>}
+            {result.processedAt && <div className="fld"><dt className="l">Processed At</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>}
+            {result.failureReason && <div className="fld"><dt className="l">Failure Reason</dt><dd className="v" style={{ margin: 0 }}>{result.failureReason}</dd></div>}
+          </dl>
         )}
       </form>
     </Card>

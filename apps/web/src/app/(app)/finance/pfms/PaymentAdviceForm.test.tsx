@@ -18,10 +18,16 @@ describe("PaymentAdviceForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires the core fields before opening the confirm dialog", () => {
+  it("requires the core fields before opening the confirm dialog, with field-specific messages", () => {
     render(<PaymentAdviceForm />);
     fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
-    expect(screen.getByText(/Bill ID, payee name, account number/)).toBeInTheDocument();
+
+    const billInput = screen.getByLabelText(/Bill ID/);
+    expect(screen.getByText("Bill ID must be a valid UUID.")).toBeInTheDocument();
+    expect(billInput).toHaveAttribute("aria-invalid", "true");
+    expect(billInput).toHaveFocus();
+    expect(screen.getByText("IFSC must be exactly 11 characters.")).toBeInTheDocument();
+    expect(screen.queryByText(/Bill ID, payee name, account number/)).not.toBeInTheDocument();
   });
 
   it("generates a payment advice on confirm (happy path)", async () => {
