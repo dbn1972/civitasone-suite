@@ -43,6 +43,9 @@ const financeSections: NavTile[] = [
 
 	// Accounting
 	{ title: "General Ledger", description: "All posted journal entries with debit and credit detail.", href: "/finance/accounting/general-ledger" },
+	{ title: "Recurring Entries", description: "Recurring journal templates and schedules.", href: "/finance/recurring-entries" },
+	{ title: "Opening Balances", description: "Set fiscal-year opening balances (balanced entry).", href: "/finance/opening-balances" },
+	{ title: "Fiscal Years", description: "Fiscal year setup and activation.", href: "/finance/fiscal-years" },
 	{ title: "New Voucher", description: "Draft and submit a double-entry journal voucher.", href: "/finance/accounting/vouchers/new" },
 	{ title: "Financial Statements", description: "Receipts, payments, and balance sheet summary.", href: "/finance/accounting/financial-statements" },
 	{ title: "Payments", description: "Track outgoing and incoming payments with approvals.", href: "/finance/payments" },
