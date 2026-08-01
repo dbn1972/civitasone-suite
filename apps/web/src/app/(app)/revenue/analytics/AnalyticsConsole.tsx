@@ -48,64 +48,67 @@ export function AnalyticsConsole({
       <Tabs tabs={[...TABS]} active={active} onChange={(t) => setActive(t as Tab)} />
 
       {active === "Trends & Efficiency" && (
-        trendsSource === "error" && trendRows.length === 0 ? (
-          <DataSourceBadge source="error" />
-        ) : trendRows.length === 0 ? (
-          <EmptyState
-            icon="📈"
-            title="No trend data"
-            message={`No demand or collection movements have been recorded for the ${granularity === "fy" ? "financial-year" : "monthly"} series yet.`}
-          />
-        ) : (
-          <DataTable<(typeof trendRows)[number]>
-            columns={[
-              { key: "period", label: "Period" },
-              { key: "demandMinor", label: "Demand", align: "right", cellType: "amount" },
-              { key: "collectionMinor", label: "Collection", align: "right", cellType: "amount" },
-              { key: "efficiencyDisplay", label: "Efficiency", align: "right" },
-            ]}
-            rows={trendRows}
-            sortable
-            pageSize={15}
-          />
-        )
+        <>
+          {trendsSource === "error" && <DataSourceBadge source="error" />}
+          {trendRows.length === 0 ? (
+            <EmptyState
+              icon="📈"
+              title="No trend data"
+              message={`No demand or collection movements have been recorded for the ${granularity === "fy" ? "financial-year" : "monthly"} series yet.`}
+            />
+          ) : (
+            <DataTable<(typeof trendRows)[number]>
+              columns={[
+                { key: "period", label: "Period" },
+                { key: "demandMinor", label: "Demand", align: "right", cellType: "amount" },
+                { key: "collectionMinor", label: "Collection", align: "right", cellType: "amount" },
+                { key: "efficiencyDisplay", label: "Efficiency", align: "right" },
+              ]}
+              rows={trendRows}
+              sortable
+              pageSize={15}
+            />
+          )}
+        </>
       )}
 
       {active === "Arrears Aging" && (
-        agingSource === "error" && buckets.length === 0 ? (
-          <DataSourceBadge source="error" />
-        ) : buckets.length === 0 ? (
-          <EmptyState icon="⏳" title="No arrears aging data" message="No outstanding demand balances were found." />
-        ) : (
-          <DataTable<AgingBucketRow>
-            columns={[
-              { key: "bucket", label: "Age Bucket" },
-              { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
-            ]}
-            rows={buckets}
-          />
-        )
+        <>
+          {agingSource === "error" && <DataSourceBadge source="error" />}
+          {buckets.length === 0 ? (
+            <EmptyState icon="⏳" title="No arrears aging data" message="No outstanding demand balances were found." />
+          ) : (
+            <DataTable<AgingBucketRow>
+              columns={[
+                { key: "bucket", label: "Age Bucket" },
+                { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
+              ]}
+              rows={buckets}
+            />
+          )}
+        </>
       )}
 
       {active === "Top Defaulters" && (
-        defaultersSource === "error" && defaulters.length === 0 ? (
-          <DataSourceBadge source="error" />
-        ) : defaulters.length === 0 ? (
-          <EmptyState icon="🚩" title="No defaulters" message="No assessees have an outstanding balance." />
-        ) : (
-          <DataTable<DefaulterRow>
-            columns={[
-              { key: "rank", label: "Rank", align: "right" },
-              { key: "assesseeId", label: "Assessee ID" },
-              { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
-            ]}
-            rows={defaulters}
-            sortable
-            filterable
-            filterPlaceholder="Filter by assessee ID…"
-            pageSize={15}
-          />
-        )
+        <>
+          {defaultersSource === "error" && <DataSourceBadge source="error" />}
+          {defaulters.length === 0 ? (
+            <EmptyState icon="🚩" title="No defaulters" message="No assessees have an outstanding balance." />
+          ) : (
+            <DataTable<DefaulterRow>
+              columns={[
+                { key: "rank", label: "Rank", align: "right" },
+                { key: "assesseeId", label: "Assessee ID" },
+                { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
+              ]}
+              rows={defaulters}
+              sortable
+              filterable
+              filterPlaceholder="Filter by assessee ID…"
+              pageSize={15}
+            />
+          )}
+        </>
       )}
 
       {active === "Forecast" && <ForecastPanel defaultGranularity={granularity} />}

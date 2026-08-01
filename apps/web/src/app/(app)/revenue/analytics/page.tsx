@@ -134,9 +134,14 @@ export default async function RevenueAnalyticsPage({
       ? "error"
       : "api";
 
-  const totalDemand = efficiency?.totalDemandMinor ?? "0";
-  const totalCollection = efficiency?.totalCollectionMinor ?? "0";
-  const overallEfficiencyBps = efficiency?.efficiencyBps ?? 0;
+  // Never fall back to a fabricated "0"/0 when the efficiency read failed — that would
+  // render as a real ₹0.00 / 0% figure indistinguishable from a genuine zero. Gate each
+  // stat on efficiencySource so an error renders "—", not a made-up amount.
+  const totalDemand =
+    efficiencySource === "error" ? null : (efficiency?.totalDemandMinor ?? "0");
+  const totalCollection =
+    efficiencySource === "error" ? null : (efficiency?.totalCollectionMinor ?? "0");
+  const overallEfficiencyBps = efficiencySource === "error" ? null : (efficiency?.efficiencyBps ?? 0);
   const topDefaulterOutstanding = defaulters[0]?.outstandingMinor;
 
   return (
@@ -149,9 +154,14 @@ export default async function RevenueAnalyticsPage({
       />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#eff6ff" label="Total Demand" value={formatMoney(totalDemand)} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Collection" value={formatMoney(totalCollection)} />
-        <StatCard icon="⚡" iconBg="#fffbe6" label="Collection Efficiency" value={formatBps(overallEfficiencyBps)} />
+        <StatCard icon="📊" iconBg="#eff6ff" label="Total Demand" value={totalDemand === null ? "—" : formatMoney(totalDemand)} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Collection" value={totalCollection === null ? "—" : formatMoney(totalCollection)} />
+        <StatCard
+          icon="⚡"
+          iconBg="#fffbe6"
+          label="Collection Efficiency"
+          value={overallEfficiencyBps === null ? "—" : formatBps(overallEfficiencyBps)}
+        />
         <StatCard
           icon="⚠️"
           iconBg="#fef3f2"
@@ -159,6 +169,7 @@ export default async function RevenueAnalyticsPage({
           value={topDefaulterOutstanding ? formatMoney(topDefaulterOutstanding) : "—"}
         />
       </StatGrid>
+      {efficiencySource === "error" && <DataSourceBadge source="error" />}
 
       <nav aria-label="Trend granularity" style={{ display: "flex", gap: 8, marginBottom: 4 }}>
         <Link

@@ -84,4 +84,24 @@ describe("RevenueAnalyticsPage", () => {
     render(ui);
     expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
   });
+
+  it("never fabricates ₹0.00 / 0% stat-card figures when the efficiency read fails", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/efficiency")) return Promise.resolve({ data: null, source: "error" });
+      if (path.includes("/arrears-aging")) return Promise.resolve({ data: null, source: "api" });
+      if (path.includes("/defaulters")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/trends")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+
+    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    render(ui);
+
+    // The three efficiency-derived stat cards must render "—", never a fabricated
+    // ₹0.00 or 0% that would be indistinguishable from a genuine zero reading.
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+  });
 });

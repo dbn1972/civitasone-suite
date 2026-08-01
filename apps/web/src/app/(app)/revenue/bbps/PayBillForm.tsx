@@ -4,19 +4,11 @@ import { useId, useRef, useState } from "react";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
 const CHANNELS = ["online", "counter", "upi", "netbanking", "card"] as const;
-
-/** Convert a rupees-and-paise decimal string (clerk input) into a minor-unit integer string. */
-function rupeesToMinorString(v: string): string | null {
-  const trimmed = v.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100).toString();
-}
 
 export function PayBillForm() {
   const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
@@ -147,8 +139,7 @@ export function PayBillForm() {
                 id={amountId}
                 ref={amountRef}
                 type="number"
-                min="0.01"
-                step="0.01"
+                step="any"
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
