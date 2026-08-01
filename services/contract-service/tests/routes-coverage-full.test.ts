@@ -1093,6 +1093,36 @@ describe("Performance bond routes", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("POST /bonds/:bondId/transition → 409 when bond not held", async () => {
+    const releasedId = "cccccccc-dddd-4000-8000-0000000000c1";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, releasedId));
+      await tx.insert(contractPerformanceBonds).values({
+        id: releasedId,
+        contractId: ACTIVE_ID,
+        tenantId: TENANT,
+        bondType: "performance",
+        amountMinor: 10_000n,
+        currency: "INR",
+        issuer: "SBI",
+        referenceNo: "BG-RELEASED",
+        validFrom: "2026-01-01",
+        validTo: "2026-12-31",
+        status: "released",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    }));
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/contract/contracts/${ACTIVE_ID}/bonds/${releasedId}/transition`,
+      headers: authHeader(),
+      payload: { toStatus: "claimed" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_STATUS");
+  });
+
   it("POST /bonds/:bondId/transition → 404 unknown bond on known contract", async () => {
     const res = await app.inject({
       method: "POST",

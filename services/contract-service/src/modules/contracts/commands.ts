@@ -194,6 +194,9 @@ export async function transitionPerformanceBond(
   await loadScoped(ctx, contractId);
   const bond = await repo.findBondById(bondId, contractId, ctx.tenantId);
   if (!bond) throw new HttpError(404, "NOT_FOUND", "performance bond not found");
+  if (bond.status !== "held") {
+    throw new HttpError(409, "INVALID_STATUS", `bond is already ${bond.status}`);
+  }
   await queue.publish(COMMANDS.bondTransition, {
     messageId: randomUUID(), type: COMMANDS.bondTransition,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
