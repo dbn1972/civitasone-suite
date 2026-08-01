@@ -1,11 +1,10 @@
--- Purpose: Apply tenant RLS to _outbox.messages / _inbox.processed when the
--- connecting role owns them. Mirrors works-service 0011_outbox_rls_if_owner.sql.
--- Safe no-op if not owner.
+-- Purpose: Apply tenant RLS to _outbox.messages (and _inbox.processed when it
+-- has tenant_id) when the connecting role owns them.
+-- Mirrors works-service 0011_outbox_rls_if_owner.sql. Safe no-op if not owner.
 --
--- Deploy note: visitor-worker MUST run startRelay(scannerDb, …). The outbox
--- relay is cross-tenant and the visitor_scanner role is BYPASSRLS (0009) with
--- grants on _outbox/_inbox (0011). Using visitor_svc + FORCE RLS with no
--- app.tenant_id would starve the relay.
+-- Deploy note: visitor-worker MUST run startRelay(scannerDb, …) and
+-- startOutboxPurge(scannerDb, …). The outbox relay/purge are cross-tenant and
+-- visitor_scanner is BYPASSRLS (0009) with grants on _outbox/_inbox (0011).
 SET lock_timeout = '5s';
 
 DO $$
@@ -40,6 +39,15 @@ BEGIN
       AND tableowner = current_user
   ) THEN
     RAISE NOTICE 'skip _inbox.processed RLS — not owned by %', current_user;
+    RETURN;
+  END IF;
+  -- Some deployments use a message_id-only inbox without tenant_id (visitor
+  -- 0011). Tenant RLS requires a tenant column — skip safely otherwise.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = '_inbox' AND table_name = 'processed' AND column_name = 'tenant_id'
+  ) THEN
+    RAISE NOTICE 'skip _inbox.processed RLS — no tenant_id column';
     RETURN;
   END IF;
   EXECUTE 'ALTER TABLE _inbox.processed ENABLE ROW LEVEL SECURITY';
