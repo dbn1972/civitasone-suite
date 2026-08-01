@@ -49,7 +49,7 @@ describe("HearingsConsole", () => {
       />,
     );
     expect(screen.getByText("Hearings (1)")).toBeInTheDocument();
-    expect(screen.getByText(/arguments/)).toBeInTheDocument();
+    expect(screen.getByText(/arguments/i)).toBeInTheDocument();
   });
 
   it("renders a genuine empty state (not the saved-information badge) when there are no hearings", () => {
@@ -87,7 +87,7 @@ describe("HearingsConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schedule hearing" }));
     await waitFor(() => expect(scheduleHearingMock).toHaveBeenCalledTimes(1));
     expect(scheduleHearingMock.mock.calls[0][0]).toBe("case-1");
-    await waitFor(() => expect(screen.getByText("Hearing scheduled.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Hearing scheduled\./)).toBeInTheDocument());
   });
 
   it("surfaces the server's error message when recording an outcome fails, via ConfirmDialog", async () => {

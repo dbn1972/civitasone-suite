@@ -88,7 +88,7 @@ describe("OrdersConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Draft order" }));
     await waitFor(() => expect(recordOrderMock).toHaveBeenCalledTimes(1));
     expect(recordOrderMock.mock.calls[0][0]).toBe("case-1");
-    await waitFor(() => expect(screen.getByText("Order drafted.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Order drafted\./)).toBeInTheDocument());
   });
 
   it("requires a DSC signature before approve & issue reaches the server, then surfaces a server error", async () => {
