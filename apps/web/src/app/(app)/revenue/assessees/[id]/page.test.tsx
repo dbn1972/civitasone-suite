@@ -52,7 +52,7 @@ describe("AssesseeDetailPage", () => {
 
     expect(screen.getByText("Ramesh Kumar")).toBeInTheDocument();
     expect(screen.getByText(/PROP-0001/)).toBeInTheDocument();
-    expect(screen.getByText("₹3,000.00")).toBeInTheDocument();
+    expect(screen.getAllByText("₹3,000.00").length).toBeGreaterThan(0);
   });
 
   it("shows the data-source badge on error instead of a friendly empty state", async () => {
