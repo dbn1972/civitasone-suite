@@ -42,6 +42,10 @@ const hrTiles: NavTile[] = [
 	{ title: "Flex Benefits", href: "/hr/payroll/flex-benefits", description: "Flexible benefit plans and elections" },
 	{ title: "Salary Revisions", href: "/hr/payroll/salary-revisions", description: "Pay-fixation revisions (from HRMS)" },
 	{ title: "Payroll Period", href: "/hr/payroll/period", description: "Monthly periods and run status" },
+	{ title: "Payroll Register", href: "/hr/payroll/register", description: "Department-wise run register and totals" },
+	{ title: "Off-Cycle Runs", href: "/hr/payroll/off-cycle", description: "Bonus / incentive / ad-hoc runs" },
+	{ title: "Run Comparison", href: "/hr/payroll/comparison", description: "Period-vs-period payroll deltas" },
+	{ title: "Corrections", href: "/hr/payroll/corrections", description: "Salary corrections and adjustments" },
 	// Compensation & Benefits
 	{ title: "Benefits", href: "/hr/benefits", description: "HRA, LTC, medical, conveyance enrollment" },
 	{ title: "Loans", href: "/hr/loans", description: "Employee loan applications and EMI" },
