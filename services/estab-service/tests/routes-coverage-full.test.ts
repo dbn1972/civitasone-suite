@@ -441,7 +441,10 @@ describe("POST /v1/estab/library/issues — valid payload", () => {
       },
     });
     await app.close();
-    expect([200, 201, 202, 400, 409, 500]).toContain(r.statusCode);
+    // bookId is a random uuid that does not exist — issueBook now validates
+    // book existence server-side (EST-LIBRARY availability enforcement),
+    // so a random uuid legitimately 404s.
+    expect([200, 201, 202, 400, 404, 409, 500]).toContain(r.statusCode);
   });
 });
 

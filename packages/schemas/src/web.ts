@@ -1071,6 +1071,31 @@ export const GuesthouseBookingSummarySchema = z.object({
 });
 export const GuesthouseBookingSummaryListSchema = z.array(GuesthouseBookingSummarySchema);
 
+export const LibraryBookSummarySchema = z.object({
+  id: z.string(),
+  accessionNo: z.string(),
+  title: z.string(),
+  author: z.string().optional(),
+  isbn: z.string().optional(),
+  category: z.string().optional(),
+  copiesTotal: z.number(),
+  copiesAvailable: z.number(),
+  status: z.enum(["available", "unavailable"]),
+});
+export const LibraryBookSummaryListSchema = z.array(LibraryBookSummarySchema);
+
+export const LibraryIssueSummarySchema = z.object({
+  id: z.string(),
+  bookId: z.string(),
+  bookTitle: z.string().optional(),
+  borrowerRef: z.string(),
+  issuedAt: z.string(),
+  dueAt: z.string(),
+  returnedAt: z.string().optional(),
+  status: z.enum(["issued", "returned", "overdue"]),
+});
+export const LibraryIssueSummaryListSchema = z.array(LibraryIssueSummarySchema);
+
 export const ComplianceSummarySchema = z.object({
   id: z.string(),
   complianceCode: z.string(),
