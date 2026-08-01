@@ -112,16 +112,19 @@ function SelectInput({
   onChange,
   options,
   error,
+  selectRef,
 }: {
   id: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   error?: string;
+  selectRef?: React.Ref<HTMLSelectElement>;
 }) {
   return (
     <select
       id={id}
+      ref={selectRef}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-required="true"
@@ -191,6 +194,8 @@ function SurveyPanel({
 
   const assetRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  const conditionRef = useRef<HTMLSelectElement>(null);
+  const repairRef = useRef<HTMLInputElement>(null);
   const surveyIdRef = useRef<HTMLInputElement>(null);
   const versionRef = useRef<HTMLInputElement>(null);
 
@@ -205,6 +210,8 @@ function SurveyPanel({
     setErrors(next);
     if (next.assetId) { assetRef.current?.focus(); return false; }
     if (next.surveyDate) { dateRef.current?.focus(); return false; }
+    if (next.condition) { conditionRef.current?.focus(); return false; }
+    if (next.repairCost) { repairRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
@@ -280,6 +287,7 @@ function SurveyPanel({
               <Field id={conditionField} label="Condition" error={errors.condition}>
                 <SelectInput
                   id={conditionField}
+                  selectRef={conditionRef}
                   value={condition}
                   onChange={setCondition}
                   error={errors.condition}
@@ -296,7 +304,7 @@ function SurveyPanel({
                 <TextInput id={yearsField} value={yearsInUse} onChange={setYearsInUse} placeholder="e.g. 8" inputMode="numeric" required={false} />
               </Field>
               <Field id={repairField} label="Estimated repair cost (₹)" required={false} error={errors.repairCost}>
-                <TextInput id={repairField} value={repairCost} onChange={setRepairCost} placeholder="e.g. 15000" inputMode="decimal" required={false} error={errors.repairCost} />
+                <TextInput id={repairField} inputRef={repairRef} value={repairCost} onChange={setRepairCost} placeholder="e.g. 15000" inputMode="decimal" required={false} error={errors.repairCost} />
               </Field>
             </>,
           )}
@@ -455,7 +463,11 @@ function RecommendationPanel({
 
   const surveyRef = useRef<HTMLInputElement>(null);
   const assetRef = useRef<HTMLInputElement>(null);
+  const decisionRef = useRef<HTMLSelectElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const firstMemberRef = useRef<HTMLInputElement>(null);
+  const reserveRef = useRef<HTMLInputElement>(null);
+  const floorRef = useRef<HTMLInputElement>(null);
   const recIdRef = useRef<HTMLInputElement>(null);
   const approveVersionRef = useRef<HTMLInputElement>(null);
 
@@ -476,7 +488,11 @@ function RecommendationPanel({
     setErrors(next);
     if (next.surveyId) { surveyRef.current?.focus(); return false; }
     if (next.assetId) { assetRef.current?.focus(); return false; }
+    if (next.decision) { decisionRef.current?.focus(); return false; }
     if (next.reason) { reasonRef.current?.focus(); return false; }
+    if (next.members) { firstMemberRef.current?.focus(); return false; }
+    if (next.reserveValue) { reserveRef.current?.focus(); return false; }
+    if (next.floorValue) { floorRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
@@ -562,6 +578,7 @@ function RecommendationPanel({
               <Field id={decisionField} label="Decision" error={errors.decision}>
                 <SelectInput
                   id={decisionField}
+                  selectRef={decisionRef}
                   value={decision}
                   onChange={setDecision}
                   error={errors.decision}
@@ -574,10 +591,10 @@ function RecommendationPanel({
                 />
               </Field>
               <Field id={reserveField} label="Reserve value (₹)" required={false} error={errors.reserveValue}>
-                <TextInput id={reserveField} value={reserveValue} onChange={setReserveValue} inputMode="decimal" required={false} error={errors.reserveValue} />
+                <TextInput id={reserveField} inputRef={reserveRef} value={reserveValue} onChange={setReserveValue} inputMode="decimal" required={false} error={errors.reserveValue} />
               </Field>
               <Field id={floorField} label="Floor value (₹)" required={false} error={errors.floorValue}>
-                <TextInput id={floorField} value={floorValue} onChange={setFloorValue} inputMode="decimal" required={false} error={errors.floorValue} />
+                <TextInput id={floorField} inputRef={floorRef} value={floorValue} onChange={setFloorValue} inputMode="decimal" required={false} error={errors.floorValue} />
               </Field>
             </>,
           )}
@@ -604,6 +621,7 @@ function RecommendationPanel({
                 <Field id={`member-${i}-name`} label={`Member ${i + 1} name`} required={false}>
                   <TextInput
                     id={`member-${i}-name`}
+                    inputRef={i === 0 ? firstMemberRef : undefined}
                     value={m.name}
                     onChange={(v) => updateMember(i, { name: v })}
                     required={false}
@@ -714,9 +732,22 @@ function RecommendationPanel({
         errorMessage={approveDialogError}
         description={
           <>
-            Submits your approval of recommendation <strong className="mono">{recommendationId.slice(0, 8)}…</strong> for
-            server-side maker-checker verification (approver must differ from creator). On approval the asset moves
-            toward condemnation — this cannot be undone from this screen.
+            Submits your approval of recommendation <strong className="mono">{recommendationId.slice(0, 8)}…</strong>
+            {assetId.trim() ? (
+              <>
+                {" "}for asset <strong className="mono">{assetId.trim().slice(0, 8)}…</strong>
+              </>
+            ) : null}{" "}
+            for server-side maker-checker verification (approver must differ from creator).
+            {(reserveValue.trim() || floorValue.trim()) ? (
+              <>
+                {" "}Reserve value{" "}
+                <strong>{reserveValue.trim() ? formatMoney(Number(rupeesToMinorString(reserveValue) ?? "0")) : "—"}</strong>
+                {" "}· floor value{" "}
+                <strong>{floorValue.trim() ? formatMoney(Number(rupeesToMinorString(floorValue) ?? "0")) : "—"}</strong>.
+              </>
+            ) : null}{" "}
+            On approval the asset moves toward condemnation — this cannot be undone from this screen.
           </>
         }
         onConfirm={() => void approveRecommendation()}
@@ -773,6 +804,7 @@ function AuctionPanel({
   const assetRef = useRef<HTMLInputElement>(null);
   const recRef = useRef<HTMLInputElement>(null);
   const reserveRef = useRef<HTMLInputElement>(null);
+  const auctionDateRef = useRef<HTMLInputElement>(null);
   const auctionIdRef = useRef<HTMLInputElement>(null);
   const versionRef = useRef<HTMLInputElement>(null);
   const bidRef = useRef<HTMLInputElement>(null);
@@ -790,6 +822,7 @@ function AuctionPanel({
     if (next.assetId) { assetRef.current?.focus(); return false; }
     if (next.recommendationId) { recRef.current?.focus(); return false; }
     if (next.reserveValue) { reserveRef.current?.focus(); return false; }
+    if (next.auctionDate) { auctionDateRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
@@ -877,7 +910,7 @@ function AuctionPanel({
                 <TextInput id={reserveField} inputRef={reserveRef} value={reserveValue} onChange={setReserveValue} inputMode="decimal" error={errors.reserveValue} />
               </Field>
               <Field id={dateField} label="Auction date" required={false} error={errors.auctionDate}>
-                <TextInput id={dateField} value={auctionDate} onChange={setAuctionDate} placeholder="YYYY-MM-DD" required={false} error={errors.auctionDate} />
+                <TextInput id={dateField} inputRef={auctionDateRef} value={auctionDate} onChange={setAuctionDate} placeholder="YYYY-MM-DD" required={false} error={errors.auctionDate} />
               </Field>
             </>,
           )}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 
 type Props = {
   assetId: string;
@@ -12,16 +13,30 @@ type Props = {
 };
 
 /**
- * Non-negative rupees → paise-string, allowing blank/"0" as "no proceeds"
- * (the lifecycle disposeBody / enterprise request-disposal schemas accept
- * proceedsMinor: 0 for a scrapped asset with no sale value). Returns null
- * only when the field is non-empty and not a valid non-negative amount —
- * rupeesToMinorString() itself rejects "0" outright, which is wrong here.
+ * Non-negative rupees → paise-string, allowing blank or any zero-valued
+ * amount as "no proceeds" (the lifecycle disposeBody / enterprise
+ * request-disposal schemas accept proceedsMinor: 0 for a scrapped asset with
+ * no sale value). rupeesToMinorString() itself rejects zero outright, which
+ * is wrong here — but rather than pattern-matching a handful of zero
+ * spellings ("0", "0.0", "0.00", which misses "00.00" etc. and spuriously
+ * rejects them), parse the value directly: at most 2 significant fractional
+ * digits (a 3rd+ decimal digit can't be represented exactly in paise, same
+ * rule as rupeesToMinorString) and treat an all-zero result as "0" instead
+ * of null. Returns null only for a non-empty, genuinely invalid amount.
  */
 function proceedsToMinorString(input: string): string | null {
   const trimmed = input.trim();
-  if (!trimmed || trimmed === "0" || trimmed === "0.0" || trimmed === "0.00") return "0";
-  return rupeesToMinorString(trimmed);
+  if (!trimmed) return "0";
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+  if (!match) return null;
+  const [, wholePart, fracPart = ""] = match;
+  // Any non-zero digit beyond the 2nd decimal place is real precision loss —
+  // reject it. Trailing zeros beyond 2 places (e.g. "0.000", "12.500") are
+  // just imprecise formatting, not a rejection reason.
+  if (/[1-9]/.test(fracPart.slice(2))) return null;
+  const paise = `${fracPart}00`.slice(0, 2);
+  const minor = BigInt(wholePart + paise);
+  return minor.toString();
 }
 
 const inputStyle: React.CSSProperties = { width: "100%", padding: 8, marginBottom: 4, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 };
@@ -395,7 +410,7 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
         description={
           <>
             This <b>bypasses the eOffice write-off approval workflow</b> and immediately marks the asset disposed,
-            posting {directProceeds.trim() ? `₹${directProceeds.trim()}` : "₹0"} proceeds. This is{" "}
+            posting <b>{formatMoney(Number(proceedsToMinorString(directProceeds) ?? "0"))}</b> proceeds. This is{" "}
             <b>GFR-irreversible</b> and cannot be undone from this screen.
           </>
         }

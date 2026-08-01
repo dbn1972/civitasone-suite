@@ -102,4 +102,44 @@ describe("AssetDetailActions", () => {
       expect(screen.getByText("ORG_NOT_FOUND")).toBeInTheDocument();
     });
   });
+
+  it("shows a formatted rupee amount (not raw input text) on the direct-dispose confirm dialog", async () => {
+    render(<AssetDetailActions assetId={ASSET_ID} status="active" />);
+    fireEvent.change(screen.getByPlaceholderText("Proceeds (₹), leave blank for none"), { target: { value: "5000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Direct dispose" }));
+
+    await waitFor(() => expect(screen.getByText("Directly dispose this asset?")).toBeInTheDocument());
+    const dialog = screen.getByText("Directly dispose this asset?").closest(".cd-panel") as HTMLElement;
+    expect(dialog).toHaveTextContent("₹5,000.00");
+    expect(dialog).not.toHaveTextContent("₹5000");
+  });
+
+  it("accepts zero-valued proceeds spellings ('00.00', '0.000') as no-proceeds rather than a spurious validation error", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "d2", status: "accepted" }), { status: 202 }),
+    );
+
+    render(<AssetDetailActions assetId={ASSET_ID} status="active" />);
+    fireEvent.change(screen.getByPlaceholderText("Proceeds (₹), leave blank for none"), { target: { value: "00.00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Direct dispose" }));
+
+    // No validation error, dialog opens straight away.
+    expect(screen.queryByText(/Enter a valid non-negative proceeds amount/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Directly dispose this asset?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Dispose asset" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.proceedsMinor).toBe(0);
+  });
+
+  it("still rejects a proceeds value with more than 2 significant decimal digits", () => {
+    render(<AssetDetailActions assetId={ASSET_ID} status="active" />);
+    fireEvent.change(screen.getByPlaceholderText("Proceeds (₹), leave blank for none"), { target: { value: "12.345" } });
+    fireEvent.click(screen.getByRole("button", { name: "Direct dispose" }));
+    expect(
+      screen.getByText("Enter a valid non-negative proceeds amount (₹) with at most 2 decimals, or leave blank."),
+    ).toBeInTheDocument();
+  });
 });
