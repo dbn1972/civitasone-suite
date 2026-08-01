@@ -48,7 +48,7 @@ export async function parseErrorMessage(res: Response): Promise<string> {
   }
 }
 
-export function PeriodsTable({ periods }: { periods: PeriodRow[] }) {
+export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRow[]; canReopen?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState<{ row: PeriodRow; action: PeriodAction } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,7 +90,7 @@ export function PeriodsTable({ periods }: { periods: PeriodRow[] }) {
       label: "Actions",
       sortable: false,
       render: (row: DisplayRow) => {
-        const actions = AVAILABLE_ACTIONS[row.status] ?? [];
+        const actions = (AVAILABLE_ACTIONS[row.status] ?? []).filter((a) => a !== "reopen" || canReopen);
         if (actions.length === 0) {
           return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
         }

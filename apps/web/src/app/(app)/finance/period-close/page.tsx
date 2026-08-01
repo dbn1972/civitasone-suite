@@ -3,6 +3,7 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { ClosePeriodForm } from "./ClosePeriodForm";
 import { PeriodsTable, type PeriodRow } from "./PeriodsTable";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -44,6 +45,9 @@ async function getPeriods(): Promise<LoaderResult<PeriodRow[]>> {
 
 export default async function PeriodCloseCockpitPage() {
   const { data: periods, source } = await getPeriods();
+  // Reopen is restricted to finance_admin/super_admin server-side; hide the
+  // affordance for other roles so they aren't offered an action that 403s.
+  const canReopen = getSessionRoles().some((r) => r === "finance_admin" || r === "super_admin");
 
   const openCount = periods.filter((p) => p.status === "open").length;
   const softClosedCount = periods.filter((p) => p.status === "soft_close").length;
@@ -76,7 +80,7 @@ export default async function PeriodCloseCockpitPage() {
         {source === "error" && periods.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : (
-          <PeriodsTable periods={periods} />
+          <PeriodsTable periods={periods} canReopen={canReopen} />
         )}
       </Card>
     </main>
