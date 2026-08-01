@@ -32,7 +32,7 @@ describe("GenerateBillForm", () => {
 
   it("requires a demand selection before opening the confirm dialog", () => {
     render(<GenerateBillForm assesseeId="a1" demands={demands} />);
-    fireEvent.click(screen.getByText("Generate Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
     expect(screen.getByText("Select a demand to generate a bill for.")).toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe("GenerateBillForm", () => {
 
     render(<GenerateBillForm assesseeId="a1" demands={demands} />);
     fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "d1" } });
-    fireEvent.click(screen.getByText("Generate Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
 
     await waitFor(() => expect(screen.getByText("Generate this bill?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Generate bill"));
@@ -59,7 +59,7 @@ describe("GenerateBillForm", () => {
 
     render(<GenerateBillForm assesseeId="a1" demands={demands} />);
     fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "d1" } });
-    fireEvent.click(screen.getByText("Generate Bill"));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
 
     await waitFor(() => expect(screen.getByText("Generate this bill?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Generate bill"));

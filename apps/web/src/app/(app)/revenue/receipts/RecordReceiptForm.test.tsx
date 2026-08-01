@@ -25,7 +25,7 @@ describe("RecordReceiptForm", () => {
 
   it("requires demand, amount and reference before opening the confirm dialog", () => {
     render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
-    fireEvent.click(screen.getByText("Record Receipt"));
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
     expect(screen.getByText("Please correct the highlighted fields.")).toBeInTheDocument();
   });
 
@@ -36,7 +36,7 @@ describe("RecordReceiptForm", () => {
 
     render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Record Receipt"));
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
 
     await waitFor(() => expect(screen.getByText("Record this receipt?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Record receipt"));
@@ -52,7 +52,7 @@ describe("RecordReceiptForm", () => {
 
     render(<RecordReceiptForm assesseeId="a1" demands={demands} />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Record Receipt"));
+    fireEvent.click(screen.getByRole("button", { name: "Record Receipt" }));
 
     await waitFor(() => expect(screen.getByText("Record this receipt?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Record receipt"));

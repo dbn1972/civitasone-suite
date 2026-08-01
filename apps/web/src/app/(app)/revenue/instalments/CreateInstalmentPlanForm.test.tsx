@@ -21,7 +21,7 @@ describe("CreateInstalmentPlanForm", () => {
 
   it("requires a valid instalment count before opening the confirm dialog", () => {
     render(<CreateInstalmentPlanForm assesseeId="a1" />);
-    fireEvent.click(screen.getByText("Create Instalment Plan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Instalment Plan" }));
     expect(screen.getByText("Please correct the highlighted fields.")).toBeInTheDocument();
   });
 
@@ -32,7 +32,7 @@ describe("CreateInstalmentPlanForm", () => {
 
     render(<CreateInstalmentPlanForm assesseeId="a1" />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Create Instalment Plan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Instalment Plan" }));
 
     await waitFor(() => expect(screen.getByText("Create this instalment plan?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create plan"));
@@ -48,7 +48,7 @@ describe("CreateInstalmentPlanForm", () => {
 
     render(<CreateInstalmentPlanForm assesseeId="a1" />);
     fillValidForm();
-    fireEvent.click(screen.getByText("Create Instalment Plan"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Instalment Plan" }));
 
     await waitFor(() => expect(screen.getByText("Create this instalment plan?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create plan"));
