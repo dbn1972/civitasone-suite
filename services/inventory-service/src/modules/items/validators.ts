@@ -147,3 +147,35 @@ export const createUomPayload = createUomBody.extend({
   id:       z.string().uuid(),
   tenantId: z.string().uuid(),
 });
+export const createSubstitutePayload = createSubstituteBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export const createBinPayload = createBinBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export const createReservationPayload = createReservationBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+/**
+ * A fresh messageId is minted by the command handler for release (the target
+ * reservation's own id lives in `id`) — reusing the reservation id as the
+ * messageId would collide with the id already recorded in the idempotency
+ * inbox by reservation.create and cause the release to be silently deduped.
+ */
+export const releaseReservationPayload = releaseReservationBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export const createGoodsReturnPayload = createGoodsReturnBody.extend({
+  id:       z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+/** Same fresh-messageId reasoning as releaseReservationPayload above. */
+export const qcInspectionPayload = qcInspectionBody.extend({
+  id:           z.string().uuid(),
+  tenantId:     z.string().uuid(),
+  inspectedBy:  z.string().uuid(),
+});
