@@ -16,7 +16,7 @@ describe("CreatePayGroupForm", () => {
 
   it("requires a name before opening the confirm dialog", () => {
     render(<CreatePayGroupForm />);
-    fireEvent.click(screen.getByText("Create Pay Group"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Pay Group" }));
     expect(screen.getByText("Pay group name is required.")).toBeInTheDocument();
   });
 
@@ -30,7 +30,7 @@ describe("CreatePayGroupForm", () => {
 
     render(<CreatePayGroupForm />);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Weekly Wage Staff" } });
-    fireEvent.click(screen.getByText("Create Pay Group"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Pay Group" }));
 
     await waitFor(() => expect(screen.getByText("Create this pay group?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create pay group"));
@@ -46,7 +46,7 @@ describe("CreatePayGroupForm", () => {
 
     render(<CreatePayGroupForm />);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Duplicate Group" } });
-    fireEvent.click(screen.getByText("Create Pay Group"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Pay Group" }));
 
     await waitFor(() => expect(screen.getByText("Create this pay group?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create pay group"));
