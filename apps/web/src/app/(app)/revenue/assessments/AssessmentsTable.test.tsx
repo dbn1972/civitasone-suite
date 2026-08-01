@@ -19,6 +19,12 @@ const ROW: AssessmentRow = {
   createdAt: "2026-07-01T00:00:00.000Z",
 };
 
+const ROW_2: AssessmentRow = {
+  ...ROW,
+  id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+  assesseeId: "33333333-3333-3333-3333-333333333333",
+};
+
 describe("AssessmentsTable", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -33,17 +39,39 @@ describe("AssessmentsTable", () => {
     expect(screen.getByText("No assessments yet")).toBeInTheDocument();
   });
 
-  it("has distinct accessible names for repeated row action buttons", () => {
+  it("has distinct accessible names for repeated row action buttons across assessees sharing a financial year", () => {
+    render(<AssessmentsTable assessments={[ROW, ROW_2]} />);
+    expect(screen.getByLabelText("Approve remission for assessment aaaaaaaa, FY 2026-27")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reject remission for assessment aaaaaaaa, FY 2026-27")).toBeInTheDocument();
+    expect(screen.getByLabelText("Approve remission for assessment bbbbbbbb, FY 2026-27")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reject remission for assessment bbbbbbbb, FY 2026-27")).toBeInTheDocument();
+  });
+
+  it("gives the Revise field panel an accessible name and focuses the input on open", async () => {
     render(<AssessmentsTable assessments={[ROW]} />);
-    expect(screen.getByLabelText("Approve remission for FY 2026-27 assessment")).toBeInTheDocument();
-    expect(screen.getByLabelText("Reject remission for FY 2026-27 assessment")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Revise assessment aaaaaaaa for FY 2026-27"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Revise this assessment — enter new base value" });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByLabelText(/New Base Value/)).toHaveFocus();
+  });
+
+  it("focuses the invalid field when Revise validation fails", async () => {
+    render(<AssessmentsTable assessments={[ROW]} />);
+    fireEvent.click(screen.getByLabelText("Revise assessment aaaaaaaa for FY 2026-27"));
+    await screen.findByRole("dialog", { name: "Revise this assessment — enter new base value" });
+
+    fireEvent.click(screen.getByText("Continue"));
+
+    expect(await screen.findByText("Enter a valid non-negative base value (₹).")).toBeInTheDocument();
+    expect(screen.getByLabelText(/New Base Value/)).toHaveFocus();
   });
 
   it("approves a remission on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
     render(<AssessmentsTable assessments={[ROW]} />);
-    fireEvent.click(screen.getByLabelText("Approve remission for FY 2026-27 assessment"));
+    fireEvent.click(screen.getByLabelText("Approve remission for assessment aaaaaaaa, FY 2026-27"));
     await waitFor(() => expect(screen.getByText("Approve this remission?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Approve remission"));
 
@@ -61,7 +89,7 @@ describe("AssessmentsTable", () => {
     );
 
     render(<AssessmentsTable assessments={[ROW]} />);
-    fireEvent.click(screen.getByLabelText("Reject remission for FY 2026-27 assessment"));
+    fireEvent.click(screen.getByLabelText("Reject remission for assessment aaaaaaaa, FY 2026-27"));
     await waitFor(() => expect(screen.getByText("Reject this remission?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Reject remission"));
 

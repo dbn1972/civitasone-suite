@@ -8,16 +8,23 @@ vi.mock("next/navigation", () => ({
 
 import { AssesseeCreateForm } from "./AssesseeCreateForm";
 
+function fillValidForm() {
+  fireEvent.change(screen.getByLabelText(/Assessee Type/), { target: { value: "property" } });
+  fireEvent.change(screen.getByLabelText(/Identifier No\./), { target: { value: "PROP-0099" } });
+  fireEvent.change(screen.getByLabelText(/Owner \/ Holder Name/), { target: { value: "Ramesh Kumar" } });
+  fireEvent.change(screen.getByLabelText(/^Address/), { target: { value: "12 MG Road" } });
+}
+
 describe("AssesseeCreateForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     refreshMock.mockReset();
   });
 
-  it("requires an owner/holder name before opening the confirm dialog", () => {
+  it("requires assessee type, identifier, owner name, and address before opening the confirm dialog", () => {
     render(<AssesseeCreateForm />);
     fireEvent.click(screen.getByRole("button", { name: "Register Assessee" }));
-    expect(screen.getByText("Owner / holder name is required.")).toBeInTheDocument();
+    expect(screen.getByText("Select an assessee type.")).toBeInTheDocument();
   });
 
   it("registers an assessee on confirm (happy path)", async () => {
@@ -26,7 +33,7 @@ describe("AssesseeCreateForm", () => {
     );
 
     render(<AssesseeCreateForm />);
-    fireEvent.change(screen.getByLabelText(/Owner \/ Holder Name/), { target: { value: "Ramesh Kumar" } });
+    fillValidForm();
 
     fireEvent.click(screen.getByRole("button", { name: "Register Assessee" }));
     await waitFor(() => expect(screen.getByText("Register this assessee?")).toBeInTheDocument());
@@ -40,18 +47,18 @@ describe("AssesseeCreateForm", () => {
 
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: { code: "VALIDATION_FAILED", message: "name is required" } }), { status: 400 }),
+      new Response(JSON.stringify({ error: { code: "VALIDATION_FAILED", message: "identifierNo is required" } }), { status: 400 }),
     );
 
     render(<AssesseeCreateForm />);
-    fireEvent.change(screen.getByLabelText(/Owner \/ Holder Name/), { target: { value: "Ramesh Kumar" } });
+    fillValidForm();
 
     fireEvent.click(screen.getByRole("button", { name: "Register Assessee" }));
     await waitFor(() => expect(screen.getByText("Register this assessee?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Register assessee"));
 
     await waitFor(() => {
-      expect(screen.getByText(/VALIDATION_FAILED: name is required/)).toBeInTheDocument();
+      expect(screen.getByText(/VALIDATION_FAILED: identifierNo is required/)).toBeInTheDocument();
     });
   });
 });

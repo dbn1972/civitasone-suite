@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
@@ -60,10 +61,21 @@ async function postJson(url: string, body: unknown): Promise<void> {
   }
 }
 
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 /** Hand-rolled panel that collects the business-data field(s) before the
- * ConfirmDialog gate captures the required reason and submits. */
+ * ConfirmDialog gate captures the required reason and submits.
+ *
+ * Accessible-dialog behaviour (mirrors the DS ConfirmDialog): rendered into a
+ * body-level portal so the rest of the page can be made `inert` while it's
+ * open; focus moves to the input on open and is trapped inside the panel;
+ * focus returns to the trigger on close; a validation error re-focuses the
+ * invalid input.
+ */
 function FieldPanel({
   titleId,
+  title,
   label,
   hint,
   value,
@@ -73,6 +85,7 @@ function FieldPanel({
   error,
 }: {
   titleId: string;
+  title: string;
   label: string;
   hint?: string;
   value: string;
@@ -81,15 +94,67 @@ function FieldPanel({
   onContinue: () => void;
   error?: string;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  return (
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Focus the input on open, trap background interaction, restore focus on close.
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
+
+    const hidden: HTMLElement[] = [];
+    Array.from(document.body.children).forEach((child) => {
+      if (child instanceof HTMLElement && !child.contains(panelRef.current) && child !== panelRef.current) {
+        if (!child.hasAttribute("inert")) {
+          hidden.push(child);
+          child.setAttribute("inert", "");
+        }
+      }
+    });
+
+    return () => {
+      hidden.forEach((el) => el.removeAttribute("inert"));
+      previouslyFocused.current?.focus?.();
+    };
+  }, []);
+
+  // Re-focus the invalid field whenever a new validation error appears.
+  useEffect(() => {
+    if (error) inputRef.current?.focus();
+  }, [error]);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const node = panelRef.current;
+      if (!node) return;
+      const focusables = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [onCancel],
+  );
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onCancel();
-      }}
+      onKeyDown={handleKeyDown}
       style={{
         position: "fixed",
         inset: 0,
@@ -101,8 +166,9 @@ function FieldPanel({
         padding: 16,
       }}
     >
-      <div className="card" style={{ width: "min(420px,100%)" }}>
+      <div ref={panelRef} className="card" style={{ width: "min(420px,100%)" }}>
         <div className="pad" style={{ display: "grid", gap: 10 }}>
+          <h2 id={titleId} style={{ margin: 0, fontSize: 16 }}>{title}</h2>
           <label htmlFor={`${titleId}-input`} style={{ fontSize: 13, fontWeight: 600 }}>
             {label} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
@@ -125,7 +191,8 @@ function FieldPanel({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -264,44 +331,51 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       key: "id" as const,
       label: "Actions",
       sortable: false,
-      render: (row: AssessmentRow) => (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn ghost sm"
-            aria-label={`Revise assessment for FY ${row.financialYear}`}
-            disabled={row.status !== "active"}
-            onClick={() => startRevise(row)}
-          >
-            Revise
-          </button>
-          <button
-            type="button"
-            className="btn ghost sm"
-            aria-label={`Request remission for FY ${row.financialYear} assessment`}
-            disabled={row.status !== "active"}
-            onClick={() => startRemit(row)}
-          >
-            Remit
-          </button>
-          <button
-            type="button"
-            className="btn ghost sm"
-            aria-label={`Approve remission for FY ${row.financialYear} assessment`}
-            onClick={() => startDecide(row, true)}
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            className="btn ghost sm"
-            aria-label={`Reject remission for FY ${row.financialYear} assessment`}
-            onClick={() => startDecide(row, false)}
-          >
-            Reject
-          </button>
-        </div>
-      ),
+      render: (row: AssessmentRow) => {
+        // NOTE: Approve/Reject are always enabled regardless of assessment/remission
+        // status — see PR "## FUNCTIONAL FOLLOW-UPS" (flagged for functional review;
+        // the server rejects the action if there's no pending remission, but the UI
+        // does not yet pre-disable the buttons in that case).
+        const shortId = row.id.slice(0, 8);
+        return (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Revise assessment ${shortId} for FY ${row.financialYear}`}
+              disabled={row.status !== "active"}
+              onClick={() => startRevise(row)}
+            >
+              Revise
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Request remission for assessment ${shortId}, FY ${row.financialYear}`}
+              disabled={row.status !== "active"}
+              onClick={() => startRemit(row)}
+            >
+              Remit
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Approve remission for assessment ${shortId}, FY ${row.financialYear}`}
+              onClick={() => startDecide(row, true)}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Reject remission for assessment ${shortId}, FY ${row.financialYear}`}
+              onClick={() => startDecide(row, false)}
+            >
+              Reject
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -328,6 +402,7 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       {revisingRow && !reviseConfirmOpen && (
         <FieldPanel
           titleId={reviseTitleId}
+          title="Revise this assessment — enter new base value"
           label="New Base Value (₹)"
           hint={`Current base value: ${formatMoney(revisingRow.baseValue)}. This recomputes the demand.`}
           value={newBaseValue}
@@ -367,6 +442,7 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       {remittingRow && !remitConfirmOpen && (
         <FieldPanel
           titleId={remitTitleId}
+          title="Request remission — enter percent"
           label="Remission Percent (1–100)"
           hint="This raises a remission request pending a distinct checker's approval."
           value={remissionPercent}
