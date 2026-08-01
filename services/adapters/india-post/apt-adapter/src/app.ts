@@ -3,6 +3,7 @@ import { registerOpsRoutes } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
+import { HttpError } from "./shared/context.js";
 import { serviceabilityRoutes } from "./modules/serviceability/routes.js";
 import { trackingRoutes } from "./modules/tracking/routes.js";
 import { bookingRoutes } from "./modules/booking/routes.js";
@@ -23,6 +24,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(bookingRoutes);
 
   app.setErrorHandler((error, _req, reply) => {
+    if (error instanceof HttpError) {
+      return reply.status(error.status).send({ error: { code: error.code, message: error.message } });
+    }
     if (error.validation) {
       return reply.status(400).send({ error: { code: "VALIDATION_ERROR", message: error.message } });
     }
