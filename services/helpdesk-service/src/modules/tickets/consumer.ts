@@ -315,22 +315,32 @@ export function registerTicketConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const now = new Date();
       let updated: Awaited<ReturnType<typeof repo.assign>> = null;
+      // Missing-field rejection uses the SAME audited path as not-found below
+      // (rather than a bare `return`) so a malformed batch item is observable
+      // in the audit trail instead of silently vanishing.
+      let rejectReason: string | null = null;
       if (p.action === "assign") {
         const assigneeId = p.payload?.assigneeId as string | undefined;
-        if (!assigneeId) return;
-        updated = await repo.assign(tx, p.ticketId, msg.tenantId, assigneeId, msg.actorId, now);
+        if (!assigneeId) {
+          rejectReason = "rejected_missing_assignee";
+        } else {
+          updated = await repo.assign(tx, p.ticketId, msg.tenantId, assigneeId, msg.actorId, now);
+        }
       } else if (p.action === "close") {
         updated = await repo.transitionStatus(tx, p.ticketId, msg.tenantId, "closed", msg.actorId, now);
       } else if (p.action === "set_priority") {
         const priority = p.payload?.priority as string | undefined;
-        if (!priority) return;
-        updated = await repo.updatePriority(tx, p.ticketId, msg.tenantId, priority, msg.actorId, now);
+        if (!priority) {
+          rejectReason = "rejected_missing_priority";
+        } else {
+          updated = await repo.updatePriority(tx, p.ticketId, msg.tenantId, priority, msg.actorId, now);
+        }
       }
       if (!updated) {
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { service: "helpdesk", action: "bulk_action", resourceType: "ticket", resourceId: p.ticketId, outcome: "rejected_not_found", batchId: p.batchId },
+          payload: { service: "helpdesk", action: "bulk_action", resourceType: "ticket", resourceId: p.ticketId, outcome: rejectReason ?? "rejected_not_found", batchId: p.batchId },
         });
         return;
       }

@@ -109,7 +109,7 @@ export async function viewsRoutes(app: FastifyInstance): Promise<void> {
       actorId: ctx.actorId,
       correlationId: ctx.correlationId,
       schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, actorId: ctx.actorId, ...body },
+      payload: { id, tenantId: ctx.tenantId, actorId: ctx.actorId, actorRoles: ctx.roles, ...body },
     });
 
     return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId });
@@ -129,7 +129,7 @@ export async function viewsRoutes(app: FastifyInstance): Promise<void> {
       actorId: ctx.actorId,
       correlationId: ctx.correlationId,
       schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, actorId: ctx.actorId },
+      payload: { id, tenantId: ctx.tenantId, actorId: ctx.actorId, actorRoles: ctx.roles },
     });
 
     return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId });

@@ -22,6 +22,10 @@ const { outboxMessages } = outboxSchema;
 const TENANT_A = "aaaaaaaa-0000-4000-8000-0000000bc701";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-0000000bc702";
 const OWNER = "00000000-aaaa-4000-8000-0000000bc799";
+/** Same-tenant, different user — used to prove ownership (not just tenant) isolation. */
+const OTHER_USER = "11111111-bbbb-4000-8000-0000000bc798";
+/** Same-tenant helpdesk_admin — allowed to override ownership. */
+const ADMIN_USER = "22222222-cccc-4000-8000-0000000bc797";
 const ALL_TENANTS = [TENANT_A, TENANT_B];
 
 function wireTenantAwareQueue(q: Queue): Queue {
@@ -207,5 +211,97 @@ describe("VIEW_COMMANDS.delete — persists removal of a saved view", () => {
     await new Promise((r) => setTimeout(r, 150));
 
     expect(await findView(id, TENANT_A)).not.toBeNull(); // still there
+  });
+});
+
+describe("VIEW_COMMANDS.update/delete — ownership (IDOR) enforcement", () => {
+  async function seedPrivateView(tenantId: string, ownerId: string): Promise<string> {
+    const id = randomUUID();
+    await runWithTenant(tenantId, () =>
+      db.transaction((tx) => tx.insert(savedViews).values({
+        id, tenantId, ownerId, name: "Private", filters: {}, columns: [], shared: false,
+      })),
+    );
+    return id;
+  }
+
+  it("same-tenant, different owner: update is rejected (not applied, no throw)", async () => {
+    const q = wired();
+    const id = await seedPrivateView(TENANT_A, OWNER);
+    await q.publish(VIEW_COMMANDS.update, {
+      messageId: randomUUID(), type: VIEW_COMMANDS.update, tenantId: TENANT_A, actorId: OTHER_USER,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, actorId: OTHER_USER, actorRoles: ["helpdesk_user"], name: "Hijacked by B" },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const row = await findView(id, TENANT_A);
+    expect(row!.name).toBe("Private"); // untouched
+    expect(row!.version).toBe(1); // no version bump — the guard rejected before applying
+
+    const emitted = await outboxFor(TENANT_A, id);
+    const audit = emitted.filter((m) => m.topic === "audit.event.record");
+    expect(audit.some((m) => (m.payload as { outcome?: string }).outcome === "rejected_forbidden")).toBe(true);
+    expect(emitted.some((m) => m.topic === EVENTS.viewUpdated)).toBe(false);
+  });
+
+  it("same-tenant, different owner: delete is rejected (row survives, no throw)", async () => {
+    const q = wired();
+    const id = await seedPrivateView(TENANT_A, OWNER);
+    await q.publish(VIEW_COMMANDS.delete, {
+      messageId: randomUUID(), type: VIEW_COMMANDS.delete, tenantId: TENANT_A, actorId: OTHER_USER,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, actorId: OTHER_USER, actorRoles: ["helpdesk_user"] },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(await findView(id, TENANT_A)).not.toBeNull(); // still there
+
+    const emitted = await outboxFor(TENANT_A, id);
+    const audit = emitted.filter((m) => m.topic === "audit.event.record");
+    expect(audit.some((m) => (m.payload as { outcome?: string }).outcome === "rejected_forbidden")).toBe(true);
+    expect(emitted.some((m) => m.topic === EVENTS.viewDeleted)).toBe(false);
+  });
+
+  it("helpdesk_admin can update another user's private view", async () => {
+    const q = wired();
+    const id = await seedPrivateView(TENANT_A, OWNER);
+    await q.publish(VIEW_COMMANDS.update, {
+      messageId: randomUUID(), type: VIEW_COMMANDS.update, tenantId: TENANT_A, actorId: ADMIN_USER,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, actorId: ADMIN_USER, actorRoles: ["helpdesk_admin"], name: "Fixed by admin" },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const row = await findView(id, TENANT_A);
+    expect(row!.name).toBe("Fixed by admin");
+    expect(row!.version).toBe(2);
+  });
+
+  it("helpdesk_admin can delete another user's private view", async () => {
+    const q = wired();
+    const id = await seedPrivateView(TENANT_A, OWNER);
+    await q.publish(VIEW_COMMANDS.delete, {
+      messageId: randomUUID(), type: VIEW_COMMANDS.delete, tenantId: TENANT_A, actorId: ADMIN_USER,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, actorId: ADMIN_USER, actorRoles: ["helpdesk_admin"] },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(await findView(id, TENANT_A)).toBeNull();
+  });
+
+  it("owner can update their own view", async () => {
+    const q = wired();
+    const id = await seedPrivateView(TENANT_A, OWNER);
+    await q.publish(VIEW_COMMANDS.update, {
+      messageId: randomUUID(), type: VIEW_COMMANDS.update, tenantId: TENANT_A, actorId: OWNER,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, actorId: OWNER, actorRoles: ["helpdesk_user"], name: "Self-updated" },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const row = await findView(id, TENANT_A);
+    expect(row!.name).toBe("Self-updated");
   });
 });
