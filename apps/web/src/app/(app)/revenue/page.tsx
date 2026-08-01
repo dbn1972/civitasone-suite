@@ -5,6 +5,8 @@ import { PageHeader } from "../../_components/ds";
 // Municipal / non-tax revenue collection (revenue-service). Tiles are added as
 // each revenue lane lands on main; links point only at live routes.
 const revenueTiles: NavTile[] = [
+	{ title: "Assessee Register", href: "/revenue/assessees", description: "Taxpayer register with demand-collection-balance." },
+	{ title: "Assessments", href: "/revenue/assessments", description: "Create, revise and remit assessments (maker-checker)." },
 	{ title: "Bills & Demands", href: "/revenue/bills", description: "Generate bills and view raised demands by assessee." },
 	{ title: "Collection Receipts", href: "/revenue/receipts", description: "Record and review revenue collection receipts." },
 	{ title: "Instalment Plans", href: "/revenue/instalments", description: "Assessee instalment plans for outstanding demands." },
