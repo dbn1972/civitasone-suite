@@ -3,6 +3,16 @@ export const COMMANDS = {
   createTicket: "helpdesk.ticket.create",
   assignTicket: "helpdesk.ticket.assign",
   transitionTicket: "helpdesk.ticket.transition",
+  /** TKT-04 — add internal/public note to a ticket. */
+  addNote: "helpdesk.ticket.add_note",
+  /** TKT-07 — transfer ticket to another department. */
+  transferTicket: "helpdesk.ticket.transfer",
+  /** TKT-08 — link two tickets (parent/child/duplicate/related). */
+  linkTickets: "helpdesk.ticket.link",
+  /** TKT-09 — bulk action on up to 50 tickets. */
+  bulkAction: "helpdesk.ticket.bulk_action",
+  /** TKT-14 — reopen a closed/resolved ticket. */
+  reopenTicket: "helpdesk.ticket.reopen",
 } as const;
 
 export const EVENTS = {
@@ -12,6 +22,14 @@ export const EVENTS = {
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
   ticketTransitioned: "helpdesk.ticket.transitioned",
+  /** TKT-04 — note added to ticket (internal or public). */
+  noteAdded: "helpdesk.ticket.note_added",
+  /** TKT-07 — ticket transferred between departments. */
+  ticketTransferred: "helpdesk.ticket.transferred",
+  /** TKT-08 — tickets linked (parent/child/duplicate/related). */
+  ticketsLinked: "helpdesk.ticket.linked",
+  /** TKT-14 — ticket reopened from resolved/closed. */
+  ticketReopened: "helpdesk.ticket.reopened",
   // SVC-129 — service catalogue / self-service request lifecycle.
   requestRaised: "helpdesk.request.raised",
   requestApproved: "helpdesk.request.approved",
