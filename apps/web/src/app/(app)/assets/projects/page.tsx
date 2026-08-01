@@ -1,175 +1,89 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { PageHeader, DataTable, EmptyState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { AucForm } from "./AucForm";
+import { AucTable, type AucRow } from "./AucTable";
 
-type Auc = {
-  id: string;
-  projectCode: string;
-  name: string;
-  accumulatedMinor: number | string;
-  status: string;
-  assetId?: string | null;
-};
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
 
-export default function ProjectsAucPage() {
-  const [rows, setRows] = useState<Auc[]>([]);
-  const [form, setForm] = useState({ projectCode: "", name: "", amountMinor: "" });
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [target, setTarget] = useState<Auc | null>(null);
+function mapAucRows(payload: unknown): AucRow[] | null {
+  const rows = Array.isArray(payload)
+    ? payload
+    : isRecord(payload) && Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: unknown[] }).data
+      : null;
+  if (!rows) return null;
 
-  async function load() {
-    const res = await fetch("/api/proxy/v1/asset/projects/auc");
-    setLoaded(true);
-    if (!res.ok) return;
-    const body = await res.json() as { data: Auc[] };
-    setRows(body.data ?? []);
+  const mapped: AucRow[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue;
+    const id = raw.id;
+    const projectCode = raw.projectCode;
+    const name = raw.name;
+    const status = raw.status;
+    if (typeof id !== "string" || typeof projectCode !== "string" || typeof name !== "string" || typeof status !== "string") continue;
+    mapped.push({
+      id,
+      projectCode,
+      name,
+      wbsRef: typeof raw.wbsRef === "string" ? raw.wbsRef : null,
+      // Server returns accumulated_minor as a bigint-serialized string or number; both are paise.
+      accumulatedMinor: typeof raw.accumulatedMinor === "number" || typeof raw.accumulatedMinor === "string" ? raw.accumulatedMinor : 0,
+      status,
+      assetId: typeof raw.assetId === "string" ? raw.assetId : null,
+    });
   }
+  return mapped;
+}
 
-  useEffect(() => { void load(); }, []);
-
-  async function createAuc(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMessage("");
-    setIsError(false);
-    try {
-      const res = await fetch("/api/proxy/v1/asset/projects/auc", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          projectCode: form.projectCode,
-          name: form.name,
-          amountMinor: Math.round(Number(form.amountMinor || "0") * 100),
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setMessage("AUC project created.");
-      setForm({ projectCode: "", name: "", amountMinor: "" });
-      await load();
-    } catch (e) {
-      setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Create failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const capitalizeAction = useConfirmAction({
-    onConfirm: async (reason) => {
-      if (!target) return;
-      const res = await fetch(`/api/proxy/v1/asset/projects/auc/${target.id}/capitalize`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason }),
-      });
-      const body = await res.json().catch(() => ({})) as { id?: string };
-      if (!res.ok) throw new Error(await res.text());
-      setIsError(false);
-      setMessage(`Capitalized — asset ${body.id?.slice(0, 8) ?? ""}`);
-      setTarget(null);
-      await load();
-    },
+async function getAucProjects(): Promise<LoaderResult<AucRow[]>> {
+  // Verified: GET /v1/assets/projects/auc in services/asset-service/src/modules/enterprise/routes.ts
+  // (returns { data: AucRow[] }). Gateway prefix used elsewhere in this app for asset-service is
+  // /api/v1/asset (see getAssetById et al. in _data/loaders.ts) — both /api/v1/asset and
+  // /api/v1/assets are registered upstream to the same asset-service; this app's convention is
+  // the singular form.
+  return fetchJson<unknown, AucRow[]>("/api/v1/asset/projects/auc", [], {
+    telemetryKey: "assets.projects.auc",
+    mapResponse: mapAucRows,
   });
+}
 
-  const inputStyle = { padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-  const fieldCol = { display: "flex", flexDirection: "column" as const, gap: 4 };
+export default async function ProjectsAucPage() {
+  const { data: rows, source } = await getAucProjects();
 
-  const tableRows = rows.map((r) => ({
-    id: r.id,
-    projectCode: r.projectCode,
-    name: r.name,
-    cost: formatMoney(r.accumulatedMinor),
-    status: r.status.replace(/_/g, " "),
-    _raw: r,
-  }));
+  const underConstruction = rows.filter((r) => r.status === "under_construction");
+  const capitalized = rows.filter((r) => r.status === "capitalized");
+  const accumulatedTotal = underConstruction.reduce((sum, r) => sum + BigInt(r.accumulatedMinor), 0n);
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Projects & AUC"
-        subtitle="Assets under construction — capitalize to fixed asset register with dual-book depreciation."
+        subtitle="Assets under construction — accumulate WIP, then capitalize to the fixed-asset register with dual-book depreciation."
         back="/assets"
         backLabel="Assets"
+        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
-      {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
-      ) : null}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <form onSubmit={createAuc} className="pad">
-          <div className="fields">
-            <div style={fieldCol}>
-              <label className="l" htmlFor="auc-code">Project code</label>
-              <input id="auc-code" required value={form.projectCode} onChange={(e) => setForm({ ...form, projectCode: e.target.value })} style={inputStyle} />
-            </div>
-            <div style={fieldCol}>
-              <label className="l" htmlFor="auc-name">Project name</label>
-              <input id="auc-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-            </div>
-            <div style={fieldCol}>
-              <label className="l" htmlFor="auc-amt">Accumulated cost (₹)</label>
-              <input id="auc-amt" inputMode="decimal" value={form.amountMinor} onChange={(e) => setForm({ ...form, amountMinor: e.target.value })} style={inputStyle} />
-            </div>
-          </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Creating…" : "Create AUC"}</button>
-        </form>
-      </div>
-      <div className="card">
-        <div className="card-h"><h3>AUC register</h3></div>
-        {tableRows.length === 0 ? (
-          <EmptyState icon="🏗️" title={loaded ? "No projects yet" : "Loading projects…"} message={loaded ? "Create an AUC project to accumulate WIP before capitalization." : undefined} />
-        ) : (
-          <DataTable
-            columns={[
-              { key: "projectCode", label: "Code" },
-              { key: "name", label: "Name" },
-              { key: "cost", label: "Cost", align: "right" },
-              { key: "status", label: "Status", cellType: "status" },
-              {
-                key: "id",
-                label: "",
-                render: (r) =>
-                  r._raw.status === "under_construction" ? (
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => {
-                        setTarget(r._raw);
-                        capitalizeAction.trigger();
-                      }}
-                    >
-                      Capitalize
-                    </button>
-                  ) : r._raw.assetId ? (
-                    <a href={`/assets/${r._raw.assetId}`}>View asset</a>
-                  ) : null,
-              },
-            ]}
-            rows={tableRows}
-            sortable
-          />
-        )}
-      </div>
 
-      <ConfirmDialog
-        open={capitalizeAction.open}
-        title="Capitalize this project?"
-        description={<>This transfers <b>{target ? formatMoney(target.accumulatedMinor) : ""}</b> of accumulated WIP from AUC into the fixed-asset register and starts dual-book depreciation. This posts to the GL and cannot be undone.</>}
-        confirmLabel="Capitalize to fixed asset"
-        requireReason
-        reasonLabel="Reason / authorisation"
-        busy={capitalizeAction.busy}
-        errorMessage={capitalizeAction.error}
-        onConfirm={capitalizeAction.confirm}
-        onCancel={() => {
-          capitalizeAction.cancel();
-          setTarget(null);
-        }}
-      />
-    </>
+      <StatGrid>
+        <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value={underConstruction.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value={capitalized.length} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value={rows.length} />
+        <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value={formatMoney(accumulatedTotal)} />
+      </StatGrid>
+
+      <AucForm />
+
+      <Card title="AUC register">
+        {source === "error" && rows.length === 0 ? (
+          <DataSourceBadge source="error" />
+        ) : (
+          <AucTable rows={rows} />
+        )}
+      </Card>
+    </main>
   );
 }
