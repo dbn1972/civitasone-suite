@@ -18,6 +18,7 @@ import { analyticsModuleSchema } from "../modules/analytics/schema.js";
 import { dndModuleSchema } from "../modules/dnd/schema.js";
 import { i18nModuleSchema } from "../modules/i18n/schema.js";
 import { segmentsModuleSchema } from "../modules/segments/schema.js";
+import { inboxCorrelationsSchema } from "../modules/inbox/correlation-schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -34,6 +35,7 @@ const SCHEMA = {
   ...dndModuleSchema,
   ...i18nModuleSchema,
   ...segmentsModuleSchema,
+  ...inboxCorrelationsSchema,
   ...outboxSchema,
 };
 

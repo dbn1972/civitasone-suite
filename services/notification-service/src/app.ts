@@ -23,6 +23,11 @@ import { dndRoutes } from "./modules/dnd/routes.js";
 import { i18nRoutes } from "./modules/i18n/routes.js";
 import { segmentRoutes } from "./modules/segments/routes.js";
 import { approvalRoutes } from "./modules/approval/routes.js";
+import { crmTimelineRoutes } from "./modules/channels/crm-timeline-routes.js";
+import { channelAnalyticsRoutes } from "./modules/channels/analytics-routes.js";
+import { inboundRoutes as inboundMessageRoutes } from "./modules/inbox/inbound-routes.js";
+import { convertRoutes } from "./modules/inbox/convert-routes.js";
+import { correlationRoutes } from "./modules/inbox/correlation-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -68,6 +73,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(i18nRoutes);
   await app.register(segmentRoutes);
   await app.register(approvalRoutes);
+  await app.register(crmTimelineRoutes);
+  await app.register(channelAnalyticsRoutes);
+  await app.register(inboundMessageRoutes);
+  await app.register(convertRoutes);
+  await app.register(correlationRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
