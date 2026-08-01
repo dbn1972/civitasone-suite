@@ -8,8 +8,9 @@ export default function Page() {
       links={[
         { href: "/billing/plans", label: "Plans", note: "Billing plans and pricing" },
         { href: "/billing/subscriptions", label: "Subscriptions", note: "Active subscriptions" },
-        { href: "/billing/invoices", label: "Invoices", note: "Generated invoices" },
+        { href: "/billing/invoices", label: "Invoices", note: "Generated invoices, GST e-invoice / IRN" },
         { href: "/billing/payments", label: "Payments", note: "Payment records" },
+        { href: "/billing/gstn", label: "GSTN Console", note: "GST return filing status and GSTIN verification" },
       ]}
     />
   );
