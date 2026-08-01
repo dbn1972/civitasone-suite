@@ -35,6 +35,7 @@ export function CreateOffCycleForm() {
   const runTypeId = useId();
   const errId = useId();
   const periodRef = useRef<HTMLInputElement>(null);
+  const empRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const periodInvalid = tone === "bad" && !!message && message.startsWith("Period");
   const itemsInvalid = tone === "bad" && !!message && message.startsWith("Every off-cycle item");
@@ -72,6 +73,11 @@ export function CreateOffCycleForm() {
     if (!allValid) {
       setTone("bad");
       setMessage("Every off-cycle item needs an Employee ID and a positive amount.");
+      const firstInvalid = items.findIndex((it) => {
+        const rupees = parseFloat(it.amountRupees);
+        return !(it.employeeId.trim().length > 0 && !Number.isNaN(rupees) && rupees > 0);
+      });
+      if (firstInvalid >= 0) empRefs.current[firstInvalid]?.focus();
       return;
     }
     setDialogError(undefined);
@@ -177,11 +183,12 @@ export function CreateOffCycleForm() {
                     <label htmlFor={empLabelId} style={{ fontSize: 12, fontWeight: 600 }}>Employee ID</label>
                     <input
                       id={empLabelId}
+                      ref={(el) => { empRefs.current[index] = el; }}
                       value={it.employeeId}
                       onChange={(e) => updateItem(index, { employeeId: e.target.value })}
                       aria-required="true"
                       aria-invalid={itemsInvalid && !it.employeeId.trim() ? true : undefined}
-                      aria-describedby={itemsInvalid ? errId : undefined}
+                      aria-describedby={itemsInvalid && !it.employeeId.trim() ? errId : undefined}
                       style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                     />
                   </div>
@@ -196,7 +203,7 @@ export function CreateOffCycleForm() {
                       onChange={(e) => updateItem(index, { amountRupees: e.target.value })}
                       aria-required="true"
                       aria-invalid={itemsInvalid && !(parseFloat(it.amountRupees) > 0) ? true : undefined}
-                      aria-describedby={itemsInvalid ? errId : undefined}
+                      aria-describedby={itemsInvalid && !(parseFloat(it.amountRupees) > 0) ? errId : undefined}
                       style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                     />
                   </div>

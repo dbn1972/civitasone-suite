@@ -67,6 +67,7 @@ export function OffCycleList({ rows }: { rows: OffCycleRow[] }) {
             type="button"
             className="btn"
             style={{ minHeight: 36 }}
+            aria-label={`Process ${row.run_type} off-cycle run for ${row.period}`}
             onClick={() => {
               setDialogError(undefined);
               setPendingRow(row);
@@ -83,7 +84,7 @@ export function OffCycleList({ rows }: { rows: OffCycleRow[] }) {
   return (
     <>
       {message && (
-        <p role="status" aria-live="polite" className="pill good" style={{ width: "fit-content", marginBottom: 12 }}>
+        <p role="status" className="pill good" style={{ width: "fit-content", marginBottom: 12 }}>
           {message}
         </p>
       )}

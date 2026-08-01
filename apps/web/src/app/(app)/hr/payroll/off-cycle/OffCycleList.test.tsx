@@ -29,7 +29,7 @@ describe("OffCycleList", () => {
   it("renders draft runs with a Process action", () => {
     render(<OffCycleList rows={[row]} />);
     expect(screen.getByText("Diwali bonus")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Process" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Process/ })).toBeInTheDocument();
   });
 
   it("processes a run on confirm (happy path)", async () => {
@@ -40,7 +40,7 @@ describe("OffCycleList", () => {
     );
 
     render(<OffCycleList rows={[row]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Process" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Process/ }));
 
     await waitFor(() => expect(screen.getByText("Process this off-cycle run?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Process run"));
@@ -55,7 +55,7 @@ describe("OffCycleList", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 409 }));
 
     render(<OffCycleList rows={[row]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Process" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Process/ }));
 
     await waitFor(() => expect(screen.getByText("Process this off-cycle run?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Process run"));
