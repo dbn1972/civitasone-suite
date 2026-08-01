@@ -74,6 +74,12 @@ export const tourPlans = assignmentSchema.table("tour_plans", {
   periodEnd:   date("period_end").notNull(),
   slots:       jsonb("slots").notNull(), // TourSlot[]
   // { date: string; entityId: string; inspectionId: string; latitude: number; longitude: number }[]
+  // Approval workflow (SVC-109) — see domain.ts TOUR_PLAN_STATES/TOUR_PLAN_TRANSITIONS.
+  status:       varchar("status", { length: 24 }).notNull().default("draft"),
+  submittedBy:  uuid("submitted_by"),
+  submittedAt:  timestamp("submitted_at", { withTimezone: true }),
+  approvedBy:   uuid("approved_by"),
+  approvedAt:   timestamp("approved_at", { withTimezone: true }),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
@@ -82,6 +88,8 @@ export const tourPlans = assignmentSchema.table("tour_plans", {
 }, (table) => ({
   tenantInspector: index("idx_tour_plans_tenant_inspector")
     .on(table.tenantId, table.inspectorId),
+  tenantStatus: index("idx_tour_plans_tenant_status")
+    .on(table.tenantId, table.status),
 }));
 
 // ── assignment.geo_attendance ─────────────────────────────────────────────
