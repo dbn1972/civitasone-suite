@@ -27,7 +27,7 @@ interface RateConfigConsoleProps {
   rebateRulesSource: LoaderSource;
 }
 
-type WithStatus<T> = T & { statusLabel: string };
+type WithStatus<T> = T & { statusLabel: string } & Record<string, unknown>;
 
 function withStatus<T extends { isActive: boolean }>(rows: T[]): WithStatus<T>[] {
   return rows.map((r) => ({ ...r, statusLabel: r.isActive ? "active" : "inactive" }));

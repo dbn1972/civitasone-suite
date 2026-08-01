@@ -16,7 +16,7 @@ describe("CreatePenaltyRuleForm", () => {
 
   it("requires an annual interest rate before opening the confirm dialog", () => {
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByText("Create Penalty Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
     expect(screen.getByText(/Annual Interest Rate \(%\) is required/)).toBeInTheDocument();
   });
 
@@ -28,7 +28,7 @@ describe("CreatePenaltyRuleForm", () => {
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Annual Interest Rate/), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText(/^Grace Days/), { target: { value: "15" } });
-    fireEvent.click(screen.getByText("Create Penalty Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
 
     await waitFor(() => expect(screen.getByText("Create this penalty rule?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create penalty rule"));
@@ -49,7 +49,7 @@ describe("CreatePenaltyRuleForm", () => {
 
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Annual Interest Rate/), { target: { value: "12" } });
-    fireEvent.click(screen.getByText("Create Penalty Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
 
     await waitFor(() => expect(screen.getByText("Create this penalty rule?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create penalty rule"));

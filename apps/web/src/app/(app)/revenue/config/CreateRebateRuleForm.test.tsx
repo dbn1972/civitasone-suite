@@ -16,7 +16,7 @@ describe("CreateRebateRuleForm", () => {
 
   it("requires a discount percent before opening the confirm dialog", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByText("Create Rebate Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
     expect(screen.getByText(/Discount \(%\) is required/)).toBeInTheDocument();
   });
 
@@ -28,7 +28,7 @@ describe("CreateRebateRuleForm", () => {
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText(/^Valid Until/), { target: { value: "30" } });
-    fireEvent.click(screen.getByText("Create Rebate Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
 
     await waitFor(() => expect(screen.getByText("Create this rebate rule?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rebate rule"));
@@ -49,7 +49,7 @@ describe("CreateRebateRuleForm", () => {
 
     render(<CreateRebateRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Discount/), { target: { value: "5" } });
-    fireEvent.click(screen.getByText("Create Rebate Rule"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rebate Rule" }));
 
     await waitFor(() => expect(screen.getByText("Create this rebate rule?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rebate rule"));

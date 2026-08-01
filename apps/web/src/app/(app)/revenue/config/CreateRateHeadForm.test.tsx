@@ -16,7 +16,7 @@ describe("CreateRateHeadForm", () => {
 
   it("requires code, name, and category before opening the confirm dialog", () => {
     render(<CreateRateHeadForm />);
-    fireEvent.click(screen.getByText("Create Rate Head"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Head" }));
     expect(screen.getByText("Rate head code is required.")).toBeInTheDocument();
   });
 
@@ -29,7 +29,7 @@ describe("CreateRateHeadForm", () => {
     fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "PT" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Property Tax" } });
     fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: "property_tax" } });
-    fireEvent.click(screen.getByText("Create Rate Head"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Head" }));
 
     await waitFor(() => expect(screen.getByText("Create this rate head?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rate head"));
@@ -47,7 +47,7 @@ describe("CreateRateHeadForm", () => {
     fireEvent.change(screen.getByLabelText(/^Code/), { target: { value: "PT" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Property Tax" } });
     fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: "property_tax" } });
-    fireEvent.click(screen.getByText("Create Rate Head"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Head" }));
 
     await waitFor(() => expect(screen.getByText("Create this rate head?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rate head"));

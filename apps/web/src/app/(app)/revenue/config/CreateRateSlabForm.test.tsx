@@ -16,7 +16,7 @@ describe("CreateRateSlabForm", () => {
 
   it("requires a rate and an effective-from date before opening the confirm dialog", () => {
     render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByText("Create Rate Slab"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
     expect(screen.getByText(/Rate \(₹\) is required/)).toBeInTheDocument();
   });
 
@@ -29,7 +29,7 @@ describe("CreateRateSlabForm", () => {
     fireEvent.change(screen.getByLabelText(/^Slab Type/), { target: { value: "ad_valorem" } });
     fireEvent.change(screen.getByLabelText(/^Rate \(%\)/), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByText("Create Rate Slab"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
 
     await waitFor(() => expect(screen.getByText("Create this rate slab?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rate slab"));
@@ -51,7 +51,7 @@ describe("CreateRateSlabForm", () => {
     render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
-    fireEvent.click(screen.getByText("Create Rate Slab"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
 
     await waitFor(() => expect(screen.getByText("Create this rate slab?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create rate slab"));
