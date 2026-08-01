@@ -1,9 +1,12 @@
-import { eq, asc, and, notInArray, isNull, or, sql } from "drizzle-orm";
+import { eq, and, desc, notInArray, isNull, or, sql, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { tickets, type TicketRow, type TicketInsert, type TicketView } from "./schema.js";
 import { slaPolicies } from "../sla/schema.js";
 import { evaluateSlaStatus, resolvePolicy, DEFAULT_SLA_POLICIES, type SlaPolicy, type SlaEvalStatus } from "../sla/domain.js";
+import { ticketNotes, type TicketNoteInsert, type TicketNoteRow } from "./notes-schema.js";
+import { ticketLinks, type TicketLinkInsert, type TicketLinkRow } from "./links-schema.js";
+import { ticketTransfers, type TicketTransferInsert, type TicketTransferRow } from "./transfer-schema.js";
 
 function mapStatus(status: string): TicketView["status"] {
   const s = status.toLowerCase();
@@ -317,6 +320,183 @@ export async function transitionStatus(
     .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId)))
     .returning();
   return res[0] ?? null;
+}
+
+/**
+ * Update a ticket's priority (used by TKT-09 bulk set_priority). Tenant-scoped,
+ * bumps version. Returns the updated row, or null if not found.
+ */
+export async function updatePriority(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  priority: string,
+  actorId: string,
+  now: Date,
+): Promise<TicketRow | null> {
+  const res = await (tx as typeof db).update(tickets)
+    .set({
+      priority,
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${tickets.version} + 1`,
+    })
+    .where(and(eq(tickets.id, id), eq(tickets.tenantId, tenantId)))
+    .returning();
+  return res[0] ?? null;
+}
+
+/**
+ * TKT-14 — reopen a ticket. Atomically transitions resolved/closed → open in a
+ * single guarded UPDATE (no separate read-then-write race window). Returns the
+ * updated row, or null if the ticket does not exist in this tenant OR is not
+ * currently resolved/closed (already-open redelivery is a safe no-op).
+ */
+export async function reopenIfClosed(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  actorId: string,
+  now: Date,
+): Promise<TicketRow | null> {
+  const res = await (tx as typeof db).update(tickets)
+    .set({
+      status: "open",
+      updatedBy: actorId,
+      updatedAt: now,
+      version: sql`${tickets.version} + 1`,
+    })
+    .where(and(
+      eq(tickets.id, id),
+      eq(tickets.tenantId, tenantId),
+      or(eq(tickets.status, "resolved"), eq(tickets.status, "closed")),
+    ))
+    .returning();
+  return res[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// TKT-04 — ticket notes
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a note. Idempotent on `id` (the route mints the note id and reuses it
+ * as the command's messageId, so a redelivery carries the SAME row id) — a
+ * second insert of the identical id is a no-op via onConflictDoNothing.
+ * Returns the row if inserted, or null if it already existed (duplicate id).
+ */
+export async function insertNoteIdempotent(tx: Writer, row: TicketNoteInsert): Promise<TicketNoteRow | null> {
+  const res = await (tx as typeof db).insert(ticketNotes).values(row).onConflictDoNothing().returning();
+  return res[0] ?? null;
+}
+
+export async function listNotes(tenantId: string, ticketId: string, includeInternal: boolean): Promise<TicketNoteRow[]> {
+  return scopedRead(async (tx) => {
+    const conds = [eq(ticketNotes.tenantId, tenantId), eq(ticketNotes.ticketId, ticketId)];
+    if (!includeInternal) conds.push(eq(ticketNotes.visibility, "public"));
+    return tx.select().from(ticketNotes).where(and(...conds)).orderBy(asc(ticketNotes.createdAt));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TKT-07 — ticket transfers
+// ---------------------------------------------------------------------------
+
+/** Most recent transfer's destination department, i.e. the ticket's current department. */
+export async function getCurrentDepartment(tx: Writer, tenantId: string, ticketId: string): Promise<string | null> {
+  const rows = await (tx as typeof db).select().from(ticketTransfers)
+    .where(and(eq(ticketTransfers.tenantId, tenantId), eq(ticketTransfers.ticketId, ticketId)))
+    .orderBy(desc(ticketTransfers.transferredAt))
+    .limit(1);
+  return rows[0]?.toDepartment ?? null;
+}
+
+/**
+ * Insert a transfer audit row. Idempotent on `id` (mirrors insertNoteIdempotent —
+ * the route mints the transfer id and reuses it as the messageId).
+ */
+export async function insertTransferIdempotent(tx: Writer, row: TicketTransferInsert): Promise<TicketTransferRow | null> {
+  const res = await (tx as typeof db).insert(ticketTransfers).values(row).onConflictDoNothing().returning();
+  return res[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// TKT-08 — ticket links
+// ---------------------------------------------------------------------------
+
+/** Inverse relationship for the directional link types (parent <-> child). */
+const INVERSE_LINK_TYPE: Record<string, string> = {
+  parent: "child",
+  child: "parent",
+  duplicate: "duplicate",
+  related: "related",
+};
+
+/**
+ * Look up an existing link representing the SAME relationship, in either
+ * direction — (source,target,type) or the symmetric (target,source,inverseType)
+ * pairing. e.g. "A parent-of B" already covers "B child-of A"; "A duplicate B"
+ * already covers "B duplicate A".
+ */
+async function findExistingLink(
+  tx: Writer,
+  tenantId: string,
+  sourceTicketId: string,
+  targetTicketId: string,
+  linkType: string,
+): Promise<TicketLinkRow | null> {
+  const inverse = INVERSE_LINK_TYPE[linkType] ?? linkType;
+  const rows = await (tx as typeof db).select().from(ticketLinks)
+    .where(and(
+      eq(ticketLinks.tenantId, tenantId),
+      or(
+        and(
+          eq(ticketLinks.sourceTicketId, sourceTicketId),
+          eq(ticketLinks.targetTicketId, targetTicketId),
+          eq(ticketLinks.linkType, linkType),
+        ),
+        and(
+          eq(ticketLinks.sourceTicketId, targetTicketId),
+          eq(ticketLinks.targetTicketId, sourceTicketId),
+          eq(ticketLinks.linkType, inverse),
+        ),
+      ),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Idempotently link two tickets. Symmetric-safe: a redelivery, OR the inverse
+ * relationship submitted separately (e.g. B "child" of A after A "parent" of B
+ * already exists), resolves to the existing row instead of inserting a
+ * duplicate pair. Returns the row id and whether it was newly created.
+ */
+export async function insertLinkIdempotent(
+  tx: Writer,
+  row: TicketLinkInsert,
+): Promise<{ id: string; created: boolean }> {
+  const existing = await findExistingLink(tx, row.tenantId, row.sourceTicketId, row.targetTicketId, row.linkType);
+  if (existing) return { id: existing.id, created: false };
+  try {
+    const res = await (tx as typeof db).insert(ticketLinks).values(row).returning({ id: ticketLinks.id });
+    return { id: res[0]!.id, created: true };
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const now = await findExistingLink(tx, row.tenantId, row.sourceTicketId, row.targetTicketId, row.linkType);
+      if (now) return { id: now.id, created: false };
+    }
+    throw err;
+  }
+}
+
+export async function listLinks(tenantId: string, ticketId: string): Promise<TicketLinkRow[]> {
+  return scopedRead(async (tx) =>
+    tx.select().from(ticketLinks).where(and(
+      eq(ticketLinks.tenantId, tenantId),
+      or(eq(ticketLinks.sourceTicketId, ticketId), eq(ticketLinks.targetTicketId, ticketId)),
+    )),
+  );
 }
 
 export { mapStatus, mapPriority };

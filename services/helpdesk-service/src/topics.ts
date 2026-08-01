@@ -15,6 +15,14 @@ export const COMMANDS = {
   reopenTicket: "helpdesk.ticket.reopen",
 } as const;
 
+/** TKT-11 — saved-views command topics (moved here from views-routes.ts so
+ * the views consumer can share the same source of truth as the routes). */
+export const VIEW_COMMANDS = {
+  create: "helpdesk.view.create",
+  update: "helpdesk.view.update",
+  delete: "helpdesk.view.delete",
+} as const;
+
 export const EVENTS = {
   ticketCreated: "helpdesk.ticket.created",
   /** Ticket updated (status, assignment, priority change) — consumed by ml-service for breach risk re-scoring. */
@@ -30,6 +38,10 @@ export const EVENTS = {
   ticketsLinked: "helpdesk.ticket.linked",
   /** TKT-14 — ticket reopened from resolved/closed. */
   ticketReopened: "helpdesk.ticket.reopened",
+  /** TKT-11 — saved view lifecycle. */
+  viewCreated: "helpdesk.view.created",
+  viewUpdated: "helpdesk.view.updated",
+  viewDeleted: "helpdesk.view.deleted",
   // SVC-129 — service catalogue / self-service request lifecycle.
   requestRaised: "helpdesk.request.raised",
   requestApproved: "helpdesk.request.approved",

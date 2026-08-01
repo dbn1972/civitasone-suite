@@ -57,6 +57,52 @@ type CrmCaseOpenedPayload = {
   dealId?: string | null;
 };
 
+/** TKT-04 — helpdesk.ticket.add_note payload. */
+type AddNotePayload = {
+  id: string;
+  tenantId: string;
+  ticketId: string;
+  content: string;
+  visibility: "internal" | "public";
+  createdBy: string;
+};
+
+/** TKT-07 — helpdesk.ticket.transfer payload. */
+type TransferPayload = {
+  id: string;
+  tenantId: string;
+  ticketId: string;
+  toDepartment: string;
+  reason: string;
+  transferredBy: string;
+};
+
+/** TKT-08 — helpdesk.ticket.link payload. */
+type LinkPayload = {
+  id: string;
+  tenantId: string;
+  sourceTicketId: string;
+  targetTicketId: string;
+  linkType: "parent" | "child" | "duplicate" | "related";
+  createdBy: string;
+};
+
+/** TKT-09 — helpdesk.ticket.bulk_action payload (one message per ticket in the batch). */
+type BulkActionPayload = {
+  batchId: string;
+  ticketId: string;
+  action: "assign" | "close" | "set_priority";
+  payload: Record<string, unknown>;
+};
+
+/** TKT-14 — helpdesk.ticket.reopen payload. */
+type ReopenPayload = {
+  id: string;
+  tenantId: string;
+  ticketId: string;
+  reason: string;
+};
+
 function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
@@ -173,6 +219,160 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     });
     const row = await repo.findById(msg.payload.id, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, msg.payload.id), row);
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
+  // ---- TKT-04: add note ----------------------------------------------------
+  // Idempotent two ways: markProcessed dedupes on messageId (the route reuses
+  // the note's own id as messageId, mirroring the sibling create/assign
+  // pattern), and insertNoteIdempotent's onConflictDoNothing is the DB-level
+  // backstop if the same note id is ever redelivered outside markProcessed.
+  queue.subscribe<AddNotePayload>(COMMANDS.addNote, async (msg) => {
+    const p = msg.payload;
+    let inserted = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await repo.insertNoteIdempotent(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        ticketId: p.ticketId,
+        content: p.content,
+        visibility: p.visibility,
+        createdBy: p.createdBy,
+      });
+      inserted = row !== null;
+      await emit(tx, msg, EVENTS.noteAdded, { ticketId: p.ticketId, noteId: p.id, visibility: p.visibility }, "add_note", p.ticketId);
+    });
+    if (inserted) {
+      await cache.invalidateResource(msg.tenantId, "ticket_notes");
+    }
+  });
+
+  // ---- TKT-07: transfer ticket ----------------------------------------------
+  // Records an audit-trail row (fromDepartment is derived from the most recent
+  // prior transfer, or null for a ticket's first transfer). helpdesk.tickets
+  // has no department/queue column, so there is nothing on the ticket row
+  // itself to reassign — the transfer's system of record IS ticket_transfers.
+  queue.subscribe<TransferPayload>(COMMANDS.transferTicket, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const fromDepartment = await repo.getCurrentDepartment(tx, p.tenantId, p.ticketId);
+      const row = await repo.insertTransferIdempotent(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        ticketId: p.ticketId,
+        fromDepartment,
+        toDepartment: p.toDepartment,
+        reason: p.reason,
+        transferredBy: p.transferredBy,
+      });
+      if (!row) return; // duplicate delivery of the same transfer id — no-op
+      await emit(tx, msg, EVENTS.ticketTransferred, { ticketId: p.ticketId, fromDepartment, toDepartment: p.toDepartment }, "transfer", p.ticketId);
+    });
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
+  // ---- TKT-08: link tickets --------------------------------------------------
+  // Symmetric-safe: insertLinkIdempotent treats "A parent-of B" as covering
+  // "B child-of A" and treats duplicate/related as order-independent, so
+  // redelivery — or the same relationship reported in reverse — never inserts
+  // a second row.
+  queue.subscribe<LinkPayload>(COMMANDS.linkTickets, async (msg) => {
+    const p = msg.payload;
+    let linkId: string | null = null;
+    let created = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const res = await repo.insertLinkIdempotent(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        sourceTicketId: p.sourceTicketId,
+        targetTicketId: p.targetTicketId,
+        linkType: p.linkType,
+        createdBy: p.createdBy,
+      });
+      linkId = res.id;
+      created = res.created;
+      if (created) {
+        await emit(tx, msg, EVENTS.ticketsLinked, { linkId: res.id, sourceTicketId: p.sourceTicketId, targetTicketId: p.targetTicketId, linkType: p.linkType }, "link", res.id);
+      }
+    });
+    if (linkId && created) {
+      await cache.invalidateResource(msg.tenantId, "ticket_links");
+    }
+  });
+
+  // ---- TKT-09: bulk action ---------------------------------------------------
+  // The route fans a batch out to one message PER ticket (each with its own
+  // messageId), so per-item failure isolation and idempotency are inherited
+  // from the same markProcessed + per-ticket-update mechanism the single-ticket
+  // assign/transition/priority paths already use — no separate batching logic
+  // needed here, and one poison ticketId can't lose the rest of the batch.
+  queue.subscribe<BulkActionPayload>(COMMANDS.bulkAction, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const now = new Date();
+      let updated: Awaited<ReturnType<typeof repo.assign>> = null;
+      // Missing-field rejection uses the SAME audited path as not-found below
+      // (rather than a bare `return`) so a malformed batch item is observable
+      // in the audit trail instead of silently vanishing.
+      let rejectReason: string | null = null;
+      if (p.action === "assign") {
+        const assigneeId = p.payload?.assigneeId as string | undefined;
+        if (!assigneeId) {
+          rejectReason = "rejected_missing_assignee";
+        } else {
+          updated = await repo.assign(tx, p.ticketId, msg.tenantId, assigneeId, msg.actorId, now);
+        }
+      } else if (p.action === "close") {
+        updated = await repo.transitionStatus(tx, p.ticketId, msg.tenantId, "closed", msg.actorId, now);
+      } else if (p.action === "set_priority") {
+        const priority = p.payload?.priority as string | undefined;
+        if (!priority) {
+          rejectReason = "rejected_missing_priority";
+        } else {
+          updated = await repo.updatePriority(tx, p.ticketId, msg.tenantId, priority, msg.actorId, now);
+        }
+      }
+      if (!updated) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "helpdesk", action: "bulk_action", resourceType: "ticket", resourceId: p.ticketId, outcome: rejectReason ?? "rejected_not_found", batchId: p.batchId },
+        });
+        return;
+      }
+      await emit(tx, msg, EVENTS.ticketUpdated, { ticketId: p.ticketId, changedFields: [p.action], batchId: p.batchId }, "bulk_action", p.ticketId);
+    });
+    const row = await repo.findById(p.ticketId, msg.tenantId);
+    if (row) await cache.put(keyFor(msg.tenantId, p.ticketId), row);
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
+  // ---- TKT-14: reopen ticket -------------------------------------------------
+  // reopenIfClosed's WHERE clause guards on current status = resolved/closed in
+  // the same UPDATE, so a redelivery (or a reopen request racing an already-open
+  // ticket) is a clean no-op instead of double-transitioning or erroring.
+  queue.subscribe<ReopenPayload>(COMMANDS.reopenTicket, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const updated = await repo.reopenIfClosed(tx, p.ticketId, p.tenantId, msg.actorId, new Date());
+      if (!updated) {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "helpdesk", action: "reopen", resourceType: "ticket", resourceId: p.ticketId, outcome: "rejected_not_resolved_or_closed" },
+        });
+        return;
+      }
+      await emit(tx, msg, EVENTS.ticketReopened, { ticketId: p.ticketId, reason: p.reason }, "reopen", p.ticketId);
+      await emit(tx, msg, EVENTS.ticketUpdated, { ticketId: p.ticketId, changedFields: ["status"], newStatus: "open" }, "update", p.ticketId);
+    });
+    const row = await repo.findById(p.ticketId, msg.tenantId);
+    if (row) await cache.put(keyFor(msg.tenantId, p.ticketId), row);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 
