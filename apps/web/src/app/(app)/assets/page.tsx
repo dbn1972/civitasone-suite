@@ -19,6 +19,9 @@ export default function Page() {
         { href: "/assets/fixed-assets", label: "Fixed Assets", note: "Capitalized assets" },
         { href: "/assets/infra", label: "Infrastructure", note: "Roads, buildings and networks" },
         { href: "/assets/maintenance", label: "Maintenance", note: "AMC, preventive and corrective" },
+        { href: "/assets/fleet", label: "Fleet & Telematics", note: "Vehicles, GPS and IoT devices" },
+        { href: "/assets/insurance", label: "Insurance", note: "Policies and claims" },
+        { href: "/assets/condemnation", label: "Condemnation & Disposal", note: "Survey, auction and disposal workflow" },
       ]}
     />
   );
