@@ -15,6 +15,8 @@ export default defineConfig({
         "dist/**",
         "src/index.ts",
         "src/worker.ts",
+        "vitest.config.ts",
+        "eslint.config.js",
         "src/modules/contracts/consumer.ts",
         "src/modules/contracts/eoffice-consumer.ts",
         "src/modules/rate/consumer.ts",

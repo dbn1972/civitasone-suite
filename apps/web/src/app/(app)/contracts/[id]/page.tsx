@@ -4,6 +4,9 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { getContractById } from "../../../_data/loaders";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
+import { getContractMilestones, getContractBonds } from "../../../_data/loaders";
+import { MilestoneActions } from "./MilestoneActions";
+import { BondActions } from "./BondActions";
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -15,7 +18,11 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 export default async function ContractDetailPage({ params }: { params: { id: string } }) {
-  const { data: contract, source } = await getContractById(params.id);
+  const [{ data: contract, source }, milestonesRes, bondsRes] = await Promise.all([
+    getContractById(params.id),
+    getContractMilestones(params.id),
+    getContractBonds(params.id),
+  ]);
 
   if (!contract) {
     return (
@@ -106,6 +113,50 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h"><h3>Milestones</h3></div>
+        <div className="pad">
+          {milestonesRes.data.length === 0 ? (
+            <p style={{ margin: 0, color: "var(--ink2)", fontSize: 13 }}>No milestones on this contract.</p>
+          ) : (
+            <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
+              {milestonesRes.data.map((m) => (
+                <li key={String(m.id)} style={{ fontSize: 13, marginBottom: 4 }}>
+                  {String(m.title ?? "Milestone")} — <span className="pill mut">{String(m.status ?? "—")}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <MilestoneActions
+            contractId={params.id}
+            milestones={milestonesRes.data.map((m) => ({
+              id: String(m.id),
+              title: String(m.title ?? "Milestone"),
+              status: String(m.status ?? "pending"),
+              dueDate: typeof m.dueDate === "string" ? m.dueDate : undefined,
+            }))}
+          />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h"><h3>Performance bonds</h3></div>
+        <div className="pad">
+          <BondActions
+            contractId={params.id}
+            canRegister={statusLower === "active" || statusLower === "approved"}
+            bonds={bondsRes.data.map((b) => ({
+              id: String(b.id),
+              referenceNo: typeof b.referenceNo === "string" ? b.referenceNo : undefined,
+              status: String(b.status ?? "held"),
+              amountMinor: b.amountMinor as string | number | undefined,
+              bondType: typeof b.bondType === "string" ? b.bondType : undefined,
+            }))}
+          />
         </div>
       </div>
 

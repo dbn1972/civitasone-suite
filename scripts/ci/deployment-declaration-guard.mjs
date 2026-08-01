@@ -110,10 +110,53 @@ if (missingFromRegistry.length > 0) {
   );
 }
 
+
+// ── Worker presence (for services already declared in ecosystem) ───────────────
+const workerDecls = [...eco.matchAll(/\bworker\("([a-z-]+)"/g)].map((m) => m[1]);
+const workerSet = new Set(workerDecls);
+const courtWorkerCall = [...eco.matchAll(/\bworker\("court"[^)]*\)/g)].map((m) => m[0]);
+if (courtWorkerCall.length === 0) {
+  fail('court has no worker("court", ...) declaration');
+} else if (!courtWorkerCall.some((c) => c.includes("worker-main"))) {
+  fail('court worker must use dist/worker-main.js (export-only dist/worker.js exits immediately)');
+}
+
+/** Services declared in ecosystem but intentionally not running a worker yet. */
+const NO_WORKER_BY_DESIGN = {
+  metadata: "known-not-serving — worker not started until INTERNAL_SERVICE_SECRET rollout",
+};
+
+const missingWorkers = [];
+for (const s of services) {
+  if (declared.has(s) === false) continue; // undeployed scaffolds are reported above
+  if (NO_WORKER_BY_DESIGN[s]) continue;
+  const svcDir = join(SERVICES_DIR, `${s}-service`);
+  const hasWorker =
+    existsSync(join(svcDir, "src/worker.ts")) ||
+    existsSync(join(svcDir, "src/worker-main.ts"));
+  if (hasWorker && workerSet.has(s) === false) {
+    missingWorkers.push(s);
+  }
+}
+if (missingWorkers.length) {
+  fail(
+    `  WORKER MISSING — declared services ship a worker entrypoint but have no worker("…"):\n` +
+      missingWorkers.map((s) => `      ${s}`).join("\n") +
+      `\n      Queue-first writes will stall without a worker process.\n`,
+  );
+}
+if (declared.has("visitor") && workerSet.has("visitor") === false) {
+  fail("  visitor-worker must be declared (queue-first writes)\n");
+}
+if (declared.has("works") && workerSet.has("works") === false) {
+  fail("  works-worker must be declared (queue-first writes)\n");
+}
+
 if (process.exitCode === 1) {
   console.log("──────────────────────────────────────────────────────────────");
   process.exit(1);
 }
 
+console.log(`  workers declared         : ${workerSet.size}`);
 console.log("  CLEAN — every service is both startable and reachable.");
 console.log("──────────────────────────────────────────────────────────────");

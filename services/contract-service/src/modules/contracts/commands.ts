@@ -8,6 +8,7 @@ import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 import type {
   CreateContractBody, AmendContractBody, ApproveContractBody,
   ActivateContractBody, CloseContractBody, TerminateContractBody,
+  CompleteMilestoneBody, MarkMilestoneLateBody, RegisterBondBody, TransitionBondBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -122,4 +123,82 @@ export async function submitContractForApproval(ctx: RequestContext, id: string)
   });
   await inval(ctx, id);
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Complete a milestone on time — queue-first CQRS write. */
+export async function completeMilestone(
+  ctx: RequestContext, contractId: string, milestoneId: string, body: CompleteMilestoneBody,
+): Promise<Accepted> {
+  await loadScoped(ctx, contractId);
+  const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
+  if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
+  if (milestone.status === "completed" || milestone.status === "completed_late") {
+    throw new HttpError(409, "ALREADY_COMPLETED", "milestone is already completed");
+  }
+  await queue.publish(COMMANDS.milestoneComplete, {
+    messageId: randomUUID(), type: COMMANDS.milestoneComplete,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { contractId, milestoneId, tenantId: ctx.tenantId, achievedDate: body.achievedDate },
+  });
+  await inval(ctx, contractId);
+  return { id: milestoneId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Mark milestone late with SLA penalty — queue-first CQRS write. */
+export async function markMilestoneLate(
+  ctx: RequestContext, contractId: string, milestoneId: string, body: MarkMilestoneLateBody,
+): Promise<Accepted> {
+  await loadScoped(ctx, contractId);
+  const milestone = await repo.findMilestoneById(milestoneId, contractId, ctx.tenantId);
+  if (!milestone) throw new HttpError(404, "NOT_FOUND", "milestone not found");
+  if (milestone.status === "completed" || milestone.status === "completed_late") {
+    throw new HttpError(409, "ALREADY_COMPLETED", "milestone is already completed");
+  }
+  await queue.publish(COMMANDS.milestoneMarkLate, {
+    messageId: randomUUID(), type: COMMANDS.milestoneMarkLate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      contractId, milestoneId, tenantId: ctx.tenantId,
+      achievedDate: body.achievedDate, notes: body.notes ?? null,
+    },
+  });
+  await inval(ctx, contractId);
+  return { id: milestoneId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Register a performance bond / bank guarantee against an active or approved contract. */
+export async function registerPerformanceBond(
+  ctx: RequestContext, contractId: string, body: RegisterBondBody,
+): Promise<Accepted> {
+  const contract = await loadScoped(ctx, contractId);
+  if (contract.status !== "active" && contract.status !== "approved") {
+    throw new HttpError(409, "INVALID_STATUS", "bonds can only be registered on approved or active contracts");
+  }
+  if (body.validTo < body.validFrom) {
+    throw new HttpError(400, "VALIDATION_FAILED", "validTo must be on or after validFrom");
+  }
+  const id = randomUUID();
+  await queue.publish(COMMANDS.bondRegister, {
+    messageId: id, type: COMMANDS.bondRegister,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, contractId, tenantId: ctx.tenantId, ...body },
+  });
+  await inval(ctx, contractId);
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Transition a held bond to released / claimed / forfeited. */
+export async function transitionPerformanceBond(
+  ctx: RequestContext, contractId: string, bondId: string, body: TransitionBondBody,
+): Promise<Accepted> {
+  await loadScoped(ctx, contractId);
+  const bond = await repo.findBondById(bondId, contractId, ctx.tenantId);
+  if (!bond) throw new HttpError(404, "NOT_FOUND", "performance bond not found");
+  await queue.publish(COMMANDS.bondTransition, {
+    messageId: randomUUID(), type: COMMANDS.bondTransition,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { contractId, bondId, tenantId: ctx.tenantId, toStatus: body.toStatus, notes: body.notes ?? null },
+  });
+  await inval(ctx, contractId);
+  return { id: bondId, status: "accepted", correlationId: ctx.correlationId };
 }

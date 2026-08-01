@@ -1,6 +1,6 @@
 import { eq, and, lte, gte, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { contractContracts, contractAmendments, type ContractRow, type ContractInsert } from "./schema.js";
+import { contractContracts, contractAmendments, contractMilestones, contractPerformanceBonds, type ContractRow, type ContractInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -64,4 +64,62 @@ export async function listAmendments(contractId: string, tenantId: string, limit
 export async function countAmendments(tx: Writer, contractId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(contractAmendments).where(eq(contractAmendments.contractId, contractId)).limit(500);
   return rows.length;
+}
+
+export async function findMilestoneById(milestoneId: string, contractId: string, tenantId: string) {
+  const rows = await scopedRead((tx) => tx.select().from(contractMilestones).where(and(
+    eq(contractMilestones.id, milestoneId),
+    eq(contractMilestones.contractId, contractId),
+    eq(contractMilestones.tenantId, tenantId),
+  )).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function findMilestoneByIdTx(tx: Writer, milestoneId: string, contractId: string, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(contractMilestones).where(and(
+    eq(contractMilestones.id, milestoneId),
+    eq(contractMilestones.contractId, contractId),
+    eq(contractMilestones.tenantId, tenantId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateMilestone(tx: Writer, milestoneId: string, tenantId: string, patch: Record<string, unknown>): Promise<void> {
+  await (tx as typeof db).update(contractMilestones)
+    .set({ ...patch, updatedAt: new Date() } as any)
+    .where(and(eq(contractMilestones.id, milestoneId), eq(contractMilestones.tenantId, tenantId)));
+}
+
+export async function insertBond(tx: Writer, row: typeof contractPerformanceBonds.$inferInsert): Promise<void> {
+  await tx.insert(contractPerformanceBonds).values(row);
+}
+
+export async function findBondById(bondId: string, contractId: string, tenantId: string) {
+  const rows = await scopedRead((tx) => tx.select().from(contractPerformanceBonds).where(and(
+    eq(contractPerformanceBonds.id, bondId),
+    eq(contractPerformanceBonds.contractId, contractId),
+    eq(contractPerformanceBonds.tenantId, tenantId),
+  )).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function findBondByIdTx(tx: Writer, bondId: string, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(contractPerformanceBonds).where(and(
+    eq(contractPerformanceBonds.id, bondId),
+    eq(contractPerformanceBonds.tenantId, tenantId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateBond(tx: Writer, bondId: string, tenantId: string, patch: Record<string, unknown>): Promise<void> {
+  await (tx as typeof db).update(contractPerformanceBonds)
+    .set({ ...patch, updatedAt: new Date() } as any)
+    .where(and(eq(contractPerformanceBonds.id, bondId), eq(contractPerformanceBonds.tenantId, tenantId)));
+}
+
+export async function listBonds(contractId: string, tenantId: string) {
+  return scopedRead((tx) => tx.select().from(contractPerformanceBonds).where(and(
+    eq(contractPerformanceBonds.contractId, contractId),
+    eq(contractPerformanceBonds.tenantId, tenantId),
+  )));
 }
