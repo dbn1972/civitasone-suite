@@ -24,6 +24,18 @@ const CONSOLES = [
     title: "Admin Configuration",
     desc: "Manage the §47 config engine — case, court and order types, hearing purposes, party roles and the disposal SLA — or apply a vertical preset.",
   },
+  {
+    href: "/court/hearings",
+    icon: "📅",
+    title: "Hearings",
+    desc: "Pick a case to schedule hearings, record outcomes and adjournments across its lifecycle.",
+  },
+  {
+    href: "/court/orders",
+    icon: "📜",
+    title: "Orders",
+    desc: "Pick a case to draft orders and drive the approval & issuance (DSC, maker-checker) workflow.",
+  },
 ];
 
 export default async function CourtHomePage() {

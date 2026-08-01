@@ -16,6 +16,8 @@ export default function EstabHubPage() {
         { href: "/estab/meetings", label: "Meetings", note: "Schedule, agenda, MOM & action tracking" },
         { href: "/estab/vehicles", label: "Fleet", note: "Vehicle management & logbook" },
         { href: "/estab/guesthouse", label: "Guest House", note: "Room bookings & occupancy" },
+        { href: "/estab/quarters", label: "Residential Quarters", note: "Quarter inventory & allotment lifecycle" },
+        { href: "/estab/library", label: "Staff Library", note: "Book catalogue, issues & returns" },
         { href: "/estab/compliance", label: "Compliance", note: "Action & decision compliance tracking" },
       ]}
     />
