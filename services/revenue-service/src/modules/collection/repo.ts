@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
-import { receipts } from "./schema.js";
+import { receipts, refunds } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { eq, and, desc } from "drizzle-orm";
 import { SERVICE } from "../../topics.js";
@@ -21,6 +21,20 @@ export async function findReceipt(tenantId: string, id: string) {
     .select()
     .from(receipts)
     .where(and(eq(receipts.tenantId, tenantId), eq(receipts.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Fetch a single refund by id, tenant-scoped. Used by the maker-checker
+ * decide screen so a checker never approves/rejects blind — the caller
+ * needs amountMinor + the reason + who raised it before deciding.
+ */
+export async function findRefundById(tenantId: string, id: string) {
+  const rows = await db
+    .select()
+    .from(refunds)
+    .where(and(eq(refunds.tenantId, tenantId), eq(refunds.id, id)))
     .limit(1);
   return rows[0] ?? null;
 }

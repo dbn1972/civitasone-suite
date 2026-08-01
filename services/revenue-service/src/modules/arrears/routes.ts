@@ -44,6 +44,22 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: result });
   });
 
+  // ── GET /v1/revenue/write-offs/:id ──────────────────────────────────────────
+  // Tenant-scoped single-record fetch so the maker-checker decide screen can
+  // show the checker the amount/assessee/reason before they approve or reject
+  // — never decide blind on a bare UUID.
+
+  app.get("/v1/revenue/write-offs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const writeOff = await repo.findWriteOffById(ctx.tenantId, id);
+    if (!writeOff) {
+      throw new HttpError(404, "NOT_FOUND", "write-off not found");
+    }
+    return reply.send({ data: writeOff });
+  });
+
   // ── PATCH /v1/revenue/write-offs/:id/decide ─────────────────────────────────
 
   app.patch("/v1/revenue/write-offs/:id/decide", async (req, reply) => {

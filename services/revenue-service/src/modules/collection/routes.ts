@@ -44,6 +44,22 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: result });
   });
 
+  // ── GET /v1/revenue/refunds/:id ────────────────────────────────────────────
+  // Tenant-scoped single-record fetch so the maker-checker decide screen can
+  // show the checker the amount/receipt/reason before they approve or reject
+  // — never decide blind on a bare UUID.
+
+  app.get("/v1/revenue/refunds/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const refund = await repo.findRefundById(ctx.tenantId, id);
+    if (!refund) {
+      throw new HttpError(404, "NOT_FOUND", "refund not found");
+    }
+    return reply.send({ data: refund });
+  });
+
   // ── PATCH /v1/revenue/refunds/:id/decide ──────────────────────────────────
 
   app.patch("/v1/revenue/refunds/:id/decide", async (req, reply) => {
