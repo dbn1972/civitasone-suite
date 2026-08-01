@@ -349,9 +349,9 @@ describe("Assignment consumers", () => {
   });
 
   it("handles employeeLeaveUpdated (consumed event from hrms-service)", async () => {
-    const handler = handlers.get("hrms.leave.updated");
+    const handler = handlers.get("hrms.leave.approved");
     expect(handler).toBeDefined();
-    await handler!(makeMsg("hrms.leave.updated", {
+    await handler!(makeMsg("hrms.leave.approved", {
       employeeId: USER_ID, leaveType: "casual", startDate: "2025-07-01",
       endDate: "2025-07-03", status: "approved",
     }));

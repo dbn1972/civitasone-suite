@@ -202,3 +202,94 @@ export async function findTourPlan(
     },
   );
 }
+
+/**
+ * Find a tour plan by id within a tenant (approval-workflow lookups).
+ * Cached separately from `findTourPlan` (keyed by id, not inspectorId).
+ */
+export async function findTourPlanById(
+  tenantId: string,
+  id: string,
+): Promise<TourPlanRow | null> {
+  return cache.getOrLoad<TourPlanRow>(
+    cache.makeKey(tenantId, "tour_plan_id", id),
+    async () => {
+      const rows = await scopedRead((tx) =>
+        tx.select().from(tourPlans)
+          .where(and(
+            eq(tourPlans.id, id),
+            eq(tourPlans.tenantId, tenantId),
+          )),
+      );
+      return rows[0] ?? null;
+    },
+  );
+}
+
+/**
+ * Transition a tour plan draft -> submitted (SVC-109).
+ *
+ * The `eq(tourPlans.status, "draft")` guard is enforced IN THE UPDATE itself
+ * (not just checked beforehand) so a concurrent transition between the
+ * consumer's pre-check and this write cannot silently double-apply: if the
+ * row is no longer in 'draft' the UPDATE matches zero rows and this returns
+ * null, which the consumer treats as a non-retryable "no longer submittable"
+ * error rather than as success.
+ */
+export async function submitTourPlan(
+  tx: Tx,
+  id: string,
+  tenantId: string,
+  actorId: string,
+): Promise<TourPlanRow | null> {
+  const rows = await tx.update(tourPlans)
+    .set({
+      status: "submitted",
+      submittedBy: actorId,
+      submittedAt: new Date(),
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${tourPlans.version} + 1`,
+    })
+    .where(and(
+      eq(tourPlans.id, id),
+      eq(tourPlans.tenantId, tenantId),
+      eq(tourPlans.status, "draft"),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Transition a tour plan submitted -> approved (SVC-109).
+ *
+ * Same guarded-UPDATE pattern as {@link submitTourPlan}: the WHERE clause
+ * requires status = 'submitted', so a race or redelivery that finds the plan
+ * already approved (or never submitted) matches zero rows instead of
+ * double-applying. Maker-checker (approver != submitter) is enforced by the
+ * caller BEFORE this is invoked, using the submittedBy captured by
+ * submitTourPlan.
+ */
+export async function approveTourPlan(
+  tx: Tx,
+  id: string,
+  tenantId: string,
+  actorId: string,
+): Promise<TourPlanRow | null> {
+  const rows = await tx.update(tourPlans)
+    .set({
+      status: "approved",
+      approvedBy: actorId,
+      approvedAt: new Date(),
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      version: sql`${tourPlans.version} + 1`,
+    })
+    .where(and(
+      eq(tourPlans.id, id),
+      eq(tourPlans.tenantId, tenantId),
+      eq(tourPlans.status, "submitted"),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}

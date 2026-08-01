@@ -30,14 +30,19 @@ import {
   validateDailyCapacity,
   validateGeofence,
   planTourRoute,
+  assertValidTourPlanTransition,
+  assertMakerCheckerApproval,
   DomainError,
   type GeoPoint,
+  type TourPlanState,
 } from "./domain.js";
 import * as repo from "./repo.js";
 import type {
   InspectorAssignPayload,
   TourPlanGeneratePayload,
   GeoAttendanceMarkPayload,
+  TourPlanSubmitPayload,
+  TourPlanApprovePayload,
 } from "./commands.js";
 
 const log = pino({ name: "assignment-consumer" });
@@ -47,7 +52,7 @@ const AUDIT_TOPIC = "audit.event.record";
 // ── Consumed Event Payload Types ──────────────────────────────────────────────
 
 /**
- * Payload shape for hrms.leave.updated events published by hrms-service.
+ * Payload shape for hrms.leave.approved events published by hrms-service.
  * Cross-service contract: { employeeId, tenantId, leaveType, startDate, endDate, status }
  */
 interface EmployeeLeaveUpdatedPayload {
@@ -393,6 +398,240 @@ export function registerAssignmentConsumers(queue: Queue): void {
     log.info(
       { event: "tour_plan_generated", tourPlanId, inspectorId: p.inspectorId, tenantId: msg.tenantId },
       "tour plan generated",
+    );
+  });
+
+  // ─── tourPlanSubmit (SVC-109) ───────────────────────────────────────────
+  // Inspector submits a draft tour plan for supervisory approval:
+  // draft -> submitted. Idempotent: a redelivery that finds the plan already
+  // 'submitted' is treated as a safe no-op (not an error), since the target
+  // state has already been reached. Any other current state is an invalid
+  // transition per domain.ts TOUR_PLAN_TRANSITIONS and is rejected
+  // non-retryably. The actual status flip is a guarded UPDATE
+  // (WHERE status = 'draft') in repo.submitTourPlan, so a race between this
+  // pre-check and the write cannot double-apply.
+  queue.subscribe<TourPlanSubmitPayload>(COMMANDS.tourPlanSubmit, async (msg) => {
+    const p = msg.payload;
+    let submittedPlanId: string | undefined;
+    let submittedInspectorId: string | undefined;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const existing = await repo.findTourPlanById(msg.tenantId, p.tourPlanId);
+      if (!existing) {
+        throw new NonRetryableError(
+          `Tour plan ${p.tourPlanId} not found for tenant ${msg.tenantId}`,
+        );
+      }
+
+      // Idempotent no-op: already at the target state (redelivery with a
+      // different messageId, e.g. a client retry after a slow 202).
+      if (existing.status === "submitted") {
+        submittedPlanId = existing.id;
+        submittedInspectorId = existing.inspectorId;
+        return;
+      }
+
+      try {
+        assertValidTourPlanTransition(existing.status as TourPlanState, "submitted");
+      } catch (err) {
+        if (err instanceof DomainError) {
+          throw new NonRetryableError(err.message);
+        }
+        throw err;
+      }
+
+      const plan = await repo.submitTourPlan(tx, p.tourPlanId, msg.tenantId, msg.actorId);
+      if (!plan) {
+        // Raced with a concurrent transition between the pre-check above and
+        // the guarded UPDATE — the plan is no longer submittable.
+        throw new NonRetryableError(
+          `Tour plan ${p.tourPlanId} is no longer in 'draft' state and cannot be submitted`,
+        );
+      }
+
+      submittedPlanId = plan.id;
+      submittedInspectorId = plan.inspectorId;
+
+      // Emit tourPlanSubmitted domain event via outbox
+      await enqueue(tx, {
+        topic: EVENTS.tourPlanSubmitted,
+        eventType: EVENTS.tourPlanSubmitted,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          tourPlanId: plan.id,
+          inspectorId: plan.inspectorId,
+          submittedBy: msg.actorId,
+          submittedAt: plan.submittedAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+
+      // Audit event
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          action: "tour_plan.submitted",
+          resourceType: "tour_plan",
+          resourceId: plan.id,
+          details: { inspectorId: plan.inspectorId, submittedBy: msg.actorId },
+        },
+      });
+    });
+
+    // Cache invalidation (outside transaction, best-effort)
+    if (submittedPlanId) {
+      try {
+        await cache.invalidate(cache.makeKey(msg.tenantId, "tour_plan_id", submittedPlanId));
+        if (submittedInspectorId) {
+          await cache.invalidate(cache.makeKey(msg.tenantId, "tour_plan", submittedInspectorId));
+        }
+      } catch (err) {
+        log.warn({ err, tenantId: msg.tenantId, tourPlanId: submittedPlanId, event: "cache_invalidate_failed" },
+          "failed to invalidate tour_plan cache after submit");
+      }
+    }
+
+    log.info(
+      { event: "tour_plan_submitted", tourPlanId: submittedPlanId, tenantId: msg.tenantId },
+      "tour plan submitted for approval",
+    );
+  });
+
+  // ─── tourPlanApprove (SVC-109) ──────────────────────────────────────────
+  // Supervising officer approves a submitted tour plan: submitted -> approved.
+  // Maker-checker: the approver must not be the same person who submitted the
+  // plan (assertMakerCheckerApproval), checked on every delivery — not only
+  // the first — so a same-actor redelivery under a fresh messageId is still
+  // rejected. Idempotent: a redelivery that finds the plan already 'approved'
+  // is a safe no-op.
+  queue.subscribe<TourPlanApprovePayload>(COMMANDS.tourPlanApprove, async (msg) => {
+    const p = msg.payload;
+    let approvedPlanId: string | undefined;
+    let approvedInspectorId: string | undefined;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const existing = await repo.findTourPlanById(msg.tenantId, p.tourPlanId);
+      if (!existing) {
+        throw new NonRetryableError(
+          `Tour plan ${p.tourPlanId} not found for tenant ${msg.tenantId}`,
+        );
+      }
+
+      // Idempotent no-op: already at the target state.
+      if (existing.status === "approved") {
+        approvedPlanId = existing.id;
+        approvedInspectorId = existing.inspectorId;
+        return;
+      }
+
+      try {
+        assertValidTourPlanTransition(existing.status as TourPlanState, "approved");
+      } catch (err) {
+        if (err instanceof DomainError) {
+          throw new NonRetryableError(err.message);
+        }
+        throw err;
+      }
+
+      try {
+        assertMakerCheckerApproval(existing.submittedBy ?? "", msg.actorId);
+      } catch (err) {
+        if (err instanceof DomainError) {
+          throw new NonRetryableError(err.message);
+        }
+        throw err;
+      }
+
+      const plan = await repo.approveTourPlan(tx, p.tourPlanId, msg.tenantId, msg.actorId);
+      if (!plan) {
+        // Raced with a concurrent transition between the pre-check above and
+        // the guarded UPDATE — the plan is no longer approvable.
+        throw new NonRetryableError(
+          `Tour plan ${p.tourPlanId} is no longer in 'submitted' state and cannot be approved`,
+        );
+      }
+
+      approvedPlanId = plan.id;
+      approvedInspectorId = plan.inspectorId;
+
+      // Emit tourPlanApproved domain event via outbox
+      await enqueue(tx, {
+        topic: EVENTS.tourPlanApproved,
+        eventType: EVENTS.tourPlanApproved,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          tourPlanId: plan.id,
+          inspectorId: plan.inspectorId,
+          approvedBy: msg.actorId,
+          approvedAt: plan.approvedAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+
+      // Notify the inspector that their tour plan was approved
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND,
+        eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "inspection.tour_plan.approved",
+          recipient: plan.inspectorId,
+          recipientId: plan.inspectorId,
+          channel: "in_app",
+          variables: {
+            tourPlanId: plan.id,
+          },
+        }),
+      });
+
+      // Audit event
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          action: "tour_plan.approved",
+          resourceType: "tour_plan",
+          resourceId: plan.id,
+          details: {
+            inspectorId: plan.inspectorId,
+            approvedBy: msg.actorId,
+            submittedBy: existing.submittedBy,
+          },
+        },
+      });
+    });
+
+    // Cache invalidation (outside transaction, best-effort)
+    if (approvedPlanId) {
+      try {
+        await cache.invalidate(cache.makeKey(msg.tenantId, "tour_plan_id", approvedPlanId));
+        if (approvedInspectorId) {
+          await cache.invalidate(cache.makeKey(msg.tenantId, "tour_plan", approvedInspectorId));
+        }
+      } catch (err) {
+        log.warn({ err, tenantId: msg.tenantId, tourPlanId: approvedPlanId, event: "cache_invalidate_failed" },
+          "failed to invalidate tour_plan cache after approve");
+      }
+    }
+
+    log.info(
+      { event: "tour_plan_approved", tourPlanId: approvedPlanId, tenantId: msg.tenantId },
+      "tour plan approved",
     );
   });
 
