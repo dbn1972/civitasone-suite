@@ -15,6 +15,7 @@ export default async function LibraryIssuesPage({
   ]);
 
   const overallSource = issuesSource === "error" || booksSource === "error" ? "error" : "api";
+  const errored = overallSource === "error";
 
   const activeCount = issues.filter((i) => i.status === "issued").length;
   const overdueCount = issues.filter((i) => i.status === "overdue").length;
@@ -31,10 +32,12 @@ export default async function LibraryIssuesPage({
         actions={overallSource === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
+      {/* Counts below are computed from `issues`, which is [] whenever either
+          loader errored — never render them as authoritative facts in that case. */}
       <StatGrid>
-        <StatCard icon="📖" iconBg="#eff6ff" label="On Loan" value={activeCount.toLocaleString("en-IN")} />
-        <StatCard icon="⏰" iconBg="#fef2f2" label="Overdue" value={overdueCount.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Returned" value={returnedCount.toLocaleString("en-IN")} />
+        <StatCard icon="📖" iconBg="#eff6ff" label="On Loan" value={errored ? "—" : activeCount.toLocaleString("en-IN")} />
+        <StatCard icon="⏰" iconBg="#fef2f2" label="Overdue" value={errored ? "—" : overdueCount.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Returned" value={errored ? "—" : returnedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
       <IssueBookForm books={issuableBooks} defaultBookId={searchParams?.bookId} />

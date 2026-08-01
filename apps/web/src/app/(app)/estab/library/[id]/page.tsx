@@ -61,9 +61,13 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
       </Card>
 
       <p style={{ marginTop: 16 }}>
-        <Link href={`/estab/library/issues?bookId=${encodeURIComponent(book.id)}`} className="btn primary" style={{ minHeight: 44 }}>
-          Issue this book
-        </Link>
+        {book.copiesAvailable > 0 ? (
+          <Link href={`/estab/library/issues?bookId=${encodeURIComponent(book.id)}`} className="btn primary" style={{ minHeight: 44 }}>
+            Issue this book
+          </Link>
+        ) : (
+          <span className="sub">No copies currently available to issue.</span>
+        )}
       </p>
     </main>
   );

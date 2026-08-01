@@ -16,6 +16,7 @@ export default async function LibraryPage({
     : undefined;
 
   const { data: books, source } = await getLibraryBooks({ search, status });
+  const errored = source === "error";
 
   const totalTitles = books.length;
   const totalCopies = books.reduce((sum, b) => sum + b.copiesTotal, 0);
@@ -38,17 +39,19 @@ export default async function LibraryPage({
         }
       />
 
+      {/* Counts below are computed from `books`, which is [] whenever the fetch
+          errored — never render them as authoritative facts in that case. */}
       <StatGrid>
-        <StatCard icon="📚" iconBg="#e6f0ff" label="Titles" value={totalTitles.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#eff6ff" label="Total Copies" value={totalCopies.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Copies Available" value={totalAvailable.toLocaleString("en-IN")} />
-        <StatCard icon="🚫" iconBg="#fef2f2" label="Titles Out of Stock" value={outOfStock.toLocaleString("en-IN")} />
+        <StatCard icon="📚" iconBg="#e6f0ff" label="Titles" value={errored ? "—" : totalTitles.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Total Copies" value={errored ? "—" : totalCopies.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Copies Available" value={errored ? "—" : totalAvailable.toLocaleString("en-IN")} />
+        <StatCard icon="🚫" iconBg="#fef2f2" label="Titles Out of Stock" value={errored ? "—" : outOfStock.toLocaleString("en-IN")} />
       </StatGrid>
 
       <AddBookForm />
 
       <Card title="Catalogue">
-        {source === "error" && books.length === 0 ? (
+        {errored && books.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : books.length === 0 ? (
           <EmptyState icon="📚" title="No books in the catalogue" message="Add a book above to start the catalogue." />
