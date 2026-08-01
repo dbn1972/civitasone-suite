@@ -11,6 +11,12 @@ const revenueTiles: NavTile[] = [
 	{ title: "Collection Receipts", href: "/revenue/receipts", description: "Record and review revenue collection receipts." },
 	{ title: "Instalment Plans", href: "/revenue/instalments", description: "Assessee instalment plans for outstanding demands." },
 	{ title: "Rate Configuration", href: "/revenue/config", description: "Rate heads, slabs, penalty and rebate rules." },
+	{ title: "Refunds", href: "/revenue/refunds", description: "Raise and decide refunds against receipts (maker-checker)." },
+	{ title: "Write-offs", href: "/revenue/write-offs", description: "Raise and decide demand write-offs (maker-checker)." },
+	{ title: "Adjustments", href: "/revenue/adjustments", description: "Transfer or adjust amounts between demands." },
+	{ title: "Recovery Referrals", href: "/revenue/recovery", description: "Refer defaulting demands for recovery action." },
+	{ title: "Analytics", href: "/revenue/analytics", description: "Arrears ageing, defaulters, efficiency, trends and forecast." },
+	{ title: "BBPS Bill Fetch & Pay", href: "/revenue/bbps", description: "Fetch and pay assessee bills via Bharat Bill Payment System." },
 ];
 
 export default function RevenueHubPage() {
