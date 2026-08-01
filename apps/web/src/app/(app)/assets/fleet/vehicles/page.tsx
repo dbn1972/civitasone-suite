@@ -1,5 +1,5 @@
-import { PageHeader, Card, DataTable } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, Card, DataTable } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RegisterVehicleForm } from "./RegisterVehicleForm";
 import { RecordGpsForm } from "./RecordGpsForm";

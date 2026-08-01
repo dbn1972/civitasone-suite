@@ -12,7 +12,7 @@
  * view here — see BACKEND FOLLOW-UPS for consumer status.
  */
 import { useId, useRef, useState } from "react";
-import { Card } from "../../../_components/ds";
+import { Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type FieldErrors = {

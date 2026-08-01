@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 const MAINTENANCE_TYPES = ["oil_change", "tire_rotation", "brake_inspection", "full_service", "battery_check"] as const;

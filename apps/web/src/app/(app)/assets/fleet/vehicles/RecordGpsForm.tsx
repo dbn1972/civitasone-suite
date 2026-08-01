@@ -12,7 +12,7 @@
  * event or persist to a store — see BACKEND FOLLOW-UPS in the PR body.
  */
 import { useId, useRef, useState } from "react";
-import { Card } from "../../../_components/ds";
+import { Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type FieldErrors = {
