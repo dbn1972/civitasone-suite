@@ -1,9 +1,10 @@
 /**
  * Arrears module — route-level integration tests.
  *
- * Covers: POST /instalments 202, POST /write-offs 202, PATCH /write-offs/:id/decide 202,
- * POST /recovery-referrals 202, GET /assessees/:id/instalments paginated,
- * 400/401/403 error paths.
+ * Covers: POST /instalments 202, POST /write-offs 202, GET /write-offs/:id,
+ * PATCH /write-offs/:id/decide 202, POST /recovery-referrals 202,
+ * GET /assessees/:id/instalments paginated, 400/401/403 error paths,
+ * and cross-tenant isolation on GET /write-offs/:id.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -11,16 +12,47 @@ import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
+const TENANT_B_ID = "t9999999-9999-9999-9999-999999999999";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
 const ASSESSEE_ID = "a2222222-2222-2222-2222-222222222222";
 const WRITEOFF_ID = "33333333-3333-3333-3333-333333333333";
 
-function makeToken(roles: string[]) {
-  return signToken({ sub: USER_ID, tid: TENANT_ID, roles, sid: "s1" }, SECRET, 3600);
+function makeToken(roles: string[], tenantId: string = TENANT_ID) {
+  return signToken({ sub: USER_ID, tid: tenantId, roles, sid: "s1" }, SECRET, 3600);
 }
 
 const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
 const BAD_ROLE = { authorization: `Bearer ${makeToken(["employee"])}` };
+const AUTH_TENANT_B = { authorization: `Bearer ${makeToken(["revenue_admin"], TENANT_B_ID)}` };
+
+// Seeded per-tenant write-off store used only by the findWriteOffById mock
+// below, so GET /v1/revenue/write-offs/:id tests can assert on real field
+// values (amount, reason, status) and on cross-tenant isolation without a
+// live database.
+const WRITEOFF_STORE: Record<string, { tenantId: string; [k: string]: unknown }> = {
+  [WRITEOFF_ID]: {
+    id: WRITEOFF_ID,
+    tenantId: TENANT_ID,
+    assesseeId: ASSESSEE_ID,
+    amountMinor: 100000n,
+    reason: "Unrecoverable after legal proceedings",
+    status: "pending",
+    makerUserId: "maker-11111111-1111-1111-1111-111111111111",
+    checkerUserId: null,
+  },
+};
+
+vi.mock("../src/modules/arrears/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/arrears/repo.js")>();
+  return {
+    ...original,
+    findWriteOffById: vi.fn(async (tenantId: string, id: string) => {
+      const row = WRITEOFF_STORE[id];
+      if (!row || row.tenantId !== tenantId) return null;
+      return row;
+    }),
+  };
+});
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -153,6 +185,52 @@ describe("POST /v1/revenue/write-offs", () => {
 
   it("returns 403 with wrong role", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/write-offs", headers: BAD_ROLE, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GET /v1/revenue/write-offs/:id ─────────────────────────────────────────────
+
+describe("GET /v1/revenue/write-offs/:id", () => {
+  it("returns 200 with the full write-off record (amount, reason, status, requester)", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/write-offs/${WRITEOFF_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.data.id).toBe(WRITEOFF_ID);
+    expect(json.data.amountMinor).toBe("100000");
+    expect(json.data.reason).toBe("Unrecoverable after legal proceedings");
+    expect(json.data.status).toBe("pending");
+    expect(json.data.makerUserId).toBe("maker-11111111-1111-1111-1111-111111111111");
+  });
+
+  it("returns 404 for an unknown write-off id", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/revenue/write-offs/99999999-9999-9999-9999-999999999999",
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 404 (not the other tenant's data) when a different tenant requests this write-off — cross-tenant isolation", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/write-offs/${WRITEOFF_ID}`, headers: AUTH_TENANT_B });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 400 with invalid UUID param", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/write-offs/not-a-uuid", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/write-offs/${WRITEOFF_ID}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 403 with wrong role", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/revenue/write-offs/${WRITEOFF_ID}`, headers: BAD_ROLE });
     expect(res.statusCode).toBe(403);
   });
 });
