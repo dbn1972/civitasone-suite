@@ -41,12 +41,21 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
   const referenceId = useId();
   const instrumentId = useId();
   const bankId = useId();
-  const errId = useId();
+  const summaryId = useId();
+  const noDemandsHelpId = useId();
+
+  const demandErrorId = `${demandSelId}-error`;
+  const amountErrorId = `${amountId}-error`;
+  const referenceErrorId = `${referenceId}-error`;
+
+  const demandSelRef = useRef<HTMLSelectElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
 
   const eligibleDemands = demands.filter((d) => d.status !== "paid");
   const selectedDemand = eligibleDemands.find((d) => d.id === demandId);
   const minorAmount = rupeesToMinorString(amount);
+  const noEligibleDemands = eligibleDemands.length === 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,10 +65,18 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
     if (!minorAmount) errors.amount = "Enter a valid amount greater than zero.";
     if (!reference.trim()) errors.reference = "Reference / UTR is required.";
     setFieldErrors(errors);
+
     if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage("Please correct the highlighted fields.");
-      if (errors.reference) referenceRef.current?.focus();
+      // Focus the first invalid field in DOM order: demand -> amount -> reference.
+      if (errors.demand) {
+        demandSelRef.current?.focus();
+      } else if (errors.amount) {
+        amountRef.current?.focus();
+      } else if (errors.reference) {
+        referenceRef.current?.focus();
+      }
       return;
     }
     setDialogError(undefined);
@@ -118,11 +135,12 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               </label>
               <select
                 id={demandSelId}
+                ref={demandSelRef}
                 value={demandId}
                 onChange={(e) => setDemandId(e.target.value)}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.demand || undefined}
-                aria-describedby={fieldErrors.demand ? errId : undefined}
+                aria-describedby={fieldErrors.demand ? demandErrorId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
                 <option value="">Select a demand…</option>
@@ -132,6 +150,11 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                   </option>
                 ))}
               </select>
+              {fieldErrors.demand && (
+                <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  {fieldErrors.demand}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -143,6 +166,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               </label>
               <input
                 id={amountId}
+                ref={amountRef}
                 type="number"
                 min="0.01"
                 step="0.01"
@@ -151,9 +175,14 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                 onChange={(e) => setAmount(e.target.value)}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.amount || undefined}
-                aria-describedby={fieldErrors.amount ? errId : undefined}
+                aria-describedby={fieldErrors.amount ? amountErrorId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {fieldErrors.amount && (
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  {fieldErrors.amount}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -193,9 +222,14 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                 maxLength={128}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.reference || undefined}
-                aria-describedby={fieldErrors.reference ? errId : undefined}
+                aria-describedby={fieldErrors.reference ? referenceErrorId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {fieldErrors.reference && (
+                <p id={referenceErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  {fieldErrors.reference}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -230,17 +264,22 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               type="submit"
               className="btn primary"
               style={{ minHeight: 44 }}
-              disabled={busy || eligibleDemands.length === 0}
+              disabled={busy || noEligibleDemands}
+              aria-describedby={noEligibleDemands ? noDemandsHelpId : undefined}
             >
               Record Receipt
             </button>
+            {noEligibleDemands && (
+              <p id={noDemandsHelpId} style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
+                No outstanding demands for this assessee.
+              </p>
+            )}
           </div>
 
           {message && (
             <p
-              id={errId}
+              id={summaryId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >

@@ -27,8 +27,11 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
 
   const countId = useId();
   const startId = useId();
-  const errId = useId();
+  const summaryId = useId();
+  const countErrorId = `${countId}-error`;
+  const startErrorId = `${startId}-error`;
   const countRef = useRef<HTMLInputElement>(null);
+  const startRef = useRef<HTMLInputElement>(null);
 
   const parsedCount = Number(instalmentCount);
   const countValid = Number.isInteger(parsedCount) && parsedCount >= MIN_INSTALMENTS && parsedCount <= MAX_INSTALMENTS;
@@ -43,10 +46,16 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
     }
     if (!dateValid) errors.start = "Enter a valid start date.";
     setFieldErrors(errors);
+
     if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage("Please correct the highlighted fields.");
-      if (errors.count) countRef.current?.focus();
+      // Focus the first invalid field in DOM order: instalment count -> start date.
+      if (errors.count) {
+        countRef.current?.focus();
+      } else if (errors.start) {
+        startRef.current?.focus();
+      }
       return;
     }
     setDialogError(undefined);
@@ -110,9 +119,14 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
                 onChange={(e) => setInstalmentCount(e.target.value)}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.count || undefined}
-                aria-describedby={fieldErrors.count ? errId : undefined}
+                aria-describedby={fieldErrors.count ? countErrorId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {fieldErrors.count && (
+                <p id={countErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  {fieldErrors.count}
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -124,14 +138,20 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
               </label>
               <input
                 id={startId}
+                ref={startRef}
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.start || undefined}
-                aria-describedby={fieldErrors.start ? errId : undefined}
+                aria-describedby={fieldErrors.start ? startErrorId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {fieldErrors.start && (
+                <p id={startErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  {fieldErrors.start}
+                </p>
+              )}
             </div>
           </div>
 
@@ -143,9 +163,8 @@ export function CreateInstalmentPlanForm({ assesseeId }: { assesseeId: string })
 
           {message && (
             <p
-              id={errId}
+              id={summaryId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >

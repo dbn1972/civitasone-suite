@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -17,22 +17,32 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const selectId = useId();
-  const errId = useId();
-  const selectInvalid = tone === "bad" && !!message && !demandId;
+  const summaryId = useId();
+  const noDemandsHelpId = useId();
+  const demandErrorId = `${selectId}-error`;
+  const selectRef = useRef<HTMLSelectElement>(null);
 
   const eligibleDemands = demands.filter((d) => d.status !== "paid");
   const selected = eligibleDemands.find((d) => d.id === demandId);
+  const noEligibleDemands = eligibleDemands.length === 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (!demandId) {
+    const errors: Record<string, string> = {};
+    if (!demandId) errors.demand = "Select a demand to generate a bill for.";
+    setFieldErrors(errors);
+
+    if (errors.demand) {
       setTone("bad");
-      setMessage("Select a demand to generate a bill for.");
+      setMessage("Please correct the highlighted field.");
+      selectRef.current?.focus();
       return;
     }
+
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -54,6 +64,7 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
           : "Bill generation submitted.",
       );
       setDemandId("");
+      setFieldErrors({});
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
@@ -75,11 +86,12 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
             </label>
             <select
               id={selectId}
+              ref={selectRef}
               value={demandId}
               onChange={(e) => setDemandId(e.target.value)}
               aria-required="true"
-              aria-invalid={selectInvalid || undefined}
-              aria-describedby={selectInvalid ? errId : undefined}
+              aria-invalid={!!fieldErrors.demand || undefined}
+              aria-describedby={fieldErrors.demand ? demandErrorId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             >
               <option value="">Select a demand…</option>
@@ -89,6 +101,11 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
                 </option>
               ))}
             </select>
+            {fieldErrors.demand && (
+              <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                {fieldErrors.demand}
+              </p>
+            )}
           </div>
 
           <div>
@@ -96,17 +113,22 @@ export function GenerateBillForm({ assesseeId, demands }: { assesseeId: string; 
               type="submit"
               className="btn primary"
               style={{ minHeight: 44 }}
-              disabled={busy || eligibleDemands.length === 0}
+              disabled={busy || noEligibleDemands}
+              aria-describedby={noEligibleDemands ? noDemandsHelpId : undefined}
             >
               Generate Bill
             </button>
+            {noEligibleDemands && (
+              <p id={noDemandsHelpId} style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
+                No outstanding demands for this assessee.
+              </p>
+            )}
           </div>
 
           {message && (
             <p
-              id={errId}
+              id={summaryId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >

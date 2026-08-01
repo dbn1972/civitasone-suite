@@ -147,7 +147,13 @@ export default async function ReceiptsPage({
       ? "error"
       : "api";
 
-  const totalCollectedMinor = receipts.reduce((sum, r) => sum + Number(r.amountMinor), 0);
+  const totalCollectedMinor = receipts.reduce((sum, r) => {
+    try {
+      return sum + BigInt(r.amountMinor);
+    } catch {
+      return sum;
+    }
+  }, 0n);
   const reconciledCount = receipts.filter((r) => r.status === "reconciled").length;
 
   const receiptRows = receipts.map((r) => ({ ...r, createdAtDisplay: formatIndianDate(r.createdAt) }));
