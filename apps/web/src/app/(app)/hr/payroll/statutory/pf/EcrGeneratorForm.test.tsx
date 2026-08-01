@@ -1,10 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { EcrGeneratorForm } from "./EcrGeneratorForm";
 
 describe("EcrGeneratorForm", () => {
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
   });
 
   it("requires a month before opening the confirm dialog", () => {
@@ -17,8 +27,6 @@ describe("EcrGeneratorForm", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("UAN|NAME|1|1|1|1|1|1|1|0|0", { status: 200, headers: { "content-type": "text/plain" } }),
     );
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
 
     render(<EcrGeneratorForm />);
     fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2026-06" } });

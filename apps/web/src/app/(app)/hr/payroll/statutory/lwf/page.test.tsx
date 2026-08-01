@@ -18,7 +18,7 @@ describe("LwfPage", () => {
 
   it("renders LWF configuration", async () => {
     fetchJsonMock.mockResolvedValue({
-      data: { lwfConfig: [{ state_code: "KA", employee_contrib_minor: 2000, employer_contrib_minor: 2000, frequency: "yearly" }] },
+      data: [{ state_code: "KA", employee_contrib_minor: 2000, employer_contrib_minor: 2000, frequency: "yearly" }],
       source: "api",
     });
     const ui = await LwfPage();
@@ -27,7 +27,7 @@ describe("LwfPage", () => {
   });
 
   it("renders an empty state when there is no LWF configuration", async () => {
-    fetchJsonMock.mockResolvedValue({ data: { lwfConfig: [] }, source: "api" });
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     const ui = await LwfPage();
     render(ui);
     expect(screen.getByText("No LWF configuration")).toBeInTheDocument();

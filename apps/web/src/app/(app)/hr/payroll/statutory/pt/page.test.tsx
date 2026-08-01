@@ -18,7 +18,7 @@ describe("ProfessionalTaxPage", () => {
 
   it("renders PT slabs", async () => {
     fetchJsonMock.mockResolvedValue({
-      data: { ptSlabs: [{ state_code: "KA", slab_from_minor: 0, slab_to_minor: 1500000, pt_amount_minor: 0 }] },
+      data: [{ state_code: "KA", slab_from_minor: 0, slab_to_minor: 1500000, pt_amount_minor: 0 }],
       source: "api",
     });
     const ui = await ProfessionalTaxPage();
@@ -27,7 +27,7 @@ describe("ProfessionalTaxPage", () => {
   });
 
   it("renders an empty state when there are no PT slabs", async () => {
-    fetchJsonMock.mockResolvedValue({ data: { ptSlabs: [] }, source: "api" });
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     const ui = await ProfessionalTaxPage();
     render(ui);
     expect(screen.getByText("No PT slabs configured")).toBeInTheDocument();
