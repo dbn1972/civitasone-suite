@@ -30,9 +30,35 @@ export async function browserFetch(path: string, init: RequestInit = {}): Promis
   });
 }
 
+/**
+ * Extract a human-usable error string from a failed Response, preferring the
+ * server's own `code`/`message` (e.g. "ALREADY_CLOSED: period is already
+ * hard-closed" or "INTEGRATION_DISABLED: PFMS is offline") over a bare HTTP
+ * status. Falls back to `API_ERROR: <status>` when the body is absent or
+ * unparseable, preserving the historic contract for callers/tests that only
+ * see a status.
+ */
+export async function errorMessageFromResponse(res: Response): Promise<string> {
+  try {
+    const body = (await res.clone().json()) as {
+      code?: string;
+      message?: string;
+      error?: { code?: string; message?: string };
+    };
+    const code = body.code ?? body.error?.code;
+    const message = body.message ?? body.error?.message;
+    if (code && message) return `${code}: ${message}`;
+    const single = message ?? code;
+    if (single) return single;
+  } catch {
+    // no body / not JSON — fall through to the status fallback
+  }
+  return `API_ERROR: ${res.status}`;
+}
+
 export async function browserJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await browserFetch(path, init);
-  if (!res.ok) throw new Error(`API_ERROR: ${res.status}`);
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
   return res.json() as Promise<T>;
 }
 
