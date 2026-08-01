@@ -67,3 +67,21 @@ export function formatMoney(minorUnits: bigint | number | string): string {
   const paiseStr = paise.toString().padStart(2, "0");
   return `${negative ? "-" : ""}₹${grouped}.${paiseStr}`;
 }
+
+/**
+ * Format a basis-points integer (1 bp = 0.01%) as a percent string for display,
+ * stripping trailing zeros. Renders the *exact* bps/100 value — never rounds a
+ * statutory rate/threshold before showing it.
+ *
+ *   formatBps(1200) -> "12%"
+ *   formatBps(550)  -> "5.5%"
+ *   formatBps(12)   -> "0.12%"
+ */
+export function formatBps(bps: number | string | null | undefined): string {
+  if (bps === null || bps === undefined || bps === "") return "—";
+  const n = typeof bps === "number" ? bps : Number(bps);
+  if (!Number.isFinite(n)) return "—";
+  const pct = n / 100;
+  const fixed = pct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${fixed}%`;
+}

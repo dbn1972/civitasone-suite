@@ -8,6 +8,7 @@ const revenueTiles: NavTile[] = [
 	{ title: "Bills & Demands", href: "/revenue/bills", description: "Generate bills and view raised demands by assessee." },
 	{ title: "Collection Receipts", href: "/revenue/receipts", description: "Record and review revenue collection receipts." },
 	{ title: "Instalment Plans", href: "/revenue/instalments", description: "Assessee instalment plans for outstanding demands." },
+	{ title: "Rate Configuration", href: "/revenue/config", description: "Rate heads, slabs, penalty and rebate rules." },
 ];
 
 export default function RevenueHubPage() {
