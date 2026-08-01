@@ -143,7 +143,7 @@ export function PtSlabForm() {
             <p
               id={errId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
+              aria-live={tone === "bad" ? undefined : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >

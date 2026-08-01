@@ -28,8 +28,12 @@ export function IngestChallanForm({ period }: { period: string }) {
   const errId = useId();
   const bsrRef = useRef<HTMLInputElement>(null);
   const amtRef = useRef<HTMLInputElement>(null);
+  const serialRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
   const bsrInvalid = tone === "bad" && !!message && message.startsWith("BSR");
   const amtInvalid = tone === "bad" && !!message && message.startsWith("TDS amount");
+  const serialInvalid = tone === "bad" && !!message && message.startsWith("Challan serial") && !challanSerial.trim();
+  const dateInvalid = tone === "bad" && !!message && message.startsWith("Challan serial") && !depositDate;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +54,7 @@ export function IngestChallanForm({ period }: { period: string }) {
     if (!challanSerial.trim() || !depositDate) {
       setTone("bad");
       setMessage("Challan serial and deposit date are required.");
+      (!challanSerial.trim() ? serialRef : dateRef).current?.focus();
       return;
     }
     setDialogError(undefined);
@@ -123,9 +128,12 @@ export function IngestChallanForm({ period }: { period: string }) {
               </label>
               <input
                 id={serialId}
+                ref={serialRef}
                 value={challanSerial}
                 onChange={(e) => setChallanSerial(e.target.value)}
                 aria-required="true"
+                aria-invalid={serialInvalid || undefined}
+                aria-describedby={serialInvalid ? errId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
             </div>
@@ -135,10 +143,13 @@ export function IngestChallanForm({ period }: { period: string }) {
               </label>
               <input
                 id={dateId}
+                ref={dateRef}
                 type="date"
                 value={depositDate}
                 onChange={(e) => setDepositDate(e.target.value)}
                 aria-required="true"
+                aria-invalid={dateInvalid || undefined}
+                aria-describedby={dateInvalid ? errId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
             </div>
@@ -182,7 +193,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             <p
               id={errId}
               role={tone === "bad" ? "alert" : "status"}
-              aria-live={tone === "bad" ? "assertive" : "polite"}
+              aria-live={tone === "bad" ? undefined : "polite"}
               className={`pill ${tone}`}
               style={{ width: "fit-content" }}
             >
