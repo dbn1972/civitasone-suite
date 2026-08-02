@@ -9,7 +9,7 @@ import { validateGraph } from "./graph.js";
 import type { EdgeSpec, NodeSpec } from "./repo.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
-type Layout = { width?: number; height?: number; zoom?: number; gridSize?: number };
+type Layout = { width?: number | undefined; height?: number | undefined; zoom?: number | undefined; gridSize?: number | undefined };
 
 async function publish(ctx: RequestContext, type: string, payload: Record<string, unknown>): Promise<Accepted> {
   const id = (payload.id as string | undefined) ?? randomUUID();

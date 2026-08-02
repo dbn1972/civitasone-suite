@@ -118,7 +118,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       active: z.boolean().default(true),
     }).parse(req.body);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertRoleMember(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertRoleMember(ctx, {
+      roleRef: body.roleRef,
+      userId: body.userId,
+      active: body.active,
+      ...(body.reportsTo !== undefined ? { reportsTo: body.reportsTo } : {}),
+    }));
   });
 
   app.get("/v1/workflow/role-members", async (req, reply) => {
