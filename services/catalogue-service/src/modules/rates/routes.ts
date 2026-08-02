@@ -1,11 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const CATALOGUE_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
 const ADMIN_ROLES = ["catalogue_admin", "super_admin"];
@@ -23,7 +20,6 @@ const updateRateBody = z.object({
   effectiveTo: z.string().date().nullable().optional(),
   rateValueMinor: z.coerce.bigint().optional(),
   source: z.string().min(1).max(128).optional(),
-  /** Optional optimistic-lock guard. Falls back to the row's current version. */
   version: z.number().int().positive().optional(),
 });
 
@@ -41,7 +37,6 @@ const currentQuery = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function rateRoutes(app: FastifyInstance): Promise<void> {
-  // List rates for a product with optional date filter
   app.get("/v1/catalogue/rates", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
@@ -57,7 +52,6 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows, meta: { page, pageSize: q.limit, total } });
   });
 
-  // Get currently effective rate for a product
   app.get("/v1/catalogue/rates/current", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
@@ -67,49 +61,21 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rate });
   });
 
-  // Create rate entry
   app.post("/v1/catalogue/rates", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createRateBody.parse(req.body);
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insertRate(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createRate(ctx, {
         productId: body.productId,
-        effectiveDate: body.effectiveFrom,
+        effectiveFrom: body.effectiveFrom,
         effectiveTo: body.effectiveTo ?? null,
-        rateValue: body.rateValueMinor,
+        rateValueMinor: body.rateValueMinor.toString(),
         source: body.source,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-        version: 1,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.rateCreated,
-        eventType: EVENTS.rateCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          rateId: id,
-          productId: body.productId,
-          effectiveFrom: body.effectiveFrom,
-          effectiveTo: body.effectiveTo ?? null,
-          // bigint paise — serialised as a string so the jsonb payload stays JSON-safe.
-          rateValueMinor: body.rateValueMinor.toString(),
-          source: body.source,
-        },
-      });
-    });
-
-    return reply.code(201).send({ data: { id } });
+      }),
+    );
   });
 
-  // Update rate (creates new version for audit trail)
   app.patch("/v1/catalogue/rates/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -120,38 +86,35 @@ export async function rateRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Rate not found");
 
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
-    if (body.effectiveFrom !== undefined) patch["effectiveDate"] = body.effectiveFrom;
-    if (body.effectiveTo !== undefined) patch["effectiveTo"] = body.effectiveTo;
-    if (body.rateValueMinor !== undefined) patch["rateValue"] = body.rateValueMinor;
-    if (body.source !== undefined) patch["source"] = body.source;
+    const eventPatch: Record<string, unknown> = {};
+    if (body.effectiveFrom !== undefined) {
+      patch["effectiveDate"] = body.effectiveFrom;
+      eventPatch["effectiveFrom"] = body.effectiveFrom;
+    }
+    if (body.effectiveTo !== undefined) {
+      patch["effectiveTo"] = body.effectiveTo;
+      eventPatch["effectiveTo"] = body.effectiveTo;
+    }
+    if (body.rateValueMinor !== undefined) {
+      patch["rateValue"] = body.rateValueMinor.toString();
+      eventPatch["rateValueMinor"] = body.rateValueMinor.toString();
+    }
+    if (body.source !== undefined) {
+      patch["source"] = body.source;
+      eventPatch["source"] = body.source;
+    }
 
+    if (body.version !== undefined && body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "Rate has been modified; retry with current version");
+    }
     const expectedVersion = body.version ?? existing.version;
-
-    await db.transaction(async (tx) => {
-      const ok = await repo.updateRate(tx, id, ctx.tenantId, patch as Partial<typeof existing>, expectedVersion);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "Rate has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.rateUpdated,
-        eventType: EVENTS.rateUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          rateId: id,
-          productId: existing.productId,
-          previousVersion: expectedVersion,
-          ...(body.effectiveFrom !== undefined ? { effectiveFrom: body.effectiveFrom } : {}),
-          ...(body.effectiveTo !== undefined ? { effectiveTo: body.effectiveTo } : {}),
-          // bigint paise — serialised as a string so the jsonb payload stays JSON-safe.
-          ...(body.rateValueMinor !== undefined ? { rateValueMinor: body.rateValueMinor.toString() } : {}),
-          ...(body.source !== undefined ? { source: body.source } : {}),
-        },
-      });
-    });
-
-    return reply.send({ data: { id, version: expectedVersion + 1 } });
+    return reply.code(202).send(
+      await commands.updateRate(ctx, id, {
+        version: expectedVersion,
+        productId: existing.productId,
+        patch,
+        eventPatch,
+      }),
+    );
   });
 }

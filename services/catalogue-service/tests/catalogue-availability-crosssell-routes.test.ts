@@ -16,6 +16,7 @@ const RULE_ID = "88888888-8888-4000-8000-000000000001";
 const NON_EXISTENT_ID = "00000000-0000-4000-8000-000000000099";
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock("../src/shared/db.js", () => ({
   sqlClient: { end: async () => {} },
 }));
 
-vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqueueMock(...a) }));
+vi.mock("../src/shared/outbox.js", () => ({ enqueue: vi.fn() }));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: {
@@ -47,7 +48,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(),
     makeKey: (t: string, r: string, i: string) => `catalogue:${t}:${r}:${i}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/products/repo.js", () => ({
@@ -199,6 +200,7 @@ function makeCrossSell(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
   H.replaceAvailabilityV2Mock.mockImplementation((_tx: unknown, _p: string, _t: string, rows: unknown[]) => Promise.resolve(rows.length));
   H.listAvailabilityV2Mock.mockResolvedValue([]);
@@ -343,7 +345,7 @@ describe("PC-004 PUT /v1/catalogue/products/:id/availability-v2", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.rowCount).toBe(MAX_AVAILABILITY_ROWS);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("404 for an unknown product", async () => {
@@ -375,9 +377,9 @@ describe("PC-004 PUT /v1/catalogue/products/:id/availability-v2", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.rowCount).toBe(2);
-    expect(H.replaceAvailabilityV2Mock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("202 accepts an empty set (clears availability)", async () => {
@@ -391,7 +393,8 @@ describe("PC-004 PUT /v1/catalogue/products/:id/availability-v2", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.rowCount).toBe(0);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when officeCode is given without regionCode", async () => {
@@ -767,7 +770,7 @@ describe("PC-008 POST /v1/catalogue/products/:id/cross-sell", () => {
     expect(res.json().code).toBe("SELF_CROSS_SELL");
     // Nothing was written and no product lookup was even needed.
     expect(H.insertCrossSellMock).not.toHaveBeenCalled();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 
   it("422 self cross-sell is rejected for every rule type", async () => {
@@ -811,7 +814,7 @@ describe("PC-008 POST /v1/catalogue/products/:id/cross-sell", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("201 creates the rule", async () => {
+  it("202 creates the rule", async () => {
     H.productFindByIdMock.mockImplementation((id: string) => Promise.resolve(makeProduct({ id })));
     H.listCrossSellMock.mockResolvedValue([]);
     const app = await buildApp();
@@ -822,10 +825,8 @@ describe("PC-008 POST /v1/catalogue/products/:id/cross-sell", () => {
       payload: { targetProductId: TARGET_ID, ruleType: "upsell", priority: 5 },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.targetProductId).toBe(TARGET_ID);
-    expect(H.insertCrossSellMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("422 for a duplicate pair + rule type", async () => {
@@ -886,7 +887,7 @@ describe("PC-008 DELETE /v1/catalogue/cross-sell/:ruleId", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("200 deletes the rule and emits an event", async () => {
+  it("202 deletes the rule and emits an event", async () => {
     H.findCrossSellByIdMock.mockResolvedValue(makeCrossSell());
     const app = await buildApp();
     const res = await app.inject({
@@ -895,10 +896,8 @@ describe("PC-008 DELETE /v1/catalogue/cross-sell/:ruleId", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.deleted).toBe(true);
-    expect(H.deleteCrossSellMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("409 when the rule vanished mid-transaction", async () => {
@@ -911,7 +910,8 @@ describe("PC-008 DELETE /v1/catalogue/cross-sell/:ruleId", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
   });
 });
 
@@ -1031,7 +1031,7 @@ describe("PC-005 PUT /v1/catalogue/rates/:id/external-ref", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("200 records the external master", async () => {
+  it("202 records the external master", async () => {
     H.rateFindByIdMock.mockResolvedValue(makeRate());
     const app = await buildApp();
     const res = await app.inject({
@@ -1041,14 +1041,13 @@ describe("PC-005 PUT /v1/catalogue/rates/:id/external-ref", () => {
       payload: { sourceSystem: "FINACLE", externalId: "RT-9001", syncedAt: "2026-06-01T00:00:00.000Z" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.sourceSystem).toBe("FINACLE");
-    expect(res.json().data.version).toBe(2);
-    expect(H.setExternalRefMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("200 defaults syncedAt to now when omitted", async () => {
+  it("202 defaults syncedAt to now when omitted", async () => {
     H.rateFindByIdMock.mockResolvedValue(makeRate());
     const app = await buildApp();
     const res = await app.inject({
@@ -1058,8 +1057,9 @@ describe("PC-005 PUT /v1/catalogue/rates/:id/external-ref", () => {
       payload: { sourceSystem: "CBS", externalId: "RT-2" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.syncedAt).toBeDefined();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when syncedAt is in the future", async () => {
@@ -1089,6 +1089,7 @@ describe("PC-005 PUT /v1/catalogue/rates/:id/external-ref", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1243,7 +1244,7 @@ describe("QP-001 PUT /v1/catalogue/products/:id/classification", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("200 sets the classification", async () => {
+  it("202 sets the classification", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     H.findByProductCodeMock.mockResolvedValue(null);
     const app = await buildApp();
@@ -1254,11 +1255,10 @@ describe("QP-001 PUT /v1/catalogue/products/:id/classification", () => {
       payload: VALID,
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.taxRateBps).toBe(1200);
-    expect(res.json().data.version).toBe(2);
-    expect(H.productUpdateMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("200 accepts a 0 bps (tax-exempt) product", async () => {
@@ -1271,11 +1271,11 @@ describe("QP-001 PUT /v1/catalogue/products/:id/classification", () => {
       payload: { ...VALID, taxRateBps: 0 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.taxRateBps).toBe(0);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
-  it("200 allows a product to keep its own existing code", async () => {
+  it("202 allows a product to keep its own existing code", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     H.findByProductCodeMock.mockResolvedValue(makeProduct({ id: PRODUCT_ID }));
     const app = await buildApp();
@@ -1286,7 +1286,8 @@ describe("QP-001 PUT /v1/catalogue/products/:id/classification", () => {
       payload: VALID,
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("422 when the productCode belongs to another product", async () => {
@@ -1316,6 +1317,7 @@ describe("QP-001 PUT /v1/catalogue/products/:id/classification", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 });
 

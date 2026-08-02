@@ -150,7 +150,7 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
     productId: PRODUCT_ID,
     requestedRateMinor: "125000",
     currency: "INR",
-    effectiveFrom: "2026-08-01",
+    effectiveFrom: "2027-01-01",
     reason: "annual repricing",
     ...overrides,
   };
