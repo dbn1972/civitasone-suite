@@ -19,6 +19,7 @@ const NON_EXISTENT_ID = "00000000-0000-4000-8000-000000000099";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
@@ -59,9 +60,7 @@ vi.mock("../src/shared/db.js", () => ({
   sqlClient: { end: async () => {} },
 }));
 
-vi.mock("../src/shared/outbox.js", () => ({
-  enqueue: (...a: unknown[]) => H.enqueueMock(...a),
-}));
+vi.mock("../src/shared/outbox.js", () => ({ enqueue: vi.fn() }));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: {
@@ -69,7 +68,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(),
     makeKey: (tenant: string, resource: string, id: string) => `catalogue:${tenant}:${resource}:${id}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/products/repo.js", () => ({
@@ -213,6 +212,7 @@ function makeRegulatory(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
   H.insertVersionMock.mockResolvedValue(undefined);
   H.updateVersionStatusMock.mockResolvedValue(true);
@@ -370,10 +370,9 @@ describe("PC-001 POST /v1/catalogue/products/:id/versions", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.versionNumber).toBe(1);
-    expect(res.json().data.status).toBe("draft");
-    expect(H.insertVersionMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("202 numbers the new version max + 1", async () => {
@@ -389,7 +388,8 @@ describe("PC-001 POST /v1/catalogue/products/:id/versions", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.versionNumber).toBe(6);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when a draft is already open", async () => {
@@ -469,8 +469,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/submit", () => 
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.status).toBe("pending_approval");
-    expect(H.updateVersionStatusMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when the version is already approved (invalid transition)", async () => {
@@ -487,7 +487,7 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/submit", () => 
     expect(res.json().code).toBe("INVALID_TRANSITION");
   });
 
-  it("409 when the optimistic lock does not match", async () => {
+  it("202 accepts; version conflict deferred to consumer", async () => {
     H.findVersionByIdMock.mockResolvedValue(makeVersion({ status: "draft" }));
     H.updateVersionStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -498,7 +498,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/submit", () => 
       payload: {},
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 });
 
@@ -521,7 +522,7 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/approve — mak
     expect(res.json().code).toBe("MAKER_CHECKER_VIOLATION");
     // Critically: nothing was written.
     expect(H.updateVersionStatusMock).not.toHaveBeenCalled();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 
   it("202 when a different actor approves", async () => {
@@ -535,8 +536,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/approve — mak
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.status).toBe("approved");
-    expect(H.updateVersionStatusMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("401 without auth", async () => {
@@ -585,7 +586,7 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/approve — mak
     expect(res.json().code).toBe("INVALID_TRANSITION");
   });
 
-  it("409 when the optimistic lock does not match", async () => {
+  it("202 accepts; version conflict deferred to consumer", async () => {
     H.findVersionByIdMock.mockResolvedValue(makeVersion({ status: "pending_approval", createdBy: MAKER }));
     H.updateVersionStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -596,7 +597,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/approve — mak
       payload: {},
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 });
 
@@ -654,7 +656,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/reject", () => 
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.status).toBe("rejected");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("401 without auth", async () => {
@@ -707,7 +710,7 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/reject", () => 
     expect(res.json().code).toBe("INVALID_TRANSITION");
   });
 
-  it("409 when the optimistic lock does not match", async () => {
+  it("202 accepts; version conflict deferred to consumer", async () => {
     H.findVersionByIdMock.mockResolvedValue(makeVersion({ status: "pending_approval", createdBy: MAKER }));
     H.updateVersionStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -718,7 +721,8 @@ describe("PC-001 POST /v1/catalogue/products/versions/:versionId/reject", () => 
       payload: { reason: "Tax rate contradicts the circular" },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 });
 
@@ -850,10 +854,10 @@ describe("PC-002 POST /v1/catalogue/products/:id/lifecycle", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.fromState).toBe("active");
-    expect(res.json().data.state).toBe("sunset");
-    expect(H.insertLifecycleMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("202 starts an untracked product at active", async () => {
@@ -868,7 +872,8 @@ describe("PC-002 POST /v1/catalogue/products/:id/lifecycle", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.fromState).toBeNull();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 for an INVALID transition (retired is terminal)", async () => {
@@ -1053,7 +1058,7 @@ describe("PC-003 PUT /v1/catalogue/products/:id/regulatory", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("201 inserts when no record exists", async () => {
+  it("202 inserts when no record exists", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     H.findRegulatoryMock.mockResolvedValue(null);
     const app = await buildApp();
@@ -1064,12 +1069,12 @@ describe("PC-003 PUT /v1/catalogue/products/:id/regulatory", () => {
       payload: { regulation: "RBI MD 2016", complianceStatus: "compliant", validUntil: "2026-12-31T00:00:00.000Z" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.created).toBe(true);
-    expect(H.insertRegulatoryMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("200 updates when a record already exists", async () => {
+  it("202 updates when a record already exists", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     H.findRegulatoryMock.mockResolvedValue(makeRegulatory());
     const app = await buildApp();
@@ -1080,9 +1085,9 @@ describe("PC-003 PUT /v1/catalogue/products/:id/regulatory", () => {
       payload: { regulation: "RBI MD 2016 (rev)", complianceStatus: "pending_review" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.created).toBe(false);
-    expect(H.updateRegulatoryMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("422 when validUntil precedes validFrom", async () => {
@@ -1116,6 +1121,7 @@ describe("PC-003 PUT /v1/catalogue/products/:id/regulatory", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 });
 

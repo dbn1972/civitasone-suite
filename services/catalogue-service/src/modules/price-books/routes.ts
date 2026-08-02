@@ -6,18 +6,18 @@
  * as a bigint at the route boundary, and is ALWAYS serialised to JSON as a STRING.
  * It is never a JSON number and never a float, so a price above 2^53 (which a
  * double cannot represent) round-trips byte-exact. All arithmetic uses BigInt().
+ *
+ * Mutations are queue-first (CQRS): validate → publish command → 202 Accepted.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { PRICE_BOOK_STATUSES, type PriceBookRow, type PriceBookEntryRow, type PriceBookEntryInsert } from "./schema.js";
+import { PRICE_BOOK_STATUSES, type PriceBookRow, type PriceBookEntryRow } from "./schema.js";
 import { resolveEffectivePrice, taxOnAmountMinor, type CandidateBook, type CandidateEntry } from "./domain.js";
 import * as productRepo from "../products/repo.js";
+import * as commands from "./commands.js";
 
 const READ_ROLES = ["catalogue_user", "catalogue_admin", "catalogue_approver", "pricing_officer", "super_admin"];
 const WRITE_ROLES = ["catalogue_admin", "pricing_officer", "super_admin"];
@@ -53,17 +53,19 @@ const createBody = z.object({
   status: z.enum(PRICE_BOOK_STATUSES).default("draft"),
 });
 
-const patchBody = z.object({
-  name: z.string().min(1).max(200).optional(),
-  segment: z.string().min(1).max(64).optional(),
-  currency: currencySchema.optional(),
-  geography: geographySchema.optional(),
-  effectiveFrom: z.string().datetime().optional(),
-  effectiveTo: z.string().datetime().nullable().optional(),
-  status: z.enum(PRICE_BOOK_STATUSES).optional(),
-  /** Optional optimistic-lock guard. Falls back to the row's current version. */
-  version: z.number().int().positive().optional(),
-}).refine((b) => Object.keys(b).some((k) => k !== "version"), { message: "at least one field must be provided" });
+const patchBody = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    segment: z.string().min(1).max(64).optional(),
+    currency: currencySchema.optional(),
+    geography: geographySchema.optional(),
+    effectiveFrom: z.string().datetime().optional(),
+    effectiveTo: z.string().datetime().nullable().optional(),
+    status: z.enum(PRICE_BOOK_STATUSES).optional(),
+    /** Optional optimistic-lock guard. Falls back to the row's current version. */
+    version: z.number().int().positive().optional(),
+  })
+  .refine((b) => Object.keys(b).some((k) => k !== "version"), { message: "at least one field must be provided" });
 
 const entriesQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -71,15 +73,19 @@ const entriesQuery = z.object({
 });
 
 const putEntriesBody = z.object({
-  entries: z.array(z.object({
-    productId: z.string().uuid(),
-    /**
-     * Accepted as a decimal STRING of minor units. z.coerce.bigint() rejects any
-     * fractional input, which is exactly what we want: paise are indivisible.
-     */
-    amountMinor: z.coerce.bigint().nonnegative(),
-    currency: currencySchema.optional(),
-  })).max(MAX_PRICE_BOOK_ENTRIES),
+  entries: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        /**
+         * Accepted as a decimal STRING of minor units. z.coerce.bigint() rejects any
+         * fractional input, which is exactly what we want: paise are indivisible.
+         */
+        amountMinor: z.coerce.bigint().nonnegative(),
+        currency: currencySchema.optional(),
+      }),
+    )
+    .max(MAX_PRICE_BOOK_ENTRIES),
 });
 
 const resolveQuery = z.object({
@@ -132,7 +138,11 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "No active price book matches that segment and currency");
     }
 
-    const entries = await repo.listEntriesForProduct(ctx.tenantId, q.productId, books.map((b) => b.id));
+    const entries = await repo.listEntriesForProduct(
+      ctx.tenantId,
+      q.productId,
+      books.map((b) => b.id),
+    );
 
     const candidateBooks: CandidateBook[] = books.map((b) => ({
       id: b.id,
@@ -215,41 +225,17 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_EFFECTIVE_WINDOW", "effectiveTo must not precede effectiveFrom");
     }
 
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insertPriceBook(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createPriceBook(ctx, {
         name: body.name,
         segment: body.segment,
         currency: body.currency,
         geography: body.geography,
-        effectiveFrom,
-        effectiveTo,
+        effectiveFrom: effectiveFrom.toISOString(),
+        effectiveTo: effectiveTo !== null ? effectiveTo.toISOString() : null,
         status: body.status,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-        version: 1,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.priceBookCreated,
-        eventType: EVENTS.priceBookCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          priceBookId: id,
-          name: body.name,
-          segment: body.segment,
-          currency: body.currency,
-          status: body.status,
-        },
-      });
-    });
-
-    return reply.code(201).send({ data: { id, status: body.status } });
+      }),
+    );
   });
 
   // ─── Patch a price book ──────────────────────────────────────────────────────
@@ -263,11 +249,18 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Price book not found");
 
     const nextFrom = body.effectiveFrom !== undefined ? new Date(body.effectiveFrom) : existing.effectiveFrom;
-    const nextTo = body.effectiveTo === undefined
-      ? existing.effectiveTo
-      : (body.effectiveTo === null ? null : new Date(body.effectiveTo));
+    const nextTo =
+      body.effectiveTo === undefined
+        ? existing.effectiveTo
+        : body.effectiveTo === null
+          ? null
+          : new Date(body.effectiveTo);
     if (nextTo !== null && nextTo.getTime() < nextFrom.getTime()) {
       throw new HttpError(422, "INVALID_EFFECTIVE_WINDOW", "effectiveTo must not precede effectiveFrom");
+    }
+
+    if (body.version !== undefined && body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "Price book has been modified; retry with current version");
     }
 
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
@@ -275,27 +268,12 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     if (body.segment !== undefined) patch["segment"] = body.segment;
     if (body.currency !== undefined) patch["currency"] = body.currency;
     if (body.geography !== undefined) patch["geography"] = body.geography;
-    if (body.effectiveFrom !== undefined) patch["effectiveFrom"] = nextFrom;
-    if (body.effectiveTo !== undefined) patch["effectiveTo"] = nextTo;
+    if (body.effectiveFrom !== undefined) patch["effectiveFrom"] = nextFrom.toISOString();
+    if (body.effectiveTo !== undefined) patch["effectiveTo"] = nextTo !== null ? nextTo.toISOString() : null;
     if (body.status !== undefined) patch["status"] = body.status;
 
     const expectedVersion = body.version ?? existing.version;
-
-    await db.transaction(async (tx) => {
-      const ok = await repo.updatePriceBook(tx, id, ctx.tenantId, patch as Partial<PriceBookRow>, expectedVersion);
-      if (!ok) throw new HttpError(409, "VERSION_CONFLICT", "Price book has been modified; retry with current version");
-
-      await enqueue(tx, {
-        topic: EVENTS.priceBookUpdated,
-        eventType: EVENTS.priceBookUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { priceBookId: id, patch: { ...patch, updatedBy: ctx.actorId }, previousVersion: expectedVersion },
-      });
-    });
-
-    return reply.send({ data: { id, version: expectedVersion + 1 } });
+    return reply.code(202).send(await commands.updatePriceBook(ctx, id, { version: expectedVersion, patch }));
   });
 
   // ─── List a book's entries ───────────────────────────────────────────────────
@@ -333,40 +311,24 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
       seen.add(entry.productId);
       const currency = entry.currency ?? book.currency;
       if (currency !== book.currency) {
-        throw new HttpError(422, "CURRENCY_MISMATCH", `Entry currency '${currency}' does not match the price book currency '${book.currency}'`);
+        throw new HttpError(
+          422,
+          "CURRENCY_MISMATCH",
+          `Entry currency '${currency}' does not match the price book currency '${book.currency}'`,
+        );
       }
     }
 
-    const inserts: PriceBookEntryInsert[] = body.entries.map((entry) => ({
+    const entries = body.entries.map((entry) => ({
       id: randomUUID(),
-      tenantId: ctx.tenantId,
-      priceBookId: id,
       productId: entry.productId,
-      amountMinor: entry.amountMinor,
+      amountMinor: entry.amountMinor.toString(),
       currency: entry.currency ?? book.currency,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-      version: 1,
     }));
+    const totalAmountMinor = body.entries.reduce((sum, e) => sum + e.amountMinor, 0n).toString();
 
-    await db.transaction(async (tx) => {
-      const written = await repo.replaceEntries(tx, id, ctx.tenantId, inserts);
-
-      await enqueue(tx, {
-        topic: EVENTS.priceBookEntriesReplaced,
-        eventType: EVENTS.priceBookEntriesReplaced,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          priceBookId: id,
-          entryCount: written,
-          // MONEY RULE: every amount in the event payload is a string too.
-          totalAmountMinor: inserts.reduce((sum, e) => sum + e.amountMinor, 0n).toString(),
-        },
-      });
-    });
-
-    return reply.code(202).send({ data: { priceBookId: id, entryCount: inserts.length } });
+    return reply.code(202).send(
+      await commands.replacePriceBookEntries(ctx, id, { entries, totalAmountMinor }),
+    );
   });
 }
