@@ -438,7 +438,7 @@ module.exports = {
     svc("field",        3042, "field_svc",        "civitas_field"),
     svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
     svc("journey",     3043, "journey_svc",     "civitas_journey"),
-    svc("loyalty",      3042, "loyalty_svc",      "civitas_loyalty"),
+    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty"),
     svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
     svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
