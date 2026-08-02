@@ -4,8 +4,21 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
+  /**
+   * Optional per-field detail for the `{ error: { code, message, details } }`
+   * envelope. Left undefined by every pre-existing call site, so the older
+   * modules' flat error bodies are unchanged.
+   */
+  public details: Record<string, string> | undefined;
+
   constructor(public status: number, public code: string, message: string) {
     super(message);
+  }
+
+  /** Attach field-level validation detail and return `this` (fluent throw). */
+  withDetails(details: Record<string, string>): this {
+    this.details = details;
+    return this;
   }
 }
 

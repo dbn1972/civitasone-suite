@@ -18,12 +18,36 @@ function auth(actor: string, roles: string[] = ["tenant_admin"], tenantId = TENA
   return { authorization: `Bearer ${signToken({ sub: actor, tid: tenantId, roles, sid: "s" }, SECRET, 3600)}` };
 }
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
 
 function readAsTenant<T>(tid: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return sqlClient.begin(async (sql) => { await sql`SELECT set_config('app.tenant_id', ${tid}, true)`; return run(sql as typeof sqlClient); }) as Promise<T>;
 }
+
+/**
+ * Test-hygiene fix: this file created a correction per test and never removed
+ * any of them, so `support.admin_data_corrections` grew on every run.
+ *
+ * That breaks the reject test deterministically once the pile is large enough.
+ * `GET /v1/admin/support/data-corrections` defaults to `limit=50` and orders by
+ * `created_at` ASCENDING — oldest first — so a freshly rejected correction is
+ * always the LAST row and stops being returned as soon as 50 rejected rows
+ * exist. The suite had reached 55 rejected / 110 pending / 55 approved, so the
+ * assertion could never pass again regardless of correct product behaviour.
+ *
+ * Wiping on both sides makes the file self-contained and order-independent,
+ * matching the rest of this service's suite.
+ */
+async function wipe(): Promise<void> {
+  for (const t of [TENANT, OTHER]) {
+    await readAsTenant(t, async (sql) => {
+      await sql`DELETE FROM support.admin_data_corrections WHERE tenant_id = ${t}`;
+      await sql`DELETE FROM _outbox.messages WHERE tenant_id = ${t}`;
+    });
+  }
+}
+
+beforeAll(async () => { app = await buildApp(); await wipe(); });
+afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
 async function propose(actor = PROPOSER, tenantId = TENANT): Promise<string> {
   const res = await app.inject({
     method: "POST", url: "/v1/admin/support/data-corrections", headers: auth(actor, ["tenant_admin"], tenantId),

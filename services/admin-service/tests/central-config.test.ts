@@ -29,8 +29,6 @@ function auth(actorId: string, roles?: string[], tenantId?: string) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
 
 function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return sqlClient.begin(async (sql) => {
@@ -38,6 +36,33 @@ function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promi
     return run(sql as typeof sqlClient);
   }) as Promise<T>;
 }
+
+/**
+ * Test-hygiene fix: this file previously created rows with `Date.now()`-suffixed
+ * keys and never removed them, so `central_config.config_entries` grew by a
+ * handful of rows on every run and NOTHING ever reclaimed them.
+ *
+ * That eventually breaks the encryption test deterministically, not randomly:
+ * `GET /v1/admin/central-config` orders by `key` and defaults to `limit=200`, so
+ * once this tenant accumulated more than 200 entries the freshly created
+ * `secret.api_key.<ts>` row — which sorts late alphabetically — fell off the
+ * first page and `.find()` returned undefined. The suite had crossed 220 rows.
+ *
+ * Every other test file in this service wipes its own tenants; this one did not.
+ * Wiping on both sides makes the file self-contained and order-independent.
+ */
+async function wipe(): Promise<void> {
+  for (const t of [TENANT, OTHER_TENANT]) {
+    await readAsTenant(t, async (sql) => {
+      await sql`DELETE FROM central_config.config_versions WHERE tenant_id = ${t}`;
+      await sql`DELETE FROM central_config.config_change_requests WHERE tenant_id = ${t}`;
+      await sql`DELETE FROM central_config.config_entries WHERE tenant_id = ${t}`;
+    });
+  }
+}
+
+beforeAll(async () => { app = await buildApp(); await wipe(); });
+afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
 
 async function propose(body: Record<string, unknown>, actor = PROPOSER, tenantId = TENANT): Promise<string> {
   const res = await app.inject({
