@@ -10,6 +10,8 @@ import { schema as feedbackModule } from "../modules/feedback/schema.js";
 import { schema as predictiveModule } from "../modules/predictive/schema.js";
 import { schema as collateralModule } from "../modules/collateral/schema.js";
 import { schema as intelligenceModule } from "../modules/intelligence/schema.js";
+import { schema as triggersModule } from "../modules/triggers/schema.js";
+import { schema as measurementModule } from "../modules/measurement/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -20,6 +22,8 @@ const SCHEMA = {
   ...predictiveModule,
   ...collateralModule,
   ...intelligenceModule,
+  ...triggersModule,
+  ...measurementModule,
   ...outboxSchema,
 };
 

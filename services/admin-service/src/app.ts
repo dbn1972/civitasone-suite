@@ -26,6 +26,12 @@ import { centralConfigRoutes } from "./modules/central-config/routes.js";
 import { integrationSettingsRoutes } from "./modules/integration-settings/routes.js";
 import { integrationOpsRoutes } from "./modules/integration-ops/routes.js";
 import { compositionRoutes } from "./modules/composition/routes.js";
+// World-class-gap sprint: WC-010, WC-009, CR-MOB-01, ORG-07, DM-002.
+import { configArtefactRoutes } from "./modules/config/artefact-routes.js";
+import { sandboxRoutes } from "./modules/sandbox/routes.js";
+import { mobileTelemetryRoutes } from "./modules/health/mobile-routes.js";
+import { departmentTemplateRoutes } from "./modules/dept-templates/routes.js";
+import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -74,6 +80,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(integrationSettingsRoutes);
   await app.register(integrationOpsRoutes);
   await app.register(compositionRoutes);
+  await app.register(configArtefactRoutes);
+  await app.register(sandboxRoutes);
+  await app.register(mobileTelemetryRoutes);
+  await app.register(departmentTemplateRoutes);
+  await app.register(documentGovernanceRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 

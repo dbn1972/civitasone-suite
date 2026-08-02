@@ -42,4 +42,33 @@ export const profileScores = cdpSchema.table("profile_scores", {
 export type ProfileScoreRow = typeof profileScores.$inferSelect;
 export type ProfileScoreInsert = typeof profileScores.$inferInsert;
 
-export const schema = { profiles, profileScores };
+/**
+ * CR-CDP-01 — per-tenant, per-vertical golden profile template.
+ *
+ * Two things a CDP cannot hard-code: which attributes a golden profile carries (a
+ * hospital's profile is not a telecom's), and which source wins when two systems
+ * disagree on the same attribute. Both live here as tenant configuration:
+ * `attributesSpec` is the contract, `conflictRules` is the survivorship policy applied
+ * per attribute, with `defaultStrategy`/`sourcePriority` as the fallback.
+ */
+export const profileTemplates = cdpSchema.table("profile_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  vertical: varchar("vertical", { length: 64 }).notNull(),
+  profileType: varchar("profile_type", { length: 32 }).notNull().default("individual"),
+  label: varchar("label", { length: 160 }).notNull(),
+  attributesSpec: jsonb("attributes_spec").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  conflictRules: jsonb("conflict_rules").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+  defaultStrategy: varchar("default_strategy", { length: 32 }).notNull().default("most_recent"),
+  sourcePriority: jsonb("source_priority").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  updatedBy: uuid("updated_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export type ProfileTemplateRow = typeof profileTemplates.$inferSelect;
+export type ProfileTemplateInsert = typeof profileTemplates.$inferInsert;
+
+export const schema = { profiles, profileScores, profileTemplates };

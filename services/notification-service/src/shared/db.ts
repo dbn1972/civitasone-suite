@@ -19,6 +19,11 @@ import { dndModuleSchema } from "../modules/dnd/schema.js";
 import { i18nModuleSchema } from "../modules/i18n/schema.js";
 import { segmentsModuleSchema } from "../modules/segments/schema.js";
 import { inboxCorrelationsSchema } from "../modules/inbox/correlation-schema.js";
+import { inboxExtensionsSchema } from "../modules/inbox/keyword-schema.js";
+import { emailModuleSchema } from "../modules/email/schema.js";
+import { experimentsModuleSchema } from "../modules/experiments/schema.js";
+import { pushModuleSchema } from "../modules/push/schema.js";
+import { bouncesModuleSchema } from "../modules/bounces/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -36,6 +41,11 @@ const SCHEMA = {
   ...i18nModuleSchema,
   ...segmentsModuleSchema,
   ...inboxCorrelationsSchema,
+  ...inboxExtensionsSchema,
+  ...emailModuleSchema,
+  ...experimentsModuleSchema,
+  ...pushModuleSchema,
+  ...bouncesModuleSchema,
   ...outboxSchema,
 };
 

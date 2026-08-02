@@ -12,6 +12,9 @@ import { registerCustomDomainConsumers } from "./modules/custom-domains/consumer
 import { registerWebhookConsumers } from "./modules/webhooks/consumer.js";
 import { registerDataExportConsumers } from "./modules/data-export/consumer.js";
 import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.js";
+// WC-009: subscriber for the admin.sandbox_refresh.execute command published by
+// the approve route. Without this the command would have no consumer.
+import { registerSandboxConsumers } from "./modules/sandbox/consumer.js";
 
 const log = pino({ name: "admin-worker" });
 
@@ -24,6 +27,9 @@ registerCustomDomainConsumers(queue);
 registerWebhookConsumers(queue);
 registerDataExportConsumers(queue);
 registerFeatureFlagConsumers(queue);
+// handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
+// not need the tenantScoped(queue) proxy.
+registerSandboxConsumers(queue);
 
 import { registerReconciliationConsumers } from "./modules/reconciliation-consumer.js";
 registerReconciliationConsumers(queue);

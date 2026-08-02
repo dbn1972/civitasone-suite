@@ -97,6 +97,27 @@ export async function relink(
 }
 
 /**
+ * Move every device edge from one profile to another. Returns the number moved.
+ *
+ * CR-CDP-04 identity stitching: the device the visitor browsed on is the device the
+ * now-known customer owns. Leaving the edge on the absorbed shell would let the next
+ * anonymous session resolve back to a profile that no longer exists as a distinct person.
+ */
+export async function reassignProfile(
+  tx: ScopedTx,
+  fromProfileId: string,
+  toProfileId: string,
+  tenantId: string,
+): Promise<number> {
+  const result = await tx
+    .update(deviceTokens)
+    .set({ profileId: toProfileId })
+    .where(and(eq(deviceTokens.profileId, fromProfileId), eq(deviceTokens.tenantId, tenantId)))
+    .returning({ id: deviceTokens.id });
+  return result.length;
+}
+
+/**
  * Revoke every device token held for a profile.
  *
  * DPDP Act 2023 erasure: the schema comment states why tokens are stored instead of

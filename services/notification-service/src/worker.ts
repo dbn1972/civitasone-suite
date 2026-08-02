@@ -23,6 +23,12 @@ import { startDndReleaseSweeper } from "./modules/dnd/sweeper.js";
 import { registerI18nConsumers } from "./modules/i18n/consumer.js";
 import { registerSegmentConsumers } from "./modules/segments/consumer.js";
 import { registerApprovalConsumers } from "./modules/approval/consumer.js";
+import { registerEmailDomainConsumers } from "./modules/email/consumer.js";
+import { startDomainAuthSweeper } from "./modules/email/sweeper.js";
+import { registerExperimentConsumers } from "./modules/experiments/consumer.js";
+import { registerPushConsumers } from "./modules/push/consumer.js";
+import { registerBounceConsumers } from "./modules/bounces/consumer.js";
+import { registerInboxConsumers } from "./modules/inbox/consumer.js";
 
 const log = pino({ name: "notification-worker" });
 registerTemplateConsumers(queue);
@@ -40,6 +46,18 @@ registerDndConsumers(queue);
 registerI18nConsumers(queue);
 registerSegmentConsumers(queue);
 registerApprovalConsumers(queue);
+// CR-MKT-04 sending domains + recorded DKIM/SPF/DMARC checks
+registerEmailDomainConsumers(queue);
+// CR-MKT-05 A/B experiments
+registerExperimentConsumers(queue);
+// MT-006 push subscriptions + in-app messages
+registerPushConsumers(queue);
+// INT-12 bounce classification + suppression list
+registerBounceConsumers(queue);
+// CR-MKT-06 keyword auto-responses + F.5 handoff transitions.
+// This also consumes notification.inbox.inbound_received, which previously had
+// no subscriber at all.
+registerInboxConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
@@ -54,6 +72,8 @@ const retrySweeper = startRetrySweeper(queue);
 const scheduleSweeper = startScheduleSweeper(queue);
 const digestFlushSweeper = startDigestFlushSweeper(queue);
 const dndReleaseSweeper = startDndReleaseSweeper(queue);
+// CR-MKT-04: the ONLY component that performs DNS lookups. Route handlers never do.
+const domainAuthSweeper = startDomainAuthSweeper(queue);
 
 // G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
 // Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).
@@ -81,6 +101,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(scheduleSweeper);
   clearInterval(digestFlushSweeper);
   clearInterval(dndReleaseSweeper);
+  clearInterval(domainAuthSweeper);
   await queue.stop();
   await sqlClient.end();
   process.exit(0);

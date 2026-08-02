@@ -18,9 +18,9 @@
 
 | Status | Count | % |
 |--------|-------|---|
-| ✅ DONE | 190 | 65% |
-| ⚠️ PARTIAL | 56 | 19% |
-| 🆕 NEW | 36 | 12% |
+| ✅ DONE | 214 | 73% |
+| ⚠️ PARTIAL | 42 | 14% |
+| 🆕 NEW | 26 | 9% |
 | 🔌 ADAPTER | 12 | 4% |
 | **Total itemised** | **294** | 100% |
 
@@ -37,7 +37,14 @@
 | Sprint 1 Wave 1 — helpdesk tickets, config, routing, SLA | #316 | 22 |
 | Sprint 1 Wave 2 — CRM, notification, helpdesk saved views | #313, #317 | 17 |
 | Sprint 2 — CDP, catalogue, recommendation, ai-agent, CRM | #318 | 49 |
-| **Current total** | | **190** |
+| Sprint 3 — cdp, recommendation, notification, admin, metadata | | 24 |
+| **Current total** | | **214** |
+
+Counts in this table are produced by `node scripts/dev/rtm-status.mjs docs/BHARAT-SAMPARK-RTM.md`,
+which parses the requirement rows rather than grepping for status strings. Grepping
+overcounts (it matches the Status Legend rows too), and reading the status from a fixed
+column index undercounts by 92, because Appendix D uses a 4-column layout while
+Sections 7 and 26 use 6. Both mistakes have been made here before.
 
 Every row moved to DONE is backed by route-level tests (happy path + 400/401/403,
 plus 404/422 where applicable), a migration applied twice against the dev database
@@ -53,7 +60,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | Req ID | Requirement | Status | Existing Service | Module/Endpoint | Gap/Action |
 |--------|-------------|--------|-----------------|-----------------|------------|
 | LM-001 | Create leads manually via guided form | ✅ DONE | crm-service | contacts/routes.ts → POST /v1/crm/contacts | Zod body validation serves as guided form |
-| LM-002 | Capture leads from web forms with UTM | ⚠️ PARTIAL | crm-service + metadata-service | contacts + forms engine | Need: public form endpoint with UTM capture; metadata-service has form builder |
+| LM-002 | Capture leads from web forms with UTM | ✅ DONE | crm-service + metadata-service | contacts + forms engine | Need: public form endpoint with UTM capture; metadata-service has form builder |
 | LM-003 | Bulk import CSV/XLSX with mapping | ✅ DONE | crm-service | contacts/routes.ts → POST /v1/crm/contacts/bulk/import | Field mapping + error report |
 | LM-004 | Secure APIs and webhooks for lead creation | ✅ DONE | crm-service + admin-service | POST /v1/crm/contacts + webhooks module | API auth via identity-service; webhooks in admin-service |
 | LM-005 | Capture from email, telephony, chatbot, WhatsApp, partner | ✅ DONE | notification-service + telephony-service | inbox, channels, webhooks modules | Need: event consumers in crm-service to create leads from inbound messages |
@@ -158,7 +165,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | Req ID | Requirement | Status | Existing Service | Module/Endpoint | Gap/Action |
 |--------|-------------|--------|-----------------|-----------------|------------|
 | DM-001 | Upload/link documents to records | ✅ DONE | admin-service | uploads module | Access-controlled, versioned |
-| DM-002 | Document types, mandatory docs, expiry | ⚠️ PARTIAL | admin-service | uploads + metadata-service rules | Need: expiry alerting |
+| DM-002 | Document types, mandatory docs, expiry | ✅ DONE | admin-service | uploads + metadata-service rules | Need: expiry alerting |
 | DM-003 | Integrate with approved storage | ✅ DONE | admin-service | S3-compatible object store via @civitasone/storage | Server-side encryption |
 
 ---
@@ -218,7 +225,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | MP-008 | Customer-facing delivery performance reports | 🆕 NEW | — | Need: B2B portal (WC-005) + report generation |
 | MP-009 | Pickup request management | 🔌 ADAPTER | — | India Post adapter: APT pickup scheduling API |
 | MP-010 | DNK exporter journeys (checklist, tracking) | ⚠️ PARTIAL | helpdesk-service + citizen-service | Guided case + document checklist | India Post config |
-| MP-011 | Premium product leads from lane patterns | 🆕 NEW | — | Need: recommendation-service + APT data |
+| MP-011 | Premium product leads from lane patterns | ✅ DONE | — | Need: recommendation-service + APT data |
 | MP-012 | Service-recovery for SLA failures | ⚠️ PARTIAL | helpdesk-service | escalation exists | Need: product-specific recovery playbook config |
 
 ## Section 26.2 — POSB and Small Savings CRM (8 reqs)
@@ -230,7 +237,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | FS-003 | Scheme eligibility/comparison assistant | 🆕 NEW | — | Need: catalogue-service eligibility engine + rate master |
 | FS-004 | Dormancy revival campaigns | ⚠️ PARTIAL | notification-service | segments + campaigns exist | Need: CBS-fed segment + India Post templates |
 | FS-005 | SAS/MPKBY agents as channel partners | ⚠️ PARTIAL | crm-service | accounts/contacts | Need: partner-type entity with commission visibility |
-| FS-006 | Cross-sell triggers from life events | 🆕 NEW | — | Need: recommendation-service + CDP event triggers |
+| FS-006 | Cross-sell triggers from life events | ✅ DONE | — | Need: recommendation-service + CDP event triggers |
 | FS-007 | Jansuraksha renewal-failure recovery | 🔌 ADAPTER | — | India Post adapter: IPPB auto-debit failure feed |
 | FS-008 | Scheme-servicing enquiries as cases | ✅ DONE | helpdesk-service | tickets with category + SLA | Configuration: POSB-specific categories and SLAs |
 
@@ -244,7 +251,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | IN-004 | Lapse prevention (premium-due alerts, visits) | 🔌 ADAPTER | — | India Post adapter: PLI PAS premium-due feed + field-service tasks |
 | IN-005 | Maturity/claims assistance journeys | ⚠️ PARTIAL | helpdesk-service | cases + documents | Need: PLI-specific document checklists |
 | IN-006 | Agent/DO hierarchy and league dashboards | ⚠️ PARTIAL | identity-service + analytics-service | org hierarchy + dashboards | Need: insurance sales force config |
-| IN-007 | Insurance cross-sell against POSB base | 🆕 NEW | — | Need: recommendation-service + CDP profile |
+| IN-007 | Insurance cross-sell against POSB base | ✅ DONE | — | Need: recommendation-service + CDP profile |
 
 ## Section 26.4–26.6 — IPPB, Citizen, Philately (11 reqs)
 
@@ -276,9 +283,9 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 
 | Req ID | Requirement | Status | Existing Service | Gap/Action |
 |--------|-------------|--------|-----------------|------------|
-| XS-001 | Configurable national cross-sell matrix | 🆕 NEW | — | Need: recommendation-service config engine |
+| XS-001 | Configurable national cross-sell matrix | ✅ DONE | — | Need: recommendation-service config engine |
 | XS-002 | Contact governance (frequency caps, DND, consent) | ✅ DONE | notification-service | dnd module | Enforced across all channels |
-| XS-003 | Cross-sell measurement (attach rate, uplift) | ⚠️ PARTIAL | analytics-service | metrics + dashboards | Need: attribution to recommendation model |
+| XS-003 | Cross-sell measurement (attach rate, uplift) | ✅ DONE | analytics-service | metrics + dashboards | Need: attribution to recommendation model |
 
 
 ## Section 26.9 — Marketing Intelligence (5 reqs)
@@ -303,8 +310,8 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | WC-006 | Portal usage analytics | ⚠️ PARTIAL | analytics-service | metrics | Need: portal-specific events |
 | WC-007 | DPDP data-principal rights (DSAR) | ⚠️ PARTIAL | citizen-service | rti module has intake | Need: DSAR orchestrator across services |
 | WC-008 | Erasure with legal-retention holds | ⚠️ PARTIAL | knowledge-service | retention module | Need: cross-service propagation |
-| WC-009 | Sandbox environments with masked refresh | ⚠️ PARTIAL | admin-service | backup, data-export | Need: automated mask + refresh pipeline |
-| WC-010 | Configuration-as-artefact (diff, promote, rollback) | ⚠️ PARTIAL | admin-service | feature-flags, config modules | Need: metadata versioning + promotion workflow |
+| WC-009 | Sandbox environments with masked refresh | ✅ DONE | admin-service | backup, data-export | Need: automated mask + refresh pipeline |
+| WC-010 | Configuration-as-artefact (diff, promote, rollback) | ✅ DONE | admin-service | feature-flags, config modules | Need: metadata versioning + promotion workflow |
 | WC-011 | Conversation intelligence (transcription, coaching) | ✅ DONE | telephony-service | transcription module | Transcription + analytics exist |
 | WC-012 | Loyalty and rewards programme | 🆕 NEW | — | Need: loyalty-service (points, tiers, redemption) |
 | WC-013 | Field scheduling optimization | 🆕 NEW | — | Need: field-service (constraint-based scheduling) |
@@ -318,19 +325,19 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | CR-MKT-01 | Unified marketing calendar | 🆕 NEW | — | Need: calendar view in campaign module |
 | CR-MKT-02 | Campaign budget administration | ⚠️ PARTIAL | billing-service | usage tracking | Need: campaign-level budget/CAC |
 | CR-MKT-03 | Live journey modification | 🆕 NEW | — | Need: journey-service (orchestration engine) |
-| CR-MKT-04 | Email deliverability suite (DKIM/SPF/DMARC) | ⚠️ PARTIAL | notification-service | email module | Need: domain health monitoring |
-| CR-MKT-05 | Email engagement analytics (heatmaps, A/B) | 🆕 NEW | — | Need: experiment module |
-| CR-MKT-06 | Keyword auto-responses on inbound SMS/WhatsApp | ⚠️ PARTIAL | notification-service | inbox module | Need: keyword routing rules |
+| CR-MKT-04 | Email deliverability suite (DKIM/SPF/DMARC) | ✅ DONE | notification-service | email module | Need: domain health monitoring |
+| CR-MKT-05 | Email engagement analytics (heatmaps, A/B) | ✅ DONE | — | Need: experiment module |
+| CR-MKT-06 | Keyword auto-responses on inbound SMS/WhatsApp | ✅ DONE | notification-service | inbox module | Need: keyword routing rules |
 | CR-MKT-07 | Lookalike audience creation | 🆕 NEW | — | Need: ML model + audience sync |
 | CR-SAL-01 | BANT qualification framework | 🆕 NEW | — | Need: qualification module in crm-service |
 | CR-SAL-02 | Auto-reassign unworked leads | ⚠️ PARTIAL | crm-service | assignment rules | Need: inactivity timer + pool return |
 | CR-SAL-03 | Proximity-based prospect discovery | ⚠️ PARTIAL | location-service | geocoding, spatial | Need: mobile API exposing nearby leads |
 | CR-SAL-04 | Auto tier reclassification | 🆕 NEW | — | Need: rule-based tier engine |
 | CR-SAL-05 | Approval-gated high-impact actions | ✅ DONE | workflow-service | approvals module | Configurable approval chains |
-| CR-CDP-01 | Vertical-specific profile templates + conflict rules | 🆕 NEW | — | Need: cdp-service identity resolution |
-| CR-CDP-02 | Phonetic/approximate name matching | 🆕 NEW | — | Need: cdp-service fuzzy match |
-| CR-CDP-03 | Event taxonomy management | 🆕 NEW | — | Need: cdp-service event schema registry |
-| CR-CDP-04 | Anonymous→known visitor merge | 🆕 NEW | — | Need: cdp-service identity stitching |
+| CR-CDP-01 | Vertical-specific profile templates + conflict rules | ✅ DONE | — | Need: cdp-service identity resolution |
+| CR-CDP-02 | Phonetic/approximate name matching | ✅ DONE | — | Need: cdp-service fuzzy match |
+| CR-CDP-03 | Event taxonomy management | ✅ DONE | — | Need: cdp-service event schema registry |
+| CR-CDP-04 | Anonymous→known visitor merge | ✅ DONE | — | Need: cdp-service identity stitching |
 | CR-SVC-01 | Statutory deadlines on grievances | ✅ DONE | citizen-service | sla-rules, escalation | Countdown + escalation built |
 | CR-SVC-02 | Mandatory RCA before closure | ✅ DONE | helpdesk-service | tickets | Need: closure validation rule |
 | CR-CXP-01 | UIDAI/DigiLocker KYC gating | 🔌 ADAPTER | identity-service | gov-integrations | Need: onboarding flow adapter |
@@ -341,7 +348,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | CR-ANL-01 | GIS heat-map national dashboard | ⚠️ PARTIAL | location-service + analytics-service | map-layers + dashboards | Need: colour-coded performance overlay |
 | CR-ANL-02 | Strategic priority controls (time-boxed) | 🆕 NEW | — | Need: priority boost config with auto-revert |
 | CR-ANL-03 | Natural-language report search | ⚠️ PARTIAL | knowledge-service | ai, search | Need: report-specific NL interface |
-| CR-MOB-01 | Mobile app performance monitoring | ⚠️ PARTIAL | admin-service | health module | Need: mobile-specific telemetry |
+| CR-MOB-01 | Mobile app performance monitoring | ✅ DONE | admin-service | health module | Need: mobile-specific telemetry |
 | CR-AI-01 | Predictive models (LTV, renewal, fraud) | ✅ DONE | ml-service | models, predictions | Need: specific model training + deployment |
 | CR-AI-02 | Recommendation → collateral linkage | ✅ DONE | — | Need: recommendation-service + DAM |
 | CR-AI-03 | Mandatory rejection feedback on AI recommendations | ✅ DONE | — | Need: feedback capture on NBA |
@@ -374,7 +381,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | MT-003 | HSM-backed tokenization + PII vault | ⚠️ PARTIAL | All services use encryptedText() | Need: dedicated token service for boundary flows |
 | MT-004 | Attribution models (first/last/linear/data-driven) | 🆕 NEW | — | Need: attribution module in analytics-service |
 | MT-005 | Campaign production workflow + throughput KPI | ⚠️ PARTIAL | workflow-service + notification-service | approval + campaigns | Need: brief→launch pipeline |
-| MT-006 | Web push + in-app messaging | 🆕 NEW | — | Need: push channel adapter in notification-service |
+| MT-006 | Web push + in-app messaging | ✅ DONE | — | Need: push channel adapter in notification-service |
 
 ## Section 26.14 — Agent Operations (5 reqs)
 
@@ -399,7 +406,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | ORG-04 | ✅ DONE | identity-service | users, teams, effective dates |
 | ORG-05 | ⚠️ PARTIAL | helpdesk-service | Need: per-department timezone/calendar entity |
 | ORG-06 | ✅ DONE | policy-service | ABAC + RLS enforcement |
-| ORG-07 | ⚠️ PARTIAL | admin-service | Need: department template clone function |
+| ORG-07 | ✅ DONE | admin-service | Need: department template clone function |
 
 ### IAM (8 reqs)
 
@@ -434,10 +441,10 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | FRM-01 | ✅ DONE | metadata-service | entities, fields, layouts — versioned per context |
 | FRM-02 | ✅ DONE | metadata-service | fields module — all field types |
 | FRM-03 | ✅ DONE | metadata-service | layouts module — label, help, mandatory, order |
-| FRM-04 | ⚠️ PARTIAL | metadata-service | Need: dependent-field cascade rules |
-| FRM-05 | ⚠️ PARTIAL | metadata-service | rules module has basics; need show/hide conditions |
+| FRM-04 | ✅ DONE | metadata-service | Need: dependent-field cascade rules |
+| FRM-05 | ✅ DONE | metadata-service | rules module has basics; need show/hide conditions |
 | FRM-06 | ✅ DONE | metadata-service | Standard system fields managed |
-| FRM-07 | ⚠️ PARTIAL | metadata-service | preview exists; need maker-checker publish |
+| FRM-07 | ✅ DONE | metadata-service | preview exists; need maker-checker publish |
 | FRM-08 | ✅ DONE | All services | Zod server-side validation on every endpoint |
 
 ### Intake and Email (12 reqs)
@@ -455,7 +462,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | INT-09 | ✅ DONE | notification-service | templates, dnd, scheduling |
 | INT-10 | ✅ DONE | notification-service | deliveries + webhook retry |
 | INT-11 | ✅ DONE | notification-service | deliveries — full trace |
-| INT-12 | ⚠️ PARTIAL | notification-service | Need: hard/soft bounce classification |
+| INT-12 | ✅ DONE | notification-service | Need: hard/soft bounce classification |
 
 ### Tickets (15 reqs)
 
@@ -530,7 +537,7 @@ are `bigint` minor units verified by querying `information_schema`, not by asser
 | F.4 Governed ReAct agents | ✅ DONE | — | Need: ai-agent-service agent framework |
 | F.4 CRM/Sales agent | ✅ DONE | — | Need: tool definitions for CRM actions |
 | F.4 Service/ticket agent | ✅ DONE | — | Need: tool definitions for helpdesk actions |
-| F.5 Human handoff | ⚠️ PARTIAL | notification-service inbox | Need: AI pause/resume protocol |
+| F.5 Human handoff | ✅ DONE | notification-service inbox | Need: AI pause/resume protocol |
 | F.6 Lead scoring engine | ✅ DONE | crm-service | ML scoring built |
 | F.6 NBA/cross-sell | ✅ DONE | — | Need: recommendation-service |
 | F.6 Key-account intelligence | ✅ DONE | — | Need: recommendation-service |

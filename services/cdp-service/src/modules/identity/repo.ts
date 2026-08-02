@@ -71,17 +71,23 @@ export async function deleteById(tx: ScopedTx, id: string, tenantId: string): Pr
 
 /**
  * Reassign all identity links from one profile to another (used during merge).
+ *
+ * Returns the number of edges moved. CR-CDP-04 records that count on the visitor register
+ * so a stitch can be shown to have actually moved the identifiers it claims; existing
+ * callers (steward merge) may ignore it.
  */
 export async function reassignProfile(
   tx: ScopedTx,
   fromProfileId: string,
   toProfileId: string,
   tenantId: string,
-): Promise<void> {
-  await tx
+): Promise<number> {
+  const result = await tx
     .update(identityGraph)
     .set({ profileId: toProfileId })
-    .where(and(eq(identityGraph.profileId, fromProfileId), eq(identityGraph.tenantId, tenantId)));
+    .where(and(eq(identityGraph.profileId, fromProfileId), eq(identityGraph.tenantId, tenantId)))
+    .returning({ id: identityGraph.id });
+  return result.length;
 }
 
 /**

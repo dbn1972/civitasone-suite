@@ -392,8 +392,6 @@ describe("Real-time message delivery via pub/sub", () => {
       const channel = `notifications:${TENANT_A}:${USER_A}`;
       const ssePromise = connectSSE(port, token(TENANT_A, USER_A), 500);
 
-      // Wait a bit for connection to establish, then publish via memory pub/sub
-      await new Promise((r) => setTimeout(r, 100));
       const payload = JSON.stringify({
         id: "live-notif-001",
         type: "finance.bill.passed",
@@ -402,7 +400,16 @@ describe("Real-time message delivery via pub/sub", () => {
         metadata: {},
         createdAt: new Date().toISOString(),
       });
-      publishToMemorySubscribers(channel, payload);
+      // Wait until the SSE connection has actually REGISTERED as a subscriber
+      // before publishing. A fixed sleep raced the connection under load: the
+      // publish landed with zero subscribers and the message was simply
+      // dropped, so this test flaked whenever the suite got busier.
+      let delivered = 0;
+      for (let attempt = 0; attempt < 100 && delivered === 0; attempt++) {
+        delivered = publishToMemorySubscribers(channel, payload);
+        if (delivered === 0) await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(delivered).toBeGreaterThan(0);
 
       const sseRes = await ssePromise;
       expect(sseRes.body).toContain("event: connected");

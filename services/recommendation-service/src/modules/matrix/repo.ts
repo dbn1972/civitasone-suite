@@ -2,8 +2,9 @@
  * matrix/repo.ts — Database operations for the cross-sell matrix.
  * Every query is filtered by tenant_id in addition to RLS.
  */
-import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, gt, or, sql, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import { toIso } from "../../shared/iso.js";
 import { crossSellMatrix, type CrossSellMatrixRow, type CrossSellMatrixInsert } from "./schema.js";
 
 export function toView(r: CrossSellMatrixRow) {
@@ -15,8 +16,12 @@ export function toView(r: CrossSellMatrixRow) {
     segment: r.segment,
     channel: r.channel,
     priority: r.priority,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
+    /** XS-001 — basis points (10000 = 100%). Integer, so it stays a JSON number. */
+    weightBps: r.weightBps,
+    effectiveFrom: r.effectiveFrom === null ? null : toIso(r.effectiveFrom),
+    effectiveTo: r.effectiveTo === null ? null : toIso(r.effectiveTo),
+    createdAt: toIso(r.createdAt),
+    updatedAt: toIso(r.updatedAt),
     version: r.version,
   };
 }
@@ -99,6 +104,44 @@ export async function findByProductPair(
           eq(crossSellMatrix.recommendedProductId, recommendedProductId),
         ),
       ),
+  );
+}
+
+/**
+ * XS-001 — cells whose trigger product is one the customer holds AND whose
+ * effective window contains `asOf`.
+ *
+ * The date window is filtered in SQL as well as re-checked in the domain: SQL
+ * keeps the result set small (a national matrix can hold tens of thousands of
+ * expired cells), the domain check is what the unit tests pin the semantics to.
+ * Both use the same half-open [from, to) rule.
+ */
+export async function listEffectiveForTriggers(
+  tenantId: string,
+  triggerProductIds: readonly string[],
+  asOf: Date,
+  limit: number,
+  filters: ListFilters = {},
+): Promise<CrossSellMatrixRow[]> {
+  if (triggerProductIds.length === 0) return [];
+
+  const conditions: (SQL | undefined)[] = [
+    eq(crossSellMatrix.tenantId, tenantId),
+    inArray(crossSellMatrix.triggerProductId, [...triggerProductIds]),
+    or(isNull(crossSellMatrix.effectiveFrom), lte(crossSellMatrix.effectiveFrom, asOf)),
+    or(isNull(crossSellMatrix.effectiveTo), gt(crossSellMatrix.effectiveTo, asOf)),
+  ];
+
+  if (filters.segment !== undefined) conditions.push(eq(crossSellMatrix.segment, filters.segment));
+  if (filters.channel !== undefined) conditions.push(eq(crossSellMatrix.channel, filters.channel));
+
+  return scopedRead((tx) =>
+    tx
+      .select()
+      .from(crossSellMatrix)
+      .where(and(...conditions))
+      .orderBy(desc(crossSellMatrix.priority), desc(crossSellMatrix.weightBps), asc(crossSellMatrix.id))
+      .limit(limit),
   );
 }
 

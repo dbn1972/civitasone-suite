@@ -46,6 +46,18 @@ export const COMMANDS = {
   customDomainRegister: "admin.custom_domain.register",
   customDomainVerify:   "admin.custom_domain.verify",
   customDomainDelete:   "admin.custom_domain.delete",
+  // ── WC-009 sandbox masked refresh ──────────────────────────────────────
+  /**
+   * COMMAND: execute an APPROVED sandbox refresh.
+   * Payload: `{ jobId: string; sandboxId: string; tenantId: string }`
+   * Published by: `POST /v1/admin/sandbox-refreshes/:id/approve` (after the
+   * second approver has signed off), in the same transaction as the job's
+   * flip to `queued`.
+   * Consumed by: `registerSandboxConsumers` (wired in src/worker.ts). The
+   * consumer resolves the masking plan, records what was masked and closes the
+   * job — the ACTUAL data copy is an explicit stub at that boundary.
+   */
+  sandboxRefreshExecute: "admin.sandbox_refresh.execute",
 } as const;
 
 export const EVENTS = {
@@ -74,6 +86,119 @@ export const EVENTS = {
   changeScheduled:   "admin.change.scheduled",
   changeCompleted:   "admin.change.completed",
   changeRolledBack:  "admin.change.rolled_back",
+
+  // ══ WC-010 — configuration as a versioned artefact ══════════════════════
+  /**
+   * A config set was snapshotted as a new immutable artefact version.
+   * Payload: `{ artefactId: string; setKey: string; artefactVersion: number; checksum: string }`
+   * Fires: on `POST /v1/admin/config-artefacts`, inside the same transaction
+   * as the config_artefacts INSERT. No in-service consumer — published for
+   * audit-service and any external release-tracking subscriber.
+   */
+  configArtefactSnapshotted: "admin.config_artefact.snapshotted",
+  /**
+   * A promotion of an artefact version into an environment was REQUESTED
+   * (maker half of maker-checker); nothing is live yet.
+   * Payload: `{ promotionId: string; setKey: string; artefactVersion: number; targetEnv: string }`
+   * Fires: on `POST /v1/admin/config-artefacts/promotions`.
+   */
+  configPromotionRequested: "admin.config_promotion.requested",
+  /**
+   * A promotion was APPROVED by a second actor and the environment now runs
+   * that artefact version.
+   * Payload: `{ promotionId: string; setKey: string; artefactId: string;
+   *            artefactVersion: number; environment: string;
+   *            approvedBy: string; requestedBy: string }`
+   * Fires: on `POST /v1/admin/config-artefacts/promotions/:id/approve`, in the
+   * same transaction as the config_env_state write. `approvedBy` is guaranteed
+   * different from `requestedBy` (separation of duties).
+   */
+  configArtefactPromoted: "admin.config_artefact.promoted",
+  /**
+   * A pending promotion was rejected; no environment changed.
+   * Payload: `{ promotionId: string; setKey: string; targetEnv: string }`
+   * Fires: on `POST /v1/admin/config-artefacts/promotions/:id/reject`.
+   */
+  configPromotionRejected: "admin.config_promotion.rejected",
+  /**
+   * An environment was rolled back to an earlier, previously-approved artefact.
+   * Payload: `{ promotionId: string; setKey: string; environment: string;
+   *            fromVersion: number; toVersion: number }`
+   * Fires: on `POST /v1/admin/config-artefacts/environments/:env/rollback`.
+   */
+  configArtefactRolledBack: "admin.config_artefact.rolled_back",
+
+  // ══ WC-009 — sandbox environments with masked refresh ═══════════════════
+  /**
+   * A sandbox environment was registered. No data has been copied into it.
+   * Payload: `{ sandboxId: string; code: string; sourceEnvironment: string }`
+   * Fires: on `POST /v1/admin/sandboxes`.
+   */
+  sandboxRegistered: "admin.sandbox.registered",
+  /**
+   * A masked refresh was REQUESTED (maker half); awaiting a second approver.
+   * Payload: `{ jobId: string; sandboxId: string; sourceEnvironment: string }`
+   * Fires: on `POST /v1/admin/sandboxes/:id/refreshes`.
+   */
+  sandboxRefreshRequested: "admin.sandbox_refresh.requested",
+  /**
+   * A refresh was approved by a DIFFERENT actor and queued for execution.
+   * Payload: `{ jobId: string; sandboxId: string; requestedBy: string; approvedBy: string }`
+   * Fires: on `POST /v1/admin/sandbox-refreshes/:id/approve`, in the same
+   * transaction that flips the job to `queued` and publishes the
+   * `sandboxRefreshExecute` COMMAND.
+   */
+  sandboxRefreshApproved: "admin.sandbox_refresh.approved",
+  /** A refresh request was rejected. Payload: `{ jobId: string; sandboxId: string }` */
+  sandboxRefreshRejected: "admin.sandbox_refresh.rejected",
+  /**
+   * The refresh orchestration finished. NOTE: `dataMovement` is always
+   * `"stubbed"` in this build — admin-service records WHAT would be masked and
+   * never copies production data (see modules/sandbox/consumer.ts).
+   * Payload: `{ jobId: string; sandboxId: string; maskedFieldCount: number;
+   *            preservedFieldCount: number; dataMovement: "stubbed" | "executed" }`
+   * Fires: from the `admin.sandbox_refresh.execute` consumer.
+   */
+  sandboxRefreshCompleted: "admin.sandbox_refresh.completed",
+
+  // ══ ORG-07 — department template clone ═════════════════════════════════
+  /**
+   * A department's configuration was cloned into a reusable template.
+   * Payload: `{ templateId: string; code: string; droppedRefCount: number }`
+   * Fires: on `POST /v1/admin/department-templates`.
+   */
+  departmentTemplateCreated: "admin.department_template.created",
+  /**
+   * A template was instantiated as a new department configuration. The owning
+   * service (hrms/estab) creates the actual department from this event —
+   * admin-service holds the template + instantiation record only.
+   * Payload: `{ instantiationId: string; templateId: string; templateVersion: number;
+   *            departmentCode: string; departmentName: string; config: object }`
+   * Fires: on `POST /v1/admin/department-templates/:id/instantiate` (first call
+   * for an idempotency key only — a repeat is a read, not a re-publish).
+   */
+  departmentInstantiated: "admin.department.instantiated",
+
+  // ══ DM-002 — document types, mandatory documents, expiry ═══════════════
+  /**
+   * A document is inside its type's expiry warning window.
+   * Payload: `{ documentId: string; documentTypeCode: string; contextType: string;
+   *            contextKey: string; subjectId: string; expiresAt: string;
+   *            daysRemaining: number }`
+   * Fires: from `POST /v1/admin/documents/expiry-scan` for each document whose
+   * status transitions to `expiring`. CONSUMED BY notification-service (it owns
+   * the alert channel/template); admin-service only publishes.
+   * PII: carries identifiers and dates only, never document contents.
+   */
+  documentExpiring: "admin.document.expiring",
+  /**
+   * A document's expiry date has passed.
+   * Payload: `{ documentId: string; documentTypeCode: string; contextType: string;
+   *            contextKey: string; subjectId: string; expiresAt: string }`
+   * Fires: from `POST /v1/admin/documents/expiry-scan` for each document whose
+   * status transitions to `expired`. CONSUMED BY notification-service.
+   */
+  documentExpired: "admin.document.expired",
 } as const;
 
 export const SERVICE = "admin";
