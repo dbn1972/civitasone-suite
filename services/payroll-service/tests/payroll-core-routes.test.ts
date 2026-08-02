@@ -564,15 +564,15 @@ describe("POST /v1/payroll/runs/:id/simulate (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/corrections (gap)", () => {
-  it("201 — valid correction", async () => {
+  it("202 (T1-03 CQRS lift) — valid correction returns accepted envelope", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/corrections", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, component: "BASIC", effectiveFrom: "2026-04-01", newValueMinor: 6000000, oldValueMinor: 5500000, reason: "annual increment" } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201) {
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
       const body = res.json();
-      expect(body.data.component).toBe("BASIC");
-      expect(body.data.status).toBe("pending");
+      expect(body.status).toBe("accepted");
+      expect(body.id).toBeDefined();
     }
   });
 
@@ -652,13 +652,13 @@ describe("GET /v1/payroll/corrections (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/pay-groups (gap)", () => {
-  it("201 — valid pay group", async () => {
+  it("202 (T1-03 CQRS lift) — valid pay group returns accepted envelope", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/pay-groups", headers: auth(["payroll_admin"]), payload: { name: "Monthly Default", frequency: "monthly", payDayOfMonth: 28 } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201) {
-      expect(res.json().data.name).toBe("Monthly Default");
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
+      expect(res.json().status).toBe("accepted");
     }
   });
 
@@ -766,11 +766,11 @@ describe("GET /v1/payroll/calendar (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/flex-benefits/plans (gap)", () => {
-  it("201 — valid plan", async () => {
+  it("202 (T1-03 CQRS lift) — valid plan returns accepted envelope", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/flex-benefits/plans", headers: auth(["payroll_admin"]), payload: { name: "FY26 Plan", fy: "2026-27", totalBudgetMinor: 10000000, components: [{ name: "Medical", maxMinor: 5000000, taxExempt: true }] } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect([202, 500]).toContain(res.statusCode);
   });
 
   it("400 — empty body", async () => {
@@ -807,11 +807,11 @@ describe("POST /v1/payroll/flex-benefits/plans (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/flex-benefits/elections (gap)", () => {
-  it("201 — valid election (employee can elect)", async () => {
+  it("202 (T1-03 CQRS lift) — valid election (employee can elect)", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/flex-benefits/elections", headers: auth(["employee"]), payload: { planId: randomUUID(), fy: "2026-27", elections: [{ component: "Medical", electedMinor: 250000 }] } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect([202, 500]).toContain(res.statusCode);
   });
 
   it("400 — empty elections", async () => {
@@ -883,11 +883,11 @@ describe("GET /v1/payroll/flex-benefits/my-elections (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/costing/rules (gap)", () => {
-  it("201 — valid costing rule", async () => {
+  it("202 (T1-03 CQRS lift) — valid costing rule returns accepted envelope", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/costing/rules", headers: auth(["payroll_admin"]), payload: { employeeGroup: "engineering", costCenterId: randomUUID(), splitPct: 100 } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect([202, 500]).toContain(res.statusCode);
   });
 
   it("400 — empty body", async () => {
@@ -1042,14 +1042,15 @@ describe("GET /v1/payroll/tax/regime-comparison (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/off-cycle (gap)", () => {
-  it("201 — valid off-cycle run", async () => {
+  it("202 (T1-03 CQRS lift) — valid off-cycle run returns accepted envelope", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/off-cycle", headers: auth(["payroll_admin"]), payload: { runType: "bonus", period: "2026-07", description: "Q2 bonus", items: [{ employeeId: ACTOR, amountMinor: 5000000 }] } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201) {
-      expect(res.json().data.runType).toBe("bonus");
-      expect(res.json().data.status).toBe("draft");
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
+      const body = res.json();
+      expect(body.status).toBe("accepted");
+      expect(body.id).toBeDefined();
     }
   });
 
@@ -1156,18 +1157,18 @@ describe("POST /v1/payroll/off-cycle/:id/process (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/statutory/state-rules (gap)", () => {
-  it("201 — valid state rules with PT slabs", async () => {
+  it("202 (T1-03 CQRS lift) — valid state rules with PT slabs", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(["payroll_admin"]), payload: { stateCode: "KA", ptSlabs: [{ fromMinor: 0, toMinor: 1500000, taxMinor: 0 }, { fromMinor: 1500001, toMinor: 99999999, taxMinor: 20000 }] } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect([202, 500]).toContain(res.statusCode);
   });
 
-  it("201 — valid LWF config", async () => {
+  it("202 (T1-03 CQRS lift) — valid LWF config", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(["payroll_admin"]), payload: { stateCode: "MH", lwfEmployee: 2500, lwfEmployer: 2500 } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect([202, 500]).toContain(res.statusCode);
   });
 
   it("400 — empty body", async () => {

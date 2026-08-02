@@ -20,6 +20,17 @@ export const COMMANDS = {
   arrearCreate:           "payroll.arrear.create",
   bonusCompute:           "payroll.bonus.compute",
   reimbursementCreate:    "payroll.reimbursement.create",
+  // CQRS lift T1-03 (payroll/gap-routes.ts) — 8 mutating routes moved to
+  // publish + idempotent consumer; mirrors ddo/pensioner/arrear/bonus/
+  // reimbursement above.
+  correctionCreate:       "payroll.correction.create",
+  payGroupCreate:         "payroll.paygroup.create",
+  flexPlanCreate:         "payroll.flex_plan.create",
+  flexElectionUpsert:     "payroll.flex_election.upsert",
+  costingRuleUpsert:      "payroll.costing_rule.upsert",
+  offCycleCreate:         "payroll.off_cycle.create",
+  offCycleProcess:        "payroll.off_cycle.process",
+  stateRulesUpsert:       "payroll.state_rules.upsert",
 } as const;
 
 export const EVENTS = {
@@ -36,6 +47,14 @@ export const EVENTS = {
   arrearCreated:          "payroll.arrear.created",
   bonusComputed:          "payroll.bonus.computed",
   reimbursementCreated:   "payroll.reimbursement.created",
+  correctionCreated:      "payroll.correction.created",
+  payGroupCreated:        "payroll.paygroup.created",
+  flexPlanCreated:        "payroll.flex_plan.created",
+  flexElectionUpserted:   "payroll.flex_election.upserted",
+  costingRuleUpserted:    "payroll.costing_rule.upserted",
+  offCycleCreated:        "payroll.off_cycle.created",
+  offCycleProcessed:      "payroll.off_cycle.processed",
+  stateRulesUpserted:     "payroll.state_rules.upserted",
 } as const;
 
 export const CONSUMED_EVENTS = {

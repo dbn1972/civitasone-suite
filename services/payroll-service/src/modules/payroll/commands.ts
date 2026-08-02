@@ -148,3 +148,124 @@ export async function createReimbursement(ctx: RequestContext, body: CreateReimb
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+// ─── CQRS lift T1-03 (payroll/gap-routes.ts) ────────────────────────────────
+// gap-routes.ts previously did db.execute() INSERT/UPDATE in the request path
+// for corrections, pay-groups, flex-benefit plans/elections, costing rules,
+// off-cycle runs, off-cycle processing, and state-rules. These are now
+// publish + idempotent consumer, mirroring ddo/pensioner/arrear/bonus above.
+
+export type CreateCorrectionInput = {
+  employeeId: string; component: string; effectiveFrom: string;
+  newValueMinor: number; oldValueMinor: number; reason?: string | undefined;
+  affectedPeriods: number; arrearsMinor: string;
+};
+export async function createCorrection(ctx: RequestContext, body: CreateCorrectionInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.correctionCreate, {
+    messageId: id, type: COMMANDS.correctionCreate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type CreatePayGroupInput = {
+  name: string; frequency: "monthly" | "bi_weekly" | "weekly";
+  payDayOfMonth: number; timezone: string;
+};
+export async function createPayGroup(ctx: RequestContext, body: CreatePayGroupInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.payGroupCreate, {
+    messageId: id, type: COMMANDS.payGroupCreate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type CreateFlexPlanInput = {
+  name: string; fy: string; totalBudgetMinor: number;
+  components: Array<{ name: string; maxMinor: number; taxExempt: boolean }>;
+};
+export async function createFlexPlan(ctx: RequestContext, body: CreateFlexPlanInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.flexPlanCreate, {
+    messageId: id, type: COMMANDS.flexPlanCreate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type UpsertFlexElectionInput = {
+  planId: string; fy: string;
+  elections: Array<{ component: string; electedMinor: number }>;
+  totalElectedMinor: number;
+};
+export async function upsertFlexElection(ctx: RequestContext, body: UpsertFlexElectionInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.flexElectionUpsert, {
+    messageId: id, type: COMMANDS.flexElectionUpsert,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type UpsertCostingRuleInput = {
+  employeeGroup: string; costCenterId: string; splitPct: number;
+};
+export async function upsertCostingRule(ctx: RequestContext, body: UpsertCostingRuleInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.costingRuleUpsert, {
+    messageId: id, type: COMMANDS.costingRuleUpsert,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type CreateOffCycleInput = {
+  runType: "bonus" | "incentive" | "adhoc"; period: string;
+  description?: string | undefined; totalAmountMinor: string;
+  items: Array<{ employeeId: string; amountMinor: number }>;
+};
+export async function createOffCycle(ctx: RequestContext, body: CreateOffCycleInput): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.offCycleCreate, {
+    messageId: id, type: COMMANDS.offCycleCreate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * Off-cycle process command. The 30% flat-tax computation now runs in the
+ * consumer (single source of truth), not the HTTP handler.
+ */
+export async function processOffCycle(ctx: RequestContext, offCycleId: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.offCycleProcess, {
+    messageId: deterministicUuid(`payroll-offcycle-process:${offCycleId}`),
+    type: COMMANDS.offCycleProcess,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: offCycleId, tenantId: ctx.tenantId },
+  });
+  return { id: offCycleId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type UpsertStateRulesInput = {
+  stateCode: string;
+  ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }> | undefined;
+  lwfEmployee?: number | undefined;
+  lwfEmployer?: number | undefined;
+};
+export async function upsertStateRules(ctx: RequestContext, body: UpsertStateRulesInput): Promise<Accepted> {
+  await queue.publish(COMMANDS.stateRulesUpsert, {
+    messageId: randomUUID(), type: COMMANDS.stateRulesUpsert,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: body.stateCode, status: "accepted", correlationId: ctx.correlationId };
+}
