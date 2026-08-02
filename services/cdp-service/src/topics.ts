@@ -90,6 +90,77 @@ export const EVENTS = {
    * refreshed after a segment recompute. Payload: { segmentId, memberCount, activationIds }.
    */
   activationAudienceRefreshed: "cdp.activation.audience_refreshed",
+
+  /**
+   * CR-CDP-01 — a vertical profile template was registered. Fires on
+   * POST /v1/cdp/profile-templates, inside the same transaction as the insert.
+   * Payload: { templateId, vertical, profileType, attributeCount }.
+   */
+  profileTemplateCreated: "cdp.profile_template.created",
+  /**
+   * CR-CDP-01 — a template's attribute contract or conflict rules changed. Fires on
+   * PATCH /v1/cdp/profile-templates/{id}. Downstream contract: a consumer holding
+   * template-derived state should re-read the template.
+   * Payload: { templateId, vertical, changed: string[] } — field names only, no values.
+   */
+  profileTemplateUpdated: "cdp.profile_template.updated",
+  /**
+   * CR-CDP-01 — a template's conflict rules were applied to a golden profile and the
+   * surviving attributes were written. Fires on POST /v1/cdp/profiles/{id}/apply-template.
+   * Payload: { profileId, templateId, vertical,
+   *            resolved: Array<{ attribute, source, strategy, conflicted }>,
+   *            ignoredAttributes: string[] }.
+   * Attribute NAMES and the winning source only — never the values, which are PII.
+   */
+  profileTemplateApplied: "cdp.profile.template_applied",
+
+  /**
+   * CR-CDP-02 — a profile's phonetic name key was (re)indexed for approximate matching.
+   * Fires on POST /v1/cdp/identity/name-keys. Payload: { profileId, phoneticKey, reindexed }.
+   * The phoneticKey is a lossy Soundex code, not the name; the normalized name is PII and
+   * is deliberately absent.
+   */
+  nameKeyIndexed: "cdp.identity.name_key_indexed",
+
+  /**
+   * CR-CDP-03 — a new revision of an event's attribute schema was authored as a draft.
+   * Fires on POST /v1/cdp/events/taxonomy/{id}/versions.
+   * Payload: { taxonomyId, eventName, schemaVersion, breaking } — `breaking` is true when
+   * a producer satisfying the previous revision could fail this one.
+   */
+  taxonomyVersionCreated: "cdp.event_taxonomy_version.created",
+  /**
+   * CR-CDP-03 — a schema revision is now the contract in force; its predecessor was
+   * deprecated in the same transaction. Downstream contract: producers should validate
+   * against this schemaVersion from now on.
+   * Payload: { taxonomyId, eventName, schemaVersion, deprecatedCount }.
+   */
+  taxonomyVersionActivated: "cdp.event_taxonomy_version.activated",
+  /**
+   * CR-CDP-03 — a schema revision was retired. Historical events remain explicable
+   * against it; new payloads should not be validated against it.
+   * Payload: { taxonomyId, eventName, schemaVersion }.
+   */
+  taxonomyVersionDeprecated: "cdp.event_taxonomy_version.deprecated",
+
+  /**
+   * CR-CDP-04 — an anonymous visitor (device/cookie id) was registered with a shell
+   * golden profile. Fires on the first POST /v1/cdp/identity/anonymous-visitors for a
+   * visitor key; a returning visitor is a heartbeat and emits nothing.
+   * Payload: { visitorId, anonymousProfileId, deviceType }. Carries no visitor key,
+   * raw or hashed — a hashed device id is still a tracking identifier.
+   */
+  visitorTracked: "cdp.identity.visitor_tracked",
+  /**
+   * CR-CDP-04 — an anonymous visitor authenticated and its events, identifiers and
+   * devices were merged into the known golden profile. Fires on
+   * POST /v1/cdp/identity/anonymous-visitors/{id}/stitch, alongside `cdp.profile.merged`
+   * (so existing merge consumers stay correct without learning a new topic) and
+   * `cdp.profile.lineage_appended`.
+   * Payload: { visitorId, anonymousProfileId, knownProfileId, eventsMerged,
+   *            identifiersMerged, devicesMerged }.
+   */
+  visitorStitched: "cdp.identity.visitor_stitched",
 } as const;
 
 /**

@@ -71,6 +71,28 @@ export async function listByProfile(
 }
 
 /**
+ * Move every stored event from one profile to another. Returns the number moved.
+ *
+ * CR-CDP-04 identity stitching: the events a visitor generated before authenticating are
+ * the same person's events. They are re-pointed rather than copied — a copy would double
+ * every behavioural count the profile is segmented on, and leaving them behind would hide
+ * the pre-login journey that makes the stitch worth doing.
+ */
+export async function reassignProfile(
+  tx: ScopedTx,
+  fromProfileId: string,
+  toProfileId: string,
+  tenantId: string,
+): Promise<number> {
+  const result = await tx
+    .update(eventStore)
+    .set({ profileId: toProfileId })
+    .where(and(eq(eventStore.profileId, fromProfileId), eq(eventStore.tenantId, tenantId)))
+    .returning({ id: eventStore.id });
+  return result.length;
+}
+
+/**
  * Get timeline events for a profile (consolidated interaction timeline).
  */
 export async function getTimeline(

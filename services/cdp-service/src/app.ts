@@ -24,6 +24,10 @@ import { segmentComputeRoutes } from "./modules/segments/compute-routes.js";
 import { stewardQualityRoutes } from "./modules/steward/quality-routes.js";
 import { dsarRoutes } from "./modules/dsar/routes.js";
 import { activationRoutes } from "./modules/activations/routes.js";
+import { profileTemplateRoutes } from "./modules/profiles/template-routes.js";
+import { identityPhoneticRoutes } from "./modules/identity/phonetic-routes.js";
+import { eventTaxonomyVersionRoutes } from "./modules/events/taxonomy-version-routes.js";
+import { identityVisitorRoutes } from "./modules/identity/visitor-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -59,6 +63,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(stewardQualityRoutes);        // CDP-010
   await app.register(dsarRoutes);                  // CDP-011
   await app.register(activationRoutes);            // CDP-012
+
+  // Bharat Sampark CR rows
+  await app.register(profileTemplateRoutes);       // CR-CDP-01
+  await app.register(identityPhoneticRoutes);      // CR-CDP-02
+  await app.register(eventTaxonomyVersionRoutes);  // CR-CDP-03
+  await app.register(identityVisitorRoutes);       // CR-CDP-04
 
   return app;
 }
