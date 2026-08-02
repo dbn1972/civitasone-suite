@@ -58,6 +58,11 @@ export const COMMANDS = {
    * job — the ACTUAL data copy is an explicit stub at that boundary.
    */
   sandboxRefreshExecute: "admin.sandbox_refresh.execute",
+  securityIncidentCreate: "admin.security_incident.create",
+  securityIncidentTransition: "admin.security_incident.transition",
+  securityIncidentClose: "admin.security_incident.close",
+  securityBreachNotificationCreate: "admin.security_breach_notification.create",
+  securityBreachNotificationSubmit: "admin.security_breach_notification.submit",
 } as const;
 
 export const EVENTS = {

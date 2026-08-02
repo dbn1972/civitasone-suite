@@ -34,8 +34,10 @@ registerSandboxConsumers(queue);
 import { registerReconciliationConsumers } from "./modules/reconciliation-consumer.js";
 registerReconciliationConsumers(queue);
 import { registerSecurityComplianceConsumers } from "./modules/security-compliance/consumer.js";
+import { registerSecurityIncidentConsumers } from "./modules/security-incident/consumer.js";
 import { tenantScoped } from "./shared/tenant-queue.js";
 registerSecurityComplianceConsumers(tenantScoped(queue));
+registerSecurityIncidentConsumers(tenantScoped(queue));
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
