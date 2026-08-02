@@ -106,6 +106,8 @@ export const COMMANDS = {
   complianceNoticeCreate: "inspection.compliance_notice.create",
   /** payload: { findingId, verificationEvidenceIds?, verifierNotes? } — transitions finding to closed with verification */
   findingVerifyResolved: "inspection.finding.verify_resolved",
+  /** payload: { findingId } — soft-delete finding when parent inspection allows (Req 9.8) */
+  findingSoftDelete: "inspection.finding.soft_delete",
 
   // ── CAPA (SVC-106) ───────────────────────────────────────────────────────
   /** payload: { findingId, type: "corrective"|"preventive", description, ownerId?, dueDate? } */

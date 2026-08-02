@@ -39,7 +39,7 @@ describe("ecosystem workers (FE↔BE CQRS)", () => {
   });
 });
 
-describe("ecosystem scanner DSN wiring (court/visitor/works/procurement)", () => {
+describe("ecosystem scanner DSN wiring (court/visitor/works/procurement/contract/inspection)", () => {
   const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
 
   it("wires COURT_SCANNER_DATABASE_URL into court-worker", () => {
@@ -90,5 +90,15 @@ describe("ecosystem workflow scanner DSN", () => {
   it("wires WORKFLOW_SCANNER_DATABASE_URL into workflow-worker", () => {
     expect(eco).toMatch(/worker\(\s*"workflow"[\s\S]*WORKFLOW_SCANNER_DATABASE_URL/);
     expect(eco).toContain('scannerDbUrl("workflow_scanner"');
+  });
+
+  it("wires CONTRACT_SCANNER_DATABASE_URL into contract-worker", () => {
+    expect(eco).toMatch(/worker\(\s*"contract"[\s\S]*CONTRACT_SCANNER_DATABASE_URL/);
+    expect(eco).toContain('scannerDbUrl("contract_scanner"');
+  });
+
+  it("wires INSPECTION_SCANNER_DATABASE_URL into inspection-worker", () => {
+    expect(eco).toMatch(/worker\(\s*"inspection"[\s\S]*INSPECTION_SCANNER_DATABASE_URL/);
+    expect(eco).toContain('scannerDbUrl("inspection_scanner"');
   });
 });
