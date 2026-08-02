@@ -87,7 +87,14 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createBodySchema.parse(req.body);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createTable(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createTable(ctx, {
+      name: body.name,
+      hitPolicy: body.hitPolicy,
+      inputs: body.inputs,
+      outputs: body.outputs,
+      rules: body.rules,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+    }));
   });
 
   /** GET /v1/workflow/dmn/tables — list decision tables */
@@ -166,7 +173,15 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updateBodySchema.parse(req.body);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTable(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTable(ctx, id, {
+      version: body.version,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.hitPolicy !== undefined ? { hitPolicy: body.hitPolicy } : {}),
+      ...(body.inputs !== undefined ? { inputs: body.inputs } : {}),
+      ...(body.outputs !== undefined ? { outputs: body.outputs } : {}),
+      ...(body.rules !== undefined ? { rules: body.rules } : {}),
+    }));
   });
 
   /** DELETE /v1/workflow/dmn/tables/:id — soft-delete */
