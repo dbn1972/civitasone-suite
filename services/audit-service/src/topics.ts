@@ -4,6 +4,7 @@
  */
 export const CONSUMED_EVENTS = {
   auditEventRecord: "audit.event.record",
+  auditEventIngest: "audit.event.ingest",
 } as const;
 
 export const COMMANDS = {

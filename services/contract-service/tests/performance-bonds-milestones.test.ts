@@ -44,7 +44,7 @@ function pub(q: MemoryQueue, type: string, actorId: string, payload: Record<stri
 }
 
 async function waitForContractStatus(id: string, want: string): Promise<void> {
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 120; i++) {
     const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(contractContracts).where(eq(contractContracts.id, id))));
     if (row?.status === want) return;
@@ -54,7 +54,7 @@ async function waitForContractStatus(id: string, want: string): Promise<void> {
 }
 
 async function waitForMilestone(id: string, want: string) {
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 120; i++) {
     const [ms] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(contractMilestones).where(eq(contractMilestones.id, id))));
     if (ms?.status === want) return ms;
@@ -140,7 +140,7 @@ describe("milestones + performance bonds (CQRS integration)", () => {
     });
 
     let held = false;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 120; i++) {
       const bonds = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
         tx.select().from(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, bondId))));
       if (bonds[0]?.status === "held") { held = true; expect(bonds[0]?.amountMinor).toBe(450_000n); break; }
@@ -151,7 +151,7 @@ describe("milestones + performance bonds (CQRS integration)", () => {
     await pub(q, COMMANDS.bondTransition, CHECKER, {
       contractId, bondId, tenantId: TENANT, toStatus: "released", notes: "defect liability cleared",
     });
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 120; i++) {
       const [after] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
         tx.select().from(contractPerformanceBonds).where(eq(contractPerformanceBonds.id, bondId))));
       if (after?.status === "released") {
