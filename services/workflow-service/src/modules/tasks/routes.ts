@@ -37,9 +37,14 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/tasks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const q = listQuerySchema.extend({ status: z.string().optional() }).parse(req.query);
-    const listOpts: { status?: string; roles?: string[] } = {};
+    const q = listQuerySchema.extend({
+      status: z.string().optional(),
+      // D1 (FE↔BE high ROI) — scope the task list to one instance.
+      instanceId: z.string().uuid().optional(),
+    }).parse(req.query);
+    const listOpts: { status?: string; roles?: string[]; instanceId?: string } = {};
     if (q.status !== undefined) listOpts.status = q.status;
+    if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
     if (ctx.roles.length) listOpts.roles = ctx.roles;
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });

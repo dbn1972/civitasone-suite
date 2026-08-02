@@ -264,6 +264,21 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id, ...body } });
   });
 
+  // FE gap (quality-payroll-95): the costing page previously had no way to
+  // list rules — only create (POST) existed — so it showed a static
+  // "not yet available" EmptyState. This closes that gap.
+  app.get("/v1/payroll/costing/rules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT id, employee_group, cost_center_id, split_pct, status, created_at
+      FROM payroll.costing_rules
+      WHERE tenant_id = ${ctx.tenantId}::uuid
+      ORDER BY employee_group, cost_center_id
+    `))) as unknown as Array<Record<string, unknown>>;
+    return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
   app.get("/v1/payroll/costing/report", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

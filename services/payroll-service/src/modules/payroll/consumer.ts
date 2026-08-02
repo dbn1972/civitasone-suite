@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { payrollPensioners } from "./schema.js";
 import * as repo from "./repo.js";
 import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
@@ -453,6 +454,147 @@ export function registerPayrollConsumers(queue: Queue): void {
       await audit(tx, msg, "revert", "payroll_run", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
+  });
+
+  // ─── CQRS lift (quality-payroll-95) ───────────────────────────────────────
+  // routes.ts (ddos/pensioners) and world-class-routes.ts (arrears/bonus/
+  // reimbursements) used to write synchronously in the request path. These
+  // consumers now persist those writes, idempotently (markProcessed), and
+  // fire the paired *ed event — mirrors works-service #354's masters/billing
+  // CQRS lift.
+
+  queue.subscribe(COMMANDS.ddoUpsert, async (msg) => {
+    const p = msg.payload as { tenantId: string; ddoCode: string; name: string; departmentIds?: string[] };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_ddos (tenant_id, ddo_code, name)
+        VALUES (${p.tenantId}::uuid, ${p.ddoCode}, ${p.name})
+        ON CONFLICT (tenant_id, ddo_code) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
+      `);
+      for (const deptId of p.departmentIds ?? []) {
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_ddo_departments (tenant_id, department_id, ddo_code)
+          VALUES (${p.tenantId}::uuid, ${deptId}::uuid, ${p.ddoCode})
+          ON CONFLICT (tenant_id, department_id) DO UPDATE SET ddo_code = EXCLUDED.ddo_code
+        `);
+      }
+      await enqueue(tx, {
+        topic: EVENTS.ddoUpserted, eventType: EVENTS.ddoUpserted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { ddoCode: p.ddoCode, name: p.name },
+      });
+      await audit(tx, msg, "upsert", "payroll_ddo", p.ddoCode);
+    });
+  });
+
+  queue.subscribe(COMMANDS.pensionerCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; ppoNo: string; fullName: string; dateOfBirth: string;
+      basicPensionMinor: string; commutedPensionMinor?: string; commutationDate: string | null;
+      medicalAllowanceMinor?: string; ddoCode: string | null;
+      bankAccountNo: string | null; bankIfsc: string | null; pan: string | null; taxRegime: "old" | "new";
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // SEC-P1-06: insert via the Drizzle table so the encryptedText transform
+      // on bank_account_no / bank_ifsc / pan applies — matches the guarantee
+      // the previous synchronous handler in routes.ts made (never store this
+      // PII in plaintext).
+      await tx.insert(payrollPensioners).values({
+        id: p.id,
+        tenantId: p.tenantId,
+        ppoNo: p.ppoNo,
+        fullName: p.fullName,
+        dateOfBirth: p.dateOfBirth,
+        basicPensionMinor: BigInt(p.basicPensionMinor),
+        commutedPensionMinor: BigInt(p.commutedPensionMinor ?? "0"),
+        commutationDate: p.commutationDate ?? null,
+        medicalAllowanceMinor: BigInt(p.medicalAllowanceMinor ?? "0"),
+        ddoCode: p.ddoCode ?? null,
+        bankAccountNo: p.bankAccountNo ?? null,
+        bankIfsc: p.bankIfsc ?? null,
+        pan: p.pan ?? null,
+        taxRegime: p.taxRegime,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      }).onConflictDoNothing();
+      await enqueue(tx, {
+        topic: EVENTS.pensionerCreated, eventType: EVENTS.pensionerCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, ppoNo: p.ppoNo },
+      });
+      await audit(tx, msg, "create", "payroll_pensioner", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.arrearCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string; componentCode: string;
+      fromPeriod: string; toPeriod: string; oldAmountMinor: number; newAmountMinor: number;
+      reason?: string | null;
+    };
+    const diff = p.newAmountMinor - p.oldAmountMinor;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_arrears
+          (id, tenant_id, employee_id, component_code, from_period, to_period,
+           old_amount_minor, new_amount_minor, difference_minor, reason, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.componentCode},
+          ${p.fromPeriod}, ${p.toPeriod}, ${p.oldAmountMinor}, ${p.newAmountMinor}, ${diff},
+          ${p.reason ?? null}, ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.arrearCreated, eventType: EVENTS.arrearCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: p.employeeId, differenceMinor: diff },
+      });
+      await audit(tx, msg, "create", "payroll_arrear", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.bonusCompute, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; employeeId: string; fy: string; basicMinor: number; bonusPct: number };
+    const bonusAmountMinor = Math.round((p.basicMinor * p.bonusPct) / 100);
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_bonus (id, tenant_id, employee_id, fy, basic_minor, bonus_pct, bonus_amount_minor)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.fy}, ${p.basicMinor}, ${p.bonusPct}, ${bonusAmountMinor})
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.bonusComputed, eventType: EVENTS.bonusComputed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: p.employeeId, bonusAmountMinor },
+      });
+      await audit(tx, msg, "compute", "payroll_bonus", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.reimbursementCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string; category: string; amountMinor: number;
+      billDate?: string | null; billRef?: string | null; period: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_reimbursements
+          (id, tenant_id, employee_id, category, amount_minor, bill_date, bill_ref, period, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.category}, ${p.amountMinor},
+          ${p.billDate ?? null}::date, ${p.billRef ?? null}, ${p.period}, ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.reimbursementCreated, eventType: EVENTS.reimbursementCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: p.employeeId, amountMinor: p.amountMinor },
+      });
+      await audit(tx, msg, "create", "payroll_reimbursement", p.id);
+    });
   });
 }
 

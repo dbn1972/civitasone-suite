@@ -5,6 +5,7 @@ export const COMMANDS = {
   vendorCreate:    "procurement.vendor.create",
   vendorEmpanel:   "procurement.vendor.empanel",
   vendorBlacklist: "procurement.vendor.blacklist",
+  rfqCreate:       "procurement.rfq.create",
   poCreate:        "procurement.po.create",
   poApprove:       "procurement.po.approve",
   poDispatch:      "procurement.po.dispatch",

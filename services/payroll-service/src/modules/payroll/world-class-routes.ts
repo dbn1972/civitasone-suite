@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
+import { createArrearBody, computeBonusBody, createReimbursementBody } from "./validators.js";
 
 const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
 
@@ -14,30 +18,14 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
+  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // the request path; now publishes payroll.arrear.create and returns 202 —
+  // the arrearCreate consumer (payroll/consumer.js) persists it asynchronously.
   app.post("/v1/payroll/arrears", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const body = z.object({
-      employeeId: z.string().uuid(),
-      componentCode: z.string(),
-      fromPeriod: z.string(),
-      toPeriod: z.string(),
-      oldAmountMinor: z.number().int(),
-      newAmountMinor: z.number().int(),
-      reason: z.string().optional(),
-    }).parse(req.body);
-    const row = await repo.insertArrear({
-      tenantId: ctx.tenantId,
-      employeeId: body.employeeId,
-      componentCode: body.componentCode,
-      fromPeriod: body.fromPeriod,
-      toPeriod: body.toPeriod,
-      oldAmountMinor: body.oldAmountMinor,
-      newAmountMinor: body.newAmountMinor,
-      reason: body.reason ?? null,
-      actorId: ctx.actorId,
-    });
-    return reply.code(201).send({ data: row });
+    const body = createArrearBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createArrear(ctx, body));
   });
 
   // Bonus
@@ -49,25 +37,16 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
+  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // the request path (with the bonus amount computed in the HTTP handler);
+  // now publishes payroll.bonus.compute and returns 202 — the bonusCompute
+  // consumer (payroll/consumer.js) computes bonusAmountMinor and persists it
+  // asynchronously, as the single source of truth for the calculation.
   app.post("/v1/payroll/bonus/compute", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const body = z.object({
-      employeeId: z.string().uuid(),
-      fy: z.string(),
-      basicMinor: z.number().int(),
-      bonusPct: z.number().default(8.33),
-    }).parse(req.body);
-    const bonusAmountMinor = Math.round(body.basicMinor * body.bonusPct / 100);
-    const row = await repo.insertBonus({
-      tenantId: ctx.tenantId,
-      employeeId: body.employeeId,
-      fy: body.fy,
-      basicMinor: body.basicMinor,
-      bonusPct: body.bonusPct,
-      bonusAmountMinor,
-    });
-    return reply.code(201).send({ data: row });
+    const body = computeBonusBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.computeBonus(ctx, body));
   });
 
   // Professional Tax
@@ -98,28 +77,15 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
+  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // the request path; now publishes payroll.reimbursement.create and returns
+  // 202 — the reimbursementCreate consumer (payroll/consumer.js) persists it
+  // asynchronously.
   app.post("/v1/payroll/reimbursements", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...ROLES, "employee"]);
-    const body = z.object({
-      employeeId: z.string().uuid(),
-      category: z.enum(["medical","travel","lta","food","telephone","internet","fuel","other"]),
-      amountMinor: z.number().int().positive(),
-      billDate: z.string().optional(),
-      billRef: z.string().optional(),
-      period: z.string(),
-    }).parse(req.body);
-    const row = await repo.insertReimbursement({
-      tenantId: ctx.tenantId,
-      employeeId: body.employeeId,
-      category: body.category,
-      amountMinor: body.amountMinor,
-      billDate: body.billDate ?? null,
-      billRef: body.billRef ?? null,
-      period: body.period,
-      actorId: ctx.actorId,
-    });
-    return reply.code(201).send({ data: row });
+    const body = createReimbursementBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createReimbursement(ctx, body));
   });
 
   // Salary Revisions
@@ -186,5 +152,17 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       period1: { period: q.period1, ...s1 },
       period2: { period: q.period2, ...s2 },
     });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

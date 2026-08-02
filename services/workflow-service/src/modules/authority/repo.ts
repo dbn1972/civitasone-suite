@@ -3,7 +3,11 @@ import { db, scopedRead } from "../../shared/db.js";
 import { authorityLimits, type AuthorityLimitRow } from "./schema.js";
 import type { AuthorityLimit, AuthorityScope, AuthorityType } from "./domain.js";
 
-/** Map a DB row to the pure-domain AuthorityLimit (numeric string → number). */
+/**
+ * Map a DB row to the pure-domain AuthorityLimit. `maxAmount` is a native
+ * bigint (Drizzle `mode: "bigint"`, migration 0032) — passed through as-is;
+ * NEVER coerce through Number() (loses precision above 2^53).
+ */
 export function toDomain(r: AuthorityLimitRow): AuthorityLimit {
   return {
     id: r.id,
@@ -11,7 +15,7 @@ export function toDomain(r: AuthorityLimitRow): AuthorityLimit {
     scopeRef: r.scopeRef,
     authorityType: r.authorityType as AuthorityType,
     currency: r.currency,
-    maxAmount: Number(r.maxAmount),
+    maxAmount: r.maxAmount,
     effectiveFrom: r.effectiveFrom,
     effectiveTo: r.effectiveTo ?? null,
     escalateToScopeType: (r.escalateToScopeType as AuthorityScope | null) ?? null,
@@ -26,7 +30,7 @@ export interface CreateLimitInput {
   scopeRef: string;
   authorityType: AuthorityType;
   currency: string;
-  maxAmount: number;
+  maxAmount: bigint;
   effectiveFrom: string;
   effectiveTo: string | null;
   escalateToScopeType: AuthorityScope | null;

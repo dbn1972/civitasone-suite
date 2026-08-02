@@ -60,7 +60,11 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
       />
       <PageHeader
         title={instance.name}
-        subtitle={`Process instance · version ${instance.version}`}
+        subtitle={
+          instance.definitionName
+            ? `${instance.definitionName} · version ${instance.version}`
+            : `Process instance · version ${instance.version}`
+        }
         back="/workflow/list"
         actions={
           <>
@@ -76,6 +80,15 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
         <StatCard icon="🕘" iconBg="#f5f3ff" label="Transitions" value={history.length} />
         <StatCard icon="#️⃣" iconBg="#ecfdf5" label="Version" value={instance.version} />
       </StatGrid>
+
+      {instance.refType ? (
+        <div className="pad" style={{ paddingTop: 0 }}>
+          <span style={{ color: "var(--civitas-color-text-muted)", fontSize: 13 }}>
+            Linked to {instance.refType}
+            {instance.refId ? ` · ${instance.refId}` : ""}
+          </span>
+        </div>
+      ) : null}
 
       <div className="grid g-2" style={{ marginTop: 18 }}>
         <Card title="Open tasks">

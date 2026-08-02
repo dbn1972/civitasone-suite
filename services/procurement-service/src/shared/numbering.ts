@@ -32,6 +32,7 @@ const PREFIX: Record<string, string> = {
   plan: "APP",
   amendment: "AMD",
   corrigendum: "COR",
+  rfq: "RFQ",
 };
 
 /**

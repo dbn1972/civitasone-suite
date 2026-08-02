@@ -7,6 +7,11 @@ export const COMMANDS = {
   deliverMessage: "workflow.message.deliver",
   correlateMessage: "workflow.message.correlate",
   broadcastSignal: "workflow.signal.broadcast",
+  // CQRS (designer lift) — BPMN visual designer definition writes.
+  createDesignerDefinition: "workflow.designer.definition.create",
+  updateDesignerDefinition: "workflow.designer.definition.update",
+  deleteDesignerDefinition: "workflow.designer.definition.delete",
+  importDesignerDefinition: "workflow.designer.definition.import",
 } as const;
 
 export const EVENTS = {
@@ -29,6 +34,11 @@ export const EVENTS = {
   // CAP-029 — instance finalization / reversal.
   instanceFinalized: "workflow.instance.finalized",
   instanceReversed: "workflow.instance.reversed",
+  // CQRS (designer lift) — BPMN visual designer definition lifecycle events.
+  designerDefinitionCreated: "workflow.designer.definition.created",
+  designerDefinitionUpdated: "workflow.designer.definition.updated",
+  designerDefinitionDeleted: "workflow.designer.definition.deleted",
+  designerDefinitionImported: "workflow.designer.definition.imported",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */

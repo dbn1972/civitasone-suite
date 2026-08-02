@@ -2075,6 +2075,15 @@ export async function getProcurementEMD(): Promise<LoaderResult<EmdBgEntry[]>> {
   });
 }
 
+/** Performance security (bank guarantees) — same register the EMD & BG page renders alongside EMD entries. */
+export async function getProcurementPBG(): Promise<LoaderResult<EmdBgEntry[]>> {
+  return fetchJson<unknown, EmdBgEntry[]>("/api/v1/procurement/pbg", [], {
+    revalidateSeconds: 120,
+    telemetryKey: "procurement.pbg",
+    mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+  });
+}
+
 export type EmpanelmentEntry = {
   id: string;
   vendorName: string;
@@ -4072,7 +4081,7 @@ function buildApprovalLink(module: string, refType: string, refId: string, taskI
     case "procurement_indent":
       return `/procurement/indents/${refId}`;
     case "procurement_po":
-      return `/procurement/purchase-orders/${refId}`;
+      return `/procurement/orders/${refId}`;
     case "finance_bill":
       return `/finance/bills/${refId}`;
     case "estab_file":

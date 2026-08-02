@@ -39,7 +39,7 @@ describe("ecosystem workers (FE↔BE CQRS)", () => {
   });
 });
 
-describe("ecosystem scanner DSN wiring (court/visitor/works)", () => {
+describe("ecosystem scanner DSN wiring (court/visitor/works/procurement)", () => {
   const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
 
   it("wires COURT_SCANNER_DATABASE_URL into court-worker", () => {
@@ -55,5 +55,40 @@ describe("ecosystem scanner DSN wiring (court/visitor/works)", () => {
   it("wires WORKS_SCANNER_DATABASE_URL into works-worker", () => {
     expect(eco).toMatch(/worker\(\s*"works"[\s\S]*WORKS_SCANNER_DATABASE_URL/);
     expect(eco).toContain('scannerDbUrl("works_scanner"');
+  });
+
+  it("wires PROCUREMENT_SCANNER_DATABASE_URL into procurement-worker", () => {
+    expect(eco).toMatch(/worker\(\s*"procurement"[\s\S]*?PROCUREMENT_SCANNER_DATABASE_URL/);
+    expect(eco).toContain('scannerDbUrl("procurement_scanner"');
+  });
+});
+
+describe("ecosystem PII_ENC_KEY wiring (procurement) — 117-restart-loop regression", () => {
+  const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
+
+  it("generates a dedicated PROCUREMENT_PII_KEY via the piiKey() factory", () => {
+    expect(eco).toMatch(/piiKey\(\s*"PROCUREMENT_PII_KEY"/);
+  });
+
+  it("wires PII_ENC_KEY into svc(\"procurement\", …) — service reads process.env.PII_ENC_KEY, not a per-service var", () => {
+    const m = eco.match(/svc\(\s*"procurement"[\s\S]*?\)[,;\n]/);
+    expect(m?.[0], 'svc("procurement", …) call not found').toBeDefined();
+    expect(m?.[0]).toContain("PII_ENC_KEY");
+  });
+
+  it("wires PII_ENC_KEY into worker(\"procurement\", …)", () => {
+    // Nested scannerDbUrl(...) — match loosely to the full call.
+    const m = eco.match(/worker\(\s*"procurement"[\s\S]*?PROCUREMENT_SCANNER_DATABASE_URL[\s\S]*?\)\s*,/);
+    expect(m?.[0], 'worker("procurement", …) call not found').toBeDefined();
+    expect(m?.[0]).toContain("PII_ENC_KEY: PROCUREMENT_PII_KEY");
+    expect(m?.[0]).toContain("PROCUREMENT_SCANNER_DATABASE_URL");
+  });
+});
+
+describe("ecosystem workflow scanner DSN", () => {
+  const eco = readFileSync(join(ROOT, "ecosystem.config.js"), "utf8");
+  it("wires WORKFLOW_SCANNER_DATABASE_URL into workflow-worker", () => {
+    expect(eco).toMatch(/worker\(\s*"workflow"[\s\S]*WORKFLOW_SCANNER_DATABASE_URL/);
+    expect(eco).toContain('scannerDbUrl("workflow_scanner"');
   });
 });

@@ -1,6 +1,13 @@
 /**
  * Tests for BPMN designer module: CRUD routes, 500 element limit, graph validation.
  * Validates Requirements 7.1 and 7.6.
+ *
+ * CQRS: create/update/delete/import publish a command and return the bare
+ * `{ id, status: "accepted", correlationId }` envelope immediately — the
+ * actual write happens in the consumer (see designer-cqrs.test.ts). Tests
+ * that need a pre-existing row (GET/PATCH/DELETE/validate/export happy paths)
+ * seed it with a direct scoped insert instead of going through the route,
+ * mirroring messages-integration.test.ts.
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -8,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { designerDefinitions } from "../src/modules/designer/schema.js";
 import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -29,45 +37,66 @@ afterEach(async () => {
 });
 afterAll(async () => { await sqlClient.end(); });
 
-// Helper to create a definition via API
-async function createDefinition(app: ReturnType<typeof buildApp> extends Promise<infer T> ? T : never, payload?: Record<string, unknown>) {
-  return app.inject({
-    method: "POST",
-    url: "/v1/workflow/designer/definitions",
-    headers: { authorization: `Bearer ${adminToken()}` },
-    payload: payload ?? {
-      name: "Test BPMN Definition",
-      description: "A test workflow",
-      elements: [
-        { id: "start1", type: "startEvent", label: "Start", position: { x: 100, y: 100 } },
-        { id: "task1", type: "userTask", label: "Review", position: { x: 300, y: 100 } },
-        { id: "end1", type: "endEvent", label: "End", position: { x: 500, y: 100 } },
-      ],
-      edges: [
-        { id: "e1", source: "start1", target: "task1" },
-        { id: "e2", source: "task1", target: "end1" },
-      ],
-    },
-  });
+const DEFAULT_ELEMENTS = [
+  { id: "start1", type: "startEvent", label: "Start", position: { x: 100, y: 100 } },
+  { id: "task1", type: "userTask", label: "Review", position: { x: 300, y: 100 } },
+  { id: "end1", type: "endEvent", label: "End", position: { x: 500, y: 100 } },
+];
+const DEFAULT_EDGES = [
+  { id: "e1", source: "start1", target: "task1" },
+  { id: "e2", source: "task1", target: "end1" },
+];
+
+/** Seed a definition row directly (bypassing the async CQRS write path). */
+async function seedDefinition(opts: {
+  name?: string;
+  elements?: unknown[];
+  edges?: unknown[];
+  status?: string;
+  version?: number;
+} = {}): Promise<string> {
+  const id = randomUUID();
+  await asTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(designerDefinitions).values({
+      id,
+      tenantId: TENANT,
+      name: opts.name ?? "Seeded Definition",
+      description: null,
+      elements: (opts.elements ?? DEFAULT_ELEMENTS) as never,
+      edges: (opts.edges ?? DEFAULT_EDGES) as never,
+      status: opts.status ?? "draft",
+      version: opts.version ?? 1,
+      createdBy: ACTOR,
+      updatedBy: ACTOR,
+    });
+  }));
+  return id;
 }
 
 describe("POST /v1/workflow/designer/definitions", () => {
-  it("creates a definition with elements and edges → 202", async () => {
+  it("accepts a create request with elements and edges → 202", async () => {
     const app = await buildApp();
-    const res = await createDefinition(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflow/designer/definitions",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: {
+        name: "Test BPMN Definition",
+        description: "A test workflow",
+        elements: DEFAULT_ELEMENTS,
+        edges: DEFAULT_EDGES,
+      },
+    });
     await app.close();
 
     expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.data.id).toBeDefined();
-    expect(body.data.name).toBe("Test BPMN Definition");
-    expect(body.data.status).toBe("draft");
-    expect(body.data.version).toBe(1);
-    expect(body.data.elementCount).toBe(3);
-    expect(body.data.edgeCount).toBe(2);
+    expect(body.id).toBeDefined();
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeDefined();
   });
 
-  it("creates an empty definition (no elements)", async () => {
+  it("accepts an empty definition (no elements) → 202", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -78,9 +107,7 @@ describe("POST /v1/workflow/designer/definitions", () => {
     await app.close();
 
     expect(res.statusCode).toBe(202);
-    const body = res.json();
-    expect(body.data.elementCount).toBe(0);
-    expect(body.data.edgeCount).toBe(0);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("rejects when total elements exceed 500", async () => {
@@ -151,9 +178,9 @@ describe("POST /v1/workflow/designer/definitions", () => {
 
 describe("GET /v1/workflow/designer/definitions", () => {
   it("lists definitions for the tenant", async () => {
+    await seedDefinition();
+    await seedDefinition({ name: "Second Def", elements: [], edges: [] });
     const app = await buildApp();
-    await createDefinition(app);
-    await createDefinition(app, { name: "Second Def", elements: [], edges: [] });
 
     const res = await app.inject({
       method: "GET",
@@ -171,10 +198,10 @@ describe("GET /v1/workflow/designer/definitions", () => {
   });
 
   it("supports pagination", async () => {
+    await seedDefinition();
+    await seedDefinition({ name: "Second", elements: [], edges: [] });
+    await seedDefinition({ name: "Third", elements: [], edges: [] });
     const app = await buildApp();
-    await createDefinition(app);
-    await createDefinition(app, { name: "Second", elements: [], edges: [] });
-    await createDefinition(app, { name: "Third", elements: [], edges: [] });
 
     const res = await app.inject({
       method: "GET",
@@ -190,8 +217,8 @@ describe("GET /v1/workflow/designer/definitions", () => {
   });
 
   it("allows workflow_user role to list", async () => {
+    await seedDefinition();
     const app = await buildApp();
-    await createDefinition(app);
 
     const res = await app.inject({
       method: "GET",
@@ -206,9 +233,8 @@ describe("GET /v1/workflow/designer/definitions", () => {
 
 describe("GET /v1/workflow/designer/definitions/:id", () => {
   it("returns a single definition by id", async () => {
+    const id = await seedDefinition({ name: "Test BPMN Definition" });
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "GET",
@@ -239,10 +265,9 @@ describe("GET /v1/workflow/designer/definitions/:id", () => {
 });
 
 describe("PATCH /v1/workflow/designer/definitions/:id", () => {
-  it("updates name with correct version → 200", async () => {
+  it("accepts an update with correct version → 202", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "PATCH",
@@ -252,16 +277,15 @@ describe("PATCH /v1/workflow/designer/definitions/:id", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.data.name).toBe("Updated Name");
-    expect(body.data.version).toBe(2);
+    expect(body.id).toBe(id);
+    expect(body.status).toBe("accepted");
   });
 
   it("rejects with 409 on version conflict", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "PATCH",
@@ -276,10 +300,9 @@ describe("PATCH /v1/workflow/designer/definitions/:id", () => {
     expect(body.error.code).toBe("VERSION_CONFLICT");
   });
 
-  it("updates elements and edges with limit enforcement", async () => {
+  it("accepts an elements/edges update within the limit", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "PATCH",
@@ -296,14 +319,13 @@ describe("PATCH /v1/workflow/designer/definitions/:id", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("rejects update exceeding 500 elements", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const elements = Array.from({ length: 501 }, (_, i) => ({
       id: `n_${i}`,
@@ -339,28 +361,21 @@ describe("PATCH /v1/workflow/designer/definitions/:id", () => {
 });
 
 describe("DELETE /v1/workflow/designer/definitions/:id", () => {
-  it("soft-deletes a definition → 204", async () => {
+  it("accepts a delete request → 202", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflow/designer/definitions/${id}`,
       headers: { authorization: `Bearer ${adminToken()}` },
     });
-
-    expect(res.statusCode).toBe(204);
-
-    // Verify it's soft-deleted (GET returns 404)
-    const getRes = await app.inject({
-      method: "GET",
-      url: `/v1/workflow/designer/definitions/${id}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-    });
     await app.close();
 
-    expect(getRes.statusCode).toBe(404);
+    expect(res.statusCode).toBe(202);
+    const body = res.json();
+    expect(body.id).toBe(id);
+    expect(body.status).toBe("accepted");
   });
 
   it("returns 404 for non-existent definition", async () => {
@@ -375,19 +390,10 @@ describe("DELETE /v1/workflow/designer/definitions/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("returns 404 for already deleted definition", async () => {
+  it("returns 404 for an already-deleted definition", async () => {
+    const id = await seedDefinition({ status: "deleted" });
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
-    // Delete once
-    await app.inject({
-      method: "DELETE",
-      url: `/v1/workflow/designer/definitions/${id}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-    });
-
-    // Delete again
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/workflow/designer/definitions/${id}`,
@@ -401,9 +407,8 @@ describe("DELETE /v1/workflow/designer/definitions/:id", () => {
 
 describe("POST /v1/workflow/designer/definitions/:id/validate", () => {
   it("returns valid for a correct graph", async () => {
+    const id = await seedDefinition();
     const app = await buildApp();
-    const createRes = await createDefinition(app);
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "POST",
@@ -419,25 +424,19 @@ describe("POST /v1/workflow/designer/definitions/:id/validate", () => {
   });
 
   it("detects gateway with no outgoing flow", async () => {
-    const app = await buildApp();
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/workflow/designer/definitions",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        name: "Invalid Gateway",
-        elements: [
-          { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
-          { id: "gw1", type: "exclusiveGateway", label: "Decision", position: { x: 200, y: 0 } },
-          { id: "end1", type: "endEvent", label: "End", position: { x: 400, y: 0 } },
-        ],
-        edges: [
-          { id: "e1", source: "s1", target: "gw1" },
-          // No outgoing edge from gateway
-        ],
-      },
+    const id = await seedDefinition({
+      name: "Invalid Gateway",
+      elements: [
+        { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
+        { id: "gw1", type: "exclusiveGateway", label: "Decision", position: { x: 200, y: 0 } },
+        { id: "end1", type: "endEvent", label: "End", position: { x: 400, y: 0 } },
+      ],
+      edges: [
+        { id: "e1", source: "s1", target: "gw1" },
+        // No outgoing edge from gateway
+      ],
     });
-    const { id } = createRes.json().data;
+    const app = await buildApp();
 
     const res = await app.inject({
       method: "POST",
@@ -458,27 +457,21 @@ describe("POST /v1/workflow/designer/definitions/:id/validate", () => {
   });
 
   it("detects unreachable end event", async () => {
-    const app = await buildApp();
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/workflow/designer/definitions",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        name: "Unreachable End",
-        elements: [
-          { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
-          { id: "t1", type: "userTask", label: "Task", position: { x: 200, y: 0 } },
-          { id: "end1", type: "endEvent", label: "End", position: { x: 400, y: 0 } },
-          { id: "end2", type: "endEvent", label: "Disconnected End", position: { x: 400, y: 200 } },
-        ],
-        edges: [
-          { id: "e1", source: "s1", target: "t1" },
-          { id: "e2", source: "t1", target: "end1" },
-          // end2 has no incoming edge — unreachable
-        ],
-      },
+    const id = await seedDefinition({
+      name: "Unreachable End",
+      elements: [
+        { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
+        { id: "t1", type: "userTask", label: "Task", position: { x: 200, y: 0 } },
+        { id: "end1", type: "endEvent", label: "End", position: { x: 400, y: 0 } },
+        { id: "end2", type: "endEvent", label: "Disconnected End", position: { x: 400, y: 200 } },
+      ],
+      edges: [
+        { id: "e1", source: "s1", target: "t1" },
+        { id: "e2", source: "t1", target: "end1" },
+        // end2 has no incoming edge — unreachable
+      ],
     });
-    const { id } = createRes.json().data;
+    const app = await buildApp();
 
     const res = await app.inject({
       method: "POST",
@@ -498,24 +491,18 @@ describe("POST /v1/workflow/designer/definitions/:id/validate", () => {
   });
 
   it("detects dangling edge references", async () => {
-    const app = await buildApp();
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/workflow/designer/definitions",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: {
-        name: "Dangling Edge",
-        elements: [
-          { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
-          { id: "end1", type: "endEvent", label: "End", position: { x: 200, y: 0 } },
-        ],
-        edges: [
-          { id: "e1", source: "s1", target: "end1" },
-          { id: "e2", source: "s1", target: "nonexistent_node" },
-        ],
-      },
+    const id = await seedDefinition({
+      name: "Dangling Edge",
+      elements: [
+        { id: "s1", type: "startEvent", label: "Start", position: { x: 0, y: 0 } },
+        { id: "end1", type: "endEvent", label: "End", position: { x: 200, y: 0 } },
+      ],
+      edges: [
+        { id: "e1", source: "s1", target: "end1" },
+        { id: "e2", source: "s1", target: "nonexistent_node" },
+      ],
     });
-    const { id } = createRes.json().data;
+    const app = await buildApp();
 
     const res = await app.inject({
       method: "POST",
@@ -546,14 +533,8 @@ describe("POST /v1/workflow/designer/definitions/:id/validate", () => {
   });
 
   it("validates an empty definition (no elements) as missing start/end", async () => {
+    const id = await seedDefinition({ name: "Empty", elements: [], edges: [] });
     const app = await buildApp();
-    const createRes = await app.inject({
-      method: "POST",
-      url: "/v1/workflow/designer/definitions",
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: { name: "Empty" },
-    });
-    const { id } = createRes.json().data;
 
     const res = await app.inject({
       method: "POST",

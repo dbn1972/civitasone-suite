@@ -206,6 +206,20 @@ function scannerDbUrl(scannerUser, dbName, envName) {
 const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
 const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
+// procurement-service's app-layer PII crypto (src/shared/pii-crypto.ts) reads
+// the generic `PII_ENC_KEY` env var name (same contract as hrms-service), NOT
+// a `PROCUREMENT_PII_KEY`-named var — but it still needs its OWN distinct key
+// material rather than reusing HRMS's. Generate a procurement-specific secret
+// via the same piiKey() factory (own env-var name + host key-file slug for
+// injection), then plumb its VALUE into the `PII_ENC_KEY` env key both
+// svc("procurement") and worker("procurement") actually read.
+//
+// Boot-probed 2026-08-02: procurement-service and procurement-worker were
+// missing PII_ENC_KEY entirely (unlike hrms, the only other service reading
+// this exact var), so every boot threw "PII_ENC_KEY is required and must be
+// at least 16 characters" (src/shared/validate-env.ts) and pm2 autorestart
+// looped both processes (117 restarts observed). Wiring it below stops the loop.
+const PROCUREMENT_PII_KEY = piiKey("PROCUREMENT_PII_KEY", "procurement", "procurement-service");
 
 // NOTE on inspection-service: it validates a required-env allowlist at boot
 // (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
@@ -274,7 +288,7 @@ module.exports = {
 
     // ── Finance & procurement ──────────────────────────────────────────────────
     svc("finance",      3007, "finance_svc",       "civitas_finance"),
-    svc("procurement",  3008, "procurement_svc",   "civitas_procurement"),
+    svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }),
     svc("contract",     3009, "contract_svc",      "civitas_contract"),
 
     // ── Establishment & physical assets ───────────────────────────────────────
@@ -311,9 +325,14 @@ module.exports = {
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
     worker("finance",      "finance_svc",      "civitas_finance"),
-    worker("procurement",  "procurement_svc",  "civitas_procurement"),
-    worker("workflow",     "workflow_svc",     "civitas_workflow"),
-    worker("payroll",      "payroll_svc",      "civitas_payroll"),
+    worker("procurement",  "procurement_svc",  "civitas_procurement", {
+      PII_ENC_KEY: PROCUREMENT_PII_KEY,
+      PROCUREMENT_SCANNER_DATABASE_URL: scannerDbUrl("procurement_scanner", "civitas_procurement", "PROCUREMENT_SCANNER_DATABASE_URL"),
+    }),
+    worker("workflow",     "workflow_svc",     "civitas_workflow", { WORKFLOW_SCANNER_DATABASE_URL: scannerDbUrl("workflow_scanner", "civitas_workflow", "WORKFLOW_SCANNER_DATABASE_URL") }),
+    worker("payroll",      "payroll_svc",      "civitas_payroll", {
+      PAYROLL_SCANNER_DATABASE_URL: scannerDbUrl("payroll_scanner", "civitas_payroll", "PAYROLL_SCANNER_DATABASE_URL"),
+    }),
     worker("hrms",         "hrms_svc",         "civitas_hrms", { PII_ENC_KEY }),
     worker("grant",        "grant_svc",        "civitas_grant"),
     worker("project",      "project_svc",      "civitas_project"),

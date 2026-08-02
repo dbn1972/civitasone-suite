@@ -53,6 +53,18 @@ export interface WorkflowInstance {
   version: number;
 }
 
+/** Full single-instance detail from GET /v1/workflow/instances/:id. */
+export interface WorkflowInstanceDetail extends WorkflowInstance {
+  definitionId: string | null;
+  definitionCode: string | null;
+  definitionName: string | null;
+  refType: string | null;
+  refId: string | null;
+  currentNode: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface WorkflowTransition {
   id: string;
   fromNode: string | null;

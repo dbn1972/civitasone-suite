@@ -1,10 +1,12 @@
-import { sendValidated } from "@civitasone/schemas/validate";
-import { listQuerySchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { RFQSummaryListSchema, RFQDetailSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { createRfqBody } from "./validators.js";
+import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
@@ -12,6 +14,13 @@ const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 const idParam      = z.object({ id: z.string().uuid() });
 
 export async function rfqRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/v1/procurement/rfqs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const body = createRfqBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRfq(ctx, body));
+  });
+
   app.get("/v1/procurement/rfqs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

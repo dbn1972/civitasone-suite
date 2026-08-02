@@ -34,6 +34,17 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, instancesListSchema, await queries.listInstances(ctx.tenantId, q.limit, q.offset));
   });
 
+  // D1 (FE↔BE high ROI) — full single-instance detail. Registered BEFORE
+  // /search so Fastify's router does not treat "search" as a :id param.
+  app.get("/v1/workflow/instances/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const detail = await queries.getInstanceDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "instance not found");
+    return reply.send({ data: detail });
+  });
+
   // Rich instance search with filtering
   app.get("/v1/workflow/instances/search", async (req, reply) => {
     const ctx = resolveContext(req);

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementAuctions, procurementBids, type AuctionRow, type AuctionInsert, type BidInsert } from "./schema.js";
 
@@ -47,4 +47,35 @@ export async function insertBid(tx: Writer, row: BidInsert): Promise<void> {
 
 export async function updateBid(tx: Writer, id: string, patch: Partial<BidInsert>): Promise<void> {
   await tx.update(procurementBids).set({ ...patch, updatedAt: new Date() }).where(eq(procurementBids.id, id));
+}
+
+export async function listAuctionsByTenant(tenantId: string, limit: number, offset: number): Promise<AuctionRow[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx.select().from(procurementAuctions)
+    .where(eq(procurementAuctions.tenantId, tenantId))
+    .orderBy(desc(procurementAuctions.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export type AuctionBidStats = { auctionId: string; bidderCount: number; lowestEffectiveMinor: bigint | null };
+
+/** Aggregate bid count + lowest effective bid per auction — one grouped query, no N+1. */
+export async function getBidStatsByAuctionIds(tenantId: string, auctionIds: string[]): Promise<AuctionBidStats[]> {
+  if (auctionIds.length === 0) return [];
+  const rows = await db.transaction((tx) => tx
+    .select({
+      auctionId: procurementBids.auctionId,
+      bidderCount: sql<number>`COUNT(DISTINCT ${procurementBids.vendorId})`,
+      lowestEffectiveMinor: sql<string | null>`MIN(${procurementBids.effectiveMinor})`,
+    })
+    .from(procurementBids)
+    .where(and(eq(procurementBids.tenantId, tenantId), inArray(procurementBids.auctionId, auctionIds)))
+    .groupBy(procurementBids.auctionId));
+  return rows.map((r) => ({
+    auctionId: r.auctionId,
+    bidderCount: Number(r.bidderCount),
+    lowestEffectiveMinor: r.lowestEffectiveMinor != null ? BigInt(r.lowestEffectiveMinor) : null,
+  }));
 }

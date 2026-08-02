@@ -26,7 +26,7 @@ const CENTERS: Array<{
     match: (r) => r.some((x) => x.includes("procurement")),
     actions: [
       { label: "Open indents", href: "/procurement/indents", note: "Review and sanction", priority: "urgent" },
-      { label: "PO approvals", href: "/procurement/purchase-orders", note: "Commit funds with budget check", priority: "urgent" },
+      { label: "PO approvals", href: "/procurement/orders", note: "Commit funds with budget check", priority: "urgent" },
       { label: "GRN pending", href: "/procurement/grn", note: "Receipt → stock/asset", priority: "normal" },
       { label: "Vendor KYC", href: "/procurement/vendors", note: "Blocked vendors halt PO", priority: "normal" },
     ],

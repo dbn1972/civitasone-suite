@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
@@ -99,6 +99,50 @@ export async function openFinancialBidVersioned(tx: Writer, bidId: string, expec
   if (res.length === 0) {
     throw new Error(`OPTIMISTIC_LOCK_CONFLICT: financial bid for ${bidId} was modified concurrently (expected version ${expectedVersion})`);
   }
+}
+
+export type BidEvaluationRow = {
+  bidId: string;
+  tenderNo: string;
+  vendorName: string;
+  technicalScore: number | null;
+  financialScore: number | null;
+  rank: number | null;
+  status: string;
+};
+
+/**
+ * Cross-tender bid-evaluation register: bids that have entered technical
+ * evaluation (technicalScore assigned) — i.e. tender.status IN
+ * (technical_evaluation, financial_evaluation, awarded, …). Does NOT touch
+ * procurementTenderFinancialBids (sealed amounts) — financialScore here is
+ * the evaluation-derived score column on the bid itself, not the raw amount.
+ */
+export async function listBidEvaluationsByTenant(tenantId: string, limit: number, offset: number): Promise<BidEvaluationRow[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx
+    .select({
+      bidId: procurementTenderBids.id,
+      tenderNo: procurementTenders.tenderNo,
+      vendorName: procurementTenderBids.vendorName,
+      technicalScore: procurementTenderBids.technicalScore,
+      financialScore: procurementTenderBids.financialScore,
+      rank: procurementTenderBids.rank,
+      status: procurementTenderBids.status,
+    })
+    .from(procurementTenderBids)
+    .innerJoin(procurementTenders, and(
+      eq(procurementTenderBids.tenderId, procurementTenders.id),
+      eq(procurementTenders.tenantId, tenantId),
+    ))
+    .where(and(
+      eq(procurementTenderBids.tenantId, tenantId),
+      isNotNull(procurementTenderBids.technicalScore),
+    ))
+    .orderBy(desc(procurementTenderBids.updatedAt))
+    .limit(limit)
+    .offset(offset));
 }
 
 /**

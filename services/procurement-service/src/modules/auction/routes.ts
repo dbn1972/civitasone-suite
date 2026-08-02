@@ -1,5 +1,5 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -11,6 +11,14 @@ const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"]
 const READER_ROLES = [...PROC_ROLES, "audit_officer"];
 
 export async function auctionRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/procurement/auctions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const data = await queries.listAuctions(ctx.tenantId, q.limit, q.offset);
+    return reply.send({ data, meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: data.length } });
+  });
+
   app.post("/v1/procurement/auctions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);

@@ -34,6 +34,38 @@ async function getReport(period: string): Promise<LoaderResult<DisplayRow[]>> {
   });
 }
 
+type RuleRow = {
+  id: string;
+  employee_group: string;
+  cost_center_id: string;
+  split_pct: number;
+  status: string;
+  created_at: string;
+};
+
+type RuleDisplayRow = {
+  employeeGroup: string;
+  costCenterId: string;
+  splitPct: number;
+  status: string;
+} & Record<string, unknown>;
+
+async function getRules(): Promise<LoaderResult<RuleDisplayRow[]>> {
+  return fetchJson<unknown, RuleDisplayRow[]>("/api/v1/payroll/costing/rules", [], {
+    telemetryKey: "payroll.costing.rules",
+    mapResponse: (p) => {
+      const arr = (p as { data?: RuleRow[] })?.data;
+      if (!Array.isArray(arr)) return null;
+      return arr.map((r) => ({
+        employeeGroup: r.employee_group,
+        costCenterId: r.cost_center_id,
+        splitPct: r.split_pct,
+        status: r.status,
+      }));
+    },
+  });
+}
+
 export default async function CostingPage({
   searchParams,
 }: {
@@ -43,11 +75,21 @@ export default async function CostingPage({
   const result: LoaderResult<DisplayRow[]> = period ? await getReport(period) : { data: [], source: "api" };
   const rows = result.data;
 
+  const rulesResult = await getRules();
+  const ruleRows = rulesResult.data;
+
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
     { key: "costCenterId", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "allocatedMinor", label: "Allocated Amount", align: "right", cellType: "amount" },
+  ];
+
+  const ruleColumns: { key: keyof RuleDisplayRow & string; label: string; align?: "left" | "right" }[] = [
+    { key: "employeeGroup", label: "Employee Group" },
+    { key: "costCenterId", label: "Cost Center" },
+    { key: "splitPct", label: "Split %", align: "right" },
+    { key: "status", label: "Status" },
   ];
 
   return (
@@ -58,14 +100,21 @@ export default async function CostingPage({
         back="/hr/payroll"
       />
       {period && result.source === "error" && <DataSourceBadge source="error" />}
+      {rulesResult.source === "error" && <DataSourceBadge source="error" />}
 
       <CreateCostingRuleForm />
 
       <Card title="Costing Rules">
-        <EmptyState
-          icon="📋"
-          title="Rules list not yet available"
-          message="The payroll-service does not currently expose a GET /v1/payroll/costing/rules listing endpoint — only rule creation (POST) exists. Use the form above to add or update a rule; it will be reflected in the costing report below."
+        <DataTable<RuleDisplayRow>
+          columns={ruleColumns}
+          rows={ruleRows}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee group…"
+          pageSize={15}
+          emptyIcon="📋"
+          emptyTitle="No costing rules yet"
+          emptyMessage="Use the form above to add a cost-center allocation rule."
         />
       </Card>
 

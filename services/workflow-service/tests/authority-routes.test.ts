@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "a5000000-1111-4000-8000-000000000001";
@@ -17,7 +18,12 @@ function token(actorId: string, tid = TENANT, roles = ["workflow_admin"]) {
 }
 
 afterEach(async () => {
-  await db.execute(sql`DELETE FROM workflow.authority_limits WHERE tenant_id IN (${TENANT}, ${TENANT_B})`);
+  // RLS (workflow_svc is NOBYPASSRLS, #146): a bare db.execute() runs with no
+  // app.tenant_id GUC set, so the fail-closed policy silently matches ZERO
+  // rows and this cleanup would no-op, leaking limits into every later run
+  // against the shared test DB. Must go through sqlAsTenant per tenant.
+  await sqlAsTenant(TENANT, sql`DELETE FROM workflow.authority_limits WHERE tenant_id = ${TENANT}`);
+  await sqlAsTenant(TENANT_B, sql`DELETE FROM workflow.authority_limits WHERE tenant_id = ${TENANT_B}`);
 });
 afterAll(async () => { await sqlClient.end(); });
 
