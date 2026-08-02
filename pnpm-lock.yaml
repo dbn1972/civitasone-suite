@@ -1696,15 +1696,27 @@ importers:
       '@civitasone/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker
       '@civitasone/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -3293,6 +3305,9 @@ importers:
       fastify:
         specifier: ^4.27.0
         version: 4.29.1
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@types/amqplib':
         specifier: ^0.10.5

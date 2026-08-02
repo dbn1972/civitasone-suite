@@ -406,7 +406,12 @@ module.exports = {
     // metadata-worker was never declared here, so CQRS writes black-holed.
     worker("metadata",     "metadata_svc",     "civitas_metadata"),
 
+    // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
+    worker("gateway",      "gateway_svc",      "civitas_gateway"),
+
     // ── Infrastructure services ────────────────────────────────────────────────
+    // Platform message-bus observability process (F9). Domain services embed the
+    // bus via @civitasone/queue; this process exposes /health + /v1/queue/* ops.
     {
       name: "queue",
       script: "dist/server.js",
@@ -419,7 +424,9 @@ module.exports = {
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 3030,
+        BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
+        INTERNAL_SERVICE_SECRET,
         REDIS_URL: REDIS,
         ...AWS_ENV,
       },
@@ -451,6 +458,9 @@ module.exports = {
     svc("location",     4012, "location_svc",     "civitas_location"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
+    // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)
+    // and to let the proxy stay healthy when catalogue is enabled. Proxy routing
+    // itself does not use the DB.
     {
       name: "gateway",
       script: "dist/index.js",
@@ -463,9 +473,13 @@ module.exports = {
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 8080,
-        QUEUE_HEALTH_URL: "http://127.0.0.1:3030/health",
+        BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
+        REDIS_URL: REDIS,
+        ...AWS_ENV,
+        DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
+        QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
       },
     },
