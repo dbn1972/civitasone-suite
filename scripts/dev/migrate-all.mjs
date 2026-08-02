@@ -69,6 +69,9 @@ const SERVICES = [
   { name: "visitor-service",    db: "civitas_visitor" },
   { name: "works-service",      db: "civitas_works" },
   { name: "metadata-service",   db: "civitas_metadata" },
+  // Gateway owns civitas_gateway (api catalogue). Was the only service with a
+  // migrations/ dir missing from this list.
+  { name: "gateway-service",    db: "civitas_gateway" },
 ];
 
 let applied = 0;
