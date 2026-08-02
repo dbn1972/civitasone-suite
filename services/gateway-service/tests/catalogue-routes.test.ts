@@ -59,9 +59,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await wipe(TENANT_A);
-  await wipe(TENANT_B);
-  await app.close();
+  if (wipe) {
+    await wipe(TENANT_A);
+    await wipe(TENANT_B);
+  }
+  if (app) await app.close();
 });
 
 describe("CAP-052 seed helpers (pure)", () => {

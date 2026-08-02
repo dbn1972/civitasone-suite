@@ -27,3 +27,10 @@ CREATE TABLE IF NOT EXISTS _inbox.processed (
   message_id   uuid PRIMARY KEY,
   processed_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- gateway_svc owns the DB but newly created schemas need explicit grants for
+-- the NOBYPASSRLS app role when tables are created by civitas_admin (migrate-all).
+GRANT USAGE ON SCHEMA _outbox TO gateway_svc;
+GRANT USAGE ON SCHEMA _inbox TO gateway_svc;
+GRANT ALL ON ALL TABLES IN SCHEMA _outbox TO gateway_svc;
+GRANT ALL ON ALL TABLES IN SCHEMA _inbox TO gateway_svc;
