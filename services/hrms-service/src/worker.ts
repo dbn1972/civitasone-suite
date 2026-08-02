@@ -15,6 +15,8 @@ import { registerRecruitmentEOfficeConsumers } from "./modules/recruitment/eoffi
 import { registerLeaveConsumers }      from "./modules/leave/consumer.js";
 import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
+import { registerLifecycleMutationConsumers } from "./modules/lifecycle/consumer.js";
+import { registerLoanConsumers } from "./modules/employee/loans-consumer.js";
 import { registerTrainingConsumers }   from "./modules/training/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerAppraisalConsumers }  from "./modules/appraisals/consumer.js";
@@ -58,6 +60,8 @@ import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 const log = pino({ name: "hrms-worker" });
 
 registerEmployeeConsumers(queue);
+registerLifecycleMutationConsumers(queue);
+registerLoanConsumers(queue);
 registerLifecycleConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
 registerPromotionEOfficeConsumers(queue);
