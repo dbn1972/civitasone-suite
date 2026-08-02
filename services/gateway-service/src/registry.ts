@@ -66,8 +66,8 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   // Customer-engagement platform services (generic — client-specific behaviour
   // lives in services/adapters/*). These were built and tested but had NO
   // gateway route, so every request 404'd and no client could reach them.
-  // Ports start at 3043: 3036-3042 were already claimed by works/inspection/
-  // revenue/metadata, so the original 3036-3039 assignments collided.
+  // Ports: recommendation 3040, ai-agent 3041, journey 3045, field 3046,
+  // cdp 3047, loyalty 3048 (catalogue 3044). Keep ecosystem.config.js in sync.
   { name: "cdp",             prefix: "/api/v1/cdp",             upstream: upstream("cdp", 3047) },
   { name: "catalogue",       prefix: "/api/v1/catalogue",       upstream: upstream("catalogue", 3044) },
   { name: "journeys",        prefix: "/api/v1/journeys",        upstream: upstream("journey", 3045) },
