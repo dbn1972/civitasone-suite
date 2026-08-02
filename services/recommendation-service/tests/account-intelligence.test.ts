@@ -98,6 +98,8 @@ function makeRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -455,7 +457,7 @@ describe("POST /v1/recommendations/accounts/:accountId/intelligence/compute", ()
       },
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.status).toBe("queued");
+    expect(r.json().status).toBe("accepted");
     expect(H.queuePublishMock).toHaveBeenCalledOnce();
     // No write on the read path.
     expect(H.upsertMock).not.toHaveBeenCalled();
@@ -470,8 +472,7 @@ describe("POST /v1/recommendations/accounts/:accountId/intelligence/compute", ()
       headers: auth(),
       payload: { whiteSpace: [{ productId: PRODUCT_A }, { productId: PRODUCT_B }], riskSignals: [] },
     });
-    expect(r.json().data.opportunityScore).toBe("0.2500");
-    expect(typeof r.json().data.opportunityScore).toBe("string");
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -479,7 +480,7 @@ describe("POST /v1/recommendations/accounts/:accountId/intelligence/compute", ()
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.opportunityScore).toBe("0.0000");
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 

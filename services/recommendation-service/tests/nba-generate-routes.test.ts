@@ -25,6 +25,7 @@ const H = vi.hoisted(() => ({
   listForProfileMock: vi.fn(),
   matrixListMock: vi.fn(),
   predictiveFindMock: vi.fn(),
+  queuePublishMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -44,7 +45,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.queuePublishMock(...a) },
 }));
 
 vi.mock("../src/modules/nba/repo.js", async () => {
@@ -127,6 +128,8 @@ function makeRecommendation(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");

@@ -20,6 +20,7 @@ import type { CommandEnvelope } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -99,5 +100,54 @@ export async function handleRecordAttribution(
   });
 
   // Outside the transaction: a missed invalidation self-heals via the bounded TTL.
+  await cache.invalidate(cache.makeKey(msg.tenantId, "cross-sell-metrics", p.campaignKey));
+}
+
+
+export interface AssignExposurePayload {
+  exposureId: string;
+  campaignKey: string;
+  subjectId: string;
+  cohort: Cohort;
+  assignedAt: string;
+}
+
+export async function handleAssignExposure(
+  msg: CommandEnvelope<AssignExposurePayload>,
+): Promise<void> {
+  const p = msg.payload;
+  await runWithTenant(msg.tenantId, async () => {
+    await db.transaction(async (tx) => {
+      const fresh = await markProcessed(tx, msg.messageId);
+      if (!fresh) return;
+      await repo.insertExposure(tx, {
+        id: p.exposureId,
+        tenantId: msg.tenantId,
+        campaignKey: p.campaignKey,
+        subjectId: p.subjectId,
+        cohort: p.cohort,
+        assignedAt: new Date(p.assignedAt),
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.cohortAssigned,
+        eventType: EVENTS.cohortAssigned,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          exposureId: p.exposureId,
+          campaignKey: p.campaignKey,
+          cohort: p.cohort,
+        },
+      });
+      await writeAudit(
+        tx,
+        { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        { action: "exposure.assign", resourceType: "measurement_exposure", resourceId: p.exposureId },
+      );
+    });
+  });
   await cache.invalidate(cache.makeKey(msg.tenantId, "cross-sell-metrics", p.campaignKey));
 }
