@@ -2,11 +2,11 @@ import { and, eq, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { slaRules, type SlaRuleRow, type SlaRuleInsert } from "./schema.js";
 
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
 /** Upsert by (tenant_id, priority) so re-posting a priority updates in place. */
-export async function upsertRule(row: SlaRuleInsert): Promise<SlaRuleRow> {
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this write — a bare db.insert() runs with no RLS GUC set.
-  const [out] = await db.transaction((tx) => tx.insert(slaRules).values(row)
+export async function upsertRuleTx(tx: Writer, row: SlaRuleInsert): Promise<SlaRuleRow> {
+  const [out] = await tx.insert(slaRules).values(row)
     .onConflictDoUpdate({
       target: [slaRules.tenantId, slaRules.priority],
       set: {
@@ -15,8 +15,15 @@ export async function upsertRule(row: SlaRuleInsert): Promise<SlaRuleRow> {
         isActive: row.isActive ?? true,
       },
     })
-    .returning());
+    .returning();
   return out!;
+}
+
+/** Upsert by (tenant_id, priority) so re-posting a priority updates in place. */
+export async function upsertRule(row: SlaRuleInsert): Promise<SlaRuleRow> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this write — a bare db.insert() runs with no RLS GUC set.
+  return db.transaction((tx) => upsertRuleTx(tx, row));
 }
 
 export async function listActiveRules(tenantId: string, limit: number, offset: number): Promise<SlaRuleRow[]> {

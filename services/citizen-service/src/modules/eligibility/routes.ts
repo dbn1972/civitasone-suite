@@ -1,3 +1,5 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -9,26 +11,25 @@ const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 const ADMIN_ROLES   = ["citizen_admin", "super_admin"];
 
 export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
-  // --- Rule set authoring / maker-checker publish -----------------------------
   app.post("/v1/citizen/eligibility/rule-sets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createRuleSetBody.parse(req.body);
-    return reply.code(201).send(await commands.createRuleSet(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRuleSet(ctx, body));
   });
 
   app.post("/v1/citizen/eligibility/rule-sets/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.submitRuleSet(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitRuleSet(ctx, id));
   });
 
   app.post("/v1/citizen/eligibility/rule-sets/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.publishRuleSet(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.publishRuleSet(ctx, id));
   });
 
   app.get("/v1/citizen/eligibility/rule-sets", async (req, reply) => {
@@ -46,12 +47,11 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(rs);
   });
 
-  // --- Evaluation + manual-review queue ---------------------------------------
   app.post("/v1/citizen/eligibility/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = evaluateBody.parse(req.body);
-    return reply.send(await commands.evaluate(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.evaluate(ctx, body));
   });
 
   app.get("/v1/citizen/eligibility/manual-review", async (req, reply) => {
@@ -74,7 +74,7 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reviewDecisionBody.parse(req.body);
-    return reply.send(await commands.decideReview(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.decideReview(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

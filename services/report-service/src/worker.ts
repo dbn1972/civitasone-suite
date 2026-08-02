@@ -8,12 +8,14 @@ import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerJobConsumers } from "./modules/jobs/consumer.js";
 import { registerRenderConsumers } from "./modules/render/consumer.js";
+import { registerScheduledConsumers } from "./modules/scheduled/consumer.js";
 import { startScheduledReportCron } from "./modules/scheduled/cron.js";
 
 const log = pino({ name: "reports-worker" });
 
 registerJobConsumers(queue);
 registerRenderConsumers(queue);
+registerScheduledConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

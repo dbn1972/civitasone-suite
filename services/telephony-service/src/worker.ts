@@ -9,6 +9,7 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { registerCallConsumers } from "./modules/calls/consumer.js";
 import { registerQueueConsumers } from "./modules/queues/consumer.js";
 import { registerAgentConsumers } from "./modules/agents/consumer.js";
+import { registerDidConsumers } from "./modules/did/consumer.js";
 import { registerRecordingConsumers } from "./modules/recordings/consumer.js";
 import { registerTranscriptionConsumers } from "./modules/transcription/consumer.js";
 
@@ -17,6 +18,7 @@ const log = pino({ name: "telephony-worker" });
 registerCallConsumers(queue);
 registerQueueConsumers(queue);
 registerAgentConsumers(queue);
+registerDidConsumers(queue);
 registerRecordingConsumers(queue);
 registerTranscriptionConsumers(queue);
 await queue.start();

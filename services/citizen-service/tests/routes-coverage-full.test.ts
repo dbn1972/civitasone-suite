@@ -1118,8 +1118,8 @@ describe("SLA Rules — POST /v1/citizen/sla-rules", () => {
       headers: auth(["super_admin"]),
       payload: { priority: "high", escalationHours: 24, escalateTo: "supervisor" },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).toBeDefined();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBeDefined();
   });
 
   it("400 missing priority", async () => {

@@ -16,6 +16,9 @@ export const COMMANDS = {
   createQueue: "telephony.queue.create",
   upsertAgent: "telephony.agent.upsert",
   setAgentStatus: "telephony.agent.status",
+  // DID mapping administration
+  createDidMapping: "telephony.did.create",
+  deleteDidMapping: "telephony.did.delete",
 } as const;
 
 export const EVENTS = {
@@ -33,9 +36,13 @@ export const EVENTS = {
   queueCreated: "telephony.queue.created",
   agentUpserted: "telephony.agent.upserted",
   agentStatusChanged: "telephony.agent.status_changed",
+  didMappingCreated: "telephony.did.created",
+  didMappingDeleted: "telephony.did.deleted",
 } as const;
 
 export const SERVICE = "telephony";
 export const RESOURCE = "call";
 export const QUEUE_RESOURCE = "queue";
 export const AGENT_RESOURCE = "agent";
+export const DID_RESOURCE = "did-mapping";
+export const DID_ACTIVE_MAPPINGS_CACHE = "global:did-mappings:active";

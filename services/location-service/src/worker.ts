@@ -12,6 +12,7 @@ import { registerLandRecordConsumers } from "./modules/land-records/consumer.js"
 import { registerCadastralConsumers } from "./modules/cadastral/consumer.js";
 import { registerInfrastructureConsumers } from "./modules/infrastructure/consumer.js";
 import { registerGeoPointConsumers } from "./modules/map-markers/consumer.js";
+import { registerMapLayerConsumers } from "./modules/map-layers/consumer.js";
 
 const log = pino({ name: "location-worker" });
 
@@ -24,6 +25,7 @@ registerLandRecordConsumers(queue);
 registerCadastralConsumers(queue);
 registerInfrastructureConsumers(queue);
 registerGeoPointConsumers(queue);
+registerMapLayerConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

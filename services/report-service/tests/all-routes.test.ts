@@ -178,9 +178,33 @@ vi.mock("../src/modules/jobs/commands.js", () => ({
   createJob: async () => ({ id: JOB_ID, status: "accepted", correlationId: "corr-1" }),
 }));
 
-vi.mock("../src/modules/scheduled/commands.js", () => ({
-  createScheduledReport: async () => ({ id: SCHEDULED_ID, status: "accepted", correlationId: "corr-1" }),
-}));
+vi.mock("../src/modules/scheduled/commands.js", async () => {
+  const { HttpError } = await import("../src/shared/context.js");
+  const notFound = () => {
+    throw new HttpError(404, "NOT_FOUND", "scheduled report not found");
+  };
+  return {
+    createScheduledReport: async () => ({ id: SCHEDULED_ID, status: "accepted", correlationId: "corr-1" }),
+    updateScheduledReport: async () => {
+      if (mockState.queryResult.length === 0) notFound();
+      return { id: SCHEDULED_ID, status: "accepted", correlationId: "corr-1" };
+    },
+    disableScheduledReport: async () => {
+      if (mockState.queryResult.length === 0) notFound();
+      return { id: SCHEDULED_ID, status: "accepted", correlationId: "corr-1" };
+    },
+    runScheduledReport: async () => {
+      if (mockState.queryResult.length === 0) notFound();
+      return {
+        id: "job-id-1",
+        jobId: "job-id-1",
+        scheduledReportId: SCHEDULED_ID,
+        status: "queued",
+        correlationId: "corr-1",
+      };
+    },
+  };
+});
 
 vi.mock("../src/modules/templates/commands.js", () => ({
   createTemplate: async () => ({ id: TEMPLATE_ID, status: "accepted", correlationId: "corr-1" }),
@@ -197,6 +221,10 @@ vi.mock("../src/topics.js", () => ({
     updateTemplate: "reports.template.update",
     deleteTemplate: "reports.template.delete",
     executeTemplate: "reports.template.execute",
+    createScheduled: "reports.scheduled.create",
+    updateScheduled: "reports.scheduled.update",
+    disableScheduled: "reports.scheduled.disable",
+    runScheduled: "reports.scheduled.run",
     scheduledGenerate: "reports.scheduled.generate",
   },
   EVENTS: {},
@@ -603,7 +631,7 @@ describe("Scheduled Routes", () => {
   });
 
   describe("POST /v1/reports/scheduled", () => {
-    it("returns 201 for valid body", async () => {
+    it("returns 202 for valid body", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/v1/reports/scheduled",
@@ -615,9 +643,10 @@ describe("Scheduled Routes", () => {
           format: "pdf",
         },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
       const body = res.json();
       expect(body.data).toBeDefined();
+      expect(body.data.status).toBe("accepted");
     });
 
     it("returns 401 without token", async () => {
@@ -734,14 +763,15 @@ describe("Scheduled Routes", () => {
   });
 
   describe("PATCH /v1/reports/scheduled/:id", () => {
-    it("returns 200 for valid update", async () => {
+    it("returns 202 for valid update", async () => {
       const res = await app.inject({
         method: "PATCH",
         url: `/v1/reports/scheduled/${SCHEDULED_ID}`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { cadence: "weekly", version: 1 },
       });
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(202);
+      expect(res.json().data.status).toBe("accepted");
     });
 
     it("returns 404 when not found", async () => {
@@ -787,13 +817,14 @@ describe("Scheduled Routes", () => {
   });
 
   describe("DELETE /v1/reports/scheduled/:id", () => {
-    it("returns 204 on delete", async () => {
+    it("returns 202 on delete", async () => {
       const res = await app.inject({
         method: "DELETE",
         url: `/v1/reports/scheduled/${SCHEDULED_ID}`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
       });
-      expect(res.statusCode).toBe(204);
+      expect(res.statusCode).toBe(202);
+      expect(res.json().data.status).toBe("accepted");
     });
 
     it("returns 404 when not found", async () => {

@@ -1,18 +1,16 @@
 /**
  * Service Catalogue (SVC-129) — HTTP integration tests (app.inject).
  *
- * Exercises the full self-service lifecycle end-to-end against the live
- * civitas_helpdesk DB: offering management, OLA tracking, raise-request (creates
- * a fulfilment item + linked ticket), maker-checker approval, fulfilment stage
- * advancement, fulfilment (resolves the ticket), the breach report, cross-tenant
- * RLS isolation and role gating.
+ * CQRS: mutations return 202; MemoryQueue + catalogue consumer wired via infra mock
+ * so writes persist before assertions.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
-import { runWithTenant } from "@civitasone/db";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
+import type { Handler } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tickets } from "../src/modules/tickets/schema.js";
@@ -24,6 +22,28 @@ import {
   requestStageEvents,
 } from "../src/modules/catalogue/schema.js";
 import { outboxSchema } from "../src/shared/outbox.js";
+
+vi.mock("../src/shared/infra.js", async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  const { withTenantConsumer } = await import("@civitasone/db");
+  const { registerCatalogueConsumers } = await import("../src/modules/catalogue/consumer.js");
+  const q = new MemoryQueue();
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  registerCatalogueConsumers(q);
+  return {
+    queue: q,
+    cache: {
+      invalidate: vi.fn(),
+      makeKey: (...parts: string[]) => parts.join(":"),
+      getOrLoad: vi.fn(),
+      put: vi.fn(),
+      invalidateResource: vi.fn(),
+      listOrLoad: vi.fn(),
+    },
+  };
+});
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT_A = "aaaaaaaa-0000-4000-8000-00000000ca01";
@@ -73,7 +93,11 @@ async function get(url: string, tok: string) {
   return app.inject({ method: "GET", url, headers: { authorization: `Bearer ${tok}` } });
 }
 
-/** Create an offering and return its id. */
+async function flush() {
+  await new Promise((r) => setTimeout(r, 250));
+}
+
+/** Create an offering and return its id (202 → consumer flush). */
 async function createOffering(tok: string, over: Record<string, unknown> = {}) {
   const res = await post("/v1/helpdesk/catalogue/offerings", tok, {
     name: `Offering ${randomUUID()}`,
@@ -88,13 +112,18 @@ async function createOffering(tok: string, over: Record<string, unknown> = {}) {
     defaultPriority: "Medium",
     ...over,
   });
+  if (res.statusCode === 202) {
+    await flush();
+    const body = res.json();
+    return { ...res, json: () => ({ data: { id: body.id as string } }) };
+  }
   return res;
 }
 
 describe("catalogue offerings — management + browse", () => {
-  it("admin creates an offering (201), user can browse + read detail", async () => {
+  it("admin creates an offering (202), user can browse + read detail", async () => {
     const c = await createOffering(adminA());
-    expect(c.statusCode).toBe(201);
+    expect(c.statusCode).toBe(202);
     const id = c.json().data.id as string;
 
     const list = await get("/v1/helpdesk/catalogue/offerings", userA());
@@ -125,8 +154,15 @@ describe("catalogue offerings — management + browse", () => {
   it("duplicate offering name in a tenant is a 409", async () => {
     const name = `Dup ${randomUUID()}`;
     const a = await createOffering(adminA(), { name });
-    expect(a.statusCode).toBe(201);
-    const b = await createOffering(adminA(), { name });
+    expect(a.statusCode).toBe(202);
+    const b = await post("/v1/helpdesk/catalogue/offerings", adminA(), {
+      name,
+      category: "access",
+      approvalRequired: false,
+      fulfilmentStages: [],
+      requestFormSchema: [],
+      defaultPriority: "Medium",
+    });
     expect(b.statusCode).toBe(409);
     expect(b.json().code).toBe("DUPLICATE_OFFERING");
   });
@@ -135,8 +171,10 @@ describe("catalogue offerings — management + browse", () => {
     const c = await createOffering(adminA());
     const id = c.json().data.id as string;
     const upd = await patch(`/v1/helpdesk/catalogue/offerings/${id}`, adminA(), { description: "updated", status: "retired" });
-    expect(upd.statusCode).toBe(200);
-    expect(upd.json().data.status).toBe("retired");
+    expect(upd.statusCode).toBe(202);
+    await flush();
+    const detail = await get(`/v1/helpdesk/catalogue/offerings/${id}`, userA());
+    expect(detail.json().data.status).toBe("retired");
     const miss = await patch(`/v1/helpdesk/catalogue/offerings/${randomUUID()}`, adminA(), { description: "x" });
     expect(miss.statusCode).toBe(404);
   });
@@ -152,9 +190,11 @@ describe("OLA / underpinning-contract tracking", () => {
     const c = await createOffering(adminA());
     const id = c.json().data.id as string;
     const o1 = await post(`/v1/helpdesk/catalogue/offerings/${id}/olas`, adminA(), { name: "ISP UC", kind: "uc", provider: "ISP", targetMinutes: 480 });
-    expect(o1.statusCode).toBe(201);
+    expect(o1.statusCode).toBe(202);
+    await flush();
     const o2 = await post(`/v1/helpdesk/catalogue/offerings/${id}/olas`, adminA(), { name: "IT OLA", kind: "ola", provider: "IT", targetMinutes: 120 });
-    expect(o2.statusCode).toBe(201);
+    expect(o2.statusCode).toBe(202);
+    await flush();
 
     const olas = await get(`/v1/helpdesk/catalogue/offerings/${id}/olas`, userA());
     expect(olas.json().data).toHaveLength(2);
@@ -170,7 +210,8 @@ describe("self-service portal — raise request creates fulfilment item + ticket
     const c = await createOffering(adminA(), { fulfilmentStages: [] });
     const id = c.json().data.id as string;
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "need access" } });
-    expect(raise.statusCode).toBe(201);
+    expect(raise.statusCode).toBe(202);
+    await flush();
     const { requestId, ticketId, status } = raise.json().data;
     expect(status).toBe("pending_fulfilment"); // no stages, no approval
     expect(requestId).toBeTruthy();
@@ -189,7 +230,8 @@ describe("self-service portal — raise request creates fulfilment item + ticket
     const c = await createOffering(adminA()); // default: no approval, 3 stages
     const id = c.json().data.id as string;
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
-    expect(raise.statusCode).toBe(201);
+    expect(raise.statusCode).toBe(202);
+    await flush();
     expect(raise.json().data.status).toBe("in_fulfilment");
     expect(raise.json().data.currentStage).toBe("triage");
     const requestId = raise.json().data.requestId;
@@ -209,6 +251,7 @@ describe("self-service portal — raise request creates fulfilment item + ticket
     const c = await createOffering(adminA());
     const id = c.json().data.id as string;
     await patch(`/v1/helpdesk/catalogue/offerings/${id}`, adminA(), { status: "retired" });
+    await flush();
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
     expect(raise.statusCode).toBe(409);
     expect(raise.json().code).toBe("OFFERING_RETIRED");
@@ -227,7 +270,8 @@ describe("maker-checker approvals + fulfilment workflow", () => {
 
     // maker raises (ADMIN_A)
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, token(TENANT_A, ADMIN_A, ["helpdesk_admin"]), { formData: { reason: "need it" } });
-    expect(raise.statusCode).toBe(201);
+    expect(raise.statusCode).toBe(202);
+    await flush();
     const { requestId, ticketId } = raise.json().data;
     expect(raise.json().data.status).toBe("pending_approval");
 
@@ -238,7 +282,8 @@ describe("maker-checker approvals + fulfilment workflow", () => {
 
     // distinct checker approves → moves into fulfilment at the first stage
     const appr = await post(`/v1/helpdesk/catalogue/requests/${requestId}/approve`, adminB_A(), { decision: "approved", comment: "ok" });
-    expect(appr.statusCode).toBe(200);
+    expect(appr.statusCode).toBe(202);
+    await flush();
     expect(appr.json().data.status).toBe("in_fulfilment");
     expect(appr.json().data.currentStage).toBe("triage");
 
@@ -253,12 +298,14 @@ describe("maker-checker approvals + fulfilment workflow", () => {
     expect(skip.json().code).toBe("INVALID_STAGE_TRANSITION");
 
     // advance triage → provision → verify
-    expect((await post(`/v1/helpdesk/catalogue/requests/${requestId}/advance`, adminA(), { toStage: "provision" })).statusCode).toBe(200);
-    expect((await post(`/v1/helpdesk/catalogue/requests/${requestId}/advance`, adminA(), { toStage: "verify", note: "checked" })).statusCode).toBe(200);
+    expect((await post(`/v1/helpdesk/catalogue/requests/${requestId}/advance`, adminA(), { toStage: "provision" })).statusCode).toBe(202);
+    await flush();
+    expect((await post(`/v1/helpdesk/catalogue/requests/${requestId}/advance`, adminA(), { toStage: "verify", note: "checked" })).statusCode).toBe(202);
+    await flush();
 
-    // fulfil at terminal → resolves the linked ticket
     const done = await post(`/v1/helpdesk/catalogue/requests/${requestId}/fulfil`, adminA(), { note: "granted" });
-    expect(done.statusCode).toBe(200);
+    expect(done.statusCode).toBe(202);
+    await flush();
     expect(done.json().data.status).toBe("fulfilled");
 
     const ticketRows = await runWithTenant(TENANT_A, () =>
@@ -277,9 +324,11 @@ describe("maker-checker approvals + fulfilment workflow", () => {
     const c = await createOffering(adminA(), { approvalRequired: true });
     const id = c.json().data.id as string;
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, token(TENANT_A, ADMIN_A, ["helpdesk_admin"]), { formData: { reason: "x" } });
+    await flush();
     const requestId = raise.json().data.requestId;
     const rej = await post(`/v1/helpdesk/catalogue/requests/${requestId}/approve`, adminB_A(), { decision: "rejected", comment: "no" });
-    expect(rej.statusCode).toBe(200);
+    expect(rej.statusCode).toBe(202);
+    await flush();
     expect(rej.json().data.status).toBe("rejected");
     // cannot approve again (not pending)
     const again = await post(`/v1/helpdesk/catalogue/requests/${requestId}/approve`, adminB_A(), { decision: "approved" });
@@ -291,9 +340,11 @@ describe("maker-checker approvals + fulfilment workflow", () => {
     const c = await createOffering(adminA(), { fulfilmentStages: [] });
     const id = c.json().data.id as string;
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
+    await flush();
     const requestId = raise.json().data.requestId;
     const done = await post(`/v1/helpdesk/catalogue/requests/${requestId}/fulfil`, adminA(), {});
-    expect(done.statusCode).toBe(200);
+    expect(done.statusCode).toBe(202);
+    await flush();
     expect(done.json().data.status).toBe("fulfilled");
   });
 
@@ -319,6 +370,7 @@ describe("my-requests + breach report", () => {
     const c = await createOffering(adminA(), { fulfilmentStages: [] });
     const id = c.json().data.id as string;
     await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
+    await flush();
 
     const mine = await get("/v1/helpdesk/catalogue/requests?mine=true", userA());
     expect(mine.statusCode).toBe(200);

@@ -1,3 +1,5 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
@@ -16,25 +18,23 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = uploadBody.parse(req.body);
-    // IDOR: constrain citizenId to the actor unless an officer specifies another.
     const citizenId = resolveCitizenId(ctx, body.citizenId);
-    return reply.code(201).send(await commands.upload(ctx, { ...body, citizenId }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upload(ctx, { ...body, citizenId }));
   });
 
   app.post("/v1/citizen/documents/digilocker-fetch", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = digilockerFetchBody.parse(req.body);
-    // IDOR: constrain citizenId to the actor unless an officer specifies another.
     const citizenId = resolveCitizenId(ctx, body.citizenId);
-    return reply.code(201).send(await commands.digilockerFetchIntake(ctx, { ...body, citizenId }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.digilockerFetchIntake(ctx, { ...body, citizenId }));
   });
 
   app.get("/v1/citizen/documents/checklist", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { serviceId, applicationId } = checklistQuery.parse(req.query);
-    return reply.send(await commands.checklist(ctx, serviceId, applicationId));
+    return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId));
   });
 
   app.get("/v1/citizen/documents/pending", async (req, reply) => {
@@ -47,7 +47,6 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { applicationId } = applicationQuery.parse(req.query);
-    // IDOR: a citizen may only list documents they own; officers see all for the app.
     if (isOfficer(ctx)) {
       return reply.send({ data: await queries.listByApplication(ctx.tenantId, applicationId) });
     }
@@ -61,7 +60,6 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const sub = await queries.getSubmission(ctx.tenantId, id);
     if (!sub) throw new HttpError(404, "NOT_FOUND", "document submission not found");
-    // IDOR: a citizen may only read their own submission (officers bypass).
     assertOwnership(ctx, sub.citizenId);
     return reply.send(sub);
   });
@@ -71,7 +69,7 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = verifyBody.parse(req.body);
-    return reply.send(await commands.verify(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.verify(ctx, id, body));
   });
 
   app.post("/v1/citizen/documents/:id/resubmit", async (req, reply) => {
@@ -79,7 +77,7 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = resubmitBody.parse(req.body);
-    return reply.code(201).send(await commands.resubmit(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.resubmit(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {
