@@ -34,17 +34,18 @@ export function registerTrainingConsumers(queue: Queue): void {
       await audit(tx, msg, "nominate", "nomination", p.id);
     });
   });
-}
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
-  await enqueue(tx, {
-    topic: AUDIT, eventType: AUDIT,
-    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
-  });
-
-  q.subscribe(COMMANDS.nominationComplete, async (msg) => {
-    const p = msg.payload as any;
+  queue.subscribe(COMMANDS.nominationComplete, async (msg) => {
+    const p = msg.payload as {
+      id: string;
+      tenantId: string;
+      completedDate: string;
+      result: string;
+      score?: number | null;
+      certificateRef?: string | null;
+      trainingTitle?: string | null;
+      trainingId?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.completeNomination(tx, p.tenantId, p.id, msg.actorId, {
@@ -59,5 +60,13 @@ async function audit(tx: any, msg: any, action: string, resourceType: string, re
         recordedBy: msg.actorId, documentRef: p.certificateRef ?? null,
       });
     });
+  });
+}
+
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT, eventType: AUDIT,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
   });
 }

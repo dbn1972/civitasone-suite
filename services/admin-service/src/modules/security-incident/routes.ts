@@ -30,7 +30,17 @@ export async function securityIncidentRoutes(app: FastifyInstance): Promise<void
         affectedDataPrincipals: z.number().int().min(0).default(0),
       })
       .parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createIncident(ctx, body));
+    // exactOptionalPropertyTypes: omit description when absent
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createIncident(ctx, {
+      title: body.title,
+      severity: body.severity,
+      category: body.category,
+      affectedAssets: body.affectedAssets,
+      affectedTenants: body.affectedTenants,
+      isBreach: body.isBreach,
+      affectedDataPrincipals: body.affectedDataPrincipals,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+    }));
   });
 
   app.get("/v1/admin/security-incidents", async (req, reply) => {
@@ -79,7 +89,12 @@ export async function securityIncidentRoutes(app: FastifyInstance): Promise<void
     if (!canTransition(inc.status as IncidentStatus, body.toStatus as IncidentStatus)) {
       throw new HttpError(409, "INVALID_TRANSITION", `cannot move ${inc.status} → ${body.toStatus}`);
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.transitionIncident(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.transitionIncident(ctx, id, {
+      toStatus: body.toStatus,
+      ...(body.note !== undefined ? { note: body.note } : {}),
+      ...(body.rootCause !== undefined ? { rootCause: body.rootCause } : {}),
+      ...(body.resolution !== undefined ? { resolution: body.resolution } : {}),
+    }));
   });
 
   app.post("/v1/admin/security-incidents/:id/close", async (req, reply) => {
@@ -94,7 +109,9 @@ export async function securityIncidentRoutes(app: FastifyInstance): Promise<void
     }
     const segErr = checkCloseSegregation(inc.reportedBy, ctx.actorId);
     if (segErr) throw new HttpError(409, "MAKER_CHECKER", segErr);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.closeIncident(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeIncident(ctx, id, {
+      ...(body.note !== undefined ? { note: body.note } : {}),
+    }));
   });
 
   app.post("/v1/admin/security-incidents/:id/breach-notifications", async (req, reply) => {

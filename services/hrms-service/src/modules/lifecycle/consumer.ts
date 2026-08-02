@@ -7,6 +7,7 @@ import { COMMANDS } from "../../topics.js";
 import { and, eq } from "drizzle-orm";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import * as repo from "./repo.js";
 
 const log = pino({ name: "lifecycle-consumer" });
 const AUDIT = "audit.event.record";
