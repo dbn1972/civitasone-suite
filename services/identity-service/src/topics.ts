@@ -7,6 +7,13 @@ export const COMMANDS = {
   revokeAllSessions: "identity.session.revoke_all",
   resetPassword:   "identity.user.reset_password",
   enableMfa:       "identity.mfa.enable",
+  setupMfa:        "identity.mfa.setup",
+  mfaVerifyFail:   "identity.mfa.verify_fail",
+  mfaVerifySuccess:"identity.mfa.verify_success",
+  scimUserCreate:  "identity.scim.user.create",
+  scimUserReplace: "identity.scim.user.replace",
+  scimUserPatch:   "identity.scim.user.patch",
+  scimUserDelete:  "identity.scim.user.delete",
   // RBAC (wave 2)
   rbacCreateRole:        "identity.rbac.role.create",
   rbacCreatePermission:  "identity.rbac.permission.create",
