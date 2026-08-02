@@ -1,5 +1,7 @@
 /**
  * Field service route-level tests — tasks, visits, routes, sync.
+ * CQRS: mutations return 202 Accepted and publish a command to the queue;
+ * the consumer (not exercised here) applies the write.
  * Happy paths + 400/401/403/404/409/422.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -14,25 +16,18 @@ const VISIT_ID = "cccccccc-1111-4000-8000-000000000001";
 const ROUTE_ID = "dddddddd-1111-4000-8000-000000000001";
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   scopedReadMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   taskFindByIdMock: vi.fn(),
   taskListMock: vi.fn(),
-  taskInsertMock: vi.fn(),
-  taskUpdateMock: vi.fn(),
   visitFindByIdMock: vi.fn(),
   visitFindByTaskMock: vi.fn(),
   visitFindByAgentMock: vi.fn(),
-  visitInsertMock: vi.fn(),
-  visitUpdateMock: vi.fn(),
   routeFindByIdMock: vi.fn(),
   routeFindByAssigneeMock: vi.fn(),
   routeListMock: vi.fn(),
-  routeInsertMock: vi.fn(),
-  routeUpdateMock: vi.fn(),
-  syncInsertBatchMock: vi.fn(),
   syncGetChangesMock: vi.fn(),
-  enqueueMock: vi.fn(),
   cacheGetOrLoadMock: vi.fn(),
   cacheInvalidateMock: vi.fn(),
   cacheMakeKeyMock: vi.fn(),
@@ -45,7 +40,7 @@ vi.mock("../src/shared/db.js", () => ({
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({
-  enqueue: (...a: unknown[]) => H.enqueueMock(...a),
+  enqueue: vi.fn(),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
@@ -54,14 +49,14 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/tasks/repo.js", () => ({
   findById: (...a: unknown[]) => H.taskFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.taskListMock(...a),
-  insert: (...a: unknown[]) => H.taskInsertMock(...a),
-  update: (...a: unknown[]) => H.taskUpdateMock(...a),
+  insert: vi.fn(),
+  update: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
@@ -69,8 +64,8 @@ vi.mock("../src/modules/visits/repo.js", () => ({
   findById: (...a: unknown[]) => H.visitFindByIdMock(...a),
   findByTaskId: (...a: unknown[]) => H.visitFindByTaskMock(...a),
   findByAgent: (...a: unknown[]) => H.visitFindByAgentMock(...a),
-  insert: (...a: unknown[]) => H.visitInsertMock(...a),
-  update: (...a: unknown[]) => H.visitUpdateMock(...a),
+  insert: vi.fn(),
+  update: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
@@ -78,13 +73,13 @@ vi.mock("../src/modules/routes/repo.js", () => ({
   findById: (...a: unknown[]) => H.routeFindByIdMock(...a),
   findByAssigneeAndDate: (...a: unknown[]) => H.routeFindByAssigneeMock(...a),
   listByTenant: (...a: unknown[]) => H.routeListMock(...a),
-  insert: (...a: unknown[]) => H.routeInsertMock(...a),
-  update: (...a: unknown[]) => H.routeUpdateMock(...a),
+  insert: vi.fn(),
+  update: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
 vi.mock("../src/modules/sync/repo.js", () => ({
-  insertBatch: (...a: unknown[]) => H.syncInsertBatchMock(...a),
+  insertBatch: vi.fn(),
   getChangesSince: (...a: unknown[]) => H.syncGetChangesMock(...a),
   toView: (r: Record<string, unknown>) => r,
 }));
@@ -145,30 +140,25 @@ beforeEach(() => {
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
   H.cacheInvalidateMock.mockResolvedValue(undefined);
-  H.enqueueMock.mockResolvedValue(undefined);
-  H.taskInsertMock.mockResolvedValue(undefined);
-  H.taskUpdateMock.mockResolvedValue(true);
-  H.visitInsertMock.mockResolvedValue(undefined);
-  H.visitUpdateMock.mockResolvedValue(true);
-  H.routeInsertMock.mockResolvedValue(undefined);
-  H.routeUpdateMock.mockResolvedValue(true);
-  H.syncInsertBatchMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
 });
 
 // ── TASKS ROUTES ──────────────────────────────────────────────────────────────
 
 describe("POST /v1/field/tasks (create)", () => {
-  it("201 — creates a task", async () => {
+  it("202 — accepts task creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/field/tasks",
       headers: auth(),
       payload: { taskType: "inspection", title: "Inspect Site", priority: 2 },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.taskType).toBe("inspection");
-    expect(H.taskInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.task.create");
     await app.close();
   });
 
@@ -252,8 +242,48 @@ describe("GET /v1/field/tasks/:id (get single)", () => {
   });
 });
 
+describe("PATCH /v1/field/tasks/:id", () => {
+  it("202 — accepts task update", async () => {
+    H.taskFindByIdMock.mockResolvedValue(makeTask());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+      payload: { title: "Updated title", version: 1 },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("404 — task not found", async () => {
+    H.taskFindByIdMock.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+      payload: { title: "X", version: 1 },
+    });
+    expect(r.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("409 — version conflict", async () => {
+    H.taskFindByIdMock.mockResolvedValue(makeTask({ version: 2 }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+      payload: { title: "X", version: 1 },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe("POST /v1/field/tasks/:id/assign", () => {
-  it("200 — assigns task", async () => {
+  it("202 — accepts task assignment", async () => {
     H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "unassigned", assigneeId: null }));
     const app = await buildApp();
     const r = await app.inject({
@@ -261,8 +291,10 @@ describe("POST /v1/field/tasks/:id/assign", () => {
       headers: auth(),
       payload: { assigneeId: USER2, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("assigned");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.task.assign");
     await app.close();
   });
 
@@ -291,8 +323,7 @@ describe("POST /v1/field/tasks/:id/assign", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "unassigned", assigneeId: null }));
-    H.taskUpdateMock.mockResolvedValue(false);
+    H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "unassigned", assigneeId: null, version: 2 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/field/tasks/${TASK_ID}/assign`,
@@ -300,12 +331,13 @@ describe("POST /v1/field/tasks/:id/assign", () => {
       payload: { assigneeId: USER2, version: 1 },
     });
     expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
 describe("POST /v1/field/tasks/:id/start", () => {
-  it("200 — starts task", async () => {
+  it("202 — accepts task start", async () => {
     H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "assigned" }));
     const app = await buildApp();
     const r = await app.inject({
@@ -313,8 +345,8 @@ describe("POST /v1/field/tasks/:id/start", () => {
       headers: auth(),
       payload: { version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("in_progress");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -332,7 +364,7 @@ describe("POST /v1/field/tasks/:id/start", () => {
 });
 
 describe("POST /v1/field/tasks/:id/complete", () => {
-  it("200 — completes task", async () => {
+  it("202 — accepts task completion", async () => {
     H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "in_progress" }));
     const app = await buildApp();
     const r = await app.inject({
@@ -340,8 +372,8 @@ describe("POST /v1/field/tasks/:id/complete", () => {
       headers: auth(),
       payload: { version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("completed");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -359,7 +391,7 @@ describe("POST /v1/field/tasks/:id/complete", () => {
 });
 
 describe("POST /v1/field/tasks/:id/cancel", () => {
-  it("200 — cancels task", async () => {
+  it("202 — accepts task cancellation", async () => {
     H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "in_progress" }));
     const app = await buildApp();
     const r = await app.inject({
@@ -367,8 +399,46 @@ describe("POST /v1/field/tasks/:id/cancel", () => {
       headers: auth(),
       payload: { version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("cancelled");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
+});
+
+describe("DELETE /v1/field/tasks/:id", () => {
+  it("202 — accepts task delete", async () => {
+    H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "assigned" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "DELETE", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+    });
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.task.delete");
+    await app.close();
+  });
+
+  it("404 — task not found", async () => {
+    H.taskFindByIdMock.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "DELETE", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+    });
+    expect(r.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("422 — already completed", async () => {
+    H.taskFindByIdMock.mockResolvedValue(makeTask({ status: "completed" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "DELETE", url: `/v1/field/tasks/${TASK_ID}`,
+      headers: auth(),
+    });
+    expect(r.statusCode).toBe(422);
     await app.close();
   });
 });
@@ -376,7 +446,7 @@ describe("POST /v1/field/tasks/:id/cancel", () => {
 // ── VISITS ROUTES ─────────────────────────────────────────────────────────────
 
 describe("POST /v1/field/visits/check-in", () => {
-  it("201 — records check-in", async () => {
+  it("202 — accepts check-in", async () => {
     H.taskFindByIdMock.mockResolvedValue(makeTask());
     const app = await buildApp();
     const r = await app.inject({
@@ -384,9 +454,10 @@ describe("POST /v1/field/visits/check-in", () => {
       headers: auth(),
       payload: { taskId: TASK_ID, latitude: 28.6139, longitude: 77.209 },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.taskId).toBe(TASK_ID);
-    expect(H.visitInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.visit.check_in");
     await app.close();
   });
 
@@ -425,7 +496,7 @@ describe("POST /v1/field/visits/check-in", () => {
 });
 
 describe("POST /v1/field/visits/:id/check-out", () => {
-  it("200 — records check-out", async () => {
+  it("202 — accepts check-out", async () => {
     H.visitFindByIdMock.mockResolvedValue(makeVisit());
     const app = await buildApp();
     const r = await app.inject({
@@ -433,9 +504,10 @@ describe("POST /v1/field/visits/:id/check-out", () => {
       headers: auth(),
       payload: { latitude: 28.614, longitude: 77.21, notes: "All good" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.durationMinutes).toBeGreaterThan(0);
-    expect(r.json().data.outcome).toBeDefined();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.visit.check_out");
     await app.close();
   });
 
@@ -495,7 +567,7 @@ describe("GET /v1/field/visits/by-agent/:agentId", () => {
 // ── ROUTES ROUTES ─────────────────────────────────────────────────────────────
 
 describe("POST /v1/field/routes (generate)", () => {
-  it("201 — generates optimized route", async () => {
+  it("202 — accepts optimized route creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/field/routes",
@@ -509,10 +581,10 @@ describe("POST /v1/field/routes (generate)", () => {
         ],
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.optimizedOrder).toBeDefined();
-    expect(r.json().data.status).toBe("optimized");
-    expect(H.routeInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.route.create");
     await app.close();
   });
 
@@ -590,7 +662,7 @@ describe("GET /v1/field/routes/today", () => {
 });
 
 describe("PATCH /v1/field/routes/:id/reorder", () => {
-  it("200 — reorders waypoints", async () => {
+  it("202 — accepts waypoint reorder", async () => {
     H.routeFindByIdMock.mockResolvedValue(makeRoute());
     const app = await buildApp();
     const r = await app.inject({
@@ -598,8 +670,10 @@ describe("PATCH /v1/field/routes/:id/reorder", () => {
       headers: auth(),
       payload: { optimizedOrder: [1, 0], version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.optimizedOrder).toEqual([1, 0]);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.route.reorder");
     await app.close();
   });
 
@@ -624,6 +698,19 @@ describe("PATCH /v1/field/routes/:id/reorder", () => {
       payload: { optimizedOrder: [0], version: 1 },
     });
     expect(r.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it("409 — version conflict", async () => {
+    H.routeFindByIdMock.mockResolvedValue(makeRoute({ version: 2 }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/field/routes/${ROUTE_ID}/reorder`,
+      headers: auth(),
+      payload: { optimizedOrder: [1, 0], version: 1 },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -651,7 +738,9 @@ describe("POST /v1/field/sync/push", () => {
     });
     expect(r.statusCode).toBe(202);
     expect(r.json().data.processed).toBe(1);
-    expect(H.syncInsertBatchMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("field.sync.push");
     await app.close();
   });
 
