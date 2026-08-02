@@ -15,6 +15,7 @@
  */
 import { pino } from "pino";
 import { createSmtpTransport } from "../../adapters/email-transport.js";
+import { maskRecipient } from "../../adapters/mask.js";
 
 const log = pino({ name: "smtp-sender" });
 
@@ -39,7 +40,9 @@ export async function sendEmail(
 ): Promise<SendEmailResult> {
   const host = process.env["SMTP_HOST"];
   if (!host) {
-    log.info({ to, subject }, "SMTP_HOST not set — dry-run, email not dispatched");
+    // The recipient address is PII (DPDP Act) and must never reach a log line
+    // in cleartext — mask it, exactly as the SMS/WhatsApp adapters already do.
+    log.info({ to: maskRecipient(to) }, "SMTP_HOST not set — dry-run, email not dispatched");
     return { sent: false };
   }
 
@@ -48,7 +51,7 @@ export async function sendEmail(
   // are logged (the delivery sweeper owns durable retry).
   void transport
     .send({ to, from: fromAddress(), subject, text: html })
-    .catch((err: unknown) => log.error({ err, to, subject }, "SMTP send failed"));
+    .catch((err: unknown) => log.error({ err, to: maskRecipient(to) }, "SMTP send failed"));
 
   return { sent: true };
 }

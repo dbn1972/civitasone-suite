@@ -28,6 +28,12 @@ import { channelAnalyticsRoutes } from "./modules/channels/analytics-routes.js";
 import { inboundRoutes as inboundMessageRoutes } from "./modules/inbox/inbound-routes.js";
 import { convertRoutes } from "./modules/inbox/convert-routes.js";
 import { correlationRoutes } from "./modules/inbox/correlation-routes.js";
+import { keywordRoutes } from "./modules/inbox/keyword-routes.js";
+import { handoffRoutes } from "./modules/inbox/handoff-routes.js";
+import { emailDeliverabilityRoutes } from "./modules/email/routes.js";
+import { experimentRoutes } from "./modules/experiments/routes.js";
+import { pushRoutes } from "./modules/push/routes.js";
+import { bounceRoutes } from "./modules/bounces/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -78,6 +84,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(inboundMessageRoutes);
   await app.register(convertRoutes);
   await app.register(correlationRoutes);
+  // CR-MKT-06 keyword auto-responses + F.5 human handoff (inbox extensions)
+  await app.register(keywordRoutes);
+  await app.register(handoffRoutes);
+  // CR-MKT-04 email deliverability (DKIM/SPF/DMARC health)
+  await app.register(emailDeliverabilityRoutes);
+  // CR-MKT-05 A/B experiments + engagement heatmaps
+  await app.register(experimentRoutes);
+  // MT-006 web push + in-app messaging
+  await app.register(pushRoutes);
+  // INT-12 bounce classification + suppression list
+  await app.register(bounceRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

@@ -131,7 +131,7 @@ describe("bulk campaign fan-out", () => {
       payload: { id: campaignId, tenantId: "t1", templateId, name: "Budget Alert Campaign", recipients },
     });
 
-    await new Promise((r) => setTimeout(r, 20));
+    await q.drain();
 
     await q.publish(COMMANDS.sendCampaign, {
       messageId: randomUUID(),
@@ -143,7 +143,7 @@ describe("bulk campaign fan-out", () => {
       payload: { id: campaignId, tenantId: "t1" },
     });
 
-    await new Promise((r) => setTimeout(r, 50));
+    await q.drain();
 
     expect(sentCommands).toHaveLength(recipients.length);
     const recipientIds = sentCommands.map((c) => c.recipientId);
@@ -208,7 +208,7 @@ describe("CQRS campaign send end-to-end (MemoryQueue)", () => {
       payload: { id: campaignId, tenantId: "t2", templateId, name: "CQRS Test Campaign", recipients: campaignRecipients },
     });
 
-    await new Promise((r) => setTimeout(r, 20));
+    await q.drain();
 
     // Step 2: campaign.send (what PATCH /campaigns/:id/send triggers)
     await q.publish(COMMANDS.sendCampaign, {
@@ -221,7 +221,7 @@ describe("CQRS campaign send end-to-end (MemoryQueue)", () => {
       payload: { id: campaignId, tenantId: "t2" },
     });
 
-    await new Promise((r) => setTimeout(r, 50));
+    await q.drain();
 
     expect(notificationSends).toHaveLength(campaignRecipients.length);
     expect(notificationSends.every((s) => s.templateId === templateId)).toBe(true);

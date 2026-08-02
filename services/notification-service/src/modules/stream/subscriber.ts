@@ -39,12 +39,22 @@ class MemoryStreamSubscriber implements StreamSubscriber {
 const memorySubscribers = new Set<MemoryStreamSubscriber>();
 
 /** Publish to all in-memory subscribers on the given channel (used in tests) */
-export function publishToMemorySubscribers(channel: string, message: string): void {
+/**
+ * Deliver a message to every in-memory subscriber on `channel`.
+ *
+ * @returns the number of subscribers it reached. Callers in production ignore
+ * this; tests use it to wait until an SSE connection has actually registered
+ * instead of sleeping for a fixed interval and publishing into the void.
+ */
+export function publishToMemorySubscribers(channel: string, message: string): number {
+  let delivered = 0;
   for (const sub of memorySubscribers) {
     if (sub.getChannel() === channel) {
       sub.deliver(message);
+      delivered++;
     }
   }
+  return delivered;
 }
 
 /** Clear all memory subscribers (test cleanup) */

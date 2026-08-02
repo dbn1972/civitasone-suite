@@ -47,6 +47,26 @@ export const COMMANDS = {
   convertToTicket:        "notification.inbox.convert_to_ticket",
   // INT-04: Inbox-Ticket Correlation
   correlateInbox:         "notification.inbox.correlate",
+  // CR-MKT-04: Email deliverability — sending domains + DKIM/SPF/DMARC health
+  registerSendingDomain:  "notification.email.sending_domain.register",
+  recordDomainAuthCheck:  "notification.email.domain_auth_check.record",
+  // CR-MKT-05: A/B experiments + engagement heatmaps
+  createExperiment:       "notification.experiment.create",
+  recordExperimentEvent:  "notification.experiment.event.record",
+  concludeExperiment:     "notification.experiment.conclude",
+  // CR-MKT-06: Keyword auto-responses on inbound SMS/WhatsApp
+  createKeywordRule:      "notification.inbox.keyword_rule.create",
+  updateKeywordRule:      "notification.inbox.keyword_rule.update",
+  // MT-006: Web push + in-app messaging
+  registerPushSubscription: "notification.push.subscription.register",
+  revokePushSubscription:   "notification.push.subscription.revoke",
+  createInAppMessage:       "notification.in_app.message.create",
+  markInAppRead:            "notification.in_app.message.read",
+  // INT-12: Bounce classification + suppression
+  recordBounce:           "notification.bounce.record",
+  releaseSuppression:     "notification.suppression.release",
+  // F.5: Human handoff — AI pause/resume protocol
+  transitionHandoff:      "notification.inbox.handoff.transition",
 } as const;
 
 export const EVENTS = {
@@ -92,6 +112,129 @@ export const EVENTS = {
   convertedToTicket:      "notification.inbox.converted_to_ticket",
   // INT-04: Inbox-Ticket Correlation
   inboxCorrelated:        "notification.inbox.correlated",
+
+  /* ---- CR-MKT-04: email deliverability ---------------------------------- */
+  /**
+   * A sending domain has been registered for a tenant.
+   * Payload: `{ sendingDomainId: string; domain: string; dkimSelector: string }`
+   * Fires: after the register command's row is committed. The domain starts at
+   * health `unknown` — no DNS has been checked yet.
+   */
+  sendingDomainRegistered: "notification.email.sending_domain.registered",
+  /**
+   * A DKIM/SPF/DMARC check result has been recorded against a sending domain.
+   * Payload: `{ checkId: string; sendingDomainId: string; health: "healthy"|"degraded"|"failing"|"unknown";
+   *            dkim: "pass"|"fail"|"missing"; spf: same; dmarc: same }`
+   * Fires: every time a check result is stored, whether submitted by the
+   * scheduled checker or by an operator.
+   */
+  domainAuthCheckRecorded: "notification.email.domain_auth_check.recorded",
+  /**
+   * A sending domain's authentication is failing — mail from it is at risk of
+   * rejection. Payload: `{ sendingDomainId: string; domain: string; dkim, spf, dmarc }`
+   * Fires: only when a recorded check rolls up to health `failing`. Intended for
+   * alerting.
+   */
+  domainAuthFailing:       "notification.email.domain_auth.failing",
+
+  /* ---- CR-MKT-05: A/B experiments --------------------------------------- */
+  /**
+   * An A/B experiment and its variants have been created.
+   * Payload: `{ experimentId: string; name: string; variantIds: string[] }`
+   * Fires: after the experiment + variant rows commit.
+   */
+  experimentCreated:       "notification.experiment.created",
+  /**
+   * An engagement event (open or click) has been attributed to a variant.
+   * Payload: `{ experimentId: string; variantId: string; eventType: "open"|"click";
+   *            linkPosition: number | null }`
+   * Fires: once per recorded event. `linkPosition` drives the click heatmap.
+   */
+  experimentEventRecorded: "notification.experiment.event.recorded",
+  /**
+   * An experiment has been concluded and its winner (if any) frozen.
+   * Payload: `{ experimentId: string; decided: boolean; winnerVariantId: string | null }`
+   * Fires: on conclude. `decided: false` means the "clear leader" rule found no
+   * winner — it is NOT a statement of statistical significance either way.
+   */
+  experimentConcluded:     "notification.experiment.concluded",
+
+  /* ---- CR-MKT-06: keyword auto-responses -------------------------------- */
+  /**
+   * A keyword routing rule has been created.
+   * Payload: `{ ruleId: string; matchType: "exact"|"prefix"|"contains"; channel: string | null }`
+   * Fires: after the rule row commits.
+   */
+  keywordRuleCreated:      "notification.inbox.keyword_rule.created",
+  /**
+   * An inbound message matched a keyword rule and the rule was acted on.
+   * Payload: `{ ruleId: string; channel: string;
+   *            outcome: "reply"|"action"|"reply_and_action"; action: string | null }`
+   * Fires: once per inbound message that matched. No PII in the payload — the
+   * sender is deliberately omitted.
+   */
+  keywordAutoResponded:    "notification.inbox.keyword_auto_responded",
+
+  /* ---- MT-006: web push + in-app messaging ------------------------------ */
+  /**
+   * A device/browser has been registered for push.
+   * Payload: `{ subscriptionId: string; userId: string; platform: "web"|"android"|"ios" }`
+   * Fires: on register (including re-registration of an existing token).
+   * The device token is NEVER in the payload — it is a bearer credential.
+   */
+  pushSubscriptionRegistered: "notification.push.subscription.registered",
+  /**
+   * A push subscription has been revoked (user signed out, token rotated).
+   * Payload: `{ subscriptionId: string }`
+   * Fires: on revoke. The row is retained, disabled, for audit.
+   */
+  pushSubscriptionRevoked:    "notification.push.subscription.revoked",
+  /**
+   * An in-app message has been placed in a user's inbox.
+   * Payload: `{ messageId: string; userId: string; severity: string }`
+   * Fires: after the message row commits.
+   */
+  inAppMessageCreated:        "notification.in_app.message.created",
+  /**
+   * A user has read an in-app message.
+   * Payload: `{ messageId: string; userId: string }`
+   * Fires: on the first read only — a repeat read is a no-op and emits nothing.
+   */
+  inAppMessageRead:           "notification.in_app.message.read_marked",
+
+  /* ---- INT-12: bounces + suppression ----------------------------------- */
+  /**
+   * A bounce has been classified and stored.
+   * Payload: `{ bounceEventId: string; deliveryId: string | null; channel: string;
+   *            classification: "hard"|"soft"|"unknown"; suppressed: boolean }`
+   * Fires: once per recorded bounce. The recipient address is NOT in the payload.
+   */
+  bounceRecorded:          "notification.bounce.recorded",
+  /**
+   * A recipient has been added to the tenant's suppression list.
+   * Payload: `{ bounceEventId: string; recipientHash: string; channel: string;
+   *            reason: "hard_bounce"|"soft_bounce_threshold"; softBounceCount: number }`
+   * Fires: on a hard bounce, or when soft bounces reach the configured
+   * threshold. `recipientHash` is an irreversible blind index, not an address.
+   */
+  recipientSuppressed:     "notification.suppression.added",
+  /**
+   * A suppression entry has been released by an operator.
+   * Payload: `{ suppressionId: string }`
+   * Fires: on release. Sends to that recipient resume immediately.
+   */
+  suppressionReleased:     "notification.suppression.released",
+
+  /* ---- F.5: human handoff ---------------------------------------------- */
+  /**
+   * An AI-handled conversation changed handoff state.
+   * Payload: `{ conversationId: string; fromState: string; toState: string;
+   *            action: "pause"|"assign_human"|"resume_ai"|"close";
+   *            aiPaused: boolean; agentId: string | null }`
+   * Fires: on every accepted transition. `aiPaused` is the flag the AI agent
+   * reads to decide whether it may reply.
+   */
+  handoffStateChanged:     "notification.inbox.handoff.state_changed",
 } as const;
 
 /** Events consumed from other services — triggers user notifications. */

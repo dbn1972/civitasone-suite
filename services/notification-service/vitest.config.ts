@@ -11,6 +11,13 @@ export default defineConfig({
         "postgres://notification_scanner:notification_scanner_dev_pw@localhost:5435/civitas_notification",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // Field-level PII encryption (encryptedText / blindIndex in
+      // src/shared/pii-crypto.ts) fails closed when this is unset, so every
+      // test that touches bounces.recipient, push.device_token or
+      // inbound_auto_responses.sender needs a key. Test-only value; production
+      // injects the real key from the secret manager.
+      NOTIFICATION_PII_KEY: "test_notification_pii_key_32chars",
+      NOTIFICATION_PII_SALT: "civitas-notification-pii-test",
       NOTIFICATION_EMAIL_DRIVER: "stub",
       NOTIFICATION_IN_APP_DRIVER: "memory",
       NOTIFICATION_SMS_DRIVER: "stub",

@@ -20,10 +20,22 @@ import { pino } from "pino";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
-import * as repo from "../stream/repo.js";
+import { notifications, type NotificationRow } from "../stream/schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "ml-predictions-consumer" });
+
+/**
+ * System actor for scheduler/consumer-originated writes.
+ *
+ * stream.notifications.created_by is `uuid NOT NULL`, so the literal "system"
+ * this consumer used to pass was rejected by Postgres with "invalid input syntax
+ * for type uuid". The insert threw, the catch below logged it, and — because the
+ * idempotency marker had already been committed in its own transaction — the
+ * message was consumed for good. Every ML high-risk notification was therefore
+ * lost silently. Same constant/convention as email/sweeper.ts.
+ */
+const SYSTEM_ACTOR = "00000000-0000-4000-8000-000000000000";
 
 // ─── Event Topics ────────────────────────────────────────────────────────────
 
@@ -154,19 +166,6 @@ export function registerMLPredictionConsumers(queue: Queue): void {
       const payload = msg.payload as unknown as MLPredictionEventPayload;
       const { tenantId, entityId, domain, correlationId } = payload;
 
-      // Idempotency check
-      const isNew = await markProcessed(db, msg.messageId);
-      if (!isNew) {
-        log.info({ messageId: msg.messageId, topic }, "duplicate ML prediction event — skipping");
-        return;
-      }
-
-      // Verify threshold exceeded
-      if (!exceedsRiskThreshold(topic, payload)) {
-        log.debug({ topic, tenantId, entityId, prediction: payload.prediction }, "prediction below threshold — no notification");
-        return;
-      }
-
       const { title, body } = buildNotificationContent(topic, payload);
       const reviewUrl = buildReviewUrl(domain, entityId);
 
@@ -176,23 +175,43 @@ export function registerMLPredictionConsumers(queue: Queue): void {
       const targetUserId = msg.actorId ?? tenantId;
 
       try {
-        // Persist notification for offline delivery
-        const notification = await repo.persistNotification({
-          tenantId,
-          userId: targetUserId,
-          type: topic,
-          title,
-          body,
-          metadata: {
-            domain,
-            entityId,
-            prediction: payload.prediction,
-            confidence: payload.confidence,
-            reviewUrl,
-            factors: payload.factors,
-          },
-          createdBy: "system",
+        // ONE handler = ONE transaction, with markProcessed as its first
+        // operation. Previously the marker was committed separately BEFORE the
+        // write, so any insert failure consumed the message permanently and the
+        // notification could never be recovered by a retry.
+        const notification: NotificationRow | null = await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) {
+            log.info({ messageId: msg.messageId, topic }, "duplicate ML prediction event — skipping");
+            return null;
+          }
+          if (!exceedsRiskThreshold(topic, payload)) {
+            log.debug(
+              { topic, tenantId, entityId, prediction: payload.prediction },
+              "prediction below threshold — no notification",
+            );
+            return null;
+          }
+          const rows = await tx.insert(notifications).values({
+            tenantId,
+            userId: targetUserId,
+            type: topic,
+            title,
+            body,
+            metadata: {
+              domain,
+              entityId,
+              prediction: payload.prediction,
+              confidence: payload.confidence,
+              reviewUrl,
+              factors: payload.factors,
+            },
+            createdBy: SYSTEM_ACTOR,
+          }).returning();
+          return rows[0] ?? null;
         });
+
+        // Duplicate, or below threshold: nothing to broadcast.
+        if (!notification) return;
 
         // Publish via Redis pub/sub for real-time SSE delivery (within 2 seconds)
         const { createNotificationPublisher } = await import("../../adapters/pubsub.js");
