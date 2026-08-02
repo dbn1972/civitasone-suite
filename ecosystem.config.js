@@ -476,8 +476,11 @@ module.exports = {
         BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
-        // Do NOT set REDIS_URL here: gateway rate-limit expects ioredis and the
-        // fleet Cache redis client is not compatible (defineCommand crash).
+        // AWS_ENV supplies QUEUE_DRIVER=sqs for catalogue CQRS publishes.
+        // Force-clear REDIS_URL: PM2 inherits the shell env; a host REDIS_URL
+        // enables the broken `{ url }` rate-limit store (defineCommand crash).
+        ...AWS_ENV,
+        REDIS_URL: "",
         DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
         QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
