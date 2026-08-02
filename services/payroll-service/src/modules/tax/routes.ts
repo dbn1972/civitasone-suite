@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership, isSelfServiceEmployee } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
@@ -388,36 +388,15 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const body = upsertCeilingBody.parse(req.body);
 
-    const rows = await db.transaction(async (tx) => {
-      return tx
-        .insert(exemptionCeilings)
-        .values({
-          fyStartYear: body.fyStartYear,
-          section: body.section,
-          ceilingMinor: body.ceilingMinor,
-          notes: body.notes ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [exemptionCeilings.fyStartYear, exemptionCeilings.section],
-          set: {
-            ceilingMinor: body.ceilingMinor,
-            notes: body.notes ?? null,
-          },
-        })
-        .returning();
-    });
-
-    const row = rows[0]!;
-
-    return reply.send({
-      data: {
-        id: row.id,
-        fyStartYear: row.fyStartYear,
-        section: row.section,
-        ceilingMinor: row.ceilingMinor.toString(),
-        notes: row.notes,
-        createdAt: row.createdAt,
-      },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.upsertExemptionCeiling(ctx, {
+        fyStartYear: body.fyStartYear,
+        section: body.section,
+        ceilingMinor: body.ceilingMinor.toString(),
+        notes: body.notes,
+      }),
+    );
   });
 }
