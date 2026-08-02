@@ -372,6 +372,7 @@ module.exports = {
     worker("ai-agent",     "ai_agent_svc",     "civitas_ai_agent"),
     worker("field",        "field_svc",        "civitas_field"),
     worker("journey",      "journey_svc",     "civitas_journey"),
+    worker("loyalty",      "loyalty_svc",      "civitas_loyalty"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
     // court-service is the only service in the fleet whose worker.ts is split
     // into a pure, side-effect-free module (src/worker.ts, exports
@@ -433,6 +434,7 @@ module.exports = {
     svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
     svc("field",        3042, "field_svc",        "civitas_field"),
     svc("journey",     3043, "journey_svc",     "civitas_journey"),
+    svc("loyalty",      3042, "loyalty_svc",      "civitas_loyalty"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
