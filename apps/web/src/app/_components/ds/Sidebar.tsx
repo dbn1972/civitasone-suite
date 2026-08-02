@@ -89,6 +89,7 @@ const NAV: NavGroup[] = [
       { icon: "❔", label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
       { icon: "🤖", label: "Assistant", href: "/knowledge/assistant", moduleKey: "knowledge" },
       { icon: "🔔", label: "Notifications", href: "/notifications", moduleKey: null },
+      { icon: "🏢", label: "Tenant", href: "/tenant", moduleKey: "tenant" },
       { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
       { icon: "🔧", label: "Change & Release", href: "/change", moduleKey: null },
     ],
