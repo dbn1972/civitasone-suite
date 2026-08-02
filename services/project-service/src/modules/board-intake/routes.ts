@@ -1,21 +1,11 @@
 /**
- * Board-decision project intake — human-triage inbox for `meeting.decision.project`.
- *
- *  GET  /v1/project/board-intake                 list intake items (default: pending_review)
- *  GET  /v1/project/board-intake/:id             read one
- *  POST /v1/project/board-intake/:id/accept      mark reviewed=accepted (NO auto-execution)
- *  POST /v1/project/board-intake/:id/reject      mark reviewed=rejected (note required)
- *
- * Accepting an item ONLY records that a project officer reviewed it. It
- * deliberately does NOT create a project record — a board decision is free text
- * and must be actioned through the service's own controlled flow. See the TODO
- * hook in the accept handler.
+ * Board-decision project intake — CQRS routes (accept/reject → 202).
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const PROJ_ROLES   = ["project_manager", "project_officer", "super_admin"];
 const READER_ROLES = [...PROJ_ROLES, "audit_officer", "finance_officer"];
@@ -52,16 +42,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     if (row.status !== "pending_review") {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
-
-    await db.transaction(async (tx) => {
-      await repo.review(tx, ctx.tenantId, id, "accepted", ctx.actorId, body.note ?? null, row.version);
-      // TODO(choreography): controlled hand-off point. A competent project
-      // officer has accepted the board decision for action — invoke the normal
-      // create-flow here (e.g. create/annotate a project record via the module's
-      // own command). Intentionally NOT auto-executed.
-    });
-
-    return reply.send({ id, status: "accepted", reviewedBy: ctx.actorId });
+    return reply.code(202).send(await commands.acceptIntake(ctx, id, body.note));
   });
 
   app.post("/v1/project/board-intake/:id/reject", async (req, reply) => {
@@ -74,12 +55,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     if (row.status !== "pending_review") {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
-
-    await db.transaction(async (tx) => {
-      await repo.review(tx, ctx.tenantId, id, "rejected", ctx.actorId, body.note, row.version);
-    });
-
-    return reply.send({ id, status: "rejected", reviewedBy: ctx.actorId });
+    return reply.code(202).send(await commands.rejectIntake(ctx, id, body.note));
   });
 
   app.setErrorHandler((err, req, reply) => {

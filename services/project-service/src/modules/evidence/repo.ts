@@ -13,6 +13,11 @@ export async function listByMilestone(tenantId: string, milestoneId: string): Pr
   ));
 }
 
+export async function insertTx(tx: Pick<typeof db, "insert">, row: EvidenceInsert): Promise<EvidenceRow> {
+  const [created] = await tx.insert(projectMilestoneEvidence).values(row).returning();
+  return created!;
+}
+
 export async function insert(row: EvidenceInsert): Promise<EvidenceRow> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this write — a bare db.insert() runs with no RLS GUC set.
