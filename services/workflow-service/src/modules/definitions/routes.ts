@@ -71,7 +71,14 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createDefinition(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDefinition(ctx, {
+      code: body.code,
+      name: body.name,
+      nodes: body.nodes,
+      edges: body.edges,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.layout !== undefined ? { layout: body.layout } : {}),
+    }));
   });
 
   app.get("/v1/workflow/definitions", async (req, reply) => {
@@ -129,7 +136,10 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
       name: z.string().min(1).max(200).optional(),
     }).parse(req.body ?? {});
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.cloneTemplate(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.cloneTemplate(ctx, id, {
+      ...(body.code !== undefined ? { code: body.code } : {}),
+      ...(body.name !== undefined ? { name: body.name } : {}),
+    }));
   });
 
   // CAP-030 — list all versions of a definition code.

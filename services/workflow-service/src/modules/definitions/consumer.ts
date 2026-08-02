@@ -24,7 +24,7 @@ export function registerDefinitionConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       const latest = await repo.findLatestVersionTx(tx, p.tenantId, p.code as string);
-      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code: p.code as string, name: p.name as string, description: p.description as string | undefined, layout: p.layout as never, version: (latest?.version ?? 0) + 1, status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId });
+      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code: p.code as string, name: p.name as string, description: (p.description as string | undefined) ?? null, layout: (p.layout as never) ?? null, version: (latest?.version ?? 0) + 1, status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId });
       await repo.insertGraphTx(tx, p.id, p.nodes as never, p.edges as never);
       await emit(tx, msg, EVENTS.definitionCreated, "create", p.id);
     });
@@ -52,7 +52,7 @@ export function registerDefinitionConsumers(queue: Queue): void {
       const templateRows = await tx.select().from(definitions).where(and(eq(definitions.id, p.templateId as string), eq(definitions.isTemplate, true))).limit(1);
       const template = templateRows[0]; if (!template) return;
       const latest = await repo.findLatestVersionTx(tx, p.tenantId, p.code as string);
-      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code: p.code as string, name: p.name as string, description: template.description ?? undefined, version: (latest?.version ?? 0) + 1, status: "draft", isTemplate: false, createdBy: msg.actorId, updatedBy: msg.actorId });
+      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code: p.code as string, name: p.name as string, description: template.description ?? null, version: (latest?.version ?? 0) + 1, status: "draft", isTemplate: false, createdBy: msg.actorId, updatedBy: msg.actorId });
       const [nodes, edges] = await Promise.all([
         tx.select().from(definitionNodes).where(eq(definitionNodes.definitionId, template.id)),
         tx.select().from(definitionEdges).where(eq(definitionEdges.definitionId, template.id)),
