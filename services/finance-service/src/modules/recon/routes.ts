@@ -1,21 +1,22 @@
 /**
  * CAP-059 — reconciliation routes (finance-service).
  *
- * GET  /v1/finance/recon/providers            list available source providers
- * POST /v1/finance/recon/runs                 trigger a reconciliation run
- * GET  /v1/finance/recon/runs                 list runs
- * GET  /v1/finance/recon/runs/:id             run + its breaks
- * GET  /v1/finance/recon/exceptions           list breaks (filter: status, runId)
- * POST /v1/finance/recon/exceptions/:id/action  drive a break through its lifecycle
+ * Mutations are CQRS (queue.publish → 202). Reads remain synchronous.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { applyExceptionAction, ExceptionWorkflowError, type ExceptionStatus, type ExceptionAction } from "@civitasone/reconciliation";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import {
+  applyExceptionAction,
+  ExceptionWorkflowError,
+  type ExceptionStatus,
+  type ExceptionAction,
+} from "@civitasone/reconciliation";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
-import { listProviders } from "./providers.js";
-import { runReconciliation, ReconError } from "./service.js";
+import { listProviders, getProvider } from "./providers.js";
+import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -43,22 +44,10 @@ export async function reconRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = runBody.parse(req.body ?? {});
-    try {
-      const result = await runReconciliation(ctx, body.provider, body.params ?? {});
-      return reply.code(201).send({
-        data: {
-          runId: result.run.id,
-          balanced: result.balanced,
-          breakCount: result.breakCount,
-          sourceCount: result.run.sourceCount,
-          targetCount: result.run.targetCount,
-          matchedCount: result.run.matchedCount,
-        },
-      });
-    } catch (err) {
-      if (err instanceof ReconError) throw new HttpError(err.status, err.code, err.message);
-      throw err;
+    if (!getProvider(body.provider)) {
+      throw new HttpError(400, "UNKNOWN_PROVIDER", `no reconciliation provider '${body.provider}'`);
     }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.startReconRun(ctx, body));
   });
 
   app.get("/v1/finance/recon/runs", async (req, reply) => {
@@ -98,26 +87,20 @@ export async function reconRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = actionBody.parse(req.body);
 
-    const updated = await db.transaction(async (tx) => {
-      const existing = await repo.getBreak(ctx.tenantId, id);
-      if (!existing) throw new HttpError(404, "NOT_FOUND", "exception not found");
-      let next: ExceptionStatus;
-      try {
-        next = applyExceptionAction(existing.status as ExceptionStatus, body.action as ExceptionAction);
-      } catch (err) {
-        if (err instanceof ExceptionWorkflowError) throw new HttpError(409, err.code, err.message);
-        throw err;
-      }
-      const resolving = next === "resolved" || next === "written_off";
-      return repo.updateBreakStatus(tx, ctx.tenantId, id, {
-        status: next,
-        resolutionNote: body.note ?? null,
-        // Audit who closed the break and when (operational triage, recorded for trail).
-        resolvedBy: resolving ? ctx.actorId : null,
-        resolvedAt: resolving ? new Date() : null,
-      });
-    });
+    const existing = await repo.getBreak(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "exception not found");
+    // Validate transition before enqueue (preserve 409 for illegal moves).
+    try {
+      applyExceptionAction(existing.status as ExceptionStatus, body.action as ExceptionAction);
+    } catch (err) {
+      if (err instanceof ExceptionWorkflowError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
 
-    return reply.send({ data: updated });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.applyExceptionActionCmd(ctx, id, body),
+    );
   });
 }

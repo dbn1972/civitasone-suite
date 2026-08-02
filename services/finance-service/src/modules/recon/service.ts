@@ -10,6 +10,7 @@
 import { reconcile } from "@civitasone/reconciliation";
 import type { RequestContext } from "@civitasone/types";
 import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { getProvider } from "./providers.js";
 import * as repo from "./repo.js";
 import type { ReconRunRow, ReconBreakInsert } from "./schema.js";
@@ -30,7 +31,8 @@ export async function runReconciliation(
   ctx: Pick<RequestContext, "tenantId" | "actorId">,
   providerKey: string,
   params: Record<string, unknown> = {},
-): Promise<RunResult> {
+  opts: { runId?: string; messageId?: string } = {},
+): Promise<RunResult | null> {
   const provider = getProvider(providerKey);
   if (!provider) throw new ReconError(400, "UNKNOWN_PROVIDER", `no reconciliation provider '${providerKey}'`);
 
@@ -38,7 +40,10 @@ export async function runReconciliation(
   const { summary, breaks } = reconcile(source, target, config);
 
   return db.transaction(async (tx) => {
+    if (opts.messageId && !(await markProcessed(tx, opts.messageId))) return null;
+
     const run = await repo.insertRun(tx, {
+      ...(opts.runId ? { id: opts.runId } : {}),
       tenantId: ctx.tenantId,
       provider: provider.key,
       sourceSystem: summary.sourceSystem,

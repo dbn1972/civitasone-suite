@@ -28,6 +28,23 @@ export const COMMANDS = {
   advanceCreate:        "finance.advance.create",
   advanceAdjust:        "finance.advance.adjust",
   ucCreate:             "finance.uc.create",
+  // bank-recon
+  bankStatementImport:  "finance.bank_statement.import",
+  bankStatementReconcile: "finance.bank_statement.reconcile",
+  // org-structure
+  legalEntityCreate:    "finance.org_structure.legal_entity_create",
+  operatingUnitCreate:  "finance.org_structure.operating_unit_create",
+  costCenterCreate:     "finance.org_structure.cost_center_create",
+  profitCenterCreate:   "finance.org_structure.profit_center_create",
+  // period-close
+  periodClose:          "finance.period.close",
+  periodReopen:         "finance.period.reopen",
+  // pfms
+  pfmsBatchSign:        "finance.pfms.batch_sign",
+  pfmsBatchSubmit:      "finance.pfms.batch_submit",
+  // recon (CAP-059)
+  reconRun:             "finance.recon.run",
+  reconExceptionAction: "finance.recon.exception_action",
 } as const;
 
 export const EVENTS = {
