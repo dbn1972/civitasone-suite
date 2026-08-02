@@ -392,14 +392,14 @@ describe("Vendor blacklist routes", () => {
     expect([200, 404]).toContain(res.statusCode);
   });
 
-  it("POST /v1/procurement/central-debarment → 201|409|500", async () => {
+  it("POST /v1/procurement/central-debarment → 202|201|409|500", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/central-debarment", headers: auth,
       payload: { pan: "ABCDE1234F", reason: "CVC debarment order", blacklistedFrom: "2025-01-01" },
     });
     await app.close();
-    expect([201, 409, 500]).toContain(res.statusCode);
+    expect([202, 201, 409, 500]).toContain(res.statusCode);
   });
 });
 

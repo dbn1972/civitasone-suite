@@ -24,6 +24,8 @@ import { registerVendorScorecardConsumers } from "./modules/vendor/scorecard-con
 import { registerTenderDocsConsumers } from "./modules/tender/docs-consumer.js";
 import { registerGemReconcileConsumers } from "./modules/gem/reconcile-consumer.js";
 import { registerRfqConsumers } from "./modules/rfq/consumer.js";
+import { registerThreeWayMatchConsumers } from "./modules/three-way-match/consumer.js";
+import { registerVendorBlacklistConsumers } from "./modules/vendor-blacklist/consumer.js";
 
 const log = pino({ name: "procurement-worker" });
 
@@ -80,6 +82,8 @@ registerVendorScorecardConsumers(queue);
 registerTenderDocsConsumers(queue);
 registerGemReconcileConsumers(queue);
 registerRfqConsumers(queue);
+registerThreeWayMatchConsumers(queue);
+registerVendorBlacklistConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
