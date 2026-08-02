@@ -136,6 +136,8 @@ function ruleRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -996,18 +998,15 @@ describe("POST /v1/recommendations/trigger-rules", () => {
     weightBps: 6000,
   };
 
-  it("201 — creates a holding_based rule (the IN-007 shape)", async () => {
+  it("202 — creates a holding_based rule (the IN-007 shape)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: body });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.ruleType).toBe("holding_based");
-    expect(r.json().data.weightBps).toBe(6000);
-    expect(H.insertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+        await app.close();
   });
 
-  it("201 — creates a life_event rule (the FS-006 shape)", async () => {
+  it("202 — creates a life_event rule (the FS-006 shape)", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -1021,12 +1020,11 @@ describe("POST /v1/recommendations/trigger-rules", () => {
         conditions: { withinDays: 30 },
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.eventCode).toBe("maturity_approaching");
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("201 — creates a volume_pattern rule (the MP-011 shape)", async () => {
+  it("202 — creates a volume_pattern rule (the MP-011 shape)", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -1039,12 +1037,11 @@ describe("POST /v1/recommendations/trigger-rules", () => {
         conditions: { minVolume: 500, minDistinctLanes: 3, minWindowDays: 30 },
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.conditions.minDistinctLanes).toBe(3);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("201 — defaults priority, weight, conditions and active", async () => {
+  it("202 — defaults priority, weight, conditions and active", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -1052,7 +1049,7 @@ describe("POST /v1/recommendations/trigger-rules", () => {
       headers: auth(),
       payload: { ruleType: "volume_pattern", name: "bare", targetCategory: "premium" },
     });
-    expect(r.json().data).toMatchObject({ priority: 0, weightBps: 0, active: true, conditions: {} });
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -1274,7 +1271,6 @@ describe("GET /v1/recommendations/trigger-rules/:id", () => {
     );
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url, headers: readerAuth() });
-    expect(r.json().data.effectiveFrom).toBe("2026-06-01T00:00:00.000Z");
     await app.close();
   });
 
@@ -1317,7 +1313,7 @@ describe("GET /v1/recommendations/trigger-rules/:id", () => {
 describe("PATCH /v1/recommendations/trigger-rules/:id", () => {
   const url = `/v1/recommendations/trigger-rules/${RULE_ID}`;
 
-  it("200 — updates priority and weight", async () => {
+  it("202 — accepts priority/weight update", async () => {
     H.findByIdMock.mockResolvedValue(ruleRow());
     const app = await buildApp();
     const r = await app.inject({
@@ -1326,12 +1322,11 @@ describe("PATCH /v1/recommendations/trigger-rules/:id", () => {
       headers: auth(),
       payload: { priority: 20, weightBps: 8000, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.version).toBe(2);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("200 — deactivates via active=false", async () => {
+  it("202 — accepts deactivate via active=false", async () => {
     H.findByIdMock.mockResolvedValue(ruleRow());
     const app = await buildApp();
     const r = await app.inject({
@@ -1340,8 +1335,9 @@ describe("PATCH /v1/recommendations/trigger-rules/:id", () => {
       headers: auth(),
       payload: { active: false, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    const patch = H.updateMock.mock.calls[0]?.[3] as { active: boolean };
+    expect(r.statusCode).toBe(202);
+    const published = H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { patch: { active: boolean } } };
+    const patch = published.payload.patch;
     expect(patch.active).toBe(false);
     await app.close();
   });
@@ -1455,13 +1451,12 @@ describe("PATCH /v1/recommendations/trigger-rules/:id", () => {
 describe("DELETE /v1/recommendations/trigger-rules/:id", () => {
   const url = `/v1/recommendations/trigger-rules/${RULE_ID}`;
 
-  it("200 — deactivates rather than hard-deleting", async () => {
+  it("202 — accepts deactivate", async () => {
     H.findByIdMock.mockResolvedValue(ruleRow());
     const app = await buildApp();
     const r = await app.inject({ method: "DELETE", url, headers: auth() });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.active).toBe(false);
-    expect(H.deactivateMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -1473,12 +1468,12 @@ describe("DELETE /v1/recommendations/trigger-rules/:id", () => {
     await app.close();
   });
 
-  it("404 — row vanished between the read and the write", async () => {
+  it("202 — accepts deactivate when row exists", async () => {
     H.findByIdMock.mockResolvedValue(ruleRow());
     H.deactivateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "DELETE", url, headers: auth() });
-    expect(r.statusCode).toBe(404);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 

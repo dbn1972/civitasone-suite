@@ -1,16 +1,17 @@
 /**
- * collateral/consumer.ts — CR-AI-02 handler for recommendation.collateral.attach.
- *
- * Command → consumer → outbox event, so the HTTP route can answer 202 without
- * holding a write transaction open. markProcessed() runs FIRST inside the
- * transaction: a redelivered message is skipped rather than double-inserted.
+ * collateral/consumer.ts — CR-AI-02 handlers for attach/detach.
  */
 import type { CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+
+function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
+  return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
+}
 
 export interface AttachCollateralPayload {
   linkId: string;
@@ -21,11 +22,15 @@ export interface AttachCollateralPayload {
   ordinal: number;
 }
 
-export async function handleAttachCollateral(msg: CommandEnvelope<AttachCollateralPayload>): Promise<void> {
-  const p = msg.payload;
+export interface DetachCollateralPayload {
+  linkId: string;
+}
 
+export async function handleAttachCollateral(
+  msg: CommandEnvelope<AttachCollateralPayload>,
+): Promise<void> {
+  const p = msg.payload;
   await db.transaction(async (tx) => {
-    // Idempotency gate — must be the first statement in the transaction.
     const fresh = await markProcessed(tx, msg.messageId);
     if (!fresh) return;
 
@@ -53,8 +58,48 @@ export async function handleAttachCollateral(msg: CommandEnvelope<AttachCollater
         collateralType: p.collateralType,
       },
     });
+    await writeAudit(tx, ctxOf(msg), {
+      action: "collateral.attach",
+      resourceType: "collateral_link",
+      resourceId: p.linkId,
+    });
   });
 
-  // Outside the transaction: a missed invalidation self-heals via the bounded TTL.
   await cache.invalidate(cache.makeKey(msg.tenantId, "collateral", p.recommendationId));
+}
+
+export async function handleDetachCollateral(
+  msg: CommandEnvelope<DetachCollateralPayload>,
+): Promise<void> {
+  const p = msg.payload;
+  let recommendationId: string | null = null;
+  await db.transaction(async (tx) => {
+    const fresh = await markProcessed(tx, msg.messageId);
+    if (!fresh) return;
+
+    const existing = await repo.findById(p.linkId, msg.tenantId);
+    if (!existing) return;
+    recommendationId = existing.recommendationId;
+
+    const ok = await repo.deleteById(tx, p.linkId, msg.tenantId);
+    if (!ok) return;
+
+    await enqueue(tx, {
+      topic: EVENTS.collateralDetached,
+      eventType: EVENTS.collateralDetached,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: { linkId: p.linkId, recommendationId: existing.recommendationId },
+    });
+    await writeAudit(tx, ctxOf(msg), {
+      action: "collateral.detach",
+      resourceType: "collateral_link",
+      resourceId: p.linkId,
+    });
+  });
+
+  if (recommendationId) {
+    await cache.invalidate(cache.makeKey(msg.tenantId, "collateral", recommendationId));
+  }
 }

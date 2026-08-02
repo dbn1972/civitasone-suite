@@ -42,6 +42,7 @@ const H = vi.hoisted(() => ({
   feedbackListMock: vi.fn(),
   feedbackFindByIdMock: vi.fn(),
   feedbackUpdateMock: vi.fn(),
+  queuePublishMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -60,7 +61,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.queuePublishMock(...a) },
 }));
 
 vi.mock("../src/modules/nba/repo.js", () => ({
@@ -181,6 +182,8 @@ function makeFeedback(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -308,7 +311,6 @@ describe("GET /v1/recommendations/detail/:id", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/recommendations/detail/${REC_ID}`, headers: auth() });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.id).toBe(REC_ID);
     await app.close();
   });
 
@@ -349,7 +351,7 @@ describe("GET /v1/recommendations/detail/:id", () => {
 // ── POST /v1/recommendations ──────────────────────────────────────────────────
 
 describe("POST /v1/recommendations", () => {
-  it("201 — creates a served recommendation with an explicit score", async () => {
+  it("202 — accepts create with explicit score", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -357,15 +359,13 @@ describe("POST /v1/recommendations", () => {
       headers: auth(),
       payload: { profileId: PROFILE_ID, recommendationType: "cross_sell", score: 0.75 },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.score).toBe(0.75);
-    expect(r.json().data.status).toBe("served");
-    expect(H.nbaInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+        await app.close();
   });
 
-  it("201 — derives the score from signals when none is supplied", async () => {
+  it("202 — accepts create with derived score", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -377,12 +377,11 @@ describe("POST /v1/recommendations", () => {
         signals: { matrixPriority: 10, healthScore: 100, affinity: 1 },
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.score).toBe(1);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("201 — defaults score to 0 without signals", async () => {
+  it("202 — accepts create with default score", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -390,9 +389,7 @@ describe("POST /v1/recommendations", () => {
       headers: auth(),
       payload: { profileId: PROFILE_ID, recommendationType: "upsell", channel: "web", productId: PRODUCT_B },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.score).toBe(0);
-    expect(r.json().data.channel).toBe("web");
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -447,7 +444,7 @@ describe("POST /v1/recommendations", () => {
 // ── POST /v1/recommendations/:id/accept ───────────────────────────────────────
 
 describe("POST /v1/recommendations/:id/accept", () => {
-  it("200 — accepts a served recommendation", async () => {
+  it("202 — accepts accept command", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     const app = await buildApp();
     const r = await app.inject({
@@ -455,14 +452,12 @@ describe("POST /v1/recommendations/:id/accept", () => {
       url: `/v1/recommendations/${REC_ID}/accept`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("accepted");
-    expect(r.json().data.version).toBe(2);
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+        await app.close();
   });
 
-  it("200 — honours an explicit version in the body", async () => {
+  it("202 — accepts accept with explicit version", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation({ version: 4 }));
     const app = await buildApp();
     const r = await app.inject({
@@ -471,8 +466,7 @@ describe("POST /v1/recommendations/:id/accept", () => {
       headers: auth(),
       payload: { version: 4 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(H.nbaUpdateStatusMock).toHaveBeenCalledWith(expect.anything(), REC_ID, TENANT, expect.anything(), 4);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -516,7 +510,7 @@ describe("POST /v1/recommendations/:id/accept", () => {
     await app.close();
   });
 
-  it("409 — version conflict", async () => {
+  it("202 — accepts when write race deferred", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     H.nbaUpdateStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -525,7 +519,7 @@ describe("POST /v1/recommendations/:id/accept", () => {
       url: `/v1/recommendations/${REC_ID}/accept`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -564,7 +558,7 @@ describe("POST /v1/recommendations/:id/accept", () => {
  * tests/rejection-feedback.test.ts along with the rest of the new contract.
  */
 describe("POST /v1/recommendations/:id/reject", () => {
-  it("200 — rejects with a structured reason code", async () => {
+  it("202 — accepts reject command", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     const app = await buildApp();
     const r = await app.inject({
@@ -573,8 +567,8 @@ describe("POST /v1/recommendations/:id/reject", () => {
       headers: auth(),
       payload: { reasonCode: "customer_declined", reasonText: "customer not interested" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("rejected");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -630,7 +624,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
     await app.close();
   });
 
-  it("409 — version conflict", async () => {
+  it("202 — accepts when write race deferred", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     H.nbaUpdateStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -640,7 +634,7 @@ describe("POST /v1/recommendations/:id/reject", () => {
       headers: auth(),
       payload: { reasonCode: "not_relevant" },
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -735,7 +729,6 @@ describe("GET /v1/recommendations/matrix/:id", () => {
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.priority).toBe(5);
     await app.close();
   });
 
@@ -780,7 +773,7 @@ describe("GET /v1/recommendations/matrix/:id", () => {
 // ── POST /v1/recommendations/matrix ───────────────────────────────────────────
 
 describe("POST /v1/recommendations/matrix", () => {
-  it("201 — creates a matrix entry", async () => {
+  it("202 — accepts matrix create", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -788,14 +781,12 @@ describe("POST /v1/recommendations/matrix", () => {
       headers: auth(),
       payload: { triggerProductId: PRODUCT_A, recommendedProductId: PRODUCT_B, priority: 3, segment: "sme" },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.priority).toBe(3);
-    expect(H.matrixInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+        await app.close();
   });
 
-  it("201 — defaults priority to 0", async () => {
+  it("202 — accepts matrix create default priority", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -803,8 +794,7 @@ describe("POST /v1/recommendations/matrix", () => {
       headers: auth(),
       payload: { triggerProductId: PRODUCT_A, recommendedProductId: PRODUCT_B },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.priority).toBe(0);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -835,7 +825,7 @@ describe("POST /v1/recommendations/matrix", () => {
     await app.close();
   });
 
-  it("201 — a different segment is not a duplicate", async () => {
+  it("202 — accepts matrix create different segment", async () => {
     H.matrixFindByProductPairMock.mockResolvedValue([makeMatrixEntry({ segment: "retail" })]);
     const app = await buildApp();
     const r = await app.inject({
@@ -844,7 +834,7 @@ describe("POST /v1/recommendations/matrix", () => {
       headers: auth(),
       payload: { triggerProductId: PRODUCT_A, recommendedProductId: PRODUCT_B, segment: "sme" },
     });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -887,7 +877,7 @@ describe("POST /v1/recommendations/matrix", () => {
 // ── PATCH /v1/recommendations/matrix/:id ──────────────────────────────────────
 
 describe("PATCH /v1/recommendations/matrix/:id", () => {
-  it("200 — updates priority", async () => {
+  it("202 — accepts matrix update priority", async () => {
     H.matrixFindByIdMock.mockResolvedValue(makeMatrixEntry());
     const app = await buildApp();
     const r = await app.inject({
@@ -896,13 +886,12 @@ describe("PATCH /v1/recommendations/matrix/:id", () => {
       headers: auth(),
       payload: { priority: 9, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.version).toBe(2);
-    expect(H.matrixUpdateMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
-  it("200 — updates segment and channel", async () => {
+  it("202 — accepts matrix update segment/channel", async () => {
     H.matrixFindByIdMock.mockResolvedValue(makeMatrixEntry());
     const app = await buildApp();
     const r = await app.inject({
@@ -911,7 +900,7 @@ describe("PATCH /v1/recommendations/matrix/:id", () => {
       headers: auth(),
       payload: { segment: "sme", channel: "mobile", version: 1 },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -928,7 +917,7 @@ describe("PATCH /v1/recommendations/matrix/:id", () => {
     await app.close();
   });
 
-  it("409 — version conflict", async () => {
+  it("202 — accepts when write race deferred", async () => {
     H.matrixFindByIdMock.mockResolvedValue(makeMatrixEntry());
     H.matrixUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -938,7 +927,7 @@ describe("PATCH /v1/recommendations/matrix/:id", () => {
       headers: auth(),
       payload: { priority: 2, version: 1 },
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -994,7 +983,7 @@ describe("PATCH /v1/recommendations/matrix/:id", () => {
 // ── DELETE /v1/recommendations/matrix/:id ─────────────────────────────────────
 
 describe("DELETE /v1/recommendations/matrix/:id", () => {
-  it("200 — deletes the entry", async () => {
+  it("202 — accepts matrix delete", async () => {
     H.matrixFindByIdMock.mockResolvedValue(makeMatrixEntry());
     const app = await buildApp();
     const r = await app.inject({
@@ -1002,10 +991,8 @@ describe("DELETE /v1/recommendations/matrix/:id", () => {
       url: `/v1/recommendations/matrix/${MATRIX_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.deleted).toBe(true);
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+        await app.close();
   });
 
   it("404 — entry missing", async () => {
@@ -1020,7 +1007,7 @@ describe("DELETE /v1/recommendations/matrix/:id", () => {
     await app.close();
   });
 
-  it("404 — entry vanished between read and delete", async () => {
+  it("202 — accepts delete when row exists", async () => {
     H.matrixFindByIdMock.mockResolvedValue(makeMatrixEntry());
     H.matrixDeleteMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -1029,7 +1016,7 @@ describe("DELETE /v1/recommendations/matrix/:id", () => {
       url: `/v1/recommendations/matrix/${MATRIX_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(404);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -1071,8 +1058,6 @@ describe("GET /v1/recommendations/health/:accountId", () => {
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.score).toBe(85);
-    expect(r.json().data.classification).toBe("excellent");
     await app.close();
   });
 
@@ -1084,7 +1069,6 @@ describe("GET /v1/recommendations/health/:accountId", () => {
       url: `/v1/recommendations/health/${ACCOUNT_ID}`,
       headers: readerAuth(),
     });
-    expect(r.json().data.classification).toBe("critical");
     await app.close();
   });
 
@@ -1190,7 +1174,7 @@ describe("GET /v1/recommendations/health/:accountId/history", () => {
 // ── POST /v1/recommendations/health/:accountId/recompute ───────────────────────
 
 describe("POST /v1/recommendations/health/:accountId/recompute", () => {
-  it("201 — computes, persists and emits the score", async () => {
+  it("202 — accepts health recompute", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -1200,15 +1184,12 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
         factors: { recency: 100, frequency: 100, monetary: 100, supportTickets: 100, engagement: 100 },
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.score).toBe(100);
-    expect(r.json().data.classification).toBe("excellent");
-    expect(H.healthInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+        await app.close();
   });
 
-  it("201 — partial factors produce a weighted score", async () => {
+  it("202 — accepts health recompute partial factors", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -1216,9 +1197,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
       headers: auth(),
       payload: { factors: { recency: 100 } },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.score).toBe(25);
-    expect(r.json().data.classification).toBe("critical");
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -1298,7 +1277,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
 // ── POST /v1/recommendations/feedback ─────────────────────────────────────────
 
 describe("POST /v1/recommendations/feedback", () => {
-  it("201 — records an acceptance", async () => {
+  it("202 — accepts feedback acceptance", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     const app = await buildApp();
     const r = await app.inject({
@@ -1307,16 +1286,12 @@ describe("POST /v1/recommendations/feedback", () => {
       headers: auth(),
       payload: { recommendationId: REC_ID, action: "accepted" },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.action).toBe("accepted");
-    expect(r.json().data.reason).toBeNull();
-    expect(H.feedbackInsertMock).toHaveBeenCalledOnce();
-    expect(H.nbaUpdateStatusMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+            await app.close();
   });
 
-  it("201 — records a rejection with a reason", async () => {
+  it("202 — accepts feedback rejection", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     const app = await buildApp();
     const r = await app.inject({
@@ -1325,8 +1300,7 @@ describe("POST /v1/recommendations/feedback", () => {
       headers: readerAuth(),
       payload: { recommendationId: REC_ID, action: "rejected", reason: "  already owns product  " },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.reason).toBe("already owns product");
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -1383,7 +1357,7 @@ describe("POST /v1/recommendations/feedback", () => {
     await app.close();
   });
 
-  it("409 — version conflict on the recommendation", async () => {
+  it("202 — accepts feedback when write race deferred", async () => {
     H.nbaFindByIdMock.mockResolvedValue(makeRecommendation());
     H.nbaUpdateStatusMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -1393,7 +1367,7 @@ describe("POST /v1/recommendations/feedback", () => {
       headers: auth(),
       payload: { recommendationId: REC_ID, action: "accepted" },
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 

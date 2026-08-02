@@ -1,12 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   CONFIDENCE_SCALE,
   MODEL_TYPES,
@@ -85,13 +82,9 @@ export async function predictiveRoutes(app: FastifyInstance): Promise<void> {
     const confidence =
       body.confidence === undefined ? null : normaliseDecimal(body.confidence, CONFIDENCE_SCALE);
 
-    const computedAt = body.computedAt === undefined ? new Date() : new Date(body.computedAt);
-    const id = randomUUID();
-
-    const written = await db.transaction(async (tx) => {
-      const rows = await repo.upsert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    const computedAt = (body.computedAt === undefined ? new Date() : new Date(body.computedAt)).toISOString();
+    return reply.code(202).send(
+      await commands.upsertPredictiveScore(ctx, {
         subjectType: params.subjectType,
         subjectId: params.subjectId,
         modelType: params.modelType,
@@ -100,38 +93,8 @@ export async function predictiveRoutes(app: FastifyInstance): Promise<void> {
         modelVersion: body.modelVersion ?? null,
         features: body.features ?? {},
         computedAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      const row = rows[0];
-      if (row === undefined) {
-        throw new HttpError(409, "UPSERT_FAILED", "predictive score could not be written; retry");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.predictiveScoreUpserted,
-        eventType: EVENTS.predictiveScoreUpserted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          scoreId: row.id,
-          subjectType: params.subjectType,
-          subjectId: params.subjectId,
-          modelType: params.modelType,
-          // String, not number — the audit trail must record the exact value stored.
-          score: row.score,
-          modelVersion: row.modelVersion,
-        },
-      });
-
-      return row;
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "predictive", params.subjectId));
-
-    return reply.send({ data: repo.toView(written) });
+      }),
+    );
   });
 
   /** GET /v1/recommendations/predictive/:subjectType/:subjectId — every model score for a subject. */

@@ -1,12 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache, queue } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import * as nbaRepo from "../nba/repo.js";
 import { COLLATERAL_TYPES, nextOrdinal, validateCollateral } from "./domain.js";
 
@@ -71,35 +67,15 @@ export async function collateralRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.listAllForRecommendation(ctx.tenantId, id);
     const ordinal = body.ordinal ?? nextOrdinal(existing);
 
-    const linkId = randomUUID();
-
-    await queue.publish(COMMANDS.collateralAttach, {
-      type: COMMANDS.collateralAttach,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: {
-        linkId,
+    return reply.code(202).send(
+      await commands.attachCollateral(ctx, {
         recommendationId: id,
         collateralType: body.collateralType,
         collateralRef: body.collateralRef,
         title: body.title,
         ordinal,
-      },
-    });
-
-    return reply.code(202).send({
-      data: {
-        linkId,
-        recommendationId: id,
-        collateralType: body.collateralType,
-        collateralRef: body.collateralRef,
-        title: body.title,
-        ordinal,
-        status: "queued",
-      },
-    });
+      }),
+    );
   });
 
   /** DELETE /v1/recommendations/collateral/:linkId — detach collateral. */
@@ -111,23 +87,7 @@ export async function collateralRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(linkId, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "collateral link not found");
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.deleteById(tx, linkId, ctx.tenantId);
-      if (!ok) throw new HttpError(404, "NOT_FOUND", "collateral link not found");
-
-      await enqueue(tx, {
-        topic: EVENTS.collateralDetached,
-        eventType: EVENTS.collateralDetached,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { linkId, recommendationId: existing.recommendationId },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "collateral", existing.recommendationId));
-
-    return reply.send({ data: { id: linkId, deleted: true } });
+    return reply.code(202).send(await commands.detachCollateral(ctx, linkId));
   });
 
   /** GET /v1/recommendations/collateral/types — supported collateral kinds. */

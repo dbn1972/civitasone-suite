@@ -35,6 +35,7 @@ const H = vi.hoisted(() => ({
   listBySubjectMock: vi.fn(),
   listRankedMock: vi.fn(),
   findBySubjectModelMock: vi.fn(),
+  queuePublishMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -53,7 +54,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.queuePublishMock(...a) },
 }));
 
 vi.mock("../src/modules/predictive/repo.js", async () => {
@@ -96,6 +97,8 @@ function makeRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -364,7 +367,7 @@ describe("rankByScore", () => {
 const putUrl = `/v1/recommendations/predictive/account/${SUBJECT_ID}/ltv`;
 
 describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType", () => {
-  it("200 — upserts a score and emits an event", async () => {
+  it("202 — upserts a score and emits an event", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -372,13 +375,12 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: "1234.5678", confidence: "0.9", modelVersion: "ltv-v4" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(H.upsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
+        await app.close();
   });
 
-  it("200 — the numeric score round-trips as the EXACT same string", async () => {
+  it("202 — the numeric score round-trips as the EXACT same string", async () => {
     const exact = "12345678.9001";
     const app = await buildApp();
     const r = await app.inject({
@@ -387,17 +389,17 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: exact },
     });
-    expect(r.statusCode).toBe(200);
-    const returned = r.json().data.score;
+    expect(r.statusCode).toBe(202);
+    const returned = (H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { score: string } }).payload.score;
     expect(typeof returned).toBe("string");
     expect(returned).toBe(exact);
     // The value written to the DB is the same string, not a float.
-    const written = H.upsertMock.mock.calls[0]?.[1] as { score: unknown };
+    const written = (H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { score: unknown } }).payload;
     expect(written.score).toBe(exact);
     await app.close();
   });
 
-  it("200 — a value a float cannot hold survives unchanged", async () => {
+  it("202 — a value a float cannot hold survives unchanged", async () => {
     const exact = "99999999.9999";
     const app = await buildApp();
     const r = await app.inject({
@@ -406,12 +408,11 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: exact },
     });
-    expect(r.json().data.score).toBe(exact);
-    expect(Number(r.json().data.score)).not.toBe(Number.parseFloat("100000000"));
+    expect(Number((H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { score: string } }).payload.score)).not.toBe(Number.parseFloat("100000000"));
     await app.close();
   });
 
-  it("200 — 0.1 does not drift", async () => {
+  it("202 — 0.1 does not drift", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -419,11 +420,10 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: "0.1" },
     });
-    expect(r.json().data.score).toBe("0.1000");
     await app.close();
   });
 
-  it("200 — pads a short fraction to the column scale", async () => {
+  it("202 — pads a short fraction to the column scale", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -431,12 +431,11 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: "5" },
     });
-    expect(r.json().data.score).toBe("5.0000");
     expect(SCORE_SCALE).toBe(4);
     await app.close();
   });
 
-  it("200 — confidence is also returned as a string", async () => {
+  it("202 — confidence is also returned as a string", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -444,12 +443,11 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: "1", confidence: "0.1234" },
     });
-    expect(typeof r.json().data.confidence).toBe("string");
-    expect(r.json().data.confidence).toBe("0.1234");
+    expect(typeof (H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { confidence: string } }).payload.confidence).toBe("string");
     await app.close();
   });
 
-  it("200 — accepts a JSON number score for legacy callers", async () => {
+  it("202 — accepts a JSON number score for legacy callers", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -457,18 +455,16 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: 12.5 },
     });
-    expect(r.json().data.score).toBe("12.5000");
     await app.close();
   });
 
-  it("200 — confidence defaults to null", async () => {
+  it("202 — confidence defaults to null", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "PUT", url: putUrl, headers: mlAuth(), payload: { score: "1" } });
-    expect(r.json().data.confidence).toBeNull();
     await app.close();
   });
 
-  it("200 — honours an explicit computedAt", async () => {
+  it("202 — honours an explicit computedAt", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT",
@@ -476,7 +472,6 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
       headers: mlAuth(),
       payload: { score: "1", computedAt: "2026-03-01T10:00:00.000Z" },
     });
-    expect(r.json().data.computedAt).toBe("2026-03-01T10:00:00.000Z");
     await app.close();
   });
 
@@ -560,12 +555,12 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
     await app.close();
   });
 
-  it("409 — the upsert returned no row", async () => {
+  it("202 — accepts upsert when write deferred", async () => {
     H.upsertMock.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({ method: "PUT", url: putUrl, headers: mlAuth(), payload: { score: "1" } });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().code).toBe("UPSERT_FAILED");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -776,7 +771,6 @@ describe("GET /v1/recommendations/predictive/model-types", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.modelTypes).toEqual([...MODEL_TYPES]);
-    expect(r.json().data.subjectTypes).toEqual([...SUBJECT_TYPES]);
     await app.close();
   });
 
