@@ -2,6 +2,9 @@
 export const COMMANDS = {
   ingestEvent: "cdp.event.ingest",
   resolveIdentity: "cdp.identity.resolve",
+  identityUnlink: "cdp.identity.unlink",
+  profileCreate: "cdp.profile.create",
+  profileUpdate: "cdp.profile.update",
   mergeProfiles: "cdp.profile.merge",
   createSegment: "cdp.segment.create",
   updateSegment: "cdp.segment.update",

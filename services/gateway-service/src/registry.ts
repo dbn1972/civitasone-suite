@@ -68,7 +68,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   // gateway route, so every request 404'd and no client could reach them.
   // Ports start at 3043: 3036-3042 were already claimed by works/inspection/
   // revenue/metadata, so the original 3036-3039 assignments collided.
-  { name: "cdp",             prefix: "/api/v1/cdp",             upstream: upstream("cdp", 3043) },
+  { name: "cdp",             prefix: "/api/v1/cdp",             upstream: upstream("cdp", 3047) },
   { name: "catalogue",       prefix: "/api/v1/catalogue",       upstream: upstream("catalogue", 3044) },
   { name: "journeys",        prefix: "/api/v1/journeys",        upstream: upstream("journey", 3045) },
   { name: "field",           prefix: "/api/v1/field",           upstream: upstream("field", 3046) },

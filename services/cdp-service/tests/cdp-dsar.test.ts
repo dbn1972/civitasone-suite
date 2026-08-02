@@ -125,16 +125,15 @@ describe("POST /v1/cdp/dsar", () => {
   const url = "/v1/cdp/dsar";
   const payload = { profileId: PROFILE_ID, requestType: "erasure", reason: "citizen request" };
 
-  it("202 — registers the request as pending and publishes the command", async () => {
+  it("202 — accepts DSAR raise and publishes the command", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.status).toBe("pending");
-    expect(r.json().data.requestType).toBe("erasure");
-    expect(H.insertMock).toHaveBeenCalledOnce();
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().id).toBeDefined();
     expect(H.publishMock).toHaveBeenCalledOnce();
-    // Domain event + audit event.
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.dsar.raise");
+    expect(H.insertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -143,8 +142,9 @@ describe("POST /v1/cdp/dsar", () => {
     for (const requestType of ["access", "erasure", "rectification", "portability"]) {
       const r = await app.inject({ method: "POST", url, headers: auth(), payload: { profileId: PROFILE_ID, requestType } });
       expect(r.statusCode).toBe(202);
-      expect(r.json().data.requestType).toBe(requestType);
+      expect(r.json().status).toBe("accepted");
     }
+    expect(H.publishMock).toHaveBeenCalledTimes(4);
     await app.close();
   });
 
@@ -250,39 +250,32 @@ describe("GET /v1/cdp/dsar", () => {
 describe("POST /v1/cdp/dsar/:id/complete", () => {
   const url = `/v1/cdp/dsar/${DSAR_ID}/complete`;
 
-  it("200 — completes and emits the purge event through the outbox", async () => {
+  it("202 — accepts DSAR complete", async () => {
     H.findByIdMock.mockResolvedValue(makeDsar());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("completed");
-    expect(r.json().data.version).toBe(2);
-    expect(r.json().data.purgeDownstream).toBe(true);
-
-    // The downstream contract: the completion event carries the profile to purge.
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain(EVENTS.dsarCompleted);
-    const completion = H.enqueueMock.mock.calls
-      .map((c) => c[1] as { topic: string; payload: Record<string, unknown> })
-      .find((e) => e.topic === EVENTS.dsarCompleted);
-    expect(completion?.payload).toMatchObject({ profileId: PROFILE_ID, requestType: "erasure", purgeDownstream: true });
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/dsar/${DSAR_ID}/complete`, headers: auth(), payload: { version: 1 } });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.dsar.complete");
+    expect(H.completeMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — an access request completes without asking anyone to purge", async () => {
+  it("202 — an access request complete is accepted", async () => {
     H.findByIdMock.mockResolvedValue(makeDsar({ requestType: "access" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.purgeDownstream).toBe(false);
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/dsar/${DSAR_ID}/complete`, headers: auth(), payload: { version: 1 } });
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
-  it("200 — an in_progress request can be completed", async () => {
-    H.findByIdMock.mockResolvedValue(makeDsar({ status: "in_progress", version: 3 }));
+  it("202 — an in_progress request can be completed", async () => {
+    H.findByIdMock.mockResolvedValue(makeDsar({ status: "in_progress", version: 2 }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 3 } });
-    expect(r.statusCode).toBe(200);
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/dsar/${DSAR_ID}/complete`, headers: auth(), payload: { version: 2 } });
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -302,11 +295,11 @@ describe("POST /v1/cdp/dsar/:id/complete", () => {
   });
 
   it("409 — stale version", async () => {
-    H.findByIdMock.mockResolvedValue(makeDsar());
-    H.completeMock.mockResolvedValue(false);
+    H.findByIdMock.mockResolvedValue(makeDsar({ version: 3 }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/dsar/${DSAR_ID}/complete`, headers: auth(), payload: { version: 1 } });
     expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 
