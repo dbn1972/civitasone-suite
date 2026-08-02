@@ -12,6 +12,21 @@ export const COMMANDS = {
   updateDesignerDefinition: "workflow.designer.definition.update",
   deleteDesignerDefinition: "workflow.designer.definition.delete",
   importDesignerDefinition: "workflow.designer.definition.import",
+  createDefinition: "workflow.definition.create",
+  deployDefinition: "workflow.definition.deploy",
+  cloneDefinitionTemplate: "workflow.definition.clone",
+  rollbackDefinition: "workflow.definition.rollback",
+  importBpmnDefinition: "workflow.definition.bpmn_import",
+  createDmnTable: "workflow.dmn.table.create",
+  updateDmnTable: "workflow.dmn.table.update",
+  deleteDmnTable: "workflow.dmn.table.delete",
+  upsertRoleMember: "workflow.role_member.upsert",
+  createMatrixRule: "workflow.assignment.matrix.create",
+  deactivateMatrixRule: "workflow.assignment.matrix.deactivate",
+  createSubstitution: "workflow.assignment.substitution.create",
+  deactivateSubstitution: "workflow.assignment.substitution.deactivate",
+  createDecision: "workflow.decision.create",
+  deployDecision: "workflow.decision.deploy",
 } as const;
 
 export const EVENTS = {
@@ -39,6 +54,21 @@ export const EVENTS = {
   designerDefinitionUpdated: "workflow.designer.definition.updated",
   designerDefinitionDeleted: "workflow.designer.definition.deleted",
   designerDefinitionImported: "workflow.designer.definition.imported",
+  definitionCreated: "workflow.definition.created",
+  definitionDeployed: "workflow.definition.deployed",
+  definitionCloned: "workflow.definition.cloned",
+  definitionRolledBack: "workflow.definition.rolled_back",
+  definitionBpmnImported: "workflow.definition.bpmn_imported",
+  dmnTableCreated: "workflow.dmn.table.created",
+  dmnTableUpdated: "workflow.dmn.table.updated",
+  dmnTableDeleted: "workflow.dmn.table.deleted",
+  roleMemberUpserted: "workflow.role_member.upserted",
+  matrixRuleCreated: "workflow.assignment.matrix.created",
+  matrixRuleDeactivated: "workflow.assignment.matrix.deactivated",
+  substitutionCreated: "workflow.assignment.substitution.created",
+  substitutionDeactivated: "workflow.assignment.substitution.deactivated",
+  decisionCreated: "workflow.decision.created",
+  decisionDeployed: "workflow.decision.deployed",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */

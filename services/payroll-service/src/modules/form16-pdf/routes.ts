@@ -15,6 +15,8 @@ import { payrollSlips } from "../payroll/schema.js";
 import { form16BulkJobs } from "./schema.js";
 import { COMMANDS } from "../../topics.js";
 import { getObject, presignedGetUrl } from "@civitasone/storage";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
@@ -167,7 +169,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
         pdfBuffer = signResult.buffer;
         dscSigned = true;
 
-        // Emit audit event: form16_signed
+        // Read-side PDF issuance has no entity CRUD; this transaction persists
+        // only the mandatory audit outbox record after signing.
         await db.transaction(async (tx) => {
           await enqueue(tx, {
             topic: AUDIT_TOPIC,
@@ -199,7 +202,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
         }
         pdfBuffer = watermarkedResult.buffer;
 
-        // Emit audit event: form16_generated_unsigned
+        // Read-side PDF issuance has no entity CRUD; this transaction persists
+        // only the mandatory audit outbox record after generation.
         await db.transaction(async (tx) => {
           await enqueue(tx, {
             topic: AUDIT_TOPIC,
@@ -273,20 +277,11 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "BULK_JOB_IN_PROGRESS", `A bulk Form 16 generation job is already running for FY ${body.fy}`);
     }
 
-    // Create the job row
     const jobId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(form16BulkJobs).values({
-        id: jobId,
-        tenantId: ctx.tenantId,
-        fy: body.fy,
-        status: "pending",
-        createdBy: ctx.actorId,
-      });
-    });
 
-    // Publish command to queue
+    // The consumer creates the job row atomically with its idempotency marker.
     await queue.publish(COMMANDS.form16BulkGenerate, {
+      messageId: jobId,
       type: COMMANDS.form16BulkGenerate,
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,
@@ -300,8 +295,10 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    return reply.status(202).send({
-      data: { jobId, message: "bulk Form 16 generation queued", fy: body.fy },
+    return sendAccepted(reply, acceptedResponseSchema, {
+      id: jobId,
+      status: "accepted",
+      correlationId: ctx.correlationId,
     });
   });
 

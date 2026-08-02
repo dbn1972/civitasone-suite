@@ -138,11 +138,20 @@ export function registerForm16BulkConsumers(queue: Queue): void {
     const p = msg.payload as BulkGeneratePayload;
     const { jobId, tenantId, fy, employeeIds } = p;
 
-    // Idempotency check
-    const idempotent = await db.transaction(async (tx) => {
-      return markProcessed(tx, msg.messageId);
+    // The job row and idempotency marker commit together. A redelivery cannot
+    // create a second job or start a duplicate generation run.
+    const initialized = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      await tx.insert(form16BulkJobs).values({
+        id: jobId,
+        tenantId,
+        fy,
+        status: "pending",
+        createdBy: msg.actorId,
+      }).onConflictDoNothing();
+      return true;
     });
-    if (!idempotent) return;
+    if (!initialized) return;
 
     const storagePrefix = `form16/${tenantId}/${fy}`;
     const errorDetails: Array<{ employeeId: string; employeeNo: string; error: string }> = [];

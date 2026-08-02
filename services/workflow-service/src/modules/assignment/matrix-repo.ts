@@ -10,6 +10,7 @@ export type Writer = Pick<typeof db, "select" | "insert" | "update" | "execute">
 export async function insertMatrixRule(
   tx: Writer,
   row: {
+    id?: string;
     tenantId: string;
     roleRef: string;
     conditionExpr: string | null;
@@ -20,6 +21,7 @@ export async function insertMatrixRule(
   const [inserted] = await (tx as typeof db)
     .insert(responsibilityMatrix)
     .values({
+      ...(row.id ? { id: row.id } : {}),
       tenantId: row.tenantId,
       roleRef: row.roleRef,
       conditionExpr: row.conditionExpr,
@@ -98,6 +100,7 @@ export async function resolveFromMatrix(
 export async function insertSubstitution(
   tx: Writer,
   row: {
+    id?: string;
     tenantId: string;
     userId: string;
     substituteId: string;
@@ -109,6 +112,7 @@ export async function insertSubstitution(
   const [inserted] = await (tx as typeof db)
     .insert(substitutionRules)
     .values({
+      ...(row.id ? { id: row.id } : {}),
       tenantId: row.tenantId,
       userId: row.userId,
       substituteId: row.substituteId,

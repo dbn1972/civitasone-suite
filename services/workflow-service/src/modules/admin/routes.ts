@@ -3,11 +3,14 @@ import { ZodError, z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { roleMembers } from "../assignment/resolver.js";
 import { and, eq } from "drizzle-orm";
 import * as dlq from "../dlq/repo.js";
 import * as historyRepo from "../history/repo.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
@@ -41,6 +44,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   // Gap 3 — DLQ requeue: re-publish the stored envelope to its topic and mark
   // the dead letter requeued. Tenant-scoped (can only requeue own messages).
+  // CQRS exception (operational): markRequeued is inbox/DLQ bookkeeping, not a
+  // domain entity mutation — keeping it synchronous so requeue status is
+  // immediately consistent with the republish.
   app.post("/v1/workflow/dlq/:id/requeue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -112,19 +118,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       active: z.boolean().default(true),
     }).parse(req.body);
 
-    await db.transaction(async (tx) => {
-      await tx.insert(roleMembers).values({
-        tenantId: ctx.tenantId,
-        roleRef: body.roleRef,
-        userId: body.userId,
-        ...(body.reportsTo !== undefined ? { reportsTo: body.reportsTo } : {}),
-        active: body.active,
-      }).onConflictDoUpdate({
-        target: [roleMembers.tenantId, roleMembers.roleRef, roleMembers.userId],
-        set: { reportsTo: body.reportsTo ?? null, active: body.active },
-      });
-    });
-    return reply.code(201).send({ data: { roleRef: body.roleRef, userId: body.userId } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertRoleMember(ctx, body));
   });
 
   app.get("/v1/workflow/role-members", async (req, reply) => {

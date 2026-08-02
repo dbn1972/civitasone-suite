@@ -11,6 +11,11 @@ import { registerTasksConsumers } from "./modules/tasks/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
 import { registerMessagesConsumers } from "./modules/messages/consumer.js";
 import { registerDesignerConsumers } from "./modules/designer/consumer.js";
+import { registerDefinitionConsumers } from "./modules/definitions/consumer.js";
+import { registerDmnConsumers } from "./modules/dmn/consumer.js";
+import { registerAdminConsumers } from "./modules/admin/consumer.js";
+import { registerAssignmentConsumers } from "./modules/assignment/consumer.js";
+import { registerDecisionConsumers } from "./modules/decisions/consumer.js";
 import { startSlaSweeper, startTimerSweeper, startReminderSweeper } from "./modules/tasks/sweeper.js";
 import { startMessageSweeper } from "./modules/messages/sweeper.js";
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
@@ -62,6 +67,11 @@ registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
 registerDesignerConsumers(queue);
+registerDefinitionConsumers(queue);
+registerDmnConsumers(queue);
+registerAdminConsumers(queue);
+registerAssignmentConsumers(queue);
+registerDecisionConsumers(queue);
 // CAP-031: cross-domain registration handlers write to FORCE-RLS workflow.cases
 // under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC
 // (also covered by the global wrap above; tenantScoped() kept for clarity/tests).
