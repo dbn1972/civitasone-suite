@@ -18,6 +18,7 @@ import { withTenant } from "../../shared/scope.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import { ADMIN } from "../../shared/roles.js";
 import { entityDefinitions, fieldDefinitions } from "../entities/schema.js";
+import { createItem, updateItem, deleteItem } from "./commands.js";
 
 const FIELD_TYPES = ["text", "number", "currency", "date", "boolean", "picklist", "lookup", "formula"] as const;
 
@@ -60,30 +61,11 @@ export async function fieldRoutes(app: FastifyInstance): Promise<void> {
     const { entityId } = z.object({ entityId: z.string().uuid() }).parse(req.params);
     const body = createFieldSchema.parse(req.body);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const parent = await tx.select().from(entityDefinitions)
-        .where(and(eq(entityDefinitions.id, entityId), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1);
-      if (!parent[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
-
-      const [created] = await tx.insert(fieldDefinitions).values({
-        tenantId: ctx.tenantId,
-        entityDefId: entityId,
-        apiName: body.apiName,
-        label: body.label,
-        fieldType: body.fieldType,
-        isRequired: body.isRequired,
-        isUnique: body.isUnique,
-        defaultValue: body.defaultValue ?? null,
-        picklistValues: body.picklistValues ?? null,
-        lookupEntityId: body.lookupEntityId ?? null,
-        formulaExpression: body.formulaExpression ?? null,
-        sortOrder: body.sortOrder,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      }).returning();
-      return created;
-    });
-    return reply.code(201).send({ data: row });
+    const parent = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(entityDefinitions)
+        .where(and(eq(entityDefinitions.id, entityId), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1));
+    if (!parent[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
+    return reply.code(202).send({ data: await createItem(ctx, { ...body, entityId }) });
   });
 
   app.patch("/v1/metadata/fields/:id", async (req, reply) => {
@@ -99,34 +81,14 @@ export async function fieldRoutes(app: FastifyInstance): Promise<void> {
       isActive: z.boolean().optional(),
     }).parse(req.body);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.actorId };
-      if (body.label !== undefined) set.label = body.label;
-      if (body.isRequired !== undefined) set.isRequired = body.isRequired;
-      if (body.isUnique !== undefined) set.isUnique = body.isUnique;
-      if (body.picklistValues !== undefined) set.picklistValues = body.picklistValues;
-      if (body.sortOrder !== undefined) set.sortOrder = body.sortOrder;
-      if (body.isActive !== undefined) set.isActive = body.isActive;
-      const [updated] = await tx.update(fieldDefinitions).set(set)
-        .where(and(eq(fieldDefinitions.id, id), eq(fieldDefinitions.tenantId, ctx.tenantId))).returning();
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "Field not found");
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await updateItem(ctx, id, body) });
   });
 
   app.delete("/v1/metadata/fields/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const [updated] = await tx.update(fieldDefinitions)
-        .set({ isActive: false, updatedAt: new Date(), updatedBy: ctx.actorId })
-        .where(and(eq(fieldDefinitions.id, id), eq(fieldDefinitions.tenantId, ctx.tenantId))).returning();
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "Field not found");
-    return reply.send({ data: { id, isActive: false } });
+    return reply.code(202).send({ data: await deleteItem(ctx, id) });
   });
 
   registerErrorHandler(app);

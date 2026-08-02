@@ -85,4 +85,19 @@ export function registerEntityConsumers(q: Queue): void {
       });
     });
   });
+
+  q.subscribe("metadata.entity.publish", async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await withTenant(p.tenantId, async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.update(entityDefinitions)
+        .set({ publishedAt: new Date(), publishedBy: msg.actorId, isActive: true, updatedAt: new Date(), updatedBy: msg.actorId })
+        .where(and(eq(entityDefinitions.id, p.id), eq(entityDefinitions.tenantId, p.tenantId)));
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "metadata", action: "publish_entity", resourceType: "entity_definition", resourceId: p.id, outcome: "success" },
+      });
+    });
+  });
 }

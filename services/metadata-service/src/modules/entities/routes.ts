@@ -7,6 +7,8 @@ import { db } from "../../shared/db.js";
 import { withTenant } from "../../shared/scope.js";
 import { queue } from "../../shared/infra.js";
 import { entityDefinitions } from "./schema.js";
+import { publishCommand } from "../../shared/publish.js";
+import { COMMANDS } from "../../topics.js";
 
 const ADMIN = ["super_admin", "platform_admin", "metadata_admin"];
 
@@ -51,20 +53,15 @@ export async function entityRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/metadata/entities/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const existing = await tx.select().from(entityDefinitions)
-        .where(and(eq(entityDefinitions.id, id), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1);
-      if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
-      if (existing[0].publishedAt) throw new HttpError(409, "ALREADY_PUBLISHED", "Entity is already published");
-      if (existing[0].createdBy === ctx.actorId) {
-        throw new HttpError(403, "MAKER_CANNOT_CHECK", "the entity's author cannot publish it — a different admin must approve");
-      }
-      const [updated] = await tx.update(entityDefinitions)
-        .set({ publishedAt: new Date(), publishedBy: ctx.actorId, isActive: true, updatedAt: new Date(), updatedBy: ctx.actorId })
-        .where(and(eq(entityDefinitions.id, id), eq(entityDefinitions.tenantId, ctx.tenantId))).returning();
-      return updated;
-    });
-    return reply.send({ data: row });
+    const existing = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(entityDefinitions)
+        .where(and(eq(entityDefinitions.id, id), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
+    if (existing[0].publishedAt) throw new HttpError(409, "ALREADY_PUBLISHED", "Entity is already published");
+    if (existing[0].createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CANNOT_CHECK", "the entity's author cannot publish it — a different admin must approve");
+    }
+    return reply.code(202).send({ data: await publishCommand(ctx, COMMANDS.ENTITY_PUBLISH, id, {}) });
   });
 
   app.setErrorHandler((err, req, reply) => {
