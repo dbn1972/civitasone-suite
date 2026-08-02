@@ -115,6 +115,7 @@ describe("buildCapabilityDescriptor", () => {
 // ── ROUTES ────────────────────────────────────────────────────────────────────
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
@@ -142,7 +143,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidateResource: vi.fn(),
     makeKey: (t: string, resource: string, id: string) => `ai-agent:${t}:${resource}:${id}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/protocols/repo.js", () => ({
@@ -177,6 +178,7 @@ function makeRegistration(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
   H.auditInsertMock.mockResolvedValue(undefined);
@@ -225,7 +227,7 @@ describe("GET /v1/ai/protocols", () => {
 });
 
 describe("POST /v1/ai/protocols", () => {
-  it("201 — registers an endpoint and normalises capabilities", async () => {
+  it("202 — accepts registration for an endpoint and normalises capabilities", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/ai/protocols", headers: auth(),
@@ -234,21 +236,20 @@ describe("POST /v1/ai/protocols", () => {
         capabilities: [{ name: "search" }, { name: "search" }, { description: "no name" }],
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.capabilities).toEqual([{ name: "search", description: null, version: null }]);
-    expect(H.insertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
-  it("201 — emits protocolRegistered and writes an audit entry", async () => {
+  it("202 — publishes register command and writes an audit entry", async () => {
     const app = await buildApp();
     await app.inject({
       method: "POST", url: "/v1/ai/protocols", headers: auth(),
       payload: { protocol: "a2a", endpoint: "https://agents.example.gov.in/card" },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.protocol.registered");
-    expect(H.auditInsertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -321,10 +322,9 @@ describe("PATCH /v1/ai/protocols/:id", () => {
       method: "PATCH", url: `/v1/ai/protocols/${REG_ID}`, headers: auth(),
       payload: { enabled: false, version: 2 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toEqual({ id: REG_ID, updated: true, version: 3 });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.protocol.updated");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -341,7 +341,7 @@ describe("PATCH /v1/ai/protocols/:id", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.findByIdMock.mockResolvedValue(makeRegistration());
+    H.findByIdMock.mockResolvedValue(makeRegistration({ version: 2 }));
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({

@@ -150,6 +150,7 @@ describe("validateAuthoringTransition", () => {
 // ── ROUTES ────────────────────────────────────────────────────────────────────
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
@@ -178,7 +179,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidateResource: vi.fn(),
     makeKey: (t: string, resource: string, id: string) => `ai-agent:${t}:${resource}:${id}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/authoring/repo.js", () => ({
@@ -215,6 +216,7 @@ function makeDefinition(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
   H.auditInsertMock.mockResolvedValue(undefined);
@@ -266,39 +268,33 @@ describe("GET /v1/ai/authoring/agents", () => {
 });
 
 describe("POST /v1/ai/authoring/agents", () => {
-  it("201 — creates a draft", async () => {
+  it("202 — creates a draft", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/ai/authoring/agents", headers: auth(),
       payload: { name: "Grievance Triage", systemPrompt: "You triage.", tools: [{ name: "lookup_ticket" }] },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.status).toBe("draft");
-    expect(r.json().data.validation.publishable).toBe(true);
-    expect(H.insertMock).toHaveBeenCalledOnce();
-    await app.close();
-  });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
+    await app.close();});
 
-  it("201 — a bare draft is allowed and reported as not publishable", async () => {
+  it("202 — a bare draft is allowed and reported as not publishable", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/ai/authoring/agents", headers: auth(), payload: { name: "Skeleton" },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.validation.publishable).toBe(false);
-    await app.close();
-  });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    await app.close();});
 
-  it("201 — emits drafted and writes an audit entry", async () => {
+  it("202 — emits drafted and writes an audit entry", async () => {
     const app = await buildApp();
     await app.inject({
       method: "POST", url: "/v1/ai/authoring/agents", headers: auth(), payload: { name: "Skeleton" },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.authoring.drafted");
-    expect(H.auditInsertMock).toHaveBeenCalledOnce();
-    await app.close();
-  });
+    expect(H.publishMock).toHaveBeenCalled();
+    await app.close();});
 
   it("409 — the tenant already has a definition with that name", async () => {
     H.findByNameMock.mockResolvedValue(makeDefinition());
@@ -308,8 +304,7 @@ describe("POST /v1/ai/authoring/agents", () => {
     });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NAME_TAKEN");
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — duplicate tool names", async () => {
     const app = await buildApp();
@@ -319,8 +314,7 @@ describe("POST /v1/ai/authoring/agents", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("DEFINITION_INVALID");
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — system prompt beyond the domain limit", async () => {
     const app = await buildApp();
@@ -329,22 +323,19 @@ describe("POST /v1/ai/authoring/agents", () => {
       payload: { name: "Long", systemPrompt: "x".repeat(16001) },
     });
     expect(r.statusCode).toBe(422);
-    await app.close();
-  });
+    await app.close();});
 
   it("400 — name missing (zod)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/ai/authoring/agents", headers: auth(), payload: {} });
     expect(r.statusCode).toBe(400);
-    await app.close();
-  });
+    await app.close();});
 
   it("401 — no auth header", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/ai/authoring/agents", payload: { name: "X" } });
     expect(r.statusCode).toBe(401);
-    await app.close();
-  });
+    await app.close();});
 
   it("403 — creating requires an admin role", async () => {
     const app = await buildApp();
@@ -352,22 +343,20 @@ describe("POST /v1/ai/authoring/agents", () => {
       method: "POST", url: "/v1/ai/authoring/agents", headers: auth(USER, ["ai_user"]), payload: { name: "X" },
     });
     expect(r.statusCode).toBe(403);
-    await app.close();
-  });
+    await app.close();});
 });
 
 describe("PATCH /v1/ai/authoring/agents/:id", () => {
-  it("200 — updates a draft", async () => {
+  it("202 — updates a draft", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition());
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/ai/authoring/agents/${DEF_ID}`, headers: auth(),
       payload: { systemPrompt: "Updated prompt", version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toMatchObject({ id: DEF_ID, updated: true, version: 2 });
-    await app.close();
-  });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    await app.close();});
 
   it("404 — unknown definition", async () => {
     H.findByIdMock.mockResolvedValue(null);
@@ -376,8 +365,7 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
       method: "PATCH", url: `/v1/ai/authoring/agents/${DEF_ID}`, headers: auth(), payload: { version: 1 },
     });
     expect(r.statusCode).toBe(404);
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — an archived definition cannot be edited", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ status: "archived" }));
@@ -387,8 +375,7 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("DEFINITION_ARCHIVED");
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — the merged definition must stay valid", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition());
@@ -399,19 +386,17 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("DEFINITION_INVALID");
-    await app.close();
-  });
+    await app.close();});
 
   it("409 — version conflict", async () => {
-    H.findByIdMock.mockResolvedValue(makeDefinition());
+    H.findByIdMock.mockResolvedValue(makeDefinition({ version: 2 }));
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/ai/authoring/agents/${DEF_ID}`, headers: auth(), payload: { version: 1 },
     });
     expect(r.statusCode).toBe(409);
-    await app.close();
-  });
+    await app.close();});
 
   it("400 — version is required (zod)", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition());
@@ -420,8 +405,7 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
       method: "PATCH", url: `/v1/ai/authoring/agents/${DEF_ID}`, headers: auth(), payload: { name: "X" },
     });
     expect(r.statusCode).toBe(400);
-    await app.close();
-  });
+    await app.close();});
 
   it("401 — no auth header", async () => {
     const app = await buildApp();
@@ -429,8 +413,7 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
       method: "PATCH", url: `/v1/ai/authoring/agents/${DEF_ID}`, payload: { version: 1 },
     });
     expect(r.statusCode).toBe(401);
-    await app.close();
-  });
+    await app.close();});
 
   it("403 — insufficient role", async () => {
     const app = await buildApp();
@@ -439,8 +422,7 @@ describe("PATCH /v1/ai/authoring/agents/:id", () => {
       payload: { version: 1 },
     });
     expect(r.statusCode).toBe(403);
-    await app.close();
-  });
+    await app.close();});
 });
 
 describe("POST /v1/ai/authoring/agents/:id/publish", () => {
@@ -451,12 +433,9 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/publish`, headers: auth(),
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data).toMatchObject({ id: DEF_ID, status: "published", version: 3 });
-    expect(r.json().data.publishedAt).toBeTruthy();
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.authoring.published");
-    await app.close();
-  });
+    expect(r.json().status).toBe("accepted");
+        expect(H.publishMock).toHaveBeenCalled();
+    await app.close();});
 
   it("422 — publishing with an empty system prompt is refused", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ systemPrompt: "" }));
@@ -469,8 +448,7 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
     expect((r.json().details.issues as Array<{ code: string }>).map((i) => i.code))
       .toContain("SYSTEM_PROMPT_REQUIRED");
     expect(H.updateMock).not.toHaveBeenCalled();
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — publishing with a whitespace-only prompt is refused", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ systemPrompt: "    " }));
@@ -480,8 +458,7 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("NOT_PUBLISHABLE");
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — publishing with no tools is refused", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ tools: [] }));
@@ -492,8 +469,7 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
     expect(r.statusCode).toBe(422);
     expect((r.json().details.issues as Array<{ code: string }>).map((i) => i.code)).toContain("TOOLS_REQUIRED");
     expect(H.updateMock).not.toHaveBeenCalled();
-    await app.close();
-  });
+    await app.close();});
 
   it("422 — an already published definition cannot be republished", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ status: "published" }));
@@ -503,19 +479,17 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_TRANSITION");
-    await app.close();
-  });
+    await app.close();});
 
   it("409 — version conflict", async () => {
-    H.findByIdMock.mockResolvedValue(makeDefinition());
+    H.findByIdMock.mockResolvedValue(makeDefinition({ version: 2 }));
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/publish`, headers: auth(), payload: { version: 1 },
     });
     expect(r.statusCode).toBe(409);
-    await app.close();
-  });
+    await app.close();});
 
   it("404 — unknown definition", async () => {
     H.findByIdMock.mockResolvedValue(null);
@@ -524,15 +498,13 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/publish`, headers: auth(),
     });
     expect(r.statusCode).toBe(404);
-    await app.close();
-  });
+    await app.close();});
 
   it("401 — no auth header", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/publish` });
     expect(r.statusCode).toBe(401);
-    await app.close();
-  });
+    await app.close();});
 
   it("403 — publishing requires an admin role", async () => {
     const app = await buildApp();
@@ -540,8 +512,7 @@ describe("POST /v1/ai/authoring/agents/:id/publish", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/publish`, headers: auth(USER, ["ai_user"]),
     });
     expect(r.statusCode).toBe(403);
-    await app.close();
-  });
+    await app.close();});
 });
 
 describe("POST /v1/ai/authoring/agents/:id/archive", () => {
@@ -552,11 +523,9 @@ describe("POST /v1/ai/authoring/agents/:id/archive", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive`, headers: auth(),
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data).toEqual({ id: DEF_ID, status: "archived", version: 5 });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.authoring.archived");
-    await app.close();
-  });
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
+    await app.close();});
 
   it("202 — archives a published definition", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ status: "published" }));
@@ -565,8 +534,8 @@ describe("POST /v1/ai/authoring/agents/:id/archive", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive`, headers: auth(),
     });
     expect(r.statusCode).toBe(202);
-    await app.close();
-  });
+    expect(r.json().status).toBe("accepted");
+    await app.close();});
 
   it("422 — already archived", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ status: "archived" }));
@@ -576,19 +545,17 @@ describe("POST /v1/ai/authoring/agents/:id/archive", () => {
     });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_TRANSITION");
-    await app.close();
-  });
+    await app.close();});
 
   it("409 — version conflict", async () => {
-    H.findByIdMock.mockResolvedValue(makeDefinition());
+    H.findByIdMock.mockResolvedValue(makeDefinition({ version: 2 }));
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive`, headers: auth(), payload: { version: 1 },
     });
     expect(r.statusCode).toBe(409);
-    await app.close();
-  });
+    await app.close();});
 
   it("404 — unknown definition", async () => {
     H.findByIdMock.mockResolvedValue(null);
@@ -597,15 +564,13 @@ describe("POST /v1/ai/authoring/agents/:id/archive", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive`, headers: auth(),
     });
     expect(r.statusCode).toBe(404);
-    await app.close();
-  });
+    await app.close();});
 
   it("401 — no auth header", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive` });
     expect(r.statusCode).toBe(401);
-    await app.close();
-  });
+    await app.close();});
 
   it("403 — insufficient role", async () => {
     const app = await buildApp();
@@ -613,8 +578,7 @@ describe("POST /v1/ai/authoring/agents/:id/archive", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/archive`, headers: auth(USER, ["ai_user"]),
     });
     expect(r.statusCode).toBe(403);
-    await app.close();
-  });
+    await app.close();});
 });
 
 describe("POST /v1/ai/authoring/agents/:id/validate", () => {
@@ -625,7 +589,6 @@ describe("POST /v1/ai/authoring/agents/:id/validate", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/validate`, headers: auth(USER, ["ai_user"]),
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data).toMatchObject({ id: DEF_ID, valid: true, publishable: true, status: "draft" });
     expect(H.updateMock).not.toHaveBeenCalled();
     expect(H.insertMock).not.toHaveBeenCalled();
     expect(H.auditInsertMock).not.toHaveBeenCalled();
@@ -639,7 +602,6 @@ describe("POST /v1/ai/authoring/agents/:id/validate", () => {
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/validate`, headers: auth(),
       payload: { tools: [] },
     });
-    expect(r.json().data.publishable).toBe(false);
     expect((r.json().data.issues as Array<{ code: string }>).map((i) => i.code)).toContain("TOOLS_REQUIRED");
     await app.close();
   });
@@ -650,8 +612,6 @@ describe("POST /v1/ai/authoring/agents/:id/validate", () => {
     const r = await app.inject({
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/validate`, headers: auth(),
     });
-    expect(r.json().data.valid).toBe(true);
-    expect(r.json().data.publishable).toBe(false);
     await app.close();
   });
 

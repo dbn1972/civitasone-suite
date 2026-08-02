@@ -2,11 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, ADMIN_ROLES } from "../../shared/roles.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as guardrailsRepo from "../guardrails/repo.js";
 import { evaluateRules } from "../guardrails/domain.js";
@@ -16,6 +12,7 @@ import {
   canInvoke,
   selectHandoffTarget,
 } from "./domain.js";
+import * as commands from "./commands.js";
 
 const skillSchema = z.record(z.unknown());
 
@@ -57,7 +54,6 @@ const listQuery = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function agentRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/ai/agents — list agent definitions
   app.get("/v1/ai/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -75,7 +71,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /v1/ai/agents/handoff — route work to the best-matching agent
   app.post("/v1/ai/agents/handoff", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -101,37 +96,20 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "NO_HANDOFF_TARGET", `no active agent has skill: ${body.requiredSkill}`);
     }
 
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: EVENTS.handoffTriggered,
-        eventType: EVENTS.handoffTriggered,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          fromAgentId: from.id,
-          toAgentId: target.id,
-          requiredSkill: body.requiredSkill,
-          ...(body.conversationId !== undefined ? { conversationId: body.conversationId } : {}),
-        },
-      });
-
-      await writeAudit(tx, ctx, {
-        agentId: from.id,
-        action: "agent.handoff",
-        input: body.requiredSkill,
-        output: target.id,
-        blocked: false,
-        reason: null,
-      });
+    const accepted = await commands.handoffAgent(ctx, {
+      fromAgentId: from.id,
+      toAgentId: target.id,
+      toAgentName: target.name,
+      requiredSkill: body.requiredSkill,
+      ...(body.conversationId !== undefined ? { conversationId: body.conversationId } : {}),
     });
 
-    return reply.status(202).send({
+    return reply.code(202).send({
+      ...accepted,
       data: { fromAgentId: from.id, toAgentId: target.id, toAgentName: target.name, status: "handed_off" },
     });
   });
 
-  // GET /v1/ai/agents/:id — single agent
   app.get("/v1/ai/agents/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -145,7 +123,6 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: repo.toView(agent) });
   });
 
-  // POST /v1/ai/agents — create an agent definition
   app.post("/v1/ai/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -160,38 +137,14 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "AGENT_DEFINITION_INVALID", definitionError);
     }
 
-    const id = randomUUID();
     const skills = body.skills ?? [];
     const tools = body.tools ?? [];
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        name: body.name,
-        skills,
-        tools,
-        status: "active",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.create",
-        input: body.name,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.status(201).send({
-      data: { id, name: body.name, skills, tools, status: "active", version: 1 },
-    });
+    return reply.code(202).send(
+      await commands.createAgent(ctx, { name: body.name, skills, tools }),
+    );
   });
 
-  // PATCH /v1/ai/agents/:id — update definition or status
   app.patch("/v1/ai/agents/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -201,6 +154,10 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) {
       throw new HttpError(404, "NOT_FOUND", "agent not found");
+    }
+
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
     }
 
     if (body.name !== undefined || body.skills !== undefined || body.tools !== undefined) {
@@ -227,26 +184,9 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     if (body.tools !== undefined) patch.tools = body.tools;
     if (body.status !== undefined) patch.status = body.status;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.update",
-        input: JSON.stringify(Object.keys(patch)),
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateAgent(ctx, id, { version: body.version, patch }));
   });
 
-  // DELETE /v1/ai/agents/:id — soft delete (archive)
   app.delete("/v1/ai/agents/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -262,26 +202,9 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.archive(tx, id, ctx.tenantId, existing.version, ctx.actorId);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.archive",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.status(204).send();
+    return reply.code(202).send(await commands.deleteAgent(ctx, id, existing.version));
   });
 
-  // POST /v1/ai/agents/:id/pause — active → paused
   app.post("/v1/ai/agents/:id/pause", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -299,36 +222,13 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const version = body.version ?? existing.version;
+    if (version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
+    }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, { status: "paused", updatedBy: ctx.actorId }, version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.agentPaused,
-        eventType: EVENTS.agentPaused,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { agentId: id },
-      });
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.pause",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.send({ data: { agentId: id, status: "paused", version: version + 1 } });
+    return reply.code(202).send(await commands.pauseAgent(ctx, id, version));
   });
 
-  // POST /v1/ai/agents/:id/resume — paused → active
   app.post("/v1/ai/agents/:id/resume", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -346,27 +246,13 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const version = body.version ?? existing.version;
+    if (version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
+    }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, { status: "active", updatedBy: ctx.actorId }, version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.resume",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.send({ data: { agentId: id, status: "active", version: version + 1 } });
+    return reply.code(202).send(await commands.resumeAgent(ctx, id, version));
   });
 
-  // POST /v1/ai/agents/:id/invoke — dispatch work to an agent
   app.post("/v1/ai/agents/:id/invoke", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -390,16 +276,11 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
 
       if (!evaluation.passed) {
         const reason = evaluation.violations.map((v) => v.message).join("; ").slice(0, 500);
-        await db.transaction(async (tx) => {
-          // Redacted text only — DPDP Act 2023.
-          await writeAudit(tx, ctx, {
-            agentId: id,
-            action: "agent.invoke",
-            input: evaluation.sanitizedInput,
-            output: null,
-            blocked: true,
-            reason,
-          });
+        await commands.recordBlockedAudit(ctx, {
+          agentId: id,
+          action: "agent.invoke",
+          input: evaluation.sanitizedInput,
+          reason,
         });
         return reply.status(422).send({
           code: "GUARDRAIL_BLOCKED",
@@ -412,32 +293,14 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const invocationId = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: EVENTS.turnCompleted,
-        eventType: EVENTS.turnCompleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          agentId: id,
-          invocationId,
-          ...(body.conversationId !== undefined ? { conversationId: body.conversationId } : {}),
-        },
-      });
-
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.invoke",
-        input: sanitizedInput,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
+    const accepted = await commands.invokeAgent(ctx, id, {
+      invocationId,
+      sanitizedInput,
+      ...(body.conversationId !== undefined ? { conversationId: body.conversationId } : {}),
     });
 
-    return reply.status(202).send({
+    return reply.code(202).send({
+      ...accepted,
       data: { agentId: id, invocationId, status: "invoked" },
     });
   });
