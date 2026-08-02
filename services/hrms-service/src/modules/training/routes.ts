@@ -54,8 +54,13 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     if (!nom) throw new HttpError(404, "NOT_FOUND", "nomination not found");
     if (nom.status === "completed") throw new HttpError(409, "ALREADY_COMPLETED", "nomination already completed");
     const training = await repo.getTraining(ctx.tenantId, nom.trainingId);
+    // exactOptionalPropertyTypes: omit score/certificateRef when absent
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeNomination(ctx, id, {
-      ...body, trainingTitle: training?.title ?? null,
+      completedDate: body.completedDate,
+      result: body.result,
+      trainingTitle: training?.title ?? null,
+      ...(body.score !== undefined ? { score: body.score } : {}),
+      ...(body.certificateRef !== undefined ? { certificateRef: body.certificateRef } : {}),
     }));
   });
 
