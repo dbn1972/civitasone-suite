@@ -68,6 +68,8 @@ tags:
     description: Next-best-action recommendations, cross-sell matrix, account health, feedback
   - name: AI Agent
     description: Agent definitions, chat conversations, copilot turns, guardrails, AI governance
+  - name: Notification
+    description: Email deliverability — sending domains, DKIM/SPF/DMARC authentication health
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -14444,6 +14446,274 @@ paths:
       security:
         - bearerAuth: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Notification Service — email deliverability (CR-MKT-04)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/notification/email/sending-domains:
+    post:
+      operationId: registerSendingDomain
+      tags: [Notification]
+      summary: Register a sending domain
+      description: |
+        Registers a DNS domain the tenant intends to send mail from, together with
+        the DKIM selector, DKIM public-key material, SPF include mechanism and
+        DMARC policy that its DNS is expected to publish. The registration is a
+        CQRS write: it is validated, queued and answered 202. No DNS lookup is
+        performed by the request — a scheduled checker resolves the records and
+        posts the observed values back via the auth-checks endpoint.
+
+        A newly registered domain starts at `health: unknown` until the first
+        check lands.
+
+        Roles: notification_admin, tenant_admin, platform_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterSendingDomainRequest"
+      responses:
+        "202":
+          description: Registration accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            Validation error — `domain` is not a valid multi-label DNS name,
+            `dkimSelector` contains characters outside `[a-z0-9._-]`,
+            `dkimValue` is shorter than 8 characters, or `dmarcPolicy` is not one
+            of none/quarantine/reject.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "422":
+          description: |
+            `INVALID_SPF_INCLUDE` — `spfInclude` must be an `include:` mechanism
+            (e.g. `include:spf.example.net`), not a bare hostname. A bare host
+            would make every later SPF evaluation fail silently.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+      security:
+        - bearerAuth: []
+    get:
+      operationId: listSendingDomains
+      tags: [Notification]
+      summary: List sending domains
+      description: |
+        Returns the tenant's registered sending domains with their current
+        authentication health. `limit` is mandatory (max 200) — there is no
+        unbounded listing.
+
+        Roles: notification_admin, tenant_admin, platform_admin, super_admin,
+        audit_officer.
+      parameters:
+        - name: limit
+          in: query
+          required: true
+          description: Page size. Required — max 200.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of sending domains
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SendingDomain"
+                  meta:
+                    $ref: "#/components/schemas/NotificationListMeta"
+        "400":
+          description: Validation error — `limit` missing, below 1, or above 200
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/notification/email/sending-domains/{id}/auth-checks:
+    post:
+      operationId: recordSendingDomainAuthCheck
+      tags: [Notification]
+      summary: Record a DKIM/SPF/DMARC check result
+      description: |
+        Records the raw TXT strings observed in DNS for a domain's DKIM, SPF and
+        DMARC records. The service evaluates each mechanism against the expected
+        values captured at registration and rolls the three results into one
+        health status; it does NOT resolve DNS itself, which keeps request
+        handling free of network I/O.
+
+        An empty array for a mechanism means the record is absent (`missing`).
+        Omitting the body entirely is legal and records all three as missing,
+        which is how "the domain publishes nothing" is reported.
+
+        Health roll-up: DKIM or SPF not passing ⇒ `failing` (mail is at real risk
+        of rejection). DMARC alone not passing ⇒ `degraded` (mail delivers but
+        the domain is unprotected against spoofing). All three missing ⇒
+        `unknown`.
+
+        Roles: notification_admin, tenant_admin, platform_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sending domain id
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordDomainAuthCheckRequest"
+      responses:
+        "202":
+          description: Check result accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            Validation error — `id` is not a uuid, a TXT array holds more than 20
+            strings or a string longer than 4096 characters, `source` is not
+            scheduled/manual, or `checkedAt` is not an ISO-8601 date-time.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no sending domain with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+      security:
+        - bearerAuth: []
+
+  /v1/notification/email/sending-domains/{id}/health:
+    get:
+      operationId: getSendingDomainHealth
+      tags: [Notification]
+      summary: Get current authentication health and check history
+      description: |
+        Returns the domain's current health, whether it may still be used as an
+        envelope-from (`sendingAllowed` is true for `healthy` and `degraded`), the
+        expected records registered for it, and the most recent check results
+        newest-first.
+
+        Roles: notification_admin, tenant_admin, platform_admin, super_admin,
+        audit_officer.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sending domain id
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: How many historical checks to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        "200":
+          description: Current health plus check history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SendingDomainHealth"
+        "400":
+          description: Validation error — `id` is not a uuid, or `limit` out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no sending domain with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+      security:
+        - bearerAuth: []
+
+  /v1/notification/email/dmarc-policies:
+    get:
+      operationId: listDmarcPolicies
+      tags: [Notification]
+      summary: List accepted DMARC policies
+      description: |
+        Returns the DMARC policy values the registration validator accepts, so an
+        operator console does not have to hardcode them. Takes no parameters.
+
+        Roles: notification_admin, tenant_admin, platform_admin, super_admin,
+        audit_officer.
+      responses:
+        "200":
+          description: Accepted DMARC policy values
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                      enum: [none, quarantine, reject]
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -20852,3 +21122,200 @@ components:
         blockRatePct:
           type: number
           description: Blocked share as a percentage, 2 decimal places
+
+    # ─── Notification Service — email deliverability (CR-MKT-04) ─────────────
+
+    NotificationListMeta:
+      type: object
+      description: Offset-based pagination envelope used by notification-service list routes.
+      required: [page, pageSize, total]
+      properties:
+        page:
+          type: integer
+          description: 1-based page number derived from offset/limit
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    DomainHealth:
+      type: string
+      description: |
+        Roll-up of the three authentication mechanisms.
+        `healthy` — DKIM, SPF and DMARC all pass.
+        `degraded` — DKIM and SPF pass but DMARC does not; mail delivers, the
+        domain is unprotected against spoofing.
+        `failing` — DKIM or SPF is not passing; mail is at real risk of rejection.
+        `unknown` — no record was observed for any mechanism, so there is no signal.
+      enum: [healthy, degraded, failing, unknown]
+
+    MechanismStatus:
+      type: string
+      description: |
+        Per-mechanism verdict. `missing` means no TXT record was observed at all,
+        which is distinct from `fail` (a record exists but does not match).
+      enum: [pass, fail, missing]
+
+    RegisterSendingDomainRequest:
+      type: object
+      required: [domain, dkimSelector, dkimValue, spfInclude, dmarcPolicy]
+      properties:
+        domain:
+          type: string
+          minLength: 4
+          maxLength: 253
+          description: |
+            DNS domain to send from. RFC 1035 label syntax, at least two labels —
+            a bare hostname is rejected.
+          examples: ["mail.example.gov.in"]
+        dkimSelector:
+          type: string
+          minLength: 1
+          maxLength: 63
+          pattern: "^[a-zA-Z0-9._-]+$"
+          description: DKIM selector; the TXT record is expected at `<selector>._domainkey.<domain>`
+          examples: ["s1"]
+        dkimValue:
+          type: string
+          minLength: 8
+          maxLength: 4096
+          description: |
+            Expected DKIM public-key material, or a distinctive fragment of it.
+            Compared with all whitespace removed, because DNS providers wrap long
+            `p=` values differently.
+        spfInclude:
+          type: string
+          minLength: 3
+          maxLength: 253
+          description: |
+            Expected SPF include mechanism. MUST start with `include:` — a bare
+            host is refused with 422 `INVALID_SPF_INCLUDE`.
+          examples: ["include:spf.example.net"]
+        dmarcPolicy:
+          type: string
+          enum: [none, quarantine, reject]
+          description: Expected `p=` value in the domain's DMARC record
+
+    RecordDomainAuthCheckRequest:
+      type: object
+      description: |
+        Observed DNS TXT strings for one check. Every field is optional; an omitted
+        or empty array means the record is absent and evaluates to `missing`.
+      properties:
+        dkimTxt:
+          type: array
+          default: []
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 4096
+          description: TXT chunks observed at the DKIM selector; concatenated before evaluation
+        spfTxt:
+          type: array
+          default: []
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 4096
+        dmarcTxt:
+          type: array
+          default: []
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 4096
+        source:
+          type: string
+          enum: [scheduled, manual]
+          default: scheduled
+          description: Whether the scheduled sweeper or an operator produced this check
+        checkedAt:
+          type: string
+          format: date-time
+          description: When the DNS lookup happened. Defaults to server time when omitted.
+
+    SendingDomain:
+      type: object
+      description: A registered sending domain as returned by the list route.
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        dkimSelector:
+          type: string
+        spfInclude:
+          type: string
+        dmarcPolicy:
+          type: string
+          enum: [none, quarantine, reject]
+        health:
+          $ref: "#/components/schemas/DomainHealth"
+        enabled:
+          type: boolean
+          description: Whether the tenant has the domain switched on for sending
+        lastCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null until the first authentication check has landed
+
+    DomainAuthCheck:
+      type: object
+      description: One historical DKIM/SPF/DMARC evaluation.
+      properties:
+        id:
+          type: string
+          format: uuid
+        dkimStatus:
+          $ref: "#/components/schemas/MechanismStatus"
+        spfStatus:
+          $ref: "#/components/schemas/MechanismStatus"
+        dmarcStatus:
+          $ref: "#/components/schemas/MechanismStatus"
+        health:
+          $ref: "#/components/schemas/DomainHealth"
+        source:
+          type: string
+          enum: [scheduled, manual]
+        checkedAt:
+          type: string
+          format: date-time
+
+    SendingDomainHealth:
+      type: object
+      description: Current authentication health for one sending domain, plus recent checks.
+      properties:
+        sendingDomainId:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        health:
+          $ref: "#/components/schemas/DomainHealth"
+        sendingAllowed:
+          type: boolean
+          description: |
+            True when the domain may be used as an envelope-from — that is, when
+            health is `healthy` or `degraded`. `failing` and `unknown` are refused.
+        lastCheckedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expected:
+          type: object
+          description: The records registered for this domain, for side-by-side comparison
+          properties:
+            dkimSelector:
+              type: string
+            spfInclude:
+              type: string
+            dmarcPolicy:
+              type: string
+              enum: [none, quarantine, reject]
+        history:
+          type: array
+          description: Most recent checks, newest first
+          items:
+            $ref: "#/components/schemas/DomainAuthCheck"
