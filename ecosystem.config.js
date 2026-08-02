@@ -393,6 +393,10 @@ module.exports = {
       INSPECTION_SCANNER_DATABASE_URL: scannerDbUrl("inspection_scanner", "civitas_inspection", "INSPECTION_SCANNER_DATABASE_URL"),
     }),
 
+    // T1-02: entities consumer + outbox relay were registered in worker.ts but
+    // metadata-worker was never declared here, so CQRS writes black-holed.
+    worker("metadata",     "metadata_svc",     "civitas_metadata"),
+
     // ── Infrastructure services ────────────────────────────────────────────────
     {
       name: "queue",
