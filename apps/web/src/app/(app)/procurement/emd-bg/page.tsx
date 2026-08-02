@@ -1,10 +1,15 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
-import { getProcurementEMD } from "../../../_data/loaders";
+import { getProcurementEMD, getProcurementPBG } from "../../../_data/loaders";
 import { EmdBgTable } from "./EmdBgTable";
 
 export default async function EmdBgPage() {
-  const { data: entries, source } = await getProcurementEMD();
+  const [{ data: emdEntries, source: emdSource }, { data: pbgEntries, source: pbgSource }] = await Promise.all([
+    getProcurementEMD(),
+    getProcurementPBG(),
+  ]);
+  const entries = [...emdEntries, ...pbgEntries];
+  const source = emdSource === "error" || pbgSource === "error" ? "error" : "api";
 
   const active = entries.filter((e) => e.status === "Active").length;
   const expired = entries.filter((e) => e.status === "Expired").length;

@@ -1,88 +1,87 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
+import { startOutboxPurge } from "@civitasone/outbox";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
-import { relayOnce } from "./shared/outbox.js";
+import { startRelay } from "./shared/outbox.js";
 import { registerInstancesConsumers } from "./modules/instances/consumer.js";
 import { registerTasksConsumers } from "./modules/tasks/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
 import { registerMessagesConsumers } from "./modules/messages/consumer.js";
+import { registerDesignerConsumers } from "./modules/designer/consumer.js";
 import { startSlaSweeper, startTimerSweeper, startReminderSweeper } from "./modules/tasks/sweeper.js";
 import { startMessageSweeper } from "./modules/messages/sweeper.js";
+import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
 
 const log = pino({ name: "workflow-worker" });
+
+/**
+ * RLS (#146): workflow_svc is NOBYPASSRLS, so every consumer write must run
+ * inside the message's tenant context for db.transaction() to set the
+ * app.tenant_id GUC. Individual modules already wrap their own subscribe call
+ * via tenantScoped() (belt); this global wrap on the shared queue (suspenders)
+ * guarantees ANY topic subscribed here — present or future — gets the tenant
+ * context even if a module forgets to apply tenantScoped() itself. Nesting
+ * runWithTenant() with the same tenantId is a harmless no-op. Mirrors
+ * works-service / court-service worker.ts.
+ */
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
+
+/**
+ * Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the scanner
+ * DSN must be present and distinct from DATABASE_URL so relay/purge cannot
+ * silently fall back to the NOBYPASSRLS service role. Mirrors works-service /
+ * court-service worker.ts.
+ */
+function assertScannerConfigured(): void {
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.WORKFLOW_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "WORKFLOW_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
+
 registerInstancesConsumers(queue);
 registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
-import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
-import { tenantScoped } from "./shared/tenant-queue.js";
+registerDesignerConsumers(queue);
 // CAP-031: cross-domain registration handlers write to FORCE-RLS workflow.cases
-// under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC.
-registerCaseRegistryConsumers(tenantScoped(queue));
+// under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC
+// (also covered by the global wrap above; tenantScoped() kept for clarity/tests).
+registerCaseRegistryConsumers(queue);
 await queue.start();
 
-// RLS (#146): workflow_svc is NOBYPASSRLS and _outbox.messages is fail-closed
-// (tenant_id = workflow.current_tenant_id()), so the shared startRelay/
-// startOutboxPurge — whose bare cross-tenant reads/deletes carry no GUC — see
-// zero rows. Enumerate the tenants with pending/purgeable rows via the
-// SECURITY DEFINER helpers (migration 0029 — tenant ids only) and run each
-// tenant's relay/purge inside runWithTenant + db.transaction so the GUC is set.
-type RelayTx = Parameters<typeof relayOnce>[0];
-async function relayAllTenantsOnce(): Promise<void> {
-  const rows = (await db.execute(
-    sql`SELECT workflow.outbox_pending_tenants() AS tenant_id`,
-  )) as unknown as Array<{ tenant_id: string }>;
-  for (const { tenant_id } of rows) {
-    await runWithTenant(tenant_id, () =>
-      db.transaction((tx) => relayOnce(tx as unknown as RelayTx, queue, 100, "workflow")),
-    );
-  }
-}
-const relay = setInterval(() => {
-  relayAllTenantsOnce().catch((err) => log.error({ err }, "outbox relay cycle failed"));
-}, 500);
+// Cross-tenant outbox scan must use the BYPASSRLS scannerDb — FORCE RLS on
+// _outbox.messages would otherwise hide all unpublished rows under
+// workflow_svc when app.tenant_id is unset (see shared/scanner-db.ts). This
+// replaces the previous custom per-tenant relay/purge loop (which enumerated
+// tenants via dedicated SECURITY DEFINER lookup functions and looped
+// runWithTenant() per tenant) with the shared @civitasone/outbox helpers every
+// other service uses.
+const relay = startRelay(scannerDb as unknown as typeof db, queue);
+const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
+  intervalMs: 60 * 60_000,
+  batchSize: 1000,
+  logger: log,
+});
 
-// G7: scheduled outbox purge — remove published messages older than 7 days
-// (per tenant, for the same RLS reason), plus GUC-free _inbox.processed rows.
-const PURGE_RETENTION_DAYS = 7;
-const PURGE_BATCH = 1000;
-async function purgeAllTenantsOnce(): Promise<void> {
-  const cutoff = sql`now() - interval '${sql.raw(String(PURGE_RETENTION_DAYS))} days'`;
-  const rows = (await db.execute(
-    sql`SELECT workflow.outbox_purgeable_tenants(interval '${sql.raw(String(PURGE_RETENTION_DAYS))} days') AS tenant_id`,
-  )) as unknown as Array<{ tenant_id: string }>;
-  for (const { tenant_id } of rows) {
-    await runWithTenant(tenant_id, async () => {
-      let deleted: number;
-      do {
-        const res = await db.transaction((tx) => tx.execute(sql`
-          DELETE FROM _outbox.messages
-          WHERE id IN (
-            SELECT id FROM _outbox.messages
-            WHERE published_at IS NOT NULL AND published_at < ${cutoff}
-            LIMIT ${sql.raw(String(PURGE_BATCH))}
-          )
-        `));
-        deleted = (res as unknown as { count?: number }).count ?? (res as unknown as unknown[]).length ?? 0;
-      } while (deleted >= PURGE_BATCH);
-    });
-  }
-  // _inbox.processed carries no tenant column and no RLS policy — bare delete is fine.
-  await db.execute(sql`
-    DELETE FROM _inbox.processed
-    WHERE message_id IN (
-      SELECT message_id FROM _inbox.processed
-      WHERE processed_at < ${cutoff}
-      LIMIT ${sql.raw(String(PURGE_BATCH))}
-    )
-  `);
-}
-const purge = setInterval(() => {
-  purgeAllTenantsOnce().catch((err) => log.warn({ err }, "outbox purge cycle failed"));
-}, 60 * 60_000);
-purge.unref();
 const slaSweeper = startSlaSweeper(Number(process.env.SLA_SWEEP_MS ?? 30_000));
 // P1-2 — deemed-approval timer sweeper.
 const timerSweeper = startTimerSweeper(Number(process.env.TIMER_SWEEP_MS ?? 15_000));
@@ -90,7 +89,9 @@ const reminderSweeper = startReminderSweeper(Number(process.env.REMINDER_SWEEP_M
 const msgTimeoutSweeper = startMessageSweeper(Number(process.env.MSG_TIMEOUT_SWEEP_MS ?? 30_000));
 
 // G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
-// Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).
+// Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards). This
+// is schema DDL (not a tenant-scoped read/write), so it still runs on the
+// primary `db` pool.
 async function ensurePartitions(): Promise<void> {
   try {
     await db.execute(sql`SELECT _outbox.create_future_partitions()`);

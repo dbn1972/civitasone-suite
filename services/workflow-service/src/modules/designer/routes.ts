@@ -5,31 +5,33 @@
  *   POST   /v1/workflow/designer/definitions            — create definition → 202
  *   GET    /v1/workflow/designer/definitions            — list definitions
  *   GET    /v1/workflow/designer/definitions/:id        — get single
- *   PATCH  /v1/workflow/designer/definitions/:id        — update (optimistic locking)
- *   DELETE /v1/workflow/designer/definitions/:id        — soft-delete
+ *   PATCH  /v1/workflow/designer/definitions/:id        — update (optimistic locking) → 202
+ *   DELETE /v1/workflow/designer/definitions/:id        — soft-delete → 202
  *   POST   /v1/workflow/designer/definitions/:id/validate — run graph validation
+ *   POST   /v1/workflow/designer/definitions/:id/import — import BPMN XML → 202
+ *   GET    /v1/workflow/designer/definitions/:id/export — export as BPMN 2.0 XML
  *
- * CQRS: writes publish commands → consumer persists. For this iteration the
- * consumer is inline (direct DB write within the route handler's transaction)
- * because the designer module is interactive with immediate feedback needs.
- * Future: extract async consumer when multi-user collaboration is added.
+ * CQRS: create/update/delete/import publish a command (see commands.ts) that
+ * the consumer (consumer.ts) applies async; each route validates synchronously
+ * (existence, optimistic-locking version, element-count limit, BPMN parse) so
+ * the caller still gets an immediate 400/404/409, then acknowledges with the
+ * standard 202 `sendAccepted` envelope — matching instances/tasks. GET routes
+ * (list/single/validate/export) stay synchronous reads.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, desc, isNull } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { eq, and, desc } from "drizzle-orm";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
+import { scopedRead } from "../../shared/db.js";
 import { designerDefinitions, type DesignerNode, type DesignerEdge } from "./schema.js";
 import { validateGraph } from "./domain.js";
-import { parseBpmnXml, exportBpmnXml, BpmnParseError } from "./bpmn-io.js";
+import { exportBpmnXml, BpmnParseError } from "./bpmn-io.js";
+import * as commands from "./commands.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
-
-/** Maximum total elements (nodes + edges) per definition. */
-const MAX_ELEMENTS = 500;
 
 // ── Zod Schemas ───────────────────────────────────────────────────
 
@@ -73,59 +75,17 @@ const paginationSchema = z.object({
 // ── Routes ────────────────────────────────────────────────────────
 
 export async function designerRoutes(app: FastifyInstance): Promise<void> {
-  /** POST /v1/workflow/designer/definitions — create new definition */
+  /** POST /v1/workflow/designer/definitions — create new definition (CQRS) */
   app.post("/v1/workflow/designer/definitions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBodySchema.parse(req.body);
-
-    // Enforce 500 element limit
-    const totalElements = body.elements.length + body.edges.length;
-    if (totalElements > MAX_ELEMENTS) {
-      throw new HttpError(
-        400,
-        "ELEMENT_LIMIT_EXCEEDED",
-        `Total elements (${totalElements}) exceeds maximum of ${MAX_ELEMENTS}`,
-      );
-    }
-
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(designerDefinitions).values({
-        id,
-        tenantId: ctx.tenantId,
-        name: body.name,
-        description: body.description ?? null,
-        elements: body.elements as DesignerNode[],
-        edges: body.edges as DesignerEdge[],
-        status: "draft",
-        version: 1,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-    });
-
-    // Publish command for audit trail
-    await queue.publish("workflow.designer.definition.created", {
-      type: "workflow.designer.definition.created",
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: req.id,
-      schemaVersion: "1.0",
-      payload: { definitionId: id, name: body.name },
-    });
-
-    return reply.code(202).send({
-      data: {
-        id,
-        name: body.name,
-        description: body.description ?? null,
-        status: "draft",
-        version: 1,
-        elementCount: body.elements.length,
-        edgeCount: body.edges.length,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDefinition(ctx, {
+      name: body.name,
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      elements: body.elements as DesignerNode[],
+      edges: body.edges as DesignerEdge[],
+    }));
   });
 
   /** GET /v1/workflow/designer/definitions — list definitions */
@@ -202,124 +162,27 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: row });
   });
 
-  /** PATCH /v1/workflow/designer/definitions/:id — update with optimistic locking */
+  /** PATCH /v1/workflow/designer/definitions/:id — update (optimistic locking, CQRS) */
   app.patch("/v1/workflow/designer/definitions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updateBodySchema.parse(req.body);
-
-    // Enforce 500 element limit on updates
-    if (body.elements !== undefined || body.edges !== undefined) {
-      const elemCount = body.elements?.length ?? 0;
-      const edgeCount = body.edges?.length ?? 0;
-      if (elemCount + edgeCount > MAX_ELEMENTS) {
-        throw new HttpError(
-          400,
-          "ELEMENT_LIMIT_EXCEEDED",
-          `Total elements (${elemCount + edgeCount}) exceeds maximum of ${MAX_ELEMENTS}`,
-        );
-      }
-    }
-
-    const result = await db.transaction(async (tx) => {
-      const rows = await tx
-        .select()
-        .from(designerDefinitions)
-        .where(
-          and(
-            eq(designerDefinitions.id, id),
-            eq(designerDefinitions.tenantId, ctx.tenantId),
-          ),
-        )
-        .limit(1);
-
-      const existing = rows[0];
-      if (!existing || existing.status === "deleted") {
-        throw new HttpError(404, "NOT_FOUND", "designer definition not found");
-      }
-
-      // Optimistic locking: version must match
-      if (existing.version !== body.version) {
-        throw new HttpError(
-          409,
-          "VERSION_CONFLICT",
-          `Version conflict: expected ${body.version}, current is ${existing.version}`,
-        );
-      }
-
-      // If only partial update (elements/edges not provided), validate existing + new
-      const newElements = body.elements !== undefined ? body.elements as DesignerNode[] : existing.elements as DesignerNode[];
-      const newEdges = body.edges !== undefined ? body.edges as DesignerEdge[] : existing.edges as DesignerEdge[];
-
-      // Re-check limit with actual values being stored
-      if (newElements.length + newEdges.length > MAX_ELEMENTS) {
-        throw new HttpError(
-          400,
-          "ELEMENT_LIMIT_EXCEEDED",
-          `Total elements (${newElements.length + newEdges.length}) exceeds maximum of ${MAX_ELEMENTS}`,
-        );
-      }
-
-      const updateData: Record<string, unknown> = {
-        version: existing.version + 1,
-        updatedAt: new Date(),
-        updatedBy: ctx.actorId,
-      };
-      if (body.name !== undefined) updateData.name = body.name;
-      if (body.description !== undefined) updateData.description = body.description;
-      if (body.elements !== undefined) updateData.elements = newElements;
-      if (body.edges !== undefined) updateData.edges = newEdges;
-
-      await tx
-        .update(designerDefinitions)
-        .set(updateData)
-        .where(eq(designerDefinitions.id, id));
-
-      return { ...existing, ...updateData };
-    });
-
-    return reply.send({
-      data: {
-        id,
-        name: result.name,
-        version: result.version,
-        status: result.status,
-        updatedAt: result.updatedAt,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDefinition(ctx, id, {
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.elements !== undefined ? { elements: body.elements as DesignerNode[] } : {}),
+      ...(body.edges !== undefined ? { edges: body.edges as DesignerEdge[] } : {}),
+      version: body.version,
+    }));
   });
 
-  /** DELETE /v1/workflow/designer/definitions/:id — soft-delete */
+  /** DELETE /v1/workflow/designer/definitions/:id — soft-delete (CQRS) */
   app.delete("/v1/workflow/designer/definitions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-
-    const rows = await scopedRead((tx) => tx
-      .select()
-      .from(designerDefinitions)
-      .where(
-        and(
-          eq(designerDefinitions.id, id),
-          eq(designerDefinitions.tenantId, ctx.tenantId),
-        ),
-      )
-      .limit(1));
-
-    const existing = rows[0];
-    if (!existing || existing.status === "deleted") {
-      throw new HttpError(404, "NOT_FOUND", "designer definition not found");
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(designerDefinitions)
-        .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
-        .where(eq(designerDefinitions.id, id));
-    });
-
-    return reply.code(204).send();
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteDefinition(ctx, id));
   });
 
   /** POST /v1/workflow/designer/definitions/:id/validate — run graph validation */
@@ -352,69 +215,13 @@ export async function designerRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(200).send({ data: result });
   });
 
-  /** POST /v1/workflow/designer/definitions/:id/import — import BPMN XML into definition */
+  /** POST /v1/workflow/designer/definitions/:id/import — import BPMN XML (CQRS) */
   app.post("/v1/workflow/designer/definitions/:id/import", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-
-    const body = z.object({
-      xml: z.string().min(1),
-    }).parse(req.body);
-
-    // Look up existing definition
-    const rows = await scopedRead((tx) => tx
-      .select()
-      .from(designerDefinitions)
-      .where(
-        and(
-          eq(designerDefinitions.id, id),
-          eq(designerDefinitions.tenantId, ctx.tenantId),
-        ),
-      )
-      .limit(1));
-
-    const existing = rows[0];
-    if (!existing || existing.status === "deleted") {
-      throw new HttpError(404, "NOT_FOUND", "designer definition not found");
-    }
-
-    // Parse the BPMN XML (will throw BpmnParseError on invalid input)
-    const parsed = parseBpmnXml(body.xml);
-
-    // Enforce 500 element limit
-    const totalElements = parsed.nodes.length + parsed.edges.length;
-    if (totalElements > MAX_ELEMENTS) {
-      throw new HttpError(
-        400,
-        "ELEMENT_LIMIT_EXCEEDED",
-        `Imported BPMN contains ${totalElements} elements, exceeding maximum of ${MAX_ELEMENTS}`,
-      );
-    }
-
-    // Update the definition with imported elements
-    await db.transaction(async (tx) => {
-      await tx
-        .update(designerDefinitions)
-        .set({
-          elements: parsed.nodes,
-          edges: parsed.edges,
-          version: existing.version + 1,
-          updatedAt: new Date(),
-          updatedBy: ctx.actorId,
-        })
-        .where(eq(designerDefinitions.id, id));
-    });
-
-    return reply.code(200).send({
-      data: {
-        id,
-        processName: parsed.processName,
-        elementCount: parsed.nodes.length,
-        edgeCount: parsed.edges.length,
-        version: existing.version + 1,
-      },
-    });
+    const body = z.object({ xml: z.string().min(1) }).parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.importDefinition(ctx, id, body.xml));
   });
 
   /** GET /v1/workflow/designer/definitions/:id/export — export definition as BPMN 2.0 XML */

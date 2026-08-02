@@ -10,12 +10,17 @@ export async function listTasks(
   tenantId: string,
   limit: number,
   offset: number,
-  opts?: { status?: string; roles?: string[] },
+  opts?: { status?: string; roles?: string[]; instanceId?: string },
 ) {
   const loader = async () => {
-    const rows = opts?.status === "pending" && opts.roles?.length
-      ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset)
-      : await repo.listByTenant(tenantId, limit, offset);
+    // D1 (FE↔BE high ROI) — instanceId takes priority over the role-scoped
+    // pending inbox: a caller viewing one instance's task list wants every
+    // task on it, not just the ones targeted at their own roles.
+    const rows = opts?.instanceId
+      ? await repo.listByInstance(tenantId, opts.instanceId, limit, offset)
+      : opts?.status === "pending" && opts.roles?.length
+        ? await repo.listPendingForRoles(tenantId, opts.roles, limit, offset)
+        : await repo.listByTenant(tenantId, limit, offset);
     return {
       data: rows,
       pagination: {
@@ -26,6 +31,6 @@ export async function listTasks(
     };
   };
 
-  const key = `list:${opts?.status ?? "all"}:${limit}:${offset}`;
+  const key = `list:${opts?.status ?? "all"}:${opts?.instanceId ?? "-"}:${limit}:${offset}`;
   return cache.listOrLoad(tenantId, TASK_RESOURCE, key, loader);
 }

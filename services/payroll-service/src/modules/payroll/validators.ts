@@ -53,3 +53,36 @@ export type CreatePensionerBody = z.infer<typeof createPensionerBody>;
 export const slipQueryParams = z.object({
   runId: z.string().uuid().optional(),
 });
+
+// ─── CQRS lift (quality-payroll-95): arrears/bonus/reimbursements ──────────
+// Hoisted out of world-class-routes.ts (were inline z.object literals) so
+// commands.ts can share the exact same shape/types as the route validation —
+// mirrors createDdoBody/createPensionerBody above.
+export const createArrearBody = z.object({
+  employeeId:     z.string().uuid(),
+  componentCode:  z.string(),
+  fromPeriod:     z.string(),
+  toPeriod:       z.string(),
+  oldAmountMinor: z.number().int(),
+  newAmountMinor: z.number().int(),
+  reason:         z.string().optional(),
+});
+export type CreateArrearBody = z.infer<typeof createArrearBody>;
+
+export const computeBonusBody = z.object({
+  employeeId: z.string().uuid(),
+  fy:         z.string(),
+  basicMinor: z.number().int(),
+  bonusPct:   z.number().default(8.33),
+});
+export type ComputeBonusBody = z.infer<typeof computeBonusBody>;
+
+export const createReimbursementBody = z.object({
+  employeeId:  z.string().uuid(),
+  category:    z.enum(["medical", "travel", "lta", "food", "telephone", "internet", "fuel", "other"]),
+  amountMinor: z.number().int().positive(),
+  billDate:    z.string().optional(),
+  billRef:     z.string().optional(),
+  period:      z.string(),
+});
+export type CreateReimbursementBody = z.infer<typeof createReimbursementBody>;

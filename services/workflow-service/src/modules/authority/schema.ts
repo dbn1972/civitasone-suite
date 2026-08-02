@@ -10,7 +10,7 @@ export const authorityLimits = domainSchema.table("authority_limits", {
   scopeRef: varchar("scope_ref", { length: 128 }).notNull(),
   authorityType: varchar("authority_type", { length: 16 }).notNull().default("financial"),
   currency: varchar("currency", { length: 8 }).notNull().default("INR"),
-  maxAmount: bigint("max_amount", { mode: "number" }).notNull(),
+  maxAmount: bigint("max_amount", { mode: "bigint" }).notNull(),
   effectiveFrom: date("effective_from").notNull(),
   effectiveTo: date("effective_to"),
   escalateToScopeType: varchar("escalate_to_scope_type", { length: 16 }),

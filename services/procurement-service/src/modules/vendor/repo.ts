@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementVendors, procurementEmpanelment, type VendorRow, type VendorInsert } from "./schema.js";
+import { procurementVendorScorecards } from "./scorecard-schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -45,4 +46,46 @@ export async function updateVendorVersioned(tx: Writer, id: string, expectedVers
 
 export async function insertEmpanelment(tx: Writer, row: typeof procurementEmpanelment.$inferInsert): Promise<void> {
   await tx.insert(procurementEmpanelment).values(row);
+}
+
+export type EmpanelmentListRow = {
+  id: string;
+  vendorName: string;
+  category: string;
+  validUntil: string | null;
+  status: string;
+  overallRating: number | null;
+};
+
+/**
+ * Empanelment register joined with vendor name + the vendor's all-time
+ * scorecard rating (SVC-049) — no fabricated rating; 0/null when the vendor
+ * has no computed scorecard yet.
+ */
+export async function listEmpanelmentsByTenant(tenantId: string, limit: number, offset: number): Promise<EmpanelmentListRow[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx
+    .select({
+      id: procurementEmpanelment.id,
+      vendorName: procurementVendors.name,
+      category: procurementEmpanelment.category,
+      validUntil: procurementEmpanelment.validUntil,
+      status: procurementEmpanelment.status,
+      overallRating: procurementVendorScorecards.overallRating,
+    })
+    .from(procurementEmpanelment)
+    .innerJoin(procurementVendors, and(
+      eq(procurementEmpanelment.vendorId, procurementVendors.id),
+      eq(procurementVendors.tenantId, tenantId),
+    ))
+    .leftJoin(procurementVendorScorecards, and(
+      eq(procurementVendorScorecards.vendorId, procurementEmpanelment.vendorId),
+      eq(procurementVendorScorecards.tenantId, tenantId),
+      eq(procurementVendorScorecards.period, "all"),
+    ))
+    .where(eq(procurementEmpanelment.tenantId, tenantId))
+    .orderBy(desc(procurementEmpanelment.createdAt))
+    .limit(limit)
+    .offset(offset));
 }

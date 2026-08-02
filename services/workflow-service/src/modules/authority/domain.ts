@@ -6,6 +6,10 @@
  * that authority, and — when it is exceeded — walks the escalation chain to the
  * lowest office whose limit covers the amount (the approver the case must route
  * to). All functions are pure: no I/O, no clock; the caller supplies `onDate`.
+ *
+ * Money (R7): `maxAmount`/`amount` are paise as `bigint` — the DB column is
+ * `bigint("max_amount", { mode: "bigint" })` (migration 0032) and MUST NOT pass
+ * through a JS `number` anywhere on this path (loses precision above 2^53).
  */
 
 export type AuthorityScope = "role" | "designation" | "user";
@@ -17,8 +21,8 @@ export interface AuthorityLimit {
   scopeRef: string;
   authorityType: AuthorityType;
   currency: string;
-  /** Inclusive maximum amount the scope may authorise. */
-  maxAmount: number;
+  /** Inclusive maximum amount (paise) the scope may authorise. */
+  maxAmount: bigint;
   /** YYYY-MM-DD (inclusive). */
   effectiveFrom: string;
   /** YYYY-MM-DD (inclusive) or null = open-ended. */
@@ -38,16 +42,16 @@ export interface ActorScopes {
 export interface AuthorityDecision {
   /** The best (highest) limit the actor personally holds, or null if none. */
   actorLimit: AuthorityLimit | null;
-  /** The actor's ceiling (0 when the actor holds no applicable limit). */
-  actorMax: number;
+  /** The actor's ceiling (paise; 0n when the actor holds no applicable limit). */
+  actorMax: bigint;
   /** True when `amount` is within the actor's own authority. */
   withinActorAuthority: boolean;
   /** True when the amount exceeds the actor and must route upward. */
   requiresEscalation: boolean;
   /** Ordered chain of offices the request escalates through (excludes actor). */
-  escalationChain: Array<{ scopeType: AuthorityScope; scopeRef: string; maxAmount: number }>;
+  escalationChain: Array<{ scopeType: AuthorityScope; scopeRef: string; maxAmount: bigint }>;
   /** The final office whose limit covers the amount, or null if uncovered. */
-  finalApprover: { scopeType: AuthorityScope; scopeRef: string; maxAmount: number } | null;
+  finalApprover: { scopeType: AuthorityScope; scopeRef: string; maxAmount: bigint } | null;
   /** True when SOME office in the chain covers the amount. */
   covered: boolean;
 }
@@ -118,7 +122,7 @@ export function resolveActorLimit(
 export function resolveEscalation(
   limits: AuthorityLimit[],
   start: AuthorityLimit,
-  amount: number,
+  amount: bigint,
   authorityType: AuthorityType,
   onDate: string,
 ): Pick<AuthorityDecision, "escalationChain" | "finalApprover" | "covered"> {
@@ -147,21 +151,22 @@ export function resolveEscalation(
 }
 
 /**
- * Full authority evaluation for a request of `amount` by an actor on `onDate`.
- * If the actor's own limit covers the amount, no escalation is required; else
- * the escalation chain is resolved from the actor's best limit (or, when the
- * actor holds no limit at all, from the highest applicable limit of any scope
- * they hold — falling through to whatever escalation targets exist).
+ * Full authority evaluation for a request of `amount` (paise) by an actor on
+ * `onDate`. If the actor's own limit covers the amount, no escalation is
+ * required; else the escalation chain is resolved from the actor's best limit
+ * (or, when the actor holds no limit at all, from the highest applicable limit
+ * of any scope they hold — falling through to whatever escalation targets
+ * exist).
  */
 export function evaluateAuthority(
   limits: AuthorityLimit[],
   actor: ActorScopes,
   authorityType: AuthorityType,
-  amount: number,
+  amount: bigint,
   onDate: string,
 ): AuthorityDecision {
   const actorLimit = resolveActorLimit(limits, actor, authorityType, onDate);
-  const actorMax = actorLimit?.maxAmount ?? 0;
+  const actorMax = actorLimit?.maxAmount ?? 0n;
   const withinActorAuthority = actorLimit !== null && amount <= actorMax;
 
   if (withinActorAuthority) {

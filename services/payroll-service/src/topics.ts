@@ -12,6 +12,14 @@ export const COMMANDS = {
   nachReturnProcess:      "payroll.nach_return.process",
   fnfCompute:             "payroll.fnf.compute",
   form16BulkGenerate:     "payroll.form16.bulk_generate",
+  // CQRS lift (quality-payroll-95): these routes used to write synchronously
+  // in the request path (raw INSERT / Drizzle insert) — moved to async
+  // command + idempotent consumer, mirroring works-service #354.
+  ddoUpsert:              "payroll.ddo.upsert",
+  pensionerCreate:        "payroll.pensioner.create",
+  arrearCreate:           "payroll.arrear.create",
+  bonusCompute:           "payroll.bonus.compute",
+  reimbursementCreate:    "payroll.reimbursement.create",
 } as const;
 
 export const EVENTS = {
@@ -23,6 +31,11 @@ export const EVENTS = {
   fnfDraftCreated:        "payroll.fnf.draft_created",
   form16BulkCompleted:    "payroll.form16.bulk_completed",
   dscExpiryWarning:       "payroll.dsc.expiry_warning",
+  ddoUpserted:            "payroll.ddo.upserted",
+  pensionerCreated:       "payroll.pensioner.created",
+  arrearCreated:          "payroll.arrear.created",
+  bonusComputed:          "payroll.bonus.computed",
+  reimbursementCreated:   "payroll.reimbursement.created",
 } as const;
 
 export const CONSUMED_EVENTS = {

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { AuthorityLimitRow } from "./schema.js";
@@ -15,7 +16,10 @@ const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 function view(r: AuthorityLimitRow) {
   return {
     id: r.id, scopeType: r.scopeType, scopeRef: r.scopeRef, authorityType: r.authorityType,
-    currency: r.currency, maxAmount: Number(r.maxAmount), effectiveFrom: r.effectiveFrom,
+    // Money (R7): maxAmount is a native bigint (paise) — sent as-is. The
+    // BigInt.prototype.toJSON patch (shared/bigint-json.ts, imported by
+    // app.ts) serialises it as an exact base-10 string, never a JS number.
+    currency: r.currency, maxAmount: r.maxAmount, effectiveFrom: r.effectiveFrom,
     effectiveTo: r.effectiveTo ?? null, escalateToScopeType: r.escalateToScopeType ?? null,
     escalateToRef: r.escalateToRef ?? null, status: r.status,
     approvedBy: r.approvedBy ?? null,
@@ -32,7 +36,9 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
       scopeRef: z.string().min(1).max(128),
       authorityType: typeEnum.default("financial"),
       currency: z.string().min(1).max(8).default("INR"),
-      maxAmount: z.number().int().nonnegative(), // paise
+      // Money (R7): paise as an exact base-10 string/safe-integer — never a
+      // float that could lose precision above 2^53.
+      maxAmount: zMoneyMinorString,
       effectiveFrom: z.string().regex(dateRe),
       effectiveTo: z.string().regex(dateRe).nullable().optional(),
       escalateToScopeType: scopeEnum.nullable().optional(),
@@ -46,7 +52,7 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
       scopeRef: body.scopeRef,
       authorityType: body.authorityType,
       currency: body.currency,
-      maxAmount: body.maxAmount,
+      maxAmount: BigInt(body.maxAmount),
       effectiveFrom: body.effectiveFrom,
       effectiveTo: body.effectiveTo ?? null,
       escalateToScopeType: body.escalateToScopeType ?? null,
@@ -103,7 +109,8 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const body = z.object({
       authorityType: typeEnum.default("financial"),
-      amount: z.number().nonnegative(),
+      // Money (R7): paise as an exact base-10 string/safe-integer.
+      amount: zMoneyMinorString,
       onDate: z.string().regex(dateRe).optional(),
       scopes: z.array(z.object({ scopeType: scopeEnum, scopeRef: z.string().min(1).max(128) })).min(1),
     }).parse(req.body);
@@ -114,7 +121,7 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
       limits,
       { scopes: body.scopes as Array<{ scopeType: AuthorityScope; scopeRef: string }> },
       body.authorityType as AuthorityType,
-      body.amount,
+      BigInt(body.amount),
       onDate,
     );
     return reply.send({ data: decision });

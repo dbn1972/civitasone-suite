@@ -1,6 +1,18 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { procurementRfqs, procurementRfqItems, type RfqRow } from "./schema.js";
+import { procurementRfqs, procurementRfqItems, type RfqRow, type RfqInsert } from "./schema.js";
+
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+export type RfqItemInsert = typeof procurementRfqItems.$inferInsert;
+
+export async function insertRfq(tx: Writer, row: RfqInsert): Promise<void> {
+  await tx.insert(procurementRfqs).values(row);
+}
+
+export async function insertRfqItems(tx: Writer, rows: RfqItemInsert[]): Promise<void> {
+  if (rows.length === 0) return;
+  await tx.insert(procurementRfqItems).values(rows);
+}
 
 export async function findRfqById(id: string): Promise<RfqRow | null> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id

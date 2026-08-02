@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
-import { eq, and } from "drizzle-orm";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership, isSelfServiceEmployee } from "../../shared/context.js";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
@@ -9,7 +9,7 @@ import { taxDeclarations } from "./schema.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";
 import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
-import { HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { HrmsUnavailableError, fetchPayrollInput } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { createTaxDeclarationBody } from "./validators.js";
@@ -52,7 +52,107 @@ function fyMonths(startYear: number): string[] {
   return months;
 }
 
+/** India's FY runs Apr–Mar; returns the FY string (e.g. "2026-27") containing today. */
+function currentFy(): string {
+  const now = new Date();
+  const startYear = now.getUTCMonth() + 1 >= 4 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
 export async function taxRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * GET /v1/payroll/income-tax?fy=2025-26&employeeId=X
+   * FY income-tax rollup across employees who have payroll slips and/or a
+   * declaration on file for the FY (defaults to the current FY). Self-service
+   * employees only ever see their own row. Unlike Form 16, this is a summary
+   * listing — an unreachable HRMS degrades to id-only identities (honest
+   * shaped, `meta.hrmsAvailable: false`) rather than failing the whole page.
+   */
+  app.get("/v1/payroll/income-tax", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+
+    const { fy: reqFy, employeeId: reqEmployeeId } = req.query as { fy?: string; employeeId?: string };
+    const fy = reqFy ?? currentFy();
+    parseFy(fy);
+    const { startYear } = parseFy(fy);
+    const months = fyMonths(startYear);
+    const scopedEmployeeId = isSelfServiceEmployee(ctx) ? ctx.actorId : (reqEmployeeId ?? null);
+
+    const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+      .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
+    const runIds = runs.map((r) => r.id);
+
+    const slips = runIds.length === 0 ? [] : await scopedRead((tx) => tx.select().from(payrollSlips)
+      .where(and(eq(payrollSlips.tenantId, ctx.tenantId), inArray(payrollSlips.runId, runIds))));
+
+    const grossByEmployee = new Map<string, number>();
+    for (const slip of slips) {
+      if (scopedEmployeeId && slip.employeeId !== scopedEmployeeId) continue;
+      grossByEmployee.set(slip.employeeId, (grossByEmployee.get(slip.employeeId) ?? 0) + Number(slip.grossMinor) / 100);
+    }
+
+    const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
+      .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.fy, fy))));
+    const decByEmployee = new Map(
+      decRows.filter((d) => !scopedEmployeeId || d.employeeId === scopedEmployeeId).map((d) => [d.employeeId, d]),
+    );
+
+    const employeeIds = new Set<string>([...grossByEmployee.keys(), ...decByEmployee.keys()]);
+
+    // Best-effort identity lookup — a listing degrades gracefully rather than
+    // 502ing the whole page when HRMS is unreachable (Form 16 fails hard;
+    // this summary doesn't need to).
+    let identityById = new Map<string, { fullName: string; departmentId: string }>();
+    let hrmsAvailable = true;
+    try {
+      const input = await fetchPayrollInput(ctx.tenantId, `${startYear + 1}-03`);
+      identityById = new Map(input.employees.map((e) => [e.id, { fullName: e.fullName, departmentId: e.departmentId }]));
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) hrmsAvailable = false;
+      else throw err;
+    }
+
+    const data = [];
+    for (const employeeId of employeeIds) {
+      const dec = decByEmployee.get(employeeId) ?? null;
+      const regime = (dec?.regime ?? "new") as "old" | "new";
+      let exemptions = 0;
+      if (regime === "old" && dec) {
+        const s80c = Math.min(Number(dec.section80c) / 100, 150000);
+        const s80d = Math.min(Number(dec.section80d) / 100, 50000);
+        const hra = Number(dec.hraClaimed) / 100;
+        const other = Number(dec.otherDeductions) / 100;
+        exemptions = s80c + s80d + hra + other;
+      }
+      try { exemptions += stdDeduction(regime, startYear); }
+      catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
+
+      const grossIncome = Math.round(grossByEmployee.get(employeeId) ?? 0);
+      const taxableIncome = Math.round(Math.max(0, grossIncome - exemptions) / 10) * 10;
+      let tax;
+      try { tax = computeTax(taxableIncome, regime, startYear); }
+      catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
+
+      const identity = identityById.get(employeeId);
+      data.push({
+        id: dec?.id ?? employeeId,
+        employee: identity?.fullName ?? employeeId,
+        department: identity?.departmentId ?? "-",
+        grossIncome: String(grossIncome),
+        deductions80C: String(regime === "old" && dec ? Math.min(Number(dec.section80c) / 100, 150000) : 0),
+        otherDeductions: String(regime === "old" && dec ? Number(dec.otherDeductions) / 100 : 0),
+        taxableIncome: String(taxableIncome),
+        taxPayable: String(tax.totalTax),
+        status: dec?.status ?? "pending",
+      });
+    }
+
+    data.sort((a, b) => a.employee.localeCompare(b.employee));
+
+    return reply.send({ data, meta: { total: data.length, fy, hrmsAvailable } });
+  });
+
   /**
    * GET /v1/payroll/tax/computation?employeeId=X&fy=2025-26&regime=new
    * Compute annual income tax for an employee under specified regime.

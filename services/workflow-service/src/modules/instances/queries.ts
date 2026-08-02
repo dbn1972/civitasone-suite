@@ -3,6 +3,7 @@ import { cache } from "../../shared/infra.js";
 import { scopedExecute } from "../../shared/db.js";
 import { INSTANCE_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as defRepo from "../definitions/repo.js";
 
 export async function listInstances(tenantId: string, limit: number, offset: number) {
   return cache.listOrLoad(tenantId, INSTANCE_RESOURCE, `list:${limit}:${offset}`, async () => {
@@ -14,6 +15,46 @@ export async function listInstances(tenantId: string, limit: number, offset: num
         pageSize: limit,
         ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
       },
+    };
+  });
+}
+
+/**
+ * D1 (FE↔BE high ROI) — full single-instance detail for GET /instances/:id.
+ * Previously the frontend had no way to fetch one instance directly and
+ * resolved it by fetching the ENTIRE tenant instance list and filtering
+ * client-side (see apps/web workflowData.ts getInstanceById). This returns
+ * every instance column plus the joined definition code/name, matching the
+ * richer shape searchInstances already projects.
+ */
+export async function getInstanceDetail(id: string, tenantId: string) {
+  return cache.getOrLoad(cache.makeKey(tenantId, INSTANCE_RESOURCE, id), async () => {
+    const row = await repo.findByIdFull(id, tenantId);
+    if (!row) return null;
+    const def = row.definitionId ? await defRepo.findById(row.definitionId, tenantId) : null;
+    return {
+      id: row.id,
+      tenantId: row.tenantId,
+      name: row.name,
+      status: row.status,
+      definitionId: row.definitionId,
+      definitionVersion: row.definitionVersion,
+      definitionCode: def?.code ?? null,
+      definitionName: def?.name ?? null,
+      refType: row.refType,
+      refId: row.refId,
+      currentNode: row.currentNode,
+      parentInstanceId: row.parentInstanceId,
+      parentTaskId: row.parentTaskId,
+      parentNodeKey: row.parentNodeKey,
+      callDepth: row.callDepth,
+      context: row.context,
+      completedNodes: row.completedNodes,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      createdBy: row.createdBy,
+      updatedBy: row.updatedBy,
+      version: row.version,
     };
   });
 }

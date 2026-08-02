@@ -413,12 +413,15 @@ describe("GET /v1/payroll/ddos (core)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/ddos (core)", () => {
-  it("201 — valid body", async () => {
+  // CQRS lift (quality-payroll-95): publishes payroll.ddo.upsert and returns
+  // 202 — the ddoUpsert consumer applies the upsert asynchronously. The
+  // accepted envelope's `id` IS the ddoCode (payroll_ddos has no surrogate id).
+  it("202 — valid body", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/ddos", headers: auth(["payroll_admin"]), payload: { ddoCode: "DDO-CORE-01", name: "Core DDO", departmentIds: [] } });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().ddoCode).toBe("DDO-CORE-01");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBe("DDO-CORE-01");
   });
 
   it("400 — missing fields", async () => {
@@ -475,12 +478,15 @@ describe("GET /v1/payroll/pensioners (core)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/pensioners (core)", () => {
-  it("201 — valid pensioner", async () => {
+  // CQRS lift (quality-payroll-95): publishes payroll.pensioner.create and
+  // returns 202 — the pensionerCreate consumer persists it asynchronously.
+  it("202 — valid pensioner", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/pensioners", headers: auth(["payroll_admin"]), payload: { ppoNo: "PPO-CORE-001", fullName: "Suresh Gupta", dateOfBirth: "1958-03-20", basicPensionMinor: 4500000, taxRegime: "old" } });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().ppoNo).toBe("PPO-CORE-001");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBeDefined();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("400 — missing required fields", async () => {
@@ -1262,18 +1268,22 @@ describe("GET /v1/payroll/arrears (world-class)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/arrears (world-class)", () => {
-  it("201 or 500 — valid arrear", async () => {
+  // CQRS lift (quality-payroll-95): publishes payroll.arrear.create and
+  // returns 202 — the arrearCreate consumer persists it asynchronously
+  // (no more synchronous DB write in the request path to fail with a 500).
+  it("202 — valid arrear", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/arrears", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, componentCode: "DA", fromPeriod: "2026-01", toPeriod: "2026-06", oldAmountMinor: 3000000, newAmountMinor: 3500000 } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBeDefined();
   });
 
-  it("400 or 500 — missing fields", async () => {
+  it("400 — missing fields", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/arrears", headers: auth(["payroll_admin"]), payload: {} });
     await app.close();
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
   it("401 — no token", async () => {
@@ -1296,18 +1306,22 @@ describe("POST /v1/payroll/arrears (world-class)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/bonus/compute (world-class)", () => {
-  it("201 or 500 — valid compute", async () => {
+  // CQRS lift (quality-payroll-95): publishes payroll.bonus.compute and
+  // returns 202 — the bonusCompute consumer computes bonusAmountMinor and
+  // persists it asynchronously.
+  it("202 — valid compute", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/bonus/compute", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, fy: "2026-27", basicMinor: 8000000, bonusPct: 8.33 } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBeDefined();
   });
 
-  it("400 or 500 — missing fields", async () => {
+  it("400 — missing fields", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/bonus/compute", headers: auth(["payroll_admin"]), payload: {} });
     await app.close();
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
   it("401 — no token", async () => {
@@ -1330,25 +1344,29 @@ describe("POST /v1/payroll/bonus/compute (world-class)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/reimbursements (world-class)", () => {
-  it("201 or 500 — valid reimbursement", async () => {
+  // CQRS lift (quality-payroll-95): publishes payroll.reimbursement.create
+  // and returns 202 — the reimbursementCreate consumer persists it
+  // asynchronously.
+  it("202 — valid reimbursement", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, category: "travel", amountMinor: 500000, period: "2026-07" } });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBeDefined();
   });
 
-  it("400 or 500 — invalid category", async () => {
+  it("400 — invalid category", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, category: "invalid", amountMinor: 100, period: "2026-07" } });
     await app.close();
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
-  it("400 or 500 — missing fields", async () => {
+  it("400 — missing fields", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["payroll_admin"]), payload: {} });
     await app.close();
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
   it("401 — no token", async () => {

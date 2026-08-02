@@ -38,6 +38,25 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   return rows.map(toView);
 }
 
+/**
+ * D1 (FE↔BE high ROI) — tasks scoped to one instance. Previously the frontend
+ * had no server-side filter and fetched the ENTIRE tenant task list to filter
+ * by instanceId client-side (see apps/web workflowData.ts getTasksForInstance).
+ */
+export async function listByInstance(
+  tenantId: string,
+  instanceId: string,
+  limit: number,
+  offset: number,
+): Promise<TaskView[]> {
+  const rows = await scopedRead((tx) => tx.select().from(tasks)
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId)))
+    .orderBy(desc(tasks.updatedAt))
+    .limit(limit)
+    .offset(offset));
+  return rows.map(toView);
+}
+
 export async function listPendingForRoles(
   tenantId: string,
   roles: string[],

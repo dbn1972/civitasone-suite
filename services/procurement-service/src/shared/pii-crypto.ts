@@ -89,6 +89,16 @@ function keyring(): Keyring {
 
 export function resetPiiKeyCache(): void { cachedRing = null; }
 
+/**
+ * Fail-fast PII key assertion — call from worker.ts before doing anything else
+ * so the worker never runs fail-open on vendor PII (DPDP Act). Throws the same
+ * "PII_ENC_KEY is required…" error as the first encrypt/decrypt would, just
+ * surfaced at boot instead of on the first vendor write.
+ */
+export function assertPiiKeyConfigured(): void {
+  keyring();
+}
+
 export function encryptPii(plain: string): string {
   const ring = keyring();
   const k = ring.v2.get(ring.activeKeyId)!;

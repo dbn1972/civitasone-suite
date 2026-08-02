@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as docsRepo from "./docs-repo.js";
 import type { TenderRow } from "./schema.js";
 
 const TENDER_STATUSES = [
@@ -66,6 +67,72 @@ export async function getTenderDetail(id: string, tenantId: string) {
       status: b.status,
     })),
   };
+}
+
+export type BidEvaluationSummary = {
+  id: string;
+  tender: string;
+  bidder: string;
+  technicalScore: number;
+  financialScore: number;
+  totalScore: number;
+  rank: number;
+  status: string;
+};
+
+/**
+ * Cross-tender bid-evaluation register (gap/routes.ts real-data lift).
+ * totalScore is a simple average of technical/financial scores when both are
+ * present — there is no weighted-formula config yet, so we don't fabricate one.
+ */
+export async function listBidEvaluations(tenantId: string, limit: number, offset: number): Promise<BidEvaluationSummary[]> {
+  const rows = await repo.listBidEvaluationsByTenant(tenantId, limit, offset);
+  return rows.map((r) => {
+    const tech = r.technicalScore ?? 0;
+    const fin = r.financialScore ?? 0;
+    const bothPresent = r.technicalScore != null && r.financialScore != null;
+    const totalScore = bothPresent ? Math.round((tech + fin) / 2) : (r.technicalScore ?? r.financialScore ?? 0);
+    return {
+      id: r.bidId,
+      tender: r.tenderNo,
+      bidder: r.vendorName,
+      technicalScore: tech,
+      financialScore: fin,
+      totalScore,
+      rank: r.rank ?? 0,
+      status: r.status,
+    };
+  });
+}
+
+export type PreBidConferenceSummary = {
+  id: string;
+  tender: string;
+  date: string;
+  queriesRaised: number;
+  responses: number;
+  attendees: number;
+  status: string;
+};
+
+/**
+ * Pre-bid "conferences" are modeled here as aggregated pre-bid query threads
+ * (procurementPrebidQueries), NOT scheduled meetings — there is no attendee
+ * roster or meeting-date entity in this system, so `attendees` is always 0
+ * and callers MUST surface `meta.reason` explaining the substitution rather
+ * than presenting it as a genuine attendance figure.
+ */
+export async function listPreBidConferenceAggregates(tenantId: string, limit: number, offset: number): Promise<PreBidConferenceSummary[]> {
+  const rows = await docsRepo.listPrebidAggregatesByTenant(tenantId, limit, offset);
+  return rows.map((r) => ({
+    id: r.tenderId,
+    tender: r.tenderNo,
+    date: new Date(r.firstQueryAt).toISOString().slice(0, 10),
+    queriesRaised: Number(r.queriesRaised),
+    responses: Number(r.responses),
+    attendees: 0,
+    status: Number(r.publishedCount) >= Number(r.queriesRaised) && Number(r.queriesRaised) > 0 ? "published" : "pending",
+  }));
 }
 
 /**

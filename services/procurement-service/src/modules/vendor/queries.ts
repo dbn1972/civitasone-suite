@@ -2,6 +2,28 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { VendorRow } from "./schema.js";
 
+export type EmpanelmentSummary = {
+  id: string;
+  vendorName: string;
+  category: string;
+  validUntil: string;
+  rating: number;
+  status: string;
+};
+
+/** Empanelment register (gap/routes.ts real-data lift) — vendor name + rating join. */
+export async function listEmpanelments(tenantId: string, limit: number, offset: number): Promise<EmpanelmentSummary[]> {
+  const rows = await repo.listEmpanelmentsByTenant(tenantId, limit, offset);
+  return rows.map((r) => ({
+    id: r.id,
+    vendorName: r.vendorName,
+    category: r.category,
+    validUntil: r.validUntil ?? "",
+    rating: r.overallRating ?? 0,
+    status: r.status,
+  }));
+}
+
 export async function getVendor(id: string, tenantId: string): Promise<VendorRow | null> {
   return cache.getOrLoad<VendorRow>(
     cache.makeKey(tenantId, "vendor", id),

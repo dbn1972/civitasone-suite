@@ -5,12 +5,10 @@ import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSumma
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody } from "./validators.js";
-import { payrollPensioners } from "./schema.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -108,25 +106,14 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(rows.map((r) => ({ ddoCode: r.ddo_code, name: r.name, departmentIds: r.department_ids })));
   });
 
+  // CQRS lift (quality-payroll-95): was a synchronous upsert in the request
+  // path; now publishes payroll.ddo.upsert and returns 202 — the ddoUpsert
+  // consumer (payroll/consumer.js) applies the same upsert asynchronously.
   app.post("/v1/payroll/ddos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const body = createDdoBody.parse(req.body);
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO payroll.payroll_ddos (tenant_id, ddo_code, name)
-        VALUES (${ctx.tenantId}::uuid, ${body.ddoCode}, ${body.name})
-        ON CONFLICT (tenant_id, ddo_code) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
-      `);
-      for (const deptId of body.departmentIds) {
-        await tx.execute(sql`
-          INSERT INTO payroll.payroll_ddo_departments (tenant_id, department_id, ddo_code)
-          VALUES (${ctx.tenantId}::uuid, ${deptId}::uuid, ${body.ddoCode})
-          ON CONFLICT (tenant_id, department_id) DO UPDATE SET ddo_code = EXCLUDED.ddo_code
-        `);
-      }
-    });
-    return reply.code(201).send({ ddoCode: body.ddoCode, name: body.name, departmentIds: body.departmentIds });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertDdo(ctx, body));
   });
 
   // ===================== Pensioner master =====================
@@ -149,35 +136,16 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+  // CQRS lift (quality-payroll-95): was a synchronous Drizzle insert in the
+  // request path; now publishes payroll.pensioner.create and returns 202 —
+  // the pensionerCreate consumer (payroll/consumer.js) persists it
+  // asynchronously via the SAME Drizzle table (encryptedText PII transform
+  // on bank_account_no/bank_ifsc/pan still applies — SEC-P1-06 preserved).
   app.post("/v1/payroll/pensioners", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const b = createPensionerBody.parse(req.body);
-    const id = randomUUID();
-    // SEC-P1-06: insert via the Drizzle table so the encryptedText transform on
-    // bank_account_no / bank_ifsc / pan applies — the previous raw-SQL INSERT
-    // bypassed it and stored the PII in plaintext (DPDP violation).
-    await db.transaction(async (tx) => {
-      await tx.insert(payrollPensioners).values({
-        id,
-        tenantId: ctx.tenantId,
-        ppoNo: b.ppoNo,
-        fullName: b.fullName,
-        dateOfBirth: b.dateOfBirth,
-        basicPensionMinor: b.basicPensionMinor,
-        commutedPensionMinor: b.commutedPensionMinor ?? 0n,
-        commutationDate: b.commutationDate ?? null,
-        medicalAllowanceMinor: b.medicalAllowanceMinor ?? 0n,
-        ddoCode: b.ddoCode ?? null,
-        bankAccountNo: b.bankAccountNo ?? null,
-        bankIfsc: b.bankIfsc ?? null,
-        pan: b.pan ?? null,
-        taxRegime: b.taxRegime,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      }).onConflictDoNothing();
-    });
-    return reply.code(201).send({ id, ppoNo: b.ppoNo });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createPensioner(ctx, b));
   });
 
   app.setErrorHandler(errorHandler);

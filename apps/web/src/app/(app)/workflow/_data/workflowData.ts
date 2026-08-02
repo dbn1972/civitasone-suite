@@ -7,6 +7,7 @@ import type {
   WorkflowNode,
   WorkflowEdge,
   WorkflowInstance,
+  WorkflowInstanceDetail,
   WorkflowTransition,
   WorkflowTask,
   WorkflowAnalytics,
@@ -34,6 +35,7 @@ export type {
   WorkflowNode,
   WorkflowEdge,
   WorkflowInstance,
+  WorkflowInstanceDetail,
   WorkflowTransition,
   WorkflowTask,
   WorkflowAnalytics,
@@ -189,16 +191,39 @@ export async function getInstances(): Promise<WorkflowResult<WorkflowInstance[]>
   );
 }
 
+function mapInstanceDetail(v: unknown): WorkflowInstanceDetail | null {
+  if (!isRecord(v) || typeof v.id !== "string") return null;
+  return {
+    id: v.id,
+    name: str(v.name) || v.id,
+    status: str(v.status) || "active",
+    version: num(v.version, 1),
+    definitionId: optStr(v.definitionId),
+    definitionCode: optStr(v.definitionCode),
+    definitionName: optStr(v.definitionName),
+    refType: optStr(v.refType),
+    refId: optStr(v.refId),
+    currentNode: optStr(v.currentNode),
+    createdAt: optStr(v.createdAt),
+    updatedAt: optStr(v.updatedAt),
+  };
+}
+
+/**
+ * D1 (FE↔BE high ROI) — dedicated GET by id. Previously the service had no
+ * GET /instances/:id, so this fetched the ENTIRE tenant instance list and
+ * filtered client-side. Mirrors getDefinitionById's shape (a 404 surfaces as
+ * `source: "error"`, same as every other detail loader in this module).
+ */
 export async function getInstanceById(
   id: string,
-): Promise<WorkflowResult<WorkflowInstance | null>> {
-  // The service has no GET /instances/:id; resolve from the tenant list.
-  const list = await getInstances();
-  if (list.source === "error") {
-    return { data: null, source: "error", ...(list.status ? { status: list.status } : {}) };
-  }
-  const found = list.data.find((i) => i.id === id) ?? null;
-  return { data: found, source: "api" };
+): Promise<WorkflowResult<WorkflowInstanceDetail | null>> {
+  return getJson<WorkflowInstanceDetail | null>(
+    `/v1/workflow/instances/${id}`,
+    null,
+    (raw) => mapInstanceDetail(unwrap(raw)),
+    20,
+  );
 }
 
 /* ── Transition history ─────────────────────────────────────────── */
@@ -267,13 +292,24 @@ export async function getTasks(
   );
 }
 
-/** Open tasks for a single instance (filtered from the tenant task list). */
+/**
+ * D1 (FE↔BE high ROI) — tasks for a single instance via the server-side
+ * `instanceId` filter. Previously fetched the ENTIRE tenant task list and
+ * filtered client-side.
+ */
 export async function getTasksForInstance(
   instanceId: string,
 ): Promise<WorkflowResult<WorkflowTask[]>> {
-  const all = await getTasks();
-  if (all.source === "error") return all;
-  return { data: all.data.filter((t) => t.instanceId === instanceId), source: "api" };
+  return getJson<WorkflowTask[]>(
+    `/v1/workflow/tasks?instanceId=${instanceId}&limit=200`,
+    [],
+    (raw) => {
+      const arr = unwrap(raw);
+      if (!Array.isArray(arr)) return null;
+      return arr.map(mapTask).filter((t): t is WorkflowTask => t !== null);
+    },
+    10,
+  );
 }
 
 /* ── Analytics ──────────────────────────────────────────────────── */
