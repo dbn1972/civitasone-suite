@@ -1,6 +1,9 @@
 /** Topic + event names owned by works-service. {service}.{entity}.{action} */
 
 export const COMMANDS = {
+  // Masters
+  masterCreate:                "works.master.create",
+
   // Proposal
   proposalCreate:              "works.proposal.create",
   proposalUpdate:              "works.proposal.update",
@@ -49,6 +52,9 @@ export const COMMANDS = {
 } as const;
 
 export const EVENTS = {
+  // Masters
+  masterCreated:                "works.master.created",
+
   // Proposal
   proposalCreated:             "works.proposal.created",
   proposalUpdated:             "works.proposal.updated",
@@ -81,21 +87,21 @@ export const EVENTS = {
   // Execution
   scopeAdded:                  "works.scope.added",
   progressRecorded:            "works.progress.recorded",
-  photoUploaded:               "works.photo.uploaded",
-  issueCreated:                "works.issue.created",
-  workClosed:                  "works.work.closed",
-  physicalCompleted:           "works.physical.completed",
+  photoUploaded:                "works.photo.uploaded",
+  issueCreated:                 "works.issue.created",
+  workClosed:                   "works.work.closed",
+  physicalCompleted:            "works.physical.completed",
   // Cross-service: emitted on a completion-type closure so asset-service
   // registers the newly-created public asset (closes the handover loop).
-  assetHandover:               "works.asset.handover",
+  assetHandover:                "works.asset.handover",
 
   // Billing
-  mbIssued:                    "works.mb.issued",
-  measurementRecorded:         "works.measurement.recorded",
-  mbFinalized:                 "works.mb.finalized",
-  billCreated:                 "works.bill.created",
-  billFinalized:               "works.bill.finalized",
-  accountCompiled:             "works.account.compiled",
+  mbIssued:                     "works.mb.issued",
+  measurementRecorded:          "works.measurement.recorded",
+  mbFinalized:                  "works.mb.finalized",
+  billCreated:                  "works.bill.created",
+  billFinalized:                "works.bill.finalized",
+  accountCompiled:              "works.account.compiled",
 } as const;
 
 export const CONSUMED_EVENTS = {} as const;

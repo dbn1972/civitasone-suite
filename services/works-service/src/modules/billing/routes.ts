@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence } from "./domain.js";
+import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill } from "./domain.js";
 import { getMb, getBill, listBillsForWork } from "./repo.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -49,6 +49,22 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createBillSchema.parse(req.body);
+
+    // canCreateBill gate: a bill referencing an MB may only be created once
+    // that MB is fully finalized (do_finalized). Enforced here (pre-enqueue)
+    // AND defensively in the consumer — see billing/consumer.ts billCreate.
+    if (body.mbId) {
+      const mb = await getMb(ctx.tenantId, body.mbId);
+      if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
+      if (!canCreateBill(mb.status)) {
+        throw new HttpError(
+          409,
+          "MB_NOT_ELIGIBLE",
+          `Cannot create bill: measurement book status is '${mb.status}', must be 'do_finalized'`,
+        );
+      }
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.createBillCommand(ctx, body));
   });
 

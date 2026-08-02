@@ -1,27 +1,15 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { getBills } from "../_data/loaders";
 import { BillingTable } from "./BillingTable";
-
-type ApiBill = Record<string, unknown>;
-
-async function getBills() {
-  return fetchJson<unknown, ApiBill[]>("/api/v1/works/billing/bills", [], {
-    telemetryKey: "works.billing",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiBill[] })?.data;
-      return Array.isArray(arr) ? (arr as ApiBill[]) : null;
-    },
-  });
-}
 
 export default async function BillingPage() {
   const { data: bills, source } = await getBills();
 
   const total = bills.length;
-  const pending = bills.filter((b) => String(b.status ?? "").toLowerCase() === "pending").length;
-  const finalized = bills.filter((b) => String(b.status ?? "").toLowerCase() === "finalized").length;
-  const submitted = bills.filter((b) => String(b.status ?? "").toLowerCase() === "submitted_ifms").length;
+  const pending = bills.filter((b) => b.status === "pending" || b.status === "draft").length;
+  const finalized = bills.filter((b) => b.status === "finalized").length;
+  const submitted = bills.filter((b) => b.status === "submitted_ifms").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

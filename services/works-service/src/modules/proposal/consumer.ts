@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -28,7 +29,7 @@ export function registerProposalConsumers(q: Queue): void {
         description: p.description as string,
         workTypeId: p.workTypeId as string,
         workSubTypeId: (p.workSubTypeId as string) ?? undefined,
-        estimatedCostMinor: BigInt(p.estimatedCostMinor as string | number),
+        estimatedCostMinor: parseMinor(p.estimatedCostMinor as string | number | bigint),
         executingDivisionId: (p.executingDivisionId as string) ?? undefined,
         district: (p.district as string) ?? undefined,
         taluka: (p.taluka as string) ?? undefined,

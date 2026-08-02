@@ -13,7 +13,7 @@ vi.mock("@civitasone/db", () => ({
     sqlClient: { end: vi.fn() },
     db: {
       transaction: vi.fn((fn: Function) => fn({
-        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
+        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), groupBy: () => Promise.resolve([]), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
         insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ messageId: "x" }]) }) }) }),
         update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
       })),
@@ -150,6 +150,17 @@ function token(roles: string[] = ["works_admin", "super_admin"]): string {
 function authHeader(roles?: string[]) {
   return { authorization: `Bearer ${token(roles)}` };
 }
+
+// Controllable MB/bill lookups for the canCreateBill 409-gate test below —
+// the generic @civitasone/db mock above always resolves selects to `[]`,
+// which can't express "an MB exists in a given status".
+const mbById: Record<string, { status: string } | undefined> = {};
+const billById: Record<string, { status: string } | undefined> = {};
+vi.mock("../src/modules/billing/repo.js", () => ({
+  getMb: vi.fn(async (_tenantId: string, id: string) => mbById[id] ?? null),
+  getBill: vi.fn(async (_tenantId: string, id: string) => billById[id] ?? null),
+  listBillsForWork: vi.fn(async () => []),
+}));
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -700,6 +711,57 @@ describe("Billing routes", () => {
       payload: { nextStatus: "so_finalized" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  // canCreateBill gate (works.md §Billing): a bill referencing an MB may only
+  // be created once that MB is fully finalized (do_finalized).
+  it("POST /v1/works/billing/bills → 409 when the referenced MB is not do_finalized", async () => {
+    const mbId = "00000000-2222-4000-8000-000000000099";
+    mbById[mbId] = { status: "draft" };
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
+      payload: {
+        workId: "00000000-1111-4000-8000-000000000001",
+        awardId: "00000000-2222-4000-8000-000000000001",
+        mbId,
+        billMode: "e_mb",
+        billNumber: "BILL/2024/409",
+        grossAmountMinor: "1000000",
+      },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("POST /v1/works/billing/bills → 404 when the referenced MB does not exist", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
+      payload: {
+        workId: "00000000-1111-4000-8000-000000000001",
+        awardId: "00000000-2222-4000-8000-000000000001",
+        mbId: "00000000-2222-4000-8000-000000000000",
+        billMode: "e_mb",
+        billNumber: "BILL/2024/410",
+        grossAmountMinor: "1000000",
+      },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("POST /v1/works/billing/bills → 202 when the referenced MB is do_finalized", async () => {
+    const mbId = "00000000-2222-4000-8000-000000000098";
+    mbById[mbId] = { status: "do_finalized" };
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
+      payload: {
+        workId: "00000000-1111-4000-8000-000000000001",
+        awardId: "00000000-2222-4000-8000-000000000001",
+        mbId,
+        billMode: "e_mb",
+        billNumber: "BILL/2024/202-mb",
+        grossAmountMinor: "1000000",
+      },
+    });
+    expect(res.statusCode).toBe(202);
   });
 });
 

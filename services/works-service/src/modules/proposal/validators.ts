@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 
 export const createProposalSchema = z.object({
   description: z.string().min(1).max(2048),
   category: z.enum(["regular", "deposit", "salary"]),
   workTypeId: z.string().uuid(),
   workSubTypeId: z.string().uuid().optional(),
-  estimatedCostMinor: z.string().or(z.number()),
+  estimatedCostMinor: zMoneyMinorString,
   executingDivisionId: z.string().uuid().optional(),
   executingSubDivisionId: z.string().uuid().optional(),
   executingSectionId: z.string().uuid().optional(),

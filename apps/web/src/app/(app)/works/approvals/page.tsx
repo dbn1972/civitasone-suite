@@ -1,31 +1,19 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { getApprovalsAa, getApprovalsTs } from "../_data/loaders";
 import { ApprovalsTable } from "./ApprovalsTable";
-
-type ApiApproval = Record<string, unknown>;
-
-async function getApprovals(type: "aa" | "ts") {
-  return fetchJson<unknown, ApiApproval[]>(`/api/v1/works/approvals/${type}`, [], {
-    telemetryKey: `works.approvals.${type}`,
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiApproval[] })?.data;
-      return Array.isArray(arr) ? (arr as ApiApproval[]) : null;
-    },
-  });
-}
 
 export default async function ApprovalsPage() {
   const [{ data: aaApprovals, source: aaSource }, { data: tsApprovals, source: tsSource }] = await Promise.all([
-    getApprovals("aa"),
-    getApprovals("ts"),
+    getApprovalsAa(),
+    getApprovalsTs(),
   ]);
 
   const source = aaSource === "error" || tsSource === "error" ? "error" : "api";
   const totalAA = aaApprovals.length;
   const totalTS = tsApprovals.length;
-  const pendingAA = aaApprovals.filter((a) => String(a.status ?? "").toLowerCase() === "pending").length;
-  const pendingTS = tsApprovals.filter((a) => String(a.status ?? "").toLowerCase() === "pending").length;
+  const pendingAA = aaApprovals.filter((a) => a.status === "draft").length;
+  const pendingTS = tsApprovals.filter((a) => a.status === "draft").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

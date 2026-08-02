@@ -6,8 +6,9 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { resolveApprovalType, canFinalize, canEnterTS } from "./domain.js";
-import { countAaForWork, countTsForWork, getAa, getTs } from "./repo.js";
+import { countAaForWork, countTsForWork, getAa, getTs, listAa, listTs } from "./repo.js";
 import { getProposal } from "../proposal/repo.js";
+import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -16,6 +17,24 @@ const aaAcceptedSchema = acceptedResponseSchema.extend({ approvalType: z.string(
 const tsAcceptedSchema = acceptedResponseSchema.extend({ sanctionType: z.string() });
 
 export async function approvalRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide AA register (paginated) — the FE approvals list page.
+  app.get("/v1/works/approvals/aa", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listAa(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
+  // Tenant-wide TS register (paginated) — the FE approvals list page.
+  app.get("/v1/works/approvals/ts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listTs(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
   // Create AA
   app.post("/v1/works/approvals/aa", async (req, reply) => {
     const ctx = resolveContext(req);
