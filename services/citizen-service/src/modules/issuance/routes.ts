@@ -22,14 +22,14 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = requestIssuanceBody.parse(req.body);
-    return reply.code(201).send(await commands.requestIssuance(ctx, body));
+    return reply.code(202).send(await commands.requestIssuance(ctx, body));
   });
 
   app.post("/v1/citizen/certificates/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.approveIssuance(ctx, id));
+    return reply.code(202).send(await commands.approveIssuance(ctx, id));
   });
 
   app.get("/v1/citizen/certificates", async (req, reply) => {
@@ -53,7 +53,7 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = amendBody.parse(req.body);
-    return reply.send(await commands.amendCertificate(ctx, id, body));
+    return reply.code(202).send(await commands.amendCertificate(ctx, id, body));
   });
 
   app.post("/v1/citizen/certificates/:id/renew", async (req, reply) => {
@@ -61,7 +61,7 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = renewBody.parse(req.body);
-    return reply.send(await commands.renewCertificate(ctx, id, body));
+    return reply.code(202).send(await commands.renewCertificate(ctx, id, body));
   });
 
   app.post("/v1/citizen/certificates/:id/revoke", async (req, reply) => {
@@ -69,7 +69,7 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = revokeBody.parse(req.body);
-    return reply.send(await commands.revokeCertificate(ctx, id, body));
+    return reply.code(202).send(await commands.revokeCertificate(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

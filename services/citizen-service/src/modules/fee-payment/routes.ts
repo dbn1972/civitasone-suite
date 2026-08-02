@@ -17,7 +17,7 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createScheduleBody.parse(req.body);
-    return reply.code(201).send(await commands.createSchedule(ctx, body));
+    return reply.code(202).send(await commands.createSchedule(ctx, body));
   });
 
   app.get("/v1/citizen/fees/schedules", async (req, reply) => {
@@ -30,21 +30,21 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = computeFeeBody.parse(req.body);
-    return reply.send(await commands.computeApplicationFee(ctx, body));
+    return reply.send(await queries.computeApplicationFee(ctx, body));
   });
 
   app.post("/v1/citizen/payments/intent", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = createIntentBody.parse(req.body);
-    return reply.code(201).send(await commands.createPaymentIntent(ctx, body));
+    return reply.code(202).send(await commands.createPaymentIntent(ctx, body));
   });
 
   app.post("/v1/citizen/payments/offline", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = recordOfflineBody.parse(req.body);
-    return reply.code(201).send(await commands.recordOfflinePayment(ctx, body));
+    return reply.code(202).send(await commands.recordOfflinePayment(ctx, body));
   });
 
   app.get("/v1/citizen/payments/:id", async (req, reply) => {
@@ -57,13 +57,12 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ...pay, refunds });
   });
 
-  // --- Refund maker-checker ----------------------------------------------------
   app.post("/v1/citizen/payments/:id/refunds", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = refundRequestBody.parse(req.body);
-    return reply.code(201).send(await commands.requestRefund(ctx, id, body));
+    return reply.code(202).send(await commands.requestRefund(ctx, id, body));
   });
 
   app.post("/v1/citizen/refunds/:id/decision", async (req, reply) => {
@@ -71,7 +70,7 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = refundDecisionBody.parse(req.body);
-    return reply.send(await commands.decideRefund(ctx, id, body));
+    return reply.code(202).send(await commands.decideRefund(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -1,0 +1,162 @@
+import { pino } from "pino";
+import type { Queue } from "@civitasone/queue";
+import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
+import * as repo from "./repo.js";
+import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
+import type { FeeScheduleRow } from "./schema.js";
+
+const log = pino({ name: "citizen.fee-payment.consumer" });
+const AUDIT = "audit.event.record";
+
+async function audit(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceType: string,
+  resourceId: string,
+) {
+  await enqueue(tx, {
+    topic: AUDIT, eventType: AUDIT,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success" },
+  });
+}
+
+async function resolveSchedule(
+  tx: repo.Writer, tenantId: string, scheduleId?: string, serviceId?: string,
+): Promise<FeeScheduleRow | null> {
+  let sched = scheduleId ? await repo.findScheduleByIdTx(tx, scheduleId, tenantId) : null;
+  if (!sched && serviceId) sched = await repo.findActiveScheduleForService(tx, tenantId, serviceId);
+  return sched;
+}
+
+export function registerFeePaymentConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
+
+  queue.subscribe(COMMANDS.feeScheduleCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; serviceId: string; name: string;
+      baseAmount: number; currency: string; exemptions: unknown;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertSchedule(tx, {
+        id: p.id, tenantId: p.tenantId, serviceId: p.serviceId, name: p.name,
+        baseAmount: p.baseAmount, currency: p.currency, exemptions: p.exemptions as never,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "fee_schedule_create", "fee_schedule", p.id);
+    });
+    log.info({ id: p.id }, "fee schedule created");
+  });
+
+  queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;
+      citizenId?: string; subject: Record<string, unknown>;
+    };
+    const configured = isGatewayConfigured();
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
+      if (!sched) return;
+      const fee = computeFee(Number(sched.baseAmount), sched.exemptions, p.subject ?? {});
+      const gatewayRef = configured ? `pi_${p.id}` : null;
+      await repo.insertPayment(tx, {
+        id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
+        citizenId: p.citizenId ?? null, amount: fee.amount, currency: sched.currency,
+        exemptionApplied: fee.exemptionApplied, method: "online", status: "pending",
+        gatewayRef, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: COMMANDS.paymentRequested, eventType: COMMANDS.paymentRequested,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: p.id, applicationId: p.applicationId, amount: fee.amount,
+          currency: sched.currency, gatewayConfigured: configured,
+        },
+      });
+      await audit(tx, msg, "payment_intent_create", "payment", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+  });
+
+  queue.subscribe(COMMANDS.paymentOfflineRecord, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;
+      citizenId?: string; subject: Record<string, unknown>; reference?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
+      if (!sched) return;
+      const fee = computeFee(Number(sched.baseAmount), sched.exemptions, p.subject ?? {});
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const seq = await repo.nextReceiptSeq(tx, p.tenantId, year);
+      const receiptNo = buildReceiptNo(year, seq);
+      await repo.insertPayment(tx, {
+        id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
+        citizenId: p.citizenId ?? null, amount: fee.amount, currency: sched.currency,
+        exemptionApplied: fee.exemptionApplied, method: "offline", status: "offline_recorded",
+        gatewayRef: p.reference ?? null, receiptNo, receiptIssuedAt: now,
+        reconciliationStatus: "reconciled", createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.receiptIssued, eventType: EVENTS.receiptIssued,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: p.id, applicationId: p.applicationId, receiptNo,
+          amount: fee.amount, currency: sched.currency,
+        },
+      });
+      await audit(tx, msg, "payment_offline_record", "payment", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+  });
+
+  queue.subscribe(COMMANDS.refundRequest, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; paymentId: string; amount: number; reason?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const pay = await repo.findPaymentByIdTx(tx, p.paymentId, p.tenantId);
+      if (!pay || !isRefundable(pay.status)) return;
+      if (p.amount > Number(pay.amount)) return;
+      const existing = await repo.listRefundsByPayment(p.tenantId, p.paymentId);
+      if (existing.some((r) => r.status === "requested")) return;
+      await repo.insertRefund(tx, {
+        id: p.id, tenantId: p.tenantId, paymentId: p.paymentId, amount: p.amount,
+        reason: p.reason ?? null, status: "requested",
+        requestedBy: msg.actorId, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "refund_request", "refund", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.refundDecide, async (msg) => {
+    const p = msg.payload as { refundId: string; tenantId: string; decision: "approve" | "reject" };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const refund = await repo.findRefundByIdTx(tx, p.refundId, msg.tenantId);
+      if (!refund || refund.status !== "requested") return;
+      if (refund.requestedBy === msg.actorId) return;
+      const approved = p.decision === "approve";
+      await repo.updateRefund(tx, p.refundId, msg.tenantId, {
+        status: approved ? "approved" : "rejected",
+        approvedBy: msg.actorId, decidedAt: new Date(), updatedBy: msg.actorId,
+      });
+      if (approved) {
+        await repo.updatePayment(tx, refund.paymentId, msg.tenantId, {
+          status: "refunded", updatedBy: msg.actorId,
+        });
+      }
+      await audit(tx, msg, approved ? "refund_approve" : "refund_reject", "refund", p.refundId);
+    });
+  });
+}

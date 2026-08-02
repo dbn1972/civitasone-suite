@@ -28,6 +28,17 @@ export const COMMANDS = {
   rtiSlaCheck:             "citizen.rti.sla_check",
   // SVC-085 fee & payment
   paymentRequested:        "citizen.payment.requested",
+  feeScheduleCreate:       "citizen.fee_schedule.create",
+  paymentIntentCreate:     "citizen.payment.intent_create",
+  paymentOfflineRecord:    "citizen.payment.offline_record",
+  refundRequest:           "citizen.refund.request",
+  refundDecide:            "citizen.refund.decide",
+  // SVC-086 issuance
+  issuanceRequest:         "citizen.issuance.request",
+  issuanceApprove:         "citizen.issuance.approve",
+  issuanceAmend:           "citizen.issuance.amend",
+  issuanceRenew:           "citizen.issuance.renew",
+  issuanceRevoke:          "citizen.issuance.revoke",
 } as const;
 
 export const EVENTS = {

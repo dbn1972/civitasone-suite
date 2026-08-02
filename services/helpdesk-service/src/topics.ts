@@ -13,6 +13,14 @@ export const COMMANDS = {
   bulkAction: "helpdesk.ticket.bulk_action",
   /** TKT-14 — reopen a closed/resolved ticket. */
   reopenTicket: "helpdesk.ticket.reopen",
+  // T2-04 automation
+  automationRuleCreate: "helpdesk.automation.rule_create",
+  automationRuleUpdate: "helpdesk.automation.rule_update",
+  automationRuleDelete: "helpdesk.automation.rule_delete",
+  // T2-04 sla
+  slaPolicyUpsert: "helpdesk.sla.policy_upsert",
+  csatSubmit: "helpdesk.csat.submit",
+  ticketEscalate: "helpdesk.ticket.escalate",
 } as const;
 
 /** TKT-11 — saved-views command topics (moved here from views-routes.ts so

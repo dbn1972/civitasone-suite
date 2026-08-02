@@ -10,6 +10,8 @@ import { registerGrievanceConsumers }   from "./modules/grievance/consumer.js";
 import { registerRtiConsumers }         from "./modules/rti/consumer.js";
 import { registerHelpdeskConsumers }    from "./modules/helpdesk/consumer.js";
 import { startSlaSweep }                from "./modules/sla-sweep/scheduler.js";
+import { registerFeePaymentConsumers }  from "./modules/fee-payment/consumer.js";
+import { registerIssuanceConsumers }    from "./modules/issuance/consumer.js";
 
 const log = pino({ name: "citizen-worker" });
 
@@ -21,6 +23,8 @@ registerApplicationConsumers(queue);
 registerGrievanceConsumers(queue);
 registerRtiConsumers(queue);
 registerHelpdeskConsumers(queue);
+registerFeePaymentConsumers(queue);
+registerIssuanceConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

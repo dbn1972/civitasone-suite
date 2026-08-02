@@ -4,7 +4,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { CONSUMED_EVENTS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -60,6 +60,35 @@ export function registerBoardIntakeConsumers(queue: Queue): void {
 
     await cache.invalidate(cache.makeKey(msg.tenantId, "board_decision_intake", "pending"));
   });
+
+  queue.subscribe(COMMANDS.boardIntakeAccept, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; note?: string | null };
+    await runWithTenant(msg.tenantId, async () => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const row = await repo.findById(p.tenantId, p.id);
+        if (!row || row.status !== "pending_review") return;
+        await repo.review(tx, p.tenantId, p.id, "accepted", msg.actorId, p.note ?? null, row.version);
+        await audit(tx, msg, "intake_accept", p.id, {});
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "board_decision_intake", "pending"));
+  });
+
+  queue.subscribe(COMMANDS.boardIntakeReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; note: string };
+    await runWithTenant(msg.tenantId, async () => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const row = await repo.findById(p.tenantId, p.id);
+        if (!row || row.status !== "pending_review") return;
+        await repo.review(tx, p.tenantId, p.id, "rejected", msg.actorId, p.note, row.version);
+        await audit(tx, msg, "intake_reject", p.id, {});
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "board_decision_intake", "pending"));
+  });
+
 }
 
 async function audit(
