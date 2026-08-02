@@ -346,7 +346,9 @@ module.exports = {
     worker("crm",          "crm_svc",          "civitas_crm", { CRM_PII_KEY }),
     worker("admin",        "admin_svc",        "civitas_admin"),
     worker("billing",      "billing_svc",      "civitas_billing"),
-    worker("contract",     "contract_svc",     "civitas_contract"),
+    worker("contract",     "contract_svc",     "civitas_contract", {
+      CONTRACT_SCANNER_DATABASE_URL: scannerDbUrl("contract_scanner", "civitas_contract", "CONTRACT_SCANNER_DATABASE_URL"),
+    }),
 
     // ── EVT-1 (04-T1): previously-missing workers now wired. Each ships a real
     //    src/worker.ts (consumers + outbox relay); without these entries their
@@ -388,6 +390,7 @@ module.exports = {
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
       S3_REGION: process.env.S3_REGION ?? "ap-south-1",
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
+      INSPECTION_SCANNER_DATABASE_URL: scannerDbUrl("inspection_scanner", "civitas_inspection", "INSPECTION_SCANNER_DATABASE_URL"),
     }),
 
     // ── Infrastructure services ────────────────────────────────────────────────

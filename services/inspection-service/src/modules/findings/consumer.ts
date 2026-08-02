@@ -24,6 +24,7 @@ import {
   deriveSeverity,
   generateFindingNumber,
   assertValidFindingTransition,
+  assertDeletionAllowed,
   DomainError,
   type FindingState,
 } from "./domain.js";
@@ -33,12 +34,15 @@ import {
   updateFindingState,
   nextFindingSequence,
   findFindingById,
+  softDeleteFinding,
 } from "./repo.js";
+import { findInspectionById } from "../execution/repo.js";
 import { findProvisionById } from "../universe/repo.js";
 import type {
   FindingCreatePayload,
   ComplianceNoticeCreatePayload,
   FindingVerifyResolvedPayload,
+  FindingSoftDeletePayload,
 } from "./commands.js";
 
 const log = pino({ name: "findings-consumer" });
@@ -352,6 +356,68 @@ export function registerFindingsConsumers(queue: Queue): void {
         } catch (err) {
           log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
             "failed to invalidate finding cache after verify-resolved");
+        }
+      }
+    },
+  );
+
+  // ─── findingSoftDelete (Req 9.8) ─────────────────────────────────────────
+  queue.subscribe<FindingSoftDeletePayload & { tenantId: string }>(
+    COMMANDS.findingSoftDelete,
+    async (msg) => {
+      const p = msg.payload;
+      let findingId: string | undefined;
+
+      await db.transaction(async (tx) => {
+        await markProcessed(tx, msg.messageId);
+
+        const finding = await findFindingById(msg.tenantId, p.findingId);
+        if (!finding) {
+          throw new NonRetryableError(`finding ${p.findingId} not found`);
+        }
+
+        const inspection = await findInspectionById(msg.tenantId, finding.inspectionId);
+        if (!inspection) {
+          throw new NonRetryableError(`parent inspection ${finding.inspectionId} not found`);
+        }
+
+        try {
+          assertDeletionAllowed(inspection.state);
+        } catch (err) {
+          if (err instanceof DomainError) {
+            throw new NonRetryableError(err.message);
+          }
+          throw err;
+        }
+
+        await softDeleteFinding(tx, p.findingId, msg.tenantId, msg.actorId);
+        findingId = p.findingId;
+
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            action: "finding.soft_deleted",
+            resourceType: "finding",
+            resourceId: p.findingId,
+            details: {
+              findingNumber: finding.findingNumber,
+              inspectionId: finding.inspectionId,
+              inspectionState: inspection.state,
+            },
+          },
+        });
+      });
+
+      if (findingId) {
+        try {
+          await cache.invalidate(cache.makeKey(msg.tenantId, "finding", findingId));
+        } catch (err) {
+          log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
+            "failed to invalidate finding cache after soft-delete");
         }
       }
     },
