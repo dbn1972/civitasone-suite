@@ -29,7 +29,8 @@
     "@civitasone/events": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "fastify": "^4.27.0",
-    "@civitasone/observability": "workspace:*"
+    "@civitasone/observability": "workspace:*",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.5",

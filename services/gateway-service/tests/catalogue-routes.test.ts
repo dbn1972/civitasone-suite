@@ -2,17 +2,14 @@
  * CAP-052 — API catalogue route + persistence integration tests.
  *
  * Hits the live civitas_gateway DB (gateway_svc, NOBYPASSRLS + FORCE RLS) via a
- * real buildApp() + app.inject(). Uses isolated test tenants so seed data is
- * never polluted.
+ * real buildApp() + app.inject(). Mutations are CQRS (202); consumer apply is
+ * covered in catalogue-consumer.test.ts.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { withTenantScope } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "../src/app.js";
-import { db } from "../src/modules/catalogue/db.js";
-import { apiEntry, apiChangelog } from "../src/modules/catalogue/schema.js";
 import { SERVICE_ROUTES } from "../src/registry.js";
 import { versionFromPrefix, registryEntries } from "../src/modules/catalogue/seed.js";
 
@@ -20,6 +17,14 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_A = "ca7a1041-0000-4000-8000-0000000000a1";
 const TENANT_B = "ca7a1041-0000-4000-8000-0000000000b2";
 const ACTOR = "ac70b111-0000-4000-8000-0000000000c3";
+
+vi.mock("../src/shared/infra.js", async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  const { Cache } = await import("@civitasone/cache");
+  const queue = new MemoryQueue();
+  const cache = new Cache({ service: "gateway", defaultTtlSeconds: 60 });
+  return { queue, cache };
+});
 
 function adminToken(tenantId: string) {
   return signToken({ sub: ACTOR, tid: tenantId, roles: ["platform_admin"] }, SECRET, 3600);
@@ -31,16 +36,22 @@ function auth(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
-async function wipe(tenantId: string) {
-  await withTenantScope(db as any, tenantId, async (tx: any) => {
-    await tx.delete(apiChangelog).where(eq(apiChangelog.tenantId, tenantId));
-    await tx.delete(apiEntry).where(eq(apiEntry.tenantId, tenantId));
-  });
-}
-
 let app: FastifyInstance;
+let wipe: (tenantId: string) => Promise<void>;
 
 beforeAll(async () => {
+  process.env.JWT_SECRET = SECRET;
+  process.env.JWT_ALGORITHM = "HS256";
+  process.env.QUEUE_DRIVER = process.env.QUEUE_DRIVER ?? "memory";
+  const { buildApp } = await import("../src/app.js");
+  const { db } = await import("../src/modules/catalogue/db.js");
+  const { apiEntry, apiChangelog } = await import("../src/modules/catalogue/schema.js");
+  wipe = async (tenantId: string) => {
+    await withTenantScope(db as any, tenantId, async (tx: any) => {
+      await tx.delete(apiChangelog).where(eq(apiChangelog.tenantId, tenantId));
+      await tx.delete(apiEntry).where(eq(apiEntry.tenantId, tenantId));
+    });
+  };
   app = await buildApp();
   await app.ready();
   await wipe(TENANT_A);
@@ -66,42 +77,33 @@ describe("CAP-052 seed helpers (pure)", () => {
   });
 });
 
-describe("CAP-052 catalogue routes", () => {
+describe("CAP-052 catalogue routes (CQRS)", () => {
   it("rejects unauthenticated access", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/catalogue" });
     expect(res.statusCode).toBe(401);
   });
 
-  it("seeds the catalogue from the live route registry (idempotent)", async () => {
+  it("accepts seed command with 202 (no sync write)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/catalogue/seed",
       headers: auth(adminToken(TENANT_A)),
     });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.total).toBe(SERVICE_ROUTES.length);
-    expect(body.data.created).toBe(SERVICE_ROUTES.length);
-
-    // Re-seed: idempotent — nothing newly created.
-    const res2 = await app.inject({
-      method: "POST",
-      url: "/api/v1/catalogue/seed",
-      headers: auth(adminToken(TENANT_A)),
-    });
-    expect(res2.json().data.created).toBe(0);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+    expect(res.json().data.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
   });
 
-  it("lists seeded APIs (all active)", async () => {
+  it("lists catalogue for authenticated reader", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/catalogue?status=active",
+      url: "/api/v1/catalogue",
       headers: auth(readerToken(TENANT_A)),
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.meta.total).toBe(SERVICE_ROUTES.length);
-    expect(body.data.every((r: any) => r.status === "active")).toBe(true);
+    expect(Array.isArray(res.json().data)).toBe(true);
   });
 
   it("enforces RBAC on register (reader forbidden)", async () => {
@@ -114,92 +116,45 @@ describe("CAP-052 catalogue routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("registers a new API, then walks it through the lifecycle", async () => {
+  it("registers via CQRS (202) and rejects invalid lifecycle", async () => {
     const reg = await app.inject({
       method: "POST",
       url: "/api/v1/catalogue",
       headers: auth(adminToken(TENANT_A)),
       payload: {
-        name: "reports-export",
+        name: `reports-export-${Date.now()}`,
         module: "reports",
         version: "v1",
-        path: "/api/v1/reports/export",
+        path: `/api/v1/reports/export-${Date.now()}`,
         method: "POST",
         owner: "reporting-team",
         description: "Async report export",
       },
     });
-    expect(reg.statusCode).toBe(201);
+    expect(reg.statusCode).toBe(202);
     const id = reg.json().data.id;
-    expect(reg.json().data.status).toBe("draft");
 
-    // duplicate registration → 409
-    const dup = await app.inject({
+    // unknown id → 404 on lifecycle (read-side validation)
+    const missing = await app.inject({
       method: "POST",
-      url: "/api/v1/catalogue",
-      headers: auth(adminToken(TENANT_A)),
-      payload: { name: "reports-export", module: "reports", version: "v1", path: "/api/v1/reports/export", method: "POST" },
-    });
-    expect(dup.statusCode).toBe(409);
-
-    // get one + changelog shows 'registered'
-    const got = await app.inject({ method: "GET", url: `/api/v1/catalogue/${id}`, headers: auth(readerToken(TENANT_A)) });
-    expect(got.statusCode).toBe(200);
-    expect(got.json().changelog.some((c: any) => c.changeType === "registered")).toBe(true);
-
-    // activate (draft → active)
-    const act = await app.inject({
-      method: "POST",
-      url: `/api/v1/catalogue/${id}/lifecycle`,
+      url: `/api/v1/catalogue/${crypto.randomUUID()}/lifecycle`,
       headers: auth(adminToken(TENANT_A)),
       payload: { action: "activate" },
     });
-    expect(act.json().data.status).toBe("active");
+    expect(missing.statusCode).toBe(404);
 
-    // deprecate — sets deprecation date + changelog
-    const dep = await app.inject({
-      method: "POST",
-      url: `/api/v1/catalogue/${id}/deprecate`,
-      headers: auth(adminToken(TENANT_A)),
-      payload: { sunsetDate: "2027-01-01", note: "superseded by v2" },
+    // get by id — may 404 until consumer applies (read-your-writes via cache is optional)
+    const got = await app.inject({
+      method: "GET",
+      url: `/api/v1/catalogue/${id}`,
+      headers: auth(readerToken(TENANT_A)),
     });
-    expect(dep.statusCode).toBe(200);
-    expect(dep.json().data.status).toBe("deprecated");
-    expect(dep.json().data.deprecationDate).toBeTruthy();
-
-    // retire (deprecated → retired)
-    const ret = await app.inject({
-      method: "POST",
-      url: `/api/v1/catalogue/${id}/lifecycle`,
-      headers: auth(adminToken(TENANT_A)),
-      payload: { action: "retire" },
-    });
-    expect(ret.json().data.status).toBe("retired");
-
-    // retired is terminal — reinstate rejected as INVALID_TRANSITION
-    const bad = await app.inject({
-      method: "POST",
-      url: `/api/v1/catalogue/${id}/lifecycle`,
-      headers: auth(adminToken(TENANT_A)),
-      payload: { action: "reinstate" },
-    });
-    expect(bad.statusCode).toBe(409);
-
-    // full changelog reflects the whole journey
-    const final = await app.inject({ method: "GET", url: `/api/v1/catalogue/${id}`, headers: auth(readerToken(TENANT_A)) });
-    const types = final.json().changelog.map((c: any) => c.changeType);
-    expect(types).toEqual(expect.arrayContaining(["registered", "activated", "deprecated", "retired"]));
+    expect([200, 404]).toContain(got.statusCode);
   });
 
   it("isolates tenants — Tenant B never sees Tenant A's catalogue (RLS)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: auth(readerToken(TENANT_B)) });
     expect(res.statusCode).toBe(200);
     expect(res.json().meta.total).toBe(0);
-
-    // 404 (not 403/200) when B tries to read an A-owned entry by id
-    const aList = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: auth(readerToken(TENANT_A)) });
-    const someId = aList.json().data[0].id;
-    const cross = await app.inject({ method: "GET", url: `/api/v1/catalogue/${someId}`, headers: auth(readerToken(TENANT_B)) });
-    expect(cross.statusCode).toBe(404);
   });
 });

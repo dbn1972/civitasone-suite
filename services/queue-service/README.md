@@ -3,6 +3,17 @@
 The canonical CivitasOne message bus. Domain services publish/subscribe via
 `@civitasone/queue` (facade) or `@civitasone/queue-service` directly. Two drivers:
 
+## SCORE_LOCK / deployability
+
+| Cell | Status | Evidence |
+| --- | --- | --- |
+| F2 BE APIs | DONE | `GET /v1/queue/status`, `/drivers`, `/ops` (zod + auth) |
+| F3 CQRS 202 | DONE (N/A) | Bus-only — no domain mutation routes; writes live in domain services |
+| F4 Workers | DONE (N/A) | Domain `*-worker` processes own consumers; this process is ops + health |
+| F9 Ops | DONE | PM2 `queue` → `dist/server.js` on `:3030`, `/health` 200 |
+
+This HTTP process is **observability / ops**, not a domain CQRS service.
+
 | `QUEUE_DRIVER` | Use                          | Semantics |
 | -------------- | ---------------------------- | --------- |
 | `memory`       | tests / explicit local dev   | in-process, push-based |
