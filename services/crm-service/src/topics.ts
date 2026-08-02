@@ -34,6 +34,9 @@ export const COMMANDS = {
    * NOTE: carries no message body and no participant addresses (DPDP).
    */
   captureActivity: "crm.activity.capture",
+  createCustomField: "crm.custom_field.create",
+  updateCustomField: "crm.custom_field.update",
+  deleteCustomField: "crm.custom_field.delete",
 } as const;
 
 export const EVENTS = {
@@ -67,6 +70,9 @@ export const EVENTS = {
   dealClosed: "crm.deal.closed",
   /** Contact ownership transferred (AS-002). */
   ownershipTransferred: "crm.contact.ownership_transferred",
+  customFieldCreated: "crm.custom_field.created",
+  customFieldUpdated: "crm.custom_field.updated",
+  customFieldDeleted: "crm.custom_field.deleted",
 
   // ── Sprint 2 ────────────────────────────────────────────────────────────────
   /** Strategic account plan created (KA-001). Payload: { planId, accountId, planYear }. */
