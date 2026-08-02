@@ -15,6 +15,10 @@ import {
   handleComputeIntelligence,
   type ComputeIntelligencePayload,
 } from "./modules/intelligence/consumer.js";
+import {
+  handleRecordAttribution,
+  type RecordAttributionPayload,
+} from "./modules/measurement/consumer.js";
 
 const log = pino({ name: "recommendation-worker" });
 
@@ -25,6 +29,7 @@ const relay = startRelay(db, queue, 1000, SERVICE);
 // is a no-op rather than a duplicate write.
 queue.subscribe<AttachCollateralPayload>(COMMANDS.collateralAttach, handleAttachCollateral);
 queue.subscribe<ComputeIntelligencePayload>(COMMANDS.intelligenceCompute, handleComputeIntelligence);
+queue.subscribe<RecordAttributionPayload>(COMMANDS.attributionRecord, handleRecordAttribution);
 
 void queue.start().catch((err: unknown) => {
   log.error({ err }, "queue consumer failed to start");

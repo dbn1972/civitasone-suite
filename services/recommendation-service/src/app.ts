@@ -18,6 +18,8 @@ import { feedbackReasonRoutes } from "./modules/feedback/reason-routes.js";
 import { predictiveRoutes } from "./modules/predictive/routes.js";
 import { collateralRoutes } from "./modules/collateral/routes.js";
 import { intelligenceRoutes } from "./modules/intelligence/routes.js";
+import { triggerRoutes } from "./modules/triggers/routes.js";
+import { measurementRoutes } from "./modules/measurement/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -39,6 +41,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(predictiveRoutes);
   await app.register(collateralRoutes);
   await app.register(intelligenceRoutes);
+  await app.register(measurementRoutes);
+  await app.register(triggerRoutes);
   await app.register(feedbackReasonRoutes);
   await app.register(healthScoringRoutes);
   await app.register(nbaRankingRoutes);

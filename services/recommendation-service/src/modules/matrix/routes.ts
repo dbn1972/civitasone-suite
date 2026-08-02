@@ -7,10 +7,24 @@ import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { detectDuplicate, validateMatrixEntry, type MatrixEntryInput } from "./domain.js";
+import {
+  MAX_WEIGHT_BPS,
+  detectDuplicate,
+  resolveCompanions,
+  validateEffectiveWindow,
+  validateMatrixEntry,
+  validateWeightBps,
+  type MatrixCell,
+  type MatrixEntryInput,
+} from "./domain.js";
 
 const REC_ROLES = ["recommendation_admin", "crm_user", "sales_user", "super_admin"];
 const ADMIN_ROLES = ["recommendation_admin", "super_admin"];
+
+/** Upper bound on holdings accepted by /matrix/resolve — bounds the SQL IN list. */
+const MAX_HELD_PRODUCTS = 100;
+/** Upper bound on matrix cells pulled in for one resolution. */
+const MAX_RESOLVE_CELLS = 1000;
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -28,13 +42,32 @@ const createMatrixBody = z.object({
   segment: z.string().min(1).max(64).optional(),
   channel: z.string().min(1).max(64).optional(),
   priority: z.number().int().min(0).default(0),
+  /** XS-001 — per-cell weight in basis points (10000 = 100%). */
+  weightBps: z.number().int().min(0).max(MAX_WEIGHT_BPS).default(0),
+  effectiveFrom: z.string().datetime({ offset: true }).optional(),
+  effectiveTo: z.string().datetime({ offset: true }).optional(),
 });
 
 const updateMatrixBody = z.object({
   segment: z.string().min(1).max(64).optional(),
   channel: z.string().min(1).max(64).optional(),
   priority: z.number().int().min(0).optional(),
+  weightBps: z.number().int().min(0).max(MAX_WEIGHT_BPS).optional(),
+  effectiveFrom: z.string().datetime({ offset: true }).nullable().optional(),
+  effectiveTo: z.string().datetime({ offset: true }).nullable().optional(),
   version: z.number().int().positive(),
+});
+
+/** XS-001 — resolve companion products for a customer's current holdings. */
+const resolveBody = z.object({
+  heldProductIds: z.array(z.string().uuid()).min(1).max(MAX_HELD_PRODUCTS),
+  segment: z.string().min(1).max(64).optional(),
+  channel: z.string().min(1).max(64).optional(),
+  /** Point in time to resolve at. Defaults to now. */
+  asOf: z.string().datetime({ offset: true }).optional(),
+  /** Suppress companions the customer already holds. Defaults true. */
+  excludeHeld: z.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
 });
 
 export async function matrixRoutes(app: FastifyInstance): Promise<void> {
@@ -84,6 +117,15 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
     const validationError = validateMatrixEntry(entry);
     if (validationError) throw new HttpError(422, "MATRIX_INVALID", validationError);
 
+    const weightError = validateWeightBps(body.weightBps);
+    if (weightError) throw new HttpError(422, "MATRIX_INVALID", weightError);
+
+    const windowError = validateEffectiveWindow({
+      effectiveFrom: body.effectiveFrom ?? null,
+      effectiveTo: body.effectiveTo ?? null,
+    });
+    if (windowError) throw new HttpError(422, "MATRIX_INVALID", windowError);
+
     const siblings = await repo.findByProductPair(
       ctx.tenantId,
       body.triggerProductId,
@@ -95,6 +137,8 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
+    const effectiveFrom = body.effectiveFrom === undefined ? null : new Date(body.effectiveFrom);
+    const effectiveTo = body.effectiveTo === undefined ? null : new Date(body.effectiveTo);
 
     await db.transaction(async (tx) => {
       await repo.insert(tx, {
@@ -105,6 +149,9 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
         segment: body.segment ?? null,
         channel: body.channel ?? null,
         priority: body.priority,
+        weightBps: body.weightBps,
+        effectiveFrom,
+        effectiveTo,
         createdBy: ctx.actorId,
         updatedBy: ctx.actorId,
       });
@@ -122,6 +169,9 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
           segment: body.segment ?? null,
           channel: body.channel ?? null,
           priority: body.priority,
+          weightBps: body.weightBps,
+          effectiveFrom: body.effectiveFrom ?? null,
+          effectiveTo: body.effectiveTo ?? null,
         },
       });
     });
@@ -137,7 +187,68 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
         segment: body.segment ?? null,
         channel: body.channel ?? null,
         priority: body.priority,
+        weightBps: body.weightBps,
+        effectiveFrom: body.effectiveFrom ?? null,
+        effectiveTo: body.effectiveTo ?? null,
         version: 1,
+      },
+    });
+  });
+
+  /**
+   * POST /v1/recommendations/matrix/resolve — XS-001 resolution surface.
+   *
+   * Read-only: it resolves configuration, it does not record anything as served.
+   * POST rather than GET because the holdings list is a body-shaped input, in line
+   * with the "POST /search for complex queries" convention.
+   */
+  app.post("/v1/recommendations/matrix/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REC_ROLES);
+    const body = resolveBody.parse(req.body);
+
+    const asOf = body.asOf === undefined ? new Date() : new Date(body.asOf);
+
+    const rows = await repo.listEffectiveForTriggers(
+      ctx.tenantId,
+      body.heldProductIds,
+      asOf,
+      MAX_RESOLVE_CELLS,
+      {
+        ...(body.segment !== undefined ? { segment: body.segment } : {}),
+        ...(body.channel !== undefined ? { channel: body.channel } : {}),
+      },
+    );
+
+    const cells: MatrixCell[] = rows.map((row) => ({
+      id: row.id,
+      triggerProductId: row.triggerProductId,
+      recommendedProductId: row.recommendedProductId,
+      segment: row.segment,
+      channel: row.channel,
+      priority: row.priority,
+      weightBps: row.weightBps,
+      effectiveFrom: row.effectiveFrom,
+      effectiveTo: row.effectiveTo,
+    }));
+
+    const companions = resolveCompanions({
+      heldProductIds: body.heldProductIds,
+      cells,
+      asOf,
+      excludeHeld: body.excludeHeld,
+    });
+
+    const page = companions.slice(0, body.limit);
+
+    return reply.send({
+      data: page,
+      meta: {
+        page: 1,
+        pageSize: body.limit,
+        total: companions.length,
+        asOf: asOf.toISOString(),
+        cellCount: cells.length,
       },
     });
   });
@@ -163,10 +274,32 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
     const validationError = validateMatrixEntry(merged);
     if (validationError) throw new HttpError(422, "MATRIX_INVALID", validationError);
 
+    if (body.weightBps !== undefined) {
+      const weightError = validateWeightBps(body.weightBps);
+      if (weightError) throw new HttpError(422, "MATRIX_INVALID", weightError);
+    }
+
+    // The window is validated on the MERGED value: patching only `effectiveTo`
+    // must still be checked against the stored `effectiveFrom`, otherwise a
+    // partial update could leave an inverted window behind.
+    const mergedWindow = {
+      effectiveFrom: body.effectiveFrom === undefined ? existing.effectiveFrom : body.effectiveFrom,
+      effectiveTo: body.effectiveTo === undefined ? existing.effectiveTo : body.effectiveTo,
+    };
+    const windowError = validateEffectiveWindow(mergedWindow);
+    if (windowError) throw new HttpError(422, "MATRIX_INVALID", windowError);
+
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.segment !== undefined) patch.segment = body.segment;
     if (body.channel !== undefined) patch.channel = body.channel;
     if (body.priority !== undefined) patch.priority = body.priority;
+    if (body.weightBps !== undefined) patch.weightBps = body.weightBps;
+    if (body.effectiveFrom !== undefined) {
+      patch.effectiveFrom = body.effectiveFrom === null ? null : new Date(body.effectiveFrom);
+    }
+    if (body.effectiveTo !== undefined) {
+      patch.effectiveTo = body.effectiveTo === null ? null : new Date(body.effectiveTo);
+    }
 
     await db.transaction(async (tx) => {
       const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);

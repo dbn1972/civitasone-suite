@@ -21,6 +21,20 @@ export const COMMANDS = {
    * consumed by intelligence/consumer.ts.
    */
   intelligenceCompute: "recommendation.intelligence.compute",
+  /**
+   * XS-003 — record an outcome attributed back to the recommendation that produced it.
+   *
+   * Payload (see measurement/consumer.ts RecordAttributionPayload):
+   *   { attributionId, campaignKey, subjectId, recommendationId (null for a control
+   *     subject), outcomeType, outcomeRef, productId, amountMinor (STRING of bigint
+   *     minor units), currency, cohort, attributionModel, occurredAt }
+   *
+   * Fires from POST /v1/recommendations/measurement/attributions (202). The route
+   * decides WHICH recommendation earns credit and writes nothing; this consumer is
+   * the sole writer of the attribution row.
+   * Consumed by measurement/consumer.ts handleRecordAttribution, wired in worker.ts.
+   */
+  attributionRecord: "recommendation.attribution.record",
 } as const;
 
 export const EVENTS = {
@@ -54,6 +68,45 @@ export const EVENTS = {
   intelligenceComputed: "recommendation.intelligence.computed",
   /** F.6 — a ranked next-best-action set was generated. Payload: { profileId, actionIds, count }. */
   nbaGenerated: "recommendation.nba.generated",
+
+  /**
+   * IN-007 / FS-006 / MP-011 — a generic trigger rule was configured.
+   * Payload: { ruleId, ruleType ("holding_based"|"life_event"|"volume_pattern"),
+   *            targetCategory, priority, weightBps }.
+   * Fires on POST /v1/recommendations/trigger-rules (201), inside the same
+   * transaction as the insert, via the outbox.
+   */
+  triggerRuleCreated: "recommendation.trigger-rule.created",
+  /**
+   * IN-007 / FS-006 / MP-011 — a trigger rule's configuration changed.
+   * Payload: { ruleId, patch } where `patch` holds only the columns that changed.
+   * Fires on PATCH /v1/recommendations/trigger-rules/:id (200).
+   */
+  triggerRuleUpdated: "recommendation.trigger-rule.updated",
+  /**
+   * IN-007 / FS-006 / MP-011 — a trigger rule was deactivated (soft; the row stays
+   * readable so attributions naming it keep their meaning).
+   * Payload: { ruleId }. Fires on DELETE /v1/recommendations/trigger-rules/:id (200).
+   */
+  triggerRuleDeactivated: "recommendation.trigger-rule.deactivated",
+
+  /**
+   * XS-003 — a subject was assigned to a measurement cohort.
+   * Payload: { exposureId, campaignKey, cohort ("treatment"|"control") }.
+   * Fires on POST /v1/recommendations/measurement/exposures (201). This is the
+   * denominator of every attach-rate and uplift figure for the campaign.
+   */
+  cohortAssigned: "recommendation.cohort.assigned",
+  /**
+   * XS-003 — an outcome was attributed to a recommendation (or recorded as a
+   * control-cohort baseline conversion, in which case recommendationId is null).
+   * Payload: { attributionId, campaignKey, recommendationId, cohort,
+   *            attributionModel, attributedAmountMinor (STRING of bigint minor
+   *            units — never a JSON number), currency }.
+   * Fires from measurement/consumer.ts after the attribution row is written.
+   * analytics-service consumes this to build the dashboards the RTM points at.
+   */
+  outcomeAttributed: "recommendation.outcome.attributed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
