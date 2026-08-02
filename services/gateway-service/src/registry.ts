@@ -74,7 +74,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "field",           prefix: "/api/v1/field",           upstream: upstream("field", 3046) },
   { name: "recommendations", prefix: "/api/v1/recommendations", upstream: upstream("recommendation", 3040) },
   { name: "ai",              prefix: "/api/v1/ai",              upstream: upstream("ai-agent", 3041) },
-  { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3042) },
+  { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3048) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
