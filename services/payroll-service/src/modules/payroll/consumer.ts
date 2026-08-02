@@ -596,6 +596,252 @@ export function registerPayrollConsumers(queue: Queue): void {
       await audit(tx, msg, "create", "payroll_reimbursement", p.id);
     });
   });
+
+  // ─── CQRS lift T1-03 (payroll/gap-routes.ts) ─────────────────────────────
+  // Idempotent consumers for the 8 gap-routes.ts mutations that were doing
+  // db.execute() INSERT/UPDATE in the HTTP handler. Each opens a tx, calls
+  // markProcessed (idempotency key = messageId), applies the write, and
+  // enqueues the paired *ed event to the outbox.
+
+  queue.subscribe(COMMANDS.correctionCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string; component: string;
+      effectiveFrom: string; oldValueMinor: number; newValueMinor: number;
+      arrearsMinor: string; affectedPeriods: number; reason?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.salary_corrections
+          (id, tenant_id, employee_id, component, effective_from, old_value_minor,
+           new_value_minor, arrears_minor, affected_periods, reason, status, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid,
+          ${p.component}, ${p.effectiveFrom}::date,
+          ${p.oldValueMinor.toString()}::bigint, ${p.newValueMinor.toString()}::bigint,
+          ${p.arrearsMinor}::bigint, ${p.affectedPeriods},
+          ${p.reason ?? null}, 'pending', ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.correctionCreated, eventType: EVENTS.correctionCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: p.employeeId, arrearsMinor: p.arrearsMinor },
+      });
+      await audit(tx, msg, "create", "payroll_correction", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.payGroupCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name: string;
+      frequency: string; payDayOfMonth: number; timezone: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.pay_groups
+          (id, tenant_id, name, frequency, pay_day_of_month, timezone, created_by, updated_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.name}, ${p.frequency},
+          ${p.payDayOfMonth}, ${p.timezone}, ${msg.actorId}::uuid, ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.payGroupCreated, eventType: EVENTS.payGroupCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, name: p.name, frequency: p.frequency },
+      });
+      await audit(tx, msg, "create", "payroll_pay_group", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.flexPlanCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name: string; fy: string;
+      totalBudgetMinor: number;
+      components: Array<{ name: string; maxMinor: number; taxExempt: boolean }>;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.flex_benefit_plans
+          (id, tenant_id, name, fy, total_budget_minor, components, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.name}, ${p.fy},
+          ${p.totalBudgetMinor.toString()}::bigint, ${JSON.stringify(p.components)}::jsonb,
+          ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.flexPlanCreated, eventType: EVENTS.flexPlanCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, name: p.name, fy: p.fy },
+      });
+      await audit(tx, msg, "create", "payroll_flex_plan", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.flexElectionUpsert, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; planId: string; fy: string;
+      elections: Array<{ component: string; electedMinor: number }>;
+      totalElectedMinor: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.flex_benefit_elections
+          (id, tenant_id, employee_id, plan_id, fy, elections, total_elected_minor, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${msg.actorId}::uuid, ${p.planId}::uuid,
+          ${p.fy}, ${JSON.stringify(p.elections)}::jsonb,
+          ${p.totalElectedMinor.toString()}::bigint, ${msg.actorId}::uuid)
+        ON CONFLICT (tenant_id, employee_id, plan_id, fy)
+        DO UPDATE SET elections = EXCLUDED.elections,
+          total_elected_minor = EXCLUDED.total_elected_minor
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.flexElectionUpserted, eventType: EVENTS.flexElectionUpserted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, planId: p.planId, fy: p.fy },
+      });
+      await audit(tx, msg, "upsert", "payroll_flex_election", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.costingRuleUpsert, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeGroup: string;
+      costCenterId: string; splitPct: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.costing_rules
+          (id, tenant_id, employee_group, cost_center_id, split_pct, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeGroup},
+          ${p.costCenterId}::uuid, ${p.splitPct}, ${msg.actorId}::uuid)
+        ON CONFLICT (tenant_id, employee_group, cost_center_id)
+        DO UPDATE SET split_pct = EXCLUDED.split_pct
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.costingRuleUpserted, eventType: EVENTS.costingRuleUpserted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeGroup: p.employeeGroup, costCenterId: p.costCenterId },
+      });
+      await audit(tx, msg, "upsert", "payroll_costing_rule", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.offCycleCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; runType: "bonus" | "incentive" | "adhoc";
+      period: string; description?: string; totalAmountMinor: string;
+      items: Array<{ employeeId: string; amountMinor: number }>;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.off_cycle_runs
+          (id, tenant_id, run_type, period, description, total_amount_minor, created_by)
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.runType}, ${p.period},
+          ${p.description ?? null}, ${p.totalAmountMinor}::bigint, ${msg.actorId}::uuid)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      for (const item of p.items) {
+        await tx.execute(sql`
+          INSERT INTO payroll.off_cycle_items
+            (tenant_id, off_cycle_run_id, employee_id, amount_minor)
+          VALUES (${p.tenantId}::uuid, ${p.id}::uuid, ${item.employeeId}::uuid,
+            ${item.amountMinor.toString()}::bigint)
+        `);
+      }
+      await enqueue(tx, {
+        topic: EVENTS.offCycleCreated, eventType: EVENTS.offCycleCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, runType: p.runType, period: p.period, itemCount: p.items.length },
+      });
+      await audit(tx, msg, "create", "payroll_off_cycle_run", p.id);
+    });
+  });
+
+  // Off-cycle process: consumer is the single source of truth for the 30% flat-tax split.
+  queue.subscribe(COMMANDS.offCycleProcess, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const items = (await tx.execute(sql`
+        SELECT id, employee_id, amount_minor FROM payroll.off_cycle_items
+        WHERE off_cycle_run_id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
+      `)) as unknown as Array<{ id: string; employee_id: string; amount_minor: string }>;
+      let totalTax = 0n; let totalNet = 0n;
+      for (const item of items) {
+        const amt = BigInt(item.amount_minor);
+        const tax = (amt * 30n) / 100n;
+        const net = amt - tax;
+        totalTax += tax; totalNet += net;
+        await tx.execute(sql`
+          UPDATE payroll.off_cycle_items
+             SET tax_minor = ${tax.toString()}::bigint,
+                 net_minor = ${net.toString()}::bigint,
+                 status = 'processed'
+           WHERE id = ${item.id}::uuid AND tenant_id = ${p.tenantId}::uuid
+        `);
+      }
+      await tx.execute(sql`
+        UPDATE payroll.off_cycle_runs
+           SET total_tax_minor = ${totalTax.toString()}::bigint,
+               total_net_minor = ${totalNet.toString()}::bigint,
+               status = 'processed',
+               updated_at = NOW()
+         WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.offCycleProcessed, eventType: EVENTS.offCycleProcessed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, totalTaxMinor: totalTax.toString(), totalNetMinor: totalNet.toString() },
+      });
+      await audit(tx, msg, "process", "payroll_off_cycle_run", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.stateRulesUpsert, async (msg) => {
+    const p = msg.payload as {
+      tenantId: string; stateCode: string;
+      ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }>;
+      lwfEmployee?: number; lwfEmployer?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      for (const slab of p.ptSlabs ?? []) {
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_professional_tax
+            (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor)
+          VALUES (${p.tenantId}::uuid, ${p.stateCode},
+            ${slab.fromMinor.toString()}::bigint, ${slab.toMinor.toString()}::bigint,
+            ${slab.taxMinor.toString()}::bigint)
+          ON CONFLICT (tenant_id, state_code, slab_from_minor)
+          DO UPDATE SET slab_to_minor = EXCLUDED.slab_to_minor,
+            pt_amount_minor = EXCLUDED.pt_amount_minor
+        `);
+      }
+      if (p.lwfEmployee != null || p.lwfEmployer != null) {
+        await tx.execute(sql`
+          INSERT INTO payroll.payroll_lwf
+            (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor)
+          VALUES (${p.tenantId}::uuid, ${p.stateCode},
+            ${(p.lwfEmployee ?? 0).toString()}::bigint,
+            ${(p.lwfEmployer ?? 0).toString()}::bigint)
+          ON CONFLICT (tenant_id, state_code)
+          DO UPDATE SET employee_contrib_minor = EXCLUDED.employee_contrib_minor,
+            employer_contrib_minor = EXCLUDED.employer_contrib_minor
+        `);
+      }
+      await enqueue(tx, {
+        topic: EVENTS.stateRulesUpserted, eventType: EVENTS.stateRulesUpserted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { stateCode: p.stateCode, ptSlabCount: p.ptSlabs?.length ?? 0 },
+      });
+      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
+    });
+  });
 }
 
 async function processPayrollRun(
