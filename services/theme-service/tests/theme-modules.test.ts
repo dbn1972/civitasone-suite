@@ -3,6 +3,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
 import { upsertBrandingBody } from "../src/modules/branding/validators.js";
 import { createTemplateBody, templateTypeEnum } from "../src/modules/templates/validators.js";
+import { upsertBrandBody, applyPresetBody } from "../src/modules/tokens/validators.js";
 
 /* ─── branding validators ────────────────────────────────────────────── */
 describe("branding validators", () => {
@@ -64,6 +65,73 @@ describe("template validators", () => {
 
   it("rejects empty htmlBody", () => {
     expect(() => createTemplateBody.parse({ type: "email", name: "Test", htmlBody: "" })).toThrow();
+  });
+});
+
+/* ─── brand validators ───────────────────────────────────────────────── */
+describe("brand validators", () => {
+  it("accepts partial upsert body", () => {
+    const body = upsertBrandBody.parse({ appName: "GovPortal", colorPrimary: "#003366" });
+    expect(body.appName).toBe("GovPortal");
+    expect(body.colorPrimary).toBe("#003366");
+  });
+
+  it("rejects invalid hex color", () => {
+    expect(() => upsertBrandBody.parse({ colorPrimary: "red" })).toThrow();
+  });
+
+  it("rejects invalid sidebarStyle", () => {
+    expect(() => upsertBrandBody.parse({ sidebarStyle: "invalid" })).toThrow();
+  });
+
+  it("requires preset code", () => {
+    expect(() => applyPresetBody.parse({})).toThrow();
+    expect(applyPresetBody.parse({ code: "modern-blue" }).code).toBe("modern-blue");
+  });
+});
+
+/* ─── brand write-via-queue + read-via-cache ─────────────────────────── */
+describe("brand write-via-queue + read-via-cache", () => {
+  let queue: MemoryQueue;
+  let cache: Cache;
+  const store = new Map<string, Record<string, unknown>>();
+
+  beforeEach(() => {
+    queue = new MemoryQueue();
+    cache = new Cache({ service: "themes", store: new MemoryCache(), defaultTtlSeconds: 60 });
+    store.clear();
+    queue.subscribe("themes.brand.upsert", async (msg: { payload: { projected: { tenantId: string } & Record<string, unknown> } }) => {
+      store.set(msg.payload.projected.tenantId, msg.payload.projected);
+    });
+  });
+
+  it("brand upsert command primes cache before async DB write", async () => {
+    const tenantId = "11111111-aaaa-4000-8000-000000000060";
+    const messageId = "22222222-bbbb-4000-8000-000000000061";
+    const projected = {
+      tenantId,
+      appName: "GovPortal",
+      colorPrimary: "#003366",
+      version: 1,
+    };
+
+    await cache.put(cache.makeKey(tenantId, "brand", "config"), projected);
+    await queue.publish("themes.brand.upsert", {
+      messageId,
+      type: "themes.brand.upsert",
+      tenantId,
+      actorId: "00000000-aaaa-4000-8000-000000000001",
+      correlationId: "c3",
+      schemaVersion: "1.0",
+      payload: { projected, isCreate: true },
+    });
+
+    expect(store.has(tenantId)).toBe(false);
+    const fromCache = await cache.getOrLoad(cache.makeKey(tenantId, "brand", "config"), async () => null);
+    expect(fromCache).toEqual(projected);
+
+    await queue.drain();
+    expect(store.get(tenantId)).toBeDefined();
   });
 });
 

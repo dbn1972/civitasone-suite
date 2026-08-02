@@ -1,7 +1,10 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const CITIZEN_ADMIN_ROLES = ["citizen_admin", "super_admin", "admin", "tenant_admin"];
 
@@ -17,17 +20,7 @@ export async function slaRulesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ADMIN_ROLES);
     const body = createBody.parse(req.body);
-    // P1-1: persisted (was an in-memory store) — survives restart, feeds the SLA sweep.
-    const record = await repo.upsertRule({
-      tenantId: ctx.tenantId,
-      priority: body.priority,
-      escalationHours: body.escalationHours,
-      escalateTo: body.escalateTo,
-      isActive: body.isActive,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-    return reply.code(201).send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertRule(ctx, body));
   });
 
   app.get("/v1/citizen/sla-rules", async (req, reply) => {

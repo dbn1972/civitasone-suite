@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const ADMIN = ["super_admin", "location_admin", "gis_admin"];
@@ -26,8 +28,7 @@ export async function mapLayerRoutes(app: FastifyInstance): Promise<void> {
       zIndex: z.number().int().min(0).max(10000).default(0),
       visible: z.boolean().default(true),
     }).parse(req.body);
-    const layer = await repo.create(ctx.tenantId, ctx.actorId, { id: randomUUID(), ...body });
-    return reply.code(201).send({ data: layer });
+    sendAccepted(reply, acceptedResponseSchema, await commands.mapLayerCreate(ctx, body));
   });
 
   app.patch("/v1/locations/map-layers/:id", async (req, reply) => {
@@ -41,17 +42,17 @@ export async function mapLayerRoutes(app: FastifyInstance): Promise<void> {
       zIndex: z.number().int().min(0).max(10000).optional(),
       visible: z.boolean().optional(),
     }).parse(req.body);
-    const updated = await repo.patch(id, ctx.tenantId, body);
-    if (!updated) throw new HttpError(404, "NOT_FOUND", "map layer not found");
-    return reply.send({ data: updated });
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "map layer not found");
+    sendAccepted(reply, acceptedResponseSchema, await commands.mapLayerUpdate(ctx, id, body));
   });
 
   app.delete("/v1/locations/map-layers/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const n = await repo.remove(id, ctx.tenantId);
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "map layer not found");
-    return reply.send({ data: { id, status: "deleted" } });
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "map layer not found");
+    sendAccepted(reply, acceptedResponseSchema, await commands.mapLayerDelete(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -22,3 +22,18 @@ export const didMappingViewSchema = z.object({
 });
 
 export const didMappingsListSchema = paginatedSchema(didMappingViewSchema);
+
+export const createDidMappingPayload = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  didNumber: z.string().min(1).max(32),
+  label: z.string().max(160).nullable(),
+  active: z.boolean(),
+});
+export type CreateDidMappingPayload = z.infer<typeof createDidMappingPayload>;
+
+export const deleteDidMappingPayload = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+});
+export type DeleteDidMappingPayload = z.infer<typeof deleteDidMappingPayload>;

@@ -49,6 +49,10 @@ export async function findMatchByIdTx(tx: Writer, id: string, tenantId: string):
   return rows[0] ?? null;
 }
 
+export async function findMatchById(id: string, tenantId: string): Promise<MatchRow | null> {
+  return db.transaction((tx) => findMatchByIdTx(tx, id, tenantId));
+}
+
 export async function updateMatch(tx: Writer, id: string, tenantId: string, patch: Partial<MatchInsert>): Promise<void> {
   await tx.update(discoveryMatches).set({ ...patch, updatedAt: new Date() })
     .where(and(eq(discoveryMatches.id, id), eq(discoveryMatches.tenantId, tenantId)));
