@@ -12,7 +12,7 @@ import { awards } from "../src/modules/tender/schema.js";
 import { workSplits, workProposals } from "../src/modules/proposal/schema.js";
 import { physicalCompletions } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
-import { measurements } from "../src/modules/billing/schema.js";
+import { measurements, measurementBooks } from "../src/modules/billing/schema.js";
 import { vi } from "vitest";
 
 const mockInserted: unknown[] = [];
@@ -345,5 +345,61 @@ describe("Billing orphan consumers", () => {
     const h = await load();
     await h[COMMANDS.accountCompile]({ ...base, payload: { id: "ac-1", month: 4, year: 2026 } });
     expect(mockInserted).toHaveLength(0);
+  });
+
+  // canCreateBill gate (defense-in-depth — primary enforcement is the 409 in
+  // billing/routes.ts): billCreate must reject a bill referencing an MB that
+  // is not fully finalized (do_finalized), even if the pre-enqueue check
+  // was somehow bypassed or the MB's status changed since the HTTP request.
+  it("billCreate is rejected when the referenced MB exists but is not do_finalized (canCreateBill gate)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "draft" }]);
+    const h = await load();
+    await h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-1", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "B1", grossAmountMinor: "1000",
+      },
+    });
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  it("billCreate is rejected when the referenced MB does not exist (canCreateBill gate)", async () => {
+    mockSelectMap.set(measurementBooks, []);
+    const h = await load();
+    await h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-2", workId: "w-1", awardId: "award-1", mbId: "missing-mb",
+        billMode: "e_mb", billNumber: "B2", grossAmountMinor: "1000",
+      },
+    });
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  it("billCreate persists when the referenced MB is do_finalized", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized" }]);
+    const h = await load();
+    await h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-3", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "B3", grossAmountMinor: "1000",
+      },
+    });
+    expect(mockInserted).toHaveLength(1);
+    expect(emitted(EVENTS.billCreated)).toBe(true);
+  });
+
+  it("billCreate persists when no mbId is referenced at all (abstract bill)", async () => {
+    const h = await load();
+    await h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-4", workId: "w-1", awardId: "award-1",
+        billMode: "abstract", billNumber: "B4", grossAmountMinor: "1000",
+      },
+    });
+    expect(mockInserted).toHaveLength(1);
   });
 });

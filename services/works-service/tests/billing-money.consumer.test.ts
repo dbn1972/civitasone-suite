@@ -133,3 +133,106 @@ describe("calculateNetPayable — bigint correctness at large scale", () => {
     expect(calculateNetPayable(gross, deductions)).toBe(9_007_199_254_740_992n);
   });
 });
+
+describe("money codec — proposal validators (zMoneyMinorString)", () => {
+  it("createProposalSchema.estimatedCostMinor round-trips a large paise string above 2^53", async () => {
+    const { createProposalSchema } = await import("../src/modules/proposal/validators.js");
+    const bigPaise = "900700000000000001";
+    const parsed = createProposalSchema.parse({
+      description: "Road repair NH-48",
+      category: "regular",
+      workTypeId: "00000000-1111-4000-8000-000000000001",
+      estimatedCostMinor: bigPaise,
+    });
+    expect(parsed.estimatedCostMinor).toBe(bigPaise);
+    expect(parseMinor(parsed.estimatedCostMinor)).toBe(900700000000000001n);
+  });
+
+  it("createProposalSchema.estimatedCostMinor rejects Number.MAX_SAFE_INTEGER + 2 as a JS number", async () => {
+    const { createProposalSchema } = await import("../src/modules/proposal/validators.js");
+    const unsafe = Number.MAX_SAFE_INTEGER + 2;
+    expect(() =>
+      createProposalSchema.parse({
+        description: "Road repair",
+        category: "regular",
+        workTypeId: "00000000-1111-4000-8000-000000000001",
+        estimatedCostMinor: unsafe,
+      }),
+    ).toThrow(/safe-integer/);
+  });
+
+  it("createProposalSchema.estimatedCostMinor rejects a non-numeric junk string", async () => {
+    const { createProposalSchema } = await import("../src/modules/proposal/validators.js");
+    expect(() =>
+      createProposalSchema.parse({
+        description: "Road repair",
+        category: "regular",
+        workTypeId: "00000000-1111-4000-8000-000000000001",
+        estimatedCostMinor: "not-a-number",
+      }),
+    ).toThrow();
+  });
+
+  it("createProposalSchema.estimatedCostMinor normalises a safe-integer JS number to a string", async () => {
+    const { createProposalSchema } = await import("../src/modules/proposal/validators.js");
+    const parsed = createProposalSchema.parse({
+      description: "Road repair",
+      category: "regular",
+      workTypeId: "00000000-1111-4000-8000-000000000001",
+      estimatedCostMinor: 500000,
+    });
+    expect(parsed.estimatedCostMinor).toBe("500000");
+  });
+});
+
+describe("money codec — masters validators (zMoneyMinorString)", () => {
+  it("createSrItemSchema.rate round-trips a large paise string above 2^53", async () => {
+    const { createSrItemSchema } = await import("../src/modules/masters/validators.js");
+    const bigPaise = "123456789012345678";
+    const parsed = createSrItemSchema.parse({
+      zone: "North",
+      srYear: "2026",
+      itemCode: "IT-001",
+      description: "Excavation in ordinary soil",
+      unit: "cum",
+      rate: bigPaise,
+    });
+    expect(parsed.rate).toBe(bigPaise);
+    expect(parseMinor(parsed.rate)).toBe(123456789012345678n);
+  });
+
+  it("createSrItemSchema.rate rejects Number.MAX_SAFE_INTEGER + 2 as a JS number", async () => {
+    const { createSrItemSchema } = await import("../src/modules/masters/validators.js");
+    const unsafe = Number.MAX_SAFE_INTEGER + 2;
+    expect(() =>
+      createSrItemSchema.parse({
+        zone: "North", srYear: "2026", itemCode: "IT-002",
+        description: "desc", unit: "cum", rate: unsafe,
+      }),
+    ).toThrow(/safe-integer/);
+  });
+
+  it("createAssetSchema.cost round-trips a large paise string above 2^53", async () => {
+    const { createAssetSchema } = await import("../src/modules/masters/validators.js");
+    const bigPaise = "987654321098765432";
+    const parsed = createAssetSchema.parse({
+      code: "AST-1", name: "Bridge over river", cost: bigPaise,
+    });
+    expect(parsed.cost).toBe(bigPaise);
+    expect(parseMinor(parsed.cost as string)).toBe(987654321098765432n);
+  });
+
+  it("createAssetSchema.cost rejects Number.MAX_SAFE_INTEGER + 2 as a JS number", async () => {
+    const { createAssetSchema } = await import("../src/modules/masters/validators.js");
+    const unsafe = Number.MAX_SAFE_INTEGER + 2;
+    expect(() =>
+      createAssetSchema.parse({ code: "AST-2", name: "Bridge", cost: unsafe }),
+    ).toThrow(/safe-integer/);
+  });
+
+  it("createAssetSchema.cost is optional and omitting it is still valid", async () => {
+    const { createAssetSchema } = await import("../src/modules/masters/validators.js");
+    const parsed = createAssetSchema.parse({ code: "AST-3", name: "Culvert" });
+    expect(parsed.cost).toBeUndefined();
+  });
+});

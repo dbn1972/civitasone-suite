@@ -4,7 +4,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { measurementBooks, measurements, bills, accountCompilations } from "./schema.js";
-import { calculateNetPayable, billedQuantityExceedsBoq } from "./domain.js";
+import { calculateNetPayable, billedQuantityExceedsBoq, canCreateBill } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { eq, and } from "drizzle-orm";
 
@@ -63,6 +63,21 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+
+      // canCreateBill gate (defense-in-depth — also enforced pre-enqueue in
+      // billing/routes.ts): if this bill references an MB, that MB must be
+      // fully finalized (do_finalized) before a bill can be persisted against it.
+      const mbId = p.mbId as string | undefined;
+      if (mbId) {
+        const mbRows = await tx.select().from(measurementBooks)
+          .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+          .limit(1);
+        const mb = mbRows[0];
+        if (!mb || !canCreateBill(mb.status)) {
+          return; // reject: MB missing or not in an allowed status for bill creation
+        }
+      }
+
       const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
       const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);

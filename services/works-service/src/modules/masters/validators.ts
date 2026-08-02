@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinorString } from "@civitasone/schemas";
 
 export const createMasterSchema = z.object({
   name: z.string().min(1).max(256),
@@ -39,7 +40,7 @@ export const createSrItemSchema = z.object({
   itemCode: z.string().min(1).max(64),
   description: z.string().min(1).max(1024),
   unit: z.string().min(1).max(64),
-  rate: z.string().or(z.number()),
+  rate: zMoneyMinorString,
   active: z.boolean().optional(),
 });
 
@@ -50,7 +51,7 @@ export const createAssetSchema = z.object({
   district: z.string().max(128).optional(),
   taluka: z.string().max(128).optional(),
   chainage: z.string().max(64).optional(),
-  cost: z.string().or(z.number()).optional(),
+  cost: zMoneyMinorString.optional(),
   active: z.boolean().optional(),
 });
 

@@ -1,27 +1,15 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { getProposals } from "../_data/loaders";
 import { ProposalsTable } from "./ProposalsTable";
-
-type ApiProposal = Record<string, unknown>;
-
-async function getProposals() {
-  return fetchJson<unknown, ApiProposal[]>("/api/v1/works/proposals", [], {
-    telemetryKey: "works.proposals",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiProposal[] })?.data;
-      return Array.isArray(arr) ? (arr as ApiProposal[]) : null;
-    },
-  });
-}
 
 export default async function ProposalsPage() {
   const { data: proposals, source } = await getProposals();
 
   const total = proposals.length;
-  const draft = proposals.filter((p) => String(p.status ?? "").toLowerCase() === "draft").length;
-  const daoFinalized = proposals.filter((p) => String(p.status ?? "").toLowerCase() === "dao_finalized").length;
-  const tsEligible = proposals.filter((p) => String(p.status ?? "").toLowerCase() === "ts_eligible").length;
+  const draft = proposals.filter((p) => p.status === "draft").length;
+  const daoFinalized = proposals.filter((p) => p.status === "dao_finalized").length;
+  const tsEligible = proposals.filter((p) => p.status === "ts_eligible").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

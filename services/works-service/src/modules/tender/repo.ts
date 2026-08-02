@@ -1,6 +1,6 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
-import { preTenders, tenders, quotations, awards } from "./schema.js";
+import { tenders, quotations, awards } from "./schema.js";
 
 export async function hasTenderForWork(tenantId: string, workId: string): Promise<boolean> {
   return scopedRead(async (tx) => {
@@ -32,5 +32,16 @@ export async function getAwardById(tenantId: string, id: string) {
       .where(and(eq(awards.tenantId, tenantId), eq(awards.id, id)))
       .limit(1);
     return rows[0] ?? null;
+  });
+}
+
+/** Tenant-wide tender register (post pre-tender stage), newest first — backs the FE tenders list page. */
+export async function listTenders(tenantId: string, page: number, pageSize: number) {
+  return scopedRead(async (tx) => {
+    return tx.select().from(tenders)
+      .where(eq(tenders.tenantId, tenantId))
+      .orderBy(desc(tenders.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
   });
 }

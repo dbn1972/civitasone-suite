@@ -4,14 +4,42 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listScopes, listIssues } from "./repo.js";
+import { listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures } from "./repo.js";
 import { getAward } from "../tender/repo.js";
 import { canRecordPhysicalCompletion } from "./domain.js";
+import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function executionRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide execution progress register (paginated) — the FE execution list page.
+  app.get("/v1/works/execution/progress", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listExecutionProgress(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
+  // Tenant-wide issues register (paginated) — the FE execution issues list.
+  app.get("/v1/works/execution/issues", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listAllIssues(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
+  // Tenant-wide closure register (paginated) — the FE closure list page.
+  app.get("/v1/works/closure", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listClosures(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
   // List scopes
   app.get("/v1/works/execution/:workId/scopes", async (req, reply) => {
     const ctx = resolveContext(req);

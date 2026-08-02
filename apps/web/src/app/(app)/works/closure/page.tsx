@@ -1,27 +1,15 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { getClosures } from "../_data/loaders";
 import { ClosureTable } from "./ClosureTable";
-
-type ApiClosure = Record<string, unknown>;
-
-async function getClosures() {
-  return fetchJson<unknown, ApiClosure[]>("/api/v1/works/closure", [], {
-    telemetryKey: "works.closure",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiClosure[] })?.data;
-      return Array.isArray(arr) ? (arr as ApiClosure[]) : null;
-    },
-  });
-}
 
 export default async function ClosurePage() {
   const { data: closures, source } = await getClosures();
 
   const total = closures.length;
-  const closed = closures.filter((c) => String(c.status ?? "").toLowerCase() === "closed").length;
-  const dropped = closures.filter((c) => String(c.status ?? "").toLowerCase() === "dropped").length;
-  const completion = closures.filter((c) => String(c.status ?? "").toLowerCase() === "completion").length;
+  const closed = closures.filter((c) => c.status === "closed").length;
+  const dropped = closures.filter((c) => c.status === "dropped").length;
+  const completion = closures.filter((c) => c.status === "completion").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

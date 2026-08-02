@@ -4,12 +4,22 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listBoqItems, getRecapitulation } from "./repo.js";
+import { listBoqItems, getRecapitulation, listAllBoqItems } from "./repo.js";
+import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "estimator", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function boqRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide BoQ index (paginated) — the FE BoQ list page.
+  app.get("/v1/works/boq", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listAllBoqItems(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
   // List BoQ items for a work
   app.get("/v1/works/boq/:workId", async (req, reply) => {
     const ctx = resolveContext(req);

@@ -4,13 +4,23 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById } from "./repo.js";
+import { getAwardById, listTenders } from "./repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward } from "./domain.js";
+import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function tenderRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide tender register (paginated) — the FE tenders list page.
+  app.get("/v1/works/tenders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listTenders(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
   // Create pre-tender
   app.post("/v1/works/tenders/pre-tender", async (req, reply) => {
     const ctx = resolveContext(req);
