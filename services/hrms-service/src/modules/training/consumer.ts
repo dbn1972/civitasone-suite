@@ -1,3 +1,4 @@
+import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
