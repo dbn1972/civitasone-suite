@@ -477,9 +477,10 @@ module.exports = {
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
         // AWS_ENV supplies QUEUE_DRIVER=sqs for catalogue CQRS publishes.
-        // Do NOT set REDIS_URL: @fastify/rate-limit RedisStore needs ioredis
-        // and crashes on the Cache redis client (defineCommand).
+        // Force-clear REDIS_URL: PM2 inherits the shell env; a host REDIS_URL
+        // enables the broken `{ url }` rate-limit store (defineCommand crash).
         ...AWS_ENV,
+        REDIS_URL: "",
         DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
         QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
