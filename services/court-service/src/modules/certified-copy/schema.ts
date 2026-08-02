@@ -38,6 +38,12 @@ export const certifiedCopies = courtSchema.table("certified_copies", {
   // BigInt PAISE — server-authoritative fee.
   feeMinor:         bigint("fee_minor", { mode: "bigint" }).notNull().default(0n),
   feeSource:        varchar("fee_source", { length: 8 }),
+  // Payment proof for the requested → fee_paid transition (§30 integrity):
+  // paymentRef is the gateway/challan reference; receiptMinor is the RECEIPTED
+  // amount (BigInt PAISE), asserted equal to feeMinor by the consumer before
+  // the transition is allowed (see domain.ts assertReceiptMatchesFee).
+  paymentRef:       varchar("payment_ref", { length: 64 }),
+  receiptMinor:     bigint("receipt_minor", { mode: "bigint" }),
   status:           varchar("status", { length: 16 }).notNull().default("requested"),
   requestedBy:      uuid("requested_by"),
   issuedBy:         uuid("issued_by"),

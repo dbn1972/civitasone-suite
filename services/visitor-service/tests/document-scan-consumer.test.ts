@@ -124,7 +124,7 @@ function freshQueue(): MemoryQueue {
   return queue;
 }
 
-async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown, waitMs = 20): Promise<void> {
+async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown, waitMs = 50): Promise<void> {
   await queue.publish(topic, {
     type: topic,
     tenantId: TENANT,
@@ -159,8 +159,8 @@ describe("scanProcess", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(performOcrMock).toHaveBeenCalledTimes(1);
-    // insert: ocrResults
-    expect(fakeTx.insert).toHaveBeenCalledTimes(1);
+    // insert: scan_session (Task Q-95.3 — moved off the upload route) + ocrResults
+    expect(fakeTx.insert).toHaveBeenCalledTimes(2);
     // enqueue: scanCompleted + digilockerVerify (aadhaar is supported)
     expect(enqueueMock).toHaveBeenCalledTimes(2);
   });

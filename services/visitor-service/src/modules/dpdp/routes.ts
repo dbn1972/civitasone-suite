@@ -4,22 +4,29 @@
  * Requirement 18.4 — Right to Erasure:
  *   POST /v1/visitor/dpdp/erasure-requests
  *   Accepts a visitor reference (visitorRef) or phone number (visitorPhone),
- *   marks all matching visit_requests with `erasure_requested_at = now()`,
- *   sends a NOTIFICATION_SEND confirmation to the visitor, and returns 202
+ *   publishes a `dpdpErasureRequest` command that marks all matching
+ *   visit_requests with `erasure_requested_at = now()` and sends a
+ *   NOTIFICATION_SEND confirmation to the visitor, and returns 202
  *   Accepted. Actual PII deletion happens within 72h via a scheduled purge
  *   worker (task 20.2).
+ *
+ * Task Q-95.2: the erasure-marking UPDATE itself moved off the synchronous
+ * route handler and onto the queue -> consumer CQRS convention (see
+ * ./commands.ts for why this is safe against the 72h SLA). `recordsMarked`
+ * in the response is a best-effort, read-only preview count computed here
+ * (RLS-scoped, no write) so the caller still gets immediate feedback; the
+ * consumer is the source of truth for the actual mutation.
  *
  * Access: dpo (data protection officer), tenant_admin, super_admin.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, and, or, isNull, type SQL } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { eq, and, or, isNull, type SQL } from "drizzle-orm";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
 import { visitRequests } from "../visit-request/schema.js";
-import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import * as commands from "./commands.js";
 
 const ERASURE_ROLES = ["dpo", "tenant_admin", "super_admin"];
 
@@ -41,71 +48,41 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ERASURE_ROLES);
 
     const body = erasureRequestBody.parse(req.body);
-    const now = new Date();
     const erasureId = randomUUID();
 
     // Build the WHERE condition to find matching visit requests for this tenant.
     // Match by tracking_ref (visitorRef) or visitor_phone (visitorPhone).
-    // Only mark rows that have NOT already been marked for erasure.
+    // Only count rows that have NOT already been marked for erasure — mirrors
+    // the consumer's eligibility guard exactly.
     const conditions: SQL[] = [];
-    if (body.visitorRef) {
-      conditions.push(eq(visitRequests.trackingRef, body.visitorRef));
-    }
-    if (body.visitorPhone) {
-      conditions.push(eq(visitRequests.visitorPhone, body.visitorPhone));
-    }
+    if (body.visitorRef) conditions.push(eq(visitRequests.trackingRef, body.visitorRef));
+    if (body.visitorPhone) conditions.push(eq(visitRequests.visitorPhone, body.visitorPhone));
+    const matchCondition = conditions.length === 1 ? conditions[0]! : or(...conditions)!;
 
-    // Perform the update within a transaction: mark matching rows + enqueue notification
-    const result = await db.transaction(async (tx) => {
-      const matchCondition = conditions.length === 1 ? conditions[0]! : or(...conditions)!;
+    // Read-only preview count (RLS-scoped) — no write happens here.
+    const previewRows = await scopedRead((tx) => tx
+      .select({ id: visitRequests.id })
+      .from(visitRequests)
+      .where(
+        and(
+          eq(visitRequests.tenantId, ctx.tenantId),
+          matchCondition,
+          isNull(visitRequests.erasureRequestedAt),
+        ),
+      ));
+    const recordsMarked = previewRows.length;
 
-      const updated = await tx
-        .update(visitRequests)
-        .set({
-          erasureRequestedAt: now,
-          updatedAt: now,
-          updatedBy: ctx.actorId,
-        })
-        .where(
-          and(
-            eq(visitRequests.tenantId, ctx.tenantId),
-            matchCondition,
-            isNull(visitRequests.erasureRequestedAt),
-          ),
-        )
-        .returning({ id: visitRequests.id, visitorPhone: visitRequests.visitorPhone });
-
-      // Send NOTIFICATION_SEND confirmation to the visitor (Requirement 18.4)
-      // Use the first matched record's phone as the recipient, or the provided phone.
-      const recipientPhone = updated[0]?.visitorPhone ?? body.visitorPhone;
-      if (recipientPhone) {
-        await enqueue(tx, {
-          topic: NOTIFICATION_SEND,
-          eventType: NOTIFICATION_SEND,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: buildNotificationPayload({
-            eventType: "visitor.dpdp.erasure_confirmed",
-            recipient: recipientPhone,
-            channel: "sms",
-            variables: {
-              erasureId,
-              requestedAt: now.toISOString(),
-              message: "Your personal data erasure request has been accepted and will be processed within 72 hours.",
-            },
-          }),
-        });
-      }
-
-      return { count: updated.length };
+    await commands.dpdpErasureRequest(ctx, {
+      erasureId,
+      ...(body.visitorRef !== undefined ? { visitorRef: body.visitorRef } : {}),
+      ...(body.visitorPhone !== undefined ? { visitorPhone: body.visitorPhone } : {}),
     });
 
     return reply.code(202).send({
       data: {
         erasureId,
         status: "accepted",
-        recordsMarked: result.count,
+        recordsMarked,
         message: "Erasure request accepted. PII will be removed within 72 hours.",
       },
     });

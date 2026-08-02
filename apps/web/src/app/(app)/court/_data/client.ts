@@ -19,7 +19,9 @@ import type {
   CaseStatus,
   CauseListItem,
   CauseListRef,
+  CertifiedCopy,
   ConfigEntry,
+  CopyStatus,
   CourtCase,
   CourtOrder,
   Hearing,
@@ -82,6 +84,11 @@ export async function fetchCaseOrders(caseId: string): Promise<CourtOrder[]> {
 
 export async function fetchCaseHearings(caseId: string): Promise<Hearing[]> {
   const out = await get<{ items?: Hearing[] }>(`v1/court/cases/${caseId}/hearings`);
+  return out.items ?? [];
+}
+
+export async function fetchCaseCertifiedCopies(caseId: string): Promise<CertifiedCopy[]> {
+  const out = await get<{ items?: CertifiedCopy[] }>(`v1/court/cases/${caseId}/certified-copies`);
   return out.items ?? [];
 }
 
@@ -228,6 +235,61 @@ export async function recallOrder(
 ): Promise<void> {
   await send("PATCH", `v1/court/orders/${orderId}/recall`, {
     body: { recallReason: input.recallReason, expectedVersion: input.expectedVersion },
+  });
+}
+
+// ─── Certified copies (§30) ──────────────────────────────────────────────────
+
+/** Apply for a certified copy of an order / judgment / case document. */
+export async function requestCertifiedCopy(
+  caseId: string,
+  input: {
+    orderId?: string;
+    documentRef?: string;
+    applicantName?: string;
+    copiesCount?: number;
+    urgent?: boolean;
+  },
+): Promise<{ copyId?: string }> {
+  const out = await send<{ copyId?: string }>("POST", `v1/court/cases/${caseId}/certified-copies`, {
+    body: {
+      ...(input.orderId ? { orderId: input.orderId } : {}),
+      ...(input.documentRef ? { documentRef: input.documentRef } : {}),
+      ...(input.applicantName ? { applicantName: input.applicantName } : {}),
+      copiesCount: input.copiesCount ?? 1,
+      ...(input.urgent ? { urgent: true } : {}),
+    },
+  });
+  return out;
+}
+
+/**
+ * Transition a certified copy (advance / issue / reject). Moving to
+ * `fee_paid` REQUIRES `paymentRef` + `receiptMinor` — the service rejects a
+ * bare status flip with no proof the fee was actually collected (§30
+ * integrity), and separately asserts the receipted amount matches the
+ * server-computed fee.
+ */
+export async function transitionCertifiedCopy(
+  copyId: string,
+  input: {
+    target: CopyStatus;
+    expectedVersion: number;
+    paymentRef?: string;
+    receiptMinor?: string | number;
+    deliveryMode?: string;
+    remarks?: string;
+  },
+): Promise<void> {
+  await send("PATCH", `v1/court/certified-copies/${copyId}/status`, {
+    body: {
+      target: input.target,
+      expectedVersion: input.expectedVersion,
+      ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
+      ...(input.receiptMinor !== undefined ? { receiptMinor: input.receiptMinor } : {}),
+      ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
+      ...(input.remarks ? { remarks: input.remarks } : {}),
+    },
   });
 }
 

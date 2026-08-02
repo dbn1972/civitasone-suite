@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canTransition, assertTransition, isTerminal, deriveCopyId, computeCopyFeeMinor,
+  assertReceiptMatchesFee,
 } from "../src/modules/certified-copy/domain.js";
 
 describe("certified-copy domain — state machine", () => {
@@ -59,5 +60,23 @@ describe("certified-copy domain — computeCopyFeeMinor", () => {
 
   it("handles a single copy with no surcharge", () => {
     expect(computeCopyFeeMinor(500n, 1, false, 0n)).toBe(500n);
+  });
+});
+
+describe("certified-copy domain — assertReceiptMatchesFee (§30 payment proof)", () => {
+  it("does not throw when the receipted amount equals the fee", () => {
+    expect(() => assertReceiptMatchesFee(1500n, 1500n)).not.toThrow();
+  });
+
+  it("throws RECEIPT_AMOUNT_MISMATCH when the receipt is short", () => {
+    expect(() => assertReceiptMatchesFee(1500n, 1000n)).toThrow(/RECEIPT_AMOUNT_MISMATCH/);
+  });
+
+  it("throws RECEIPT_AMOUNT_MISMATCH when the receipt overshoots the fee", () => {
+    expect(() => assertReceiptMatchesFee(1500n, 2000n)).toThrow(/RECEIPT_AMOUNT_MISMATCH/);
+  });
+
+  it("treats zero fee and zero receipt as a match (no false positive)", () => {
+    expect(() => assertReceiptMatchesFee(0n, 0n)).not.toThrow();
   });
 });

@@ -35,6 +35,8 @@ function serializeCopy(r: CertifiedCopyRow, revealPii: boolean): Record<string, 
     urgent:        r.urgent,
     feeMinor:      r.feeMinor.toString(), // BigInt → string (not JSON-serialisable)
     feeSource:     r.feeSource,
+    paymentRef:    r.paymentRef,
+    receiptMinor:  r.receiptMinor === null ? null : r.receiptMinor.toString(),
     status:        r.status,
     requestedBy:   r.requestedBy,
     issuedBy:      r.issuedBy,

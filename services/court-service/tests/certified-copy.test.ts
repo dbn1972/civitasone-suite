@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 
 const processedIds = new Set<string>();
-let currentCopy: { status: string; version: number } | undefined;
+let currentCopy: { status: string; version: number; feeMinor: bigint } | undefined;
 // Per-key config values consulted by getConfigValueOnTx (namespace "copy_fee").
 let configValues: Record<string, unknown> = {};
 
@@ -82,7 +82,7 @@ function transitionMsg(
   copyId: string,
   target: string,
   expectedVersion: number,
-  opts: { deliveryMode?: string; remarks?: string } = {},
+  opts: { deliveryMode?: string; remarks?: string; paymentRef?: string; receiptMinor?: string | number } = {},
   messageId = randomUUID(),
 ) {
   return {
@@ -179,18 +179,50 @@ describe("certified-copy consumer — request + server-authoritative fee", () =>
 describe("certified-copy consumer — transition state machine", () => {
   beforeEach(() => { processedIds.clear(); currentCopy = undefined; configValues = {}; vi.clearAllMocks(); });
 
-  it("advances a requested copy to fee_paid (version-guarded) and emits transitioned", async () => {
-    currentCopy = { status: "requested", version: 1 };
+  it("advances a requested copy to fee_paid with matching payment proof and emits transitioned", async () => {
+    currentCopy = { status: "requested", version: 1, feeMinor: 1500n };
     const { register, deliver } = makeHarness();
     registerCertifiedCopyConsumers(register);
-    await deliver("court.copy.transition", transitionMsg("cp1", "fee_paid", 1));
+    await deliver(
+      "court.copy.transition",
+      transitionMsg("cp1", "fee_paid", 1, { paymentRef: "CHALLAN-1", receiptMinor: 1500 }),
+    );
     expect(versionedUpdate).toHaveBeenCalledTimes(1);
+    const args = (versionedUpdate as ReturnType<typeof vi.fn>).mock.calls[0]![2] as { set: Record<string, unknown> };
+    expect(args.set.paymentRef).toBe("CHALLAN-1");
+    expect(args.set.receiptMinor).toBe(1500n);
     const topics = (enqueue as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[1] as { topic: string }).topic);
     expect(topics).toContain("court.copy.transitioned");
   });
 
+  it("rejects a fee_paid transition whose receiptMinor does not match the recorded fee (amount mismatch)", async () => {
+    currentCopy = { status: "requested", version: 1, feeMinor: 1500n };
+    const { register, deliver } = makeHarness();
+    registerCertifiedCopyConsumers(register);
+    await expect(
+      deliver(
+        "court.copy.transition",
+        transitionMsg("cp1", "fee_paid", 1, { paymentRef: "CHALLAN-1", receiptMinor: 1000 }),
+      ),
+    ).rejects.toThrow(/RECEIPT_AMOUNT_MISMATCH/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fee_paid transition with a malformed receiptMinor (poison message)", async () => {
+    currentCopy = { status: "requested", version: 1, feeMinor: 1500n };
+    const { register, deliver } = makeHarness();
+    registerCertifiedCopyConsumers(register);
+    await expect(
+      deliver(
+        "court.copy.transition",
+        transitionMsg("cp1", "fee_paid", 1, { paymentRef: "CHALLAN-1", receiptMinor: "-5" }),
+      ),
+    ).rejects.toThrow(/INVALID_RECEIPT_AMOUNT/);
+    expect(versionedUpdate).not.toHaveBeenCalled();
+  });
+
   it("issuing a prepared copy stamps issuedBy/issuedAt and deliveryMode", async () => {
-    currentCopy = { status: "prepared", version: 4 };
+    currentCopy = { status: "prepared", version: 4, feeMinor: 1500n };
     const { register, deliver } = makeHarness();
     registerCertifiedCopyConsumers(register);
     await deliver("court.copy.transition", transitionMsg("cp1", "issued", 4, { deliveryMode: "post" }));
@@ -202,7 +234,7 @@ describe("certified-copy consumer — transition state machine", () => {
   });
 
   it("rejects an illegal transition (requested → issued)", async () => {
-    currentCopy = { status: "requested", version: 1 };
+    currentCopy = { status: "requested", version: 1, feeMinor: 1500n };
     const { register, deliver } = makeHarness();
     registerCertifiedCopyConsumers(register);
     await expect(deliver("court.copy.transition", transitionMsg("cp1", "issued", 1)))
@@ -211,11 +243,15 @@ describe("certified-copy consumer — transition state machine", () => {
   });
 
   it("rejects a stale optimistic-lock token", async () => {
-    currentCopy = { status: "requested", version: 5 };
+    currentCopy = { status: "requested", version: 5, feeMinor: 1500n };
     const { register, deliver } = makeHarness();
     registerCertifiedCopyConsumers(register);
-    await expect(deliver("court.copy.transition", transitionMsg("cp1", "fee_paid", 1)))
-      .rejects.toThrow(/VERSION_CONFLICT/);
+    await expect(
+      deliver(
+        "court.copy.transition",
+        transitionMsg("cp1", "fee_paid", 1, { paymentRef: "CHALLAN-1", receiptMinor: 1500 }),
+      ),
+    ).rejects.toThrow(/VERSION_CONFLICT/);
     expect(versionedUpdate).not.toHaveBeenCalled();
   });
 
@@ -223,10 +259,17 @@ describe("certified-copy consumer — transition state machine", () => {
     const { register, deliver } = makeHarness();
     registerCertifiedCopyConsumers(register);
     currentCopy = undefined;
-    await expect(deliver("court.copy.transition", transitionMsg("nope", "fee_paid", 1)))
-      .rejects.toThrow(/COPY_NOT_FOUND/);
-    currentCopy = { status: "fee_paid", version: 2 };
-    await deliver("court.copy.transition", transitionMsg("cp1", "fee_paid", 2));
+    await expect(
+      deliver(
+        "court.copy.transition",
+        transitionMsg("nope", "fee_paid", 1, { paymentRef: "CHALLAN-1", receiptMinor: 1500 }),
+      ),
+    ).rejects.toThrow(/COPY_NOT_FOUND/);
+    currentCopy = { status: "fee_paid", version: 2, feeMinor: 1500n };
+    await deliver(
+      "court.copy.transition",
+      transitionMsg("cp1", "fee_paid", 2, { paymentRef: "CHALLAN-1", receiptMinor: 1500 }),
+    );
     expect(versionedUpdate).not.toHaveBeenCalled();
   });
 });

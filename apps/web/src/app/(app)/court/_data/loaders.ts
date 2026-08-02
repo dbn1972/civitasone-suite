@@ -19,7 +19,9 @@ import type {
   CaseAnalytics,
   CaseParty,
   CaseStatus,
+  CertifiedCopy,
   ConfigEntry,
+  CopyStatus,
   CourtCase,
   CourtCaseDetail,
   CourtOrder,
@@ -138,6 +140,34 @@ function mapHearing(o: Record<string, unknown>): Hearing {
   };
 }
 
+function strOrNullNum(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  return typeof v === "string" ? v : String(v);
+}
+
+function mapCertifiedCopy(o: Record<string, unknown>): CertifiedCopy {
+  return {
+    id: str(o.id),
+    caseId: str(o.caseId),
+    orderId: strOrNull(o.orderId),
+    documentRef: strOrNull(o.documentRef),
+    applicantName: strOrNull(o.applicantName),
+    copiesCount: num(o.copiesCount, 1),
+    urgent: bool(o.urgent),
+    feeMinor: strOrNullNum(o.feeMinor) ?? "0",
+    feeSource: strOrNull(o.feeSource),
+    paymentRef: strOrNull(o.paymentRef),
+    receiptMinor: strOrNullNum(o.receiptMinor),
+    status: str(o.status, "requested") as CopyStatus,
+    requestedBy: strOrNull(o.requestedBy),
+    issuedBy: strOrNull(o.issuedBy),
+    issuedAt: strOrNull(o.issuedAt),
+    deliveryMode: strOrNull(o.deliveryMode),
+    remarks: strOrNull(o.remarks),
+    version: num(o.version, 1),
+  };
+}
+
 function mapConfig(payload: unknown): ConfigEntry[] {
   return pickItems(payload).map((o) => ({
     id: str(o.id),
@@ -198,6 +228,18 @@ export function getCaseHearings(caseId: string): Promise<LoaderResult<Hearing[]>
     {
       telemetryKey: "court.case.hearings",
       mapResponse: (p) => pickItems(p).map(mapHearing),
+    },
+  );
+}
+
+/** A case's certified-copy applications (§30), newest first. */
+export function getCaseCertifiedCopies(caseId: string): Promise<LoaderResult<CertifiedCopy[]>> {
+  return fetchJson<unknown, CertifiedCopy[]>(
+    `/api/v1/court/cases/${encodeURIComponent(caseId)}/certified-copies`,
+    [],
+    {
+      telemetryKey: "court.case.certifiedCopies",
+      mapResponse: (p) => pickItems(p).map(mapCertifiedCopy),
     },
   );
 }

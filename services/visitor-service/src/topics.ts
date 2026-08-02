@@ -83,6 +83,13 @@ export const COMMANDS = {
   // Config/metadata keystone — nothing hardcoded (tenant-scoped policy engine)
   setConfig:                   "visitor.config.set",
   deactivateConfig:            "visitor.config.deactivate",
+
+  // Location / Area (reference/config data — queue-first CQRS, Task Q-95.1)
+  locationCreate:               "visitor.location.create",
+  areaCreate:                   "visitor.area.create",
+
+  // DPDP (Task Q-95.2)
+  dpdpErasureRequest:           "visitor.dpdp.erasure_request",
 } as const;
 
 export const EVENTS = {
@@ -161,6 +168,13 @@ export const EVENTS = {
   // Config/metadata keystone lifecycle
   configSet:                   "visitor.config.set_done",
   configDeactivated:           "visitor.config.deactivated",
+
+  // Location / Area lifecycle
+  locationCreated:              "visitor.location.created",
+  areaCreated:                  "visitor.area.created",
+
+  // DPDP lifecycle
+  dpdpErasureAccepted:          "visitor.dpdp.erasure_accepted",
 } as const;
 
 export const CONSUMED_EVENTS = {

@@ -145,7 +145,9 @@ vi.mock("@civitasone/auth", async (importOriginal) => {
 vi.mock("../src/modules/case-registry/repo.js", () => ({
   listCases: async () => mockState.queryResult,
   getCaseById: async () => mockState.queryResult[0] ?? null,
-  getCasePartiesByCaseId: async () => mockState.queryResult,
+  // A spy (not a bare arrow) so tests can assert the tenant-scoping args the
+  // route passes — regression guard for the tenantId filter fix.
+  getCasePartiesByCaseId: vi.fn(async () => mockState.queryResult),
   listOverdueCases: async () => mockState.queryResult,
   caseAnalytics: async () => mockState.queryResult[0] ?? { instituted: 0, disposed: 0, pending: 0 },
   pendencySummary: async () => mockState.queryResult,
@@ -474,6 +476,14 @@ describe("Case Registry Routes", () => {
     it("returns case when found", async () => {
       const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
+    });
+
+    it("scopes the parties lookup to the caller's tenant (tenantId filter regression guard)", async () => {
+      const { getCasePartiesByCaseId } = await import("../src/modules/case-registry/repo.js");
+      (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockClear();
+      const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+      expect(getCasePartiesByCaseId).toHaveBeenCalledWith(TENANT_ID, CASE_ID);
     });
 
     it("returns 404 when not found", async () => {
@@ -1802,7 +1812,7 @@ describe("Certified Copy Routes", () => {
     mockState.queryResult = [{
       id: COPY_ID, tenantId: TENANT_ID, caseId: CASE_ID, orderId: ORDER_ID,
       documentRef: "DOC-001", applicantNameEnc: "John Doe", copiesCount: 2,
-      urgent: false, feeMinor: BigInt(500), feeSource: "manual", status: "requested",
+      urgent: false, feeMinor: BigInt(500), feeSource: "manual", paymentRef: null, receiptMinor: null, status: "requested",
       requestedBy: ACTOR_ID, issuedBy: null, issuedAt: null, deliveryMode: "in_person",
       remarks: null, version: 1, createdAt: new Date(), updatedAt: new Date(),
     }];

@@ -169,4 +169,42 @@ describe("tenant isolation (RLS) — visit_requests / digital_passes / check_ins
     expect(ids).toContain(tenantA.visitRequest);
     expect(ids).not.toContain(tenantB.visitRequest);
   });
+
+  // Reads being tenant-scoped doesn't guarantee writes are — RLS policies can
+  // (mis)configure USING without a matching WITH CHECK, silently letting a
+  // cross-tenant UPDATE/DELETE through even though SELECT is locked down.
+  // These two prove the write path is equally enforced by Postgres itself
+  // (visitor_svc is NOBYPASSRLS — see file header), not just the app layer.
+  it("visit_requests: tenant A's UPDATE against tenant B's row id affects zero rows", async () => {
+    const result = await runWithTenant(tenantA.tenant, () =>
+      db.transaction((tx) =>
+        tx
+          .update(visitRequests)
+          .set({ rejectionReason: "cross-tenant-write-attempt", updatedBy: tenantA.actor })
+          .where(eq(visitRequests.id, tenantB.visitRequest))
+          .returning({ id: visitRequests.id }),
+      ),
+    );
+    expect(result).toHaveLength(0);
+
+    const rowsAsB = await runWithTenant(tenantB.tenant, () =>
+      scopedRead((tx) => tx.select().from(visitRequests).where(eq(visitRequests.id, tenantB.visitRequest))),
+    );
+    expect(rowsAsB).toHaveLength(1);
+    expect(rowsAsB[0]?.rejectionReason).not.toBe("cross-tenant-write-attempt");
+  });
+
+  it("digital_passes: tenant A's DELETE against tenant B's row id affects zero rows", async () => {
+    const result = await runWithTenant(tenantA.tenant, () =>
+      db.transaction((tx) =>
+        tx.delete(digitalPasses).where(eq(digitalPasses.id, tenantB.digitalPass)).returning({ id: digitalPasses.id }),
+      ),
+    );
+    expect(result).toHaveLength(0);
+
+    const rowsAsB = await runWithTenant(tenantB.tenant, () =>
+      scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, tenantB.digitalPass))),
+    );
+    expect(rowsAsB).toHaveLength(1);
+  });
 });

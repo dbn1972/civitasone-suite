@@ -166,6 +166,20 @@ describe("L0 — Discovery guards (a broken probe must not pass silently)", () =
   });
 });
 
+
+describe("L0 — Static worker declarations (court / visitor)", () => {
+  it("court worker uses dist/worker-main.js in ecosystem.config.js", () => {
+    const eco = readFileSync(join(REPO_ROOT, "ecosystem.config.js"), "utf8");
+    const m = eco.match(/worker\("court"[^)]*\)/);
+    expect(m?.[0]).toContain("dist/worker-main.js");
+  });
+
+  it("visitor worker is declared in ecosystem.config.js", () => {
+    const eco = readFileSync(join(REPO_ROOT, "ecosystem.config.js"), "utf8");
+    expect(eco).toMatch(/worker\("visitor"/);
+  });
+});
+
 describe("L0 — Check 1: port is bound (catches the pm2-online lie)", () => {
   it("no service is newly unbound", () => {
     if (listeningPorts.size === 0) return; // guarded above

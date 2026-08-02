@@ -16,7 +16,6 @@
  * Requirements validated: 6.1, 6.4, 6.6
  */
 import { randomUUID } from "node:crypto";
-import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { deviceAuth } from "../device-registry/device-auth.js";
@@ -62,8 +61,16 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
   /**
    * POST /v1/visitor/scans/upload — Upload document image (multipart).
    *
-   * Device auth required. Validates image → uploads to S3 → inserts
-   * scan_session → publishes scanProcess command → returns 202.
+   * Device auth required. Validates image → uploads to S3 (sync — the
+   * caller needs a durable storage key before anything else can happen) →
+   * publishes scanProcess command → returns 202. The `scan_session` row
+   * insert moved into the consumer (Task Q-95.3): it was a pure DB write
+   * with no downstream dependency on this route call other than "give the
+   * client a session id to poll", so it is created by the same consumer
+   * transaction that immediately flips it to `processing`, following the
+   * queue-first convention used by every other mutating module. A GET
+   * against the session id before the consumer has run returns 404, same
+   * as every other CQRS-write module in this service (e.g. visit-request).
    *
    * Requirements: 6.1, 6.2
    */
@@ -93,28 +100,12 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
     const sessionId = randomUUID();
     const storageKey = `scans/${deviceCtx.tenantId}/${sessionId}/${file.filename ?? "document"}`;
 
-    // Upload to S3/MinIO
+    // Upload to S3/MinIO (kept synchronous — the client needs a durable
+    // storage key to exist before the async pipeline can do anything useful).
     await uploadToStorage(storageKey, buffer, file.mimetype);
 
-    // Insert scan session (status: uploading, expires in 1 hour)
-    const { db } = await import("../../shared/db.js");
-    const { scanSessions } = await import("./schema.js");
-
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
-
-    await runWithTenant(deviceCtx.tenantId, () => db.transaction((tx) => tx.insert(scanSessions).values({
-      id: sessionId,
-      tenantId: deviceCtx.tenantId,
-      deviceId: deviceCtx.deviceId,
-      status: "uploading",
-      imageStorageKey: storageKey,
-      imageDeleted: false,
-      imageExpiresAt: expiresAt,
-      createdAt: now,
-    })));
-
-    // Publish scanProcess command → consumer handles OCR
+    // Publish scanProcess command → consumer inserts the scan_session row
+    // and handles OCR (Task Q-95.3: session insert moved off this route).
     const ctx = {
       tenantId: deviceCtx.tenantId,
       actorId: deviceCtx.deviceId,

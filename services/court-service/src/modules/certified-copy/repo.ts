@@ -15,8 +15,12 @@ export async function insertCopy(tx: Writer, row: CertifiedCopyInsert): Promise<
 
 export async function getCopyForUpdate(
   tx: Writer, tenantId: string, id: string,
-): Promise<{ status: string; version: number } | undefined> {
-  const rows = await tx.select({ status: certifiedCopies.status, version: certifiedCopies.version })
+): Promise<{ status: string; version: number; feeMinor: bigint } | undefined> {
+  const rows = await tx.select({
+    status: certifiedCopies.status,
+    version: certifiedCopies.version,
+    feeMinor: certifiedCopies.feeMinor,
+  })
     .from(certifiedCopies)
     .where(and(eq(certifiedCopies.tenantId, tenantId), eq(certifiedCopies.id, id)))
     .limit(1);

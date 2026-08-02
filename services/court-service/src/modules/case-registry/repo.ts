@@ -111,6 +111,13 @@ export async function getCaseById(tenantId: string, id: string): Promise<CaseRow
   });
 }
 
-export async function getCasePartiesByCaseId(caseId: string): Promise<CasePartyRow[]> {
-  return scopedRead((tx) => tx.select().from(caseParties).where(eq(caseParties.caseId, caseId)));
+/**
+ * Tenant-scoped parties lookup. The tenant predicate is explicit (defense in
+ * depth alongside RLS): without it, a caseId belonging to another tenant
+ * could leak that tenant's parties (PII) if RLS were ever misconfigured or
+ * bypassed on this read path.
+ */
+export async function getCasePartiesByCaseId(tenantId: string, caseId: string): Promise<CasePartyRow[]> {
+  return scopedRead((tx) => tx.select().from(caseParties)
+    .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId))));
 }

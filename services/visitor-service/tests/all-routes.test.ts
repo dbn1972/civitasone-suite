@@ -34,14 +34,16 @@ const fakeTemplate = { id: FAKE_ID, tenantId: TENANT, name: "VIP Badge", printer
 const fakeScanSession = { id: FAKE_ID, tenantId: TENANT, deviceId: FAKE_ID2, status: "completed", imageStorageKey: "scans/x", imageDeleted: false, createdAt: new Date() };
 const fakeMaterialPass = [{ id: FAKE_ID, passId: FAKE_ID, description: "Laptop", quantity: 1, serialNumber: "SN1" }];
 
-/* ─── Mock location repo ─── */
+/* ─── Mock location repo & commands ─── */
 vi.mock("../src/modules/location/repo.js", () => ({
   listLocations: vi.fn(async () => [fakeLocation]),
   getLocationById: vi.fn(async (_tid: string, id: string) => (id === FAKE_ID ? fakeLocation : null)),
-  createLocation: vi.fn(async () => fakeLocation),
   listAreas: vi.fn(async () => [fakeArea]),
-  createArea: vi.fn(async () => fakeArea),
   listParkingSlots: vi.fn(async () => []),
+}));
+vi.mock("../src/modules/location/commands.js", () => ({
+  locationCreate: vi.fn(async () => fakeAccepted),
+  areaCreate: vi.fn(async () => fakeAccepted),
 }));
 
 /* ─── Mock blacklist repo & commands ─── */
@@ -371,17 +373,19 @@ describe("Location routes — happy paths", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toBeDefined();
   });
-  it("POST /v1/visitor/locations → 201", async () => {
+  it("POST /v1/visitor/locations → 202", async () => {
+    // Task Q-95.1: location create moved onto the queue-first CQRS convention (201 → 202).
     const res = await app.inject({ method: "POST", url: "/v1/visitor/locations", headers: headers(), payload: { name: "New HQ", address: "456 Elm" } });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
   it("GET /v1/visitor/locations/:id/areas → 200", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/visitor/locations/${FAKE_ID}/areas`, headers: headers() });
     expect(res.statusCode).toBe(200);
   });
-  it("POST /v1/visitor/locations/:id/areas → 201", async () => {
+  it("POST /v1/visitor/locations/:id/areas → 202", async () => {
+    // Task Q-95.1: area create moved onto the queue-first CQRS convention (201 → 202).
     const res = await app.inject({ method: "POST", url: `/v1/visitor/locations/${FAKE_ID}/areas`, headers: headers(), payload: { name: "Block B" } });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
   it("GET /v1/visitor/locations/:id/parking → 200", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/visitor/locations/${FAKE_ID}/parking`, headers: headers() });
