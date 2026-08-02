@@ -476,8 +476,8 @@ module.exports = {
         BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
-        REDIS_URL: REDIS,
-        ...AWS_ENV,
+        // Do NOT set REDIS_URL here: gateway rate-limit expects ioredis and the
+        // fleet Cache redis client is not compatible (defineCommand crash).
         DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
         QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
