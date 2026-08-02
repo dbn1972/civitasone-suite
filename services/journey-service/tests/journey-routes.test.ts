@@ -1,5 +1,7 @@
 /**
  * Journey service route-level tests — journeys, steps, triggers, executions.
+ * CQRS: mutations return 202 Accepted and publish a command to the queue;
+ * the consumer (not exercised here) applies the write.
  * Happy paths + 400/401/403/404/409/422.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -14,26 +16,16 @@ const EXECUTION_ID = "dddddddd-1111-4000-8000-000000000001";
 const PROFILE_ID = "eeeeeeee-1111-4000-8000-000000000001";
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   scopedReadMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   journeyFindByIdMock: vi.fn(),
   journeyListMock: vi.fn(),
-  journeyInsertMock: vi.fn(),
-  journeyUpdateMock: vi.fn(),
-  journeySoftDeleteMock: vi.fn(),
   triggerFindByIdMock: vi.fn(),
   triggerListMock: vi.fn(),
-  triggerInsertMock: vi.fn(),
-  triggerUpdateMock: vi.fn(),
-  triggerSoftDeleteMock: vi.fn(),
   stepListByJourneyMock: vi.fn(),
-  stepInsertMock: vi.fn(),
-  stepUpdateStatusMock: vi.fn(),
   execFindByIdMock: vi.fn(),
   execListMock: vi.fn(),
-  execInsertMock: vi.fn(),
-  execUpdateStatusMock: vi.fn(),
-  enqueueMock: vi.fn(),
   cacheGetOrLoadMock: vi.fn(),
   cacheInvalidateMock: vi.fn(),
   cacheMakeKeyMock: vi.fn(),
@@ -46,7 +38,7 @@ vi.mock("../src/shared/db.js", () => ({
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({
-  enqueue: (...a: unknown[]) => H.enqueueMock(...a),
+  enqueue: vi.fn(),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
@@ -55,40 +47,40 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/journeys/repo.js", () => ({
   findById: (...a: unknown[]) => H.journeyFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.journeyListMock(...a),
-  insert: (...a: unknown[]) => H.journeyInsertMock(...a),
-  update: (...a: unknown[]) => H.journeyUpdateMock(...a),
-  softDelete: (...a: unknown[]) => H.journeySoftDeleteMock(...a),
+  insert: vi.fn(),
+  update: vi.fn(),
+  softDelete: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
 vi.mock("../src/modules/triggers/repo.js", () => ({
   findById: (...a: unknown[]) => H.triggerFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.triggerListMock(...a),
-  insert: (...a: unknown[]) => H.triggerInsertMock(...a),
-  update: (...a: unknown[]) => H.triggerUpdateMock(...a),
-  softDelete: (...a: unknown[]) => H.triggerSoftDeleteMock(...a),
+  insert: vi.fn(),
+  update: vi.fn(),
+  softDelete: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
 vi.mock("../src/modules/steps/repo.js", () => ({
   findById: vi.fn(),
   listByJourney: (...a: unknown[]) => H.stepListByJourneyMock(...a),
-  insert: (...a: unknown[]) => H.stepInsertMock(...a),
-  updateStatus: (...a: unknown[]) => H.stepUpdateStatusMock(...a),
+  insert: vi.fn(),
+  updateStatus: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
 vi.mock("../src/modules/executions/repo.js", () => ({
   findById: (...a: unknown[]) => H.execFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.execListMock(...a),
-  insert: (...a: unknown[]) => H.execInsertMock(...a),
-  updateStatus: (...a: unknown[]) => H.execUpdateStatusMock(...a),
+  insert: vi.fn(),
+  updateStatus: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
 }));
 
@@ -137,31 +129,24 @@ beforeEach(() => {
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
   H.cacheInvalidateMock.mockResolvedValue(undefined);
-  H.enqueueMock.mockResolvedValue(undefined);
-  H.journeyInsertMock.mockResolvedValue(undefined);
-  H.journeyUpdateMock.mockResolvedValue(true);
-  H.journeySoftDeleteMock.mockResolvedValue(true);
-  H.triggerInsertMock.mockResolvedValue(undefined);
-  H.triggerUpdateMock.mockResolvedValue(true);
-  H.triggerSoftDeleteMock.mockResolvedValue(true);
-  H.stepInsertMock.mockResolvedValue(undefined);
-  H.execInsertMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
 });
 
 // ── JOURNEYS ──────────────────────────────────────────────────────────────────
 
 describe("POST /v1/journeys (create)", () => {
-  it("201 — creates a journey in draft status", async () => {
+  it("202 — accepts journey creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/journeys",
       headers: auth(), payload: { name: "Onboarding Flow", steps: [{ type: "wait" }] },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.name).toBe("Onboarding Flow");
-    expect(r.json().data.status).toBe("draft");
-    expect(H.journeyInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.journey.create");
     await app.close();
   });
 
@@ -235,15 +220,17 @@ describe("GET /v1/journeys/:id (get single)", () => {
 });
 
 describe("PATCH /v1/journeys/:id (update)", () => {
-  it("200 — updates a draft journey", async () => {
+  it("202 — accepts a draft journey update", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney());
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/journeys/${JOURNEY_ID}`,
       headers: auth(), payload: { name: "Updated Name", version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.updated).toBe(true);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.journey.update");
     await app.close();
   });
 
@@ -270,29 +257,30 @@ describe("PATCH /v1/journeys/:id (update)", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.journeyFindByIdMock.mockResolvedValue(makeJourney());
-    H.journeyUpdateMock.mockResolvedValue(false);
+    H.journeyFindByIdMock.mockResolvedValue(makeJourney({ version: 2 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/journeys/${JOURNEY_ID}`,
       headers: auth(), payload: { name: "X", version: 1 },
     });
     expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
 describe("POST /v1/journeys/:id/activate", () => {
-  it("200 — activates a draft journey with steps", async () => {
+  it("202 — accepts activation of a draft journey with steps", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney());
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/journeys/${JOURNEY_ID}/activate`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("active");
-    expect(H.enqueueMock).toHaveBeenCalled();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.journey.activate");
     await app.close();
   });
 
@@ -331,15 +319,17 @@ describe("POST /v1/journeys/:id/activate", () => {
 });
 
 describe("POST /v1/journeys/:id/pause", () => {
-  it("200 — pauses an active journey", async () => {
+  it("202 — accepts pausing an active journey", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney({ status: "active" }));
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/journeys/${JOURNEY_ID}/pause`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("paused");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.journey.pause");
     await app.close();
   });
 
@@ -356,15 +346,17 @@ describe("POST /v1/journeys/:id/pause", () => {
 });
 
 describe("DELETE /v1/journeys/:id (archive)", () => {
-  it("200 — archives a draft journey", async () => {
+  it("202 — accepts archiving a draft journey", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney());
     const app = await buildApp();
     const r = await app.inject({
       method: "DELETE", url: `/v1/journeys/${JOURNEY_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("archived");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.journey.delete");
     await app.close();
   });
 
@@ -383,16 +375,17 @@ describe("DELETE /v1/journeys/:id (archive)", () => {
 // ── TRIGGERS ──────────────────────────────────────────────────────────────────
 
 describe("POST /v1/journeys/triggers (create)", () => {
-  it("201 — creates a trigger", async () => {
+  it("202 — accepts trigger creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/journeys/triggers",
       headers: auth(),
       payload: { journeyId: JOURNEY_ID, triggerType: "event_based", config: { eventName: "user.signup" } },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.triggerType).toBe("event_based");
-    expect(H.triggerInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.trigger.create");
     await app.close();
   });
 
@@ -404,6 +397,7 @@ describe("POST /v1/journeys/triggers (create)", () => {
       payload: { journeyId: JOURNEY_ID, triggerType: "event_based", config: {} },
     });
     expect(r.statusCode).toBe(400);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -457,7 +451,7 @@ describe("GET /v1/journeys/triggers/:id (get)", () => {
 });
 
 describe("PATCH /v1/journeys/triggers/:id (update)", () => {
-  it("200 — updates trigger", async () => {
+  it("202 — accepts trigger update", async () => {
     H.triggerFindByIdMock.mockResolvedValue(makeTrigger());
     const app = await buildApp();
     const r = await app.inject({
@@ -465,8 +459,10 @@ describe("PATCH /v1/journeys/triggers/:id (update)", () => {
       headers: auth(),
       payload: { status: "paused", version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.updated).toBe(true);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.trigger.update");
     await app.close();
   });
 
@@ -483,8 +479,7 @@ describe("PATCH /v1/journeys/triggers/:id (update)", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.triggerFindByIdMock.mockResolvedValue(makeTrigger());
-    H.triggerUpdateMock.mockResolvedValue(false);
+    H.triggerFindByIdMock.mockResolvedValue(makeTrigger({ version: 2 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/journeys/triggers/${TRIGGER_ID}`,
@@ -492,20 +487,23 @@ describe("PATCH /v1/journeys/triggers/:id (update)", () => {
       payload: { status: "paused", version: 1 },
     });
     expect(r.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
 describe("DELETE /v1/journeys/triggers/:id (soft-delete)", () => {
-  it("200 — soft-deletes trigger", async () => {
+  it("202 — accepts trigger soft-delete", async () => {
     H.triggerFindByIdMock.mockResolvedValue(makeTrigger());
     const app = await buildApp();
     const r = await app.inject({
       method: "DELETE", url: `/v1/journeys/triggers/${TRIGGER_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("inactive");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.trigger.delete");
     await app.close();
   });
 
@@ -550,7 +548,7 @@ describe("GET /v1/journeys/:id/steps (list step executions)", () => {
 });
 
 describe("POST /v1/journeys/steps/execute (execute step)", () => {
-  it("201 — executes a step", async () => {
+  it("202 — accepts step execution", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney({ steps: [{ type: "send_notification" }, { type: "wait" }] }));
     const app = await buildApp();
     const r = await app.inject({
@@ -558,9 +556,10 @@ describe("POST /v1/journeys/steps/execute (execute step)", () => {
       headers: auth(),
       payload: { journeyId: JOURNEY_ID, profileId: PROFILE_ID, stepIndex: 0, stepType: "send_notification" },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.status).toBe("executing");
-    expect(H.stepInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.step.execute");
     await app.close();
   });
 
@@ -637,7 +636,7 @@ describe("GET /v1/journeys/executions/:id (get single)", () => {
 });
 
 describe("POST /v1/journeys/executions/enroll (enroll profile)", () => {
-  it("201 — enrolls a profile in an active journey", async () => {
+  it("202 — accepts enrollment of a profile in an active journey", async () => {
     H.journeyFindByIdMock.mockResolvedValue(makeJourney({ status: "active" }));
     const app = await buildApp();
     const r = await app.inject({
@@ -645,9 +644,10 @@ describe("POST /v1/journeys/executions/enroll (enroll profile)", () => {
       headers: auth(),
       payload: { journeyId: JOURNEY_ID, profileId: PROFILE_ID },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.status).toBe("enrolled");
-    expect(H.execInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const [topic] = H.publishMock.mock.calls[0]!;
+    expect(topic).toBe("journey.execution.enroll");
     await app.close();
   });
 
