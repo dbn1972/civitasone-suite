@@ -1,14 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as enrolmentRepo from "../enrolments/repo.js";
-import { validateAccrual, computeExpiryDate } from "./domain.js";
+import { validateAccrual } from "./domain.js";
 import { canAccrue } from "../enrolments/domain.js";
+import * as commands from "./commands.js";
 
 const INTERNAL_ROLES = ["loyalty_admin", "super_admin", "service_account"];
 const READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
@@ -29,7 +26,6 @@ const accrueBody = z.object({
 });
 
 export async function accrualRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/loyalty/accrue — accrue points to an enrolment
   app.post("/v1/loyalty/accrue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
@@ -54,50 +50,18 @@ export async function accrualRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "VALIDATION_ERROR", validation.error!);
     }
 
-    const id = randomUUID();
-    const now = new Date();
-    // Compute expiry from program config (placeholder: no program lookup for expiry in route — set null)
-    const expiresAt = computeExpiryDate(now, null);
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.accruePoints(ctx, {
         enrolmentId: body.enrolmentId,
-        points: pointsBigInt,
+        points: body.points,
         source: body.source,
         sourceRef: body.sourceRef ?? null,
         txType: body.txType,
-        expiresAt,
-        accrualDate: now,
-        createdBy: ctx.actorId,
-      });
-
-      await enrolmentRepo.adjustBalance(tx, body.enrolmentId, ctx.tenantId, pointsBigInt, pointsBigInt, enrolment.version);
-
-      await enqueue(tx, {
-        topic: EVENTS.pointsAccrued,
-        eventType: EVENTS.pointsAccrued,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { accrualId: id, enrolmentId: body.enrolmentId, points: body.points },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id,
-        enrolmentId: body.enrolmentId,
-        points: body.points.toString(),
-        source: body.source,
-        txType: body.txType,
-        accrualDate: now.toISOString(),
-      },
-    });
+        enrolmentVersion: enrolment.version,
+      }),
+    );
   });
 
-  // GET /v1/loyalty/enrolments/:id/accruals — history for an enrolment
   app.get("/v1/loyalty/enrolments/:id/accruals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -115,7 +79,6 @@ export async function accrualRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
 
-  // GET /v1/loyalty/enrolments/:id/balance — balance summary
   app.get("/v1/loyalty/enrolments/:id/balance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);

@@ -11,7 +11,8 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "worker": "tsx src/worker.ts"
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",
