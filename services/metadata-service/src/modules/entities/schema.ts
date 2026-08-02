@@ -1,5 +1,6 @@
 import { pgSchema, uuid, varchar, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { numberFormats, numberSequences } from "../numbering/schema.js";
+import { formVersions, formPublicEndpoints, formSubmissions } from "../forms/schema.js";
 
 export const metadataSchema = pgSchema("metadata");
 
@@ -128,4 +129,8 @@ export const schema = {
   validationRules,
   formulaDefinitions,
   moduleCompositions,
+  // Forms engine (migration 0004): versioning, public endpoints, captured leads.
+  formVersions,
+  formPublicEndpoints,
+  formSubmissions,
 };
