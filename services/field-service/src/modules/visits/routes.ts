@@ -1,14 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as taskRepo from "../tasks/repo.js";
 import { validateCheckIn, validateCheckOut, calculateDurationMinutes, classifyVisitOutcome } from "./domain.js";
+import * as commands from "./commands.js";
 
 const FIELD_ROLES = ["field_admin", "field_agent", "super_admin"];
 
@@ -42,47 +38,24 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FIELD_ROLES);
     const body = checkInBody.parse(req.body);
 
-    // Validate location data
     const locationError = validateCheckIn({ latitude: body.latitude, longitude: body.longitude });
     if (locationError) {
       throw new HttpError(422, "INVALID_LOCATION", locationError);
     }
 
-    // Verify task exists
     const task = await taskRepo.findById(body.taskId, ctx.tenantId);
     if (!task) {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
 
-    const id = randomUUID();
-    const checkInAt = new Date();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.checkIn(ctx, {
         taskId: body.taskId,
-        agentId: ctx.actorId,
-        checkInLatitude: body.latitude.toString(),
-        checkInLongitude: body.longitude.toString(),
-        checkInAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.visitCheckedIn,
-        eventType: EVENTS.visitCheckedIn,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { visitId: id, taskId: body.taskId, latitude: body.latitude, longitude: body.longitude },
-      });
-    });
-
-    return reply.code(201).send({
-      data: { id, taskId: body.taskId, agentId: ctx.actorId, checkInAt: checkInAt.toISOString() },
-    });
+        latitude: body.latitude,
+        longitude: body.longitude,
+        checkInAt: new Date().toISOString(),
+      }),
+    );
   });
 
   // POST /v1/field/visits/:id/check-out — record check-out
@@ -98,10 +71,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const checkOutAt = new Date();
-    const checkOutError = validateCheckOut(
-      existing.checkInAt?.toISOString() ?? null,
-      checkOutAt.toISOString(),
-    );
+    const checkOutError = validateCheckOut(existing.checkInAt?.toISOString() ?? null, checkOutAt.toISOString());
     if (checkOutError) {
       throw new HttpError(422, "INVALID_CHECKOUT", checkOutError);
     }
@@ -109,34 +79,19 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const durationMinutes = calculateDurationMinutes(existing.checkInAt!.toISOString(), checkOutAt.toISOString());
     const outcome = classifyVisitOutcome(durationMinutes);
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, {
-        checkOutAt,
-        checkOutLatitude: body.latitude?.toString() ?? null,
-        checkOutLongitude: body.longitude?.toString() ?? null,
-        durationMinutes,
-        outcome,
+    return reply.code(202).send(
+      await commands.checkOut(ctx, id, {
+        taskId: existing.taskId,
+        checkOutAt: checkOutAt.toISOString(),
+        latitude: body.latitude ?? null,
+        longitude: body.longitude ?? null,
         notes: body.notes ?? null,
         photos: body.photos,
-        updatedBy: ctx.actorId,
-      }, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "visit has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.visitCheckedOut,
-        eventType: EVENTS.visitCheckedOut,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { visitId: id, taskId: existing.taskId, durationMinutes, outcome },
-      });
-    });
-
-    return reply.send({
-      data: { id, checkOutAt: checkOutAt.toISOString(), durationMinutes, outcome },
-    });
+        durationMinutes,
+        outcome,
+        version: existing.version,
+      }),
+    );
   });
 
   // GET /v1/field/visits/by-task/:taskId — history by task
