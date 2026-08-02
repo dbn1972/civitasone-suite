@@ -6,36 +6,37 @@ import { pino } from "pino";
 import { startRelay } from "./shared/outbox.js";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
-import { COMMANDS, CONSUMED_EVENTS, SERVICE } from "./topics.js";
-import { handleIngestEventBatch } from "./modules/events/consumer.js";
-import { handleComputeSegment } from "./modules/segments/consumer.js";
-import { handleActivateSegment } from "./modules/activations/consumer.js";
-import { handleRaiseDsar } from "./modules/dsar/consumer.js";
+import { SERVICE } from "./topics.js";
+import { registerProfileConsumers } from "./modules/profiles/consumer.js";
+import { registerIdentityConsumers } from "./modules/identity/consumer.js";
+import { registerEventConsumers } from "./modules/events/consumer.js";
+import { registerSegmentConsumers } from "./modules/segments/consumer.js";
+import { registerStewardConsumers } from "./modules/steward/consumer.js";
+import { registerActivationConsumers } from "./modules/activations/consumer.js";
+import { registerDsarConsumers } from "./modules/dsar/consumer.js";
 import { handleCrmContactCreated, handleCrmContactUpdated } from "./modules/identity/crm-consumer.js";
+import { tenantScoped } from "./shared/tenant-queue.js";
+import { CONSUMED_EVENTS } from "./topics.js";
 
 const log = pino({ name: "cdp-worker" });
 
-// Start outbox relay (positional: db, queue, intervalMs, service)
+registerProfileConsumers(queue);
+registerIdentityConsumers(queue);
+registerEventConsumers(queue);
+registerSegmentConsumers(queue);
+registerStewardConsumers(queue);
+registerActivationConsumers(queue);
+registerDsarConsumers(queue);
+
+// Cross-service CRM events
+const scoped = tenantScoped(queue);
+scoped.subscribe(CONSUMED_EVENTS.crmContactCreated, handleCrmContactCreated);
+scoped.subscribe(CONSUMED_EVENTS.crmContactUpdated, handleCrmContactUpdated);
+
+await queue.start();
 const relay = startRelay(db, queue, 1000, SERVICE);
 
-// Own commands. Every handler calls markProcessed() as the first statement in its
-// transaction, so a redelivery is a no-op rather than a duplicate write.
-queue.subscribe<unknown>(COMMANDS.ingestEventBatch, handleIngestEventBatch);
-queue.subscribe<unknown>(COMMANDS.computeSegment, handleComputeSegment);
-queue.subscribe<unknown>(COMMANDS.activateSegment, handleActivateSegment);
-queue.subscribe<unknown>(COMMANDS.raiseDsar, handleRaiseDsar);
-
-// Cross-service events owned by crm-service. Typed as `unknown` deliberately: the payload
-// is validated at runtime inside the handler because this service does not own the shape.
-queue.subscribe<unknown>(CONSUMED_EVENTS.crmContactCreated, handleCrmContactCreated);
-queue.subscribe<unknown>(CONSUMED_EVENTS.crmContactUpdated, handleCrmContactUpdated);
-
-void queue.start().catch((err: unknown) => {
-  log.error({ err }, "queue consumer failed to start");
-  process.exit(1);
-});
-
-log.info("cdp-service worker: outbox relay + command consumers running");
+log.info("cdp-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
