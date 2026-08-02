@@ -186,6 +186,23 @@ function piiKey(envName, fileSlug, serviceName) {
   return `civitasone-${fileSlug}-pii-dev-key-not-for-prod`;
 }
 
+
+// Scanner (BYPASSRLS) DSNs for court/visitor outbox relay + maintenance scans.
+// Must be distinct from the service DATABASE_URL in production — FORCE RLS on
+// _outbox.messages would otherwise starve startRelay/startOutboxPurge.
+function scannerDbUrl(scannerUser, dbName, envName) {
+  const injected = process.env[envName];
+  if (IS_PROD) {
+    if (injected && injected.length > 0) return injected;
+    throw new Error(
+      `[ecosystem] ${envName} is required in production for ${scannerUser}. ` +
+        `Inject the BYPASSRLS scanner DSN from the secret manager. Refusing to start.`,
+    );
+  }
+  if (injected && injected.length > 0) return injected;
+  return `postgres://${scannerUser}:${scannerUser}_dev_pw@${DB_HOST}/${dbName}`;
+}
+
 const COURT_PII_KEY = piiKey("COURT_PII_KEY", "court", "court-service");
 const MEETING_PII_KEY = piiKey("MEETING_PII_KEY", "meeting", "meeting-service");
 const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
@@ -343,8 +360,8 @@ module.exports = {
     // as soon as the module finished evaluating, and pm2's autorestart looped
     // it forever (restarts climbing, status "waiting restart"). Point pm2 at
     // the same compiled entrypoint the "pnpm worker" script uses.
-    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY }, "dist/worker-main.js"),
-    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
+    worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
+    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
     worker("works",        "works_svc",        "civitas_works"),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {

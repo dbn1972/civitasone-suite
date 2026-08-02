@@ -63,6 +63,12 @@ const SERVICES = [
   { name: "meeting-service",    db: "civitas_meeting" },
   { name: "ml-service",         db: "civitas_ml" },
   { name: "inspection-service", db: "civitas_inspection" },
+  // Critical async-infra: visitor/works were declared in ecosystem.config.js but
+  // absent here, so migrate-all never provisioned civitas_visitor / civitas_works
+  // and queue-first writes failed closed on startup.
+  { name: "visitor-service",    db: "civitas_visitor" },
+  { name: "works-service",      db: "civitas_works" },
+  { name: "metadata-service",   db: "civitas_metadata" },
 ];
 
 let applied = 0;

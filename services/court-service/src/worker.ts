@@ -32,6 +32,7 @@ import { captureError, incrementDlqMessage } from "@civitasone/observability";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
@@ -236,11 +237,31 @@ export function subscribeConsumers(): void {
  */
 export async function startWorker(): Promise<void> {
   // Fail-fast on missing/short COURT_PII_KEY — never start fail-open.
-  assertPiiKeyConfigured();
+  
+function assertScannerConfigured(): void {
+  // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
+  // scanner DSN must be present and distinct from DATABASE_URL so relay/purge
+  // cannot silently fall back to the NOBYPASSRLS service role.
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.COURT_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "COURT_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
+assertPiiKeyConfigured();
   subscribeConsumers();
   await queue.start();
-  const relay = startRelay(db, queue);
-  const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+  // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
+  // _outbox.messages (migration 0015) would otherwise hide all unpublished
+  // rows under court_svc when app.tenant_id is unset (see scanner-db.ts).
+  const relay = startRelay(scannerDb as unknown as typeof db, queue);
+  const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
     intervalMs: 60 * 60_000,
     batchSize: 1000,
     logger: log,

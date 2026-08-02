@@ -74,3 +74,19 @@ export function computeCopyFeeMinor(
   const base = perCopyMinor * BigInt(copies);
   return urgent ? base + urgentSurchargeMinor : base;
 }
+
+/**
+ * §30 payment-proof integrity: the requested → fee_paid transition MUST carry
+ * a receipted amount (receiptMinor) that equals the server-authoritative
+ * feeMinor recorded on the copy at request time. A mismatch means either the
+ * wrong receipt was quoted or the payment was short/over — either way it is
+ * NOT silently accepted. Both amounts are BigInt PAISE, so the comparison is
+ * exact (no floating-point rounding).
+ */
+export function assertReceiptMatchesFee(feeMinor: bigint, receiptMinor: bigint): void {
+  if (receiptMinor !== feeMinor) {
+    throw new Error(
+      `RECEIPT_AMOUNT_MISMATCH: receipted amount ${receiptMinor} does not match the fee ${feeMinor}`,
+    );
+  }
+}

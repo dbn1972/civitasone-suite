@@ -5,7 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { certifiedCopies } from "./schema.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import { assertTransition, computeCopyFeeMinor, type CopyStatus } from "./domain.js";
+import { assertReceiptMatchesFee, assertTransition, computeCopyFeeMinor, type CopyStatus } from "./domain.js";
 
 type RequestCopyPayload = {
   id: string;
@@ -26,6 +26,9 @@ type TransitionCopyPayload = {
   deliveryMode?: string;
   remarks?: string;
   expectedVersion: number;
+  // Payment proof — required by validators.ts ONLY when target === "fee_paid".
+  paymentRef?: string;
+  receiptMinor?: string | number;
 };
 
 /** Default per-copy fee (paise) when neither config nor a valid client hint applies. */
@@ -49,6 +52,20 @@ function parseHintPaise(value: string | number | undefined): bigint | undefined 
   if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
   return undefined;
+}
+
+/**
+ * Parse the payment-proof `receiptMinor` to a non-negative integer PAISE
+ * (BigInt). Unlike the client fee HINT, this is proof of an actual payment —
+ * a malformed value is a poison message (NonRetryableError
+ * INVALID_RECEIPT_AMOUNT), not a silent fallback.
+ */
+function parseReceiptMinor(value: string | number | undefined): bigint {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
+  throw new NonRetryableError(
+    `INVALID_RECEIPT_AMOUNT: receiptMinor must be a non-negative integer paise amount, got ${JSON.stringify(value)}`,
+  );
 }
 
 export function registerCertifiedCopyConsumers(
@@ -157,6 +174,21 @@ export function registerCertifiedCopyConsumers(
         throw new NonRetryableError((e as Error).message);
       }
 
+      // Payment proof (§30 integrity): fee_paid MUST carry a receipted amount
+      // that matches the fee recorded on this copy at request time. Validators
+      // already require paymentRef + receiptMinor to be PRESENT on the wire;
+      // this is the server-authoritative AMOUNT check they cannot perform.
+      let paymentFields: { paymentRef?: string | null; receiptMinor?: bigint } = {};
+      if (target === "fee_paid") {
+        const receiptMinor = parseReceiptMinor(p.receiptMinor); // throws NonRetryableError if malformed
+        try {
+          assertReceiptMatchesFee(current.feeMinor, receiptMinor);
+        } catch (e) {
+          throw new NonRetryableError((e as Error).message);
+        }
+        paymentFields = { paymentRef: p.paymentRef ?? null, receiptMinor };
+      }
+
       const issuedFields = target === "issued"
         ? {
             issuedBy: msg.actorId,
@@ -171,6 +203,7 @@ export function registerCertifiedCopyConsumers(
         expectedVersion: p.expectedVersion,
         set: {
           status: target,
+          ...paymentFields,
           ...issuedFields,
           ...(p.remarks !== undefined ? { remarks: p.remarks } : {}),
           updatedBy: msg.actorId,

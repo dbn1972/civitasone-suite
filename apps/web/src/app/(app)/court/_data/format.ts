@@ -69,6 +69,21 @@ export function orderPillStatus(status: string): string {
   }
 }
 
+/** Maps a certified-copy status onto a StatusPill variant token. */
+export function copyPillStatus(status: string): string {
+  switch (status) {
+    case "issued":
+      return "completed";
+    case "fee_paid":
+    case "prepared":
+      return "in progress";
+    case "rejected":
+      return "rejected";
+    default:
+      return "open"; // requested
+  }
+}
+
 /** Maps a hearing status onto a StatusPill variant token. */
 export function hearingPillStatus(status: string): string {
   switch (status) {

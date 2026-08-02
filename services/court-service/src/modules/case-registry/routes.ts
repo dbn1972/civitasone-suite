@@ -84,7 +84,7 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     if (!found || found.tenantId !== ctx.tenantId) {
       throw new HttpError(404, "CASE_NOT_FOUND", "case not found");
     }
-    const parties = await repo.getCasePartiesByCaseId(id);
+    const parties = await repo.getCasePartiesByCaseId(ctx.tenantId, id);
     return reply.send({ ...found, parties });
   });
 

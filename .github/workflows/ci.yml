@@ -306,6 +306,14 @@ jobs:
             exit 1
           fi
           echo "✅ No raw any types"
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Ops regression locks (ecosystem workers + migrate-all inventory)
+        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts
+
       - name: Tenant router adoption guard (Req 1.7)
         run: node scripts/ci/tenant-router-guard.mjs
 

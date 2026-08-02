@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, EmptyState, Card } from "@/app/_components/ds";
-import { getCase, getCaseHearings, getCaseOrders } from "../../_data/loaders";
+import { getCase, getCaseCertifiedCopies, getCaseHearings, getCaseOrders } from "../../_data/loaders";
 import { CaseConsole } from "./CaseConsole";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,11 @@ export default async function CaseDetailPage({
   params: { caseId: string };
 }) {
   const { caseId } = params;
-  const [detail, orders, hearings] = await Promise.all([
+  const [detail, orders, hearings, certifiedCopies] = await Promise.all([
     getCase(caseId),
     getCaseOrders(caseId),
     getCaseHearings(caseId),
+    getCaseCertifiedCopies(caseId),
   ]);
 
   if (detail.source === "error" || !detail.data) {
@@ -44,13 +45,13 @@ export default async function CaseDetailPage({
     );
   }
 
-  const degraded = orders.source === "error" || hearings.source === "error";
+  const degraded = orders.source === "error" || hearings.source === "error" || certifiedCopies.source === "error";
 
   return (
     <>
       <PageHeader
         title={detail.data.title || "Case"}
-        subtitle="Drive the case lifecycle, schedule and adjourn hearings, and draft & issue orders through the maker-checker flow."
+        subtitle="Drive the case lifecycle, schedule and adjourn hearings, draft & issue orders through the maker-checker flow, and manage certified-copy applications."
         back="/court/cases"
         backLabel="Cases"
       />
@@ -61,6 +62,8 @@ export default async function CaseDetailPage({
         ordersSource={orders.source}
         initialHearings={hearings.data}
         hearingsSource={hearings.source}
+        initialCertifiedCopies={certifiedCopies.data}
+        certifiedCopiesSource={certifiedCopies.source}
       />
     </>
   );

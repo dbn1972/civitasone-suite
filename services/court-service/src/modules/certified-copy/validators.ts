@@ -23,11 +23,43 @@ export const requestCopyBody = z.object({
 });
 export type RequestCopyBody = z.infer<typeof requestCopyBody>;
 
-/** Transition a certified copy (§30). `expectedVersion` is the optimistic-lock token. */
-export const transitionCopyBody = z.object({
-  target:          z.enum(["fee_paid", "prepared", "issued", "rejected"]),
-  deliveryMode:    z.string().trim().max(24).optional(),
-  remarks:         z.string().trim().max(2000).optional(),
-  expectedVersion: z.coerce.number().int().min(1),
-});
+/**
+ * Transition a certified copy (§30). `expectedVersion` is the optimistic-lock
+ * token.
+ *
+ * Payment proof (§30 integrity): moving to `fee_paid` REQUIRES BOTH a
+ * `paymentRef` (the gateway / treasury challan reference) AND a `receiptMinor`
+ * (the receipted amount, in PAISE) — a bare status flip with no evidence the
+ * fee was actually collected is rejected here, before it ever reaches the
+ * command bus. The consumer separately asserts `receiptMinor === feeMinor`
+ * (domain.ts `assertReceiptMatchesFee`) since this schema alone cannot know the
+ * server-authoritative fee.
+ */
+export const transitionCopyBody = z
+  .object({
+    target:          z.enum(["fee_paid", "prepared", "issued", "rejected"]),
+    deliveryMode:    z.string().trim().max(24).optional(),
+    remarks:         z.string().trim().max(2000).optional(),
+    expectedVersion: z.coerce.number().int().min(1),
+    // Payment proof — required ONLY when target === "fee_paid" (enforced below).
+    paymentRef:      z.string().trim().min(1).max(64).optional(),
+    receiptMinor:    z.union([z.string(), z.number()]).optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.target !== "fee_paid") return;
+    if (!body.paymentRef) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["paymentRef"],
+        message: "paymentRef is required proof of payment when transitioning to fee_paid",
+      });
+    }
+    if (body.receiptMinor === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["receiptMinor"],
+        message: "receiptMinor is required proof of payment when transitioning to fee_paid",
+      });
+    }
+  });
 export type TransitionCopyBody = z.infer<typeof transitionCopyBody>;

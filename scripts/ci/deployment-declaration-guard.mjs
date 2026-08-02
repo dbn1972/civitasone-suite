@@ -117,8 +117,17 @@ const workerSet = new Set(workerDecls);
 const courtWorkerCall = [...eco.matchAll(/\bworker\("court"[^)]*\)/g)].map((m) => m[0]);
 if (courtWorkerCall.length === 0) {
   fail('court has no worker("court", ...) declaration');
-} else if (!courtWorkerCall.some((c) => c.includes("worker-main"))) {
-  fail('court worker must use dist/worker-main.js (export-only dist/worker.js exits immediately)');
+} else {
+  const call = courtWorkerCall[0];
+  if (!call.includes('"dist/worker-main.js"')) {
+    fail(
+      'court worker 5th arg must be "dist/worker-main.js" ' +
+        '(export-only dist/worker.js exits immediately)',
+    );
+  }
+  if (call.includes('"dist/worker.js"')) {
+    fail('court worker must not use bare "dist/worker.js" — use dist/worker-main.js');
+  }
 }
 
 /** Services declared in ecosystem but intentionally not running a worker yet. */

@@ -113,6 +113,45 @@ export interface CourtOrder {
   version: number;
 }
 
+// ─── Certified copies (§30) ──────────────────────────────────────────────────
+
+/** certified-copy/domain.ts COPY_STATUSES (the lifecycle spine). */
+export type CopyStatus = "requested" | "fee_paid" | "prepared" | "issued" | "rejected";
+
+/**
+ * The permitted forward/side transitions per status (certified-copy/domain.ts
+ * TRANSITIONS). Kept here so the console can offer only the moves the server
+ * will accept — the service still authoritatively enforces it.
+ */
+export const COPY_TRANSITIONS: Record<CopyStatus, CopyStatus[]> = {
+  requested: ["fee_paid", "rejected"],
+  fee_paid: ["prepared", "rejected"],
+  prepared: ["issued", "rejected"],
+  issued: [],
+  rejected: [],
+};
+
+export interface CertifiedCopy {
+  id: string;
+  caseId: string;
+  orderId: string | null;
+  documentRef: string | null;
+  applicantName: string | null;
+  copiesCount: number;
+  urgent: boolean;
+  feeMinor: string; // BigInt paise as a string (not JSON-safe as a number)
+  feeSource: string | null;
+  paymentRef: string | null;
+  receiptMinor: string | null; // BigInt paise as a string, once fee_paid
+  status: CopyStatus;
+  requestedBy: string | null;
+  issuedBy: string | null;
+  issuedAt: string | null;
+  deliveryMode: string | null;
+  remarks: string | null;
+  version: number;
+}
+
 // ─── Hearings ────────────────────────────────────────────────────────────────
 
 export interface Hearing {

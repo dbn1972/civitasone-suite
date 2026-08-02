@@ -34,12 +34,31 @@ import { registerBadgePrintConsumers }     from "./modules/badge-print/consumer.
 import { registerDocumentScanConsumers }   from "./modules/document-scan/consumer.js";
 import { registerTurnstileControlConsumers } from "./modules/turnstile-control/consumer.js";
 import { registerConfigRegistryConsumers } from "./modules/config-registry/consumer.js";
+import { registerLocationConsumers } from "./modules/location/consumer.js";
+import { registerDpdpConsumers } from "./modules/dpdp/consumer.js";
 import { startHealthChecker, stopHealthChecker } from "./modules/device-registry/health-checker.js";
 import { startImageCleanupWorker, stopImageCleanupWorker } from "./modules/document-scan/image-cleanup.js";
 
 const log = pino({ name: "visitor-worker" });
 
 // Fail-fast if VISITOR_PII_KEY is absent/too short so the worker never runs fail-open.
+
+function assertScannerConfigured(): void {
+  // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
+  // scanner DSN must be present and distinct from DATABASE_URL so relay/purge
+  // cannot silently fall back to the NOBYPASSRLS service role.
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.VISITOR_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "VISITOR_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
 assertPiiKeyConfigured();
 
 // RLS write-path enforcement: visitor.* tables are FORCE ROW LEVEL SECURITY, so
@@ -75,6 +94,8 @@ registerBadgePrintConsumers(queue);
 registerDocumentScanConsumers(queue);
 registerTurnstileControlConsumers(queue);
 registerConfigRegistryConsumers(queue);
+registerLocationConsumers(queue);
+registerDpdpConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

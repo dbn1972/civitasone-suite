@@ -9,11 +9,12 @@
  * publishes events after commit (transactional outbox guarantee).
  *
  * Consumer handlers:
- *   - handleScanProcess: markProcessed → download image from S3 → performOcr
- *     (circuit breaker) → map fields → check confidence → blacklist screening
- *     (SISMEMBER) → INSERT ocr_result → outbox (scanCompleted or
- *     scanOcrLowConfidence or scanBlacklistMatch) → trigger DigiLocker verify
- *     if doc type supports it
+ *   - handleScanProcess: markProcessed → INSERT scan_session (status
+ *     `processing`; Task Q-95.3 moved this off the upload route) →
+ *     download image from S3 → performOcr (circuit breaker) → map fields →
+ *     check confidence → blacklist screening (SISMEMBER) → INSERT
+ *     ocr_result → outbox (scanCompleted or scanOcrLowConfidence or
+ *     scanBlacklistMatch) → trigger DigiLocker verify if doc type supports it
  *   - handleScanOcrComplete: status update + cache invalidate
  *
  * Requirements validated: 6.3, 6.4, 6.5, 6.7, 6.8, 6.10, 11.4
@@ -128,11 +129,24 @@ export function registerDocumentScanConsumers(queue: Queue): void {
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
 
-      // 1. Mark session as processing
-      await tx
-        .update(scanSessions)
-        .set({ status: "processing" })
-        .where(and(eq(scanSessions.id, p.sessionId), eq(scanSessions.tenantId, p.tenantId)));
+      // 1. Insert the scan_session row (Task Q-95.3: moved off the upload
+      // route — see routes.ts) directly in `processing` status since this
+      // consumer takes over immediately; `imageExpiresAt` is the same 1h
+      // TTL the route previously computed at upload time, just resolved a
+      // moment later here instead. Uses the id minted by the route/command
+      // publisher, so a redelivery inserts the identical row (guarded by
+      // markProcessed above, so this only ever runs once per sessionId).
+      const now = new Date();
+      await tx.insert(scanSessions).values({
+        id: p.sessionId,
+        tenantId: p.tenantId,
+        deviceId: p.deviceId,
+        status: "processing",
+        imageStorageKey: p.imageStorageKey,
+        imageDeleted: false,
+        imageExpiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+        createdAt: now,
+      });
 
       // 2. Download image from S3
       let imageBuffer: Buffer;

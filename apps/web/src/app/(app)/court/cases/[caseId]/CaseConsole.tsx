@@ -3,8 +3,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
-import type { CaseStatus, CourtCaseDetail, CourtOrder, Hearing } from "../../_data/types";
+import type { CaseStatus, CertifiedCopy, CourtCaseDetail, CourtOrder, Hearing } from "../../_data/types";
 import { CASE_TRANSITIONS } from "../../_data/types";
+import { CertifiedCopiesPanel } from "./CertifiedCopiesPanel";
 import {
   casePillStatus,
   fmtDate,
@@ -54,12 +55,16 @@ export function CaseConsole({
   ordersSource,
   initialHearings,
   hearingsSource,
+  initialCertifiedCopies,
+  certifiedCopiesSource,
 }: {
   caseDetail: CourtCaseDetail;
   initialOrders: CourtOrder[];
   ordersSource: "api" | "error";
   initialHearings: Hearing[];
   hearingsSource: "api" | "error";
+  initialCertifiedCopies: CertifiedCopy[];
+  certifiedCopiesSource: "api" | "error";
 }) {
   const router = useRouter();
   const [orders, setOrders] = useState<CourtOrder[]>(initialOrders);
@@ -134,6 +139,11 @@ export function CaseConsole({
           await reloadOrders();
         }}
         onError={fail}
+      />
+      <CertifiedCopiesPanel
+        caseId={caseDetail.id}
+        initialCopies={initialCertifiedCopies}
+        source={certifiedCopiesSource}
       />
     </>
   );
