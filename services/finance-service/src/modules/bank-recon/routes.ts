@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
-import { autoMatch, type StatementLine, type BookEntry } from "./domain.js";
+import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -31,37 +31,7 @@ export async function bankReconRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = importBody.parse(req.body);
-    const statementId = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insertStatement(tx, {
-        id: statementId,
-        tenantId: ctx.tenantId,
-        bankAccountId: body.bankAccountId,
-        ...(body.statementRef ? { statementRef: body.statementRef } : {}),
-        ...(body.periodFrom ? { periodFrom: body.periodFrom } : {}),
-        ...(body.periodTo ? { periodTo: body.periodTo } : {}),
-        openingMinor: BigInt(body.openingMinor ?? 0),
-        closingMinor: BigInt(body.closingMinor ?? 0),
-        lineCount: body.lines.length,
-        status: "imported",
-        createdBy: ctx.actorId,
-      });
-      for (const l of body.lines) {
-        await repo.insertLine(tx, {
-          id: randomUUID(),
-          tenantId: ctx.tenantId,
-          statementId,
-          lineDate: l.date,
-          amountMinor: BigInt(l.amountMinor),
-          direction: l.direction,
-          ...(l.narration ? { narration: l.narration } : {}),
-          ...(l.reference ? { reference: l.reference } : {}),
-        });
-      }
-    });
-
-    return reply.code(201).send({ data: { id: statementId, lineCount: body.lines.length, status: "imported" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.importStatement(ctx, body));
   });
 
   // ── Run auto-reconciliation for a statement ─────────────────────
@@ -74,45 +44,11 @@ export async function bankReconRoutes(app: FastifyInstance): Promise<void> {
     const stmt = await repo.findStatement(id, ctx.tenantId);
     if (!stmt) throw new HttpError(404, "NOT_FOUND", "statement not found");
 
-    const matchedCount = await db.transaction(async (tx) => {
-      const lines = (await repo.linesForStatement(tx, id)).filter((l) => !l.matched);
-      // H2: scope book-side candidates to this statement's bank account so a
-      // payment/challan tagged to a different account can never match here.
-      const payments = await repo.unreconciledPayments(ctx.tenantId, stmt.bankAccountId);
-      const challans = await repo.unreconciledChallans(ctx.tenantId, stmt.bankAccountId);
-
-      const debitLines: StatementLine[] = lines.filter((l) => l.direction === "debit")
-        .map((l) => ({ id: l.id, amountMinor: l.amountMinor, direction: "debit", date: l.lineDate, reference: l.reference }));
-      const creditLines: StatementLine[] = lines.filter((l) => l.direction === "credit")
-        .map((l) => ({ id: l.id, amountMinor: l.amountMinor, direction: "credit", date: l.lineDate, reference: l.reference }));
-
-      const paymentBooks: BookEntry[] = payments.map((p) => ({ id: p.id, amountMinor: p.amountMinor, date: p.date, reference: p.reference }));
-      const challanBooks: BookEntry[] = challans.map((c) => ({ id: c.id, amountMinor: c.amountMinor, date: c.date, reference: c.reference }));
-
-      const payPairs = autoMatch(debitLines, paymentBooks, q.nearDays);
-      const recPairs = autoMatch(creditLines, challanBooks, q.nearDays);
-
-      // H1: only mark the bank line matched when we actually won the book-side
-      // reconcile (reconciled=false → true). A concurrent call that already
-      // reconciled the payment loses the guard (rowcount=0) and we skip the match,
-      // so one payment can never be matched to two lines.
-      let matched = 0;
-      for (const pair of payPairs) {
-        const won = await repo.markPaymentReconciled(tx, pair.bookId, pair.lineId);
-        if (!won) continue;
-        await repo.markLineMatched(tx, pair.lineId, "payment", pair.bookId);
-        matched += 1;
-      }
-      for (const pair of recPairs) {
-        const won = await repo.markChallanReconciled(tx, pair.bookId, pair.lineId);
-        if (!won) continue;
-        await repo.markLineMatched(tx, pair.lineId, "receipt", pair.bookId);
-        matched += 1;
-      }
-      return matched;
-    });
-
-    return reply.send({ data: { statementId: id, matched: matchedCount } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.reconcileStatement(ctx, id, q.nearDays),
+    );
   });
 
   // ── BRS: matched + unreconciled-in-books + unreconciled-in-bank ──

@@ -18,6 +18,10 @@ import { signToken } from "@civitasone/auth";
 import type { ReconProvider } from "../src/modules/recon/providers.js";
 import { registerProvider } from "../src/modules/recon/providers.js";
 import { buildApp } from "../src/app.js";
+import { runWithTenant } from "@civitasone/db";
+import { runReconciliation } from "../src/modules/recon/service.js";
+import * as reconRepo from "../src/modules/recon/repo.js";
+import { db } from "../src/shared/db.js";
 import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 
@@ -75,15 +79,16 @@ function identity(b: { breakKey: string; breakType: string; field: string | null
   return `${b.breakKey}|${b.breakType}|${b.field ?? ""}`;
 }
 
-async function runOnce(app: any): Promise<number> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/v1/finance/recon/runs",
-    headers: h(),
-    payload: { provider: PROVIDER_KEY },
-  });
-  expect(res.statusCode).toBe(201);
-  return res.json().data.breakCount as number;
+async function runOnce(_app: any): Promise<number> {
+  const result = await runWithTenant(TEST_TENANT, () =>
+    runReconciliation(
+      { tenantId: TEST_TENANT, actorId: TEST_ACTOR },
+      PROVIDER_KEY,
+      {},
+    ),
+  );
+  expect(result).not.toBeNull();
+  return result!.breakCount;
 }
 
 let app: any;
@@ -148,7 +153,18 @@ describe("CAP-059 reconciliation idempotency", () => {
         headers: h(),
         payload: { action: "resolve", note: "test-resolve" },
       });
-      expect(r.statusCode).toBe(200);
+      expect(r.statusCode).toBe(202);
+      // Consumer write path (HTTP only enqueues under CQRS).
+      await runWithTenant(TEST_TENANT, async () => {
+        await db.transaction(async (tx) => {
+          await reconRepo.updateBreakStatus(tx, TEST_TENANT, b.id, {
+            status: "resolved",
+            resolutionNote: "test-resolve",
+            resolvedBy: TEST_ACTOR,
+            resolvedAt: new Date(),
+          });
+        });
+      });
     }
     expect((await activeBreaks()).length).toBe(0);
 

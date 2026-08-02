@@ -324,7 +324,9 @@ module.exports = {
     svc("workflow",     3029, "workflow_svc",      "civitas_workflow"),
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
-    worker("finance",      "finance_svc",      "civitas_finance"),
+    worker("finance",      "finance_svc",      "civitas_finance", {
+      FINANCE_SCANNER_DATABASE_URL: scannerDbUrl("finance_scanner", "civitas_finance", "FINANCE_SCANNER_DATABASE_URL"),
+    }),
     worker("procurement",  "procurement_svc",  "civitas_procurement", {
       PII_ENC_KEY: PROCUREMENT_PII_KEY,
       PROCUREMENT_SCANNER_DATABASE_URL: scannerDbUrl("procurement_scanner", "civitas_procurement", "PROCUREMENT_SCANNER_DATABASE_URL"),

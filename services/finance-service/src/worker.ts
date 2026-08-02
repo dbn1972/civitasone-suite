@@ -1,6 +1,8 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -32,8 +34,36 @@ import { registerTdsConsumers }           from "./modules/tds/consumer.js";
 import { registerVoucherPrintConsumers }  from "./modules/voucher-print/consumer.js";
 import { registerAnomalyConsumers }       from "./modules/anomaly/consumer.js";
 import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/consumer.js";
+import { registerReconConsumers } from "./modules/recon/consumer.js";
 
 const log = pino({ name: "finance-worker" });
+
+function assertScannerConfigured(): void {
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.FINANCE_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "FINANCE_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
+
+
+
+// Ensure every consumer handler runs under the message tenant GUC (RLS).
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerBudgetConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
@@ -63,11 +93,12 @@ registerTdsConsumers(queue);
 registerVoucherPrintConsumers(queue);
 registerAnomalyConsumers(queue);
 registerResolutionIntakeConsumers(queue);
+registerReconConsumers(queue);
 
 await queue.start();
-const relay = startRelay(db, queue);
+const relay = startRelay(scannerDb as unknown as typeof db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
   batchSize: 1000,
   logger: log,
@@ -96,6 +127,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();
+  await scannerSqlClient.end();
   log.info("shutdown complete");
   process.exit(0);
 }
