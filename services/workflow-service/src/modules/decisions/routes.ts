@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { evaluateDecisionTable, type DecisionTableDef } from "./domain.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as commands from "./commands.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -42,23 +43,7 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
 
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertDecisionTable(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        code: body.code,
-        name: body.name,
-        hitPolicy: body.hitPolicy,
-        inputs: body.inputs,
-        outputs: body.outputs,
-        rules: body.rules,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-    });
-
-    return reply.code(201).send({ data: { id, code: body.code, name: body.name, status: "draft" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDecision(ctx, body));
   });
 
   // List decision tables
@@ -89,15 +74,7 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const row = await repo.findById(id, ctx.tenantId);
-    if (!row) throw new HttpError(404, "NOT_FOUND", "decision table not found");
-    if (row.status === "active") throw new HttpError(409, "ALREADY_DEPLOYED", "decision table already deployed");
-
-    await db.transaction(async (tx) => {
-      await repo.deployVersion(tx, id, ctx.tenantId, ctx.actorId);
-    });
-
-    return reply.send({ data: { ...row, status: "active" }, message: "decision table deployed" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deployDecision(ctx, id));
   });
 
   // Evaluate a decision table by code

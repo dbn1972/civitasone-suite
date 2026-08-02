@@ -12,12 +12,13 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
+import { scopedRead } from "../../shared/db.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { dmnTables, type DmnInput, type DmnOutput, type DmnRule, type DmnHitPolicy } from "./schema.js";
 import { evaluateDecisionTable, type DmnTableDef } from "./domain.js";
+import * as commands from "./commands.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -86,47 +87,7 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createBodySchema.parse(req.body);
 
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(dmnTables).values({
-        id,
-        tenantId: ctx.tenantId,
-        name: body.name,
-        description: body.description ?? null,
-        hitPolicy: body.hitPolicy,
-        inputs: body.inputs as DmnInput[],
-        outputs: body.outputs as DmnOutput[],
-        rules: body.rules as DmnRule[],
-        status: "draft",
-        version: 1,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-    });
-
-    // Audit event
-    await queue.publish("workflow.dmn.table.created", {
-      type: "workflow.dmn.table.created",
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: req.id,
-      schemaVersion: "1.0",
-      payload: { tableId: id, name: body.name, hitPolicy: body.hitPolicy },
-    });
-
-    return reply.code(201).send({
-      data: {
-        id,
-        name: body.name,
-        description: body.description ?? null,
-        hitPolicy: body.hitPolicy,
-        status: "draft",
-        version: 1,
-        inputCount: body.inputs.length,
-        outputCount: body.outputs.length,
-        ruleCount: body.rules.length,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createTable(ctx, body));
   });
 
   /** GET /v1/workflow/dmn/tables — list decision tables */
@@ -205,62 +166,7 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updateBodySchema.parse(req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const rows = await tx
-        .select()
-        .from(dmnTables)
-        .where(
-          and(
-            eq(dmnTables.id, id),
-            eq(dmnTables.tenantId, ctx.tenantId),
-          ),
-        )
-        .limit(1);
-
-      const existing = rows[0];
-      if (!existing || existing.status === "deleted") {
-        throw new HttpError(404, "NOT_FOUND", "DMN table not found");
-      }
-
-      // Optimistic locking
-      if (existing.version !== body.version) {
-        throw new HttpError(
-          409,
-          "VERSION_CONFLICT",
-          `Version conflict: expected ${body.version}, current is ${existing.version}`,
-        );
-      }
-
-      const updateData: Record<string, unknown> = {
-        version: existing.version + 1,
-        updatedAt: new Date(),
-        updatedBy: ctx.actorId,
-      };
-      if (body.name !== undefined) updateData.name = body.name;
-      if (body.description !== undefined) updateData.description = body.description;
-      if (body.hitPolicy !== undefined) updateData.hitPolicy = body.hitPolicy;
-      if (body.inputs !== undefined) updateData.inputs = body.inputs;
-      if (body.outputs !== undefined) updateData.outputs = body.outputs;
-      if (body.rules !== undefined) updateData.rules = body.rules;
-
-      await tx
-        .update(dmnTables)
-        .set(updateData)
-        .where(eq(dmnTables.id, id));
-
-      return { ...existing, ...updateData };
-    });
-
-    return reply.send({
-      data: {
-        id,
-        name: result.name,
-        hitPolicy: result.hitPolicy,
-        version: result.version,
-        status: result.status,
-        updatedAt: result.updatedAt,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTable(ctx, id, body));
   });
 
   /** DELETE /v1/workflow/dmn/tables/:id — soft-delete */
@@ -285,14 +191,7 @@ export async function dmnRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "DMN table not found");
     }
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(dmnTables)
-        .set({ status: "deleted", updatedAt: new Date(), updatedBy: ctx.actorId })
-        .where(eq(dmnTables.id, id));
-    });
-
-    return reply.code(204).send();
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTable(ctx, id));
   });
 
   /** POST /v1/workflow/dmn/tables/:id/execute — evaluate decision table */

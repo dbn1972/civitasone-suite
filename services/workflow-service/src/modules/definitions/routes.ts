@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { definitions } from "./schema.js";
 import * as repo from "./repo.js";
-import { validateGraph } from "./graph.js";
 import { diffVersions, type VersionGraph } from "./version-diff.js";
+import * as commands from "./commands.js";
+import { scopedRead } from "../../shared/db.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -72,39 +71,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
 
-    // P0-1 — structural validation. On create we only enforce when a graph is
-    // supplied (an empty draft may be filled in later), but a supplied graph
-    // must be well-formed before it is persisted.
-    if (body.nodes.length > 0 || body.edges.length > 0) {
-      const v = validateGraph(body.nodes, body.edges);
-      if (!v.valid) {
-        throw new HttpError(400, "INVALID_GRAPH", `invalid workflow graph: ${v.errors.join("; ")}`);
-      }
-    }
-
-    const id = randomUUID();
-    const result = await db.transaction(async (tx) => {
-      const latest = await repo.findLatestVersionTx(tx, ctx.tenantId, body.code);
-      const version = latest ? latest.version + 1 : 1;
-      await tx.insert(definitions).values({
-        id,
-        tenantId: ctx.tenantId,
-        code: body.code,
-        name: body.name,
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.layout !== undefined ? { layout: body.layout as { width?: number; height?: number; zoom?: number; gridSize?: number } } : {}),
-        version,
-        status: "draft",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await repo.insertGraphTx(tx, id, body.nodes, body.edges);
-      return { version };
-    });
-
-    return reply.code(201).send({
-      data: { id, code: body.code, name: body.name, version: result.version, status: "draft" },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDefinition(ctx, body));
   });
 
   app.get("/v1/workflow/definitions", async (req, reply) => {
@@ -134,50 +101,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const result = await db.transaction(async (tx) => {
-      const def = await repo.findById(id, ctx.tenantId);
-      if (!def) throw new HttpError(404, "NOT_FOUND", "definition not found");
-      if (def.status === "active") throw new HttpError(409, "ALREADY_DEPLOYED", "definition already deployed");
-
-      // P0-1 — strict structural validation gate on deploy. A definition with a
-      // dangling edge target, no terminal, or unreachable nodes is rejected
-      // (400) so it can never be activated and strand instances.
-      const [nodeRows, edgeRows] = await Promise.all([repo.listNodes(id), repo.listEdges(id)]);
-      const v = validateGraph(
-        nodeRows.map((n) => ({
-          nodeKey: n.nodeKey,
-          name: n.name,
-          nodeType: n.nodeType,
-          timerMinutes: n.timerMinutes,
-          deemedApproval: n.deemedApproval,
-          callDefinitionCode: n.callDefinitionCode,
-          assignStrategy: n.assignStrategy,
-          sortOrder: n.sortOrder,
-          messageName: n.messageName,
-          correlationKeyExpr: n.correlationKeyExpr,
-          signalName: n.signalName,
-          messageTopic: n.messageTopic,
-          decisionTableCode: n.decisionTableCode,
-          multiInstanceCollection: n.multiInstanceCollection,
-        })),
-        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
-      );
-      if (!v.valid) {
-        throw new HttpError(400, "INVALID_GRAPH", `cannot deploy: ${v.errors.join("; ")}`);
-      }
-
-      await tx.update(definitions)
-        .set({ status: "active", updatedBy: ctx.actorId, updatedAt: new Date() })
-        .where(eq(definitions.id, id));
-      await repo.archiveOtherVersionsTx(tx, ctx.tenantId, def.code, id);
-      return { def: { ...def, status: "active" }, warnings: v.warnings };
-    });
-
-    return reply.send({
-      data: result.def,
-      message: "definition deployed",
-      ...(result.warnings.length ? { warnings: result.warnings } : {}),
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deployDefinition(ctx, id));
   });
 
   // Gap 7 — list platform/global templates (definitions flagged is_template).
@@ -205,52 +129,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
       name: z.string().min(1).max(200).optional(),
     }).parse(req.body ?? {});
 
-    const tpl = await repo.findTemplateById(id);
-    if (!tpl) throw new HttpError(404, "NOT_FOUND", "template not found");
-
-    const code = body.code ?? tpl.code;
-    const newId = randomUUID();
-    const result = await db.transaction(async (tx) => {
-      const latest = await repo.findLatestVersionTx(tx, ctx.tenantId, code);
-      const version = latest ? latest.version + 1 : 1;
-      await tx.insert(definitions).values({
-        id: newId,
-        tenantId: ctx.tenantId,
-        code,
-        name: body.name ?? tpl.name,
-        ...(tpl.description !== null ? { description: tpl.description } : {}),
-        version,
-        status: "draft",
-        isTemplate: false,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      const [srcNodes, srcEdges] = await Promise.all([repo.listNodeRows(tpl.id), repo.listEdges(tpl.id)]);
-      await repo.insertGraphTx(
-        tx,
-        newId,
-        srcNodes.map((n) => ({
-          nodeKey: n.nodeKey,
-          name: n.name,
-          roleRef: n.roleRef,
-          nodeType: n.nodeType,
-          slaMinutes: n.slaMinutes,
-          timerMinutes: n.timerMinutes,
-          deemedApproval: n.deemedApproval,
-          callDefinitionCode: n.callDefinitionCode,
-          callContextMap: n.callContextMap,
-          assignStrategy: n.assignStrategy,
-          assignRef: n.assignRef,
-          sortOrder: n.sortOrder,
-        })),
-        srcEdges.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
-      );
-      return { version };
-    });
-
-    return reply.code(201).send({
-      data: { id: newId, code, name: body.name ?? tpl.name, version: result.version, status: "draft", clonedFrom: tpl.id },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.cloneTemplate(ctx, id, body));
   });
 
   // CAP-030 — list all versions of a definition code.
@@ -269,7 +148,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
     const q = z.object({ from: z.coerce.number().int().positive(), to: z.coerce.number().int().positive() }).parse(req.query);
     const graphFor = async (version: number): Promise<VersionGraph | null> => {
-      const def = await db.transaction((tx) => repo.findByCodeVersionTx(tx as unknown as typeof db, ctx.tenantId, code, version));
+      const def = await scopedRead((tx) => repo.findByCodeVersionTx(tx, ctx.tenantId, code, version));
       if (!def) return null;
       const [nodes, edges] = await Promise.all([repo.listNodes(def.id), repo.listEdges(def.id)]);
       return {
@@ -300,20 +179,7 @@ export async function definitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
     const body = z.object({ version: z.number().int().positive() }).parse(req.body);
-    const result = await db.transaction(async (tx) => {
-      const target = await repo.findByCodeVersionTx(tx, ctx.tenantId, code, body.version);
-      if (!target) throw new HttpError(404, "VERSION_NOT_FOUND", `version ${body.version} of '${code}' not found`);
-      if (target.status === "active") throw new HttpError(409, "ALREADY_ACTIVE", "target version is already active");
-      // re-validate the target graph before making it live again
-      const [nodeRows, edgeRows] = await Promise.all([repo.listNodes(target.id), repo.listEdges(target.id)]);
-      const v = validateGraph(
-        nodeRows.map((n) => ({ nodeKey: n.nodeKey, name: n.name, nodeType: n.nodeType, timerMinutes: n.timerMinutes, deemedApproval: n.deemedApproval, callDefinitionCode: n.callDefinitionCode, assignStrategy: n.assignStrategy, sortOrder: n.sortOrder })),
-        edgeRows.map((e) => ({ fromNode: e.fromNode, toNode: e.toNode, condition: e.condition, sortOrder: e.sortOrder })),
-      );
-      if (!v.valid) throw new HttpError(409, "TARGET_INVALID_GRAPH", `cannot roll back to an invalid graph: ${v.errors.join("; ")}`);
-      return repo.rollbackToVersionTx(tx, ctx.tenantId, code, body.version, ctx.actorId);
-    });
-    return reply.send({ data: result ? { id: result.id, code: result.code, version: result.version, status: result.status } : null, message: "rolled back" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rollbackDefinition(ctx, code, body.version));
   });
 
   app.setErrorHandler((err, req, reply) => {
