@@ -1,13 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { validateTransition, validateActivation, validateEditable, type JourneyStatus } from "./domain.js";
+import * as commands from "./commands.js";
 
 const JOURNEY_ROLES = ["journey_admin", "marketing_admin", "super_admin"];
 
@@ -37,33 +34,14 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, JOURNEY_ROLES);
     const body = createJourneyBody.parse(req.body);
-    const id = randomUUID();
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createJourney(ctx, {
         name: body.name,
-        status: "draft",
         triggerConfig: body.triggerConfig ?? null,
         steps: body.steps,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.journeyStarted,
-        eventType: "journey.journey.created",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { journeyId: id, name: body.name },
-      });
-    });
-
-    return reply.code(201).send({
-      data: { id, tenantId: ctx.tenantId, name: body.name, status: "draft", steps: body.steps, triggerConfig: body.triggerConfig ?? null, version: 1 },
-    });
+      }),
+    );
   });
 
   // GET /v1/journeys — list with pagination
@@ -116,20 +94,16 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "NOT_EDITABLE", editError);
     }
 
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "journey has been modified; retry with current version");
+    }
+
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.name !== undefined) patch["name"] = body.name;
     if (body.triggerConfig !== undefined) patch["triggerConfig"] = body.triggerConfig;
     if (body.steps !== undefined) patch["steps"] = body.steps;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "journey has been modified; retry with current version");
-      }
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "journey", id));
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateJourney(ctx, id, { version: body.version, patch }));
   });
 
   // DELETE /v1/journeys/:id — archive (soft-delete) a journey
@@ -148,15 +122,7 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.softDelete(tx, id, ctx.tenantId, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "journey has been modified; retry with current version");
-      }
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "journey", id));
-    return reply.send({ data: { id, status: "archived" } });
+    return reply.code(202).send(await commands.deleteJourney(ctx, id, existing.version));
   });
 
   // POST /v1/journeys/:id/activate — activate a draft/paused journey
@@ -180,24 +146,7 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "ACTIVATION_INVALID", activationError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, { status: "active", updatedBy: ctx.actorId }, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "journey has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.journeyStarted,
-        eventType: EVENTS.journeyStarted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { journeyId: id },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "journey", id));
-    return reply.send({ data: { id, status: "active" } });
+    return reply.code(202).send(await commands.activateJourney(ctx, id, existing.version));
   });
 
   // POST /v1/journeys/:id/pause — pause an active journey
@@ -216,14 +165,6 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, { status: "paused", updatedBy: ctx.actorId }, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "journey has been modified; retry with current version");
-      }
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "journey", id));
-    return reply.send({ data: { id, status: "paused" } });
+    return reply.code(202).send(await commands.pauseJourney(ctx, id, existing.version));
   });
 }
