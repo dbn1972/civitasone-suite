@@ -369,6 +369,7 @@ module.exports = {
     worker("inventory",    "inventory_svc",    "civitas_inventory"),
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
+    worker("ai-agent",     "ai_agent_svc",     "civitas_ai_agent"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
     // court-service is the only service in the fleet whose worker.ts is split
     // into a pure, side-effect-free module (src/worker.ts, exports
@@ -427,6 +428,7 @@ module.exports = {
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
     svc("works",        3036, "works_svc",        "civitas_works"),
     svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
+    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",

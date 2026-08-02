@@ -1,15 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, ADMIN_ROLES } from "../../shared/roles.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { evaluateRules, validateRule } from "./domain.js";
 import { detectInjection, blocksInteraction } from "./injection-domain.js";
+import * as commands from "./commands.js";
 
 const checkBody = z.object({
   input: z.string().min(1).max(16000),
@@ -53,7 +49,6 @@ const listQuery = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/ai/guardrails/check — evaluate text against the tenant's active rules
   app.post("/v1/ai/guardrails/check", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -62,9 +57,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     const rules = await repo.listActive(ctx.tenantId, body.rules);
     const evaluation = evaluateRules(body.input, rules);
 
-    // F.8: injection detection is built in, not a configurable rule. A tenant
-    // that has not configured a prompt_injection rule is still protected, and a
-    // `high` severity result blocks the interaction outright.
     const injection = detectInjection(body.input);
     const injectionBlocks = blocksInteraction(injection);
     const violations = [...evaluation.violations];
@@ -78,33 +70,15 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     }
     const passed = evaluation.passed && !injectionBlocks;
 
-    await db.transaction(async (tx) => {
-      if (injection.detected) {
-        // Family names and severity only — never the prompt text.
-        await enqueue(tx, {
-          topic: EVENTS.injectionDetected,
-          eventType: EVENTS.injectionDetected,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: {
-            severity: injection.severity,
-            patterns: injection.patterns,
-            blocked: injectionBlocks,
-            ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
-          },
-        });
-      }
-
-      // Redacted text only — DPDP Act 2023.
-      await writeAudit(tx, ctx, {
-        ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
-        action: "guardrails.check",
-        input: evaluation.sanitizedInput,
-        output: null,
-        blocked: !passed,
-        reason: violations.map((v) => v.message).join("; ").slice(0, 500) || null,
-      });
+    await commands.checkGuardrails(ctx, {
+      sanitizedInput: evaluation.sanitizedInput,
+      passed,
+      reason: violations.map((v) => v.message).join("; ").slice(0, 500) || null,
+      ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+      injectionDetected: injection.detected,
+      injectionSeverity: injection.severity,
+      injectionPatterns: injection.patterns,
+      injectionBlocked: injectionBlocks,
     });
 
     return reply.send({
@@ -118,7 +92,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /v1/ai/guardrails/check-injection — F.8 dedicated injection check
   app.post("/v1/ai/guardrails/check-injection", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -128,31 +101,11 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     const blocked = blocksInteraction(injection);
 
     if (injection.detected) {
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: EVENTS.injectionDetected,
-          eventType: EVENTS.injectionDetected,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: {
-            severity: injection.severity,
-            patterns: injection.patterns,
-            blocked,
-            ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
-          },
-        });
-
-        // Pattern families, not prompt text: the input is attacker-controlled and
-        // may carry personal data (DPDP Act 2023).
-        await writeAudit(tx, ctx, {
-          ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
-          action: "guardrails.check_injection",
-          input: null,
-          output: injection.patterns.join(", "),
-          blocked,
-          reason: `severity ${injection.severity}`,
-        });
+      await commands.checkInjection(ctx, {
+        ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+        severity: injection.severity,
+        patterns: injection.patterns,
+        blocked,
       });
     }
 
@@ -166,7 +119,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/ai/guardrails/rules — list rules
   app.get("/v1/ai/guardrails/rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -185,7 +137,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/ai/guardrails/rules/:id — single rule
   app.get("/v1/ai/guardrails/rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -199,7 +150,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: repo.toView(rule) });
   });
 
-  // POST /v1/ai/guardrails/rules — create a rule
   app.post("/v1/ai/guardrails/rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -215,46 +165,17 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "RULE_INVALID", ruleError);
     }
 
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createGuardrailRule(ctx, {
         name: body.name,
         ruleType: body.ruleType,
         pattern: body.pattern ?? null,
         config: body.config,
         severity: body.severity,
-        status: "active",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "guardrails.rule_create",
-        input: body.name,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.status(201).send({
-      data: {
-        id,
-        name: body.name,
-        ruleType: body.ruleType,
-        pattern: body.pattern ?? null,
-        config: body.config,
-        severity: body.severity,
-        status: "active",
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
-  // PATCH /v1/ai/guardrails/rules/:id — update a rule
   app.patch("/v1/ai/guardrails/rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -264,6 +185,9 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) {
       throw new HttpError(404, "NOT_FOUND", "guardrail rule not found");
+    }
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "rule has been modified; retry with current version");
     }
 
     const ruleError = validateRule({
@@ -283,25 +207,9 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
     if (body.severity !== undefined) patch.severity = body.severity;
     if (body.status !== undefined) patch.status = body.status;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "rule has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        action: "guardrails.rule_update",
-        input: JSON.stringify(Object.keys(patch)),
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateGuardrailRule(ctx, id, { version: body.version, patch }));
   });
 
-  // DELETE /v1/ai/guardrails/rules/:id — soft delete (disable)
   app.delete("/v1/ai/guardrails/rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -312,21 +220,6 @@ export async function guardrailRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "guardrail rule not found");
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.softDelete(tx, id, ctx.tenantId, existing.version, ctx.actorId);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "rule has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        action: "guardrails.rule_delete",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    return reply.status(204).send();
+    return reply.code(202).send(await commands.deleteGuardrailRule(ctx, id, existing.version));
   });
 }

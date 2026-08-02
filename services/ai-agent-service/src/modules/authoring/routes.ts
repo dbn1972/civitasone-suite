@@ -1,23 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue } from "../../shared/outbox.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, ADMIN_ROLES } from "../../shared/roles.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { validateDefinition, publishBlockers, validateAuthoringTransition } from "./domain.js";
+import * as commands from "./commands.js";
 
 const toolSchema = z.record(z.unknown());
 
 const createBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
-  // Upper bound is looser than the domain limit so an over-long prompt surfaces
-  // as a 422 business-rule violation rather than a 400 schema error.
   systemPrompt: z.string().max(32000).optional(),
   tools: z.array(toolSchema).optional(),
   modelConfig: z.record(z.unknown()).optional(),
@@ -51,7 +45,6 @@ const listQuery = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function authoringRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/ai/authoring/agents — list authored definitions (AG-003)
   app.get("/v1/ai/authoring/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -75,7 +68,6 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /v1/ai/authoring/agents — create a draft (AG-003)
   app.post("/v1/ai/authoring/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -96,61 +88,20 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "NAME_TAKEN", `an agent definition named "${body.name}" already exists`);
     }
 
-    const id = randomUUID();
     const tools = body.tools ?? [];
     const modelConfig = body.modelConfig ?? {};
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.draftAgentDefinition(ctx, {
         name: body.name,
         description: body.description ?? null,
         systemPrompt: body.systemPrompt ?? "",
         tools,
         modelConfig,
-        status: "draft",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.agentDefinitionDrafted,
-        eventType: EVENTS.agentDefinitionDrafted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { definitionId: id, name: body.name },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "authoring.create",
-        input: body.name,
-        output: id,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "authoring-agents");
-
-    return reply.status(201).send({
-      data: {
-        id,
-        name: body.name,
-        description: body.description ?? null,
-        systemPrompt: body.systemPrompt ?? "",
-        tools,
-        modelConfig,
-        status: "draft",
-        publishedAt: null,
-        version: 1,
-        validation: report,
-      },
-    });
+      }),
+    );
   });
 
-  // PATCH /v1/ai/authoring/agents/:id — edit a definition (AG-003)
   app.patch("/v1/ai/authoring/agents/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -163,6 +114,9 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
     }
     if (existing.status === "archived") {
       throw new HttpError(422, "DEFINITION_ARCHIVED", "an archived definition cannot be edited");
+    }
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
     }
 
     const merged = {
@@ -183,28 +137,9 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
     if (body.tools !== undefined) patch.tools = body.tools;
     if (body.modelConfig !== undefined) patch.modelConfig = body.modelConfig;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        action: "authoring.update",
-        input: JSON.stringify(Object.keys(patch)),
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    // The list read is cache-first, so the write path must drop it.
-    await cache.invalidateResource(ctx.tenantId, "authoring-agents");
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1, validation: report } });
+    return reply.code(202).send(await commands.updateAgentDefinition(ctx, id, { version: body.version, patch }));
   });
 
-  // POST /v1/ai/authoring/agents/:id/publish — draft → published (AG-003)
   app.post("/v1/ai/authoring/agents/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -221,8 +156,6 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", transitionError);
     }
 
-    // Publish gate: an agent with no prompt or no tools cannot do anything, and
-    // publishing it would put a dead agent in front of citizens.
     const blockers = publishBlockers({
       name: existing.name,
       systemPrompt: existing.systemPrompt,
@@ -240,51 +173,19 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const version = body.version ?? existing.version;
-    const publishedAt = new Date();
+    if (version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
+    }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "published", publishedAt, updatedBy: ctx.actorId },
+    return reply.code(202).send(
+      await commands.publishAgentDefinition(ctx, id, {
         version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.agentDefinitionPublished,
-        eventType: EVENTS.agentDefinitionPublished,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { definitionId: id, name: existing.name, toolCount: existing.tools.length },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "authoring.publish",
-        input: existing.name,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "authoring-agents");
-
-    return reply.status(202).send({
-      data: {
-        id,
-        status: "published",
-        publishedAt: publishedAt.toISOString(),
-        version: version + 1,
-      },
-    });
+        name: existing.name,
+        toolCount: existing.tools.length,
+      }),
+    );
   });
 
-  // POST /v1/ai/authoring/agents/:id/archive — retire a definition (AG-003)
   app.post("/v1/ai/authoring/agents/:id/archive", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -302,43 +203,13 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const version = body.version ?? existing.version;
+    if (version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
+    }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "archived", updatedBy: ctx.actorId },
-        version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "definition has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.agentDefinitionArchived,
-        eventType: EVENTS.agentDefinitionArchived,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { definitionId: id },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "authoring.archive",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "authoring-agents");
-
-    return reply.status(202).send({ data: { id, status: "archived", version: version + 1 } });
+    return reply.code(202).send(await commands.archiveAgentDefinition(ctx, id, version));
   });
 
-  // POST /v1/ai/authoring/agents/:id/validate — dry run, persists nothing (AG-003)
   app.post("/v1/ai/authoring/agents/:id/validate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -350,7 +221,6 @@ export async function authoringRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "agent definition not found");
     }
 
-    // Overrides let an author validate unsaved edits before committing them.
     const report = validateDefinition({
       name: overrides.name ?? existing.name,
       systemPrompt: overrides.systemPrompt ?? existing.systemPrompt,
