@@ -40,6 +40,12 @@ export function resolvePreferredChannel(
   if (pref?.push) order.push("push");
   if (pref?.inApp) order.push("in_app");
   if (pref?.email) order.push("email");
+  // Commercial channels rank last: a recipient who consented to SMS/WhatsApp
+  // *and* email still gets email first, so this cannot change the channel of an
+  // existing send. They matter for the recipient who opted in to SMS only —
+  // previously read as "all channels off" and treated as a full opt-out.
+  if (pref?.sms) order.push("sms");
+  if (pref?.whatsapp) order.push("whatsapp");
 
   if (!order.length) {
     // A pref row exists but all channels are off → fully opted out.

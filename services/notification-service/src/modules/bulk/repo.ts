@@ -50,3 +50,14 @@ export async function markRecipientQueued(tx: Writer, id: string, actorId: strin
     status: "queued", updatedBy: actorId, updatedAt: new Date(),
   }).where(eq(notificationCampaignRecipients.id, id));
 }
+
+/**
+ * R1: the consent gate refused this recipient, so no send command is published
+ * for them. The row stays in the campaign (the operator must be able to see who
+ * was excluded and why) but is terminal at `skipped`.
+ */
+export async function markRecipientSkipped(tx: Writer, id: string, actorId: string): Promise<void> {
+  await tx.update(notificationCampaignRecipients).set({
+    status: "skipped", updatedBy: actorId, updatedAt: new Date(),
+  }).where(eq(notificationCampaignRecipients.id, id));
+}

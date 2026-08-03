@@ -93,6 +93,14 @@ export const EVENTS = {
   dndWindowSet:           "notification.dnd.window_set",
   dndHeld:                "notification.dnd.held",
   dndReleased:            "notification.dnd.released",
+  /**
+   * R1 consent gate refused an outbound send before any adapter ran.
+   * Payload: `{ deliveryId: string; reason: "recipient_suppressed"|"marketing_consent_denied"
+   *            |"marketing_consent_unknown"|"channel_consent_denied"; channel: string;
+   *            recipientId: string | null }`
+   * Fires: once per refused send. The recipient address is NEVER in the payload.
+   */
+  consentBlocked:         "notification.consent.blocked",
   // I18N
   localeVariantCreated:   "notification.i18n.variant_created",
   localeVariantStale:     "notification.i18n.variant_stale",

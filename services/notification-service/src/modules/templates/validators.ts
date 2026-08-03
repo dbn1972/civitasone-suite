@@ -21,6 +21,9 @@ export const setPrefsBody = z.object({
   inApp:     z.boolean().default(true),
   email:     z.boolean().default(true),
   push:      z.boolean().default(false),
+  // Commercial channels default to false: consent must be given, never assumed.
+  sms:       z.boolean().default(false),
+  whatsapp:  z.boolean().default(false),
 });
 export type SetPrefsBody = z.infer<typeof setPrefsBody>;
 
@@ -29,12 +32,16 @@ export type SetPrefsBody = z.infer<typeof setPrefsBody>;
 // must be present so an empty PATCH is rejected rather than silently no-op.
 export const prefIdParam = z.object({ id: z.string().uuid() });
 export const updatePrefsBody = z.object({
-  inApp: z.boolean().optional(),
-  email: z.boolean().optional(),
-  push:  z.boolean().optional(),
-}).refine((b) => b.inApp !== undefined || b.email !== undefined || b.push !== undefined, {
-  message: "at least one of inApp, email, push required",
-});
+  inApp:    z.boolean().optional(),
+  email:    z.boolean().optional(),
+  push:     z.boolean().optional(),
+  sms:      z.boolean().optional(),
+  whatsapp: z.boolean().optional(),
+}).refine(
+  (b) => b.inApp !== undefined || b.email !== undefined || b.push !== undefined
+    || b.sms !== undefined || b.whatsapp !== undefined,
+  { message: "at least one of inApp, email, push, sms, whatsapp required" },
+);
 export type UpdatePrefsBody = z.infer<typeof updatePrefsBody>;
 
 export const templateIdParam = z.object({ id: z.string().uuid() });

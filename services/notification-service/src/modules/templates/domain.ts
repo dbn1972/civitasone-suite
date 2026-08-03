@@ -25,5 +25,7 @@ export type PrefView = {
   inApp: boolean;
   email: boolean;
   push: boolean;
+  sms: boolean;
+  whatsapp: boolean;
   version: number;
 };

@@ -13,7 +13,11 @@ function toTemplateView(r: typeof notificationTemplates.$inferSelect): TemplateV
   };
 }
 function toPrefView(r: typeof notificationPrefs.$inferSelect): PrefView {
-  return { id: r.id, tenantId: r.tenantId, userId: r.userId, eventType: r.eventType, inApp: r.inApp, email: r.email, push: r.push, version: r.version };
+  return {
+    id: r.id, tenantId: r.tenantId, userId: r.userId, eventType: r.eventType,
+    inApp: r.inApp, email: r.email, push: r.push, sms: r.sms, whatsapp: r.whatsapp,
+    version: r.version,
+  };
 }
 
 export async function findTemplateById(id: string): Promise<TemplateView | null> {
@@ -91,7 +95,11 @@ export async function upsertPrefs(tx: Writer, row: PrefInsert): Promise<void> {
     .limit(1);
   if (existing.length) {
     await tx.update(notificationPrefs)
-      .set({ inApp: row.inApp ?? true, email: row.email ?? true, push: row.push ?? false, updatedBy: row.updatedBy, version: (existing[0]?.version ?? 0) + 1, updatedAt: new Date() })
+      .set({
+        inApp: row.inApp ?? true, email: row.email ?? true, push: row.push ?? false,
+        sms: row.sms ?? false, whatsapp: row.whatsapp ?? false,
+        updatedBy: row.updatedBy, version: (existing[0]?.version ?? 0) + 1, updatedAt: new Date(),
+      })
       .where(eq(notificationPrefs.id, existing[0]!.id));
   } else {
     await tx.insert(notificationPrefs).values(row);
@@ -137,7 +145,10 @@ export async function updatePrefsById(
   tx: Writer,
   tenantId: string,
   id: string,
-  patch: { inApp?: boolean | undefined; email?: boolean | undefined; push?: boolean | undefined },
+  patch: {
+    inApp?: boolean | undefined; email?: boolean | undefined; push?: boolean | undefined;
+    sms?: boolean | undefined; whatsapp?: boolean | undefined;
+  },
   actorId: string,
 ): Promise<number> {
   const existing = await tx.select().from(notificationPrefs)
@@ -148,6 +159,8 @@ export async function updatePrefsById(
   if (patch.inApp !== undefined) set.inApp = patch.inApp;
   if (patch.email !== undefined) set.email = patch.email;
   if (patch.push !== undefined) set.push = patch.push;
+  if (patch.sms !== undefined) set.sms = patch.sms;
+  if (patch.whatsapp !== undefined) set.whatsapp = patch.whatsapp;
   await tx.update(notificationPrefs).set(set)
     .where(and(eq(notificationPrefs.id, id), eq(notificationPrefs.tenantId, tenantId)));
   return 1;
