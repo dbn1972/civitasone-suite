@@ -13,5 +13,18 @@ export const batchIvrHitsBody = z.object({
   hits: z.array(ivrHitEntry).min(1).max(50),
 });
 export type BatchIvrHitsBody = z.infer<typeof batchIvrHitsBody>;
+export type IvrHitEntry = z.infer<typeof ivrHitEntry>;
+
+/**
+ * Command envelope payload re-validated at the consume edge. The consumer
+ * receives the caller's hits verbatim — ordinals are assigned by the consumer
+ * inside the write transaction, never by the route.
+ */
+export const batchIvrHitsPayload = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  callId: z.string().uuid(),
+  hits: z.array(ivrHitEntry).min(1).max(50),
+});
 
 export const callIdParam = z.object({ id: z.string().uuid() });

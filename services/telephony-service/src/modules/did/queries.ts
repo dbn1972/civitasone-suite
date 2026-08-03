@@ -1,7 +1,8 @@
 /** DID mapping query handlers (READ PATH) — tenant-scoped read-through cache. */
 import { cache } from "../../shared/infra.js";
-import { DID_RESOURCE, DID_ACTIVE_MAPPINGS_CACHE } from "../../topics.js";
+import { DID_RESOURCE, DID_NUMBER_CACHE_PREFIX } from "../../topics.js";
 import * as repo from "./repo.js";
+import { resolveTenant, normalizeNumber, DEFAULT_TENANT_ID } from "./domain.js";
 import type { DidMappingView } from "./schema.js";
 
 export async function getMapping(id: string, tenantId: string): Promise<DidMappingView | null> {
@@ -27,14 +28,20 @@ export async function listMappings(
 }
 
 /**
- * Load all active DID mappings for tenant resolution.
- * Used by the webhook routes to resolve inbound calls.
+ * Resolve the tenant that owns a dialed number, for inbound carrier webhooks.
+ *
+ * Cached per normalised number rather than as one global "all active mappings"
+ * list: the list variant needed a cross-tenant read of the whole table, which
+ * FORCE RLS correctly refuses, so inbound routing could never resolve a tenant.
+ * Falls back to DEFAULT_TENANT_ID when the number has no active mapping.
  */
-export async function loadActiveMappings(): Promise<DidMappingView[]> {
-  const result = await cache.getOrLoad<DidMappingView[]>(
-    DID_ACTIVE_MAPPINGS_CACHE,
-    () => repo.listAllActive(),
-    60, // refresh every 60s
+export async function resolveTenantForNumber(calleeNumber: string): Promise<string> {
+  if (!calleeNumber) return DEFAULT_TENANT_ID;
+  const normalized = normalizeNumber(calleeNumber);
+  const mappings = await cache.getOrLoad(
+    `${DID_NUMBER_CACHE_PREFIX}${normalized}`,
+    () => repo.findMappingsForNumber(normalized),
+    60,
   );
-  return result ?? [];
+  return resolveTenant(calleeNumber, mappings ?? [], DEFAULT_TENANT_ID);
 }

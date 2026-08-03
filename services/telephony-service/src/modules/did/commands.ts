@@ -2,7 +2,8 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, DID_RESOURCE, DID_ACTIVE_MAPPINGS_CACHE } from "../../topics.js";
+import { COMMANDS, DID_RESOURCE, DID_NUMBER_CACHE_PREFIX } from "../../topics.js";
+import { normalizeNumber } from "./domain.js";
 import type { CreateDidMappingBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -24,12 +25,12 @@ export async function createDidMapping(ctx: RequestContext, body: CreateDidMappi
       active: body.active,
     },
   });
-  await cache.invalidate(DID_ACTIVE_MAPPINGS_CACHE);
+  await cache.invalidate(`${DID_NUMBER_CACHE_PREFIX}${normalizeNumber(body.didNumber)}`);
   await cache.invalidateResource(ctx.tenantId, DID_RESOURCE);
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function deleteDidMapping(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function deleteDidMapping(ctx: RequestContext, id: string, didNumber: string): Promise<Accepted> {
   const messageId = randomUUID();
   await queue.publish(COMMANDS.deleteDidMapping, {
     messageId,
@@ -40,7 +41,7 @@ export async function deleteDidMapping(ctx: RequestContext, id: string): Promise
     schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });
-  await cache.invalidate(DID_ACTIVE_MAPPINGS_CACHE);
+  await cache.invalidate(`${DID_NUMBER_CACHE_PREFIX}${normalizeNumber(didNumber)}`);
   await cache.invalidate(cache.makeKey(ctx.tenantId, DID_RESOURCE, id));
   await cache.invalidateResource(ctx.tenantId, DID_RESOURCE);
   return { id, status: "accepted", correlationId: ctx.correlationId };
