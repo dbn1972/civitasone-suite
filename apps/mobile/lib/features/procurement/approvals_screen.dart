@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/format_utils.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/status_pill.dart';
 import '../../core/widgets/skeleton_card.dart';
@@ -73,7 +74,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
               if (data['amount'] != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '₹${((data['amount'] as num) / 100).toStringAsFixed(2)}',
+                  formatAmountInr((data['amount'] as num).round()),
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                         color: Theme.of(ctx).colorScheme.primary,
                         fontWeight: FontWeight.w600,
@@ -267,7 +268,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                             if (data['amount'] != null) ...[
                               const SizedBox(height: 4),
                               Text(
-                                '₹${((data['amount'] as num) / 100).toStringAsFixed(2)}',
+                                formatAmountInr((data['amount'] as num).round()),
                                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                                       fontWeight: FontWeight.w500,
                                     ),

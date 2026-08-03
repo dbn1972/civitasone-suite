@@ -68,6 +68,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
+      // Drain the mocked response delay so no timer outlives the tree.
+      await tester.pump(const Duration(seconds: 3));
+
       // Let the future complete to avoid pending timers
       await pumpUntilSettled(tester);
     });

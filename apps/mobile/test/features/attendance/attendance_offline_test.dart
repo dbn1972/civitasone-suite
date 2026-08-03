@@ -6,7 +6,6 @@ import 'package:civitasone_mobile/core/providers.dart';
 import 'package:civitasone_mobile/core/sync/sync_database.dart';
 import 'package:civitasone_mobile/core/sync/sync_engine.dart';
 import 'package:civitasone_mobile/features/attendance/gps_checkin_screen.dart';
-import 'package:civitasone_mobile/features/attendance/attendance_history_screen.dart';
 
 class MockSyncDatabase extends Mock implements SyncDatabase {}
 
@@ -234,6 +233,10 @@ void main() {
             syncState: any(named: 'syncState'),
           )).thenAnswer((_) async {});
 
+      // The screen pops itself right after showing the snackbar, so it has to
+      // sit on top of another route whose Scaffold can host the snackbar once
+      // the check-in route is gone.
+      final navigatorKey = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -241,12 +244,15 @@ void main() {
             syncEngineProvider.overrideWithValue(mockEngine),
           ],
           child: MaterialApp(
-            home: Navigator(
-              onGenerateRoute: (_) => MaterialPageRoute<void>(
-                builder: (_) => GpsCheckInScreen(connectivityOverride: true),
-              ),
-            ),
+            navigatorKey: navigatorKey,
+            home: const Scaffold(body: SizedBox.shrink()),
           ),
+        ),
+      );
+
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => GpsCheckInScreen(connectivityOverride: true),
         ),
       );
       await pumpUntilSettled(tester);
@@ -255,6 +261,8 @@ void main() {
       await pumpUntilSettled(tester);
 
       expect(find.text('Checked in successfully'), findsOneWidget);
+      expect(find.byType(GpsCheckInScreen), findsNothing,
+          reason: 'the check-in route is popped once the write is queued');
     });
   });
 }

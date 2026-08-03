@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:civitasone_mobile/core/providers.dart';
+import 'package:civitasone_mobile/core/widgets/skeleton_card.dart';
 import 'package:civitasone_mobile/core/sync/sync_database.dart';
 import 'package:civitasone_mobile/core/sync/sync_engine.dart';
 import 'package:civitasone_mobile/features/procurement/indents_screen.dart';
@@ -42,7 +43,7 @@ void main() {
       expect(find.byType(AppBar), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator while database initializes',
+    testWidgets('shows skeleton loader while database initializes',
         (tester) async {
       when(() => mockDb.listEntities('indents')).thenAnswer((_) async => []);
 
@@ -50,7 +51,7 @@ void main() {
       // Only pump once — the FutureProvider is still resolving on the first frame
       await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(SkeletonList), findsOneWidget);
     });
 
     testWidgets('shows empty state when no indents exist', (tester) async {
@@ -59,7 +60,9 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      expect(find.text('No data — pull to refresh'), findsOneWidget);
+      expect(find.text('No indent requests'), findsOneWidget);
+      expect(find.text('Create an indent from the web portal to see it here'), findsOneWidget);
+      expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
     });
 
     testWidgets('shows list of indents when data exists', (tester) async {

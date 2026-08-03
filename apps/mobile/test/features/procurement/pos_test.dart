@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:civitasone_mobile/core/providers.dart';
+import 'package:civitasone_mobile/core/widgets/skeleton_card.dart';
 import 'package:civitasone_mobile/core/sync/sync_database.dart';
 import 'package:civitasone_mobile/core/sync/sync_engine.dart';
 import 'package:civitasone_mobile/features/procurement/pos_screen.dart';
@@ -43,7 +44,7 @@ void main() {
       expect(find.byType(AppBar), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator while database initializes',
+    testWidgets('shows skeleton loader while database initializes',
         (tester) async {
       when(() => mockDb.listEntities('purchase_orders'))
           .thenAnswer((_) async => []);
@@ -52,7 +53,7 @@ void main() {
       // Only pump once — the FutureProvider is still resolving on the first frame
       await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(SkeletonList), findsOneWidget);
     });
 
     testWidgets('shows empty state when no purchase orders exist',
@@ -63,7 +64,9 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();
 
-      expect(find.text('No data — pull to refresh'), findsOneWidget);
+      expect(find.text('No purchase orders'), findsOneWidget);
+      expect(find.text('Orders will appear once indents are approved'), findsOneWidget);
+      expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
     });
 
     testWidgets('shows list of purchase orders when data exists',
