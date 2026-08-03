@@ -58,6 +58,11 @@ export async function conversionRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const msgId = randomUUID();
+    // Ids are allocated here, not in the consumer, so a redelivered command
+    // re-uses them (ON CONFLICT DO NOTHING) instead of creating a second
+    // account/opportunity, and the caller can be told what was created.
+    const accountId = body.createAccount ? randomUUID() : null;
+    const dealId = body.dealName ? randomUUID() : null;
     await queue.publish(COMMANDS.leadConvert, {
       messageId: msgId,
       type: COMMANDS.leadConvert,
@@ -72,6 +77,8 @@ export async function conversionRoutes(app: FastifyInstance): Promise<void> {
         accountName: body.accountName ?? null,
         dealName: body.dealName ?? null,
         dealValue: body.dealValue ?? null,
+        accountId,
+        dealId,
       },
     });
 
@@ -79,6 +86,8 @@ export async function conversionRoutes(app: FastifyInstance): Promise<void> {
       id: msgId,
       status: "accepted",
       correlationId: ctx.correlationId,
+      accountId,
+      dealId,
     });
   });
 }

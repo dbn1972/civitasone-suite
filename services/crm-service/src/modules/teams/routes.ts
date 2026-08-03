@@ -6,7 +6,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -116,6 +116,19 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { agentId } = agentIdParam.parse(req.params);
     const body = updateCapacityBody.parse(req.body);
+
+    // Accepting a capacity change for an agent that has no workload row would
+    // answer 202 and then apply to nothing, so the caller is told up front.
+    const existing = await scopedRead(async (tx) => {
+      return tx.execute(sql`
+        SELECT 1 FROM crm.agent_workload
+        WHERE agent_id = ${agentId} AND tenant_id = ${ctx.tenantId}
+      `) as unknown as Array<unknown>;
+    });
+    if (existing.length === 0) {
+      throw new HttpError(404, "NOT_FOUND", "agent workload not found");
+    }
+
     return sendAccepted(
       reply,
       acceptedResponseSchema,

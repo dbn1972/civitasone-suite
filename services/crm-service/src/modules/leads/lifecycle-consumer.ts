@@ -6,7 +6,8 @@
  * Emits crm.lead.transitioned event. Supports LQ-004 requirement.
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
-import { db, sqlClient } from "../../shared/db.js";
+import { sql } from "drizzle-orm";
+import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -29,8 +30,10 @@ export function registerLifecycleConsumer(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Update the contact's lead_status
-      await sqlClient`
+      // Both writes go through `tx`, not the raw pooled client: crm.contacts and
+      // crm.lead_transitions are FORCE RLS, and only the transaction handle
+      // carries the app.tenant_id GUC the policies check.
+      await tx.execute(sql`
         UPDATE crm.contacts
         SET lead_status = ${payload.targetStatus},
             updated_at = now(),
@@ -39,10 +42,9 @@ export function registerLifecycleConsumer(queue: Queue): void {
         WHERE id = ${payload.contactId}
           AND tenant_id = ${msg.tenantId}
           AND status = 'active'
-      `;
+      `);
 
-      // Write audit trail record to lead_transitions table
-      await sqlClient`
+      await tx.execute(sql`
         INSERT INTO crm.lead_transitions (
           id, tenant_id, contact_id, from_status, to_status,
           reason, notes, created_at, created_by, version
@@ -58,7 +60,7 @@ export function registerLifecycleConsumer(queue: Queue): void {
           ${msg.actorId},
           1
         )
-      `;
+      `);
 
       // Emit crm.lead.transitioned event via outbox
       await enqueue(tx, {

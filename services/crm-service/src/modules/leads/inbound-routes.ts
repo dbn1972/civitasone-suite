@@ -39,6 +39,9 @@ export async function inboundLeadRoutes(app: FastifyInstance): Promise<void> {
 
     const body = inboundLeadBody.parse(req.body);
     const messageId = randomUUID();
+    // Allocated here so a redelivered capture command updates the same contact
+    // row rather than inserting a duplicate lead.
+    const contactId = randomUUID();
 
     await queue.publish(COMMANDS.inboundCapture, {
       messageId,
@@ -48,6 +51,7 @@ export async function inboundLeadRoutes(app: FastifyInstance): Promise<void> {
       correlationId: ctx.correlationId,
       schemaVersion: "1.0",
       payload: {
+        contactId,
         channel: body.channel,
         source: body.source,
         attributes: body.attributes,
@@ -59,6 +63,7 @@ export async function inboundLeadRoutes(app: FastifyInstance): Promise<void> {
       id: messageId,
       status: "accepted",
       correlationId: ctx.correlationId,
+      contactId,
     });
   });
 }

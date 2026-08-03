@@ -39,14 +39,21 @@ export function registerTeamConsumers(queue: Queue): void {
           : p.maxLeads !== undefined
             ? sql`max_leads = ${p.maxLeads}`
             : sql`available = ${p.available!}`;
-        await tx.execute(sql`
+        // The workload row can disappear between the route's existence check and
+        // this apply, so the audit records what actually happened rather than
+        // assuming the update landed.
+        const updated = (await tx.execute(sql`
           UPDATE crm.agent_workload
           SET ${setClause}, version = version + 1
           WHERE agent_id = ${p.agentId} AND tenant_id = ${p.tenantId}
-        `);
+          RETURNING agent_id
+        `)) as unknown as Array<unknown>;
         await enqueue(tx, {
           topic: AUDIT, eventType: AUDIT, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { service: "crm", action: "agent_capacity_update", resourceType: "agent_workload", resourceId: p.agentId, outcome: "success" },
+          payload: {
+            service: "crm", action: "agent_capacity_update", resourceType: "agent_workload", resourceId: p.agentId,
+            outcome: updated.length > 0 ? "success" : "rejected_agent_not_found",
+          },
         });
       });
     } catch (err) {

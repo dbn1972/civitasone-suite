@@ -1,0 +1,61 @@
+/**
+ * Test harness for driving crm-service command consumers.
+ *
+ * Two ways in, both used by the consumer tests:
+ *  - `drainQueue()` after an HTTP 202, to assert what the real route → bus →
+ *    consumer path actually wrote;
+ *  - `captureHandlers()` to invoke a handler directly, for cases the bus hides
+ *    (a redelivered messageId, or state that changed after the route accepted).
+ *
+ * Direct invocation must be wrapped in `runWithTenant`: on the real queue
+ * `createQueue()` decorates subscribe so handlers run in a tenant context, and
+ * without it the FORCE-RLS tables reject every write.
+ */
+import type { CommandEnvelope, MemoryQueue } from "@civitasone/queue";
+import { randomUUID } from "node:crypto";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+
+export type Handler = (msg: CommandEnvelope) => Promise<void>;
+
+/** Resolve once every in-flight consumer delivery has settled. */
+export async function drainQueue(): Promise<void> {
+  const q = queue as MemoryQueue;
+  if (typeof q.drain === "function") await q.drain();
+  else await new Promise<void>((r) => setTimeout(r, 400));
+}
+
+/** Register every consumer against a stub bus and expose the handlers by topic. */
+export function captureHandlers(): { handlerFor: (topic: string) => Handler } {
+  const handlers = new Map<string, Handler>();
+  const stub = {
+    subscribe: (topic: string, handler: Handler) => { handlers.set(topic, handler); },
+    publish: async () => "stub-id",
+    start: async () => {},
+    stop: async () => {},
+  };
+  registerAllConsumers(stub as never);
+  return {
+    handlerFor(topic: string): Handler {
+      const handler = handlers.get(topic);
+      if (!handler) throw new Error(`no consumer registered for topic "${topic}"`);
+      return handler;
+    },
+  };
+}
+
+export function envelope(
+  type: string,
+  payload: unknown,
+  opts: { tenantId: string; actorId: string; messageId?: string },
+): CommandEnvelope {
+  return {
+    messageId: opts.messageId ?? randomUUID(),
+    type,
+    tenantId: opts.tenantId,
+    actorId: opts.actorId,
+    correlationId: randomUUID(),
+    schemaVersion: "1.0",
+    payload,
+  } as CommandEnvelope;
+}
