@@ -349,7 +349,10 @@ describe("R1 gate (bulk) — campaign fan-out is gated before it publishes", () 
       messageId: randomUUID(), type: "notification.campaign.send", tenantId: TENANT, actorId: SYSTEM,
       correlationId: randomUUID(), schemaVersion: "1.0", payload: { id: campaignId, tenantId: TENANT },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await q.drain();
+    // A dead-lettered command would leave every recipient at `pending` and make
+    // the assertions below pass for the wrong reason.
+    expect(q.dlq).toEqual([]);
 
     const rows = await sqlAsTenant((sql) => sql`
       SELECT recipient_id, status FROM bulk.campaign_recipients WHERE campaign_id = ${campaignId}`) as unknown as
