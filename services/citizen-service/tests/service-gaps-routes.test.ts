@@ -7,7 +7,20 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerFeePaymentConsumers } from "../src/modules/fee-payment/consumer.js";
+import { registerIssuanceConsumers } from "../src/modules/issuance/consumer.js";
+import { registerApplicationConsumers } from "../src/modules/application/consumer.js";
+import { registerEligibilityConsumers } from "../src/modules/eligibility/consumer.js";
+import { registerDiscoveryConsumers } from "../src/modules/discovery/consumer.js";
 import type { FastifyInstance } from "fastify";
+
+registerFeePaymentConsumers(queue);
+registerIssuanceConsumers(queue);
+registerApplicationConsumers(queue);
+registerEligibilityConsumers(queue);
+registerDiscoveryConsumers(queue);
+await queue.start();
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -21,6 +34,16 @@ function tok(tenant: string, actor: string, roles = ["citizen_admin", "citizen_o
   return signToken({ sub: actor, tid: tenant, roles, sid: "sess-gaps" }, SECRET, 3600);
 }
 function hdr(t: string) { return { authorization: `Bearer ${t}`, "content-type": "application/json", "x-tenant-id": TENANT_A }; }
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
+}
 
 async function outboxTopics(): Promise<string[]> {
   // _outbox.messages has FORCED RLS — read under the transaction-LOCAL tenant GUC.
@@ -50,14 +73,17 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
         ],
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     ruleSetId = res.json().id;
-    expect(res.json().status).toBe("draft");
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 && g.json().status === "draft" ? g.json() : null;
+    });
   });
 
   it("submit records the maker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
   });
 
   it("MAKER-CHECKER: publish by the submitter is rejected 403", async () => {
@@ -68,8 +94,11 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
 
   it("publish by a different checker succeeds + emits outbox event", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/publish`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("published");
+    expect(res.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().status === "published" ? g.json() : null;
+    });
     const topics = await outboxTopics();
     expect(topics).toContain("citizen.eligibility.ruleset_published");
   });
@@ -92,9 +121,13 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
       method: "POST", url: "/v1/citizen/eligibility/evaluate", headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { serviceId: SERVICE_ID, subject: { age: 70 } }, // age ok, income_proof missing → refer
     });
-    expect(ev.statusCode).toBe(200);
-    expect(ev.json().outcome).toBe("refer_manual");
+    expect(ev.statusCode).toBe(202);
     const evalId = ev.json().id;
+    const evaluation = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/evaluations/${evalId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(evaluation.outcome).toBe("refer_manual");
 
     const queue = await app.inject({ method: "GET", url: "/v1/citizen/eligibility/manual-review", headers: hdr(tok(TENANT_A, CHECKER)) });
     expect(queue.json().data.some((e: { id: string }) => e.id === evalId)).toBe(true);
@@ -103,8 +136,11 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
       method: "POST", url: `/v1/citizen/eligibility/evaluations/${evalId}/decision`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { decision: "eligible", note: "manually verified" },
     });
-    expect(decide.statusCode).toBe(200);
-    expect(decide.json().reviewStatus).toBe("decided");
+    expect(decide.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/evaluations/${evalId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().reviewStatus === "decided" ? g.json() : null;
+    });
   });
 
   it("evaluate → not_eligible when disqualified", async () => {
@@ -112,7 +148,13 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
       method: "POST", url: "/v1/citizen/eligibility/evaluate", headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { serviceId: SERVICE_ID, subject: { age: 40, income_proof: "x" } },
     });
-    expect(ev.json().outcome).toBe("not_eligible");
+    expect(ev.statusCode).toBe(202);
+    const evalId = ev.json().id;
+    const evaluation = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/evaluations/${evalId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(evaluation.outcome).toBe("not_eligible");
   });
 });
 
@@ -127,8 +169,12 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
       method: "POST", url: "/v1/citizen/fees/schedules", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { serviceId: SERVICE_ID, name: "Trade licence fee", baseAmount: 500, exemptions: [{ id: "bpl", attribute: "bpl", op: "eq", value: true, kind: "waive" }] },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     scheduleId = res.json().id;
+    await waitFor(async () => {
+      const list = await app.inject({ method: "GET", url: "/v1/citizen/fees/schedules", headers: hdr(tok(TENANT_A, MAKER)) });
+      return list.json().data?.find((s: { id: string }) => s.id === scheduleId) ?? null;
+    });
   });
 
   it("computes fee with exemption applied", async () => {
@@ -146,10 +192,13 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
       method: "POST", url: "/v1/citizen/payments/intent", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { applicationId: APP_ID, scheduleId, subject: {} },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("pending");
-    expect(res.json().gatewayConfigured).toBe(false);
-    expect(res.json().amount).toBe(500);
+    expect(res.statusCode).toBe(202);
+    const pay = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${res.json().id}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(pay.status).toBe("pending");
+    expect(Number(pay.amount)).toBe(500);
   });
 
   it("offline payment records + issues a receipt and emits receipt.issued", async () => {
@@ -157,10 +206,15 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
       method: "POST", url: "/v1/citizen/payments/offline", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { applicationId: APP_ID, scheduleId, subject: {} },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("offline_recorded");
-    expect(res.json().receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
+    expect(res.statusCode).toBe(202);
     paymentId = res.json().id;
+    const pay = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${paymentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      const body = g.statusCode === 200 ? g.json() : null;
+      return body?.receiptNo ? body : null;
+    });
+    expect(pay.status).toBe("offline_recorded");
+    expect(pay.receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
     const topics = await outboxTopics();
     expect(topics).toContain("citizen.receipt.issued");
   });
@@ -175,14 +229,17 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
         }),
       ),
     );
+    for (const r of results) expect(r.statusCode).toBe(202);
+    const nos: string[] = [];
     for (const r of results) {
-      expect(r.statusCode).toBe(201);
-      expect(r.json().receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
+      const pay = await waitFor(async () => {
+        const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${r.json().id}`, headers: hdr(tok(TENANT_A, MAKER)) });
+        const body = g.statusCode === 200 ? g.json() : null;
+        return body?.receiptNo ? body : null;
+      });
+      nos.push(pay.receiptNo as string);
     }
-    const nos = results.map((r) => r.json().receiptNo as string);
-    // No duplicate receipt numbers under concurrency (the racy count(*)+1 could dup).
     expect(new Set(nos).size).toBe(N);
-    // Gapless + consecutive: the atomic counter hands out a contiguous run.
     const seqs = nos.map((n) => Number(n.split("-")[2])).sort((a, b) => a - b);
     for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBe(seqs[i - 1] + 1);
   });
@@ -192,8 +249,13 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
       method: "POST", url: `/v1/citizen/payments/${paymentId}/refunds`, headers: hdr(tok(TENANT_A, MAKER)),
       payload: { amount: 500, reason: "overcharge" },
     });
-    expect(reqRes.statusCode).toBe(201);
+    expect(reqRes.statusCode).toBe(202);
     const refundId = reqRes.json().id;
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${paymentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      const refunds = g.json().refunds ?? [];
+      return refunds.find((x: { id: string }) => x.id === refundId) ?? null;
+    });
 
     const selfApprove = await app.inject({
       method: "POST", url: `/v1/citizen/refunds/${refundId}/decision`, headers: hdr(tok(TENANT_A, MAKER)),
@@ -206,11 +268,13 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
       method: "POST", url: `/v1/citizen/refunds/${refundId}/decision`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { decision: "approve" },
     });
-    expect(approve.statusCode).toBe(200);
-    expect(approve.json().status).toBe("approved");
+    expect(approve.statusCode).toBe(202);
 
-    const pay = await app.inject({ method: "GET", url: `/v1/citizen/payments/${paymentId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
-    expect(pay.json().status).toBe("refunded");
+    const pay = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${paymentId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().status === "refunded" ? g.json() : null;
+    });
+    expect(pay.status).toBe("refunded");
   });
 });
 
@@ -223,8 +287,13 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
       method: "POST", url: "/v1/citizen/certificates/requests", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { certType: "birth", subject: { name: "Asha" }, payload: { name: "Asha", place: "Delhi" }, validTo: "2030-01-01" },
     });
-    expect(res.statusCode).toBe(201);
-    return res.json().id;
+    expect(res.statusCode).toBe(202);
+    const id = res.json().id as string;
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/certificates/${id}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    return id;
   }
 
   it("MAKER-CHECKER: approve by requester rejected 403", async () => {
@@ -236,8 +305,12 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
 
   it("approve by checker allocates cert no + verify token + signature; gapless sequence", async () => {
     const a1 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId1}/approve`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
-    expect(a1.statusCode).toBe(200);
-    const b1 = a1.json();
+    expect(a1.statusCode).toBe(202);
+    const b1 = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/certificates/${certId1}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      const body = g.statusCode === 200 ? g.json() : null;
+      return body?.certNo ? body : null;
+    });
     expect(b1.certNo).toMatch(/^BIRTH-\d{4}-\d{6}$/);
     expect(b1.verifyToken).toBeTruthy();
     expect(b1.signature).toBeTruthy();
@@ -245,9 +318,15 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
 
     certId2 = await requestCert();
     const a2 = await app.inject({ method: "POST", url: `/v1/citizen/certificates/${certId2}/approve`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
+    expect(a2.statusCode).toBe(202);
+    const b2 = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/certificates/${certId2}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      const body = g.statusCode === 200 ? g.json() : null;
+      return body?.certNo ? body : null;
+    });
     const seq1 = Number(b1.certNo.split("-")[2]);
-    const seq2 = Number(a2.json().certNo.split("-")[2]);
-    expect(seq2).toBe(seq1 + 1); // gapless, consecutive
+    const seq2 = Number(b2.certNo.split("-")[2]);
+    expect(seq2).toBe(seq1 + 1);
     const topics = await outboxTopics();
     expect(topics).toContain("citizen.certificate.issued");
   });
@@ -264,9 +343,11 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
       method: "POST", url: `/v1/citizen/certificates/${certId1}/revoke`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { action: "revoke", reason: "fraud" },
     });
-    expect(rev.statusCode).toBe(200);
-    const res = await app.inject({ method: "GET", url: `/v1/citizen/certificates/verify/${token1}` });
-    expect(res.json().validity).toBe("invalid");
+    expect(rev.statusCode).toBe(202);
+    await waitFor(async () => {
+      const res = await app.inject({ method: "GET", url: `/v1/citizen/certificates/verify/${token1}` });
+      return res.json().validity === "invalid" ? res.json() : null;
+    });
   });
 
   it("unknown verify token → 404", async () => {
@@ -287,18 +368,25 @@ describe("SVC-086 issuance maker-checker, gapless numbering, public verify", () 
       method: "POST", url: `/v1/citizen/certificates/${certId2}/amend`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { payload: { name: "Asha K", place: "Delhi" }, note: "name correction" },
     });
-    expect(amend.statusCode).toBe(200);
-    expect(amend.json().status).toBe("amended");
+    expect(amend.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/certificates/${certId2}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().status === "amended" ? g.json() : null;
+    });
     const renew = await app.inject({
       method: "POST", url: `/v1/citizen/certificates/${certId2}/renew`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { validTo: "2035-01-01" },
     });
-    expect(renew.statusCode).toBe(200);
-    expect(renew.json().status).toBe("renewed");
+    expect(renew.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/certificates/${certId2}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().status === "renewed" ? g.json() : null;
+    });
   });
 });
 
 // ═══════════════════════════ SVC-090 Discovery ══════════════════════════════
+
 describe("SVC-090 consent-gated proactive discovery", () => {
   const CITIZEN = "55555555-0000-4000-8000-000000000015";
 
@@ -316,30 +404,31 @@ describe("SVC-090 consent-gated proactive discovery", () => {
       method: "POST", url: "/v1/citizen/discovery/consent", headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { citizenId: CITIZEN },
     });
-    expect(grant.statusCode).toBe(201);
+    expect(grant.statusCode).toBe(202);
 
     const run = await app.inject({
       method: "POST", url: "/v1/citizen/discovery/run", headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { citizenId: CITIZEN, profile: { age: 70, income_proof: "x" } },
     });
-    expect(run.statusCode).toBe(200);
-    // Published pension rule set (age>=60 + income_proof exists) → eligible
-    expect(run.json().notified).toBeGreaterThanOrEqual(1);
+    expect(run.statusCode).toBe(202);
+
+    const matches = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: `/v1/citizen/discovery/matches?citizenId=${CITIZEN}`, headers: hdr(tok(TENANT_A, CHECKER)),
+      });
+      return g.json().data.length >= 1 ? g.json().data : null;
+    });
+    expect(matches.length).toBeGreaterThanOrEqual(1);
     const topics = await outboxTopics();
     expect(topics).toContain("notification.send");
     expect(topics).toContain("citizen.discovery.service_discovered");
-
-    const matches = await app.inject({
-      method: "GET", url: `/v1/citizen/discovery/matches?citizenId=${CITIZEN}`, headers: hdr(tok(TENANT_A, CHECKER)),
-    });
-    expect(matches.json().data.length).toBeGreaterThanOrEqual(1);
-    const matchId = matches.json().data[0].id;
+    const matchId = matches[0].id;
 
     const enrol = await app.inject({
       method: "POST", url: `/v1/citizen/discovery/matches/${matchId}/enrol`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { serviceType: "pension" },
     });
-    expect(enrol.statusCode).toBe(201);
+    expect(enrol.statusCode).toBe(202);
     expect(enrol.json().applicationId).toBeTruthy();
   });
 

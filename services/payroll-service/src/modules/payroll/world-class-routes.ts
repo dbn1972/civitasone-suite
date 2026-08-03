@@ -18,7 +18,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
-  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // CQRS lift (quality-payroll-95): was a synchronous DB write in
   // the request path; now publishes payroll.arrear.create and returns 202 —
   // the arrearCreate consumer (payroll/consumer.js) persists it asynchronously.
   app.post("/v1/payroll/arrears", async (req, reply) => {
@@ -37,7 +37,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
-  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // CQRS lift (quality-payroll-95): was a synchronous DB write in
   // the request path (with the bonus amount computed in the HTTP handler);
   // now publishes payroll.bonus.compute and returns 202 — the bonusCompute
   // consumer (payroll/consumer.js) computes bonusAmountMinor and persists it
@@ -77,7 +77,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({ data: rows });
   });
 
-  // CQRS lift (quality-payroll-95): was a synchronous db.execute() INSERT in
+  // CQRS lift (quality-payroll-95): was a synchronous DB write in
   // the request path; now publishes payroll.reimbursement.create and returns
   // 202 — the reimbursementCreate consumer (payroll/consumer.js) persists it
   // asynchronously.

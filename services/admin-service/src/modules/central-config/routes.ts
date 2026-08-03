@@ -11,6 +11,9 @@
  *              + append immutable config_versions row + audit
  *   reject   → config_change_requests(status=rejected)
  */
+import { randomUUID } from "node:crypto";
+import { publishAdminCommand } from "../../shared/f3-publish.js";
+import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -141,27 +144,16 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     const body = proposeBody.parse(req.body);
     const { stored, encrypted } = sealForStorage(body.value, body.sensitive, configKey());
 
-    const change = await db.transaction(async (tx) => {
-      const existing = await repo.findEntryByKeyTx(tx as repo.Writer, ctx.tenantId, body.key);
-      const row = await repo.insertChange(tx as repo.Writer, {
-        tenantId: ctx.tenantId,
-        key: body.key,
-        proposedValue: stored,
-        sensitive: body.sensitive,
-        encrypted,
-        description: body.description,
-        owner: body.owner,
-        note: body.note ?? null,
-        status: "pending",
-        proposedBy: ctx.actorId,
-        baseVersion: existing?.version ?? null,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await audit(tx, ctx, "config.change.proposed", row.id);
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'central_config_op_0',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(serializeChange(change));
+    const change = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId });
   });
 
   // Approve a change — maker-checker enforced; applies the value + versions it.
@@ -170,67 +162,16 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CONFIG_ROLES);
     const { id } = idParam.parse(req.params);
 
-    const result = await db.transaction(async (tx) => {
-      const change = await repo.findChangeByIdTx(tx as repo.Writer, id, ctx.tenantId);
-      if (!change) throw new HttpError(404, "NOT_FOUND", "change request not found");
-      assertPending(change.status);
-      assertApproverDistinct(change.proposedBy, ctx.actorId);
-
-      const existing = await repo.findEntryByKeyTx(tx as repo.Writer, ctx.tenantId, change.key);
-      let entryId: string;
-      let version: number;
-      if (existing) {
-        version = nextVersion(existing.version);
-        entryId = existing.id;
-        await repo.updateEntry(tx as repo.Writer, existing.id, ctx.tenantId, {
-          value: change.proposedValue,
-          sensitive: change.sensitive,
-          encrypted: change.encrypted,
-          description: change.description,
-          owner: change.owner,
-          version,
-          updatedBy: ctx.actorId,
-        });
-      } else {
-        version = 1;
-        const created = await repo.insertEntry(tx as repo.Writer, {
-          tenantId: ctx.tenantId,
-          key: change.key,
-          value: change.proposedValue,
-          sensitive: change.sensitive,
-          encrypted: change.encrypted,
-          description: change.description,
-          owner: change.owner,
-          version,
-          createdBy: change.proposedBy,
-          updatedBy: ctx.actorId,
-        });
-        entryId = created.id;
-      }
-
-      await repo.insertVersion(tx as repo.Writer, {
-        tenantId: ctx.tenantId,
-        entryId,
-        key: change.key,
-        version,
-        value: change.proposedValue,
-        sensitive: change.sensitive,
-        encrypted: change.encrypted,
-        note: change.note,
-        approvedBy: ctx.actorId,
-      });
-
-      await repo.updateChange(tx as repo.Writer, id, ctx.tenantId, {
-        status: "approved",
-        approvedBy: ctx.actorId,
-        approvedAt: new Date(),
-        updatedBy: ctx.actorId,
-      });
-
-      await audit(tx, ctx, "config.change.approved", id);
-      return { key: change.key, version };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'central_config_op_1',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send({ status: "approved", key: result.key, version: result.version });
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // Reject a change.
@@ -240,16 +181,13 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = rejectBody.parse(req.body);
 
-    await db.transaction(async (tx) => {
-      const change = await repo.findChangeByIdTx(tx as repo.Writer, id, ctx.tenantId);
-      if (!change) throw new HttpError(404, "NOT_FOUND", "change request not found");
-      assertPending(change.status);
-      await repo.updateChange(tx as repo.Writer, id, ctx.tenantId, {
-        status: "rejected",
-        rejectedReason: body.reason,
-        updatedBy: ctx.actorId,
-      });
-      await audit(tx, ctx, "config.change.rejected", id);
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'central_config_op_2',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
     return reply.send({ status: "rejected", id });
   });

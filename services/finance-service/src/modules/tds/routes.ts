@@ -1,14 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { encryptPii, decryptPii } from "../../shared/pii-crypto.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
+import { decryptPii } from "../../shared/pii-crypto.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
 export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/finance/vendor-tds — list TDS deductions
   app.get("/v1/finance/vendor-tds", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -35,7 +37,6 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 
-    // Decrypt PAN in result rows (transparent to callers)
     const decryptedRows = (rows as Record<string, unknown>[]).map((row) => ({
       ...row,
       pan: row.pan ? decryptPii(row.pan as string) : null,
@@ -44,7 +45,6 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: decryptedRows });
   });
 
-  // POST /v1/finance/vendor-tds — record a TDS deduction
   app.post("/v1/finance/vendor-tds", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -67,27 +67,15 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
     }).parse(req.body);
 
-    const encryptedPan = body.pan ? encryptPii(body.pan) : null;
-
-    const rows = await db.execute(sql`
-      INSERT INTO gl.finance_vendor_tds (
-        tenant_id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
-        gross_amount_minor, tds_rate_pct, tds_amount_minor, surcharge_minor,
-        cess_minor, net_payment_minor, deduction_date, quarter, fy
-      ) VALUES (
-        ${ctx.tenantId}::uuid, ${body.vendorId}::uuid, ${body.vendorName ?? null},
-        ${encryptedPan}, ${body.billId ?? null}::uuid, ${body.paymentId ?? null}::uuid,
-        ${body.section}, ${body.grossAmountMinor}, ${body.tdsRatePct},
-        ${body.tdsAmountMinor}, ${body.surchargeMinor}, ${body.cessMinor},
-        ${body.netPaymentMinor}, ${body.deductionDate}::date, ${body.quarter}, ${body.fy}
-      )
-      RETURNING id, vendor_id, section, tds_amount_minor, deduction_date, status
-    `);
-
-    return reply.code(201).send({ data: (rows as unknown[])[0] });
+    const id = randomUUID();
+    await queue.publish(COMMANDS.tdsDeductionRecord, {
+      messageId: id, type: COMMANDS.tdsDeductionRecord,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, ...body },
+    });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
-  // GET /v1/finance/vendor-tds/form-26q — generate Form 26Q data
   app.get("/v1/finance/vendor-tds/form-26q", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -111,7 +99,6 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY vendor_name
     `));
 
-    // Decrypt PAN in Form 26Q deductee rows
     const deductees = (rows as Record<string, unknown>[]).map((row) => ({
       ...row,
       pan: row.pan ? decryptPii(row.pan as string) : null,

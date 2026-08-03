@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate resume versioning (checklist R-RA-0087) — multiple resume versions
  * with a single active version per candidate.
@@ -11,7 +13,6 @@
  * candidate uploads is automatically active; thereafter the uploader may pass
  * `makeActive` or switch later via the activate route.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -45,19 +46,9 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (errors.length > 0) throw new HttpError(422, "INVALID_RESUME", errors.join("; "));
 
     const rid = randomUUID();
-    const result = await db.transaction(async (tx) => {
-      const r = await repo.createResumeVersion(tx, {
-        id: rid, tenantId: ctx.tenantId, candidateId: id,
-        fileKey: body.fileKey, fileName: body.fileName, mimeType: body.mimeType,
-        fileSizeBytes: BigInt(body.fileSizeBytes),
-        fingerprint: body.fingerprint ?? null, label: body.label ?? null,
-        actorId: ctx.actorId,
-      }, body.makeActive ?? false);
-      await emitAudit(tx, ctx, "resume_uploaded", "candidate_resume", rid, { candidateId: id, versionNo: r.versionNo });
-      return r;
-    });
+    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive });
+    return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/resumes", async (req, reply) => {
@@ -84,8 +75,8 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     await mustCandidate(ctx.tenantId, id);
     const resume = await repo.findResume(ctx.tenantId, id, resumeId);
     if (!resume) throw new HttpError(404, "NOT_FOUND", "resume version not found");
-    const n = await db.transaction((tx) => repo.activateResume(tx, ctx.tenantId, id, resumeId, resume.fileKey, ctx.actorId));
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "resume version not found");
+    const n = await publishF3Write(ctx, "recruitment_resume_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (n === 0) throw new HttpError(404, "NOT_FOUND", "resume version not found") as any;
     return reply.send({ id: resumeId, candidateId: id, versionNo: resume.versionNo, isActive: true });
   });
 

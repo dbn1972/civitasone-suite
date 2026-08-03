@@ -2,13 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as repo from "./outcome-repo.js";
 import {
-  assertOutcomeLinkageValid, assertAchievementValid, assertEvaluatorDistinct,
-  classifyAchievement, achievementRatioBps,
+  assertOutcomeLinkageValid, assertAchievementValid,
+  achievementRatioBps,
 } from "./outcome-domain.js";
 import { DomainError } from "./domain.js";
 import { createOutcomeBody, recordAchievementBody, evaluateOutcomeBody, outcomeQuery, idParam } from "./outcome-validators.js";
@@ -16,10 +15,8 @@ import type { BudgetOutcomeRow } from "./outcome-schema.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
-const AUDIT_TOPIC = "audit.event.record";
 
 export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
-  // Create an output/outcome framework row linked to a head + allocation.
   app.post("/v1/finance/budget-outcomes", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -36,22 +33,20 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
       throw err;
     }
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertOutcome(tx, {
+    await queue.publish(COMMANDS.budgetOutcomeCreate, {
+      messageId: id, type: COMMANDS.budgetOutcomeCreate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
         id, tenantId: ctx.tenantId, headId: body.headId, fy: body.fy,
         allocationId: body.allocationId ?? null, schemeId: body.schemeId ?? null,
         outputDesc: body.outputDesc, outcomeDesc: body.outcomeDesc,
         indicator: body.indicator, unit: body.unit,
-        baselineValue: linkage.baselineValue, targetValue: linkage.targetValue,
-        achievedValue: 0n, allocatedMinor: linkage.allocatedMinor,
-        currency: body.currency, status: "active",
+        baselineValue: body.baselineValue, targetValue: body.targetValue,
+        allocatedMinor: body.allocatedMinor, currency: body.currency,
         effectiveFrom: body.effectiveFrom ?? new Date().toISOString().slice(0, 10),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await audit(tx, ctx, "create", id);
+      },
     });
-    const row = await repo.findOutcomeById(id, ctx.tenantId);
-    return reply.code(201).send({ data: serialize(row!) });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
   app.get("/v1/finance/budget-outcomes", async (req, reply) => {
@@ -71,74 +66,38 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: serialize(row) });
   });
 
-  // Record a fresh achievement reading against the indicator.
   app.patch("/v1/finance/budget-outcomes/:id/achievement", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = recordAchievementBody.parse(req.body);
-    const achieved = BigInt(body.achievedValue);
     try {
-      assertAchievementValid(achieved);
+      assertAchievementValid(BigInt(body.achievedValue));
     } catch (err) {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
-    await db.transaction(async (tx) => {
-      const row = await repo.findOutcomeByIdTx(tx, id, ctx.tenantId);
-      if (!row) throw new HttpError(404, "NOT_FOUND", "outcome not found");
-      // An outcome that has been evaluated (or closed) is a certified record --
-      // its achievement reading is frozen. Silently mutating it here would let a
-      // maker overwrite the value the checker rated against, breaking the
-      // maker-checker integrity of the evaluation. Block the edit post-evaluation.
-      if (row.status === "evaluated" || row.status === "closed") {
-        throw new HttpError(409, "OUTCOME_ALREADY_EVALUATED", `achievement is locked once the outcome is ${row.status}`);
-      }
-      await repo.updateOutcome(tx, id, { achievedValue: achieved, updatedBy: ctx.actorId });
-      await audit(tx, ctx, "record_achievement", id);
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.budgetOutcomeAchievement, {
+      messageId, type: COMMANDS.budgetOutcomeAchievement,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, achievedValue: body.achievedValue },
     });
-    const updated = await repo.findOutcomeById(id, ctx.tenantId);
-    return reply.send({ data: serialize(updated!) });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
-  // Maker-checker evaluation: a checker (≠ creator) certifies the outcome. The
-  // rating is COMPUTED from the achievement vs the target (never hand-set), and
-  // finance.budget.outcome_evaluated is emitted via the outbox.
   app.patch("/v1/finance/budget-outcomes/:id/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["finance_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
     const body = evaluateOutcomeBody.parse(req.body);
-    let rating: string;
-    await db.transaction(async (tx) => {
-      const row = await repo.findOutcomeByIdTx(tx, id, ctx.tenantId);
-      if (!row) throw new HttpError(404, "NOT_FOUND", "outcome not found");
-      try {
-        assertEvaluatorDistinct(row.createdBy, ctx.actorId);
-      } catch (err) {
-        if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
-        throw err;
-      }
-      rating = classifyAchievement(
-        { targetValue: row.targetValue, baselineValue: row.baselineValue },
-        row.achievedValue,
-      );
-      await repo.updateOutcome(tx, id, {
-        status: "evaluated", evaluationRating: rating, evaluationNote: body.note,
-        evaluatedBy: ctx.actorId, evaluatedAt: new Date(), updatedBy: ctx.actorId,
-      });
-      await enqueue(tx, {
-        topic: EVENTS.outcomeEvaluated, eventType: EVENTS.outcomeEvaluated,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          outcomeId: id, headId: row.headId, fy: row.fy, rating,
-          achievedValue: row.achievedValue.toString(), targetValue: row.targetValue.toString(),
-        },
-      });
-      await audit(tx, ctx, "evaluate", id);
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.budgetOutcomeEvaluate, {
+      messageId, type: COMMANDS.budgetOutcomeEvaluate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, note: body.note },
     });
-    const updated = await repo.findOutcomeById(id, ctx.tenantId);
-    return reply.send({ data: serialize(updated!), rating: rating! });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -151,14 +110,6 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
     }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
-}
-
-async function audit(tx: unknown, ctx: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
-  await enqueue(tx as Parameters<typeof enqueue>[0], {
-    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-    payload: { service: "finance", action, resourceType: "budget_outcome", resourceId, outcome: "success" },
   });
 }
 

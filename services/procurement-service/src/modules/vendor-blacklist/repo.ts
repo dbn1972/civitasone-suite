@@ -72,9 +72,16 @@ export async function findActiveCentralByPan(pan: string): Promise<VendorBlackli
   return rows[0] ?? null;
 }
 
-export async function insertBlacklist(row: VendorBlacklistInsert): Promise<VendorBlacklistRow> {
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this write — a bare db.insert() runs with no RLS GUC set.
+export async function insertBlacklist(
+  row: VendorBlacklistInsert,
+  writer?: Writer,
+): Promise<VendorBlacklistRow> {
+  // When called inside a consumer transaction, reuse that writer so markProcessed
+  // and the insert share one GUC/tx. Otherwise wrap for standalone callers.
+  if (writer) {
+    const rows = await (writer as typeof db).insert(vendorBlacklist).values(row).returning();
+    return rows[0]!;
+  }
   const rows = await db.transaction((tx) => tx.insert(vendorBlacklist).values(row).returning());
   return rows[0]!;
 }

@@ -27,6 +27,8 @@ export const COMMANDS = {
   upsertRegulatoryMetadata: "catalogue.regulatory_metadata.upsert",
   /** PC-004 — bulk set circle/region/office availability. */
   setProductAvailability: "catalogue.product_availability.set",
+  /** PC-004 — record a single availability row (legacy endpoint). */
+  recordProductAvailability: "catalogue.product_availability.record",
   /** PC-005 — record that a rate is mastered in an external system. */
   recordRateExternalRef: "catalogue.rate_external_ref.record",
   /** PC-006 — request approval for bundle pricing. */

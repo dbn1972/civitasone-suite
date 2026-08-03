@@ -324,7 +324,9 @@ module.exports = {
     svc("workflow",     3029, "workflow_svc",      "civitas_workflow"),
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
-    worker("finance",      "finance_svc",      "civitas_finance"),
+    worker("finance",      "finance_svc",      "civitas_finance", {
+      FINANCE_SCANNER_DATABASE_URL: scannerDbUrl("finance_scanner", "civitas_finance", "FINANCE_SCANNER_DATABASE_URL"),
+    }),
     worker("procurement",  "procurement_svc",  "civitas_procurement", {
       PII_ENC_KEY: PROCUREMENT_PII_KEY,
       PROCUREMENT_SCANNER_DATABASE_URL: scannerDbUrl("procurement_scanner", "civitas_procurement", "PROCUREMENT_SCANNER_DATABASE_URL"),
@@ -346,7 +348,9 @@ module.exports = {
     worker("crm",          "crm_svc",          "civitas_crm", { CRM_PII_KEY }),
     worker("admin",        "admin_svc",        "civitas_admin"),
     worker("billing",      "billing_svc",      "civitas_billing"),
-    worker("contract",     "contract_svc",     "civitas_contract"),
+    worker("contract",     "contract_svc",     "civitas_contract", {
+      CONTRACT_SCANNER_DATABASE_URL: scannerDbUrl("contract_scanner", "civitas_contract", "CONTRACT_SCANNER_DATABASE_URL"),
+    }),
 
     // ── EVT-1 (04-T1): previously-missing workers now wired. Each ships a real
     //    src/worker.ts (consumers + outbox relay); without these entries their
@@ -365,6 +369,13 @@ module.exports = {
     worker("inventory",    "inventory_svc",    "civitas_inventory"),
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
+    worker("ai-agent",     "ai_agent_svc",     "civitas_ai_agent"),
+    worker("field",        "field_svc",        "civitas_field"),
+    worker("catalogue",    "catalogue_svc",    "civitas_catalogue"),
+    worker("journey",      "journey_svc",     "civitas_journey"),
+    worker("loyalty",      "loyalty_svc",      "civitas_loyalty"),
+    worker("recommendation", "recommendation_svc", "civitas_recommendation"),
+    worker("cdp",          "cdp_svc",         "civitas_cdp"),
     worker("meeting",      "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
     // court-service is the only service in the fleet whose worker.ts is split
     // into a pure, side-effect-free module (src/worker.ts, exports
@@ -388,9 +399,19 @@ module.exports = {
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
       S3_REGION: process.env.S3_REGION ?? "ap-south-1",
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
+      INSPECTION_SCANNER_DATABASE_URL: scannerDbUrl("inspection_scanner", "civitas_inspection", "INSPECTION_SCANNER_DATABASE_URL"),
     }),
 
+    // T1-02: entities consumer + outbox relay were registered in worker.ts but
+    // metadata-worker was never declared here, so CQRS writes black-holed.
+    worker("metadata",     "metadata_svc",     "civitas_metadata"),
+
+    // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
+    worker("gateway",      "gateway_svc",      "civitas_gateway"),
+
     // ── Infrastructure services ────────────────────────────────────────────────
+    // Platform message-bus observability process (F9). Domain services embed the
+    // bus via @civitasone/queue; this process exposes /health + /v1/queue/* ops.
     {
       name: "queue",
       script: "dist/server.js",
@@ -403,7 +424,9 @@ module.exports = {
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 3030,
+        BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
+        INTERNAL_SERVICE_SECRET,
         REDIS_URL: REDIS,
         ...AWS_ENV,
       },
@@ -418,6 +441,13 @@ module.exports = {
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
     svc("works",        3036, "works_svc",        "civitas_works"),
     svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
+    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
+    svc("field",        3046, "field_svc",        "civitas_field"),
+    svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
+    svc("journey",      3045, "journey_svc",      "civitas_journey"),
+    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty"),
+    svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
+    svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
@@ -428,6 +458,9 @@ module.exports = {
     svc("location",     4012, "location_svc",     "civitas_location"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
+    // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)
+    // and to let the proxy stay healthy when catalogue is enabled. Proxy routing
+    // itself does not use the DB.
     {
       name: "gateway",
       script: "dist/index.js",
@@ -440,8 +473,16 @@ module.exports = {
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 8080,
+        BIND_HOST: "127.0.0.1",
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
+        // AWS_ENV supplies QUEUE_DRIVER=sqs for catalogue CQRS publishes.
+        // Force-clear REDIS_URL: PM2 inherits the shell env; a host REDIS_URL
+        // enables the broken `{ url }` rate-limit store (defineCommand crash).
+        ...AWS_ENV,
+        REDIS_URL: "",
+        DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
+        QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
       },
     },

@@ -11,9 +11,24 @@ import { registerTasksConsumers } from "./modules/tasks/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
 import { registerMessagesConsumers } from "./modules/messages/consumer.js";
 import { registerDesignerConsumers } from "./modules/designer/consumer.js";
+import { registerDefinitionConsumers } from "./modules/definitions/consumer.js";
+import { registerDmnConsumers } from "./modules/dmn/consumer.js";
+import { registerAdminConsumers } from "./modules/admin/consumer.js";
+import { registerAssignmentConsumers } from "./modules/assignment/consumer.js";
+import { registerDecisionConsumers } from "./modules/decisions/consumer.js";
 import { startSlaSweeper, startTimerSweeper, startReminderSweeper } from "./modules/tasks/sweeper.js";
 import { startMessageSweeper } from "./modules/messages/sweeper.js";
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
+import { registerDelegationConsumers } from "./modules/delegations/consumer.js";
+import { registerAuthorityConsumers } from "./modules/authority/consumer.js";
+import { registerFinalizationConsumers } from "./modules/finalization/consumer.js";
+import { registerQuorumConsumers } from "./modules/quorum/consumer.js";
+import { registerSlaConsumers } from "./modules/sla/consumer.js";
+import { registerDeviationConsumers } from "./modules/deviations/consumer.js";
+import { registerWorkbasketConsumers } from "./modules/workbaskets/consumer.js";
+import { registerCaseLinksConsumers } from "./modules/case-links/consumer.js";
+import { registerChecklistConsumers } from "./modules/checklists/consumer.js";
+import { registerCommentsConsumers } from "./modules/comments/consumer.js";
 
 const log = pino({ name: "workflow-worker" });
 
@@ -62,10 +77,25 @@ registerTasksConsumers(queue);
 registerProvisioningConsumers(queue);
 registerMessagesConsumers(queue);
 registerDesignerConsumers(queue);
+registerDefinitionConsumers(queue);
+registerDmnConsumers(queue);
+registerAdminConsumers(queue);
+registerAssignmentConsumers(queue);
+registerDecisionConsumers(queue);
 // CAP-031: cross-domain registration handlers write to FORCE-RLS workflow.cases
 // under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC
 // (also covered by the global wrap above; tenantScoped() kept for clarity/tests).
 registerCaseRegistryConsumers(queue);
+registerDelegationConsumers(queue);
+registerAuthorityConsumers(queue);
+registerFinalizationConsumers(queue);
+registerQuorumConsumers(queue);
+registerSlaConsumers(queue);
+registerDeviationConsumers(queue);
+registerWorkbasketConsumers(queue);
+registerCaseLinksConsumers(queue);
+registerChecklistConsumers(queue);
+registerCommentsConsumers(queue);
 await queue.start();
 
 // Cross-tenant outbox scan must use the BYPASSRLS scannerDb — FORCE RLS on

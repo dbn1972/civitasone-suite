@@ -3,6 +3,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as projectRepo from "../project/repo.js";
+import * as commands from "./commands.js";
 
 const PROJECT_ROLES = ["project_manager", "project_officer", "project_admin", "super_admin"];
 
@@ -39,14 +40,12 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "milestone not found");
     }
 
-    const record = await repo.insert({
-      tenantId: ctx.tenantId,
-      milestoneId: id,
-      fileKey: body.fileUrl,
+    return reply.code(202).send(await commands.attachEvidence(ctx, id, {
       fileName: body.fileName,
-      uploadedBy: ctx.actorId,
-    });
-    return reply.code(201).send({ data: toDto(record) });
+      fileUrl: body.fileUrl,
+      fileType: body.fileType,
+      ...(body.notes !== undefined ? { notes: body.notes } : {}),
+    }));
   });
 
   app.get("/v1/projects/milestones/:id/evidence", async (req, reply) => {

@@ -143,7 +143,7 @@ describe("GET /v1/cdp/profiles/:id/lineage", () => {
 describe("POST /v1/cdp/profiles/:id/lineage", () => {
   const body = { entry: { source: "umang", sourceId: "u-42", timestamp: "2025-06-01T00:00:00.000Z" }, version: 3 };
 
-  it("202 — appends the entry and emits the event", async () => {
+  it("202 — publishes lineage append command", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     const app = await buildApp();
     const r = await app.inject({
@@ -152,19 +152,22 @@ describe("POST /v1/cdp/profiles/:id/lineage", () => {
     expect(r.statusCode).toBe(202);
     expect(r.json().data.status).toBe("accepted");
     expect(r.json().data.version).toBe(4);
-
-    // The append preserves order and never rewrites existing entries.
-    const patch = H.profileUpdateMock.mock.calls[0]?.[3] as { sourceLineage: unknown[] };
-    expect(patch.sourceLineage).toEqual([...LINEAGE, body.entry]);
-    // The route no longer publishes a command: the append is synchronous and the
-    // lineage_appended event is the downstream contract.
-    expect(H.publishMock).not.toHaveBeenCalled();
-    // Domain event + audit event.
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          op: "lineage_append",
+          profileId: PROFILE_ID,
+          sourceLineage: [...LINEAGE, body.entry],
+        }),
+      }),
+    );
+    expect(H.profileUpdateMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — server stamps a missing timestamp", async () => {
+  it("202 — server stamps a missing timestamp in the command payload", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     const app = await buildApp();
     const r = await app.inject({
@@ -174,6 +177,7 @@ describe("POST /v1/cdp/profiles/:id/lineage", () => {
     expect(r.statusCode).toBe(202);
     expect(typeof r.json().data.entry.timestamp).toBe("string");
     expect(Number.isNaN(Date.parse(r.json().data.entry.timestamp))).toBe(false);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -207,15 +211,15 @@ describe("POST /v1/cdp/profiles/:id/lineage", () => {
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
-    H.profileUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/lineage`, headers: auth(), payload: body,
     });
-    expect(r.statusCode).toBe(409);
-    expect(H.publishMock).not.toHaveBeenCalled();
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.profileUpdateMock).not.toHaveBeenCalled();
     await app.close();
   });
 

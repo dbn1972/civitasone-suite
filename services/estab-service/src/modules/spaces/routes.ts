@@ -5,6 +5,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -24,7 +26,7 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/buildings", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const body = createBuildingBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.createBuilding(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createBuilding(ctx, body));
   });
   app.get("/v1/estab/spaces/buildings", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
@@ -43,7 +45,7 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/floors", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const body = createFloorBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.createFloor(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createFloor(ctx, body));
   });
   app.get("/v1/estab/spaces/floors", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
@@ -55,7 +57,7 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/rooms", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const body = createRoomBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.createRoom(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRoom(ctx, body));
   });
   app.get("/v1/estab/spaces/rooms", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
@@ -67,7 +69,7 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/seats", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const body = createSeatBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.createSeat(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createSeat(ctx, body));
   });
   app.get("/v1/estab/spaces/seats", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
@@ -86,31 +88,31 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/allotments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES); // requester may be an employee
     const body = requestAllotmentBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.requestAllotment(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requestAllotment(ctx, body));
   });
   app.patch("/v1/estab/spaces/allotments/:id/allot", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = allotBody.parse(req.body);
-    return reply.send({ data: await commands.allot(ctx, id, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.allot(ctx, id, body));
   });
   app.patch("/v1/estab/spaces/allotments/:id/occupy", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = versionBody.parse(req.body);
-    return reply.send({ data: await commands.occupy(ctx, id, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.occupy(ctx, id, body));
   });
   app.patch("/v1/estab/spaces/allotments/:id/release", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = releaseBody.parse(req.body);
-    return reply.send({ data: await commands.release(ctx, id, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.release(ctx, id, body));
   });
   app.patch("/v1/estab/spaces/allotments/:id/cancel", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = cancelBody.parse(req.body);
-    return reply.send({ data: await commands.cancelAllotment(ctx, id, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.cancelAllotment(ctx, id, body));
   });
   app.get("/v1/estab/spaces/allotments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
@@ -122,13 +124,13 @@ export async function spacesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/spaces/maintenance", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES); // anyone can report
     const body = createMaintenanceBody.parse(req.body);
-    return reply.code(201).send({ data: await commands.createMaintenance(ctx, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createMaintenance(ctx, body));
   });
   app.patch("/v1/estab/spaces/maintenance/:id/status", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = maintenanceStatusBody.parse(req.body);
-    return reply.send({ data: await commands.updateMaintenanceStatus(ctx, id, body) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateMaintenanceStatus(ctx, id, body));
   });
   app.get("/v1/estab/spaces/maintenance", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);

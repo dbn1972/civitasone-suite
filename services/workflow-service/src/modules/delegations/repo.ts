@@ -2,6 +2,12 @@ import { and, eq, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { delegations, type DelegationRow, type DelegationView } from "./schema.js";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function withTx<T>(outer: Tx | undefined, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  if (outer) return fn(outer);
+  return db.transaction(fn);
+}
+
 export function toView(r: DelegationRow): DelegationView {
   return {
     id: r.id,
@@ -23,9 +29,11 @@ export async function create(input: {
   fromDate: string;
   toDate: string | null;
   reason: string | null;
-}): Promise<DelegationView> {
-  const rows = await db.transaction(async (tx) => {
+  id?: string;
+}, outer?: Tx): Promise<DelegationView> {
+  const rows = await withTx(outer, async (tx) => {
     return tx.insert(delegations).values({
+      ...(input.id !== undefined ? { id: input.id } : {}),
       tenantId: input.tenantId,
       delegatorId: input.delegatorId,
       delegateId: input.delegateId,
@@ -57,8 +65,8 @@ export async function findById(id: string, tenantId: string): Promise<Delegation
 }
 
 /** Soft-delete: revoke a delegation (is_active = false). Returns the updated view or null. */
-export async function revoke(id: string, tenantId: string): Promise<DelegationView | null> {
-  const rows = await db.transaction(async (tx) => {
+export async function revoke(id: string, tenantId: string, outer?: Tx): Promise<DelegationView | null> {
+  const rows = await withTx(outer, async (tx) => {
     return tx.update(delegations)
       .set({ isActive: false })
       .where(and(eq(delegations.id, id), eq(delegations.tenantId, tenantId)))

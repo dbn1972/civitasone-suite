@@ -18,10 +18,22 @@ const TOKEN_ID = "b0000000-0000-4000-8000-000000000001";
 const BRANDING_ID = "c0000000-0000-4000-8000-000000000001";
 const TEMPLATE_ID = "d0000000-0000-4000-8000-000000000001";
 
+const BRAND_CMD_ID = "e0000000-0000-4000-8000-000000000001";
+
 /* ─── Mocks ──────────────────────────────────────────────────────────── */
 vi.mock("../src/modules/tokens/commands.js", () => ({
   createToken: vi.fn(async (ctx: { correlationId: string }) => ({
     id: TOKEN_ID,
+    status: "accepted",
+    correlationId: ctx.correlationId,
+  })),
+  upsertBrandConfig: vi.fn(async (ctx: { correlationId: string }) => ({
+    id: BRAND_CMD_ID,
+    status: "accepted",
+    correlationId: ctx.correlationId,
+  })),
+  applyBrandPreset: vi.fn(async (ctx: { correlationId: string }) => ({
+    id: BRAND_CMD_ID,
     status: "accepted",
     correlationId: ctx.correlationId,
   })),
@@ -329,51 +341,54 @@ describe("PUT /v1/themes/brand", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("→ 400/500 invalid color format", async () => {
+  it("→ 400 invalid color format", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/themes/brand",
       headers: authHeader(["theme_admin"]),
       payload: { colorPrimary: "not-a-color" },
     });
-    // brand-routes has no local error handler; Fastify wraps ZodError as 500
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
-  it("→ 400/500 invalid sidebarStyle enum", async () => {
+  it("→ 400 invalid sidebarStyle enum", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/themes/brand",
       headers: authHeader(["theme_admin"]),
       payload: { sidebarStyle: "invalid" },
     });
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
-  it("→ 400/500 invalid headerStyle enum", async () => {
+  it("→ 400 invalid headerStyle enum", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/themes/brand",
       headers: authHeader(["theme_admin"]),
       payload: { headerStyle: "ultra" },
     });
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
   });
 
-  it("→ 201 creates brand config (theme_admin)", async () => {
+  it("→ 202 upserts brand config (theme_admin)", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/themes/brand",
       headers: authHeader(["theme_admin"]),
       payload: { appName: "GovPortal", colorPrimary: "#003366" },
     });
-    expect([200, 201]).toContain(res.statusCode);
-    expect(res.json().appName).toBe("GovPortal");
+    expect(res.statusCode).toBe(202);
+    const body = res.json();
+    expect(body.id).toBeDefined();
+    expect(body.status).toBe("accepted");
   });
 
-  it("→ 200/201 with super_admin role", async () => {
+  it("→ 202 with super_admin role", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/themes/brand",
       headers: authHeader(["super_admin"]),
       payload: { fontFamily: "Noto Sans, system-ui" },
     });
-    expect([200, 201]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 });
 
@@ -411,14 +426,14 @@ describe("POST /v1/themes/brand/apply-preset", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("→ 400/500 missing code", async () => {
+  it("→ 400 missing code", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/themes/brand/apply-preset",
       headers: authHeader(["theme_admin"]),
       payload: {},
     });
-    // brand-routes has no local error handler; Fastify wraps ZodError as 500
-    expect([400, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("→ 404 non-existent preset", async () => {

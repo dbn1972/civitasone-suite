@@ -1,14 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import type { VendorBlacklistRow } from "./schema.js";
 import * as vendorRepo from "../vendor/repo.js";
+import * as commands from "./commands.js";
 
 const PROC_ROLES = ["procurement_officer", "procurement_admin", "super_admin"];
-const CENTRAL_DEBARMENT_ROLES = ["super_admin"]; // CVC / central debarring authority
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+const CENTRAL_DEBARMENT_ROLES = ["super_admin"];
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
 const createBody = z.object({
   reason: z.string().min(1).max(1000),
@@ -17,7 +19,6 @@ const createBody = z.object({
   orderRef: z.string().max(128).optional(),
 });
 
-const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const centralDebarmentBody = z.object({
   pan: z.string().regex(PAN_RE, "PAN must be 10 chars (AAAAA9999A)"),
   reason: z.string().min(1).max(1000),
@@ -48,69 +49,24 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = createBody.parse(req.body);
 
-    // Tenant-scoped vendor existence check (tenant isolation).
     const vendor = await vendorRepo.findVendorById(id, ctx.tenantId);
     if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
-
     const existing = await repo.findActive(ctx.tenantId, id);
-    if (existing) {
-      throw new HttpError(409, "ALREADY_BLACKLISTED", "vendor is already blacklisted");
-    }
+    if (existing) throw new HttpError(409, "ALREADY_BLACKLISTED", "vendor is already blacklisted");
 
-    const record = await repo.insertBlacklist({
-      tenantId: ctx.tenantId,
-      vendorId: id,
-      reason: body.reason,
-      blacklistedBy: ctx.actorId,
-      createdBy: ctx.actorId,
-      blacklistedFrom: body.blacklistedFrom,
-      blacklistedUntil: body.blacklistedUntil ?? null,
-      orderRef: body.orderRef ?? null,
-      status: "active",
-    });
-
-    // Defense-in-depth: reflect on the vendor row so legacy vendorType checks agree.
-    await db.transaction(async (tx) => {
-      await vendorRepo.updateVendor(tx, id, {
-        vendorType: "blacklisted",
-        blacklistReason: body.reason,
-        updatedBy: ctx.actorId,
-        version: (vendor.version ?? 1) + 1,
-      });
-    });
-
-    return reply.code(201).send({ data: toApi(record) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addVendorBlacklist(ctx, id, body));
   });
 
-  // R17 — record a CVC / government-wide debarment by PAN. Restricted to the
-  // central debarring authority (super_admin). Such an entry blocks the firm's
-  // PAN in EVERY tenant at the award/PO gate (isCentrallyDebarredTx), not just
-  // the recording tenant. Idempotent on an already-active PAN.
   app.post("/v1/procurement/central-debarment", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CENTRAL_DEBARMENT_ROLES);
     const body = centralDebarmentBody.parse(req.body);
     const existing = await repo.findActiveCentralByPan(body.pan);
-    if (existing) {
-      throw new HttpError(409, "ALREADY_DEBARRED", "PAN already has an active central debarment");
-    }
-    const record = await repo.insertBlacklist({
-      tenantId: ctx.tenantId,        // recording authority's tenant
-      vendorId: NIL_UUID,            // central debarment matches by PAN, not a per-tenant vendor id
-      scope: "central",
-      pan: body.pan.toUpperCase(),
-      reason: body.reason,
-      blacklistedBy: ctx.actorId,
-      createdBy: ctx.actorId,
-      blacklistedFrom: body.blacklistedFrom,
-      blacklistedUntil: body.blacklistedUntil ?? null,
-      orderRef: body.orderRef ?? null,
-      status: "active",
-    });
-    return reply.code(201).send({ data: { ...toApi(record), scope: record.scope, pan: record.pan } });
+    if (existing) throw new HttpError(409, "ALREADY_DEBARRED", "PAN already has an active central debarment");
+
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addCentralDebarment(ctx, body));
   });
 
-  // List active CVC / government-wide debarments (visible to every tenant).
   app.get("/v1/procurement/central-debarment", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
@@ -149,21 +105,9 @@ export async function vendorBlacklistRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, PROC_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const entry = await repo.findActive(ctx.tenantId, id);
-    if (!entry) {
-      throw new HttpError(404, "NOT_FOUND", "vendor not in blacklist");
-    }
-    await repo.reinstate(ctx.tenantId, id, ctx.actorId);
-    const vendor = await vendorRepo.findVendorById(id, ctx.tenantId);
-    if (vendor) {
-      await db.transaction(async (tx) => {
-        await vendorRepo.updateVendor(tx, id, {
-          vendorType: "registered",
-          updatedBy: ctx.actorId,
-          version: (vendor.version ?? 1) + 1,
-        });
-      });
-    }
-    return reply.code(200).send({ data: toApi({ ...entry, status: "reinstated" }), message: "vendor reinstated" });
+    if (!entry) throw new HttpError(404, "NOT_FOUND", "vendor not in blacklist");
+
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reinstateVendorBlacklist(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

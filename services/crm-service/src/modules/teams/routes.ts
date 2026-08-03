@@ -1,19 +1,17 @@
 /**
  * Teams, queues, ownership transfer, and workload routes (AS-002 + AS-003).
- * GET /v1/crm/teams — list teams
- * POST /v1/crm/teams — create team
- * POST /v1/crm/contacts/:id/transfer — transfer ownership
- * GET /v1/crm/teams/agents — list agents with workload
- * PATCH /v1/crm/teams/agents/:agentId/capacity — update capacity
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { sql } from "drizzle-orm";
+import * as commands from "./commands.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
@@ -39,7 +37,6 @@ const updateCapacityBody = z.object({
 });
 
 export async function teamRoutes(app: FastifyInstance): Promise<void> {
-  /** List teams for tenant */
   app.get("/v1/crm/teams", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -56,26 +53,18 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: teams });
   });
 
-  /** Create a new team */
   app.post("/v1/crm/teams", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createTeamBody.parse(req.body);
-
     const teamId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.teams (id, tenant_id, name, territory)
-        VALUES (${teamId}, ${ctx.tenantId}, ${body.name}, ${JSON.stringify(body.territory)}::jsonb)
-      `);
-    });
-
-    return reply.code(201).send({
-      data: { id: teamId, name: body.name, territory: body.territory },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.createTeam(ctx, teamId, body),
+    );
   });
 
-  /** Transfer ownership of a contact (AS-002) */
   app.post("/v1/crm/contacts/:id/transfer", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -105,7 +94,6 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** List agents with workload (AS-003) */
   app.get("/v1/crm/teams/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -123,34 +111,15 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: agents });
   });
 
-  /** Update agent capacity (AS-003) */
   app.patch("/v1/crm/teams/agents/:agentId/capacity", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { agentId } = agentIdParam.parse(req.params);
     const body = updateCapacityBody.parse(req.body);
-
-    const setClause = body.maxLeads !== undefined && body.available !== undefined
-      ? sql`max_leads = ${body.maxLeads}, available = ${body.available}`
-      : body.maxLeads !== undefined
-        ? sql`max_leads = ${body.maxLeads}`
-        : sql`available = ${body.available!}`;
-
-    const result = await db.transaction(async (tx) => {
-      return tx.execute(sql`
-        UPDATE crm.agent_workload
-        SET ${setClause}, version = version + 1
-        WHERE agent_id = ${agentId} AND tenant_id = ${ctx.tenantId}
-        RETURNING id
-      `) as unknown as Array<Record<string, unknown>>;
-    });
-
-    if (result.length === 0) {
-      throw new HttpError(404, "NOT_FOUND", "agent workload record not found");
-    }
-
-    return reply.code(200).send({
-      data: { agentId, ...body },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.updateAgentCapacity(ctx, agentId, body),
+    );
   });
 }

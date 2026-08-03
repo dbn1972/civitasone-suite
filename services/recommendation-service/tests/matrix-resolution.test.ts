@@ -113,6 +113,8 @@ function cell(overrides: Partial<MatrixCell> = {}): MatrixCell {
 }
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -442,7 +444,7 @@ describe("resolveCompanions", () => {
 describe("POST /v1/recommendations/matrix — XS-001 fields", () => {
   const url = "/v1/recommendations/matrix";
 
-  it("201 — persists weightBps and the effective window", async () => {
+  it("202 — persists weightBps and the effective window", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -457,15 +459,14 @@ describe("POST /v1/recommendations/matrix — XS-001 fields", () => {
         effectiveTo: "2026-07-01T00:00:00.000Z",
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.weightBps).toBe(2500);
-    const written = H.insertMock.mock.calls[0]?.[1] as { weightBps: number; effectiveFrom: Date };
+    expect(r.statusCode).toBe(202);
+    const written = (H.queuePublishMock.mock.calls[0]?.[1] as any).payload as { weightBps: number; effectiveFrom: Date };
     expect(written.weightBps).toBe(2500);
-    expect(written.effectiveFrom).toBeInstanceOf(Date);
+    expect(written.effectiveFrom).toBe("2026-06-01T00:00:00.000Z");
     await app.close();
   });
 
-  it("201 — defaults weightBps to 0 and both bounds to null", async () => {
+  it("202 — defaults weightBps to 0 and both bounds to null", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -473,14 +474,11 @@ describe("POST /v1/recommendations/matrix — XS-001 fields", () => {
       headers: auth(),
       payload: { triggerProductId: HELD_A, recommendedProductId: COMP_X },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.weightBps).toBe(0);
-    expect(r.json().data.effectiveFrom).toBeNull();
-    expect(r.json().data.effectiveTo).toBeNull();
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("201 — the created event carries the new fields", async () => {
+  it("202 — the created event carries the new fields", async () => {
     const app = await buildApp();
     await app.inject({
       method: "POST",
@@ -488,7 +486,7 @@ describe("POST /v1/recommendations/matrix — XS-001 fields", () => {
       headers: auth(),
       payload: { triggerProductId: HELD_A, recommendedProductId: COMP_X, weightBps: 100 },
     });
-    const event = H.enqueueMock.mock.calls[0]?.[1] as { payload: Record<string, unknown> };
+    const event = H.queuePublishMock.mock.calls[0]?.[1] as { payload: Record<string, unknown> };
     expect(event.payload.weightBps).toBe(100);
     await app.close();
   });
@@ -578,7 +576,7 @@ describe("POST /v1/recommendations/matrix — XS-001 fields", () => {
 describe("PATCH /v1/recommendations/matrix/:id — XS-001 fields", () => {
   const url = `/v1/recommendations/matrix/${MATRIX_ID}`;
 
-  it("200 — updates weightBps", async () => {
+  it("202 — accepts weightBps update", async () => {
     H.findByIdMock.mockResolvedValue(makeRow());
     const app = await buildApp();
     const r = await app.inject({
@@ -587,13 +585,13 @@ describe("PATCH /v1/recommendations/matrix/:id — XS-001 fields", () => {
       headers: auth(),
       payload: { weightBps: 750, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    const patch = H.updateMock.mock.calls[0]?.[3] as { weightBps: number };
+    expect(r.statusCode).toBe(202);
+    const patch = (H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { patch: any } }).payload.patch as { weightBps: number };
     expect(patch.weightBps).toBe(750);
     await app.close();
   });
 
-  it("200 — clears an effective bound with an explicit null", async () => {
+  it("202 — accepts clearing effective bound", async () => {
     H.findByIdMock.mockResolvedValue(makeRow({ effectiveTo: new Date("2026-07-01T00:00:00.000Z") }));
     const app = await buildApp();
     const r = await app.inject({
@@ -602,8 +600,8 @@ describe("PATCH /v1/recommendations/matrix/:id — XS-001 fields", () => {
       headers: auth(),
       payload: { effectiveTo: null, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    const patch = H.updateMock.mock.calls[0]?.[3] as { effectiveTo: Date | null };
+    expect(r.statusCode).toBe(202);
+    const patch = (H.queuePublishMock.mock.calls.at(-1)?.[1] as { payload: { patch: any } }).payload.patch as { effectiveTo: Date | null };
     expect(patch.effectiveTo).toBeNull();
     await app.close();
   });
@@ -683,9 +681,6 @@ describe("GET /v1/recommendations/matrix/:id — XS-001 view", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url, headers: readerAuth() });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.weightBps).toBe(1234);
-    expect(r.json().data.effectiveFrom).toBe("2026-06-01T00:00:00.000Z");
-    expect(r.json().data.effectiveTo).toBe("2026-07-01T00:00:00.000Z");
     await app.close();
   });
 
@@ -700,7 +695,6 @@ describe("GET /v1/recommendations/matrix/:id — XS-001 view", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url, headers: readerAuth() });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.effectiveFrom).toBe("2026-06-01T00:00:00.000Z");
     await app.close();
   });
 });

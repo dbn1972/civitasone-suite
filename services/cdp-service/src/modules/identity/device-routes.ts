@@ -5,10 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as deviceRepo from "./device-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 
@@ -48,62 +45,15 @@ export async function identityDeviceRoutes(app: FastifyInstance): Promise<void> 
     const seenAt = new Date();
     const id = existing?.id ?? randomUUID();
 
-    await db.transaction(async (tx) => {
-      if (existing) {
-        // A device that changes hands moves to the new profile rather than duplicating
-        // the edge — a token identifies one device, and a device has one owner.
-        const ok = await deviceRepo.relink(tx, existing.id, ctx.tenantId, existing.version, {
-          profileId: body.profileId,
-          deviceType: body.deviceType,
-          lastSeenAt: seenAt,
-        });
-        if (!ok) {
-          throw new HttpError(409, "VERSION_CONFLICT", "device link has been modified; retry");
-        }
-      } else {
-        await deviceRepo.insert(tx, {
-          id,
-          tenantId: ctx.tenantId,
-          profileId: body.profileId,
-          deviceToken: body.deviceToken,
-          deviceType: body.deviceType,
-          lastSeenAt: seenAt,
-        });
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.deviceLinked,
-        eventType: EVENTS.deviceLinked,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        // The token is deliberately absent from the event payload: an event fans out to
-        // services that have no business holding a device credential.
-        payload: { deviceId: id, profileId: body.profileId, deviceType: body.deviceType, relinked: existing !== null },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: existing ? "device_relinked" : "device_linked",
-          resourceType: "device_token",
-          resourceId: id,
-          outcome: "success",
-          metadata: { profileId: body.profileId, deviceType: body.deviceType },
-        },
-      });
+    await publishF3Write(ctx, "device_link", id, {
+      profileId: body.profileId,
+      deviceToken: body.deviceToken,
+      deviceType: body.deviceType,
+      seenAt: seenAt.toISOString(),
+      relink: existing !== null,
+      existingId: existing?.id,
+      existingVersion: existing?.version,
     });
-
-    // No command is published here. The link/relink above IS the authoritative write and
-    // `cdp.identity.device_linked` (outbox, same transaction) is the downstream contract.
-    // There is no asynchronous follow-up to a device edge, so a command with the same
-    // payload was dead weight.
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", body.profileId));
 
     return reply.code(202).send({
       data: {
@@ -112,6 +62,7 @@ export async function identityDeviceRoutes(app: FastifyInstance): Promise<void> 
         deviceType: body.deviceType,
         relinked: existing !== null,
         status: "accepted",
+        correlationId: ctx.correlationId,
       },
     });
   });

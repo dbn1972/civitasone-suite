@@ -7,7 +7,7 @@ export default defineConfig({
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://inspection_svc:inspection_dev_pw@localhost:5435/inspection_db",
+        "postgres://inspection_svc:inspection_dev_pw@localhost:5435/civitas_inspection",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
       S3_BUCKET_NAME: "civitas-inspection-test",

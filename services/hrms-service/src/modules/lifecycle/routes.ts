@@ -1,14 +1,13 @@
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsPromotions, hrmsTransfers } from "./schema.js";
-import { hrmsServiceBookEntries } from "../service-book/schema.js";
-import { hrmsEmployees } from "../employee/schema.js";
 import { createTransferBody, createPromotionBody, issueOrderBody, relieveBody, joinBody, idParam } from "./validators.js";
-import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -26,35 +25,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createPromotionBody.parse(req.body);
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertPromotion(tx, {
-        id, tenantId: ctx.tenantId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        employeeId: body.employeeId,
-        fromDesigId: body.fromDesigId,
-        toDesigId: body.toDesigId,
-        effectiveDate: body.effectiveDate,
-        orderRef: body.orderRef ?? null,
-        newBasicMinor: body.newBasicMinor !== undefined ? BigInt(body.newBasicMinor) : null,
-      });
-      // Apply the promotion to the employee master (designation + basic pay)
-      const promoSet: Record<string, unknown> = { designationId: body.toDesigId, updatedBy: ctx.actorId };
-      if (body.newBasicMinor !== undefined) promoSet.basicMinor = BigInt(body.newBasicMinor);
-      await tx.update(hrmsEmployees).set(promoSet)
-        .where(and(eq(hrmsEmployees.id, body.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId)));
-      // NIC eHRMS: record the event in the service book
-      await tx.insert(hrmsServiceBookEntries).values({
-        tenantId: ctx.tenantId,
-        employeeId: body.employeeId,
-        entryType: "promotion",
-        effectiveDate: body.effectiveDate,
-        description: `Promotion to designation ${body.toDesigId}` + (body.newBasicMinor !== undefined ? ` at basic Rs ${(Number(body.newBasicMinor) / 100).toLocaleString("en-IN")}` : ""),
-        recordedBy: ctx.actorId,
-        documentRef: body.orderRef ?? null,
-      });
-    });
-    req.log.info({ event: "lifecycle.promotion.created", promotionId: id, employeeId: body.employeeId, toDesigId: body.toDesigId, actorId: ctx.actorId, tenantId: ctx.tenantId }, "promotion recorded");
-    return reply.code(202).send({ id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createPromotion(ctx, body as unknown as Record<string, unknown>));
   });
 
   app.get("/v1/hrms/lifecycle/transfers", async (req, reply) => {
@@ -66,95 +37,35 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // Step 1: create a transfer REQUEST (no master mutation yet — order not issued).
   app.post("/v1/hrms/lifecycle/transfers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createTransferBody.parse(req.body);
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertTransfer(tx, {
-        id, tenantId: ctx.tenantId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        employeeId: body.employeeId,
-        fromDeptId: body.fromDeptId,
-        toDeptId: body.toDeptId,
-        fromDesigId: body.fromDesigId ?? null,
-        toDesigId: body.toDesigId ?? null,
-        effectiveDate: body.effectiveDate,
-        orderRef: body.orderRef ?? null,
-        fromStation: body.fromStation ?? null,
-        toStation: body.toStation ?? null,
-        status: "requested",
-      });
-    });
-    return reply.code(201).send({ id, status: "requested" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createTransfer(ctx, body as unknown as Record<string, unknown>));
   });
 
-  // Step 2: issue the formal transfer ORDER (requested -> ordered).
   app.post("/v1/hrms/lifecycle/transfers/:id/issue-order", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = issueOrderBody.parse(req.body);
-    const updated = await db.transaction(async (tx) => {
-      return repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
-        from: ["requested", "pending"], to: "ordered",
-        set: { orderNo: body.orderNo, orderDate: body.orderDate, orderRef: body.orderRef ?? null },
-      }, tx);
-    });
-    if (!updated) throw new HttpError(409, "INVALID_STATE", "transfer not in a state that can be ordered");
-    return reply.send({ id, status: "ordered", orderNo: body.orderNo });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.issueTransferOrder(ctx, id, body as unknown as Record<string, unknown>));
   });
 
-  // Step 3: relieve at the old station (ordered -> relieved).
   app.post("/v1/hrms/lifecycle/transfers/:id/relieve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = relieveBody.parse(req.body);
-    const updated = await db.transaction(async (tx) => {
-      return repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
-        from: ["ordered"], to: "relieved",
-        set: { relievedDate: body.relievedDate },
-      }, tx);
-    });
-    if (!updated) throw new HttpError(409, "INVALID_STATE", "transfer must be in 'ordered' state to relieve");
-    return reply.send({ id, status: "relieved" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.relieveTransfer(ctx, id, body as unknown as Record<string, unknown>));
   });
 
-  // Step 4: join at the new station — applies to master + writes service book (relieved -> joined).
   app.post("/v1/hrms/lifecycle/transfers/:id/join", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = joinBody.parse(req.body);
-    const result = await db.transaction(async (tx) => {
-      const row = await repo.transitionTransfer(ctx.tenantId, id, ctx.actorId, {
-        from: ["relieved"], to: "joined",
-        set: { joinedDate: body.joinedDate },
-      }, tx);
-      if (!row) return null;
-      // Apply posting/station to the employee master at JOINING (not at request time).
-      const masterSet: Record<string, unknown> = { departmentId: row.toDeptId, updatedBy: ctx.actorId };
-      if (row.toDesigId) masterSet.designationId = row.toDesigId;
-      if (row.toStation) masterSet.station = row.toStation;
-      await tx.update(hrmsEmployees).set(masterSet)
-        .where(eq(hrmsEmployees.id, row.employeeId));
-      // NIC eHRMS: record the transfer in the service book.
-      await tx.insert(hrmsServiceBookEntries).values({
-        tenantId: ctx.tenantId,
-        employeeId: row.employeeId,
-        entryType: "transfer",
-        effectiveDate: body.joinedDate,
-        description: `Transferred and joined at ${row.toStation ?? "new station"} (dept ${row.toDeptId})`
-          + (row.orderNo ? `, vide order ${row.orderNo}` : ""),
-        recordedBy: ctx.actorId,
-        documentRef: row.orderNo ?? row.orderRef ?? null,
-      });
-      return row;
-    });
-    if (!result) throw new HttpError(409, "INVALID_STATE", "transfer must be in 'relieved' state to join");
-    return reply.send({ id, status: "joined" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.joinTransfer(ctx, id, body as unknown as Record<string, unknown>));
   });
 
   app.setErrorHandler((err, req, reply) => {

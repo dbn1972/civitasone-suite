@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { tenantTransaction } from "@civitasone/db";
+import * as commands from "./commands.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Schema
@@ -68,7 +69,7 @@ const listBaselinesQuery = z.object({
 
 type DbLike = typeof db;
 
-async function countBaselines(dbOrTx: DbLike, projectId: string, tenantId: string): Promise<number> {
+export async function countBaselines(dbOrTx: DbLike, projectId: string, tenantId: string): Promise<number> {
   const [result] = await dbOrTx
     .select({ cnt: count() })
     .from(baselines)
@@ -76,7 +77,7 @@ async function countBaselines(dbOrTx: DbLike, projectId: string, tenantId: strin
   return result?.cnt ?? 0;
 }
 
-async function insertBaseline(dbOrTx: DbLike, input: BaselineInsert) {
+export async function insertBaseline(dbOrTx: DbLike, input: BaselineInsert) {
   const [row] = await dbOrTx.insert(baselines).values(input).returning();
   return row;
 }
@@ -160,26 +161,7 @@ export async function baselineRoutes(app: FastifyInstance): Promise<void> {
     const { id: projectId } = projectIdParam.parse(req.params);
     const body = createBaselineBody.parse(req.body);
 
-    const row = await tenantTransaction(db, ctx.tenantId, async (tx) => {
-      const txDb = tx as typeof db;
-
-      // Check max 20 baselines per project
-      const currentCount = await countBaselines(txDb, projectId, ctx.tenantId);
-      if (currentCount >= MAX_BASELINES_PER_PROJECT) {
-        throw new HttpError(422, "MAX_BASELINES_EXCEEDED", `maximum ${MAX_BASELINES_PER_PROJECT} baselines per project`);
-      }
-
-      return insertBaseline(txDb, {
-        id: randomUUID(),
-        tenantId: ctx.tenantId,
-        projectId,
-        label: body.label,
-        snapshotData: body.snapshotData,
-        createdBy: ctx.actorId,
-      });
-    });
-
-    return reply.code(201).send({ data: row });
+    return reply.code(202).send(await commands.createBaseline(ctx, projectId, body));
   });
 
   /**

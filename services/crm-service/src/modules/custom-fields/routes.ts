@@ -1,23 +1,21 @@
 /**
- * Custom fields CRUD routes.
+ * Custom fields CRUD routes (CQRS).
  * Max 50 custom fields per entity type per tenant (Req 8.8).
+ * Mutations: validate → publish → 202; writes live in consumer.ts.
  */
 import type { FastifyInstance } from "fastify";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createCustomFieldBody, updateCustomFieldBody, idParam, entityTypeParam } from "./validators.js";
 import * as repo from "./repo.js";
-import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const MAX_CUSTOM_FIELDS_PER_ENTITY = 50;
-const RESOURCE = "custom_field";
 
 export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
-  /**
-   * List custom fields for an entity type.
-   */
   app.get("/v1/crm/custom-fields/:entityType", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -26,9 +24,6 @@ export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: fields, meta: { page: 1, pageSize: 50, total: fields.length } });
   });
 
-  /**
-   * Get a single custom field definition.
-   */
   app.get("/v1/crm/custom-fields/definition/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -38,16 +33,11 @@ export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: field });
   });
 
-  /**
-   * Create a custom field definition.
-   * Enforces max 50 fields per entity type per tenant.
-   */
   app.post("/v1/crm/custom-fields", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createCustomFieldBody.parse(req.body);
 
-    // Enforce limit: max 50 custom fields per entity type per tenant
     const count = await repo.countByEntityType(ctx.tenantId, body.entityType);
     if (count >= MAX_CUSTOM_FIELDS_PER_ENTITY) {
       throw new HttpError(
@@ -57,24 +47,9 @@ export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    await repo.insert(db, {
-      tenantId: ctx.tenantId,
-      entityType: body.entityType,
-      fieldName: body.fieldName,
-      fieldType: body.fieldType,
-      validationSchema: body.validationSchema ?? null,
-      ordinal: body.ordinal,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    await cache.invalidateResource(ctx.tenantId, RESOURCE);
-    return reply.code(201).send({ data: { message: "custom field created" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCustomField(ctx, body));
   });
 
-  /**
-   * Update a custom field definition.
-   */
   app.patch("/v1/crm/custom-fields/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -84,14 +59,9 @@ export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "custom field not found");
 
-    await repo.update(db, id, ctx.tenantId, body, ctx.actorId);
-    await cache.invalidateResource(ctx.tenantId, RESOURCE);
-    return reply.code(200).send({ data: { message: "custom field updated" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateCustomField(ctx, id, body));
   });
 
-  /**
-   * Delete a custom field definition.
-   */
   app.delete("/v1/crm/custom-fields/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -100,8 +70,6 @@ export async function customFieldRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "custom field not found");
 
-    await repo.remove(db, id, ctx.tenantId);
-    await cache.invalidateResource(ctx.tenantId, RESOURCE);
-    return reply.code(204).send();
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteCustomField(ctx, id));
   });
 }

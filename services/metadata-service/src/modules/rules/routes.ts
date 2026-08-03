@@ -17,6 +17,7 @@ import { withTenant } from "../../shared/scope.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import { ADMIN } from "../../shared/roles.js";
 import { entityDefinitions, validationRules } from "../entities/schema.js";
+import { createItem, updateItem, deleteItem } from "./commands.js";
 import { evaluateExpression } from "./domain.js";
 
 function assertParses(expression: string): void {
@@ -52,23 +53,11 @@ export async function validationRuleRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body);
     assertParses(body.expression);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const parent = await tx.select().from(entityDefinitions)
-        .where(and(eq(entityDefinitions.id, entityId), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1);
-      if (!parent[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
-      const [created] = await tx.insert(validationRules).values({
-        tenantId: ctx.tenantId,
-        entityDefId: entityId,
-        name: body.name,
-        expression: body.expression,
-        errorMessage: body.errorMessage,
-        sortOrder: body.sortOrder,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      }).returning();
-      return created;
-    });
-    return reply.code(201).send({ data: row });
+    const parent = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(entityDefinitions)
+        .where(and(eq(entityDefinitions.id, entityId), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1));
+    if (!parent[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
+    return reply.code(202).send({ data: await createItem(ctx, { ...body, entityId }) });
   });
 
   app.patch("/v1/metadata/validation-rules/:id", async (req, reply) => {
@@ -84,31 +73,14 @@ export async function validationRuleRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body);
     if (body.expression) assertParses(body.expression);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.actorId };
-      for (const k of ["name", "expression", "errorMessage", "isActive", "sortOrder"] as const) {
-        if (body[k] !== undefined) set[k] = body[k];
-      }
-      const [updated] = await tx.update(validationRules).set(set)
-        .where(and(eq(validationRules.id, id), eq(validationRules.tenantId, ctx.tenantId))).returning();
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "Validation rule not found");
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await updateItem(ctx, id, body) });
   });
 
   app.delete("/v1/metadata/validation-rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const [updated] = await tx.update(validationRules)
-        .set({ isActive: false, updatedAt: new Date(), updatedBy: ctx.actorId })
-        .where(and(eq(validationRules.id, id), eq(validationRules.tenantId, ctx.tenantId))).returning();
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "Validation rule not found");
-    return reply.send({ data: { id, isActive: false } });
+    return reply.code(202).send({ data: await deleteItem(ctx, id) });
   });
 
   registerErrorHandler(app);

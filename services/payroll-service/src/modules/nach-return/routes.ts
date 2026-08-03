@@ -5,9 +5,9 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { queue } from "../../shared/infra.js";
 import { parseNachReturnFile } from "./parser.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -77,29 +77,29 @@ export async function nachReturnRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Publish command for async processing (reconciliation, DB writes)
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: COMMANDS.nachReturnProcess,
-        eventType: COMMANDS.nachReturnProcess,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          runId,
-          records: records.map((r) => ({
-            reference: r.reference,
-            amountMinor: r.amountMinor.toString(),
-            statusCode: r.statusCode,
-            reasonCode: r.reasonCode,
-            reasonText: r.reasonText,
-          })),
-          summary: { credited, returned, unmatched },
-        },
-      });
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.nachReturnProcess, {
+      messageId,
+      type: COMMANDS.nachReturnProcess,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        runId,
+        records: records.map((r) => ({
+          reference: r.reference,
+          amountMinor: r.amountMinor.toString(),
+          statusCode: r.statusCode,
+          reasonCode: r.reasonCode,
+          reasonText: r.reasonText,
+        })),
+        summary: { credited, returned, unmatched },
+      },
     });
 
     return reply.status(202).send({
-      data: { credited, returned, unmatched },
+      data: { id: messageId, credited, returned, unmatched },
     });
   });
 }

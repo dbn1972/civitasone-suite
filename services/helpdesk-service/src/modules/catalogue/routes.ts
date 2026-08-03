@@ -1,23 +1,14 @@
 /**
- * Service Catalogue (SVC-129) — HTTP routes.
- *
- * Admin: manage catalogue offerings + OLA/underpinning contracts.
- * Users: browse the catalogue, raise self-service requests, track their requests.
- * Fulfilment: approve (maker-checker), advance fulfilment stages, mark fulfilled.
- * Reporting: SLA-breach report over service requests.
- *
- * Admin writes wrap in db.transaction() so createTenantDb's wrapWithTenantGuc
- * sets app.tenant_id (from the request's tenant hook) before the write — RLS
- * WITH CHECK then enforces tenant isolation on insert/update.
+ * Service Catalogue (SVC-129) — HTTP routes (CQRS: mutations return 202 Accepted).
  */
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { db } from "../../shared/db.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { isAtRisk, isBreached } from "../sla/domain.js";
 import * as repo from "./repo.js";
 import * as service from "./service.js";
+import * as commands from "./commands.js";
 import {
   createOfferingBody,
   updateOfferingBody,
@@ -28,17 +19,13 @@ import {
   fulfilRequestBody,
   idParam,
 } from "./validators.js";
-import type { OfferingRow, OfferingInsert, ServiceRequestRow } from "./schema.js";
+import type { OfferingRow, ServiceRequestRow } from "./schema.js";
 import type { FormField, FulfilmentStage } from "./domain.js";
 
 const ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
 const USER_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin"];
 const APPROVER_ROLES = ["helpdesk_admin", "super_admin"];
 const FULFILLER_ROLES = ["helpdesk_agent", "helpdesk_admin", "super_admin"];
-
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
 
 function offeringView(o: OfferingRow) {
   return {
@@ -57,7 +44,6 @@ function offeringView(o: OfferingRow) {
   };
 }
 
-/** Live SLA status of a request from its resolution deadline (freshest view). */
 function liveSlaStatus(r: ServiceRequestRow, now: Date): "within_sla" | "at_risk" | "breached" {
   if (["fulfilled", "rejected", "cancelled"].includes(r.status)) return r.slaStatus as "within_sla";
   const deadline = r.resolutionDeadline;
@@ -86,33 +72,25 @@ function requestView(r: ServiceRequestRow, now: Date) {
 }
 
 export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
-  // ── Offerings: admin management + browse ───────────────────────────────────
   app.post("/v1/helpdesk/catalogue/offerings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createOfferingBody.parse(req.body);
-    try {
-      const row = await db.transaction((tx) =>
-        repo.insertOffering(tx as repo.Writer, {
-          tenantId: ctx.tenantId,
-          name: body.name,
-          category: body.category ?? "general",
-          description: body.description ?? null,
-          status: "active",
-          slaPolicyId: body.slaPolicyId ?? null,
-          approvalRequired: body.approvalRequired ?? false,
-          requestFormSchema: (body.requestFormSchema ?? []) as FormField[],
-          fulfilmentStages: (body.fulfilmentStages ?? []) as FulfilmentStage[],
-          defaultPriority: body.defaultPriority ?? "Medium",
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        }),
-      );
-      return reply.code(201).send({ data: offeringView(row) });
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new HttpError(409, "DUPLICATE_OFFERING", "an offering with this name already exists");
-      throw err;
-    }
+    const existing = await repo.findOfferingByName(body.name, ctx.tenantId);
+    if (existing) throw new HttpError(409, "DUPLICATE_OFFERING", "an offering with this name already exists");
+
+    return reply.code(202).send(
+      await commands.createOffering(ctx, {
+        name: body.name,
+        category: body.category ?? "general",
+        description: body.description ?? null,
+        slaPolicyId: body.slaPolicyId ?? null,
+        approvalRequired: body.approvalRequired ?? false,
+        requestFormSchema: (body.requestFormSchema ?? []) as FormField[],
+        fulfilmentStages: (body.fulfilmentStages ?? []) as FulfilmentStage[],
+        defaultPriority: body.defaultPriority ?? "Medium",
+      }),
+    );
   });
 
   app.get("/v1/helpdesk/catalogue/offerings", async (req, reply) => {
@@ -144,14 +122,11 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateOfferingBody.parse(req.body);
-    const updated = await db.transaction((tx) =>
-      repo.updateOffering(tx as repo.Writer, id, ctx.tenantId, { ...body, updatedBy: ctx.actorId } as Partial<OfferingInsert>),
-    );
-    if (!updated) throw new HttpError(404, "NOT_FOUND", "offering not found");
-    return reply.send({ data: offeringView(updated) });
+    const existing = await repo.findOffering(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "offering not found");
+    return reply.code(202).send(await commands.updateOffering(ctx, id, { ...body, updatedBy: ctx.actorId }));
   });
 
-  // ── OLAs / underpinning contracts ──────────────────────────────────────────
   app.post("/v1/helpdesk/catalogue/offerings/:id/olas", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -159,19 +134,14 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const offering = await repo.findOffering(id, ctx.tenantId);
     if (!offering) throw new HttpError(404, "NOT_FOUND", "offering not found");
     const body = createOlaBody.parse(req.body);
-    const row = await db.transaction((tx) =>
-      repo.insertOla(tx as repo.Writer, {
-        tenantId: ctx.tenantId,
-        offeringId: id,
+    return reply.code(202).send(
+      await commands.createOla(ctx, id, {
         name: body.name,
         kind: body.kind ?? "ola",
         provider: body.provider,
         targetMinutes: body.targetMinutes,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
       }),
     );
-    return reply.code(201).send({ data: row });
   });
 
   app.get("/v1/helpdesk/catalogue/offerings/:id/olas", async (req, reply) => {
@@ -182,17 +152,24 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // ── Self-service portal: raise a request ───────────────────────────────────
   app.post("/v1/helpdesk/catalogue/offerings/:id/requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = raiseRequestBody.parse(req.body);
-    const result = await service.raiseRequest(ctx, id, body);
-    return reply.code(201).send({ data: result });
+    const payload = await service.prepareRaiseRequest(ctx, id, body);
+    const accepted = await commands.raiseRequest(ctx, payload);
+    return reply.code(202).send({
+      data: {
+        requestId: accepted.id,
+        ticketId: accepted.ticketId,
+        status: accepted.projectedStatus,
+        currentStage: accepted.currentStage,
+        correlationId: accepted.correlationId,
+      },
+    });
   });
 
-  // ── Requests: breach report (static path — must precede :id) ───────────────
   app.get("/v1/helpdesk/catalogue/requests/breaches", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
@@ -208,7 +185,6 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ── Requests: my requests / list ───────────────────────────────────────────
   app.get("/v1/helpdesk/catalogue/requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
@@ -242,13 +218,16 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: { ...requestView(request, new Date()), approvals, stageEvents } });
   });
 
-  // ── Fulfilment lifecycle ───────────────────────────────────────────────────
   app.post("/v1/helpdesk/catalogue/requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = approvalBody.parse(req.body);
-    return reply.send({ data: await service.decideApproval(ctx, id, body) });
+    const payload = await service.prepareApproval(ctx, id, body);
+    await commands.decideApproval(ctx, id, payload);
+    return reply.code(202).send({
+      data: { requestId: id, status: payload.nextStatus, currentStage: payload.nextStage },
+    });
   });
 
   app.post("/v1/helpdesk/catalogue/requests/:id/advance", async (req, reply) => {
@@ -256,7 +235,11 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FULFILLER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = advanceStageBody.parse(req.body);
-    return reply.send({ data: await service.advanceStage(ctx, id, body) });
+    const payload = await service.prepareAdvanceStage(ctx, id, body);
+    await commands.advanceStage(ctx, id, payload);
+    return reply.code(202).send({
+      data: { requestId: id, currentStage: payload.toStage, status: "in_fulfilment" },
+    });
   });
 
   app.post("/v1/helpdesk/catalogue/requests/:id/fulfil", async (req, reply) => {
@@ -264,7 +247,9 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FULFILLER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = fulfilRequestBody.parse(req.body);
-    return reply.send({ data: await service.fulfilRequest(ctx, id, body) });
+    const payload = await service.prepareFulfilRequest(ctx, id, body);
+    await commands.fulfilRequest(ctx, id, payload);
+    return reply.code(202).send({ data: { requestId: id, status: "fulfilled" } });
   });
 
   app.setErrorHandler((err, req, reply) => {

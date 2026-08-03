@@ -1,13 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { optimizeRouteOrder, scoreRoute, type Waypoint } from "./domain.js";
+import * as commands from "./commands.js";
 
 const FIELD_ROLES = ["field_admin", "field_agent", "super_admin"];
 const ADMIN_ROLES = ["field_admin", "super_admin"];
@@ -62,45 +58,16 @@ export async function routeRoutes(app: FastifyInstance): Promise<void> {
 
     const optimizedOrder = optimizeRouteOrder(waypoints);
     const score = scoreRoute(waypoints, optimizedOrder);
-    const id = randomUUID();
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createRoute(ctx, {
         assigneeId: body.assigneeId,
         routeDate: body.date,
-        status: "optimized",
         waypoints: body.waypoints as unknown as Array<Record<string, unknown>>,
         optimizedOrder,
-        totalDistanceKm: score.totalDistanceKm.toString(),
-        estimatedDurationMinutes: score.estimatedDurationMinutes,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.routeOptimized,
-        eventType: EVENTS.routeOptimized,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { routeId: id, assigneeId: body.assigneeId, date: body.date, score },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id,
-        assigneeId: body.assigneeId,
-        routeDate: body.date,
-        status: "optimized",
-        optimizedOrder,
-        totalDistanceKm: score.totalDistanceKm,
-        estimatedDurationMinutes: score.estimatedDurationMinutes,
-        version: 1,
-      },
-    });
+        score,
+      }),
+    );
   });
 
   // GET /v1/field/routes — list routes
@@ -180,20 +147,10 @@ export async function routeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_ORDER", "order must contain each index 0..n-1 exactly once");
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { optimizedOrder: body.optimizedOrder, updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "route has been modified; retry with current version");
-      }
-    });
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "route has been modified; retry with current version");
+    }
 
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "route", id));
-    return reply.send({ data: { id, optimizedOrder: body.optimizedOrder, version: body.version + 1 } });
+    return reply.code(202).send(await commands.reorderRoute(ctx, id, { optimizedOrder: body.optimizedOrder, version: body.version }));
   });
 }

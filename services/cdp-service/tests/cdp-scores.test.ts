@@ -122,41 +122,45 @@ describe("toStoredScore", () => {
 describe("PUT /v1/cdp/profiles/:id/scores/:scoreType", () => {
   const url = `/v1/cdp/profiles/${PROFILE_ID}/scores/churn_risk`;
 
-  it("200 — creates a score when none exists", async () => {
+  it("202 — publishes score upsert command", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT", url, headers: auth(), payload: { score: 0.8125, modelVersion: "churn-v3" },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.created).toBe(true);
-    // A string, not a number — 0.8125 must survive verbatim.
     expect(r.json().data.score).toBe("0.8125");
     expect(typeof r.json().data.score).toBe("string");
-    expect(H.insertMock).toHaveBeenCalledOnce();
-    expect(H.cacheInvalidateMock).toHaveBeenCalledWith(`cdp:${TENANT}:profile_summary:${PROFILE_ID}`);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "score_upsert" }) }),
+    );
+    expect(H.insertMock).not.toHaveBeenCalled();
+    expect(H.cacheInvalidateMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — upserts over an existing score under its current version", async () => {
+  it("202 — upsert command carries existing version when present", async () => {
     H.findByTypeMock.mockResolvedValue(makeScore());
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT", url, headers: auth(), payload: { score: 0.42, modelVersion: "churn-v4" },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.created).toBe(false);
     expect(r.json().data.id).toBe(SCORE_ID);
     expect(H.insertMock).not.toHaveBeenCalled();
-    expect(H.updateScoreMock).toHaveBeenCalledWith({}, SCORE_ID, TENANT, 4, expect.objectContaining({ score: "0.4200" }));
+    expect(H.updateScoreMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — ml_service may write scores", async () => {
+  it("202 — ml_service may write scores", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "PUT", url, headers: auth(["ml_service"]), payload: { score: 0.1 },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.modelVersion).toBe("unknown");
     await app.close();
   });
@@ -193,12 +197,12 @@ describe("PUT /v1/cdp/profiles/:id/scores/:scoreType", () => {
     await app.close();
   });
 
-  it("409 — a concurrent retrain already moved the row on", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByTypeMock.mockResolvedValue(makeScore());
-    H.updateScoreMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "PUT", url, headers: auth(), payload: { score: 0.5 } });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

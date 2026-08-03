@@ -11,12 +11,31 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { tenantScoped } from "./shared/tenant-queue.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 
 const log = pino({ name: "inspection-worker" });
+
+function assertScannerConfigured(): void {
+  // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
+  // scanner DSN must be present and distinct from DATABASE_URL so relay/purge
+  // cannot silently fall back to the NOBYPASSRLS service role.
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.INSPECTION_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "INSPECTION_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
+
 
 // ── Consumer registration ────────────────────────────────────────────────────
 import { registerUniverseConsumers } from "./modules/universe/consumer.js";
@@ -47,12 +66,12 @@ registerChecklistConsumers(scopedQueue);
 registerSyncConsumers(scopedQueue);
 registerEvidenceConsumers(scopedQueue);
 registerExecutionConsumers(scopedQueue);
-registerFindingsConsumers(queue);
-registerCapaConsumers(queue);
-registerEnforcementConsumers(queue);
-registerLicenceConsumers(queue);
-registerSurveyConsumers(queue);
-registerTelemetryConsumers(queue);
+registerFindingsConsumers(scopedQueue);
+registerCapaConsumers(scopedQueue);
+registerEnforcementConsumers(scopedQueue);
+registerLicenceConsumers(scopedQueue);
+registerSurveyConsumers(scopedQueue);
+registerTelemetryConsumers(scopedQueue);
 
 // ── DLQ handling ─────────────────────────────────────────────────────────────
 // No per-topic DLQ pollers here. Native SQS RedrivePolicy already dead-letters
@@ -67,8 +86,10 @@ registerTelemetryConsumers(queue);
 
 // ── Start queue, outbox relay, and purge ─────────────────────────────────────
 await queue.start();
-const relay = startRelay(db, queue);
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+// Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
+// _outbox.messages (migration 0023) would otherwise hide unpublished rows.
+const relay = startRelay(scannerDb as unknown as typeof db, queue);
+const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
   batchSize: 1000,
   logger: log,
@@ -183,6 +204,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();
+  await scannerSqlClient.end();
   log.info("shutdown complete");
   process.exit(0);
 }

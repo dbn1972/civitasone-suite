@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Application fee — assess / exemption / payment (checklist R-RA-0099).
  *
@@ -11,7 +13,6 @@
  * feature flag/seam; when it is not enabled the online path is honestly 501, and
  * we never fake an online charge. Money is bigint paise (serialised as string).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -58,15 +59,10 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const assessment = assessFee(vacancyFee, { category: a.category, categoryVerified: body.categoryVerified });
     const fid = randomUUID();
     try {
-      await db.transaction((tx) => repo.insertFee(tx, {
-        id: fid, tenantId: ctx.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
-        amountMinor: assessment.amountMinor, currency: "INR", status: assessment.status,
-        exemptionReason: assessment.exemptionReason, provider: "none",
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_application_fee_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        const now = await repo.findFee(ctx.tenantId, id);
+        const now = await repo.findFee(ctx.tenantId, id) as any;
         if (now) return reply.code(200).send({ data: feeView(now), assessed: false });
       }
       throw err;
@@ -108,14 +104,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const paymentRef = body.paymentRef!.trim();
 
     try {
-      await db.transaction(async (tx) => {
-        await repo.updateFee(tx, ctx.tenantId, fee.id, {
-          status: "paid", provider: "manual", paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
-        }, fee.version);
-        await emitAudit(tx, ctx, "application_fee_paid", "application_fee", fee.id, {
-          applicationId: id, amountMinor: fee.amountMinor.toString(), provider: "manual", paymentRef,
-        });
-      });
+      await publishF3Write(ctx, "recruitment_application_fee_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
       throw err;

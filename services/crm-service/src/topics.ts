@@ -26,6 +26,16 @@ export const COMMANDS = {
   closeDeal: "crm.deal.close",
   /** Transfer contact ownership to another agent (AS-002). */
   transferOwnership: "crm.contact.transfer",
+  // F3 leftover — roles / teams / quotations sync writes
+  createContactRole: "crm.contact_role.create",
+  deleteContactRole: "crm.contact_role.delete",
+  createTeam: "crm.team.create",
+  updateAgentCapacity: "crm.agent_workload.update_capacity",
+  createQuotation: "crm.quotation.create",
+  versionQuotation: "crm.quotation.version",
+  sendQuotation: "crm.quotation.send",
+  acceptQuotation: "crm.quotation.accept",
+  rejectQuotation: "crm.quotation.reject",
   /**
    * Ingest an automatically captured email/calendar item (AC-004, WC-003).
    * Payload: { capturedId, source: 'email'|'calendar', externalId, contactId|null,
@@ -34,6 +44,28 @@ export const COMMANDS = {
    * NOTE: carries no message body and no participant addresses (DPDP).
    */
   captureActivity: "crm.activity.capture",
+  createCustomField: "crm.custom_field.create",
+  updateCustomField: "crm.custom_field.update",
+  deleteCustomField: "crm.custom_field.delete",
+  // F3 residual — tenders / next-actions / recurring / plans / qbr / capture / campaign-roi
+  createTender: "crm.tender.create",
+  updateTender: "crm.tender.update",
+  changeTenderStage: "crm.tender.stage_change",
+  createNextAction: "crm.next_action.create",
+  completeNextAction: "crm.next_action.complete",
+  createRecurringTask: "crm.recurring_task.create",
+  updateRecurringTask: "crm.recurring_task.update",
+  runRecurringTask: "crm.recurring_task.run",
+  createAccountPlan: "crm.account_plan.create",
+  updateAccountPlan: "crm.account_plan.update",
+  activateAccountPlan: "crm.account_plan.activate",
+  scheduleQbr: "crm.qbr.schedule",
+  completeQbr: "crm.qbr.complete",
+  cancelQbr: "crm.qbr.cancel",
+  matchCapturedActivity: "crm.activity.capture_match",
+  upsertCampaignPerformance: "crm.campaign_performance.upsert",
+  /** Set / clear account parentId with cycle checks done at the route boundary (CM-002). */
+  setAccountParent: "crm.account.set_parent",
 } as const;
 
 export const EVENTS = {
@@ -67,6 +99,9 @@ export const EVENTS = {
   dealClosed: "crm.deal.closed",
   /** Contact ownership transferred (AS-002). */
   ownershipTransferred: "crm.contact.ownership_transferred",
+  customFieldCreated: "crm.custom_field.created",
+  customFieldUpdated: "crm.custom_field.updated",
+  customFieldDeleted: "crm.custom_field.deleted",
 
   // ── Sprint 2 ────────────────────────────────────────────────────────────────
   /** Strategic account plan created (KA-001). Payload: { planId, accountId, planYear }. */
@@ -113,6 +148,8 @@ export const EVENTS = {
   quotationRejected: "crm.quotation.rejected",
   /** Campaign responses/cost/revenue upserted for a period (MK-004). Money as STRINGS. */
   campaignPerformanceRecorded: "crm.campaign_performance.recorded",
+  /** Account parent hierarchy changed (CM-002). */
+  accountParentSet: "crm.account.parent_set",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

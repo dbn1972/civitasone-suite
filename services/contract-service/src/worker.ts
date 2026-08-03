@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerDb } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -12,8 +13,26 @@ import { registerApprovalConsumers } from "./modules/approvals/consumer.js";
 import { registerObligationConsumers } from "./modules/obligations/consumer.js";
 import { registerRenewalConsumers } from "./modules/renewals/consumer.js";
 import { registerEsignConsumers } from "./modules/esign/consumer.js";
+import { registerVersionConsumers } from "./modules/versions/consumer.js";
 
 const log = pino({ name: "contract-worker" });
+
+function assertScannerConfigured(): void {
+  // Fail closed when FORCE RLS is on outbox and NODE_ENV=production: the
+  // scanner DSN must be present and distinct from DATABASE_URL so relay/purge
+  // cannot silently fall back to the NOBYPASSRLS service role.
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.CONTRACT_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "CONTRACT_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS scanner role required for outbox relay/purge under FORCE RLS)",
+    );
+  }
+}
+
+assertScannerConfigured();
 
 registerContractConsumers(queue);
 registerEOfficeDecisionConsumers(queue);
@@ -24,11 +43,15 @@ registerApprovalConsumers(queue);
 registerObligationConsumers(queue);
 registerRenewalConsumers(queue);
 registerEsignConsumers(queue);
+registerVersionConsumers(queue);
 
 await queue.start();
-const relay = startRelay(db, queue);
+// Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
+// _outbox.messages (migration 0016) would otherwise hide all unpublished rows
+// when app.tenant_id is unset.
+const relay = startRelay(scannerDb as unknown as typeof db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.
-const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
+const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
   batchSize: 1000,
   logger: log,

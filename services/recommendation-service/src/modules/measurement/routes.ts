@@ -20,14 +20,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache, queue } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
 import * as nbaRepo from "../nba/repo.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   MAX_LOOKBACK_DAYS,
   attributeOutcome,
@@ -37,7 +33,6 @@ import {
   type ServedTouch,
 } from "./domain.js";
 import { ATTRIBUTION_MODELS, COHORTS } from "./schema.js";
-import type { RecordAttributionPayload } from "./consumer.js";
 
 const REC_ROLES = ["recommendation_admin", "crm_user", "sales_user", "super_admin"];
 const ADMIN_ROLES = ["recommendation_admin", "super_admin"];
@@ -122,43 +117,15 @@ export async function measurementRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const id = randomUUID();
-    const assignedAt = body.assignedAt === undefined ? new Date() : new Date(body.assignedAt);
-
-    await db.transaction(async (tx) => {
-      await repo.insertExposure(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    const assignedAt = (body.assignedAt === undefined ? new Date() : new Date(body.assignedAt)).toISOString();
+    return reply.code(202).send(
+      await commands.assignExposure(ctx, {
         campaignKey: body.campaignKey,
         subjectId: body.subjectId,
         cohort: body.cohort,
         assignedAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.cohortAssigned,
-        eventType: EVENTS.cohortAssigned,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { exposureId: id, campaignKey: body.campaignKey, cohort: body.cohort },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "cross-sell-metrics", body.campaignKey));
-
-    return reply.code(201).send({
-      data: {
-        id,
-        campaignKey: body.campaignKey,
-        subjectId: body.subjectId,
-        cohort: body.cohort,
-        assignedAt: assignedAt.toISOString(),
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /**
@@ -221,42 +188,21 @@ export async function measurementRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const attributionId = randomUUID();
-
-    const payload: RecordAttributionPayload = {
-      attributionId,
-      campaignKey: body.campaignKey,
-      subjectId: body.subjectId,
-      recommendationId: attributed?.recommendationId ?? null,
-      outcomeType: body.outcomeType,
-      outcomeRef: body.outcomeRef,
-      productId: body.productId ?? null,
-      amountMinor: body.amountMinor,
-      currency: body.currency,
-      cohort: exposure.cohort === "control" ? "control" : "treatment",
-      attributionModel: body.attributionModel,
-      occurredAt: occurredAt.toISOString(),
-    };
-
-    await queue.publish(COMMANDS.attributionRecord, {
-      type: COMMANDS.attributionRecord,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload,
-    });
-
-    return reply.code(202).send({
-      data: {
-        attributionId,
-        status: "queued",
-        cohort: payload.cohort,
-        recommendationId: payload.recommendationId,
-        /** Null means no eligible touch was found — an unattributed conversion. */
-        attributedTouch: attributed,
-      },
-    });
+    return reply.code(202).send(
+      await commands.recordAttribution(ctx, {
+        campaignKey: body.campaignKey,
+        subjectId: body.subjectId,
+        recommendationId: attributed?.recommendationId ?? null,
+        outcomeType: body.outcomeType,
+        outcomeRef: body.outcomeRef,
+        productId: body.productId ?? null,
+        amountMinor: body.amountMinor,
+        currency: body.currency,
+        cohort: exposure.cohort === "control" ? "control" : "treatment",
+        attributionModel: body.attributionModel,
+        occurredAt: occurredAt.toISOString(),
+      }),
+    );
   });
 
   /** GET /v1/recommendations/measurement/attributions — paginated attribution log. */

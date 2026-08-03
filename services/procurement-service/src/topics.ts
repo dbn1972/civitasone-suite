@@ -60,6 +60,10 @@ export const COMMANDS = {
   // SVC-050 GeM/CPPP integration reconciliation
   gemExchange:              "procurement.gem_integration.exchange",
   gemReconcile:             "procurement.gem_integration.reconcile",
+  threeWayMatchRun:         "procurement.three_way_match.run",
+  vendorBlacklistAdd:       "procurement.vendor_blacklist.add",
+  vendorBlacklistReinstate: "procurement.vendor_blacklist.reinstate",
+  vendorCentralDebar:       "procurement.vendor_blacklist.central_debar",
 } as const;
 
 export const EVENTS = {

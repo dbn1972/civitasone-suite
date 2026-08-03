@@ -215,3 +215,33 @@ export async function publishDeviceFirmwareSchedule(ctx: RequestContext, input: 
   });
   return { id: input.deviceId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export interface DeviceHeartbeatInput {
+  deviceId: string;
+  tenantId: string;
+  firmwareVersion: string;
+  lastSeenAt: string;
+}
+
+/** Durable heartbeat write (Redis online TTL stays sync on the route). */
+export async function publishDeviceHeartbeat(
+  input: DeviceHeartbeatInput,
+  opts: { actorId: string; correlationId: string },
+): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.deviceHeartbeat, {
+    messageId,
+    type: COMMANDS.deviceHeartbeat,
+    tenantId: input.tenantId,
+    actorId: opts.actorId,
+    correlationId: opts.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      deviceId: input.deviceId,
+      tenantId: input.tenantId,
+      firmwareVersion: input.firmwareVersion,
+      lastSeenAt: input.lastSeenAt,
+    },
+  });
+  return { id: input.deviceId, status: "accepted", correlationId: opts.correlationId };
+}

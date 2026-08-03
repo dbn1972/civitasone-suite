@@ -30,6 +30,7 @@ export const COMMANDS = {
   esignCreate:            "contract.esign.create",
   esignSign:              "contract.esign.sign",
   esignCheckDeadline:     "contract.esign.check_deadline",
+  versionCreate:          "contract.version.create",
 } as const;
 
 export const EVENTS = {
@@ -59,6 +60,7 @@ export const EVENTS = {
   esignSigned:          "contract.esign.signed",
   esignCompleted:       "contract.esign.completed",
   esignEscalated:       "contract.esign.escalated",
+  versionCreated:       "contract.version.created",
   contractExpiryAlert: "contract.expiry.alert",
 } as const;
 

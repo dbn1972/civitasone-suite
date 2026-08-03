@@ -114,19 +114,44 @@ if (missingFromRegistry.length > 0) {
 // ── Worker presence (for services already declared in ecosystem) ───────────────
 const workerDecls = [...eco.matchAll(/\bworker\("([a-z-]+)"/g)].map((m) => m[1]);
 const workerSet = new Set(workerDecls);
-const courtWorkerCall = [...eco.matchAll(/\bworker\("court"[^)]*\)/g)].map((m) => m[0]);
-if (courtWorkerCall.length === 0) {
+
+/**
+ * Extract the full, balanced `worker("<name>", ...)` call starting at
+ * `startIdx` (the index of the `w` in `worker(`). A plain regex like
+ * `/[^)]*\)/` stops at the FIRST `)`, which is wrong the moment a call
+ * contains a nested call with its own parens — e.g. court's worker() call
+ * has `scannerDbUrl("court_scanner", ..., "...")` as an object-literal
+ * value, so `[^)]*\)` truncated right after that inner `)` and never saw
+ * the "dist/worker-main.js" 5th argument or the call's real closing paren.
+ * That produced a false positive: a correctly-configured court entry read
+ * as missing its dist/worker-main.js override.
+ */
+function extractBalancedCall(src, startIdx) {
+  const openIdx = src.indexOf("(", startIdx);
+  if (openIdx === -1) return null;
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    if (src[i] === "(") depth++;
+    else if (src[i] === ")") {
+      depth--;
+      if (depth === 0) return src.slice(startIdx, i + 1);
+    }
+  }
+  return null; // unbalanced — malformed source
+}
+
+const courtWorkerStart = eco.indexOf('worker("court"');
+if (courtWorkerStart === -1) {
   fail('court has no worker("court", ...) declaration');
 } else {
-  const call = courtWorkerCall[0];
-  if (!call.includes('"dist/worker-main.js"')) {
+  const call = extractBalancedCall(eco, courtWorkerStart);
+  if (call === null) {
+    fail('court worker("court", ...) call has unbalanced parentheses — cannot verify');
+  } else if (!call.includes('"dist/worker-main.js"')) {
     fail(
       'court worker 5th arg must be "dist/worker-main.js" ' +
         '(export-only dist/worker.js exits immediately)',
     );
-  }
-  if (call.includes('"dist/worker.js"')) {
-    fail('court worker must not use bare "dist/worker.js" — use dist/worker-main.js');
   }
 }
 

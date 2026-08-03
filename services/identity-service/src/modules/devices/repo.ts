@@ -15,15 +15,18 @@ export function mintTrustToken(deviceId: string, userId: string): string {
   return createHmac("sha256", trustSecret()).update(`${deviceId}:${userId}`).digest("hex");
 }
 
-export async function upsertDevice(row: typeof registeredDevices.$inferInsert): Promise<void> {
-  const existing = await scopedRead((tx) => tx.select().from(registeredDevices)
+export async function upsertDevice(
+  tx: Writer,
+  row: typeof registeredDevices.$inferInsert,
+): Promise<void> {
+  const existing = await tx.select().from(registeredDevices)
     .where(and(
       eq(registeredDevices.tenantId, row.tenantId),
       eq(registeredDevices.userId, row.userId),
       eq(registeredDevices.fingerprint, row.fingerprint),
-    )).limit(1));
+    )).limit(1);
   if (existing[0]) {
-    await db.update(registeredDevices).set({
+    await tx.update(registeredDevices).set({
       label: row.label,
       trustToken: row.trustToken,
       trustLevel: row.trustLevel ?? "recognized",
@@ -33,7 +36,7 @@ export async function upsertDevice(row: typeof registeredDevices.$inferInsert): 
     }).where(eq(registeredDevices.id, existing[0].id));
     return;
   }
-  await db.insert(registeredDevices).values(row);
+  await tx.insert(registeredDevices).values(row);
 }
 
 export async function findDevice(tenantId: string, deviceId: string, userId: string) {

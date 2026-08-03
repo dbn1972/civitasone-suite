@@ -38,6 +38,11 @@ export interface FindingVerifyResolvedPayload {
   verifierNotes?: string | undefined;
 }
 
+/** DELETE /findings/:id — soft-delete finding (Req 9.8). */
+export interface FindingSoftDeletePayload {
+  findingId: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function envelope(ctx: RequestContext, type: string, payload: Record<string, unknown>) {
@@ -80,3 +85,13 @@ export async function publishFindingVerifyResolved(
   await queue.publish(COMMANDS.findingVerifyResolved, msg);
   return { accepted: true, messageId: msg.messageId };
 }
+
+export async function publishFindingSoftDelete(
+  payload: FindingSoftDeletePayload,
+  ctx: RequestContext,
+): Promise<{ accepted: true; messageId: string }> {
+  const msg = envelope(ctx, COMMANDS.findingSoftDelete, { ...payload, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.findingSoftDelete, msg);
+  return { accepted: true, messageId: msg.messageId };
+}
+

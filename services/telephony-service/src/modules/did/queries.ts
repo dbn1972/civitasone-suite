@@ -1,9 +1,8 @@
 /** DID mapping query handlers (READ PATH) — tenant-scoped read-through cache. */
 import { cache } from "../../shared/infra.js";
+import { DID_RESOURCE, DID_ACTIVE_MAPPINGS_CACHE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { DidMappingView } from "./schema.js";
-
-const DID_RESOURCE = "did-mapping";
 
 export async function getMapping(id: string, tenantId: string): Promise<DidMappingView | null> {
   return cache.getOrLoad<DidMappingView>(cache.makeKey(tenantId, DID_RESOURCE, id), () => repo.findById(id, tenantId));
@@ -33,7 +32,7 @@ export async function listMappings(
  */
 export async function loadActiveMappings(): Promise<DidMappingView[]> {
   const result = await cache.getOrLoad<DidMappingView[]>(
-    "global:did-mappings:active",
+    DID_ACTIVE_MAPPINGS_CACHE,
     () => repo.listAllActive(),
     60, // refresh every 60s
   );

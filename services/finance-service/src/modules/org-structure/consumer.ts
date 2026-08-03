@@ -23,7 +23,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const id = p.id ?? randomUUID();
-      await db.insert(legalEntities).values({
+      await tx.insert(legalEntities).values({
         id, tenantId: p.tenantId, code: p.code, name: p.name,
         entityType: p.entityType ?? "company",
         ...(p.parentEntityId ? { parentEntityId: p.parentEntityId } : {}),
@@ -59,7 +59,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const id = p.id ?? randomUUID();
-      await db.insert(operatingUnits).values({
+      await tx.insert(operatingUnits).values({
         id, tenantId: p.tenantId, legalEntityId: p.legalEntityId,
         code: p.code, name: p.name, unitType: p.unitType ?? "branch",
         ...(p.locationId ? { locationId: p.locationId } : {}),
@@ -84,7 +84,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const id = p.id ?? randomUUID();
-      await db.insert(costCenters).values({
+      await tx.insert(costCenters).values({
         id, tenantId: p.tenantId, legalEntityId: p.legalEntityId,
         code: p.code, name: p.name,
         ...(p.parentId ? { parentId: p.parentId } : {}),
@@ -111,7 +111,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const id = p.id ?? randomUUID();
-      await db.insert(profitCenters).values({
+      await tx.insert(profitCenters).values({
         id, tenantId: p.tenantId, legalEntityId: p.legalEntityId,
         code: p.code, name: p.name,
         ...(p.parentId ? { parentId: p.parentId } : {}),

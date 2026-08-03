@@ -10,6 +10,14 @@ import { registerGrievanceConsumers }   from "./modules/grievance/consumer.js";
 import { registerRtiConsumers }         from "./modules/rti/consumer.js";
 import { registerHelpdeskConsumers }    from "./modules/helpdesk/consumer.js";
 import { startSlaSweep }                from "./modules/sla-sweep/scheduler.js";
+import { registerFeePaymentConsumers }  from "./modules/fee-payment/consumer.js";
+import { registerIssuanceConsumers }    from "./modules/issuance/consumer.js";
+import { registerSlaRulesConsumers }    from "./modules/sla-rules/consumer.js";
+import { registerAppealConsumers }      from "./modules/appeal/consumer.js";
+import { registerCatalogueConsumers }   from "./modules/catalogue/consumer.js";
+import { registerDiscoveryConsumers }   from "./modules/discovery/consumer.js";
+import { registerDocumentsConsumers }   from "./modules/documents/consumer.js";
+import { registerEligibilityConsumers } from "./modules/eligibility/consumer.js";
 
 const log = pino({ name: "citizen-worker" });
 
@@ -21,6 +29,14 @@ registerApplicationConsumers(queue);
 registerGrievanceConsumers(queue);
 registerRtiConsumers(queue);
 registerHelpdeskConsumers(queue);
+registerFeePaymentConsumers(queue);
+registerIssuanceConsumers(queue);
+registerSlaRulesConsumers(queue);
+registerAppealConsumers(queue);
+registerCatalogueConsumers(queue);
+registerDiscoveryConsumers(queue);
+registerDocumentsConsumers(queue);
+registerEligibilityConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

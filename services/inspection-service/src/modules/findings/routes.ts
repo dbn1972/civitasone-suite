@@ -4,7 +4,7 @@
  * Follows the suite CQRS + envelope conventions:
  *   • WRITES — `resolveContext` → `requireRole` → zod validate → command publish → 202
  *   • READS  — cache-first `repo.*` lookups
- *   • DELETE — soft-delete with deletion protection (Req 9.8)
+ *   • DELETE — queue-first soft-delete (202) with deletion protection (Req 9.8)
  *
  * RBAC (design.md § API Routes — Findings Module):
  *   - inspector — create findings, verify resolved, soft-delete (pre-review)
@@ -28,17 +28,14 @@ import {
   publishFindingCreate,
   publishComplianceNoticeCreate,
   publishFindingVerifyResolved,
+  publishFindingSoftDelete,
 } from "./commands.js";
 import {
   findFindingById,
   findFindings,
-  softDeleteFinding,
 } from "./repo.js";
 import { findInspectionById } from "../execution/repo.js";
 import { assertDeletionAllowed, DomainError } from "./domain.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
 
 // ─── RBAC role groups ────────────────────────────────────────────────────────
 
@@ -165,13 +162,14 @@ export async function registerFindingsRoutes(app: FastifyInstance): Promise<void
   });
 
   // ── DELETE /v1/inspection/findings/:id (Req 9.8) ──
-  // Soft-delete: only permitted if parent inspection is NOT in under_review or finalized
+  // Soft-delete via CQRS: pre-publish validation (existence + deletion protection),
+  // then queue.publish → 202. Consumer performs the actual soft-delete + audit.
   app.delete("/v1/inspection/findings/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, INSPECTOR_ROLES);
     const { id } = idParam.parse(req.params);
 
-    // 1. Load finding
+    // 1. Load finding (pre-publish validation)
     const finding = await findFindingById(ctx.tenantId, id);
     if (!finding) throw new HttpError(404, "NOT_FOUND", "finding not found");
 
@@ -181,7 +179,7 @@ export async function registerFindingsRoutes(app: FastifyInstance): Promise<void
       throw new HttpError(404, "NOT_FOUND", "parent inspection not found");
     }
 
-    // 3. Assert deletion is allowed based on inspection state
+    // 3. Assert deletion is allowed based on inspection state (fail closed before enqueue)
     try {
       assertDeletionAllowed(inspection.state);
     } catch (err) {
@@ -191,37 +189,7 @@ export async function registerFindingsRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
 
-    // 4. Soft-delete directly (synchronous for DELETE — immediate consistency needed)
-    await db.transaction(async (tx) => {
-      await softDeleteFinding(tx, id, ctx.tenantId, ctx.actorId);
-
-      // Audit event
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          action: "finding.soft_deleted",
-          resourceType: "finding",
-          resourceId: id,
-          details: {
-            findingNumber: finding.findingNumber,
-            inspectionId: finding.inspectionId,
-            inspectionState: inspection.state,
-          },
-        },
-      });
-    });
-
-    // Cache invalidation (outside transaction, best-effort)
-    try {
-      await cache.invalidate(cache.makeKey(ctx.tenantId, "finding", id));
-    } catch {
-      // best-effort — logged by cache library
-    }
-
-    return reply.code(204).send();
+    const result = await publishFindingSoftDelete({ findingId: id }, ctx);
+    return reply.code(202).send({ data: result });
   });
 }

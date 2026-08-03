@@ -11,6 +11,9 @@ import { registerGeoConsumers }         from "./modules/geo/consumer.js";
 import { startRagScheduler }            from "./modules/project/rag.js";
 import { registerDelayForecastConsumers } from "./modules/delay-forecast/consumer.js";
 import { registerBoardIntakeConsumers }   from "./modules/board-intake/consumer.js";
+import { registerEvidenceConsumers }      from "./modules/evidence/consumer.js";
+import { registerSchedulingConsumers }    from "./modules/scheduling/consumer.js";
+import { registerF3ProjectConsumers }   from "./modules/project/f3-consumer.js";
 
 const log = pino({ name: "project-worker" });
 
@@ -22,6 +25,9 @@ registerGeoConsumers(queue);
 registerDelayForecastConsumers(queue);
 // Cross-service choreography: board decision → project intake (for-review).
 registerBoardIntakeConsumers(queue);
+registerEvidenceConsumers(queue);
+registerSchedulingConsumers(queue);
+registerF3ProjectConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

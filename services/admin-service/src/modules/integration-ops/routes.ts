@@ -12,9 +12,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { recordDeadLetter, requeueOne, discardOne, requeueBulk, ReplayError } from "./service.js";
+import { requeueOne, discardOne, requeueBulk, ReplayError } from "./service.js";
+import * as commands from "./commands.js";
 
 const recordBody = z.object({
   topic: z.string().min(1).max(120),
@@ -43,8 +46,7 @@ export async function integrationOpsRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const body = recordBody.parse(req.body);
-    const row = await recordDeadLetter(ctx, body);
-    return reply.code(201).send({ data: row });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordDeadLetterCmd(ctx, body));
   });
 
   app.get("/v1/admin/integration-ops/dead-letters", async (req, reply) => {

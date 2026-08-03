@@ -1,14 +1,11 @@
 /** DID mapping HTTP routes. zod-validated; tenant-scoped; RBAC enforced. */
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
-import { listQuerySchema } from "@civitasone/schemas/common";
-import { sendValidated } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { createDidMappingBody, idParam, didMappingsListSchema } from "./validators.js";
-import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import * as repo from "./repo.js";
 
 const TELEPHONY_ADMIN_ROLES = ["telephony_supervisor", "telephony_admin", "tenant_admin", "super_admin"];
 
@@ -26,30 +23,7 @@ export async function didRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ADMIN_ROLES);
     const body = createDidMappingBody.parse(req.body);
-
-    const id = randomUUID();
-    await repo.insert(db, {
-      id,
-      tenantId: ctx.tenantId,
-      didNumber: body.didNumber,
-      label: body.label ?? null,
-      active: body.active,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    // Invalidate cached mappings so webhook resolution picks up the new mapping
-    await cache.invalidate("global:did-mappings:active");
-
-    return reply.code(201).send({
-      data: {
-        id,
-        tenantId: ctx.tenantId,
-        didNumber: body.didNumber,
-        label: body.label ?? null,
-        active: body.active,
-      },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDidMapping(ctx, body));
   });
 
   /** Delete a DID mapping by ID (tenant-scoped). */
@@ -57,13 +31,6 @@ export async function didRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-
-    const deleted = await repo.remove(id, ctx.tenantId);
-    if (deleted === 0) throw new HttpError(404, "NOT_FOUND", "DID mapping not found");
-
-    // Invalidate cached mappings
-    await cache.invalidate("global:did-mappings:active");
-
-    return reply.code(204).send();
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteDidMapping(ctx, id));
   });
 }

@@ -121,30 +121,32 @@ beforeEach(() => {
 describe("POST /v1/cdp/segments/:id/compute", () => {
   const url = `/v1/cdp/segments/${SEGMENT_ID}/compute`;
 
-  it("202 — recomputes, caches the count, emits the event, publishes the command", async () => {
+  it("202 — publishes segment compute command without writing", async () => {
     H.segmentFindByIdMock.mockResolvedValue(makeSegment());
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth() });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.memberCount).toBe(7);
     expect(r.json().data.status).toBe("accepted");
-    expect(H.recomputeMock).toHaveBeenCalledOnce();
-    expect(H.segmentUpdateCountMock).toHaveBeenCalledWith({}, SEGMENT_ID, TENANT, 7);
-    expect(H.publishMock).toHaveBeenCalledOnce();
-    // Domain event + audit event.
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
-    // The member-list cache must not survive a recompute.
-    expect(H.cacheInvalidateMock).toHaveBeenCalledWith(`cdp:${TENANT}:segment_members:${SEGMENT_ID}`);
+    expect(r.json().data.segmentId).toBe(SEGMENT_ID);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({
+        payload: expect.objectContaining({ op: "segment_compute", segmentId: SEGMENT_ID }),
+      }),
+    );
+    expect(H.recomputeMock).not.toHaveBeenCalled();
+    expect(H.segmentUpdateCountMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.cacheInvalidateMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — an empty audience is a valid outcome", async () => {
+  it("202 — empty-audience criteria still enqueue compute", async () => {
     H.segmentFindByIdMock.mockResolvedValue(makeSegment());
-    H.recomputeMock.mockResolvedValue(0);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth() });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.memberCount).toBe(0);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

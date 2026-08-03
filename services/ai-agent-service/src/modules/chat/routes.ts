@@ -2,15 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES } from "../../shared/roles.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as guardrailsRepo from "../guardrails/repo.js";
 import { evaluateRules } from "../guardrails/domain.js";
 import { estimateTokens, buildTurnSummary, validateStatusTransition } from "./domain.js";
+import * as commands from "./commands.js";
 
 const sendMessageBody = z.object({
   conversationId: z.string().uuid().optional(),
@@ -41,27 +38,20 @@ const historyQuery = z.object({
 });
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/ai/chat — send a message; creates the conversation on first turn
   app.post("/v1/ai/chat", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const body = sendMessageBody.parse(req.body);
 
-    // Guardrails run BEFORE anything is persisted.
     const rules = await guardrailsRepo.listActive(ctx.tenantId);
     const evaluation = evaluateRules(body.message, rules);
 
     if (!evaluation.passed) {
       const reason = evaluation.violations.map((v) => v.message).join("; ").slice(0, 500);
-      await db.transaction(async (tx) => {
-        // Redacted text only — DPDP Act 2023.
-        await writeAudit(tx, ctx, {
-          action: "chat.send",
-          input: evaluation.sanitizedInput,
-          output: null,
-          blocked: true,
-          reason,
-        });
+      await commands.recordBlockedAudit(ctx, {
+        action: "chat.send",
+        input: evaluation.sanitizedInput,
+        reason,
       });
       return reply.status(422).send({
         code: "GUARDRAIL_BLOCKED",
@@ -88,71 +78,21 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const messageId = randomUUID();
     const tokens = estimateTokens(evaluation.sanitizedInput);
 
-    await db.transaction(async (tx) => {
-      if (isNew) {
-        await repo.insert(tx, {
-          id: conversationId,
-          tenantId: ctx.tenantId,
-          channelId: body.channelId,
-          profileId: body.profileId ?? ctx.actorId,
-          status: "active",
-          language: body.language ?? "en",
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        });
-
-        await enqueue(tx, {
-          topic: EVENTS.conversationStarted,
-          eventType: EVENTS.conversationStarted,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: { conversationId, channelId: body.channelId, language: body.language ?? "en" },
-        });
-      }
-
-      await repo.insertMessage(tx, {
-        id: messageId,
-        tenantId: ctx.tenantId,
-        conversationId,
-        role: "user",
-        content: evaluation.sanitizedInput,
-        tokens,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.turnCompleted,
-        eventType: EVENTS.turnCompleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { conversationId, messageId, role: "user", tokens, violations: evaluation.violations.length },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "chat.send",
-        input: evaluation.sanitizedInput,
-        output: null,
-        blocked: false,
-        reason: evaluation.violations.length > 0 ? "guardrail warnings recorded" : null,
-      });
+    const accepted = await commands.sendMessage(ctx, {
+      conversationId,
+      messageId,
+      isNew,
+      channelId: body.channelId,
+      profileId: body.profileId ?? ctx.actorId,
+      language: body.language ?? "en",
+      sanitizedInput: evaluation.sanitizedInput,
+      tokens,
+      violationCount: evaluation.violations.length,
     });
 
-    return reply.status(isNew ? 201 : 202).send({
-      data: {
-        conversationId,
-        messageId,
-        status: isNew ? "started" : "accepted",
-        tokens,
-        sanitizedInput: evaluation.sanitizedInput,
-        guardrail: { passed: true, violations: evaluation.violations },
-      },
-    });
+    return reply.code(202).send(accepted);
   });
 
-  // GET /v1/ai/chat — list conversations
   app.get("/v1/ai/chat", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -171,7 +111,6 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/ai/chat/:conversationId/history — paginated transcript
   app.get("/v1/ai/chat/:conversationId/history", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -193,7 +132,6 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /v1/ai/chat/:conversationId/end — close the conversation
   app.post("/v1/ai/chat/:conversationId/end", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -211,28 +149,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const version = body.version ?? existing.version;
+    if (version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "conversation has been modified; retry with current version");
+    }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        conversationId,
-        ctx.tenantId,
-        { status: "ended", endedAt: new Date(), updatedBy: ctx.actorId },
-        version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "conversation has been modified; retry with current version");
-      }
-
-      await writeAudit(tx, ctx, {
-        action: "chat.end",
-        input: null,
-        output: null,
-        blocked: false,
-        reason: body.reason ?? null,
-      });
-    });
-
-    return reply.send({ data: { conversationId, status: "ended", version: version + 1 } });
+    return reply.code(202).send(
+      await commands.endConversation(ctx, conversationId, { version, reason: body.reason ?? null }),
+    );
   });
 }

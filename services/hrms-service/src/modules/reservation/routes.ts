@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Reservation roster (item 3) + sanctioned-post / vacancy control (item 4).
  *
@@ -17,7 +19,6 @@
  * Filled strength is computed live against employee.hrms_employees (active,
  * matched by cadre = designation name, case-insensitive).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, asc, eq, sql } from "drizzle-orm";
@@ -78,16 +79,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       cfUr: z.coerce.number().int().min(0).default(0),
     }).parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsRosters).values({
-      id, tenantId: ctx.tenantId, cadre: body.cadre, rosterKind: body.rosterKind,
-      rosterSize: body.rosterSize,
-      pctSc: body.pctSc.toFixed(2), pctSt: body.pctSt.toFixed(2),
-      pctObc: body.pctObc.toFixed(2), pctEws: body.pctEws.toFixed(2),
-      pctPwd: body.pctPwd.toFixed(2),
-      cfSc: body.cfSc, cfSt: body.cfSt, cfObc: body.cfObc, cfEws: body.cfEws, cfUr: body.cfUr,
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id, cadre: body.cadre, rosterSize: body.rosterSize });
+    await publishF3Write(ctx, "reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, cadre: body.cadre, rosterSize: body.rosterSize }) as any;
   });
 
   app.get("/v1/hrms/reservation/rosters", async (req, reply) => {
@@ -146,17 +139,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       pctObc: Number(r.pctObc), pctEws: Number(r.pctEws),
     });
     // Idempotent: clear and re-materialise.
-    await db.transaction(async (tx) => {
-      await tx.delete(hrmsRosterPoints)
-        .where(and(eq(hrmsRosterPoints.tenantId, ctx.tenantId), eq(hrmsRosterPoints.rosterId, rid)));
-      for (const p of points) {
-        await tx.insert(hrmsRosterPoints).values({
-          id: randomUUID(), tenantId: ctx.tenantId, rosterId: rid,
-          pointNo: p.point, category: p.category, filled: false,
-        });
-      }
-    });
-    return reply.send({ rosterId: rid, points: points.length, data: points });
+    await publishF3Write(ctx, "reservation_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ rosterId: rid, points: points.length, data: points }) as any;
   });
 
   app.get("/v1/hrms/reservation/rosters/:rid/points", async (req, reply) => {
@@ -182,15 +166,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       remarks: z.string().max(2000).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsSanctionedPosts).values({
-      id, tenantId: ctx.tenantId, cadre: body.cadre,
-      sanctionedStrength: body.sanctionedStrength,
-      ...(body.designationId ? { designationId: body.designationId } : {}),
-      ...(body.payLevel ? { payLevel: body.payLevel } : {}),
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id, cadre: body.cadre, sanctionedStrength: body.sanctionedStrength });
+    await publishF3Write(ctx, "reservation_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, cadre: body.cadre, sanctionedStrength: body.sanctionedStrength }) as any;
   });
 
   app.get("/v1/hrms/sanctioned-posts", async (req, reply) => {

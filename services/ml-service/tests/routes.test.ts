@@ -27,6 +27,7 @@ const mockState = vi.hoisted(() => ({
   insertResult: null as Record<string, unknown> | null,
   updateResult: null as Record<string, unknown> | null,
   promoteResult: true,
+  queuePublish: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── DB Mock — simple fluent chain ───────────────────────────────
@@ -115,7 +116,7 @@ vi.mock("../src/shared/infra.js", () => ({
     put: async () => {},
     invalidate: async () => {},
   },
-  queue: { publish: async () => {} },
+  queue: { publish: (...args: unknown[]) => mockState.queuePublish(...args) },
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({
@@ -171,6 +172,7 @@ vi.mock("@civitasone/auth/context", () => {
         actorId: decoded.sub,
         roles: decoded.roles ?? [],
         sessionId: decoded.sid ?? "test-session",
+        correlationId: "test-correlation-id",
       };
     },
     AuthContextError,
@@ -640,8 +642,7 @@ describe("Experiment Routes", () => {
   beforeEach(() => {
     mockState.queryResult = [SEED_EXPERIMENT];
     mockState.countResult = 1;
-    mockState.insertResult = SEED_EXPERIMENT;
-    mockState.updateResult = { ...SEED_EXPERIMENT, status: "completed", endedAt: new Date() };
+    mockState.queuePublish.mockClear();
   });
 
   describe("GET /v1/ml/experiments", () => {
@@ -671,7 +672,7 @@ describe("Experiment Routes", () => {
   });
 
   describe("POST /v1/ml/experiments", () => {
-    it("creates experiment for ml_admin", async () => {
+    it("accepts experiment create for ml_admin (202 CQRS)", async () => {
       // Set models for validation lookup
       mockState.queryResult = [
         { id: MODEL_ID, tenantId: TENANT_ID, domain: "leads" },
@@ -688,8 +689,19 @@ describe("Experiment Routes", () => {
           splitPct: 50,
         },
       });
-      expect(res.statusCode).toBe(201);
-      expect(res.json().data).toBeDefined();
+      expect(res.statusCode).toBe(202);
+      const body = res.json();
+      expect(body.status).toBe("accepted");
+      expect(body.id).toBeDefined();
+      expect(body.correlationId).toBe("test-correlation-id");
+      expect(mockState.queuePublish).toHaveBeenCalledWith(
+        "ml.experiment.create",
+        expect.objectContaining({
+          type: "ml.experiment.create",
+          tenantId: TENANT_ID,
+          actorId: ACTOR_ID,
+        }),
+      );
     });
 
     it("returns 400 for missing required fields", async () => {
@@ -744,14 +756,25 @@ describe("Experiment Routes", () => {
   });
 
   describe("PATCH /v1/ml/experiments/:id", () => {
-    it("ends an active experiment for ml_admin", async () => {
+    it("accepts end experiment for ml_admin (202 CQRS)", async () => {
       mockState.queryResult = [SEED_EXPERIMENT];
       const res = await app.inject({
         method: "PATCH", url: `/v1/ml/experiments/${EXPERIMENT_ID}`,
         headers: { authorization: `Bearer ${ML_ADMIN_TOKEN()}` },
         payload: { status: "completed" },
       });
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(202);
+      const body = res.json();
+      expect(body.status).toBe("accepted");
+      expect(body.id).toBe(EXPERIMENT_ID);
+      expect(mockState.queuePublish).toHaveBeenCalledWith(
+        "ml.experiment.end",
+        expect.objectContaining({
+          type: "ml.experiment.end",
+          tenantId: TENANT_ID,
+          payload: expect.objectContaining({ id: EXPERIMENT_ID, status: "completed" }),
+        }),
+      );
     });
 
     it("returns 404 when experiment not found", async () => {

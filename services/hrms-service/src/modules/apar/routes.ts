@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * APAR / SPARROW multi-authority workflow.
  *
@@ -14,7 +16,6 @@
  * officer assigned to the *current* stage. Out-of-turn actors are rejected
  * with 403. An immutable stage-history row is appended on every transition.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
@@ -119,22 +120,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         "reporting, reviewing and accepting officers must be three distinct people");
     }
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert((await import("../appraisals/schema.js")).hrmsAppraisals).values({
-        id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-        appraisalPeriod: body.appraisalPeriod, status: "self_pending",
-        reportingOfficerId: body.reportingOfficerId,
-        reviewingOfficerId: body.reviewingOfficerId,
-        acceptingAuthorityId: body.acceptingAuthorityId,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: null, toStage: "self_pending",
-        actorId: ctx.actorId, actorRole: "initiator",
-        remarks: "APAR initiated", payload: { officers: body },
-      });
-    });
-    return reply.code(201).send({ id, status: "self_pending" });
+    await publishF3Write(ctx, "apar_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "self_pending" }) as any;
   });
 
   // --- stage 1: officer submits self-appraisal -> reporting_officer ---------
@@ -145,18 +132,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "self_pending");
-    await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, {
-        selfAppraisal: body.selfAppraisal, status: "reporting_officer", updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: "self_pending", toStage: "reporting_officer",
-        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
-        remarks: "self-appraisal submitted",
-        payload: { selfAppraisal: body.selfAppraisal },
-      });
-    });
-    return reply.send({ id, status: "reporting_officer" });
+    await publishF3Write(ctx, "apar_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "reporting_officer" }) as any;
   });
 
   // --- stage 2: reporting officer scores + pen-picture -> reviewing_officer -
@@ -175,26 +152,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "reporting_officer");
-    await db.transaction(async (tx) => {
-      for (const s of body.scores) {
-        await repo.upsertScore(tx, {
-          tenantId: ctx.tenantId, appraisalId: id, attribute: s.attribute,
-          weight: String(s.weight), score: s.score,
-          ...(s.remarks !== undefined ? { remarks: s.remarks } : {}),
-          scoredBy: ctx.actorId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        });
-      }
-      await repo.updateAppraisal(tx, id, {
-        reportingPenPicture: body.penPicture, status: "reviewing_officer", updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: "reporting_officer", toStage: "reviewing_officer",
-        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reporting_officer", override), override,
-        remarks: "scores + pen-picture recorded",
-        payload: { penPicture: body.penPicture, scores: body.scores },
-      });
-    });
-    return reply.send({ id, status: "reviewing_officer" });
+    await publishF3Write(ctx, "apar_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "reviewing_officer" }) as any;
   });
 
   // --- stage 3: reviewing officer concurrence/variation -> accepting --------
@@ -213,31 +172,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "reviewing_officer");
-    await db.transaction(async (tx) => {
-      if (body.decision === "vary" && body.variations) {
-        const existing = await repo.listScores(ctx.tenantId, id);
-        const byAttr = new Map(existing.map((e) => [e.attribute, e]));
-        for (const v of body.variations) {
-          const row = byAttr.get(v.attribute);
-          if (!row) continue;
-          await repo.upsertScore(tx, {
-            tenantId: ctx.tenantId, appraisalId: id, attribute: v.attribute,
-            weight: row.weight, score: v.score, scoredBy: ctx.actorId,
-            createdBy: ctx.actorId, updatedBy: ctx.actorId,
-            remarks: `varied by reviewing officer (was ${row.score})`,
-          });
-        }
-      }
-      await repo.updateAppraisal(tx, id, {
-        reviewingRemarks: body.remarks, status: "accepting_authority", updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: "reviewing_officer", toStage: "accepting_authority",
-        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "reviewing_officer", override), override,
-        remarks: body.remarks, payload: { decision: body.decision, variations: body.variations ?? [] },
-      });
-    });
-    return reply.send({ id, status: "accepting_authority", decision: body.decision });
+    await publishF3Write(ctx, "apar_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "accepting_authority", decision: body.decision }) as any;
   });
 
   // --- stage 4: accepting authority finalises; grade computed server-side ---
@@ -254,23 +190,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       attribute: s.attribute, weight: Number(s.weight), score: s.score,
     }));
     const grade = computeOverallGrade(scores);
-    await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, {
-        acceptingRemarks: body.remarks,
-        overallGrade: String(grade.overallGrade),
-        overallBand: grade.band,
-        status: "disclosed",
-        disclosedAt: new Date(),
-        updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: "accepting_authority", toStage: "disclosed",
-        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "accepting_authority", override), override,
-        remarks: body.remarks,
-        payload: { computed: { overallGrade: grade.overallGrade, band: grade.band, totalWeight: grade.totalWeight, attributeCount: grade.attributeCount } },
-      });
-    });
-    return reply.send({ id, status: "disclosed", overallGrade: grade.overallGrade, band: grade.band });
+    await publishF3Write(ctx, "apar_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "disclosed", overallGrade: grade.overallGrade, band: grade.band }) as any;
   });
 
   // --- stage 5: officer files representation (optional) ---------------------
@@ -281,18 +202,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "disclosed");
-    await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, {
-        representation: body.representation, status: "representation", updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: "disclosed", toStage: "representation",
-        actorId: ctx.actorId, actorRole: trueActorRole(ctx, "appraisee", override), override,
-        remarks: "representation filed",
-        payload: { representation: body.representation },
-      });
-    });
-    return reply.send({ id, status: "representation" });
+    await publishF3Write(ctx, "apar_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "representation" }) as any;
   });
 
   // --- finalise (HR closes; from disclosed or representation) ---------------
@@ -304,14 +215,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     if (a.status !== "disclosed" && a.status !== "representation") {
       throw new HttpError(409, "WRONG_STAGE", `cannot finalise from '${a.status}'`);
     }
-    await db.transaction(async (tx) => {
-      await repo.updateAppraisal(tx, id, { status: "finalised", updatedBy: ctx.actorId }, a.version);
-      await repo.appendHistory(tx, {
-        tenantId: ctx.tenantId, appraisalId: id, fromStage: a.status, toStage: "finalised",
-        actorId: ctx.actorId, actorRole: "hr", remarks: "APAR finalised", payload: {},
-      });
-    });
-    return reply.send({ id, status: "finalised", overallGrade: a.overallGrade, band: a.overallBand });
+    await publishF3Write(ctx, "apar_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "finalised", overallGrade: a.overallGrade, band: a.overallBand }) as any;
   });
 
   // --- read: full APAR with scores + stage history --------------------------

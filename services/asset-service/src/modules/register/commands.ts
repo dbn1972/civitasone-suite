@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
-import { queue, cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import * as repo from "./repo.js";
 import type { CreateAssetBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -19,9 +17,11 @@ export async function createAsset(ctx: RequestContext, body: CreateAssetBody): P
 }
 
 export async function tagBarcode(ctx: RequestContext, assetId: string, barcode: string): Promise<Accepted> {
-  await db.transaction(async (tx) => {
-    await repo.updateAssetBarcode(tx, assetId, ctx.tenantId, barcode, ctx.actorId);
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.assetTagBarcode, {
+    messageId, type: COMMANDS.assetTagBarcode,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: assetId, tenantId: ctx.tenantId, barcode },
   });
-  await cache.invalidate(cache.makeKey(ctx.tenantId, "asset", assetId));
   return { id: assetId, status: "accepted", correlationId: ctx.correlationId };
 }

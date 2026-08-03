@@ -14,6 +14,8 @@
  * Fail-closed masking: a requested field with no masking rule resolves to
  * `redact`, never to pass-through (see domain.ts resolveStrategy).
  */
+import { randomUUID } from "node:crypto";
+import { publishAdminCommand } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -162,31 +164,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SANDBOX_ROLES);
     const body = parseOrThrow(registerBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
-      // `uq_sandbox_env_code` would otherwise raise a driver-level unique
-      // violation, which the error handler can only report as 500 INTERNAL. A
-      // duplicate code is a client error, so answer it as one.
-      const clash = await repo.findSandboxByCodeTx(tx as repo.Writer, ctx.tenantId, body.code);
-      if (clash) {
-        throw new HttpError(409, "SANDBOX_EXISTS", `a sandbox with code '${body.code}' already exists`);
-      }
-      const row = await repo.insertSandbox(tx as repo.Writer, {
-        tenantId: ctx.tenantId,
-        code: body.code,
-        name: body.name,
-        sourceEnvironment: body.sourceEnvironment,
-        status: "registered",
-        notes: body.notes,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.sandboxRegistered, {
-        sandboxId: row.id, code: row.code, sourceEnvironment: row.sourceEnvironment,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "sandbox.registered", RESOURCE_SANDBOX, row.id, { code: row.code });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'sandbox_op_0',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeSandbox(created)));
+    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/sandboxes", async (req, reply) => {
@@ -214,27 +201,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const body = parseOrThrow(ruleBody, req.body);
     assertPreserveJustified(body.strategy, body.justification);
 
-    const saved = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const sandbox = await repo.findSandboxTx(w, ctx.tenantId, id);
-      if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
-      const row = await repo.upsertMaskingRule(w, {
-        tenantId: ctx.tenantId,
-        sandboxId: id,
-        tableName: body.tableName,
-        fieldName: body.fieldName,
-        strategy: body.strategy,
-        justification: body.justification,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      // Audit records the field NAME and strategy only — never a value.
-      await auditEvent(tx, outboxCtx(ctx), "sandbox.masking_rule.set", RESOURCE_SANDBOX, id, {
-        tableName: row.tableName, fieldName: row.fieldName, strategy: row.strategy,
-      });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'sandbox_op_1',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeRule(saved)));
+    const saved = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/sandboxes/:id/masking-rules", async (req, reply) => {
@@ -255,44 +231,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(refreshBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const sandbox = await repo.findSandboxTx(w, ctx.tenantId, id);
-      if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
-      assertSandboxRefreshable(sandbox.status);
-      const rules = await repo.listMaskingRulesTx(w, ctx.tenantId, id);
-      // Resolved here purely so the requester SEES the fail-closed plan before a
-      // second actor approves it. The authoritative plan is recomputed by the
-      // consumer at execution time from the rules as they stand then.
-      const plan = buildMaskingPlan(body.requestedFields, toDomainRules(rules));
-      const job = await repo.insertRefreshJob(w, {
-        tenantId: ctx.tenantId,
-        sandboxId: id,
-        sourceEnvironment: sandbox.sourceEnvironment,
-        requestedFields: body.requestedFields,
-        status: "pending_approval",
-        requestedBy: ctx.actorId,
-        dataMovement: "stubbed",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.sandboxRefreshRequested, {
-        jobId: job.id, sandboxId: id, sourceEnvironment: sandbox.sourceEnvironment,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "sandbox_refresh.requested", RESOURCE_JOB, job.id, {
-        sandboxId: id, fieldCount: plan.fields.length, maskedFieldCount: plan.maskedFieldCount,
-      });
-      return { job, plan };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'sandbox_op_2',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(singleEnvelope({
-      ...serializeJob(result.job),
-      plan: {
-        fields: result.plan.fields,
-        maskedFieldCount: result.plan.maskedFieldCount,
-        preservedFieldCount: result.plan.preservedFieldCount,
-        defaultedFields: result.plan.defaultedFields,
-      },
-    }));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── list refresh jobs ─────────────────────────────────────────────────────
@@ -313,49 +261,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const job = await repo.findRefreshJobTx(w, ctx.tenantId, id);
-      if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
-      assertAwaitingApproval(job.status);
-      assertApproverDistinct(job.requestedBy, ctx.actorId);
-      assertVersionMatch(job.version, body.expectedVersion);
-
-      const moved = await repo.updateRefreshJob(w, ctx.tenantId, id, body.expectedVersion, {
-        status: "queued",
-        approvedBy: ctx.actorId,
-        approvedAt: new Date(),
-        updatedBy: ctx.actorId,
-      });
-      if (!moved) throw new HttpError(409, "VERSION_CONFLICT", "refresh job was modified concurrently; re-read and retry");
-
-      const sandbox = await repo.findSandboxTx(w, ctx.tenantId, job.sandboxId);
-      if (sandbox) {
-        const flagged = await repo.updateSandboxStatus(w, ctx.tenantId, sandbox.id, sandbox.version, {
-          status: "refreshing", updatedBy: ctx.actorId,
-        });
-        if (!flagged) throw new HttpError(409, "VERSION_CONFLICT", "sandbox was modified concurrently; re-read and retry");
-      }
-
-      // The command rides the transactional outbox, so "job is queued" and
-      // "executor was told" commit together. Consumer: modules/sandbox/consumer.ts.
-      await enqueue(tx as Parameters<typeof enqueue>[0], {
-        topic: COMMANDS.sandboxRefreshExecute,
-        eventType: COMMANDS.sandboxRefreshExecute,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { jobId: id, sandboxId: job.sandboxId, tenantId: ctx.tenantId },
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.sandboxRefreshApproved, {
-        jobId: id, sandboxId: job.sandboxId, requestedBy: job.requestedBy, approvedBy: ctx.actorId,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "sandbox_refresh.approved", RESOURCE_JOB, id, {
-        sandboxId: job.sandboxId, requestedBy: job.requestedBy,
-      });
-      return { jobId: id, status: "queued", version: body.expectedVersion + 1 };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'sandbox_op_3',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send(singleEnvelope(result));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── reject a refresh ─────────────────────────────────────────────────────
@@ -365,22 +280,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const job = await repo.findRefreshJobTx(w, ctx.tenantId, id);
-      if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
-      assertAwaitingApproval(job.status);
-      assertApproverDistinct(job.requestedBy, ctx.actorId);
-      assertVersionMatch(job.version, body.expectedVersion);
-      const moved = await repo.updateRefreshJob(w, ctx.tenantId, id, body.expectedVersion, {
-        status: "rejected", rejectedReason: body.reason, updatedBy: ctx.actorId,
-      });
-      if (!moved) throw new HttpError(409, "VERSION_CONFLICT", "refresh job was modified concurrently; re-read and retry");
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.sandboxRefreshRejected, { jobId: id, sandboxId: job.sandboxId });
-      await auditEvent(tx, outboxCtx(ctx), "sandbox_refresh.rejected", RESOURCE_JOB, id);
-      return { jobId: id, status: "rejected" };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'sandbox_op_4',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send(singleEnvelope(result));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── what was masked for a completed refresh ───────────────────────────────

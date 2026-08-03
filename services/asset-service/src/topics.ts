@@ -1,5 +1,6 @@
 export const COMMANDS = {
   assetCreate:          "asset.asset.create",
+  assetTagBarcode:      "asset.asset.tag_barcode",
   assetTransfer:        "asset.asset.transfer",
   assetDispose:         "asset.asset.dispose",
   disposalSubmitApproval: "asset.disposal.submit_approval",
@@ -25,6 +26,13 @@ export const COMMANDS = {
   fleetScheduleMaintenance:  "asset.fleet.schedule_maintenance",
   fleetDeviceRegister:       "asset.fleet_device.register",
   fleetDeviceTelemetry:      "asset.fleet_device.telemetry",
+  f3RouteWrite:              "asset.f3.route_write",
+  verificationCreate:        "asset.verification.create",
+  verificationItemAdd:       "asset.verification.item.add",
+  verificationSubmit:        "asset.verification.submit",
+  verificationApprove:       "asset.verification.approve",
+  writeoffRequest:           "asset.writeoff.request",
+  writeoffApprove:           "asset.writeoff.approve",
 } as const;
 
 export const EVENTS = {

@@ -229,6 +229,7 @@ const H = vi.hoisted(() => ({
   setStatusMock: vi.fn(),
   deprecateActiveMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -241,7 +242,7 @@ vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqu
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
-  queue: { publish: vi.fn(async () => "m") },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/events/taxonomy-repo.js", () => ({
@@ -310,6 +311,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue("m");
   H.insertMock.mockResolvedValue(undefined);
   H.setStatusMock.mockResolvedValue(true);
   H.deprecateActiveMock.mockResolvedValue(0);
@@ -366,31 +368,36 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions", () => {
   const url = `/v1/cdp/events/taxonomy/${TAX_ID}/versions`;
   const payload = { schemaJson: { orderId: { type: "string", required: true } }, notes: "first cut" };
 
-  it("201 — authors revision 1 as a draft", async () => {
+  it("202 — publishes draft revision create command", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.schemaVersion).toBe(1);
-    expect(r.json().data.status).toBe("draft");
+    expect(r.json().data.status).toBe("accepted");
     expect(r.json().data.comparedWith).toBeNull();
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "taxonomy_version_create", schemaVersion: 1 }) }),
+    );
+    expect(H.insertMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("201 — numbers the next revision past every existing one", async () => {
+  it("202 — numbers the next revision past every existing one", async () => {
     H.listByTaxonomyMock.mockResolvedValue([
       makeVersion({ schemaVersion: 1, status: "deprecated" }),
       makeVersion({ schemaVersion: 2, status: "active" }),
     ]);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.schemaVersion).toBe(3);
     expect(r.json().data.comparedWith).toBe(2);
     await app.close();
   });
 
-  it("201 — flags a breaking change against the revision in force", async () => {
+  it("202 — flags a breaking change against the revision in force", async () => {
     H.listByTaxonomyMock.mockResolvedValue([
       makeVersion({ schemaVersion: 1, status: "active", schemaJson: { orderId: { type: "string" } } }),
     ]);
@@ -399,13 +406,13 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions", () => {
       method: "POST", url, headers: auth(),
       payload: { schemaJson: { orderId: { type: "number", required: true } } },
     });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.diff.breaking).toBe(true);
     expect(r.json().data.diff.typeChanged).toEqual([{ field: "orderId", from: "string", to: "number" }]);
     await app.close();
   });
 
-  it("201 — a purely additive optional change is not breaking", async () => {
+  it("202 — a purely additive optional change is not breaking", async () => {
     H.listByTaxonomyMock.mockResolvedValue([
       makeVersion({ schemaVersion: 1, status: "active", schemaJson: { orderId: { type: "string" } } }),
     ]);
@@ -414,7 +421,7 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions", () => {
       method: "POST", url, headers: auth(),
       payload: { schemaJson: { orderId: { type: "string" }, coupon: { type: "string" } } },
     });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.diff.breaking).toBe(false);
     await app.close();
   });
@@ -464,24 +471,27 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions", () => {
 describe("POST /v1/cdp/events/taxonomy/:id/versions/:schemaVersion/activate", () => {
   const url = `/v1/cdp/events/taxonomy/${TAX_ID}/versions/2/activate`;
 
-  it("200 — a steward puts a draft revision in force and retires its predecessor", async () => {
+  it("202 — a steward publishes activate command for a draft revision", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ schemaVersion: 2 }));
-    H.deprecateActiveMock.mockResolvedValue(1);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(["cdp_steward"]), payload: { version: 1 } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("active");
-    expect(r.json().data.deprecatedCount).toBe(1);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
     expect(r.json().data.version).toBe(2);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "taxonomy_version_activate", schemaVersion: 2 }) }),
+    );
+    expect(H.setStatusMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — activating the first revision retires nothing", async () => {
+  it("202 — activating the first revision still publishes", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ schemaVersion: 2 }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.deprecatedCount).toBe(0);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -519,12 +529,13 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions/:schemaVersion/activate", ()
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ schemaVersion: 2 }));
-    H.setStatusMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.setStatusMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -555,21 +566,26 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions/:schemaVersion/activate", ()
 describe("POST /v1/cdp/events/taxonomy/:id/versions/:schemaVersion/deprecate", () => {
   const url = `/v1/cdp/events/taxonomy/${TAX_ID}/versions/1/deprecate`;
 
-  it("200 — retires an active revision", async () => {
+  it("202 — publishes deprecate command for an active revision", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ status: "active" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(["cdp_steward"]), payload: { version: 4 } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("deprecated");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
     expect(r.json().data.version).toBe(5);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "taxonomy_version_deprecate" }) }),
+    );
+    expect(H.setStatusMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — retiring a draft is allowed (abandoned authoring)", async () => {
+  it("202 — retiring a draft is allowed (abandoned authoring)", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ status: "draft" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -581,12 +597,13 @@ describe("POST /v1/cdp/events/taxonomy/:id/versions/:schemaVersion/deprecate", (
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByVersionNumberMock.mockResolvedValue(makeVersion({ status: "active" }));
-    H.setStatusMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.setStatusMock).not.toHaveBeenCalled();
     await app.close();
   });
 

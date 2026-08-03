@@ -2,8 +2,8 @@
  * DSC Config Routes — manage per-tenant digital signature certificate configuration.
  *
  * - GET  /v1/payroll/dsc-config — returns cert metadata (CN, expiry, fingerprint), NO key material
- * - PUT  /v1/payroll/dsc-config — multipart: P12 file (base64) + passphrase
- * - DELETE /v1/payroll/dsc-config — remove S3 object + DB row
+ * - PUT  /v1/payroll/dsc-config — multipart: P12 file (base64) + passphrase → CQRS 202
+ * - DELETE /v1/payroll/dsc-config — remove S3 object + enqueue DB delete → CQRS 202
  *
  * Auth: payroll_admin / super_admin
  */
@@ -12,13 +12,13 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { validateDscCertificate, DscValidationError } from "@civitasone/render";
 import { putObject, deleteObject } from "@civitasone/storage";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
 const MAX_P12_SIZE = 10 * 1024; // 10 KB limit per requirement
-const AUDIT_TOPIC = "audit.event.record";
 
 const putBodySchema = z.object({
   /** Base64-encoded P12 file content */
@@ -56,8 +56,7 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * PUT /v1/payroll/dsc-config
-   * Upload a P12 keystore (base64-encoded) + passphrase.
-   * Validates the certificate, uploads P12 to S3, stores metadata in DB.
+   * Validate + upload P12 to S3, then publish DB upsert command → 202.
    */
   app.put("/v1/payroll/dsc-config", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -88,64 +87,24 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "DSC_INVALID", "failed to parse P12 keystore — check file and passphrase");
     }
 
-    // Upload P12 to S3
+    // Upload P12 to S3 (object store side-effect; durable DB write is via consumer)
     const storageRef = `dsc/${ctx.tenantId}/signing.p12`;
     await putObject(storageRef, p12Buffer, "application/x-pkcs12");
 
-    // Store metadata + encrypted passphrase in DB
-    await repo.upsert(ctx.tenantId, {
-      tenantId: ctx.tenantId,
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertDscConfig(ctx, {
       storageRef,
-      passphrase: body.passphrase, // encryptedText column handles encryption transparently
+      passphrase: body.passphrase,
       subjectCn: certInfo.subjectCN,
       serialNumber: certInfo.serialNumber,
-      notBefore: certInfo.notBefore,
-      notAfter: certInfo.notAfter,
+      notBefore: certInfo.notBefore.toISOString(),
+      notAfter: certInfo.notAfter.toISOString(),
       sha256Fingerprint: certInfo.sha256Fingerprint,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    // Emit audit event: dsc_config_updated (no private key material)
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: AUDIT_TOPIC,
-        eventType: AUDIT_TOPIC,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "payroll",
-          action: "dsc_config_updated",
-          resourceType: "dsc_config",
-          resourceId: ctx.tenantId,
-          outcome: "success",
-          detail: {
-            subjectCN: certInfo.subjectCN,
-            serialNumber: certInfo.serialNumber,
-            sha256Fingerprint: certInfo.sha256Fingerprint,
-            notAfter: certInfo.notAfter.toISOString(),
-          },
-        },
-      });
-    });
-
-    return reply.status(200).send({
-      data: {
-        subjectCn: certInfo.subjectCN,
-        serialNumber: certInfo.serialNumber,
-        notBefore: certInfo.notBefore,
-        notAfter: certInfo.notAfter,
-        sha256Fingerprint: certInfo.sha256Fingerprint,
-      },
-    });
+    }));
   });
 
   /**
    * DELETE /v1/payroll/dsc-config
-   * Remove S3 object + DB row. Reverts tenant to unsigned mode.
+   * Remove S3 object, then publish DB delete command → 202.
    */
   app.delete("/v1/payroll/dsc-config", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -159,32 +118,7 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
     // Remove S3 object
     await deleteObject(row.storageRef);
 
-    // Remove DB row
-    await repo.remove(ctx.tenantId);
-
-    // Emit audit event: dsc_config_deleted (no private key material)
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: AUDIT_TOPIC,
-        eventType: AUDIT_TOPIC,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "payroll",
-          action: "dsc_config_deleted",
-          resourceType: "dsc_config",
-          resourceId: ctx.tenantId,
-          outcome: "success",
-          detail: {
-            subjectCN: row.subjectCn,
-            serialNumber: row.serialNumber,
-          },
-        },
-      });
-    });
-
-    return reply.status(200).send({ status: "ok" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.removeDscConfig(ctx));
   });
 
   // ── Error handler ──────────────────────────────────────────────────────────

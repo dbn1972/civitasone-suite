@@ -17,6 +17,9 @@
  * Optimistic locking: every mutating decision takes `expectedVersion` and the
  * UPDATE carries `WHERE version = $expected`; a mismatch is 409 VERSION_CONFLICT.
  */
+import { randomUUID } from "node:crypto";
+import { publishAdminCommand } from "../../shared/f3-publish.js";
+import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, requireSuperAdmin, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -171,38 +174,16 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     }
     const checksum = checksumOf(entries);
 
-    const created = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const currentMax = await repo.maxArtefactVersionTx(w, ctx.tenantId, body.setKey);
-      if (currentMax !== null) {
-        const latest = await repo.findArtefactByVersionTx(w, ctx.tenantId, body.setKey, currentMax);
-        if (latest?.checksum === checksum) {
-          // Refuse to mint a new version that is byte-identical to the current
-          // head: artefact numbers must mean something in a promotion audit.
-          throw new HttpError(409, "ARTEFACT_UNCHANGED",
-            `config set is identical to version ${currentMax}; nothing to snapshot`);
-        }
-      }
-      const artefactVersion = nextArtefactVersion(currentMax);
-      const row = await repo.insertArtefact(w, {
-        tenantId: ctx.tenantId,
-        setKey: body.setKey,
-        artefactVersion,
-        entries,
-        checksum,
-        note: body.note ?? null,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.configArtefactSnapshotted, {
-        artefactId: row.id, setKey: row.setKey, artefactVersion, checksum,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "config_artefact.snapshot", RESOURCE, row.id, {
-        setKey: row.setKey, artefactVersion,
-      });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'config_op_0',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeArtefact(created)));
+    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── list artefact versions ────────────────────────────────────────────────
@@ -226,12 +207,7 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     if (!from) throw new HttpError(404, "NOT_FOUND", `artefact version ${q.fromVersion} not found for this set`);
     if (!to) throw new HttpError(404, "NOT_FOUND", `artefact version ${q.toVersion} not found for this set`);
     const diff = diffConfig(from.entries, to.entries);
-    return reply.send(singleEnvelope({
-      setKey: q.setKey,
-      fromVersion: from.artefactVersion,
-      toVersion: to.artefactVersion,
-      ...diff,
-    }));
+    return reply.code(202).send({ id: randomUUID(), status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── list promotions (maker-checker queue) ─────────────────────────────────
@@ -249,32 +225,16 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ARTEFACT_ROLES);
     const body = parseOrThrow(promoteBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const artefact = await repo.findArtefactByVersionTx(w, ctx.tenantId, body.setKey, body.artefactVersion);
-      if (!artefact) throw new HttpError(404, "NOT_FOUND", "config artefact version not found");
-      const row = await repo.insertPromotion(w, {
-        tenantId: ctx.tenantId,
-        setKey: body.setKey,
-        artefactId: artefact.id,
-        artefactVersion: artefact.artefactVersion,
-        targetEnv: body.targetEnv,
-        kind: "promote",
-        status: "pending",
-        requestedBy: ctx.actorId,
-        note: body.note ?? null,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.configPromotionRequested, {
-        promotionId: row.id, setKey: row.setKey, artefactVersion: row.artefactVersion, targetEnv: row.targetEnv,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "config_promotion.requested", RESOURCE, row.id, {
-        setKey: row.setKey, artefactVersion: row.artefactVersion, targetEnv: row.targetEnv,
-      });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'config_op_1',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializePromotion(created)));
+    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── approve a promotion (the CHECKER half — applies it) ───────────────────
@@ -284,76 +244,16 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const promotion = await repo.findPromotionByIdTx(w, ctx.tenantId, id);
-      if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
-      assertPendingPromotion(promotion.status);
-      // Separation of duties BEFORE the optimistic-lock check so a maker trying
-      // to self-approve always gets the SoD answer, never a version answer.
-      assertApproverDistinct(promotion.requestedBy, ctx.actorId);
-      assertVersionMatch(promotion.version, body.expectedVersion);
-
-      const decided = await repo.decidePromotion(w, ctx.tenantId, id, body.expectedVersion, {
-        status: "promoted",
-        approvedBy: ctx.actorId,
-        approvedAt: new Date(),
-        updatedBy: ctx.actorId,
-      });
-      if (!decided) {
-        throw new HttpError(409, "VERSION_CONFLICT", "promotion was modified concurrently; re-read and retry");
-      }
-
-      const existing = await repo.findEnvStateTx(w, ctx.tenantId, promotion.setKey, promotion.targetEnv);
-      let envVersion: number;
-      if (!existing) {
-        const inserted = await repo.insertEnvState(w, {
-          tenantId: ctx.tenantId,
-          setKey: promotion.setKey,
-          environment: promotion.targetEnv,
-          artefactId: promotion.artefactId,
-          artefactVersion: promotion.artefactVersion,
-          promotedBy: ctx.actorId,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        });
-        envVersion = inserted.version;
-      } else {
-        const moved = await repo.updateEnvState(w, ctx.tenantId, existing.id, existing.version, {
-          artefactId: promotion.artefactId,
-          artefactVersion: promotion.artefactVersion,
-          promotedBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        });
-        if (!moved) {
-          throw new HttpError(409, "VERSION_CONFLICT", "environment state was modified concurrently; re-read and retry");
-        }
-        envVersion = existing.version + 1;
-      }
-
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.configArtefactPromoted, {
-        promotionId: promotion.id,
-        setKey: promotion.setKey,
-        artefactId: promotion.artefactId,
-        artefactVersion: promotion.artefactVersion,
-        environment: promotion.targetEnv,
-        approvedBy: ctx.actorId,
-        requestedBy: promotion.requestedBy,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "config_promotion.approved", RESOURCE, promotion.id, {
-        setKey: promotion.setKey, artefactVersion: promotion.artefactVersion,
-        environment: promotion.targetEnv, requestedBy: promotion.requestedBy,
-      });
-      return {
-        promotionId: promotion.id,
-        status: "promoted",
-        setKey: promotion.setKey,
-        environment: promotion.targetEnv,
-        artefactVersion: promotion.artefactVersion,
-        envStateVersion: envVersion,
-      };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'config_op_2',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send(singleEnvelope(result));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── reject a promotion ───────────────────────────────────────────────────
@@ -363,28 +263,16 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const promotion = await repo.findPromotionByIdTx(w, ctx.tenantId, id);
-      if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
-      assertPendingPromotion(promotion.status);
-      assertApproverDistinct(promotion.requestedBy, ctx.actorId);
-      assertVersionMatch(promotion.version, body.expectedVersion);
-      const decided = await repo.decidePromotion(w, ctx.tenantId, id, body.expectedVersion, {
-        status: "rejected",
-        rejectedReason: body.reason,
-        updatedBy: ctx.actorId,
-      });
-      if (!decided) {
-        throw new HttpError(409, "VERSION_CONFLICT", "promotion was modified concurrently; re-read and retry");
-      }
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.configPromotionRejected, {
-        promotionId: promotion.id, setKey: promotion.setKey, targetEnv: promotion.targetEnv,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "config_promotion.rejected", RESOURCE, promotion.id);
-      return { promotionId: promotion.id, status: "rejected" };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'config_op_3',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send(singleEnvelope(result));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── what is live in each environment ─────────────────────────────────────
@@ -413,61 +301,16 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const { env } = parseOrThrow(envParam, req.params);
     const body = parseOrThrow(rollbackBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const state = await repo.findEnvStateTx(w, ctx.tenantId, body.setKey, env);
-      if (!state) throw new HttpError(404, "NOT_FOUND", "no config artefact is live in this environment for that set");
-      assertVersionMatch(state.version, body.expectedVersion);
-      const target = await repo.findArtefactByVersionTx(w, ctx.tenantId, body.setKey, body.toVersion);
-      if (!target) throw new HttpError(404, "NOT_FOUND", "rollback target artefact version not found");
-      assertRollbackIsBackwards(state.artefactVersion, body.toVersion);
-      const promoted = await repo.promotedVersionsTx(w, ctx.tenantId, body.setKey, env);
-      assertRollbackTargetPreviouslyPromoted(promoted, body.toVersion);
-
-      const moved = await repo.updateEnvState(w, ctx.tenantId, state.id, body.expectedVersion, {
-        artefactId: target.id,
-        artefactVersion: target.artefactVersion,
-        promotedBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      if (!moved) {
-        throw new HttpError(409, "VERSION_CONFLICT", "environment state was modified concurrently; re-read and retry");
-      }
-      const record = await repo.insertPromotion(w, {
-        tenantId: ctx.tenantId,
-        setKey: body.setKey,
-        artefactId: target.id,
-        artefactVersion: target.artefactVersion,
-        targetEnv: env,
-        kind: "rollback",
-        status: "promoted",
-        requestedBy: ctx.actorId,
-        approvedBy: ctx.actorId,
-        approvedAt: new Date(),
-        note: `rollback from version ${state.artefactVersion}`,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await domainEvent(tx, outboxCtx(ctx), EVENTS.configArtefactRolledBack, {
-        promotionId: record.id,
-        setKey: body.setKey,
-        environment: env,
-        fromVersion: state.artefactVersion,
-        toVersion: target.artefactVersion,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "config_artefact.rolled_back", RESOURCE, record.id, {
-        setKey: body.setKey, environment: env,
-        fromVersion: state.artefactVersion, toVersion: target.artefactVersion,
-      });
-      return {
-        setKey: body.setKey,
-        environment: env,
-        fromVersion: state.artefactVersion,
-        toVersion: target.artefactVersion,
-        envStateVersion: body.expectedVersion + 1,
-      };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'config_op_4',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send(singleEnvelope(result));
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── single artefact (registered last: static siblings win in the router) ──

@@ -89,3 +89,22 @@ export async function setIsolation(ctx: RequestContext, id: string, body: SetIso
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function upsertTenantQuotas(
+  ctx: RequestContext,
+  tenantId: string,
+  body: import("./validators.js").UpdateQuotasBody,
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.tenantQuotaUpsert, {
+    messageId: id,
+    type: COMMANDS.tenantQuotaUpsert,
+    tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(tenantId, "quotas", tenantId));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

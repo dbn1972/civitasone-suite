@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { findByTenantId } from "../sponsor-config/repo.js";
@@ -128,14 +129,14 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       for (const b of beneficiaries) totalAmountMinor += b.amountMinor;
 
       // Emit audit event
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: AUDIT_TOPIC,
-          eventType: AUDIT_TOPIC,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: {
+      await queue.publish(AUDIT_TOPIC, {
+        messageId: randomUUID(),
+        type: AUDIT_TOPIC,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        schemaVersion: "1.0",
+        payload: {
             service: "payroll",
             action: "bank_file_generated",
             resourceType: "payroll_run",
@@ -148,7 +149,6 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
               fileCount: result.type === "multi" ? result.parts.length : 1,
             },
           },
-        });
       });
 
       if (result.type === "single") {

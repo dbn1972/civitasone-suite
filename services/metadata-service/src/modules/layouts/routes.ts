@@ -1,22 +1,17 @@
 /**
- * Form / layout builder routes (CAP-109).
- *
- *   GET   /v1/metadata/entities/:entityId/layouts — list layouts
- *   POST  /v1/metadata/entities/:entityId/layouts — create a layout (form definition)
- *   PATCH /v1/metadata/layouts/:id                — update a layout
- *
- * A layout is a set of sections, each referencing field apiNames. Referenced
- * fields are checked against the entity's actual fields inside the same
- * tenant-scoped transaction, so a form can never point at a non-existent field.
+ * Form / layout builder routes (CAP-109). Writes return 202 Accepted (CQRS).
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { withTenant } from "../../shared/scope.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import { ADMIN } from "../../shared/roles.js";
 import { entityDefinitions, fieldDefinitions, layoutDefinitions } from "../entities/schema.js";
+import { publishCommand } from "../../shared/publish.js";
+import { COMMANDS } from "../../topics.js";
 
 const sectionSchema = z.object({
   label: z.string().min(1).max(256),
@@ -48,29 +43,23 @@ export async function layoutRoutes(app: FastifyInstance): Promise<void> {
     const { entityId } = z.object({ entityId: z.string().uuid() }).parse(req.params);
     const body = createLayoutSchema.parse(req.body);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const parent = await tx.select().from(entityDefinitions)
         .where(and(eq(entityDefinitions.id, entityId), eq(entityDefinitions.tenantId, ctx.tenantId))).limit(1);
       if (!parent[0]) throw new HttpError(404, "NOT_FOUND", "Entity definition not found");
-
       const fields = await tx.select({ apiName: fieldDefinitions.apiName }).from(fieldDefinitions)
         .where(and(eq(fieldDefinitions.entityDefId, entityId), eq(fieldDefinitions.tenantId, ctx.tenantId)));
       const known = new Set(fields.map((f) => f.apiName));
       const missing = body.sections.flatMap((s) => s.fields).filter((f) => !known.has(f));
       if (missing.length) throw new HttpError(422, "UNKNOWN_FIELDS", `layout references unknown fields: ${[...new Set(missing)].join(", ")}`);
-
-      const [created] = await tx.insert(layoutDefinitions).values({
-        tenantId: ctx.tenantId,
-        entityDefId: entityId,
-        layoutType: body.layoutType,
-        sections: body.sections,
-        isDefault: body.isDefault,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      }).returning();
-      return created;
     });
-    return reply.code(201).send({ data: row });
+
+    const id = randomUUID();
+    return reply.code(202).send({
+      data: await publishCommand(ctx, COMMANDS.LAYOUT_CREATE, id, {
+        entityId, layoutType: body.layoutType, sections: body.sections, isDefault: body.isDefault,
+      }),
+    });
   });
 
   app.patch("/v1/metadata/layouts/:id", async (req, reply) => {
@@ -82,11 +71,10 @@ export async function layoutRoutes(app: FastifyInstance): Promise<void> {
       isDefault: z.boolean().optional(),
     }).parse(req.body);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const existing = await tx.select().from(layoutDefinitions)
         .where(and(eq(layoutDefinitions.id, id), eq(layoutDefinitions.tenantId, ctx.tenantId))).limit(1);
       if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Layout not found");
-
       if (body.sections) {
         const fields = await tx.select({ apiName: fieldDefinitions.apiName }).from(fieldDefinitions)
           .where(and(eq(fieldDefinitions.entityDefId, existing[0].entityDefId), eq(fieldDefinitions.tenantId, ctx.tenantId)));
@@ -94,15 +82,14 @@ export async function layoutRoutes(app: FastifyInstance): Promise<void> {
         const missing = body.sections.flatMap((s) => s.fields).filter((f) => !known.has(f));
         if (missing.length) throw new HttpError(422, "UNKNOWN_FIELDS", `layout references unknown fields: ${[...new Set(missing)].join(", ")}`);
       }
-
-      const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.actorId };
-      if (body.sections !== undefined) set.sections = body.sections;
-      if (body.isDefault !== undefined) set.isDefault = body.isDefault;
-      const [updated] = await tx.update(layoutDefinitions).set(set)
-        .where(and(eq(layoutDefinitions.id, id), eq(layoutDefinitions.tenantId, ctx.tenantId))).returning();
-      return updated;
     });
-    return reply.send({ data: row });
+
+    return reply.code(202).send({
+      data: await publishCommand(ctx, COMMANDS.LAYOUT_UPDATE, id, {
+        ...(body.sections !== undefined ? { sections: body.sections } : {}),
+        ...(body.isDefault !== undefined ? { isDefault: body.isDefault } : {}),
+      }),
+    });
   });
 
   registerErrorHandler(app);

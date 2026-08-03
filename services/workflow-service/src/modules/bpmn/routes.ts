@@ -13,10 +13,11 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { definitions } from "../definitions/schema.js";
 import * as defRepo from "../definitions/repo.js";
 import { randomUUID } from "node:crypto";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as definitionCommands from "../definitions/commands.js";
 
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
@@ -146,58 +147,16 @@ export async function bpmnRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_BPMN", "No process elements found in the BPMN XML");
     }
 
-    const code = `imported_${Date.now()}`;
-    const result = await db.transaction(async (tx) => {
-      const latest = await defRepo.findLatestVersionTx(tx, ctx.tenantId, code);
-      const version = latest ? latest.version + 1 : 1;
-      const defId = randomUUID();
-
-      // Map BPMN types to internal types
-      const typeMap: Record<string, string> = {
-        startEvent: "start", endEvent: "end", userTask: "task",
-        serviceTask: "task", exclusiveGateway: "xor",
-        parallelGateway: "split", intermediateEvent: "message_catch",
-      };
-
-      await tx.insert(definitions).values({
-        id: defId,
-        tenantId: ctx.tenantId,
-        code,
-        name: body.name ?? parsed.processName,
-        version,
-        status: "draft",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      const nodes = parsed.nodes.map((n, idx) => ({
-        nodeKey: n.id,
-        name: n.name,
-        nodeType: typeMap[n.type] ?? "task",
-        sortOrder: idx + 1,
-      }));
-
-      const edges = parsed.edges.map((e) => ({
-        fromNode: e.sourceRef,
-        toNode: e.targetRef,
-        condition: e.condition,
-      }));
-
-      await defRepo.insertGraphTx(tx, defId, nodes, edges);
-      return { defId, version, code };
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: result.defId,
-        code: result.code,
-        name: body.name ?? parsed.processName,
-        version: result.version,
-        status: "draft",
-        nodeCount: parsed.nodes.length,
-        edgeCount: parsed.edges.length,
-      },
-    });
+    const typeMap: Record<string, string> = {
+      startEvent: "start", endEvent: "end", userTask: "task", serviceTask: "task",
+      exclusiveGateway: "xor", parallelGateway: "split", intermediateEvent: "message_catch",
+    };
+    return sendAccepted(reply, acceptedResponseSchema, await definitionCommands.importBpmnDefinition(ctx, {
+      code: `imported_${Date.now()}`,
+      name: body.name ?? parsed.processName,
+      nodes: parsed.nodes.map((node, index) => ({ nodeKey: node.id, name: node.name, nodeType: typeMap[node.type], sortOrder: index + 1 })),
+      edges: parsed.edges.map((edge) => ({ fromNode: edge.sourceRef, toNode: edge.targetRef, condition: edge.condition })),
+    }));
   });
 
   /** Export workflow definition as BPMN 2.0 XML */

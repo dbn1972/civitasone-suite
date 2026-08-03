@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { assertValidAgencyCode, assertValidSchemeCode } from "../../shared/pfms.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -124,19 +123,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const batch = await repo.findPfmsById(id, ctx.tenantId);
     if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
-    const hash = createHash("sha256").update(body.signaturePayload).digest("hex");
-    const sigRef = `DSC:${body.certificateRef.slice(0, 32)}:${hash.slice(0, 16)}`;
-    await db.transaction(async (tx) => {
-      await repo.updatePfmsBatch(tx, id, {
-        signedAt: new Date(),
-        signedBy: ctx.actorId,
-        signatureRef: sigRef,
-        bankFileHash: hash,
-        submissionStatus: "signed",
-        updatedBy: ctx.actorId,
-      });
-    });
-    return reply.send({ id, signatureRef: sigRef, submissionStatus: "signed" });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.signBatch(ctx, id, body));
   });
 }
 

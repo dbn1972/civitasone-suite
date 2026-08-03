@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import { GEO_POINT_REGISTER } from "./consumer.js";
+import { COMMANDS } from "../../topics.js";
 
 const READER = ["super_admin", "location_admin", "gis_admin", "location_user", "project_admin"];
 const WRITER = ["super_admin", "location_admin", "gis_admin"];
@@ -11,7 +13,6 @@ const WRITER = ["super_admin", "location_admin", "gis_admin"];
 const bboxSchema = z.string().regex(/^-?\d+(\.\d+)?(,-?\d+(\.\d+)?){3}$/).optional();
 
 export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
-  // SVC-119: aggregated marker feed for the monitoring map.
   app.get("/v1/locations/map-markers", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER);
     const q = z.object({
@@ -29,7 +30,7 @@ export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ markers, meta: { total: markers.length } });
   });
 
-  // SVC-119: HTTP register endpoint (mirrors the queue extension point).
+  // CQRS: publish only — consumer upserts (no sync repo write).
   app.post("/v1/locations/geo-points", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, WRITER);
     const body = z.object({
@@ -40,14 +41,17 @@ export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
       label: z.string().max(256).optional(),
       status: z.string().max(32).optional(),
     }).parse(req.body);
-    await repo.upsertGeoPoint(ctx.tenantId, ctx.actorId, body);
-    // Also publish the command so the persistence path is exercised identically
-    // for out-of-service registrations; the upsert above gives an immediate 201.
+    const messageId = randomUUID();
     await queue.publish(GEO_POINT_REGISTER, {
-      messageId: `${body.domain}:${body.refId}:${Date.now()}`, type: GEO_POINT_REGISTER,
+      messageId, type: COMMANDS.geoPointRegister,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: body,
     });
-    return reply.code(201).send({ data: { domain: body.domain, refId: body.refId, status: "registered" } });
+    return reply.code(202).send({
+      id: messageId,
+      status: "accepted",
+      correlationId: ctx.correlationId,
+      data: { domain: body.domain, refId: body.refId, status: "queued" },
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

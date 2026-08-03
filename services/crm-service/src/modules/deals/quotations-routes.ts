@@ -1,11 +1,6 @@
 /**
  * Quotation routes — templates, versions, acceptance (QP-003, QP-005).
- * GET  /v1/crm/quotations                  — list (dealId / status filters)
- * POST /v1/crm/quotations                  — create from a template
- * POST /v1/crm/quotations/:id/new-version   — clone and bump version_number
- * POST /v1/crm/quotations/:id/send          — draft → sent
- * POST /v1/crm/quotations/:id/accept        — sent → accepted (terminal)
- * POST /v1/crm/quotations/:id/reject        — sent → rejected (terminal, reason required)
+ * Writes are CQRS: validate → queue.publish → 202 Accepted.
  *
  * MONEY: `totalMinor` is bigint paise, carried as a STRING in JSON and summed
  * with BigInt. No float or JS number touches a money value anywhere here.
@@ -14,12 +9,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import type { RequestContext } from "@civitasone/types";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 import {
   QUOTATION_STATUSES,
   canTransition,
@@ -30,9 +24,9 @@ import {
   REJECT_REASON_MIN_LENGTH,
   type QuotationStatus,
 } from "./quotation-domain.js";
+import * as commands from "./quotation-commands.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "quotation";
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -49,7 +43,6 @@ const createBody = z.object({
   quoteRef: z.string().min(1).max(120),
   templateRef: z.string().min(1).max(120),
   lineItems: z.array(lineItem).max(500).default([]),
-  /** Only used when there are no line items (e.g. a lump-sum quote). */
   totalMinor: minorAmount.optional(),
   currency: z.string().length(3).default("INR"),
   validUntil: z.string().datetime().optional(),
@@ -104,10 +97,6 @@ interface QuotationState {
   version: number;
 }
 
-/**
- * Resolves the authoritative total: line items win when present, because a total
- * that disagrees with its own lines is a data bug, not a business decision.
- */
 function resolveTotal(
   lineItems: z.infer<typeof lineItem>[] | undefined,
   totalMinor: string | undefined,
@@ -119,7 +108,6 @@ function resolveTotal(
 }
 
 export async function quotationRoutes(app: FastifyInstance): Promise<void> {
-  /** List quotations. */
   app.get("/v1/crm/quotations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -148,7 +136,6 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(listEnvelope(rows, w, total));
   });
 
-  /** Create version 1 of a quotation from a template. */
   app.post("/v1/crm/quotations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -166,55 +153,21 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
 
     const quotationId = randomUUID();
     const totalMinor = resolveTotal(body.lineItems, body.totalMinor, "0");
-
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.quotations
-          (id, tenant_id, deal_id, quote_ref, template_ref, version_number, status,
-           total_minor, currency, valid_until, line_items, created_by, updated_by)
-        VALUES (
-          ${quotationId}, ${ctx.tenantId}, ${body.dealId ?? null}, ${body.quoteRef},
-          ${body.templateRef}, 1, 'draft', ${totalMinor}::bigint,
-          ${body.currency.toUpperCase()}, ${body.validUntil ?? null}::timestamptz,
-          ${JSON.stringify(body.lineItems)}::jsonb, ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.quotationCreated,
-        action: "create",
-        resourceType: RESOURCE,
-        resourceId: quotationId,
-        payload: {
-          quotationId,
-          quoteRef: body.quoteRef,
-          versionNumber: 1,
-          totalMinor,
-          currency: body.currency.toUpperCase(),
-        },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: quotationId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.createQuotation(ctx, quotationId, {
         dealId: body.dealId ?? null,
         quoteRef: body.quoteRef,
         templateRef: body.templateRef,
-        versionNumber: 1,
-        status: "draft",
         totalMinor,
         currency: body.currency.toUpperCase(),
         validUntil: body.validUntil ?? null,
         lineItems: body.lineItems,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
-  /**
-   * Clone into a new revision. The clone always starts as `draft`: a revision is
-   * a fresh offer, so it must be explicitly sent again.
-   */
   app.post("/v1/crm/quotations/:id/new-version", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -236,96 +189,54 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
     const totalMinor = resolveTotal(body.lineItems, body.totalMinor, source.totalMinor);
     const newId = randomUUID();
 
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.quotations
-          (id, tenant_id, deal_id, quote_ref, template_ref, version_number, status,
-           total_minor, currency, valid_until, line_items, created_by, updated_by)
-        SELECT ${newId}, tenant_id, deal_id, quote_ref, template_ref, ${nextVersionNumber}, 'draft',
-               ${totalMinor}::bigint, currency,
-               COALESCE(${body.validUntil ?? null}::timestamptz, valid_until),
-               ${JSON.stringify(clonedLineItems)}::jsonb, ${ctx.actorId}, ${ctx.actorId}
-        FROM crm.quotations
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.quotationVersioned,
-        action: "new_version",
-        resourceType: RESOURCE,
-        resourceId: newId,
-        payload: {
-          quotationId: newId,
-          clonedFrom: id,
-          quoteRef: source.quoteRef,
-          versionNumber: nextVersionNumber,
-          totalMinor,
-        },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: newId,
-        clonedFrom: id,
-        quoteRef: source.quoteRef,
-        versionNumber: nextVersionNumber,
-        status: "draft",
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.versionQuotation(ctx, newId, {
+        sourceId: id,
+        nextVersionNumber,
         totalMinor,
+        validUntil: body.validUntil ?? null,
         lineItems: clonedLineItems,
-        version: 1,
-      },
-    });
+        quoteRef: source.quoteRef,
+      }),
+    );
   });
 
-  /** draft → sent */
   app.post("/v1/crm/quotations/:id/send", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-
     const q = await loadQuotation(ctx.tenantId, id);
     assertTransition(q.status, "sent");
-
-    const version = await transitionStatus(ctx, {
-      id,
-      expectedVersion: q.version,
-      fromStatus: q.status,
-      toStatus: "sent",
-      extraSets: sql`, sent_at = now()`,
-      eventType: EVENTS.quotationSent,
-      action: "send",
-      extraPayload: {},
-    });
-
-    return reply.send({ data: { id, status: "sent", version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.sendQuotation(ctx, id, {
+        expectedVersion: q.version,
+        fromStatus: q.status,
+      }),
+    );
   });
 
-  /** sent → accepted (terminal) */
   app.post("/v1/crm/quotations/:id/accept", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-
     const q = await loadQuotation(ctx.tenantId, id);
     assertTransition(q.status, "accepted");
-
-    const version = await transitionStatus(ctx, {
-      id,
-      expectedVersion: q.version,
-      fromStatus: q.status,
-      toStatus: "accepted",
-      extraSets: sql`, decided_at = now()`,
-      eventType: EVENTS.quotationAccepted,
-      action: "accept",
-      extraPayload: { totalMinor: q.totalMinor, currency: q.currency },
-    });
-
-    return reply.send({
-      data: { id, status: "accepted", totalMinor: q.totalMinor, currency: q.currency, version },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.acceptQuotation(ctx, id, {
+        expectedVersion: q.version,
+        fromStatus: q.status,
+        totalMinor: q.totalMinor,
+        currency: q.currency,
+      }),
+    );
   });
 
-  /** sent → rejected (terminal); a reason is mandatory for loss analysis. */
   app.post("/v1/crm/quotations/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -342,19 +253,15 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
 
     const q = await loadQuotation(ctx.tenantId, id);
     assertTransition(q.status, "rejected");
-
-    const version = await transitionStatus(ctx, {
-      id,
-      expectedVersion: q.version,
-      fromStatus: q.status,
-      toStatus: "rejected",
-      extraSets: sql`, decided_at = now(), reject_reason = ${body.reason.trim()}`,
-      eventType: EVENTS.quotationRejected,
-      action: "reject",
-      extraPayload: {},
-    });
-
-    return reply.send({ data: { id, status: "rejected", version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.rejectQuotation(ctx, id, {
+        expectedVersion: q.version,
+        fromStatus: q.status,
+        reason: body.reason.trim(),
+      }),
+    );
   });
 }
 
@@ -389,52 +296,4 @@ function assertTransition(from: string, to: QuotationStatus): void {
         : `cannot move from '${from}' to '${to}' (allowed: ${allowed.join(", ")})`,
     );
   }
-}
-
-interface StatusTransition {
-  id: string;
-  expectedVersion: number;
-  fromStatus: string;
-  toStatus: QuotationStatus;
-  extraSets: ReturnType<typeof sql>;
-  eventType: string;
-  action: string;
-  extraPayload: Record<string, unknown>;
-}
-
-/**
- * Applies a status change and its audit trail in ONE transaction — the audit row
- * must commit with the status change or not at all. Optimistic lock: if another
- * request moved the row, nothing is written and the caller gets 409.
- */
-async function transitionStatus(ctx: RequestContext, t: StatusTransition): Promise<number> {
-  const rows = await db.transaction(async (tx) => {
-    const updated = await tx.execute(sql`
-      UPDATE crm.quotations
-      SET status = ${t.toStatus}${t.extraSets},
-          updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-      WHERE id = ${t.id} AND tenant_id = ${ctx.tenantId} AND version = ${t.expectedVersion}
-      RETURNING id, version
-    `) as unknown as Array<{ id: string; version: number }>;
-    if (updated.length === 0) return updated;
-    await emitWithAudit(tx, ctx, {
-      eventType: t.eventType,
-      action: t.action,
-      resourceType: RESOURCE,
-      resourceId: t.id,
-      payload: {
-        quotationId: t.id,
-        fromStatus: t.fromStatus,
-        toStatus: t.toStatus,
-        ...t.extraPayload,
-      },
-    });
-    return updated;
-  });
-
-  const row = rows[0];
-  if (!row) {
-    throw new HttpError(409, "VERSION_CONFLICT", "quotation was modified by another request");
-  }
-  return row.version;
 }

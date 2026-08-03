@@ -14,6 +14,13 @@ export const COMMANDS = {
   ucSubmit:                "project.uc.submit",
   geoTag:                  "project.geo.tag",
   photoUpload:             "project.photo.upload",
+  boardIntakeAccept:       "project.board_intake.accept",
+  boardIntakeReject:       "project.board_intake.reject",
+  evidenceAttach:          "project.evidence.attach",
+  dependencyCreate:        "project.dependency.create",
+  dependencyDelete:        "project.dependency.delete",
+  baselineCreate:          "project.baseline.create",
+  f3RouteWrite:            "project.f3.route_write",
 } as const;
 
 export const EVENTS = {

@@ -139,55 +139,63 @@ beforeEach(() => {
 describe("POST /v1/cdp/segments/:id/activate", () => {
   const url = `/v1/cdp/segments/${SEGMENT_ID}/activate`;
 
-  it("202 — queues a run sized from materialised membership", async () => {
+  it("202 — accepts activation sized from materialised membership", async () => {
+    H.segmentFindByIdMock.mockResolvedValue(makeSegment());
+    H.countMembersMock.mockResolvedValue(42);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { channel: "whatsapp" } });
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/segments/${SEGMENT_ID}/activate`, headers: auth(), payload: { channel: "sms" } });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data).toMatchObject({ segmentId: SEGMENT_ID, channel: "whatsapp", status: "pending", audienceCount: 12 });
-    expect(H.insertMock).toHaveBeenCalledOnce();
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().id).toBeDefined();
     expect(H.publishMock).toHaveBeenCalledOnce();
-    // Domain event + audit event.
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.segment.activate");
+    expect(H.insertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
   it("202 — supports every channel including umang", async () => {
+    H.segmentFindByIdMock.mockResolvedValue(makeSegment());
+    H.countMembersMock.mockResolvedValue(1);
     const app = await buildApp();
     for (const channel of ACTIVATION_CHANNELS) {
-      const r = await app.inject({ method: "POST", url, headers: auth(), payload: { channel } });
+      const r = await app.inject({ method: "POST", url: `/v1/cdp/segments/${SEGMENT_ID}/activate`, headers: auth(), payload: { channel } });
       expect(r.statusCode).toBe(202);
-      expect(r.json().data.channel).toBe(channel);
+      expect(r.json().status).toBe("accepted");
     }
+    expect(H.publishMock).toHaveBeenCalledTimes(ACTIVATION_CHANNELS.length);
     await app.close();
   });
 
-  it("202 — a future schedule is carried on the run, not started immediately", async () => {
-    const future = "2099-01-01T00:00:00.000Z";
+  it("202 — a future schedule is published on the command", async () => {
+    H.segmentFindByIdMock.mockResolvedValue(makeSegment());
+    H.countMembersMock.mockResolvedValue(3);
     const app = await buildApp();
-    const r = await app.inject({
-      method: "POST", url, headers: auth(), payload: { channel: "sms", scheduledAt: future },
-    });
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/segments/${SEGMENT_ID}/activate`, headers: auth(), payload: { channel: "email", scheduledAt: "2030-01-01T00:00:00.000Z" } });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.dispatchAt).toBe(future);
-    const row = H.insertMock.mock.calls[0]?.[1] as { startedAt?: Date };
-    expect(row.startedAt).toBeUndefined();
+    const pub = H.publishMock.mock.calls[0]![1] as { payload: { dispatchAt: string } };
+    expect(pub.payload.dispatchAt).toBe("2030-01-01T00:00:00.000Z");
     await app.close();
   });
 
-  it("202 — an immediate run records a start time", async () => {
+  it("202 — an immediate run publishes activate command", async () => {
+    H.segmentFindByIdMock.mockResolvedValue(makeSegment());
+    H.countMembersMock.mockResolvedValue(5);
     const app = await buildApp();
-    await app.inject({ method: "POST", url, headers: auth(), payload: { channel: "sms" } });
-    const row = H.insertMock.mock.calls[0]?.[1] as { startedAt?: Date };
-    expect(row.startedAt).toBeInstanceOf(Date);
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/segments/${SEGMENT_ID}/activate`, headers: auth(), payload: { channel: "push" } });
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
-  it("202 — an empty audience still produces an auditable run", async () => {
+  it("202 — an empty audience still accepts activation", async () => {
+    H.segmentFindByIdMock.mockResolvedValue(makeSegment());
     H.countMembersMock.mockResolvedValue(0);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: { channel: "email" } });
+    const r = await app.inject({ method: "POST", url: `/v1/cdp/segments/${SEGMENT_ID}/activate`, headers: auth(), payload: { channel: "whatsapp" } });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.audienceCount).toBe(0);
+    expect(r.json().status).toBe("accepted");
+    const pub = H.publishMock.mock.calls[0]![1] as { payload: { audienceCount: number } };
+    expect(pub.payload.audienceCount).toBe(0);
     await app.close();
   });
 

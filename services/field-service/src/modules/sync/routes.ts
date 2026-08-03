@@ -2,11 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { validateSyncBatch, type SyncOperation } from "./domain.js";
+import * as commands from "./commands.js";
 
 const FIELD_ROLES = ["field_admin", "field_agent", "super_admin"];
 
@@ -44,40 +42,15 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
       clientVersion: op.clientVersion,
     }));
 
-    // Validate batch
     const validationError = validateSyncBatch(operations);
     if (validationError) {
       throw new HttpError(422, "INVALID_BATCH", validationError);
     }
 
-    // Persist to sync queue
-    await db.transaction(async (tx) => {
-      const rows = operations.map((op) => ({
-        id: op.id,
-        tenantId: ctx.tenantId,
-        agentId: ctx.actorId,
-        entityType: op.entityType,
-        entityId: op.entityId,
-        operation: op.operation,
-        payload: op.payload,
-        clientTimestamp: new Date(op.clientTimestamp),
-        clientVersion: op.clientVersion,
-        status: "pending" as const,
-      }));
-
-      await repo.insertBatch(tx, rows);
-
-      await enqueue(tx, {
-        topic: EVENTS.syncCompleted,
-        eventType: EVENTS.syncCompleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { operationCount: operations.length, agentId: ctx.actorId },
-      });
-    });
+    const accepted = await commands.pushSync(ctx, operations);
 
     return reply.code(202).send({
+      ...accepted,
       data: { processed: operations.length, syncedAt: new Date().toISOString() },
     });
   });

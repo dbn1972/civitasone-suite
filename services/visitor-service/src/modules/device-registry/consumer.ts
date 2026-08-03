@@ -73,6 +73,13 @@ export interface DeviceBulkConfigPushPayload {
   config: Record<string, unknown>;
 }
 
+export interface DeviceHeartbeatPayload {
+  deviceId: string;
+  tenantId: string;
+  firmwareVersion: string;
+  lastSeenAt: string;
+}
+
 export interface DeviceFirmwareSchedulePayload {
   deviceId: string;
   tenantId: string;
@@ -603,6 +610,27 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
     } catch (err) {
       log.warn({ err, tenantId: msg.tenantId, deviceType: p.deviceType, event: "cache_invalidate_failed" },
         "device cache invalidation failed after bulk config push");
+    }
+  });
+
+  // ─── deviceHeartbeat ────────────────────────────────────────────────
+  queue.subscribe<DeviceHeartbeatPayload>(COMMANDS.deviceHeartbeat, async (msg) => {
+    const p = msg.payload;
+    await db.transaction(async (tx): Promise<void> => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const now = new Date(p.lastSeenAt);
+      await tx.update(devices).set({
+        lastSeenAt: now,
+        firmwareVersion: p.firmwareVersion,
+        online: true,
+        updatedAt: now,
+      }).where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+    });
+    try {
+      await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, p.deviceId));
+    } catch (err) {
+      log.warn({ err, tenantId: msg.tenantId, deviceId: p.deviceId, event: "cache_invalidate_failed" },
+        "device cache invalidation failed after heartbeat");
     }
   });
 

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * LTC and CEA claim modules (submit -> approve, with ceiling enforcement).
  *
@@ -18,12 +20,11 @@
  * Money in paise (bigint). On approval the approved amount is the lesser of the
  * claimed amount and the applicable ceiling (entitlement / remaining annual cap).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import type { LtcClaimRow, CeaClaimRow } from "./schema.js";
@@ -74,19 +75,13 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     await mustEmployee(ctx.tenantId, id);
 
     const claimId = randomUUID();
-    await repo.insertLtc(db, {
-      id: claimId, tenantId: ctx.tenantId, employeeId: id,
-      blockYear: body.blockYear, ltcType: body.ltcType,
-      journeyFrom: body.journeyFrom, journeyTo: body.journeyTo,
-      travelDate: body.travelDate, familyMembers: body.familyMembers,
-      claimedFareMinor: BigInt(body.claimedFareMinor),
-      entitlementMinor: BigInt(body.entitlementMinor),
-      status: "submitted",
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "claims_routes__4", claimId, {
+      body: { ...body, claimedFareMinor: body.claimedFareMinor, entitlementMinor: body.entitlementMinor },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send(jsonSafe({
-      id: claimId, employeeId: id, status: "submitted",
+    return reply.code(202).send(jsonSafe({
+      id: claimId, employeeId: id, status: "accepted",
       claimedFareMinor: BigInt(body.claimedFareMinor), entitlementMinor: BigInt(body.entitlementMinor),
     }));
   });
@@ -115,19 +110,12 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     // Ceiling enforcement: approved fare cannot exceed the entitlement.
     const approved = bmin(c.claimedFareMinor, c.entitlementMinor);
-    await db.transaction(async (tx) => {
-      await repo.updateLtc(tx, ctx.tenantId, claimId, {
-        status: "approved", approvedFareMinor: approved,
-        decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedFareMinor: c.claimedFareMinor,
       entitlementMinor: c.entitlementMinor, approvedFareMinor: approved,
       cappedToEntitlement: c.claimedFareMinor > c.entitlementMinor,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/ltc-claims/:claimId/reject", async (req, reply) => {
@@ -137,14 +125,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustLtc(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await db.transaction(async (tx) => {
-      await repo.updateLtc(tx, ctx.tenantId, claimId, {
-        status: "rejected", decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
-    return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
+    await publishF3Write(ctx, "claims_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: claimId, status: "rejected" })) as any;
   });
 
   // ======================= CEA =======================
@@ -175,16 +157,17 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const claimId = randomUUID();
-    await repo.insertCea(db, {
-      id: claimId, tenantId: ctx.tenantId, employeeId: id,
-      academicYear: body.academicYear, childName: body.childName, childRef: body.childRef,
-      claimKind: body.claimKind, claimedAmountMinor: claimed, annualCapMinor: cap,
-      status: "submitted",
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "claims_routes__5", claimId, {
+      body: {
+        ...body,
+        claimedAmountMinor: body.claimedAmountMinor,
+        annualCapMinor: body.annualCapMinor,
+      },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send(jsonSafe({
-      id: claimId, employeeId: id, status: "submitted",
+    return reply.code(202).send(jsonSafe({
+      id: claimId, employeeId: id, status: "accepted",
       claimedAmountMinor: claimed, annualCapMinor: cap,
       remainingCapMinor: cap - committed - claimed,
     }));
@@ -218,19 +201,12 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
     const remaining = c.annualCapMinor - otherCommitted;
     const approved = remaining <= 0n ? 0n : bmin(c.claimedAmountMinor, remaining);
-    await db.transaction(async (tx) => {
-      await repo.updateCea(tx, ctx.tenantId, claimId, {
-        status: "approved", approvedAmountMinor: approved,
-        decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedAmountMinor: c.claimedAmountMinor,
       annualCapMinor: c.annualCapMinor, approvedAmountMinor: approved,
       cappedToAnnualCap: c.claimedAmountMinor > remaining,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/cea-claims/:claimId/reject", async (req, reply) => {
@@ -240,14 +216,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCea(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await db.transaction(async (tx) => {
-      await repo.updateCea(tx, ctx.tenantId, claimId, {
-        status: "rejected", decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
-    return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
+    await publishF3Write(ctx, "claims_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: claimId, status: "rejected" })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

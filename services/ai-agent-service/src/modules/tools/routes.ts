@@ -2,15 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue } from "../../shared/outbox.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, ADMIN_ROLES } from "../../shared/roles.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as agentsRepo from "../agents/repo.js";
 import { decideReactStep, defaultToolsFor, validateToolDefinition } from "./domain.js";
+import * as commands from "./commands.js";
 
 const DOMAIN_ENUM = z.enum(["crm", "helpdesk", "finance", "hrms", "generic"]);
 
@@ -53,8 +50,6 @@ const reactStepBody = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function toolRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/ai/tools — tool catalogue; ?agentDomain=crm|helpdesk gives the
-  // CRM/Sales and Service/ticket agent tool sets (F.4)
   app.get("/v1/ai/tools", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -79,7 +74,6 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /v1/ai/tools — define a tool (F.4)
   app.post("/v1/ai/tools", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -99,60 +93,22 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "TOOL_EXISTS", `tool ${body.agentDomain}/${body.toolName} already exists`);
     }
 
-    const id = randomUUID();
     const inputSchema = body.inputSchema ?? {};
     const requiresApproval = body.requiresApproval ?? false;
     const enabled = body.enabled ?? true;
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.defineTool(ctx, {
         agentDomain: body.agentDomain,
         toolName: body.toolName,
         description: body.description ?? null,
         inputSchema,
         requiresApproval,
         enabled,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.toolDefined,
-        eventType: EVENTS.toolDefined,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { toolId: id, agentDomain: body.agentDomain, toolName: body.toolName, requiresApproval },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "tool.define",
-        input: `${body.agentDomain}/${body.toolName}`,
-        output: id,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "tools");
-
-    return reply.status(201).send({
-      data: {
-        id,
-        agentDomain: body.agentDomain,
-        toolName: body.toolName,
-        description: body.description ?? null,
-        inputSchema,
-        requiresApproval,
-        enabled,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
-  // POST /v1/ai/tools/seed-defaults — materialise the CRM/helpdesk defaults (F.4)
   app.post("/v1/ai/tools/seed-defaults", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -163,41 +119,14 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "NO_TEMPLATES", "no default tools exist for that agent domain");
     }
 
-    let inserted = 0;
-    await db.transaction(async (tx) => {
-      inserted = await repo.insertManyIgnoreConflicts(
-        tx,
-        templates.map((t) => ({
-          id: randomUUID(),
-          tenantId: ctx.tenantId,
-          agentDomain: t.agentDomain,
-          toolName: t.toolName,
-          description: t.description,
-          inputSchema: t.inputSchema,
-          requiresApproval: t.requiresApproval,
-          enabled: true,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })),
-      );
+    const accepted = await commands.seedDefaultTools(ctx, body.agentDomain, templates);
 
-      await writeAudit(tx, ctx, {
-        action: "tool.seed_defaults",
-        input: body.agentDomain ?? "all",
-        output: String(inserted),
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "tools");
-
-    return reply.status(202).send({
-      data: { requested: templates.length, inserted, skipped: templates.length - inserted },
+    return reply.code(202).send({
+      ...accepted,
+      data: { requested: templates.length, status: "accepted" },
     });
   });
 
-  // PATCH /v1/ai/tools/:id — update a tool definition (F.4)
   app.patch("/v1/ai/tools/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -207,6 +136,9 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) {
       throw new HttpError(404, "NOT_FOUND", "tool definition not found");
+    }
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "tool has been modified; retry with current version");
     }
 
     if (body.inputSchema !== undefined) {
@@ -226,36 +158,16 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
     if (body.requiresApproval !== undefined) patch.requiresApproval = body.requiresApproval;
     if (body.enabled !== undefined) patch.enabled = body.enabled;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "tool has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.toolUpdated,
-        eventType: EVENTS.toolUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { toolId: id, agentDomain: existing.agentDomain, toolName: existing.toolName },
-      });
-
-      await writeAudit(tx, ctx, {
-        action: "tool.update",
-        input: JSON.stringify(Object.keys(patch)),
-        output: null,
-        blocked: false,
-        reason: null,
-      });
-    });
-
-    await cache.invalidateResource(ctx.tenantId, "tools");
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(
+      await commands.updateTool(ctx, id, {
+        version: body.version,
+        patch,
+        agentDomain: existing.agentDomain,
+        toolName: existing.toolName,
+      }),
+    );
   });
 
-  // POST /v1/ai/agents/:id/react-step — record one ReAct reasoning step (F.4)
   app.post("/v1/ai/agents/:id/react-step", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -270,8 +182,6 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "AGENT_NOT_INVOCABLE", `agent is ${agent.status}; only active agents may reason`);
     }
 
-    // The action names the tool the agent wants to use. An unknown tool is a
-    // hallucinated action and must not be recorded as a step.
     const tool = await repo.findByName(ctx.tenantId, body.agentDomain, body.action);
     if (!tool) {
       throw new HttpError(404, "TOOL_NOT_FOUND", `no tool ${body.agentDomain}/${body.action} is defined`);
@@ -285,52 +195,25 @@ export async function toolRoutes(app: FastifyInstance): Promise<void> {
     const stepId = randomUUID();
     const priorSteps = await repo.countSteps(ctx.tenantId, id);
 
-    await db.transaction(async (tx) => {
-      await repo.insertStep(tx, {
-        id: stepId,
-        tenantId: ctx.tenantId,
-        agentId: id,
-        ...(body.orchestrationId !== undefined ? { orchestrationId: body.orchestrationId } : {}),
-        toolId: tool.id,
-        stepNo: priorSteps + 1,
-        thought: body.thought,
-        action: body.action,
-        actionInput: body.actionInput,
-        observation: body.observation ?? null,
-        status: decision.status,
-        // Never derived from the request body: the governance decision owns this flag.
-        executed: decision.executed,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: decision.executed ? EVENTS.reactStepRecorded : EVENTS.reactStepPendingApproval,
-        eventType: decision.executed ? EVENTS.reactStepRecorded : EVENTS.reactStepPendingApproval,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          agentId: id,
-          stepId,
-          action: body.action,
-          toolId: tool.id,
-          executed: decision.executed,
-        },
-      });
-
-      // Thought/observation text is redacted by writeAudit before it is stored.
-      await writeAudit(tx, ctx, {
-        agentId: id,
-        action: "agent.react_step",
-        input: body.thought,
-        output: body.observation ?? null,
-        blocked: !decision.executed,
-        reason: decision.executed ? null : decision.message,
-      });
+    const accepted = await commands.recordReactStep(ctx, {
+      stepId,
+      agentId: id,
+      toolId: tool.id,
+      stepNo: priorSteps + 1,
+      thought: body.thought,
+      action: body.action,
+      actionInput: body.actionInput,
+      observation: body.observation ?? null,
+      ...(body.orchestrationId !== undefined ? { orchestrationId: body.orchestrationId } : {}),
+      status: decision.status,
+      executed: decision.executed,
+      decisionCode: decision.code,
+      decisionMessage: decision.message,
+      requiresApproval: tool.requiresApproval,
     });
 
-    return reply.status(202).send({
+    return reply.code(202).send({
+      ...accepted,
       data: {
         stepId,
         agentId: id,

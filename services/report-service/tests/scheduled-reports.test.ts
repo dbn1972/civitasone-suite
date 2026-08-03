@@ -15,6 +15,11 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { computeNextRunAt, isValidCadence, GENERATION_TIMEOUT_MS, MAX_DELIVERY_RETRIES, MAX_RECIPIENTS } from "../src/modules/scheduled/domain.js";
 import { startScheduledReportCron } from "../src/modules/scheduled/cron.js";
+import {
+  handleCreateScheduled,
+  handleUpdateScheduled,
+  handleDisableScheduled,
+} from "../src/modules/scheduled/consumer.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -190,20 +195,17 @@ describe("POST /v1/reports/scheduled — create", () => {
     format: "pdf",
   };
 
-  it("returns 201 with valid body", async () => {
+  it("returns 202 with valid body", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/reports/scheduled",
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: validPayload,
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.data.id).toBeDefined();
-    expect(body.data.templateId).toBe(TEMPLATE_ID);
-    expect(body.data.cadence).toBe("daily");
-    expect(body.data.enabled).toBe(true);
-    expect(body.data.nextRunAt).toBeDefined();
+    expect(body.data.status).toBe("accepted");
   });
 
   it("returns 401 without token", async () => {
@@ -284,8 +286,8 @@ describe("POST /v1/reports/scheduled — create", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: { ...validPayload, recipients: maxRecipients },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.recipients).toHaveLength(20);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
   });
 });
 
@@ -430,7 +432,7 @@ describe("Scheduled report lifecycle", () => {
         format: "xlsx",
       },
     });
-    expect(createRes.statusCode).toBe(201);
+    expect(createRes.statusCode).toBe(202);
     createdId = createRes.json().data.id;
 
     const getRes = await app.inject({
@@ -445,6 +447,8 @@ describe("Scheduled report lifecycle", () => {
     expect(data.recipients).toEqual(["admin@gov.in", "officer@gov.in"]);
     expect(data.format).toBe("xlsx");
     expect(data.enabled).toBe(true);
+
+    await handleCreateScheduled(createdId, { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-create" }, data);
   });
 
   it("updates the scheduled report", async () => {
@@ -454,11 +458,14 @@ describe("Scheduled report lifecycle", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: { cadence: "monthly", format: "pdf", version: 1 },
     });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.cadence).toBe("monthly");
-    expect(data.format).toBe("pdf");
-    expect(data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+
+    await handleUpdateScheduled(
+      "msg-update-1",
+      { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-update" },
+      { id: createdId, version: 1, cadence: "monthly", format: "pdf", nextRunAt: new Date() },
+    );
   });
 
   it("returns 409 on version conflict", async () => {
@@ -490,7 +497,14 @@ describe("Scheduled report lifecycle", () => {
       url: `/v1/reports/scheduled/${createdId}`,
       headers: { authorization: `Bearer ${makeToken()}` },
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+
+    await handleDisableScheduled(
+      "msg-disable-1",
+      { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-disable" },
+      { id: createdId },
+    );
   });
 
   it("disabled report does not appear in list", async () => {

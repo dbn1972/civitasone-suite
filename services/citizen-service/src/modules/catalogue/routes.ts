@@ -1,3 +1,5 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -10,26 +12,25 @@ const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 const ADMIN_ROLES   = ["citizen_admin", "super_admin"];
 
 export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
-  // --- Authoring / maker-checker versioned publish ---------------------------
   app.post("/v1/citizen/catalogue/services", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createDefinitionBody.parse(req.body);
-    return reply.code(201).send(await commands.createDefinition(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDefinition(ctx, body));
   });
 
   app.post("/v1/citizen/catalogue/services/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.submitDefinition(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitDefinition(ctx, id));
   });
 
   app.post("/v1/citizen/catalogue/services/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.publishDefinition(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.publishDefinition(ctx, id));
   });
 
   app.get("/v1/citizen/catalogue/services", async (req, reply) => {
@@ -38,7 +39,6 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: await queries.listDefinitions(ctx.tenantId) });
   });
 
-  // --- Citizen-facing browse + detail (published only) -----------------------
   app.get("/v1/citizen/catalogue/published", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Interview panel scoring (checklist R-RA-0144/0146/0147/0148).
  *
@@ -66,11 +68,8 @@ export async function interviewScoringRoutes(app: FastifyInstance): Promise<void
     }).parse(req.body);
     const iv = await mustInterview(ctx.tenantId, id);
     if (iv.consolidatedAt) throw new HttpError(409, "ALREADY_CONSOLIDATED", "the panel result is already consolidated; the scorecard is locked");
-    await db.transaction((tx) => repo.updateInterview(tx, ctx.tenantId, id, {
-      scorecardTemplate: body.competencies as never,
-      ...(body.cutoffScore != null ? { cutoffScore: body.cutoffScore } : {}),
-    }, iv.version));
-    return reply.send({ id, competencies: body.competencies, cutoffScore: body.cutoffScore ?? iv.cutoffScore ?? null });
+    await publishF3Write(ctx, "recruitment_interview_scoring_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, competencies: body.competencies, cutoffScore: body.cutoffScore ?? iv.cutoffScore ?? null }) as any;
   });
 
   app.post("/v1/hrms/interviews/:id/scores", async (req, reply) => {
@@ -115,12 +114,9 @@ export async function interviewScoringRoutes(app: FastifyInstance): Promise<void
     // Per-interviewer normalised overall (0-100) for quick display.
     const overall = computePanelScore(template, [{ interviewerId: ctx.actorId, scores: body.scores }]).weightedScore;
     try {
-      await db.transaction((tx) => repo.insertScore(tx, {
-        tenantId: ctx.tenantId, interviewId: id, interviewerId: ctx.actorId,
-        scores: body.scores, overallScore: Math.round(overall), comments: body.comments ?? null,
-      }));
+      await publishF3Write(ctx, "recruitment_interview_scoring_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "ALREADY_SUBMITTED", "you have already submitted your score for this interview");
+      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "ALREADY_SUBMITTED", "you have already submitted your score for this interview") as any;
       throw err;
     }
     return reply.code(201).send({ interviewId: id, interviewerId: ctx.actorId, overallScore: Math.round(overall), submitted: true });
@@ -156,11 +152,8 @@ export async function interviewScoringRoutes(app: FastifyInstance): Promise<void
     const submitted: InterviewerScore[] = rows.filter((s) => s.submitted).map((s) => ({ interviewerId: s.interviewerId, scores: s.scores, submitted: true }));
     if (submitted.length === 0) throw new HttpError(409, "NO_SCORES", "no submitted interviewer scores to consolidate");
     const result = computePanelScore(template, submitted, iv.cutoffScore ?? null);
-    await db.transaction((tx) => repo.updateInterview(tx, ctx.tenantId, id, {
-      panelScore: Math.round(result.weightedScore), recommendation: result.recommendation,
-      status: "completed", consolidatedAt: new Date(),
-    }, iv.version));
-    return reply.send(jsonSafe({ id, ...result }));
+    await publishF3Write(ctx, "recruitment_interview_scoring_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, ...result })) as any;
   });
 
   app.get("/v1/hrms/interviews/:id/panel-result", async (req, reply) => {

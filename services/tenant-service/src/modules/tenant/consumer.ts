@@ -30,7 +30,7 @@ export function registerTenantConsumers(queue: Queue): void {
       await repo.insert(tx, {
         id: p.id, tenantId: p.id, name: p.name, domain: p.domain, edition: p.edition,
         status: "draft", region: p.region, residency: p.residency,
-        isolationTier, policyVersion, policyReason, settings: {},
+        isolationTier, policyVersion, policyReason, settings: p.settings ?? {},
         createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
       await emit(tx, msg, EVENTS.tenantCreated, { tenantId: p.id, plan: p.edition }, "create", p.id);
@@ -156,6 +156,24 @@ export function registerTenantConsumers(queue: Queue): void {
       await cache.invalidate(keyFor(msg.payload.id));
     },
   );
+
+  queue.subscribe<{
+    id: string; tenantId: string;
+    maxEmployees?: number; maxFiles?: number; maxApiCallsPerMin?: number;
+    maxStorageGb?: number; maxUsers?: number;
+  }>(COMMANDS.tenantQuotaUpsert, async (msg) => {
+    const { id: _id, tenantId, ...patch } = msg.payload;
+    let applied = false;
+    await runWithTenant(tenantId, async () => db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      applied = true;
+      await emit(tx, msg, EVENTS.quotaSet, { tenantId }, "upsert_tenant_quotas", tenantId);
+    }));
+    if (applied) {
+      await repo.upsertQuotas(tenantId, patch);
+      await cache.invalidate(cache.makeKey(tenantId, "quotas", tenantId));
+    }
+  });
 }
 
 /** Enqueue the domain event + the mandatory audit event (CLAUDE.md §3: every mutation audits). */

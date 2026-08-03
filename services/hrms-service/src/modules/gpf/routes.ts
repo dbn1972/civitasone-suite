@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * GPF (General Provident Fund) account + advances/withdrawals ledger.
  *
@@ -10,7 +12,6 @@
  *
  * Money in paise (bigint). Running balance carried on every ledger row.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -68,23 +69,8 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
 
     const acctId = randomUUID();
     const opening = BigInt(body.openingBalanceMinor);
-    await db.transaction(async (tx) => {
-      await repo.insertAccount(tx, {
-        id: acctId, tenantId: ctx.tenantId, employeeId: id, gpfNumber: body.gpfNumber,
-        openingBalanceMinor: opening,
-        monthlySubscriptionMinor: BigInt(body.monthlySubscriptionMinor),
-        interestRatePct: String(body.interestRatePct),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      if (opening > 0n) {
-        await repo.insertLedger(tx, {
-          id: randomUUID(), tenantId: ctx.tenantId, accountId: acctId, employeeId: id,
-          entryType: "opening", amountMinor: opening, deltaMinor: opening, balanceMinor: opening,
-          narrative: "opening balance", createdBy: ctx.actorId,
-        });
-      }
-    });
-    return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, gpfNumber: body.gpfNumber, openingBalanceMinor: opening }));
+    await publishF3Write(ctx, "gpf_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, gpfNumber: body.gpfNumber, openingBalanceMinor: opening })) as any;
   });
 
   app.get("/v1/hrms/employees/:id/gpf", async (req, reply) => {
@@ -120,24 +106,10 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
     const ledgerId = randomUUID();
     // Lock the account, read the balance, guard and insert — all in one tx so
     // two concurrent debits cannot both pass the INSUFFICIENT_BALANCE check. (C1)
-    const { prev, next } = await db.transaction(async (tx) => {
-      const prevBal = await repo.lockedBalance(tx, ctx.tenantId, acct);
-      const nextBal = prevBal + delta;
-      if (nextBal < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available GPF balance");
-      await repo.insertLedger(tx, {
-        id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType, amountMinor: amount, deltaMinor: delta, balanceMinor: nextBal,
-        ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
-        ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
-        createdBy: ctx.actorId,
-      });
-      // L4: bump the account optimistic-lock version on every ledger mutation.
-      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
-      return { prev: prevBal, next: nextBal };
-    });
+    const { prev, next } = await publishF3Write(ctx, "gpf_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send(jsonSafe({
       ledgerId, entryType, amountMinor: amount, previousBalanceMinor: prev, balanceMinor: next,
-    }));
+    })) as any;
   }
 
   app.post("/v1/hrms/employees/:id/gpf/subscription", (req, reply) => post(req, reply, "subscription", 1));
@@ -159,24 +131,11 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
     const ledgerId = randomUUID();
     // Read the locked balance inside the tx so interest accrues on the true,
     // serialised balance (not a stale pre-tx read). (C1)
-    const { prev, interest, next } = await db.transaction(async (tx) => {
-      const prevBal = await repo.lockedBalance(tx, ctx.tenantId, acct);
-      // paise * rate% * months/12, rounded to nearest paise
-      const interestMinor = BigInt(Math.round(Number(prevBal) * (ratePct / 100) * (body.months / 12)));
-      const nextBal = prevBal + interestMinor;
-      await repo.insertLedger(tx, {
-        id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType: "interest", amountMinor: interestMinor, deltaMinor: interestMinor, balanceMinor: nextBal,
-        narrative: `interest @ ${ratePct}% for ${body.months} month(s)`, createdBy: ctx.actorId,
-      });
-      // L4: bump the account optimistic-lock version on interest accrual too.
-      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
-      return { prev: prevBal, interest: interestMinor, next: nextBal };
-    });
+    const { prev, interest, next } = await publishF3Write(ctx, "gpf_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send(jsonSafe({
       ledgerId, ratePct, months: body.months, interestMinor: interest,
       previousBalanceMinor: prev, balanceMinor: next,
-    }));
+    })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

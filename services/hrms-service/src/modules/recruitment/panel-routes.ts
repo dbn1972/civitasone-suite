@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Interview panel governance & outcome (R-RA-0137/0138/0149/0150).
  *
@@ -67,11 +69,8 @@ export async function interviewPanelRoutes(app: FastifyInstance): Promise<void> 
     const interview = await mustInterview(ctx.tenantId, id);
     if (interview.outcomeStatus !== "pending") throw new HttpError(409, "OUTCOME_RECORDED", "the panel cannot be changed after an outcome is recorded");
 
-    await db.transaction((tx) => repo.setPanelists(tx, ctx.tenantId, id, body.members.map((m) => ({
-      tenantId: ctx.tenantId, interviewId: id, memberId: m.memberId, memberName: m.memberName, panelRole: m.panelRole,
-      availability: (m.availability ?? {}) as never, coiDeclared: m.coiDeclared, coiType: m.coiType, coiNote: m.coiNote ?? null,
-    }))));
-    const readiness = panelReadiness(body.members.map((m) => toPanelist({ ...m, recused: false })));
+    await publishF3Write(ctx, "recruitment_panel_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const readiness = panelReadiness(body.members.map((m) => toPanelist({ ...m, recused: false }))) as any;
     return reply.code(201).send(jsonSafe({ interviewId: id, panelSize: body.members.length, readiness }));
   });
 
@@ -98,8 +97,8 @@ export async function interviewPanelRoutes(app: FastifyInstance): Promise<void> 
     // No post-decision tampering: the panel composition record is frozen once an
     // outcome is recorded (mirrors the panel-constitution lock).
     if (interview.outcomeStatus !== "pending") throw new HttpError(409, "OUTCOME_RECORDED", "the panel cannot be changed after an outcome is recorded");
-    const n = await db.transaction((tx) => repo.recusePanelist(tx, ctx.tenantId, id, memberId));
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "panelist not found on this interview");
+    const n = await publishF3Write(ctx, "recruitment_panel_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (n === 0) throw new HttpError(404, "NOT_FOUND", "panelist not found on this interview") as any;
     return reply.send({ interviewId: id, memberId, recused: true });
   });
 
@@ -139,15 +138,8 @@ export async function interviewPanelRoutes(app: FastifyInstance): Promise<void> 
     // gate above: any concurrent panel edit bumps interview.version (see
     // touchInterviewVersion), so this write 409s rather than committing an outcome
     // against a roster that was swapped after readiness was checked.
-    await db.transaction((tx) => repo.updateInterview(tx, ctx.tenantId, id, {
-      outcomeStatus: body.status,
-      rejectionReason: body.status === "rejected" ? (body.rejectionReason ?? null) : null,
-      rejectionNote: body.status === "rejected" ? (body.rejectionNote ?? null) : null,
-      waitlistRank: body.status === "waitlisted" ? (body.waitlistRank ?? null) : null,
-      recommendationValidUntil: body.status === "rejected" ? null : validUntil,
-      outcomeBy: ctx.actorId, outcomeAt: new Date(),
-    } as never, interview.version));
-    return reply.send(jsonSafe({ interviewId: id, outcomeStatus: body.status, validUntil }));
+    await publishF3Write(ctx, "recruitment_panel_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ interviewId: id, outcomeStatus: body.status, validUntil })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -148,6 +148,7 @@ const H = vi.hoisted(() => ({
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(),
   auditInsertMock: vi.fn(),
   agentFindByIdMock: vi.fn(),
   orchFindByIdMock: vi.fn(),
@@ -174,7 +175,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidateResource: vi.fn(),
     makeKey: vi.fn(() => "cache-key"),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/agents/repo.js", () => ({
@@ -236,6 +237,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
   H.auditInsertMock.mockResolvedValue(undefined);
   H.agentFindByIdMock.mockResolvedValue(makeAgent());
   H.orchInsertMock.mockResolvedValue(undefined);
@@ -252,8 +254,9 @@ describe("POST /v1/ai/orchestrations", () => {
       payload: { rootAgentId: AGENT_A },
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data).toMatchObject({ status: "running", depth: 0, hopCount: 0, maxDepth: 5, maxHops: 20 });
-    expect(H.orchInsertMock).toHaveBeenCalledOnce();
+    expect(r.json().data).toMatchObject({ status: "accepted", depth: 0, hopCount: 0, maxDepth: 5, maxHops: 20 });
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.orchInsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -267,16 +270,18 @@ describe("POST /v1/ai/orchestrations", () => {
     await app.close();
   });
 
-  it("202 — emits orchestrationStarted and an audit entry", async () => {
+  it("202 — publishes startOrchestration command", async () => {
     const app = await buildApp();
     await app.inject({
       method: "POST", url: "/v1/ai/orchestrations", headers: auth(),
       payload: { rootAgentId: AGENT_A },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.orchestration.started");
-    expect(topics).toContain("audit.event.record");
-    expect(H.auditInsertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "ai.orchestration.start",
+      expect.objectContaining({ type: "ai.orchestration.start", tenantId: TENANT }),
+    );
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.auditInsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -350,21 +355,25 @@ describe("POST /v1/ai/orchestrations/:id/handoff", () => {
       payload: { fromAgentId: AGENT_A, toAgentId: AGENT_B, reason: "needs billing expertise" },
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data).toMatchObject({ depth: 2, hopCount: 4, status: "handed_off" });
-    expect(H.orchInsertHopMock).toHaveBeenCalledOnce();
-    expect(H.orchUpdateMock).toHaveBeenCalledOnce();
+    expect(r.json().data).toMatchObject({ depth: 2, hopCount: 4, status: "accepted" });
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "ai.orchestration.handoff",
+      expect.objectContaining({ type: "ai.orchestration.handoff" }),
+    );
+    expect(H.orchInsertHopMock).not.toHaveBeenCalled();
+    expect(H.orchUpdateMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — emits orchestrationHopRecorded", async () => {
+  it("202 — publishes recordHandoff command", async () => {
     H.orchFindByIdMock.mockResolvedValue(makeOrchestration());
     const app = await buildApp();
     await app.inject({
       method: "POST", url: `/v1/ai/orchestrations/${ORCH_ID}/handoff`, headers: auth(),
       payload: { fromAgentId: AGENT_A, toAgentId: AGENT_B, reason: "escalate" },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.orchestration.hop_recorded");
+    expect(H.publishMock).toHaveBeenCalledWith("ai.orchestration.handoff", expect.any(Object));
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -398,18 +407,21 @@ describe("POST /v1/ai/orchestrations/:id/handoff", () => {
     await app.close();
   });
 
-  it("422 — a refused handoff is audited and emits limitExceeded", async () => {
+  it("422 — a refused handoff publishes recordBlockedAudit with orchestration_limit", async () => {
     H.orchFindByIdMock.mockResolvedValue(makeOrchestration({ depth: 5, maxDepth: 5 }));
     const app = await buildApp();
     await app.inject({
       method: "POST", url: `/v1/ai/orchestrations/${ORCH_ID}/handoff`, headers: auth(),
       payload: { fromAgentId: AGENT_A, toAgentId: AGENT_B, reason: "deeper" },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.orchestration.limit_exceeded");
-    const row = H.auditInsertMock.mock.calls[0]?.[1] as { blocked: boolean; action: string };
-    expect(row.blocked).toBe(true);
-    expect(row.action).toBe("orchestration.handoff");
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "ai.audit.blocked",
+      expect.objectContaining({
+        payload: expect.objectContaining({ kind: "orchestration_limit", blocked: true }),
+      }),
+    );
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.auditInsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -425,7 +437,7 @@ describe("POST /v1/ai/orchestrations/:id/handoff", () => {
     await app.close();
   });
 
-  it("409 — concurrent modification loses the optimistic lock", async () => {
+  it("202 — publishes handoff even when consumer may version-conflict", async () => {
     H.orchFindByIdMock.mockResolvedValue(makeOrchestration());
     H.orchUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -433,8 +445,8 @@ describe("POST /v1/ai/orchestrations/:id/handoff", () => {
       method: "POST", url: `/v1/ai/orchestrations/${ORCH_ID}/handoff`, headers: auth(),
       payload: { fromAgentId: AGENT_A, toAgentId: AGENT_B, reason: "x" },
     });
-    expect(r.statusCode).toBe(409);
-    expect(r.json().code).toBe("VERSION_CONFLICT");
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -482,19 +494,18 @@ describe("POST /v1/ai/orchestrations/:id/handoff", () => {
 });
 
 describe("POST /v1/ai/orchestrations/:id/abort", () => {
-  it("200 — aborts a running orchestration with a reason", async () => {
+  it("202 — aborts a running orchestration with a reason", async () => {
     H.orchFindByIdMock.mockResolvedValue(makeOrchestration({ version: 3 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/ai/orchestrations/${ORCH_ID}/abort`, headers: auth(),
       payload: { reason: "runaway token spend" },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data).toEqual({
-      id: ORCH_ID, status: "aborted", reason: "runaway token spend", version: 4,
+      id: ORCH_ID, status: "accepted", reason: "runaway token spend", version: 4, correlationId: expect.any(String),
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.orchestration.aborted");
+    expect(H.publishMock).toHaveBeenCalledWith("ai.orchestration.abort", expect.any(Object));
     await app.close();
   });
 
@@ -529,7 +540,7 @@ describe("POST /v1/ai/orchestrations/:id/abort", () => {
     await app.close();
   });
 
-  it("409 — version conflict", async () => {
+  it("202 — publishes abort even when consumer may version-conflict", async () => {
     H.orchFindByIdMock.mockResolvedValue(makeOrchestration());
     H.orchUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -537,7 +548,8 @@ describe("POST /v1/ai/orchestrations/:id/abort", () => {
       method: "POST", url: `/v1/ai/orchestrations/${ORCH_ID}/abort`, headers: auth(),
       payload: { reason: "x", version: 1 },
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

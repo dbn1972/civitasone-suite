@@ -1,13 +1,20 @@
 /**
  * World-class gap features — Routes for simulation, corrections, off-cycle,
  * pay groups, flex benefits, costing, and tax optimization.
+ *
+ * CQRS lift T1-03: the eight mutating routes previously performed synchronous
+ * DB writes in the request path. They now publish a command
+ * (payroll/commands.ts) and return 202; the write happens in the idempotent
+ * consumer (payroll/consumer.ts), tenant-scoped via runWithTenant in worker.ts.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import * as commands from "./commands.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -89,7 +96,9 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().max(512).optional(),
     }).parse(req.body);
 
-    // Compute affected periods from effectiveFrom to current month
+    // Affected-periods count depends on the current wall-clock month, so we
+    // compute it here (pure function) and pass it in the command payload —
+    // keeps the consumer deterministic replay-safe.
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const effMonth = body.effectiveFrom.slice(0, 7);
@@ -97,27 +106,14 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     let [y, m] = effMonth.split("-").map(Number) as [number, number];
     const [cy, cm] = currentMonth.split("-").map(Number) as [number, number];
     while (y < cy || (y === cy && m <= cm)) { periods++; m++; if (m > 12) { m = 1; y++; } }
-
     const diffPerPeriod = BigInt(body.newValueMinor - body.oldValueMinor);
     const totalArrears = diffPerPeriod * BigInt(periods);
-    const id = randomUUID();
 
-    await db.execute(sql`
-      INSERT INTO payroll.salary_corrections
-        (id, tenant_id, employee_id, component, effective_from, old_value_minor,
-         new_value_minor, arrears_minor, affected_periods, reason, status, created_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${body.employeeId}::uuid,
-        ${body.component}, ${body.effectiveFrom}::date,
-        ${body.oldValueMinor.toString()}::bigint, ${body.newValueMinor.toString()}::bigint,
-        ${totalArrears.toString()}::bigint, ${periods},
-        ${body.reason ?? null}, 'pending', ${ctx.actorId}::uuid)
-    `);
-
-    return reply.code(201).send({
-      data: { id, employeeId: body.employeeId, component: body.component,
-        effectiveFrom: body.effectiveFrom, affectedPeriods: periods,
-        arrearsMinor: Number(totalArrears), status: "pending" },
-    });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCorrection(ctx, {
+      ...body,
+      affectedPeriods: periods,
+      arrearsMinor: totalArrears.toString(),
+    }));
   });
 
   app.get("/v1/payroll/corrections", async (req, reply) => {
@@ -145,13 +141,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       payDayOfMonth: z.number().int().min(1).max(31).default(28),
       timezone: z.string().max(64).default("Asia/Kolkata"),
     }).parse(req.body);
-    const id = randomUUID();
-    await db.execute(sql`
-      INSERT INTO payroll.pay_groups (id, tenant_id, name, frequency, pay_day_of_month, timezone, created_by, updated_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${body.name}, ${body.frequency},
-        ${body.payDayOfMonth}, ${body.timezone}, ${ctx.actorId}::uuid, ${ctx.actorId}::uuid)
-    `);
-    return reply.code(201).send({ data: { id, ...body, status: "active" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createPayGroup(ctx, body));
   });
 
   app.get("/v1/payroll/pay-groups", async (req, reply) => {
@@ -202,13 +192,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
         name: z.string(), maxMinor: z.number().int().positive(), taxExempt: z.boolean().default(false),
       })).min(1).max(20),
     }).parse(req.body);
-    const id = randomUUID();
-    await db.execute(sql`
-      INSERT INTO payroll.flex_benefit_plans (id, tenant_id, name, fy, total_budget_minor, components, created_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${body.name}, ${body.fy},
-        ${body.totalBudgetMinor.toString()}::bigint, ${JSON.stringify(body.components)}::jsonb, ${ctx.actorId}::uuid)
-    `);
-    return reply.code(201).send({ data: { id, ...body, status: "active" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createFlexPlan(ctx, body));
   });
 
   app.post("/v1/payroll/flex-benefits/elections", async (req, reply) => {
@@ -219,17 +203,11 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
       elections: z.array(z.object({ component: z.string(), electedMinor: z.number().int().min(0) })).min(1),
     }).parse(req.body);
-    const totalElected = body.elections.reduce((s, e) => s + e.electedMinor, 0);
-    const id = randomUUID();
-    await db.execute(sql`
-      INSERT INTO payroll.flex_benefit_elections
-        (id, tenant_id, employee_id, plan_id, fy, elections, total_elected_minor, created_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${ctx.actorId}::uuid, ${body.planId}::uuid,
-        ${body.fy}, ${JSON.stringify(body.elections)}::jsonb, ${totalElected.toString()}::bigint, ${ctx.actorId}::uuid)
-      ON CONFLICT (tenant_id, employee_id, plan_id, fy)
-      DO UPDATE SET elections = EXCLUDED.elections, total_elected_minor = EXCLUDED.total_elected_minor
-    `);
-    return reply.code(201).send({ data: { id, planId: body.planId, fy: body.fy, totalElectedMinor: totalElected } });
+    const totalElectedMinor = body.elections.reduce((s, e) => s + e.electedMinor, 0);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertFlexElection(ctx, {
+      ...body,
+      totalElectedMinor,
+    }));
   });
 
   app.get("/v1/payroll/flex-benefits/my-elections", async (req, reply) => {
@@ -254,14 +232,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       costCenterId: z.string().uuid(),
       splitPct: z.number().min(0).max(100).default(100),
     }).parse(req.body);
-    const id = randomUUID();
-    await db.execute(sql`
-      INSERT INTO payroll.costing_rules (id, tenant_id, employee_group, cost_center_id, split_pct, created_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${body.employeeGroup}, ${body.costCenterId}::uuid,
-        ${body.splitPct}, ${ctx.actorId}::uuid)
-      ON CONFLICT (tenant_id, employee_group, cost_center_id) DO UPDATE SET split_pct = EXCLUDED.split_pct
-    `);
-    return reply.code(201).send({ data: { id, ...body } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertCostingRule(ctx, body));
   });
 
   // FE gap (quality-payroll-95): the costing page previously had no way to
@@ -365,21 +336,11 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
         amountMinor: z.number().int().positive(),
       })).min(1).max(1000),
     }).parse(req.body);
-
-    const id = randomUUID();
-    const totalAmount = body.items.reduce((s, i) => s + i.amountMinor, 0);
-    await db.execute(sql`
-      INSERT INTO payroll.off_cycle_runs (id, tenant_id, run_type, period, description, total_amount_minor, created_by)
-      VALUES (${id}::uuid, ${ctx.tenantId}::uuid, ${body.runType}, ${body.period},
-        ${body.description ?? null}, ${totalAmount.toString()}::bigint, ${ctx.actorId}::uuid)
-    `);
-    for (const item of body.items) {
-      await db.execute(sql`
-        INSERT INTO payroll.off_cycle_items (tenant_id, off_cycle_run_id, employee_id, amount_minor)
-        VALUES (${ctx.tenantId}::uuid, ${id}::uuid, ${item.employeeId}::uuid, ${item.amountMinor.toString()}::bigint)
-      `);
-    }
-    return reply.code(201).send({ data: { id, runType: body.runType, period: body.period, totalAmountMinor: totalAmount, itemCount: body.items.length, status: "draft" } });
+    const totalAmountMinor = body.items.reduce((s, i) => s + BigInt(i.amountMinor), 0n).toString();
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createOffCycle(ctx, {
+      ...body,
+      totalAmountMinor,
+    }));
   });
 
   app.get("/v1/payroll/off-cycle", async (req, reply) => {
@@ -398,30 +359,17 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    // Compute flat 30% tax on off-cycle amounts (simplified; production uses projected annual)
+    // 404 pre-check: keep the existence guard in the route (read-only). The
+    // actual 30% flat-tax computation now runs in the consumer — single
+    // source of truth alongside the persisted update.
     const items = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, employee_id, amount_minor FROM payroll.off_cycle_items
+      SELECT id FROM payroll.off_cycle_items
       WHERE off_cycle_run_id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-    `))) as unknown as Array<{ id: string; employee_id: string; amount_minor: string }>;
+      LIMIT 1
+    `))) as unknown as Array<{ id: string }>;
     if (items.length === 0) throw new HttpError(404, "NOT_FOUND", "off-cycle run not found or has no items");
 
-    let totalTax = 0n; let totalNet = 0n;
-    for (const item of items) {
-      const amt = BigInt(item.amount_minor);
-      const tax = (amt * 30n) / 100n; // simplified flat 30%
-      const net = amt - tax;
-      totalTax += tax; totalNet += net;
-      await db.execute(sql`
-        UPDATE payroll.off_cycle_items SET tax_minor = ${tax.toString()}::bigint, net_minor = ${net.toString()}::bigint, status = 'processed'
-        WHERE id = ${item.id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-      `);
-    }
-    await db.execute(sql`
-      UPDATE payroll.off_cycle_runs SET total_tax_minor = ${totalTax.toString()}::bigint,
-        total_net_minor = ${totalNet.toString()}::bigint, status = 'processed', updated_at = NOW()
-      WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-    `);
-    return reply.send({ data: { id, status: "processed", totalTaxMinor: Number(totalTax), totalNetMinor: Number(totalNet) } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.processOffCycle(ctx, id));
   });
 
   // ─── Gap 4: Multi-State PT/LWF (CRUD for state rules) ────────────────────
@@ -434,24 +382,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       lwfEmployee: z.number().int().optional(),
       lwfEmployer: z.number().int().optional(),
     }).parse(req.body);
-
-    if (body.ptSlabs) {
-      for (const slab of body.ptSlabs) {
-        await db.execute(sql`
-          INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor)
-          VALUES (${ctx.tenantId}::uuid, ${body.stateCode}, ${slab.fromMinor.toString()}::bigint, ${slab.toMinor.toString()}::bigint, ${slab.taxMinor.toString()}::bigint)
-          ON CONFLICT (tenant_id, state_code, slab_from_minor) DO UPDATE SET slab_to_minor = EXCLUDED.slab_to_minor, pt_amount_minor = EXCLUDED.pt_amount_minor
-        `);
-      }
-    }
-    if (body.lwfEmployee != null || body.lwfEmployer != null) {
-      await db.execute(sql`
-        INSERT INTO payroll.payroll_lwf (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor)
-        VALUES (${ctx.tenantId}::uuid, ${body.stateCode}, ${(body.lwfEmployee ?? 0).toString()}::bigint, ${(body.lwfEmployer ?? 0).toString()}::bigint)
-        ON CONFLICT (tenant_id, state_code) DO UPDATE SET employee_contrib_minor = EXCLUDED.employee_contrib_minor, employer_contrib_minor = EXCLUDED.employer_contrib_minor
-      `);
-    }
-    return reply.code(201).send({ data: { stateCode: body.stateCode, saved: true } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertStateRules(ctx, body));
   });
 
   app.get("/v1/payroll/statutory/state-rules", async (req, reply) => {

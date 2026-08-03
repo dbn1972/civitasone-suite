@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as periodRepo from "./repo.js";
-import { deriveFY } from "../reports/routes.js";
+import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -26,20 +27,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ALREADY_CLOSED", "period is already hard-closed");
     }
 
-    await db.transaction(async (tx) => {
-      await periodRepo.upsertPeriodClose(tx, {
-        id: crypto.randomUUID(),
-        tenantId: ctx.tenantId,
-        fiscalYear: deriveFY(period),
-        period,
-        status: "soft_close",
-        closedBy: ctx.actorId,
-        closedAt: new Date(),
-      });
-    });
-
-    const record = await periodRepo.findPeriodClose(ctx.tenantId, period);
-    return reply.code(existing ? 200 : 201).send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "soft_close"));
   });
 
   app.post("/v1/finance/periods/:period/hard-close", async (req, reply) => {
@@ -52,20 +40,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ALREADY_CLOSED", "period is already hard-closed");
     }
 
-    await db.transaction(async (tx) => {
-      await periodRepo.upsertPeriodClose(tx, {
-        id: existing?.id ?? crypto.randomUUID(),
-        tenantId: ctx.tenantId,
-        fiscalYear: deriveFY(period),
-        period,
-        status: "hard_close",
-        closedBy: ctx.actorId,
-        closedAt: new Date(),
-      });
-    });
-
-    const record = await periodRepo.findPeriodClose(ctx.tenantId, period);
-    return reply.code(existing ? 200 : 201).send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "hard_close"));
   });
 
   app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
@@ -78,31 +53,12 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     if (!existing || existing.status === "open") {
       throw new HttpError(409, "NOT_CLOSED", "period is already open");
     }
-    const fromStatus = existing.status;
 
-    await db.transaction(async (tx) => {
-      await periodRepo.upsertPeriodClose(tx, {
-        id: existing.id,
-        tenantId: ctx.tenantId,
-        fiscalYear: deriveFY(period),
-        period,
-        status: "open",
-        closedBy: null,
-        closedAt: null,
-      });
-      await periodRepo.logReopen(tx, {
-        id: crypto.randomUUID(),
-        tenantId: ctx.tenantId,
-        period,
-        fromStatus,
-        toStatus: "open",
-        ...(body.reason ? { reason: body.reason } : {}),
-        createdBy: ctx.actorId,
-      });
-    });
-
-    const record = await periodRepo.findPeriodClose(ctx.tenantId, period);
-    return reply.send({ data: record });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.reopenPeriod(ctx, period, body.reason),
+    );
   });
 
   app.get("/v1/finance/periods", async (req, reply) => {

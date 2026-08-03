@@ -17,6 +17,8 @@ export const COMMANDS = {
   // utilisation
   ucSubmit:               "grant.uc.submit",
   complianceReport:       "grant.compliance.report",
+  /** Persist UC validation decision + flip statement.validation_status. */
+  ucValidate:             "grant.uc.validate",
   // beneficiary
   beneficiaryCreate:      "grant.beneficiary.create",
   beneficiaryLinkBank:    "grant.beneficiary.link_bank",
