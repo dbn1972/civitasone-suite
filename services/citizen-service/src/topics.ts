@@ -64,6 +64,10 @@ export const COMMANDS = {
   eligibilityRuleSetPublish: "citizen.eligibility.ruleset_publish",
   eligibilityEvaluate:     "citizen.eligibility.evaluate",
   eligibilityReviewDecide: "citizen.eligibility.review_decide",
+  // P0 F3 leftover — application intake drafts
+  draftSave:               "citizen.application.draft_save",
+  draftUpdate:             "citizen.application.draft_update",
+  draftSubmit:             "citizen.application.draft_submit",
 } as const;
 
 export const EVENTS = {

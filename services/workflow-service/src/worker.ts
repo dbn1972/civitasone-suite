@@ -26,6 +26,9 @@ import { registerQuorumConsumers } from "./modules/quorum/consumer.js";
 import { registerSlaConsumers } from "./modules/sla/consumer.js";
 import { registerDeviationConsumers } from "./modules/deviations/consumer.js";
 import { registerWorkbasketConsumers } from "./modules/workbaskets/consumer.js";
+import { registerCaseLinksConsumers } from "./modules/case-links/consumer.js";
+import { registerChecklistConsumers } from "./modules/checklists/consumer.js";
+import { registerCommentsConsumers } from "./modules/comments/consumer.js";
 
 const log = pino({ name: "workflow-worker" });
 
@@ -90,6 +93,9 @@ registerQuorumConsumers(queue);
 registerSlaConsumers(queue);
 registerDeviationConsumers(queue);
 registerWorkbasketConsumers(queue);
+registerCaseLinksConsumers(queue);
+registerChecklistConsumers(queue);
+registerCommentsConsumers(queue);
 await queue.start();
 
 // Cross-tenant outbox scan must use the BYPASSRLS scannerDb — FORCE RLS on

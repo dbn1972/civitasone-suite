@@ -36,6 +36,13 @@ export const COMMANDS = {
   catalogueRequestApprove: "helpdesk.catalogue.request_approve",
   catalogueRequestAdvance: "helpdesk.catalogue.request_advance",
   catalogueRequestFulfil: "helpdesk.catalogue.request_fulfil",
+  // P0 F3 leftover — SLA calendars / pause / extend / CES
+  calendarCreate: "helpdesk.sla.calendar_create",
+  calendarUpdate: "helpdesk.sla.calendar_update",
+  slaPause: "helpdesk.ticket.sla_pause",
+  slaResume: "helpdesk.ticket.sla_resume",
+  slaExtend: "helpdesk.ticket.sla_extend",
+  cesSubmit: "helpdesk.ces.submit",
 } as const;
 
 /** TKT-11 — saved-views command topics (moved here from views-routes.ts so

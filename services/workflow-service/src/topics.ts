@@ -44,6 +44,16 @@ export const COMMANDS = {
   reviewDeviation: "workflow.deviation.review",
   revokeDeviation: "workflow.deviation.revoke",
   upsertWorkbasket: "workflow.workbasket.upsert",
+  // P0 F3 leftover — case-links / checklists / comments
+  createCaseLink: "workflow.case.link.create",
+  splitCase: "workflow.case.split",
+  mergeCases: "workflow.case.merge",
+  upsertChecklistTemplate: "workflow.checklist.template.upsert",
+  createChecklistInstance: "workflow.checklist.instance.create",
+  toggleChecklistItem: "workflow.checklist.item.toggle",
+  addComment: "workflow.comment.add",
+  editComment: "workflow.comment.edit",
+  deleteComment: "workflow.comment.delete",
 } as const;
 
 export const EVENTS = {
@@ -98,6 +108,15 @@ export const EVENTS = {
   deviationReviewed: "workflow.deviation.reviewed",
   deviationRevoked: "workflow.deviation.revoked",
   workbasketUpserted: "workflow.workbasket.upserted",
+  caseLinkCreated: "workflow.case.link.created",
+  caseSplit: "workflow.case.split",
+  casesMerged: "workflow.case.merged",
+  checklistTemplateUpserted: "workflow.checklist.template.upserted",
+  checklistInstanceCreated: "workflow.checklist.instance.created",
+  checklistItemToggled: "workflow.checklist.item.toggled",
+  commentAdded: "workflow.comment.added",
+  commentEdited: "workflow.comment.edited",
+  commentDeleted: "workflow.comment.deleted",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */

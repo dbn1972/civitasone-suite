@@ -6,6 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
 import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
@@ -128,6 +129,71 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "sla_breached", "citizen_application", p.applicationId);
     });
+  });
+
+  queue.subscribe(COMMANDS.draftSave, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; citizenId: string; serviceId: string;
+      serviceKey?: string | null; channel: string; assistedBy: string | null;
+      formData: Record<string, unknown>; documentTypes: string[];
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await intakeRepo.insertDraft(tx, {
+        id: p.id, tenantId: p.tenantId, citizenId: p.citizenId, serviceId: p.serviceId,
+        serviceKey: p.serviceKey ?? null, channel: p.channel, assistedBy: p.assistedBy,
+        formData: p.formData, documentTypes: p.documentTypes, status: "draft",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "draft_save", "application_intake", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.draftUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string;
+      formData?: Record<string, unknown>; documentTypes?: string[];
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const draft = await intakeRepo.findDraftByIdTx(tx, p.id, msg.tenantId);
+      if (!draft || draft.status !== "draft") return;
+      await intakeRepo.updateDraft(tx, p.id, msg.tenantId, {
+        ...(p.formData ? { formData: p.formData } : {}),
+        ...(p.documentTypes ? { documentTypes: p.documentTypes } : {}),
+        updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "draft_update", "application_intake", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.draftSubmit, async (msg) => {
+    const p = msg.payload as {
+      id: string; draftId: string; tenantId: string; trackingNo: string; channel: string;
+      documentTypes?: string[];
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const draft = await intakeRepo.findDraftByIdTx(tx, p.draftId, msg.tenantId);
+      if (!draft || draft.status !== "draft") return;
+      const now = new Date();
+      await repo.insertApplication(tx, {
+        id: p.id, tenantId: p.tenantId, citizenId: draft.citizenId, serviceId: draft.serviceId,
+        refNo: p.trackingNo, status: "submitted", trackingNo: p.trackingNo, channel: draft.channel,
+        assistedBy: draft.assistedBy, acknowledgedAt: now, submittedAt: now,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await repo.insertStatusHistory(tx, {
+        tenantId: p.tenantId, applicationId: p.id, fromStatus: null, toStatus: "submitted",
+        note: `Acknowledged via ${draft.channel} (tracking ${p.trackingNo})`,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await intakeRepo.updateDraft(tx, p.draftId, msg.tenantId, {
+        status: "submitted", applicationId: p.id, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "draft_submit", "application_intake", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 }
 
