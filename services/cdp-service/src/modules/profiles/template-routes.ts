@@ -10,10 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as repo from "./template-repo.js";
 import * as profilesRepo from "./repo.js";
 import {
@@ -163,63 +160,25 @@ export async function profileTemplateRoutes(app: FastifyInstance): Promise<void>
     }
 
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        vertical: body.vertical,
-        profileType: body.profileType,
-        label: body.label,
-        attributesSpec: body.attributes,
-        conflictRules: body.conflictRules as Record<string, Record<string, unknown>>,
-        defaultStrategy: body.defaultStrategy,
-        sourcePriority: body.sourcePriority,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.profileTemplateCreated,
-        eventType: EVENTS.profileTemplateCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          templateId: id,
-          vertical: body.vertical,
-          profileType: body.profileType,
-          attributeCount: body.attributes.length,
-        },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "profile_template_created",
-          resourceType: "profile_template",
-          resourceId: id,
-          outcome: "success",
-          metadata: { vertical: body.vertical, profileType: body.profileType },
-        },
-      });
+    await publishF3Write(ctx, "template_create", id, {
+      vertical: body.vertical,
+      profileType: body.profileType,
+      label: body.label,
+      attributes: body.attributes,
+      conflictRules: body.conflictRules,
+      defaultStrategy: body.defaultStrategy,
+      sourcePriority: body.sourcePriority,
     });
 
-    return reply.code(201).send({
+    return reply.code(202).send({
       data: {
         id,
         vertical: body.vertical,
         profileType: body.profileType,
         label: body.label,
-        attributes: body.attributes,
-        conflictRules: body.conflictRules,
-        defaultStrategy: body.defaultStrategy,
-        sourcePriority: body.sourcePriority,
+        status: "accepted",
         version: 1,
+        correlationId: ctx.correlationId,
       },
     });
   });
@@ -256,39 +215,14 @@ export async function profileTemplateRoutes(app: FastifyInstance): Promise<void>
     if (body.defaultStrategy !== undefined) patch.defaultStrategy = body.defaultStrategy;
     if (body.sourcePriority !== undefined) patch.sourcePriority = body.sourcePriority;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "profile template has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.profileTemplateUpdated,
-        eventType: EVENTS.profileTemplateUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { templateId: id, vertical: existing.vertical, changed: Object.keys(patch).filter((k) => k !== "updatedBy") },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "profile_template_updated",
-          resourceType: "profile_template",
-          resourceId: id,
-          outcome: "success",
-          metadata: { vertical: existing.vertical },
-        },
-      });
+    await publishF3Write(ctx, "template_update", id, {
+      patch,
+      version: body.version,
+      vertical: existing.vertical,
+      changed: Object.keys(patch).filter((k) => k !== "updatedBy"),
     });
 
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send({ data: { id, updated: true, status: "accepted", version: body.version + 1, correlationId: ctx.correlationId } });
   });
 
   // POST /v1/cdp/profile-templates/:id/resolve — dry-run the conflict rules (CR-CDP-01)
@@ -360,70 +294,29 @@ export async function profileTemplateRoutes(app: FastifyInstance): Promise<void>
       .sort()
       .map((source) => ({ source, sourceId: `template:${template.id}`, timestamp: stampedAt }));
 
-    await db.transaction(async (tx) => {
-      const ok = await profilesRepo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        {
-          attributes: { ...profile.attributes, ...result.attributes },
-          sourceLineage: [...profile.sourceLineage, ...newLineage],
-          updatedBy: ctx.actorId,
-        },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "profile has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.profileTemplateApplied,
-        eventType: EVENTS.profileTemplateApplied,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        // Attribute *names* only. The values are customer PII and an event fans out to
-        // services that have no lawful basis to hold them.
-        payload: {
-          profileId: id,
-          templateId: template.id,
-          vertical: template.vertical,
-          resolved: result.decisions.map((d) => ({
-            attribute: d.attribute,
-            source: d.source,
-            strategy: d.strategy,
-            conflicted: d.conflicted,
-          })),
-          ignoredAttributes: result.ignoredAttributes,
-        },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "profile_template_applied",
-          resourceType: "profile",
-          resourceId: id,
-          outcome: "success",
-          metadata: { templateId: template.id, vertical: template.vertical, attributeCount: result.decisions.length },
-        },
-      });
+    await publishF3Write(ctx, "template_apply", id, {
+      profileId: id,
+      templateId: template.id,
+      vertical: template.vertical,
+      version: body.version,
+      attributes: { ...profile.attributes, ...result.attributes },
+      sourceLineage: [...profile.sourceLineage, ...newLineage],
+      resolved: result.decisions.map((d) => ({
+        attribute: d.attribute,
+        source: d.source,
+        strategy: d.strategy,
+        conflicted: d.conflicted,
+      })),
+      ignoredAttributes: result.ignoredAttributes,
     });
 
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile", id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_lineage", id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", id));
-
-    return reply.send({
+    return reply.code(202).send({
       data: {
         profileId: id,
         templateId: template.id,
+        status: "accepted",
         version: body.version + 1,
+        correlationId: ctx.correlationId,
         applied: result.decisions.map((d) => ({
           attribute: d.attribute,
           source: d.source,

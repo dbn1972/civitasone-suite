@@ -14,10 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import { hashIdentifier } from "./domain.js";
 import * as visitorRepo from "./visitor-repo.js";
 import * as identityRepo from "./repo.js";
@@ -85,21 +82,19 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
     // A returning visitor is a heartbeat, not a new registration: re-creating the shell
     // would orphan the events already filed against the first one.
     if (existing) {
-      await db.transaction(async (tx) => {
-        await visitorRepo.touch(tx, existing.id, ctx.tenantId, {
-          lastSeenAt: seenAt,
-          deviceType: body.deviceType,
-          updatedBy: ctx.actorId,
-        });
+      await publishF3Write(ctx, "visitor_touch", existing.id, {
+        seenAt: seenAt.toISOString(),
+        deviceType: body.deviceType,
       });
 
-      return reply.send({
+      return reply.code(202).send({
         data: {
           id: existing.id,
           anonymousProfileId: existing.anonymousProfileId,
           status: existing.status,
           created: false,
           lastSeenAt: seenAt.toISOString(),
+          correlationId: ctx.correlationId,
         },
       });
     }
@@ -107,76 +102,20 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
     const visitorId = randomUUID();
     const anonymousProfileId = randomUUID();
 
-    await db.transaction(async (tx) => {
-      await profilesRepo.insert(tx, {
-        id: anonymousProfileId,
-        tenantId: ctx.tenantId,
-        profileType: ANONYMOUS_PROFILE_TYPE,
-        // `anonymous` marks the shell so the stitch can strip it again later.
-        attributes: { ...body.attributes, anonymous: true },
-        sourceLineage: [{
-          source: "anonymous_visitor",
-          sourceId: `visitor:${visitorKeyHash.slice(0, 12)}`,
-          timestamp: seenAt.toISOString(),
-        }],
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      // The visitor key is an identifier like any other, so it goes in the identity graph
-      // and is carried across by the same reassignment the stitch already performs.
-      await identityRepo.insert(tx, {
-        tenantId: ctx.tenantId,
-        profileId: anonymousProfileId,
-        identifierType: VISITOR_IDENTIFIER_TYPE,
-        identifierHash: visitorKeyHash,
-        confidence: "0.6000",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await visitorRepo.insert(tx, {
-        id: visitorId,
-        tenantId: ctx.tenantId,
-        visitorKeyHash,
-        anonymousProfileId,
-        status: "anonymous",
-        deviceType: body.deviceType,
-        firstSeenAt: seenAt,
-        lastSeenAt: seenAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.visitorTracked,
-        eventType: EVENTS.visitorTracked,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        // No visitor key, raw or hashed: a hashed device id is still a tracking
-        // identifier and an event fans out beyond the services that need it.
-        payload: { visitorId, anonymousProfileId, deviceType: body.deviceType },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "anonymous_visitor_tracked",
-          resourceType: "anonymous_visitor",
-          resourceId: visitorId,
-          outcome: "success",
-          metadata: { anonymousProfileId, deviceType: body.deviceType },
-        },
-      });
+    await publishF3Write(ctx, "visitor_track", visitorId, {
+      anonymousProfileId,
+      visitorKeyHash,
+      deviceType: body.deviceType,
+      seenAt: seenAt.toISOString(),
+      attributes: { ...body.attributes, anonymous: true },
+      sourceLineage: [{
+        source: "anonymous_visitor",
+        sourceId: `visitor:${visitorKeyHash.slice(0, 12)}`,
+        timestamp: seenAt.toISOString(),
+      }],
     });
 
-    return reply.code(201).send({
+    return reply.code(202).send({
       data: {
         id: visitorId,
         anonymousProfileId,
@@ -184,6 +123,7 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
         created: true,
         deviceType: body.deviceType,
         firstSeenAt: seenAt.toISOString(),
+        correlationId: ctx.correlationId,
       },
     });
   });
@@ -258,125 +198,27 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
     const mergedAt = new Date();
     const plan = planStitch(anonymous, known, visitor.visitorKeyHash, mergedAt);
 
-    const counts = await db.transaction(async (tx) => {
-      const eventsMerged = await eventsRepo.reassignProfile(tx, anonymous.id, known.id, ctx.tenantId);
-      const identifiersMerged = await identityRepo.reassignProfile(tx, anonymous.id, known.id, ctx.tenantId);
-      const devicesMerged = await deviceRepo.reassignProfile(tx, anonymous.id, known.id, ctx.tenantId);
-      // The shell's name key must not keep matching once the shell is gone.
-      await nameKeyRepo.deleteByProfile(tx, anonymous.id, ctx.tenantId);
-
-      // Reuses the existing merge writer, so the shell is marked merged and the winner's
-      // mergedFromIds/lineage are unioned by the same code the steward merge uses.
-      await profilesRepo.markMerged(
-        tx,
-        known.id,
-        anonymous.id,
-        ctx.tenantId,
-        plan.attributes,
-        plan.sourceLineage,
-        anonymous.mergedFromIds,
-      );
-
-      // One claim, at the end, carrying the real counts. Guarded on both the optimistic
-      // version and `status = 'anonymous'`: a concurrent stitch that got here first makes
-      // this update match no rows, and the 409 rolls back the reassignments above rather
-      // than leaving the events moved twice.
-      const claimed = await visitorRepo.markMerged(
-        tx,
-        visitor.id,
-        ctx.tenantId,
-        {
-          mergedIntoProfileId: known.id,
-          eventsMerged,
-          identifiersMerged,
-          devicesMerged,
-          mergedAt,
-          updatedBy: ctx.actorId,
-        },
-        body.version,
-      );
-      if (!claimed) {
-        throw new HttpError(409, "VERSION_CONFLICT", "visitor has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.visitorStitched,
-        eventType: EVENTS.visitorStitched,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          visitorId: visitor.id,
-          anonymousProfileId: anonymous.id,
-          knownProfileId: known.id,
-          eventsMerged,
-          identifiersMerged,
-          devicesMerged,
-        },
-      });
-
-      // The stitch is also a profile merge, so downstream consumers that already react to
-      // `cdp.profile.merged` (segment recompute, activation audiences) do not need to
-      // learn a second topic to stay correct.
-      await enqueue(tx, {
-        topic: EVENTS.profilesMerged,
-        eventType: EVENTS.profilesMerged,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { winnerId: known.id, loserId: anonymous.id, reason: "anonymous_stitch" },
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.lineageAppended,
-        eventType: EVENTS.lineageAppended,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { profileId: known.id, entry: plan.lineageEntry },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "anonymous_visitor_stitched",
-          resourceType: "anonymous_visitor",
-          resourceId: visitor.id,
-          outcome: "success",
-          metadata: {
-            anonymousProfileId: anonymous.id,
-            knownProfileId: known.id,
-            eventsMerged,
-            identifiersMerged,
-            devicesMerged,
-          },
-        },
-      });
-
-      return { eventsMerged, identifiersMerged, devicesMerged };
+    await publishF3Write(ctx, "visitor_stitch", visitor.id, {
+      visitorId: visitor.id,
+      anonymousProfileId: anonymous.id,
+      knownProfileId: known.id,
+      version: body.version,
+      attributes: plan.attributes,
+      sourceLineage: plan.sourceLineage,
+      mergedFromIds: anonymous.mergedFromIds,
+      lineageEntry: plan.lineageEntry,
+      mergedAt: mergedAt.toISOString(),
     });
 
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile", known.id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile", anonymous.id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_lineage", known.id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", known.id));
-
-    return reply.send({
+    return reply.code(202).send({
       data: {
         visitorId: visitor.id,
         anonymousProfileId: anonymous.id,
         knownProfileId: known.id,
-        eventsMerged: counts.eventsMerged,
-        identifiersMerged: counts.identifiersMerged,
-        devicesMerged: counts.devicesMerged,
-        lineageEntry: plan.lineageEntry,
-        status: "merged",
+        status: "accepted",
+        correlationId: ctx.correlationId,
         version: body.version + 1,
+        lineageEntry: plan.lineageEntry,
       },
     });
   });

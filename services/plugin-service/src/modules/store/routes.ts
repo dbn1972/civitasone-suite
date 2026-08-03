@@ -12,12 +12,12 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { storeKeyParams, storeValueBody } from "./validators.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import { computeValueSize, wouldExceedQuota, getQuotaBytes } from "./domain.js";
 
 const ROLES = ["plugin_admin", "super_admin"];
 
 export async function storeRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/plugins/:pluginId/store/:key — retrieve a stored value
   app.get("/v1/plugins/:pluginId/store/:key", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
@@ -38,17 +38,14 @@ export async function storeRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PUT /v1/plugins/:pluginId/store/:key — set a stored value
   app.put("/v1/plugins/:pluginId/store/:key", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { pluginId, key } = storeKeyParams.parse(req.params);
     const { value } = storeValueBody.parse(req.body);
 
-    // Compute size of the new value
     const newValueBytes = computeValueSize(value);
 
-    // Get current usage and existing key size
     const [currentUsage, existingEntry] = await Promise.all([
       repo.getTotalUsageBytes(ctx.tenantId, pluginId),
       repo.getEntry(ctx.tenantId, pluginId, key),
@@ -56,7 +53,6 @@ export async function storeRoutes(app: FastifyInstance): Promise<void> {
 
     const existingKeyBytes = existingEntry?.sizeBytes ?? 0;
 
-    // Check quota
     if (wouldExceedQuota(currentUsage, existingKeyBytes, newValueBytes)) {
       throw new HttpError(
         422,
@@ -65,31 +61,34 @@ export async function storeRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    // Upsert the entry
-    await repo.upsertEntry(ctx.tenantId, pluginId, key, value, newValueBytes, ctx.actorId);
+    const accepted = await commands.storePut(ctx, pluginId, key, value, newValueBytes);
 
-    return reply.code(200).send({
+    return reply.code(202).send({
       data: {
         key,
         value,
         sizeBytes: newValueBytes,
-        updatedAt: new Date().toISOString(),
+        status: accepted.status,
+        correlationId: accepted.correlationId,
       },
     });
   });
 
-  // DELETE /v1/plugins/:pluginId/store/:key — delete a stored value
   app.delete("/v1/plugins/:pluginId/store/:key", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { pluginId, key } = storeKeyParams.parse(req.params);
 
-    const deleted = await repo.deleteEntry(ctx.tenantId, pluginId, key);
-    if (!deleted) {
+    const entry = await repo.getEntry(ctx.tenantId, pluginId, key);
+    if (!entry) {
       throw new HttpError(404, "NOT_FOUND", `store key "${key}" not found`);
     }
 
-    return reply.code(204).send();
+    const accepted = await commands.storeDelete(ctx, pluginId, key);
+
+    return reply.code(202).send({
+      data: { key, status: accepted.status, correlationId: accepted.correlationId },
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

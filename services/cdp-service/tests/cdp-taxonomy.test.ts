@@ -148,6 +148,7 @@ const H = vi.hoisted(() => ({
   insertMock: vi.fn(),
   updateMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(async () => "m"),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -160,7 +161,7 @@ vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqu
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
-  queue: { publish: vi.fn(async () => "m") },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/events/taxonomy-repo.js", () => ({
@@ -251,14 +252,14 @@ describe("GET /v1/cdp/events/taxonomy", () => {
 describe("POST /v1/cdp/events/taxonomy", () => {
   const payload = { eventName: "order_placed", category: "transactional", schemaJson: { orderId: { type: "string" } } };
 
-  it("201 — registers a draft definition", async () => {
+  it("202 — publishes draft taxonomy create", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/cdp/events/taxonomy", headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
-    // Registration is never approval.
-    expect(r.json().data.status).toBe("draft");
-    expect(H.insertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.insertMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -311,15 +312,16 @@ describe("POST /v1/cdp/events/taxonomy", () => {
 describe("PATCH /v1/cdp/events/taxonomy/:id", () => {
   const url = `/v1/cdp/events/taxonomy/${TAX_ID}`;
 
-  it("200 — amends the category and schema", async () => {
+  it("202 — publishes taxonomy update", async () => {
     H.findByIdMock.mockResolvedValue(makeTaxonomy());
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url, headers: auth(),
       payload: { category: "behavioural", schemaJson: { orderId: { type: "string", required: true } }, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.version).toBe(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -341,14 +343,15 @@ describe("PATCH /v1/cdp/events/taxonomy/:id", () => {
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByIdMock.mockResolvedValue(makeTaxonomy());
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url, headers: auth(), payload: { category: "behavioural", version: 1 },
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -380,15 +383,15 @@ describe("PATCH /v1/cdp/events/taxonomy/:id", () => {
 describe("POST /v1/cdp/events/taxonomy/:id/approve", () => {
   const url = `/v1/cdp/events/taxonomy/${TAX_ID}/approve`;
 
-  it("200 — a steward approves a draft", async () => {
+  it("202 — publishes taxonomy approve", async () => {
     H.findByIdMock.mockResolvedValue(makeTaxonomy());
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url, headers: auth(["cdp_steward"]), payload: { version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("approved");
-    expect(r.json().data.version).toBe(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -400,12 +403,13 @@ describe("POST /v1/cdp/events/taxonomy/:id/approve", () => {
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer on approve", async () => {
     H.findByIdMock.mockResolvedValue(makeTaxonomy());
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: { version: 1 } });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

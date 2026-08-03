@@ -43,6 +43,8 @@ export const COMMANDS = {
   riskAcceptancePropose:  "audit.risk_acceptance.propose",
   riskAcceptanceDecide:   "audit.risk_acceptance.decide",
   riskReview:             "audit.risk.review",
+  checklistCreate:        "audit.checklist.create",
+  checklistComplete:      "audit.checklist.complete",
 } as const;
 
 export const EVENTS = {

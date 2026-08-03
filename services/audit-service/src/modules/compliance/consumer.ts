@@ -8,6 +8,67 @@ import * as repo from "./repo.js";
 const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
 export function registerComplianceConsumers(queue: Queue): void {
+  queue.subscribe(COMMANDS.checklistCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string;
+      tenantId: string;
+      title: string;
+      description: string | null;
+      items: string[];
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertChecklist(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        title: p.title,
+        description: p.description,
+        items: p.items,
+        completed: false,
+        createdBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "audit",
+          action: "create",
+          resourceType: "compliance_checklist",
+          resourceId: p.id,
+          outcome: "success",
+        },
+      });
+    });
+  });
+
+  queue.subscribe(COMMANDS.checklistComplete, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; version: number };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const record = await repo.findChecklistByIdTx(tx, p.id, p.tenantId);
+      if (!record || record.completed) return;
+      const rows = await repo.completeChecklistVersioned(tx, p.id, p.tenantId, p.version, msg.actorId);
+      if (rows !== 1) return;
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "audit",
+          action: "complete",
+          resourceType: "compliance_checklist",
+          resourceId: p.id,
+          outcome: "success",
+        },
+      });
+    });
+  });
+
   queue.subscribe(COMMANDS.pendingRegisterCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; paraId: string; deptRef: string;
