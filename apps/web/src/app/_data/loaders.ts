@@ -2356,7 +2356,7 @@ const CHAT_LIST_OPTIONS = {
 
 /** Assistant chat conversations, optionally narrowed to one status. */
 export async function getChatConversations(
-  status?: "active" | "ended",
+  status?: "active" | "handed_off" | "ended",
 ): Promise<LoaderResult<ChatConversation[]>> {
   if (status) {
     return fetchJson(`/api/v1/ai/chat?limit=100&status=${status}`, [] as ChatConversation[], CHAT_LIST_OPTIONS);

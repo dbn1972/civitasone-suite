@@ -22,6 +22,13 @@ import {
   buildTurnSummary,
   CONVERSATION_STATUSES,
   MESSAGE_ROLES,
+  isHumanRequested,
+  decideHandoff,
+  validateHandoffReason,
+  buildHandoffContext,
+  HANDOFF_REASON_CODES,
+  HANDOFF_CONTEXT_TURNS,
+  LOW_CONFIDENCE_THRESHOLD,
 } from "../src/modules/chat/domain.js";
 import {
   validateAgentStatusTransition,
@@ -522,7 +529,142 @@ describe("chat: validateStatusTransition", () => {
   });
 
   it("exposes the known statuses", () => {
-    expect(CONVERSATION_STATUSES).toEqual(["active", "ended"]);
+    expect(CONVERSATION_STATUSES).toEqual(["active", "handed_off", "ended"]);
+  });
+
+  it("allows active → handed_off and handed_off → ended", () => {
+    expect(validateStatusTransition("active", "handed_off")).toBeNull();
+    expect(validateStatusTransition("handed_off", "ended")).toBeNull();
+  });
+
+  it("never returns a handed-off conversation to the bot", () => {
+    expect(validateStatusTransition("handed_off", "active")).toContain("cannot transition");
+  });
+
+  it("rejects handed_off → handed_off so a second escalation cannot overwrite the first", () => {
+    expect(validateStatusTransition("handed_off", "handed_off")).toContain("cannot transition");
+  });
+
+  it("keeps ended terminal", () => {
+    expect(validateStatusTransition("ended", "handed_off")).toContain("cannot transition");
+  });
+
+  it("leaves no legal path back into active from any state", () => {
+    for (const from of CONVERSATION_STATUSES) {
+      expect(validateStatusTransition(from, "active")).not.toBeNull();
+    }
+  });
+});
+
+// ── CHAT HANDOFF (P2-3) ───────────────────────────────────────────────────────
+
+describe("chat: isHumanRequested", () => {
+  it.each([
+    "please connect me to a human",
+    "I want to talk to an agent",
+    "transfer me to a representative",
+    "can I speak with a person",
+    "I need a live agent",
+    "give me a real person",
+  ])("detects %s", (msg) => {
+    expect(isHumanRequested(msg)).toBe(true);
+  });
+
+  it("is case insensitive", () => {
+    expect(isHumanRequested("CONNECT ME TO A HUMAN")).toBe(true);
+  });
+
+  it("does not fire on ordinary questions", () => {
+    expect(isHumanRequested("what is my application status?")).toBe(false);
+    expect(isHumanRequested("the human resources form")).toBe(false);
+  });
+
+  it("treats an empty message as no request", () => {
+    expect(isHumanRequested("")).toBe(false);
+  });
+});
+
+describe("chat: decideHandoff", () => {
+  it("escalates when the customer asks for a person", () => {
+    expect(decideHandoff({ message: "connect me to a human", confidence: 0.99 }))
+      .toEqual({ handoff: true, reasonCode: "requested" });
+  });
+
+  it("escalates when the bot reports low confidence", () => {
+    expect(decideHandoff({ message: "what is my status", confidence: 0.2 }))
+      .toEqual({ handoff: true, reasonCode: "low_confidence" });
+  });
+
+  it("treats the threshold itself as low confidence", () => {
+    expect(decideHandoff({ message: "hi", confidence: LOW_CONFIDENCE_THRESHOLD }).handoff).toBe(true);
+  });
+
+  it("escalates when a guardrail flagged the turn", () => {
+    expect(decideHandoff({ message: "hi", violationCount: 1 }))
+      .toEqual({ handoff: true, reasonCode: "guardrail" });
+  });
+
+  it("an explicit request outranks a low score, so the recorded reason matches what the customer did", () => {
+    expect(decideHandoff({ message: "talk to an agent", confidence: 0.1, violationCount: 3 }).reasonCode)
+      .toBe("requested");
+  });
+
+  it("stays with the bot for a confident, clean, unremarkable turn", () => {
+    expect(decideHandoff({ message: "what are your office hours", confidence: 0.95, violationCount: 0 }))
+      .toEqual({ handoff: false, reasonCode: null });
+  });
+
+  it("does not escalate merely because confidence was not scored", () => {
+    expect(decideHandoff({ message: "what are your office hours" }).handoff).toBe(false);
+    expect(decideHandoff({ message: "what are your office hours", confidence: null }).handoff).toBe(false);
+  });
+});
+
+describe("chat: validateHandoffReason", () => {
+  it.each(HANDOFF_REASON_CODES)("accepts %s", (code) => {
+    expect(validateHandoffReason(code)).toBeNull();
+  });
+
+  it("rejects anything else", () => {
+    expect(validateHandoffReason("because")).toContain("handoff reason must be one of");
+  });
+});
+
+describe("chat: buildHandoffContext", () => {
+  const messages = Array.from({ length: 14 }, (_, i) => ({
+    role: i % 2 === 0 ? "user" : "assistant",
+    content: `turn ${i}`,
+  }));
+
+  it("carries only the trailing window, oldest first", () => {
+    const ctx = buildHandoffContext({
+      conversationId: "c1", language: "hi", reasonCode: "requested", messages,
+    });
+    expect(ctx.recentTurns).toHaveLength(HANDOFF_CONTEXT_TURNS);
+    expect(ctx.recentTurns[0]?.content).toBe("turn 4");
+    expect(ctx.recentTurns.at(-1)?.content).toBe("turn 13");
+  });
+
+  it("summarises the whole transcript, not just the window", () => {
+    const ctx = buildHandoffContext({
+      conversationId: "c1", language: "en", reasonCode: "low_confidence", messages,
+    });
+    expect(ctx.summary.messageCount).toBe(14);
+  });
+
+  it("keeps the language so the human agent answers in the customer's language", () => {
+    expect(buildHandoffContext({
+      conversationId: "c1", language: "ta", reasonCode: "requested", messages: [],
+    }).language).toBe("ta");
+  });
+
+  it("defaults the note to null and handles an empty transcript", () => {
+    const ctx = buildHandoffContext({
+      conversationId: "c1", language: "en", reasonCode: "agent_initiated", messages: [],
+    });
+    expect(ctx.note).toBeNull();
+    expect(ctx.recentTurns).toEqual([]);
+    expect(ctx.summary.messageCount).toBe(0);
   });
 });
 

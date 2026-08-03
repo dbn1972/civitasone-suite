@@ -190,6 +190,22 @@ export const crmAccountHierarchyNodeSchema = z.object({
   name: z.string(),
 });
 
+const chatHandoffContextSchema = z.object({
+  conversationId: z.string(),
+  language: z.string(),
+  reasonCode: z.enum(["requested", "low_confidence", "guardrail", "agent_initiated"]),
+  note: z.string().nullable(),
+  summary: z.object({
+    messageCount: z.number().int(),
+    userMessages: z.number().int(),
+    assistantMessages: z.number().int(),
+    systemMessages: z.number().int(),
+    totalTokens: z.number().int(),
+    lastRole: z.string().nullable(),
+  }),
+  recentTurns: z.array(z.object({ role: z.string(), content: z.string() })),
+});
+
 const chatConversationApiSchema = z.object({
   id: z.string().uuid(),
   channelId: z.string(),
@@ -198,6 +214,14 @@ const chatConversationApiSchema = z.object({
   language: z.string(),
   startedAt: z.string(),
   endedAt: z.string().nullable(),
+  // Handoff fields normalise a missing key to null so a conversation written
+  // before the handoff migration still parses instead of blanking the screen,
+  // while the parsed value stays non-optional for consumers.
+  handedOffAt: z.string().nullish().transform((v) => v ?? null),
+  handoffReason: z.string().nullish().transform((v) => v ?? null),
+  handoffNote: z.string().nullish().transform((v) => v ?? null),
+  handoffQueue: z.string().nullish().transform((v) => v ?? null),
+  handoffContext: chatHandoffContextSchema.nullish().transform((v) => v ?? null),
   version: z.number().int(),
 });
 

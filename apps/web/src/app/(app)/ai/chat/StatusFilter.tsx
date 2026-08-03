@@ -5,6 +5,7 @@ import { useTransition } from "react";
 const OPTIONS = [
   { value: "", label: "All conversations" },
   { value: "active", label: "Active only" },
+  { value: "handed_off", label: "With a human agent" },
   { value: "ended", label: "Ended only" },
 ];
 

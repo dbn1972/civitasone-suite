@@ -12,8 +12,9 @@ interface PageProps {
 }
 
 export default async function ChatPage({ searchParams }: PageProps) {
-  const status = searchParams?.status === "active" || searchParams?.status === "ended"
-    ? searchParams.status
+  const requested = searchParams?.status;
+  const status = requested === "active" || requested === "handed_off" || requested === "ended"
+    ? requested
     : undefined;
   const { data: conversations, source } = await getChatConversations(status);
   const summary = summariseConversations(conversations);
@@ -30,6 +31,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
       <StatGrid>
         <StatCard icon="💬" iconBg="#e0f2fe" label="Conversations" value={summary.total.toLocaleString("en-IN")} />
         <StatCard icon="🟢" iconBg="#dcfce7" label="Active" value={summary.active.toLocaleString("en-IN")} />
+        <StatCard icon="🙋" iconBg="#fef3c7" label="With agent" value={summary.handedOff.toLocaleString("en-IN")} />
         <StatCard icon="⚪" iconBg="#f1f5f9" label="Ended" value={summary.ended.toLocaleString("en-IN")} />
       </StatGrid>
 

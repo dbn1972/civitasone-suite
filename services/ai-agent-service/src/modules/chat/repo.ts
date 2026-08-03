@@ -4,6 +4,7 @@
  */
 import { eq, and, sql, desc, asc, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import type { HandoffContext } from "./domain.js";
 import {
   conversations,
   messages,
@@ -23,6 +24,11 @@ export function toView(r: ConversationRow) {
     language: r.language,
     startedAt: r.startedAt.toISOString(),
     endedAt: r.endedAt ? r.endedAt.toISOString() : null,
+    handedOffAt: r.handedOffAt ? r.handedOffAt.toISOString() : null,
+    handoffReason: r.handoffReason,
+    handoffNote: r.handoffNote,
+    handoffQueue: r.handoffQueue,
+    handoffContext: r.handoffContext ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     version: r.version,
@@ -92,20 +98,69 @@ export async function insert(tx: ScopedTx, row: ConversationInsert): Promise<voi
   await tx.insert(conversations).values(row);
 }
 
+/**
+ * Optimistic-concurrency update. `expectedStatus`, when given, additionally
+ * pins the source state: every writer here bumps the version, so a stale
+ * version already implies the row moved on, but stating the source state makes
+ * the transition explicit and keeps the guard correct if a future writer ever
+ * updates the row without bumping.
+ */
 export async function update(
   tx: ScopedTx,
   id: string,
   tenantId: string,
   patch: Partial<ConversationInsert>,
   currentVersion: number,
+  expectedStatus?: string,
 ): Promise<boolean> {
+  const guards = [
+    eq(conversations.id, id),
+    eq(conversations.tenantId, tenantId),
+    eq(conversations.version, currentVersion),
+  ];
+  if (expectedStatus !== undefined) guards.push(eq(conversations.status, expectedStatus));
+
   const result = await tx
     .update(conversations)
     .set({ ...patch, updatedAt: new Date(), version: sql`${conversations.version} + 1` })
+    .where(and(...guards))
+    .returning({ id: conversations.id });
+  return result.length > 0;
+}
+
+/**
+ * Move a conversation to `handed_off`, guarded on it still being `active`
+ * rather than on a version. The auto-handoff path runs inside the same
+ * transaction as the turn that triggered it, where the caller has no fresh
+ * version to compare; guarding on the source state keeps the write idempotent
+ * and stops a late escalation from re-opening an already-ended conversation.
+ * Returns false when the conversation had already moved on.
+ */
+export async function markHandedOff(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  patch: {
+    handoffReason: string;
+    handoffNote: string | null;
+    handoffQueue: string | null;
+    handoffContext: HandoffContext;
+    updatedBy: string;
+  },
+): Promise<boolean> {
+  const result = await tx
+    .update(conversations)
+    .set({
+      status: "handed_off",
+      handedOffAt: new Date(),
+      ...patch,
+      updatedAt: new Date(),
+      version: sql`${conversations.version} + 1`,
+    })
     .where(and(
       eq(conversations.id, id),
       eq(conversations.tenantId, tenantId),
-      eq(conversations.version, currentVersion),
+      eq(conversations.status, "active"),
     ))
     .returning({ id: conversations.id });
   return result.length > 0;

@@ -110,6 +110,7 @@ vi.mock("../src/modules/chat/repo.js", () => ({
   listByTenant: vi.fn(async () => ({ rows: [], total: 0 })),
   insert: (...a: unknown[]) => H.chatInsertMock(...a),
   update: vi.fn(async () => true),
+  markHandedOff: vi.fn(async () => true),
   insertMessage: (...a: unknown[]) => H.chatInsertMessageMock(...a),
   listMessages: (...a: unknown[]) => H.chatListMessagesMock(...a),
   toView: (r: Record<string, unknown>) => r,
@@ -521,5 +522,189 @@ describe("POST /v1/ai/copilot/suggest", () => {
       payload: { taskType: "explain", context: {} },
     });
     expect(r.statusCode).toBe(403);
+    await app.close();});
+});
+
+// ── P2-3 HUMAN HANDOFF ────────────────────────────────────────────────────────
+
+describe("POST /v1/ai/chat/:conversationId/handoff", () => {
+  it("202 — escalates an active conversation and publishes the command", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(USER, ["ai_user"]),
+      payload: { reasonCode: "requested", note: "customer asked for an officer", queue: "tier2" },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
+    await app.close();});
+
+  it("202 — carries the transcript so the human agent starts informed", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    H.chatListMessagesMock.mockResolvedValue({
+      rows: [makeMessage({ content: "my pension has not arrived" })], total: 1,
+    });
+    const app = await buildApp();
+    await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(),
+      payload: { reasonCode: "low_confidence" },
+    });
+    const [topic, envelope] = H.publishMock.mock.calls.at(-1) as [string, { payload: Record<string, unknown> }];
+    expect(topic).toBe("ai.chat.handoff");
+    const context = envelope.payload.context as {
+      recentTurns: { content: string }[]; reasonCode: string;
+    };
+    expect(context.recentTurns.at(-1)?.content).toBe("my pension has not arrived");
+    expect(context.reasonCode).toBe("low_confidence");
+    await app.close();});
+
+  it("202 — defaults the reason to agent_initiated when an operator pulls the conversation", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(), payload: {},
+    });
+    expect(r.statusCode).toBe(202);
+    await app.close();});
+
+  it("404 — unknown conversation", async () => {
+    H.chatFindByIdMock.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(), payload: {},
+    });
+    expect(r.statusCode).toBe(404);
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();});
+
+  it("422 — an already handed-off conversation cannot be handed off again", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession({ status: "handed_off" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(), payload: {},
+    });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("INVALID_TRANSITION");
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();});
+
+  it("422 — an ended conversation cannot be escalated", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession({ status: "ended" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(), payload: {},
+    });
+    expect(r.statusCode).toBe(422);
+    await app.close();});
+
+  it("409 — a stale version loses the race instead of overwriting", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession({ version: 4 }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(), payload: { version: 2 },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("VERSION_CONFLICT");
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();});
+
+  it("400 — an unknown reason code is rejected at the boundary", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(),
+      payload: { reasonCode: "because_i_said_so" },
+    });
+    expect(r.statusCode).toBe(400);
+    await app.close();});
+
+  it("401 — no auth header", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, payload: {},
+    });
+    expect(r.statusCode).toBe(401);
+    await app.close();});
+
+  it("403 — insufficient role", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/ai/chat/${SESSION}/handoff`, headers: auth(USER, ["viewer"]), payload: {},
+    });
+    expect(r.statusCode).toBe(403);
+    await app.close();});
+});
+
+describe("POST /v1/ai/chat — auto escalation", () => {
+  it("202 — a request for a person escalates the same turn", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(USER, ["ai_user"]),
+      payload: { conversationId: SESSION, channelId: CHANNEL, message: "connect me to a human" },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().handoff).toEqual({ triggered: true, reasonCode: "requested" });
+    await app.close();});
+
+  it("202 — a low-confidence turn escalates", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { conversationId: SESSION, channelId: CHANNEL, message: "what is my status", confidence: 0.1 },
+    });
+    expect(r.json().handoff).toEqual({ triggered: true, reasonCode: "low_confidence" });
+    await app.close();});
+
+  it("202 — an ordinary confident turn stays with the bot", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { conversationId: SESSION, channelId: CHANNEL, message: "what are your office hours", confidence: 0.9 },
+    });
+    expect(r.json().handoff).toEqual({ triggered: false });
+    await app.close();});
+
+  it("422 — the bot refuses to answer once a human has taken over", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession({ status: "handed_off" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { conversationId: SESSION, channelId: CHANNEL, message: "hello?" },
+    });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("CONVERSATION_HANDED_OFF");
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();});
+
+  it("400 — confidence outside [0,1] is rejected at the boundary", async () => {
+    H.chatFindByIdMock.mockResolvedValue(makeSession());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/ai/chat", headers: auth(),
+      payload: { conversationId: SESSION, channelId: CHANNEL, message: "hi", confidence: 1.5 },
+    });
+    expect(r.statusCode).toBe(400);
+    await app.close();});
+});
+
+describe("GET /v1/ai/chat — handed_off filter", () => {
+  it("200 — handed_off is a valid status filter", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: "/v1/ai/chat?status=handed_off", headers: auth(),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();});
+
+  it("400 — an unknown status filter is still rejected", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET", url: "/v1/ai/chat?status=zombie", headers: auth(),
+    });
+    expect(r.statusCode).toBe(400);
     await app.close();});
 });

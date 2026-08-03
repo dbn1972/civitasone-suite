@@ -2,6 +2,9 @@
 export const COMMANDS = {
   sendMessage: "ai.chat.send",
   endConversation: "ai.chat.end",
+  /** Escalate a customer conversation to a human agent (distinct from the
+   *  agent-to-agent `handoffAgent` / `recordHandoff` orchestration hops). */
+  handOffConversation: "ai.chat.handoff",
   recordBlockedAudit: "ai.audit.blocked",
   askCopilot: "ai.copilot.ask",
   summarize: "ai.copilot.summarize",
@@ -37,6 +40,7 @@ export const COMMANDS = {
 
 export const EVENTS = {
   conversationStarted: "ai.conversation.started",
+  conversationHandedOff: "ai.conversation.handed_off",
   turnCompleted: "ai.turn.completed",
   handoffTriggered: "ai.agent.handoff_triggered",
   agentPaused: "ai.agent.paused",

@@ -3,12 +3,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /**
- * Ends an active conversation with an optional reason.
+ * Closes a conversation with an optional reason.
  *
- * This is the only closure control the chat backend exposes — there is no
- * "handed to a human" status in ai-agent-service today, so the reason field is
- * where a handoff is recorded. The button is not shown for a conversation that
- * has already ended, since the service rejects that transition.
+ * Both an active conversation and one already with a human agent can be closed;
+ * the button is hidden once it has ended, since the service rejects that
+ * transition. Escalating to a person is a separate control (HandoffButton) so
+ * the handoff is recorded as its own state rather than as closing text.
  */
 export function EndConversationButton({
   conversationId,

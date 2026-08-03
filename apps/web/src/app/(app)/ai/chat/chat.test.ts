@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ChatConversation, ChatMessage } from "@civitasone/types";
 import {
   conversationDurationMinutes,
+  handoffReasonLabel,
   inReadingOrder,
+  isOpen,
   roleLabel,
+  statusLabel,
   summariseConversations,
   summariseTranscript,
 } from "./chat";
@@ -17,6 +20,11 @@ function conversation(overrides: Partial<ChatConversation> = {}): ChatConversati
     language: "en",
     startedAt: "2026-08-01T10:00:00.000Z",
     endedAt: null,
+    handedOffAt: null,
+    handoffReason: null,
+    handoffNote: null,
+    handoffQueue: null,
+    handoffContext: null,
     version: 1,
     ...overrides,
   };
@@ -41,11 +49,64 @@ describe("summariseConversations", () => {
       conversation({ status: "ended", endedAt: "2026-08-01T10:05:00.000Z" }),
       conversation({ status: "ended", endedAt: "2026-08-01T10:09:00.000Z" }),
     ]);
-    expect(summary).toEqual({ total: 3, active: 1, ended: 2 });
+    expect(summary).toEqual({ total: 3, active: 1, handedOff: 0, ended: 2 });
+  });
+
+  it("counts conversations sitting with a human agent separately", () => {
+    const summary = summariseConversations([
+      conversation({ status: "active" }),
+      conversation({ status: "handed_off", handedOffAt: "2026-08-01T10:02:00.000Z" }),
+      conversation({ status: "handed_off", handedOffAt: "2026-08-01T10:03:00.000Z" }),
+      conversation({ status: "ended", endedAt: "2026-08-01T10:05:00.000Z" }),
+    ]);
+    expect(summary).toEqual({ total: 4, active: 1, handedOff: 2, ended: 1 });
   });
 
   it("returns zeroes for an empty list", () => {
-    expect(summariseConversations([])).toEqual({ total: 0, active: 0, ended: 0 });
+    expect(summariseConversations([])).toEqual({ total: 0, active: 0, handedOff: 0, ended: 0 });
+  });
+});
+
+describe("statusLabel", () => {
+  it("reads handed_off as plain language", () => {
+    expect(statusLabel("handed_off")).toBe("With agent");
+  });
+
+  it("labels the familiar statuses", () => {
+    expect(statusLabel("active")).toBe("Active");
+    expect(statusLabel("ended")).toBe("Ended");
+  });
+
+  it("shows an unrecognised status rather than hiding it", () => {
+    expect(statusLabel("quarantined")).toBe("quarantined");
+  });
+});
+
+describe("handoffReasonLabel", () => {
+  it("explains why the assistant stepped aside", () => {
+    expect(handoffReasonLabel("low_confidence")).toBe("Assistant was unsure");
+    expect(handoffReasonLabel("requested")).toBe("Citizen asked for a person");
+    expect(handoffReasonLabel("guardrail")).toBe("Guardrail flagged the exchange");
+    expect(handoffReasonLabel("agent_initiated")).toBe("Taken over by an operator");
+  });
+
+  it("returns null when there was no handoff", () => {
+    expect(handoffReasonLabel(null)).toBeNull();
+  });
+
+  it("passes an unrecognised reason through", () => {
+    expect(handoffReasonLabel("some_new_reason")).toBe("some_new_reason");
+  });
+});
+
+describe("isOpen", () => {
+  it("treats a conversation with a human agent as still open", () => {
+    expect(isOpen(conversation({ status: "handed_off" }))).toBe(true);
+  });
+
+  it("treats an active conversation as open and an ended one as closed", () => {
+    expect(isOpen(conversation({ status: "active" }))).toBe(true);
+    expect(isOpen(conversation({ status: "ended", endedAt: "2026-08-01T10:05:00.000Z" }))).toBe(false);
   });
 });
 

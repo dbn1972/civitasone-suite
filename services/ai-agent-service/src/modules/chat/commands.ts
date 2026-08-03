@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import type { HandoffContext } from "./domain.js";
 import { publishCommand, type Accepted } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -17,6 +18,14 @@ export async function sendMessage(
     sanitizedInput: string;
     tokens: number;
     violationCount: number;
+    /** Set when the turn also escalates the conversation to a human. The
+     *  consumer applies it in the same transaction as the message. */
+    handoff?: {
+      reasonCode: string;
+      note: string | null;
+      queue: string | null;
+      context: HandoffContext;
+    } | null;
   },
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.sendMessage, payload.messageId, payload);
@@ -31,6 +40,23 @@ export async function endConversation(
     conversationId,
     version: payload.version,
     reason: payload.reason,
+  });
+}
+
+export async function handOffConversation(
+  ctx: RequestContext,
+  conversationId: string,
+  payload: {
+    version: number;
+    reasonCode: string;
+    note: string | null;
+    queue: string | null;
+    context: HandoffContext;
+  },
+): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.handOffConversation, conversationId, {
+    conversationId,
+    ...payload,
   });
 }
 
