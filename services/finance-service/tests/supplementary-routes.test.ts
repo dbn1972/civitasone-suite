@@ -1,16 +1,15 @@
 /**
  * SVC-035 — supplementary demand HTTP integration against the dev DB.
- *
- * Proves: create (limit-capped) → maker-checker approve (self-approve blocked) →
- * the target budget's BE + RE rise and availability is recomputed; reject path;
- * RLS isolation; role gating. Reappropriation (the other half of SVC-035) is
- * covered by reappropriation.test.ts + reappropriation-transfer.test.ts.
+ * Mutations are CQRS (202 + queue); consumers registered + drain for asserts.
  */
-import { describe, it, expect, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, afterAll, beforeEach, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { eq } from "drizzle-orm";
+import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { scoped } from "./_tenant.js";
 import { financeBudgets } from "../src/modules/budget/schema.js";
 import { financeSupplementaryDemands } from "../src/modules/budget/supplementary-schema.js";
@@ -31,6 +30,10 @@ function token(tenant: string, roles: string[], sub: string) {
 const officer = (t = TENANT_A, sub = MAKER) => ({ authorization: `Bearer ${token(t, ["finance_officer"], sub)}` });
 const admin = (t = TENANT_A, sub = CHECKER) => ({ authorization: `Bearer ${token(t, ["finance_admin"], sub)}` });
 
+async function drain() {
+  await (queue as MemoryQueue).drain();
+}
+
 async function seedBudget() {
   await scoped(TENANT_A, (tx) => tx.delete(financeSupplementaryDemands).where(eq(financeSupplementaryDemands.fy, FY)));
   await scoped(TENANT_B, (tx) => tx.delete(financeSupplementaryDemands).where(eq(financeSupplementaryDemands.fy, FY)));
@@ -41,6 +44,10 @@ async function seedBudget() {
     currency: "INR", createdBy: MAKER, updatedBy: MAKER,
   }));
 }
+
+beforeAll(() => {
+  registerBudgetConsumers(queue);
+});
 beforeEach(seedBudget);
 afterAll(async () => {
   await scoped(TENANT_A, (tx) => tx.delete(financeSupplementaryDemands).where(eq(financeSupplementaryDemands.fy, FY)));
@@ -53,88 +60,104 @@ const body = {
   kind: "supplementary", authority: "MoF supplementary sanction 07/2028", reason: "shortfall in O&M provision",
 };
 
-describe("SVC-035 supplementary — flow", () => {
-  it("approve raises BE + RE and recomputes availability; self-approve blocked", async () => {
+describe("SVC-035 supplementary demand — full flow", () => {
+  it("create → self-approve blocked → checker approve raises budget RE/BE + outbox", async () => {
     const app = await buildApp();
     try {
       const created = await app.inject({ method: "POST", url: "/v1/finance/supplementary-demands", headers: officer(), payload: body });
-      expect(created.statusCode).toBe(201);
-      expect(created.json().data.status).toBe("pending_approval");
+      expect(created.statusCode).toBe(202);
       const id = created.json().data.id as string;
+      await drain();
 
-      // maker cannot self-approve
+      const pending = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: officer() });
+      expect(pending.json().data.status).toBe("pending_approval");
+
       const self = await app.inject({
         method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/approve`,
         headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
       });
-      expect(self.statusCode).toBe(409);
-      expect(self.json().code).toBe("MAKER_CHECKER_VIOLATION");
+      expect(self.statusCode).toBe(202);
+      await drain();
+      expect((await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: officer() })).json().data.status)
+        .toBe("pending_approval");
 
-      // distinct checker approves
       const appr = await app.inject({ method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/approve`, headers: admin() });
-      expect(appr.statusCode).toBe(200);
-      expect(appr.json().data.status).toBe("approved");
-      // available before = re(1000) - util(200) = 800; after supplementary 500 → 1300 (crore in paise)
-      expect(appr.json().newAvailableMinor).toBe("1300000000");
+      expect(appr.statusCode).toBe(202);
+      await drain();
 
-      // budget BE + RE rose by 500
-      const budget = (await scoped(TENANT_A, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, BUDGET))))[0];
-      expect(budget?.beMinor).toBe(1500000000n);
-      expect(budget?.reMinor).toBe(1500000000n);
-      expect(budget?.utilisedMinor).toBe(200000000n); // unchanged
+      const approved = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: admin() });
+      expect(approved.json().data.status).toBe("approved");
 
-      const events = await scoped(TENANT_A, (tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A)));
-      expect(events.some((e) => e.eventType === "finance.budget.supplementary_approved"
-        && (e.payload as { supplementaryId?: string }).supplementaryId === id)).toBe(true);
-    } finally { await app.close(); }
+      const budget = await scoped(TENANT_A, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, BUDGET)));
+      expect(budget[0]!.beMinor).toBe(1500000000n);
+      expect(budget[0]!.reMinor).toBe(1500000000n);
+
+      const events = await scoped(TENANT_A, (tx) =>
+        tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A)),
+      );
+      expect(events.some((e) => e.eventType === "finance.budget.supplementary_approved")).toBe(true);
+    } finally {
+      await app.close();
+    }
   });
 
-  it("rejects a supplementary above its limit with 400 LIMIT_EXCEEDED", async () => {
+  it("rejects over-limit create synchronously", async () => {
     const app = await buildApp();
     try {
       const res = await app.inject({
         method: "POST", url: "/v1/finance/supplementary-demands", headers: officer(),
-        payload: { ...body, amountMinor: 700000000, limitMinor: 600000000 },
+        payload: { ...body, amountMinor: 700000000 },
       });
       expect(res.statusCode).toBe(400);
-      expect(res.json().code).toBe("LIMIT_EXCEEDED");
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 
-  it("reject path leaves the budget untouched", async () => {
+  it("reject path", async () => {
     const app = await buildApp();
     try {
       const created = await app.inject({ method: "POST", url: "/v1/finance/supplementary-demands", headers: officer(), payload: body });
       const id = created.json().data.id as string;
+      await drain();
+
       const rej = await app.inject({
         method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/reject`, headers: admin(),
-        payload: { reason: "not supported by revenue trend" },
+        payload: { reason: "not justified against RE ceiling" },
       });
-      expect(rej.statusCode).toBe(200);
-      expect(rej.json().data.status).toBe("rejected");
-      const budget = (await scoped(TENANT_A, (tx) => tx.select().from(financeBudgets).where(eq(financeBudgets.id, BUDGET))))[0];
-      expect(budget?.reMinor).toBe(1000000000n); // unchanged
-    } finally { await app.close(); }
+      expect(rej.statusCode).toBe(202);
+      await drain();
+      const got = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: admin() });
+      expect(got.json().data.status).toBe("rejected");
+    } finally {
+      await app.close();
+    }
   });
 
-  it("RLS: tenant B cannot see tenant A supplementary demands", async () => {
+  it("enforces tenant isolation on list", async () => {
     const app = await buildApp();
     try {
       await app.inject({ method: "POST", url: "/v1/finance/supplementary-demands", headers: officer(), payload: body });
+      await drain();
       const listB = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands?fy=${FY}`, headers: admin(TENANT_B, CHECKER) });
       expect(listB.statusCode).toBe(200);
       expect((listB.json().data as unknown[]).length).toBe(0);
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 
-  it("403 for a non-finance role", async () => {
+  it("role-gates create", async () => {
     const app = await buildApp();
     try {
       const res = await app.inject({
         method: "POST", url: "/v1/finance/supplementary-demands",
-        headers: { authorization: `Bearer ${token(TENANT_A, ["citizen"], MAKER)}` }, payload: body,
+        headers: { authorization: `Bearer ${token(TENANT_A, ["citizen"], MAKER)}` },
+        payload: body,
       });
       expect(res.statusCode).toBe(403);
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   });
 });

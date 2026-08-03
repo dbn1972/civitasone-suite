@@ -37,4 +37,36 @@ describe("F3 P0 finance masters/budget CQRS", () => {
     expect(c).toMatch(/bankAccountCreate|COMMANDS\.bankAccountCreate/);
     expect(c).toMatch(/fiscalYearCreate|COMMANDS\.fiscalYearCreate/);
   });
+
+  it("outcome/supplementary/recurring/tds mutations are queue-first 202", () => {
+    for (const f of [
+      "src/modules/budget/outcome-routes.ts",
+      "src/modules/budget/supplementary-routes.ts",
+      "src/modules/recurring/routes.ts",
+      "src/modules/tds/routes.ts",
+    ]) {
+      const t = src(f);
+      expect(t).toMatch(/queue\.publish/);
+      expect(t).toMatch(/code\(202\)/);
+      expect(t).not.toMatch(/code\(201\)/);
+      expect(t).not.toMatch(/\bdb\.(transaction|execute|insert|update|delete)\b/);
+    }
+  });
+
+  it("budget consumer handles outcome + supplementary commands", () => {
+    const c = src("src/modules/budget/consumer.ts");
+    expect(c).toMatch(/markProcessed/);
+    expect(c).toMatch(/budgetOutcomeCreate|COMMANDS\.budgetOutcomeCreate/);
+    expect(c).toMatch(/supplementaryCreate|COMMANDS\.supplementaryCreate/);
+    expect(c).toMatch(/supplementaryApprove|COMMANDS\.supplementaryApprove/);
+  });
+
+  it("recurring/tds consumers subscribe via COMMANDS", () => {
+    const r = src("src/modules/recurring/consumer.ts");
+    const t = src("src/modules/tds/consumer.ts");
+    expect(r).toMatch(/COMMANDS\.recurringEntryCreate/);
+    expect(r).toMatch(/markProcessed/);
+    expect(t).toMatch(/COMMANDS\.tdsDeductionRecord/);
+    expect(t).toMatch(/markProcessed/);
+  });
 });

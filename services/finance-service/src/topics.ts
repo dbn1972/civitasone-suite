@@ -61,6 +61,18 @@ export const COMMANDS = {
   budgetProposalReview: "finance.budget.proposal.review",
   budgetProposalRevise: "finance.budget.proposal.revise",
   budgetProposalApprove: "finance.budget.proposal.approve",
+  // budget outcome / supplementary (F3 CQRS residuals)
+  budgetOutcomeCreate: "finance.budget.outcome.create",
+  budgetOutcomeAchievement: "finance.budget.outcome.achievement",
+  budgetOutcomeEvaluate: "finance.budget.outcome.evaluate",
+  supplementaryCreate: "finance.budget.supplementary.create",
+  supplementaryApprove: "finance.budget.supplementary.approve",
+  supplementaryReject: "finance.budget.supplementary.reject",
+  // recurring / tds (wire routes to existing consumers)
+  recurringEntryCreate: "finance.recurring.entry_create",
+  recurringEntryUpdate: "finance.recurring.entry_update",
+  tdsDeductionRecord: "finance.tds.deduction_record",
+  tdsDepositMark: "finance.tds.deposit_mark",
 } as const;
 
 export const EVENTS = {
