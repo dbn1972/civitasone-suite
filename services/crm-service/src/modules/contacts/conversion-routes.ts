@@ -4,8 +4,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -57,12 +57,12 @@ export async function conversionRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STATUS", `lead must be in qualified or converted status to convert, currently: ${lead.leadStatus}`);
     }
 
-    const msgId = randomUUID();
+    const msgId = commandId(ctx, `${COMMANDS.leadConvert}:${id}`);
     // Ids are allocated here, not in the consumer, so a redelivered command
     // re-uses them (ON CONFLICT DO NOTHING) instead of creating a second
     // account/opportunity, and the caller can be told what was created.
-    const accountId = body.createAccount ? randomUUID() : null;
-    const dealId = body.dealName ? randomUUID() : null;
+    const accountId = body.createAccount ? commandId(ctx, `${COMMANDS.leadConvert}:account:${id}`) : null;
+    const dealId = body.dealName ? commandId(ctx, `${COMMANDS.leadConvert}:deal:${id}`) : null;
     await queue.publish(COMMANDS.leadConvert, {
       messageId: msgId,
       type: COMMANDS.leadConvert,

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateContactBody, UpdateContactBody, MergeContactsBody, BulkImportBody, CreateAccountBody } from "./validators.js";
 import type { ContactView } from "./schema.js";
@@ -33,7 +34,7 @@ function buildView(id: string, ctx: RequestContext, body: CreateContactBody, ver
 }
 
 export async function createContact(ctx: RequestContext, body: CreateContactBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createContact);
   const projected = buildView(id, ctx, body);
   await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), projected);
   await queue.publish(COMMANDS.createContact, {
@@ -45,7 +46,7 @@ export async function createContact(ctx: RequestContext, body: CreateContactBody
 }
 
 export async function updateContact(ctx: RequestContext, id: string, body: UpdateContactBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.updateContact}:${id}`);
   await queue.publish(COMMANDS.updateContact, {
     messageId: msgId, type: COMMANDS.updateContact,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -57,7 +58,7 @@ export async function updateContact(ctx: RequestContext, id: string, body: Updat
 }
 
 export async function deleteContact(ctx: RequestContext, id: string): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.deleteContact}:${id}`);
   await queue.publish(COMMANDS.deleteContact, {
     messageId: msgId, type: COMMANDS.deleteContact,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -69,7 +70,7 @@ export async function deleteContact(ctx: RequestContext, id: string): Promise<Ac
 }
 
 export async function mergeContacts(ctx: RequestContext, body: MergeContactsBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.mergeContacts}:${body.primaryId}`);
   await queue.publish(COMMANDS.mergeContacts, {
     messageId: msgId, type: COMMANDS.mergeContacts,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -80,7 +81,7 @@ export async function mergeContacts(ctx: RequestContext, body: MergeContactsBody
 }
 
 export async function bulkImportContacts(ctx: RequestContext, body: BulkImportBody): Promise<Accepted> {
-  const batchId = randomUUID();
+  const batchId = commandId(ctx, COMMANDS.bulkImportContacts);
   await queue.publish(COMMANDS.bulkImportContacts, {
     messageId: batchId, type: COMMANDS.bulkImportContacts,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -107,7 +108,7 @@ export async function auditBulkExport(ctx: RequestContext, count: number, admin:
 }
 
 export async function createAccount(ctx: RequestContext, body: CreateAccountBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createAccount);
   await queue.publish(COMMANDS.createAccount, {
     messageId: id, type: COMMANDS.createAccount,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

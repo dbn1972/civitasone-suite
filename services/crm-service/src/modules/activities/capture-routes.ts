@@ -16,11 +16,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { COMMANDS } from "../../topics.js";
@@ -136,7 +136,7 @@ export async function captureRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const capturedId = randomUUID();
+    const capturedId = commandId(ctx, COMMANDS.captureActivity);
     const accepted = await publishCrmCommand(ctx, COMMANDS.captureActivity, capturedId, {
       capturedId,
       source: body.source,

@@ -4,8 +4,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -53,7 +53,7 @@ export async function closeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "ALREADY_CLOSED", "deal is already closed");
     }
 
-    const msgId = randomUUID();
+    const msgId = commandId(ctx, `${COMMANDS.closeDeal}:${id}`);
     await queue.publish(COMMANDS.closeDeal, {
       messageId: msgId,
       type: COMMANDS.closeDeal,

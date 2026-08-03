@@ -3,10 +3,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -57,7 +57,7 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createTeamBody.parse(req.body);
-    const teamId = randomUUID();
+    const teamId = commandId(ctx, COMMANDS.createTeam);
     return sendAccepted(
       reply,
       acceptedResponseSchema,
@@ -71,7 +71,7 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = transferBody.parse(req.body);
 
-    const msgId = randomUUID();
+    const msgId = commandId(ctx, `${COMMANDS.transferOwnership}:${id}`);
     await queue.publish(COMMANDS.transferOwnership, {
       messageId: msgId,
       type: COMMANDS.transferOwnership,

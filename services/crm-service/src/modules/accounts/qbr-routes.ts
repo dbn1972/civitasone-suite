@@ -8,11 +8,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { publishCrmCommand } from "../../shared/residual-publish.js";
@@ -154,7 +154,7 @@ export async function qbrRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "QBR_EXISTS", "a QBR already exists for this account and quarter");
     }
 
-    const qbrId = randomUUID();
+    const qbrId = commandId(ctx, COMMANDS.scheduleQbr);
     return sendAccepted(
       reply,
       acceptedResponseSchema,
