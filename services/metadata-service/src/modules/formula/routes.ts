@@ -1,14 +1,9 @@
 /**
- * Formula / calculation engine routes (CAP-113).
- *
- *   POST /v1/metadata/formula/evaluate    — evaluate an ad-hoc expression (no persistence)
- *   POST /v1/metadata/formula             — persist a named formula (maker)
- *   GET  /v1/metadata/formula             — list named formulas
- *   GET  /v1/metadata/formula/:id         — get a named formula
- *   POST /v1/metadata/formula/:id/evaluate — evaluate a stored formula against a context
+ * Formula / calculation engine routes (CAP-113). Persist returns 202 Accepted.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { withTenant } from "../../shared/scope.js";
@@ -16,11 +11,12 @@ import { registerErrorHandler } from "../../shared/errors.js";
 import { ADMIN, DATA } from "../../shared/roles.js";
 import { formulaDefinitions } from "../entities/schema.js";
 import { evaluateFormula, validateFormula, FormulaError } from "./domain.js";
+import { publishCommand } from "../../shared/publish.js";
+import { COMMANDS } from "../../topics.js";
 
 const contextSchema = z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional();
 
 export async function formulaRoutes(app: FastifyInstance): Promise<void> {
-  // Ad-hoc, side-effect-free evaluation.
   app.post("/v1/metadata/formula/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DATA);
@@ -34,7 +30,6 @@ export async function formulaRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Persist a named formula (validated at write time).
   app.post("/v1/metadata/formula", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
@@ -49,20 +44,13 @@ export async function formulaRoutes(app: FastifyInstance): Promise<void> {
     const check = validateFormula(body.expression);
     if (!check.valid) throw new HttpError(400, "FORMULA_ERROR", check.error ?? "invalid formula");
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
-      const [created] = await tx.insert(formulaDefinitions).values({
-        tenantId: ctx.tenantId,
-        apiName: body.apiName,
-        label: body.label,
-        expression: body.expression,
-        returnType: body.returnType,
-        description: body.description ?? null,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      }).returning();
-      return created;
+    const id = randomUUID();
+    return reply.code(202).send({
+      data: await publishCommand(ctx, COMMANDS.FORMULA_CREATE, id, {
+        apiName: body.apiName, label: body.label, expression: body.expression,
+        returnType: body.returnType, description: body.description ?? null,
+      }),
     });
-    return reply.code(201).send({ data: row });
   });
 
   app.get("/v1/metadata/formula", async (req, reply) => {
@@ -85,7 +73,6 @@ export async function formulaRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows[0] });
   });
 
-  // Evaluate a stored formula against a supplied context.
   app.post("/v1/metadata/formula/:id/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DATA);
