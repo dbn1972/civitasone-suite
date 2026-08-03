@@ -1,8 +1,34 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { tickets } from "../tickets/schema.js";
 import { slaPolicies, csatResponses } from "./schema.js";
 import { evaluateSlaStatus, resolvePolicy, DEFAULT_SLA_POLICIES, type SlaPolicy } from "./domain.js";
+
+/** Minimal ticket projection used by command pre-checks on the SLA routes. */
+export async function findTicket(
+  tenantId: string,
+  ticketId: string,
+): Promise<{ id: string; status: string } | null> {
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select({ id: tickets.id, status: tickets.status })
+      .from(tickets)
+      .where(and(eq(tickets.id, ticketId), eq(tickets.tenantId, tenantId)))
+      .limit(1),
+  );
+  return row ?? null;
+}
+
+export async function findCsatForTicket(tenantId: string, ticketId: string) {
+  const [row] = await db.transaction((tx) =>
+    tx
+      .select()
+      .from(csatResponses)
+      .where(and(eq(csatResponses.ticketId, ticketId), eq(csatResponses.tenantId, tenantId)))
+      .limit(1),
+  );
+  return row ?? null;
+}
 
 export async function loadPolicies(tenantId: string): Promise<SlaPolicy[]> {
   try {

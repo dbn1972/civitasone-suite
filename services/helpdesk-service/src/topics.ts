@@ -59,6 +59,10 @@ export const EVENTS = {
   ticketUpdated: "helpdesk.ticket.updated",
   ticketAssigned: "helpdesk.ticket.assigned",
   ticketEscalated: "helpdesk.ticket.escalated",
+  /** A CSAT response was recorded for a resolved ticket. */
+  csatSubmitted: "helpdesk.csat.submitted",
+  /** A detractor CSAT response opened a service-recovery escalation. */
+  csatServiceRecovery: "helpdesk.csat.service_recovery",
   ticketTransitioned: "helpdesk.ticket.transitioned",
   /** TKT-04 — note added to ticket (internal or public). */
   noteAdded: "helpdesk.ticket.note_added",

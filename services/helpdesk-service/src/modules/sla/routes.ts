@@ -56,6 +56,14 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     if (!isValidCsatRating(body.rating)) {
       throw new HttpError(400, "INVALID_RATING", "rating must be an integer between 1 and 5");
     }
+    const ticket = await queries.findTicket(ctx.tenantId, body.ticketId);
+    if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    if (ticket.status !== "resolved" && ticket.status !== "closed") {
+      throw new HttpError(409, "NOT_RESOLVED", `ticket is '${ticket.status}'; CSAT opens once it is resolved`);
+    }
+    if (await queries.findCsatForTicket(ctx.tenantId, body.ticketId)) {
+      throw new HttpError(409, "ALREADY_SUBMITTED", "CSAT response already submitted for this ticket");
+    }
     return reply.code(202).send(await commands.submitCsat(ctx, {
       ticketId: body.ticketId,
       rating: body.rating,
@@ -74,6 +82,9 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HELPDESK_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = escalateBody.parse(req.body);
+    if (!(await queries.findTicket(ctx.tenantId, id))) {
+      throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    }
     return reply.code(202).send(await commands.escalateTicket(ctx, id, body));
   });
 
