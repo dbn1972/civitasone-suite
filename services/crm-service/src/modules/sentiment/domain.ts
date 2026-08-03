@@ -231,9 +231,27 @@ function tokenise(text: string): string[] {
     .filter((t) => t.length > 0);
 }
 
-/** True when the token starts with any term in the list (cheap stemming). */
+/**
+ * Inflections a lexicon term may carry and still mean the same thing.
+ * Bare prefix matching is too greedy: it reads "badge" as "bad" and "against"
+ * as "again", which silently turns neutral text negative.
+ */
+const INFLECTIONS: readonly string[] = [
+  "",
+  "s",
+  "es",
+  "d",
+  "ed",
+  "ing",
+  "ly",
+  "ment",
+];
+
+/** True when the token is a lexicon term, allowing only a plausible inflection. */
 function matches(token: string, terms: readonly string[]): boolean {
-  return terms.some((t) => token.startsWith(t));
+  return terms.some(
+    (t) => token.startsWith(t) && INFLECTIONS.includes(token.slice(t.length)),
+  );
 }
 
 export interface Analysis {
@@ -314,12 +332,30 @@ export function polarityOf(score: number): Polarity {
   return "neutral";
 }
 
+/**
+ * True when `term` appears in `text` as a whole word (or whole phrase).
+ *
+ * A bare substring test is wrong here: "information" contains "form" and "happy"
+ * contains "app", so an ordinary sentence would pick up the documentation and
+ * portal themes out of nowhere. Themes drive what an officer investigates, so a
+ * spurious one is worse than a missed one.
+ */
+function containsWord(text: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // A trailing inflection is still the same word ("payments", "delays"), but an
+  // arbitrary continuation is a different one ("information" is not "form").
+  return new RegExp(
+    `(?:^|[^a-z0-9])${escaped}(?:s|es|d|ed|ing)?(?:[^a-z0-9]|$)`,
+    "i",
+  ).test(text);
+}
+
 /** Themes present in the text, sorted for a stable stored value. */
 export function detectThemes(text: string): string[] {
   const lowered = text.toLowerCase();
   const found: string[] = [];
   for (const [theme, terms] of Object.entries(THEME_TERMS)) {
-    if (terms.some((t) => lowered.includes(t))) found.push(theme);
+    if (terms.some((t) => containsWord(lowered, t))) found.push(theme);
   }
   return found.sort();
 }

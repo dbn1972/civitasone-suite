@@ -71,7 +71,7 @@ export function registerSentimentConsumers(queue: Queue): void {
         const text = p.text ?? "";
         const result = analyse(text);
 
-        await repo.insertIgnoringDuplicate(tx, {
+        const stored = await repo.insertIgnoringDuplicate(tx, {
           id: randomUUID(),
           tenantId: msg.tenantId,
           activityId: p.activityId,
@@ -86,6 +86,11 @@ export function registerSentimentConsumers(queue: Queue): void {
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
         });
+
+        // The activity already had a reading and this one was discarded. Staying
+        // silent is the point: emitting would publish a score that contradicts the
+        // stored one and log an audit entry for a write that never happened.
+        if (!stored) return;
 
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.sentimentScored,

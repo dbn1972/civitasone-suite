@@ -165,10 +165,52 @@ async function summary(query = ""): Promise<VocSummary> {
   return res.json().data as VocSummary;
 }
 
+async function summaryFor(
+  tenantId: string,
+  actorId: string,
+): Promise<VocSummary> {
+  const res = await call("GET", "/v1/crm/sentiment/summary", {
+    headers: headers(tenantId, actorId),
+  });
+  expect(res.statusCode).toBe(200);
+  return res.json().data as VocSummary;
+}
+
 async function readingFor(
   activityId: string,
 ): Promise<SentimentRow | undefined> {
   return (await listSentiments()).find((r) => r.activityId === activityId);
+}
+
+/** Domain events announcing a score for one activity, oldest first. */
+async function scoredEventsFor(activityId: string): Promise<unknown[]> {
+  const rows = (await scoped(
+    TENANT_A,
+    (tx) => tx`
+    SELECT payload FROM _outbox.messages
+    WHERE tenant_id = ${TENANT_A}
+      AND event_type = 'crm.interaction.sentiment_scored'
+      AND payload->>'activityId' = ${activityId}
+    ORDER BY created_at
+  `,
+  )) as unknown as Array<{ payload: unknown }>;
+  return rows.map((r) => r.payload);
+}
+
+/** Audit entries recorded against one activity by the sentiment consumer. */
+async function auditActionsFor(activityId: string): Promise<string[]> {
+  const rows = (await scoped(
+    TENANT_A,
+    (tx) => tx`
+    SELECT payload FROM _outbox.messages
+    WHERE tenant_id = ${TENANT_A}
+      AND event_type = 'audit.event.record'
+      AND payload->>'action' = 'score'
+      AND payload->>'resourceId' = ${activityId}
+    ORDER BY created_at
+  `,
+  )) as unknown as Array<{ payload: { action: string } }>;
+  return rows.map((r) => r.payload.action);
 }
 
 describe("P2-6 Voice of Customer", () => {
@@ -263,6 +305,46 @@ describe("P2-6 Voice of Customer", () => {
       ).toHaveLength(1);
       expect(after[0]?.id).toBe(before[0]?.id);
     });
+
+    it("stays silent when a duplicate is discarded, rather than announcing a phantom score", async () => {
+      const id = await logInteraction(
+        "The officer was excellent and very helpful.",
+      );
+      const emittedBefore = await scoredEventsFor(id);
+      expect(
+        emittedBefore,
+        "the first scoring should announce itself once",
+      ).toHaveLength(1);
+
+      // A second analyse for the same activity, carrying text that would score the
+      // opposite way. The insert is discarded — so emitting here would publish a
+      // score that contradicts the stored one and audit a write that never happened.
+      await queue.publish(COMMANDS.analyseSentiment, {
+        messageId: randomUUID(),
+        type: COMMANDS.analyseSentiment,
+        tenantId: TENANT_A,
+        actorId: ACTOR_A,
+        correlationId: randomUUID(),
+        schemaVersion: "1.0",
+        payload: {
+          activityId: id,
+          activityType: "note",
+          contactId: null,
+          dealId: null,
+          text: "This is terrible, awful and completely unacceptable.",
+        },
+      });
+      await drainQueue();
+
+      expect(
+        await scoredEventsFor(id),
+        "a discarded insert must not emit",
+      ).toHaveLength(1);
+      expect(
+        await auditActionsFor(id),
+        "a discarded insert must not audit",
+      ).toHaveLength(1);
+    });
   });
 
   describe("tenant isolation", () => {
@@ -283,14 +365,25 @@ describe("P2-6 Voice of Customer", () => {
     });
 
     it("keeps the summary scoped to the caller's tenant", async () => {
-      const a = await summary();
-      const resB = await call("GET", "/v1/crm/sentiment/summary", {
-        headers: headers(TENANT_B, ACTOR_B),
-      });
-      expect(resB.statusCode).toBe(200);
-      // Both tenants have readings, and neither total can include the other's.
-      expect(a.total).toBeGreaterThan(0);
-      expect((resB.json().data as VocSummary).total).toBeGreaterThan(0);
+      // Absolute totals are shared with every other test in this file, so assert on
+      // the DELTA instead: work done in tenant A must move A's total and leave B's
+      // untouched. A leak in either direction fails this.
+      const beforeA = await summaryFor(TENANT_A, ACTOR_A);
+      const beforeB = await summaryFor(TENANT_B, ACTOR_B);
+
+      await logInteraction(
+        "Tenant A logs one more extremely disappointing delay.",
+      );
+
+      const afterA = await summaryFor(TENANT_A, ACTOR_A);
+      const afterB = await summaryFor(TENANT_B, ACTOR_B);
+
+      expect(afterA.total, "tenant A should see its own new reading").toBe(
+        beforeA.total + 1,
+      );
+      expect(afterB.total, "tenant B must not see tenant A's reading").toBe(
+        beforeB.total,
+      );
     });
   });
 

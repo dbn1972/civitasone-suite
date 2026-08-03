@@ -100,12 +100,17 @@ export type Writer = Pick<typeof db, "insert" | "update" | "delete" | "select">;
  * Insert a reading, ignoring a repeat for the same activity. The unique index on
  * (tenant_id, activity_id) plus this clause are what make analysis idempotent: a
  * redelivered command cannot double-count an interaction in the aggregate.
+ *
+ * Returns whether a row was actually written. The caller MUST use this to decide
+ * whether to emit — announcing a reading that was silently discarded would put a
+ * score into the event stream and the audit trail that does not match the one
+ * stored, which is worse than not announcing it at all.
  */
 export async function insertIgnoringDuplicate(
   tx: Writer,
   row: InteractionSentimentInsert,
-): Promise<void> {
-  await tx
+): Promise<boolean> {
+  const inserted = await tx
     .insert(interactionSentiments)
     .values(row)
     .onConflictDoNothing({
@@ -113,5 +118,7 @@ export async function insertIgnoringDuplicate(
         interactionSentiments.tenantId,
         interactionSentiments.activityId,
       ],
-    });
+    })
+    .returning({ id: interactionSentiments.id });
+  return inserted.length > 0;
 }

@@ -109,6 +109,34 @@ describe("analyse", () => {
     expect(r.matchedTerms.every((t) => typeof t === "string")).toBe(true);
   });
 
+  it("does not read a longer unrelated word as a lexicon term", () => {
+    // "badge" is not "bad"; "against" is not "again"; "commence" is not "commend".
+    for (const text of [
+      "officer badge number 42",
+      "checked against the register",
+      "commence the process",
+    ]) {
+      const r = analyse(text);
+      expect(
+        r.matchedTerms,
+        `"${text}" should match no sentiment term`,
+      ).toEqual([]);
+      expect(r.polarity).toBe("neutral");
+    }
+  });
+
+  it("still recognises ordinary inflections of a lexicon term", () => {
+    for (const text of [
+      "the payment was delayed",
+      "repeated delays",
+      "this is frustrating",
+    ]) {
+      expect(analyse(text).polarity, `"${text}" should read negative`).toBe(
+        "negative",
+      );
+    }
+  });
+
   it("attaches themes even when the text carries no sentiment", () => {
     const r = analyse("Please confirm the invoice amount for the certificate.");
     expect(r.polarity).toBe("neutral");
@@ -151,6 +179,23 @@ describe("detectThemes", () => {
 
   it("returns nothing recognisable as an empty list", () => {
     expect(detectThemes("xyzzy plugh")).toEqual([]);
+  });
+
+  it("does not attach a theme because a word merely contains a trigger", () => {
+    // "information" contains "form"; "happy" contains "app"; "taxi" contains "tax".
+    expect(detectThemes("please share the information")).not.toContain(
+      "documentation",
+    );
+    expect(detectThemes("the citizen was happy")).not.toContain(
+      "accessibility",
+    );
+    expect(detectThemes("he took a taxi")).not.toContain("billing");
+  });
+
+  it("still attaches a theme for a plural or inflected trigger", () => {
+    expect(detectThemes("submit the documents")).toContain("documentation");
+    expect(detectThemes("two payments are pending")).toContain("billing");
+    expect(detectThemes("repeated delays")).toContain("delay");
   });
 
   it("only ever returns declared themes", () => {

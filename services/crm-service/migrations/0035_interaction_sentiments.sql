@@ -58,7 +58,8 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE policyname = 'interaction_sentiments_tenant_isolation' AND tablename = 'interaction_sentiments'
+    WHERE policyname = 'interaction_sentiments_tenant_isolation'
+      AND schemaname = 'crm' AND tablename = 'interaction_sentiments'
   ) THEN
     CREATE POLICY interaction_sentiments_tenant_isolation ON crm.interaction_sentiments
       USING (tenant_id::text = current_setting('app.tenant_id', true));
