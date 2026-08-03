@@ -10,8 +10,6 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createTenantBody, updateTenantBody, suspendTenantBody, tenantIdParam, onboardTenantBody, setIsolationBody, updateQuotasBody, msmeOnboardBody } from "./validators.js";
 import { randomUUID } from "node:crypto";
-import * as repo from "./repo.js";
-import { db } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { createTenantPipeline } from "./onboard.js";
@@ -121,8 +119,8 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["super_admin"]);
     const { tenantId } = tenantIdParam.parse(req.params);
     const body = updateQuotasBody.parse(req.body);
-    const updated = await queries.updateQuotas(tenantId, body);
-    return reply.send(updated);
+    const res = await commands.upsertTenantQuotas(ctx, tenantId, body);
+    return sendAccepted(reply, acceptedResponseSchema, res);
   });
 
   /**
@@ -146,7 +144,7 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     const tenantId = randomUUID();
     const domain = body.businessName.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 30) + ".civitasone.in";
 
-    // Create tenant via the same pipeline as admin onboarding
+    // Create tenant via the same pipeline as admin onboarding (queue-first).
     const ctx = { tenantId, actorId: tenantId, correlationId: randomUUID(), roles: ["owner"] } as unknown as import("@civitasone/types").RequestContext;
     const result = await createTenantPipeline(ctx, {
       name: body.businessName,
@@ -156,10 +154,6 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
       residency: "IN",
       adminEmail: body.email,
       adminName: body.ownerName,
-    });
-
-    // Store MSME profile in tenant settings (via direct DB update for speed)
-    await repo.update(db as unknown as repo.Writer, result.tenantId, {
       settings: {
         msme: {
           udyamNumber: body.udyamNumber,
@@ -171,12 +165,13 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    return reply.code(201).send({
+    return reply.code(202).send({
       tenantId: result.tenantId,
       domain,
       edition: "small_office",
       sector: body.sector,
-      message: "MSME tenant created. Login with the email provided.",
+      status: "accepted",
+      message: "MSME tenant accepted. Login with the email provided once provisioning completes.",
     });
   });
 

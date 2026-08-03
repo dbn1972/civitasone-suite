@@ -22,6 +22,7 @@ export const COMMANDS = {
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set",
   quotaIncrement: "tenant.quota.increment",
+  tenantQuotaUpsert: "tenant.tenant_quota.upsert",
   // ── settings ───────────────────────────────────────────────────────
   settingUpsert: "tenant.setting.upsert",
   settingDelete: "tenant.setting.delete",
