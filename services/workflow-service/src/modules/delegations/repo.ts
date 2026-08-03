@@ -33,7 +33,7 @@ export async function create(input: {
 }, outer?: Tx): Promise<DelegationView> {
   const rows = await withTx(outer, async (tx) => {
     return tx.insert(delegations).values({
-      id: input.id,
+      ...(input.id !== undefined ? { id: input.id } : {}),
       tenantId: input.tenantId,
       delegatorId: input.delegatorId,
       delegateId: input.delegateId,
