@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import type { HandoffContext } from "./domain.js";
 import { publishCommand, type Accepted } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -23,7 +24,7 @@ export async function sendMessage(
       reasonCode: string;
       note: string | null;
       queue: string | null;
-      context: unknown;
+      context: HandoffContext;
     } | null;
   },
 ): Promise<Accepted> {
@@ -50,7 +51,7 @@ export async function handOffConversation(
     reasonCode: string;
     note: string | null;
     queue: string | null;
-    context: unknown;
+    context: HandoffContext;
   },
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.handOffConversation, conversationId, {

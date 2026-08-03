@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import type { HandoffContext } from "./domain.js";
 
 const log = pino({ name: "ai.chat.consumer" });
 
@@ -34,7 +35,7 @@ export function registerChatConsumers(rawQueue: Queue): void {
         reasonCode: string;
         note: string | null;
         queue: string | null;
-        context: unknown;
+        context: HandoffContext;
       } | null;
     };
     await db.transaction(async (tx) => {
@@ -169,7 +170,7 @@ export function registerChatConsumers(rawQueue: Queue): void {
       reasonCode: string;
       note: string | null;
       queue: string | null;
-      context: unknown;
+      context: HandoffContext;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -187,9 +188,10 @@ export function registerChatConsumers(rawQueue: Queue): void {
           updatedBy: msg.actorId,
         },
         p.version,
+        "active",
       );
-      // A lost optimistic-concurrency race means another writer already moved
-      // the conversation on; re-applying would overwrite their state.
+      // A lost race means another writer already moved the conversation on;
+      // re-applying would overwrite their state.
       if (!ok) return;
 
       await enqueue(tx, {

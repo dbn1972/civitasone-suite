@@ -14,6 +14,7 @@ import {
   decideHandoff,
   HANDOFF_REASON_CODES,
   HANDOFF_CONTEXT_TURNS,
+  type HandoffContext,
   type HandoffReasonCode,
 } from "./domain.js";
 import * as commands from "./commands.js";
@@ -122,7 +123,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       reasonCode: HandoffReasonCode;
       note: string | null;
       queue: string | null;
-      context: unknown;
+      context: HandoffContext;
     } | null = null;
 
     if (decision.handoff && decision.reasonCode) {

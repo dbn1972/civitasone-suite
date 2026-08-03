@@ -548,6 +548,12 @@ describe("chat: validateStatusTransition", () => {
   it("keeps ended terminal", () => {
     expect(validateStatusTransition("ended", "handed_off")).toContain("cannot transition");
   });
+
+  it("leaves no legal path back into active from any state", () => {
+    for (const from of CONVERSATION_STATUSES) {
+      expect(validateStatusTransition(from, "active")).not.toBeNull();
+    }
+  });
 });
 
 // ── CHAT HANDOFF (P2-3) ───────────────────────────────────────────────────────

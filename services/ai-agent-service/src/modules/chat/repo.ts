@@ -4,6 +4,7 @@
  */
 import { eq, and, sql, desc, asc, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import type { HandoffContext } from "./domain.js";
 import {
   conversations,
   messages,
@@ -97,21 +98,32 @@ export async function insert(tx: ScopedTx, row: ConversationInsert): Promise<voi
   await tx.insert(conversations).values(row);
 }
 
+/**
+ * Optimistic-concurrency update. `expectedStatus`, when given, additionally
+ * pins the source state: every writer here bumps the version, so a stale
+ * version already implies the row moved on, but stating the source state makes
+ * the transition explicit and keeps the guard correct if a future writer ever
+ * updates the row without bumping.
+ */
 export async function update(
   tx: ScopedTx,
   id: string,
   tenantId: string,
   patch: Partial<ConversationInsert>,
   currentVersion: number,
+  expectedStatus?: string,
 ): Promise<boolean> {
+  const guards = [
+    eq(conversations.id, id),
+    eq(conversations.tenantId, tenantId),
+    eq(conversations.version, currentVersion),
+  ];
+  if (expectedStatus !== undefined) guards.push(eq(conversations.status, expectedStatus));
+
   const result = await tx
     .update(conversations)
     .set({ ...patch, updatedAt: new Date(), version: sql`${conversations.version} + 1` })
-    .where(and(
-      eq(conversations.id, id),
-      eq(conversations.tenantId, tenantId),
-      eq(conversations.version, currentVersion),
-    ))
+    .where(and(...guards))
     .returning({ id: conversations.id });
   return result.length > 0;
 }
@@ -132,7 +144,7 @@ export async function markHandedOff(
     handoffReason: string;
     handoffNote: string | null;
     handoffQueue: string | null;
-    handoffContext: unknown;
+    handoffContext: HandoffContext;
     updatedBy: string;
   },
 ): Promise<boolean> {
