@@ -1,7 +1,7 @@
 /**
  * executions/repo.ts — Database operations for journey execution instances.
  */
-import { eq, and, sql, desc, type SQL } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { journeyExecutions, type JourneyExecutionRow, type JourneyExecutionInsert } from "./schema.js";
 
@@ -102,4 +102,32 @@ export async function updateStatus(
     ))
     .returning({ id: journeyExecutions.id });
   return result.length > 0;
+}
+
+/**
+ * The one in-flight run for a (journey, profile) pair, read inside the caller's
+ * transaction so the advance decision and the write it drives cannot straddle a
+ * concurrent update. Terminal runs are excluded — a completed or exited run is
+ * never advanced again. Backed by the partial unique index from migration 0003,
+ * so at most one row can match.
+ */
+export async function findActiveForProfile(
+  tx: ScopedTx,
+  tenantId: string,
+  journeyId: string,
+  profileId: string,
+): Promise<JourneyExecutionRow | null> {
+  const rows = await tx
+    .select()
+    .from(journeyExecutions)
+    .where(
+      and(
+        eq(journeyExecutions.tenantId, tenantId),
+        eq(journeyExecutions.journeyId, journeyId),
+        eq(journeyExecutions.profileId, profileId),
+        inArray(journeyExecutions.status, ["enrolled", "in_progress"]),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
 }

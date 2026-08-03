@@ -20,6 +20,13 @@ export interface AuditPayload {
   action: string;
   resourceType: string;
   resourceId: string;
+  /**
+   * Defaults to "success". A mutation that completed but did NOT do its work —
+   * a step whose dispatch failed terminally, for instance — must record
+   * "failure", otherwise the audit trail claims an action succeeded when it did
+   * not.
+   */
+  outcome?: "success" | "failure";
   details?: Record<string, unknown>;
 }
 

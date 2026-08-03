@@ -18,6 +18,10 @@ export const COMMANDS = {
   triggerDelete: "journey.trigger.delete",
   /** Execute a single step for an enrolled profile. */
   stepExecute: "journey.step.execute",
+  /** Resume a `wait` step whose delay has elapsed. Published by the wait sweeper. */
+  stepWaitResume: "journey.step.wait_resume",
+  /** Advance a profile's run after a step reached a terminal outcome. */
+  executionAdvance: "journey.execution.advance",
   /** Enroll a profile into an active journey. */
   executionEnroll: "journey.execution.enroll",
 } as const;
@@ -35,6 +39,22 @@ export const EVENTS = {
   journeyArchived: "journey.journey.archived",
   /** A single step within a journey has been completed for a profile. */
   stepCompleted: "journey.step.completed",
+  /**
+   * A step could not do the work its type describes. Payload: `{ stepExecutionId,
+   * journeyId, profileId, stepIndex, stepType, failureCode, reason }`. Fires only
+   * for non-retryable failures (unknown step type, invalid config, blocked or
+   * rejected api_call); a retryable failure is left to the queue's retry + DLQ.
+   */
+  stepFailed: "journey.step.failed",
+  /**
+   * A `condition_check` gate evaluated false, so the step did not act. Payload
+   * adds `{ reason }`. The run still advances unless the gate asked to exit.
+   */
+  stepSkipped: "journey.step.skipped",
+  /** A `wait` step parked the run until `resumeAt`. Payload adds `{ resumeAt }`. */
+  stepWaiting: "journey.step.waiting",
+  /** A profile left a journey before its last step (gate exit or failed step). */
+  executionExited: "journey.execution.exited",
   /** A profile has completed all steps of a journey. */
   journeyCompleted: "journey.journey.completed",
   /** A trigger definition was created. */
