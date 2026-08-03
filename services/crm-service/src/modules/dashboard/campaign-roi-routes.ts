@@ -11,11 +11,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import { listQuery, windowOf } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 import {
   computeRoi,
   computeNetMinor,
@@ -26,8 +28,6 @@ import {
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "campaign_performance";
-
 const idParam = z.object({ id: z.string().uuid() });
 
 const minorAmount = z.string().regex(/^\d{1,25}$/, "must be a non-negative integer string of minor units");
@@ -177,68 +177,21 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = upsertBody.parse(req.body);
 
-    // BigInt round-trip validates exactness before the value reaches SQL.
     const costMinor = BigInt(body.costMinor).toString();
     const revenueMinor = BigInt(body.revenueMinor).toString();
     const rowId = randomUUID();
-
-    const saved = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        INSERT INTO crm.campaign_performance
-          (id, tenant_id, campaign_id, responses, cost_minor, revenue_minor, currency,
-           period_start, period_end, created_by, updated_by)
-        VALUES (
-          ${rowId}, ${ctx.tenantId}, ${id}, ${body.responses},
-          ${costMinor}::bigint, ${revenueMinor}::bigint, ${body.currency.toUpperCase()},
-          ${body.periodStart}::date, ${body.periodEnd ?? null}::date,
-          ${ctx.actorId}, ${ctx.actorId}
-        )
-        ON CONFLICT (tenant_id, campaign_id, period_start) DO UPDATE
-        SET responses = EXCLUDED.responses,
-            cost_minor = EXCLUDED.cost_minor,
-            revenue_minor = EXCLUDED.revenue_minor,
-            currency = EXCLUDED.currency,
-            period_end = EXCLUDED.period_end,
-            updated_at = now(),
-            updated_by = ${ctx.actorId},
-            version = crm.campaign_performance.version + 1
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      const row = rows[0];
-      if (!row) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.campaignPerformanceRecorded,
-        action: "upsert",
-        resourceType: RESOURCE,
-        resourceId: row.id,
-        payload: {
-          performanceId: row.id,
-          campaignId: id,
-          periodStart: body.periodStart,
-          responses: body.responses,
-          costMinor,
-          revenueMinor,
-          currency: body.currency.toUpperCase(),
-        },
-      });
-      return rows;
-    });
-
-    const row = saved[0];
-    if (!row) {
-      throw new HttpError(409, "CONFLICT", "campaign performance row could not be written");
-    }
-
-    return reply.send({
-      data: {
-        id: row.id,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.upsertCampaignPerformance, rowId, {
         campaignId: id,
+        responses: body.responses,
+        costMinor,
+        revenueMinor,
+        currency: body.currency.toUpperCase(),
         periodStart: body.periodStart,
         periodEnd: body.periodEnd ?? null,
-        currency: body.currency.toUpperCase(),
-        ...roiView(BigInt(costMinor), BigInt(revenueMinor), body.responses),
-        version: row.version,
-      },
-    });
+      }),
+    );
   });
 }

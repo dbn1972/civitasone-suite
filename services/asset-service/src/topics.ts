@@ -26,6 +26,12 @@ export const COMMANDS = {
   fleetDeviceRegister:       "asset.fleet_device.register",
   fleetDeviceTelemetry:      "asset.fleet_device.telemetry",
   f3RouteWrite:              "asset.f3.route_write",
+  verificationCreate:        "asset.verification.create",
+  verificationItemAdd:       "asset.verification.item.add",
+  verificationSubmit:        "asset.verification.submit",
+  verificationApprove:       "asset.verification.approve",
+  writeoffRequest:           "asset.writeoff.request",
+  writeoffApprove:           "asset.writeoff.approve",
 } as const;
 
 export const EVENTS = {

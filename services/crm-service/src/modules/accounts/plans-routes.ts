@@ -10,16 +10,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "account_plan";
-
 const PLAN_STATUSES = ["draft", "active", "closed"] as const;
 
 /** Plans are annual; the window guards against typos like 20226. */
@@ -165,41 +165,18 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const planId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.account_plans
-          (id, tenant_id, account_id, plan_year, objectives, white_space, risks,
-           status, owner_id, created_by, updated_by)
-        VALUES (
-          ${planId}, ${ctx.tenantId}, ${body.accountId}, ${body.planYear},
-          ${JSON.stringify(body.objectives)}::jsonb,
-          ${JSON.stringify(body.whiteSpace)}::jsonb,
-          ${JSON.stringify(body.risks)}::jsonb,
-          'draft', ${body.ownerId ?? null}, ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.accountPlanCreated,
-        action: "create",
-        resourceType: RESOURCE,
-        resourceId: planId,
-        payload: { planId, accountId: body.accountId, planYear: body.planYear },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: planId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.createAccountPlan, planId, {
         accountId: body.accountId,
         planYear: body.planYear,
         objectives: body.objectives,
         whiteSpace: body.whiteSpace,
         risks: body.risks,
-        status: "draft",
         ownerId: body.ownerId ?? null,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** Amend a plan. Optimistic locking: a stale `version` yields 409. */
@@ -219,40 +196,19 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "account plan not found");
     }
 
-    const sets = [
-      body.objectives !== undefined ? sql`objectives = ${JSON.stringify(body.objectives)}::jsonb` : null,
-      body.whiteSpace !== undefined ? sql`white_space = ${JSON.stringify(body.whiteSpace)}::jsonb` : null,
-      body.risks !== undefined ? sql`risks = ${JSON.stringify(body.risks)}::jsonb` : null,
-      body.status !== undefined ? sql`status = ${body.status}` : null,
-      body.ownerId !== undefined ? sql`owner_id = ${body.ownerId}` : null,
-    ].filter((s): s is NonNullable<typeof s> => s !== null);
-
-    const versionGuard = body.version !== undefined ? sql`AND version = ${body.version}` : sql``;
-
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.account_plans
-        SET ${sql.join(sets, sql`, `)}, updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionGuard}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.accountPlanUpdated,
-        action: "update",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { planId: id, changed: Object.keys(body).filter((k) => k !== "version") },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "account plan was modified by another request");
-    }
-
-    return reply.send({ data: { id, version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.updateAccountPlan, id, {
+        ...(body.objectives !== undefined ? { objectives: body.objectives } : {}),
+        ...(body.whiteSpace !== undefined ? { whiteSpace: body.whiteSpace } : {}),
+        ...(body.risks !== undefined ? { risks: body.risks } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
+        ...(body.version !== undefined ? { version: body.version } : {}),
+        changed: Object.keys(body).filter((k) => k !== "version"),
+      }),
+    );
   });
 
   /**
@@ -280,29 +236,13 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STATE", `cannot activate a plan in status '${plan.status}'`);
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.account_plans
-        SET status = 'active', updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${planId} AND tenant_id = ${ctx.tenantId} AND version = ${plan.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.accountPlanActivated,
-        action: "activate",
-        resourceType: RESOURCE,
-        resourceId: planId,
-        payload: { planId, accountId },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "account plan was modified by another request");
-    }
-
-    return reply.send({ data: { id: planId, accountId, status: "active", version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.activateAccountPlan, planId, {
+        accountId,
+        version: plan.version,
+      }),
+    );
   });
 }

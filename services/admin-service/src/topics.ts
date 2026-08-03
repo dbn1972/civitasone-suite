@@ -112,6 +112,7 @@ export const COMMANDS = {
   dataCorrectionApprove: "admin.support.data_correction.approve",
   dataCorrectionReject: "admin.support.data_correction.reject",
   f3RouteWrite: "admin.f3.route_write",
+  deadLetterRecord: "admin.integration_ops.dead_letter.record",
 } as const;
 
 export const EVENTS = {

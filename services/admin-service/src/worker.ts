@@ -46,8 +46,20 @@ import { registerF3_dept_templates_Consumers } from "./modules/dept-templates/f3
 import { registerF3_integration_settings_Consumers } from "./modules/integration-settings/f3-consumer.js";
 import { registerF3_uploads_Consumers } from "./modules/uploads/doc-f3-consumer.js";
 import { registerF3_support_Consumers } from "./modules/support/f3-consumer.js";
+import { registerIntegrationOpsConsumers } from "./modules/integration-ops/consumer.js";
 registerSecurityComplianceConsumers(tenantScoped(queue));
 registerSecurityIncidentConsumers(tenantScoped(queue));
+registerApiKeyConsumers(tenantScoped(queue));
+registerMobileTelemetryConsumers(tenantScoped(queue));
+registerF3_change_Consumers(tenantScoped(queue));
+registerF3_sandbox_Consumers(tenantScoped(queue));
+registerF3_central_config_Consumers(tenantScoped(queue));
+registerF3_config_Consumers(tenantScoped(queue));
+registerF3_dept_templates_Consumers(tenantScoped(queue));
+registerF3_integration_settings_Consumers(tenantScoped(queue));
+registerF3_uploads_Consumers(tenantScoped(queue));
+registerF3_support_Consumers(tenantScoped(queue));
+registerIntegrationOpsConsumers(tenantScoped(queue));
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

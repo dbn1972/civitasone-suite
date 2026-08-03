@@ -14,11 +14,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import {
   BID_STAGES,
   canTransition,
@@ -31,8 +33,6 @@ import {
 } from "./tender-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "tender";
-
 const idParam = z.object({ id: z.string().uuid() });
 
 /** Minor units arrive as digit strings so no float ever touches money. */
@@ -172,51 +172,20 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const tenderId = randomUUID();
-    // BigInt round-trip: proves the string is an exact integer before it reaches
-    // the database, and echoes back the canonical form.
     const estimatedValueMinor = BigInt(body.estimatedValueMinor).toString();
-
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.tenders
-          (id, tenant_id, account_id, tender_ref, title, bid_stage, submission_deadline,
-           estimated_value_minor, currency, competitors, created_by, updated_by)
-        VALUES (
-          ${tenderId}, ${ctx.tenantId}, ${body.accountId ?? null}, ${body.tenderRef},
-          ${body.title}, 'identified', ${body.submissionDeadline ?? null}::timestamptz,
-          ${estimatedValueMinor}::bigint, ${body.currency.toUpperCase()},
-          ${JSON.stringify(body.competitors)}::jsonb, ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.tenderCreated,
-        action: "create",
-        resourceType: RESOURCE,
-        resourceId: tenderId,
-        payload: {
-          tenderId,
-          tenderRef: body.tenderRef,
-          bidStage: "identified",
-          estimatedValueMinor,
-          currency: body.currency.toUpperCase(),
-        },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: tenderId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.createTender, tenderId, {
         accountId: body.accountId ?? null,
         tenderRef: body.tenderRef,
         title: body.title,
-        bidStage: "identified",
         submissionDeadline: body.submissionDeadline ?? null,
         estimatedValueMinor,
         currency: body.currency.toUpperCase(),
         competitors: body.competitors,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** Amend a tender's descriptive fields. Stage changes go through /stage. */
@@ -240,45 +209,21 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TENDER_CLOSED", `cannot amend a tender in terminal stage '${tender.bidStage}'`);
     }
 
-    const sets = [
-      body.title !== undefined ? sql`title = ${body.title}` : null,
-      body.submissionDeadline !== undefined
-        ? sql`submission_deadline = ${body.submissionDeadline}::timestamptz` : null,
-      body.estimatedValueMinor !== undefined
-        ? sql`estimated_value_minor = ${BigInt(body.estimatedValueMinor).toString()}::bigint` : null,
-      body.currency !== undefined ? sql`currency = ${body.currency.toUpperCase()}` : null,
-      body.competitors !== undefined ? sql`competitors = ${JSON.stringify(body.competitors)}::jsonb` : null,
-      body.accountId !== undefined ? sql`account_id = ${body.accountId}` : null,
-    ].filter((s): s is NonNullable<typeof s> => s !== null);
-
-    const versionGuard = body.version !== undefined ? sql`AND version = ${body.version}` : sql``;
-
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.tenders
-        SET ${sql.join(sets, sql`, `)}, updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionGuard}
-        RETURNING id, version, estimated_value_minor::text AS "estimatedValueMinor"
-      `) as unknown as Array<{ id: string; version: number; estimatedValueMinor: string }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.tenderUpdated,
-        action: "update",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { tenderId: id, changed: Object.keys(body).filter((k) => k !== "version") },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "tender was modified by another request");
-    }
-
-    return reply.send({
-      data: { id, version: row.version, estimatedValueMinor: row.estimatedValueMinor },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.updateTender, id, {
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.submissionDeadline !== undefined ? { submissionDeadline: body.submissionDeadline } : {}),
+        ...(body.estimatedValueMinor !== undefined
+          ? { estimatedValueMinor: BigInt(body.estimatedValueMinor).toString() } : {}),
+        ...(body.currency !== undefined ? { currency: body.currency.toUpperCase() } : {}),
+        ...(body.competitors !== undefined ? { competitors: body.competitors } : {}),
+        ...(body.accountId !== undefined ? { accountId: body.accountId } : {}),
+        ...(body.version !== undefined ? { version: body.version } : {}),
+        changed: Object.keys(body).filter((k) => k !== "version"),
+      }),
+    );
   });
 
   /** Bid-stage transition, guarded by the pure state machine. */
@@ -324,34 +269,15 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const lossReason = body.toStage === "lost" ? body.reason.trim() : null;
-
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.tenders
-        SET bid_stage = ${body.toStage},
-            loss_reason = COALESCE(${lossReason}, loss_reason),
-            updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${tender.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.tenderStageChanged,
-        action: "stage_change",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { tenderId: id, fromStage: tender.bidStage, toStage: body.toStage },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "tender was modified by another request");
-    }
-
-    return reply.send({
-      data: { id, fromStage: tender.bidStage, bidStage: body.toStage, version: row.version },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.changeTenderStage, id, {
+        toStage: body.toStage,
+        fromStage: tender.bidStage,
+        lossReason,
+        version: tender.version,
+      }),
+    );
   });
 }
