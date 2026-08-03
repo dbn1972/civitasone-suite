@@ -79,6 +79,28 @@ function cmd(payload: unknown, messageId?: string) {
   });
 }
 
+/**
+ * Return a deal to an open state so the next route-level case can close it.
+ *
+ * Drains first: the preceding case only got a 202, so its close is still in
+ * flight on the bus. Without the drain the consumer's write can land *after*
+ * this reset and put the deal back to Won, and the next request then fails
+ * ALREADY_CLOSED. Status and the close columns are reset too — the consumer
+ * writes all of them, so resetting stage alone leaves the row half-closed.
+ */
+async function reopenDeal(id: string): Promise<void> {
+  await drainQueue();
+  await sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    await tx`
+      UPDATE crm.deals
+      SET stage = 'Negotiation', status = 'active', probability = 0,
+          closed_at = NULL, close_reason = NULL, closed_value_minor = NULL
+      WHERE id = ${id} AND tenant_id = ${TENANT}
+    `;
+  });
+}
+
 afterAll(async () => {
   await cleanup();
   await sqlClient.end();
@@ -123,11 +145,7 @@ describe("POST /v1/crm/deals/:id/close", () => {
     });
 
     it("won does not require reason", async () => {
-      // Re-seed the deal to be open again
-      await sqlClient.begin(async (tx) => {
-        await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
-        await tx`UPDATE crm.deals SET stage = 'Negotiation' WHERE id = ${OPEN_DEAL_ID}`;
-      });
+      await reopenDeal(OPEN_DEAL_ID);
       const app = await buildApp();
       const res = await app.inject({
         method: "POST",
@@ -142,11 +160,7 @@ describe("POST /v1/crm/deals/:id/close", () => {
 
   describe("happy path — lost", () => {
     it("closes deal as lost with valid reason → 202", async () => {
-      // Re-seed to open
-      await sqlClient.begin(async (tx) => {
-        await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
-        await tx`UPDATE crm.deals SET stage = 'Negotiation' WHERE id = ${OPEN_DEAL_ID}`;
-      });
+      await reopenDeal(OPEN_DEAL_ID);
       const app = await buildApp();
       const res = await app.inject({
         method: "POST",
@@ -162,10 +176,7 @@ describe("POST /v1/crm/deals/:id/close", () => {
 
   describe("missing/short reason for lost (400)", () => {
     it("rejects lost without reason → 400", async () => {
-      await sqlClient.begin(async (tx) => {
-        await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
-        await tx`UPDATE crm.deals SET stage = 'Negotiation' WHERE id = ${OPEN_DEAL_ID}`;
-      });
+      await reopenDeal(OPEN_DEAL_ID);
       const app = await buildApp();
       const res = await app.inject({
         method: "POST",
