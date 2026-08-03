@@ -19,6 +19,13 @@ import { registerDecisionConsumers } from "./modules/decisions/consumer.js";
 import { startSlaSweeper, startTimerSweeper, startReminderSweeper } from "./modules/tasks/sweeper.js";
 import { startMessageSweeper } from "./modules/messages/sweeper.js";
 import { registerCaseRegistryConsumers } from "./modules/case-registry/consumer.js";
+import { registerDelegationConsumers } from "./modules/delegations/consumer.js";
+import { registerAuthorityConsumers } from "./modules/authority/consumer.js";
+import { registerFinalizationConsumers } from "./modules/finalization/consumer.js";
+import { registerQuorumConsumers } from "./modules/quorum/consumer.js";
+import { registerSlaConsumers } from "./modules/sla/consumer.js";
+import { registerDeviationConsumers } from "./modules/deviations/consumer.js";
+import { registerWorkbasketConsumers } from "./modules/workbaskets/consumer.js";
 
 const log = pino({ name: "workflow-worker" });
 
@@ -76,6 +83,13 @@ registerDecisionConsumers(queue);
 // under a NOBYPASSRLS role, so they MUST run inside the message tenant's GUC
 // (also covered by the global wrap above; tenantScoped() kept for clarity/tests).
 registerCaseRegistryConsumers(queue);
+registerDelegationConsumers(queue);
+registerAuthorityConsumers(queue);
+registerFinalizationConsumers(queue);
+registerQuorumConsumers(queue);
+registerSlaConsumers(queue);
+registerDeviationConsumers(queue);
+registerWorkbasketConsumers(queue);
 await queue.start();
 
 // Cross-tenant outbox scan must use the BYPASSRLS scannerDb — FORCE RLS on

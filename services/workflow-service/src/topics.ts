@@ -27,6 +27,23 @@ export const COMMANDS = {
   deactivateSubstitution: "workflow.assignment.substitution.deactivate",
   createDecision: "workflow.decision.create",
   deployDecision: "workflow.decision.deploy",
+  // F3 leftover CQRS — delegations/authority/finalization/quorum/sla/deviations/workbaskets
+  createDelegation: "workflow.delegation.create",
+  revokeDelegation: "workflow.delegation.revoke",
+  createAuthorityLimit: "workflow.authority.limit.create",
+  approveAuthorityLimit: "workflow.authority.limit.approve",
+  revokeAuthorityLimit: "workflow.authority.limit.revoke",
+  finalizeInstance: "workflow.instance.finalize",
+  reverseInstance: "workflow.instance.reverse",
+  createCommitteeDecision: "workflow.committee.decision.create",
+  castCommitteeVote: "workflow.committee.vote.cast",
+  createCalendar: "workflow.calendar.create",
+  pauseTaskSla: "workflow.task.sla.pause",
+  resumeTaskSla: "workflow.task.sla.resume",
+  raiseDeviation: "workflow.deviation.raise",
+  reviewDeviation: "workflow.deviation.review",
+  revokeDeviation: "workflow.deviation.revoke",
+  upsertWorkbasket: "workflow.workbasket.upsert",
 } as const;
 
 export const EVENTS = {
@@ -69,6 +86,18 @@ export const EVENTS = {
   substitutionDeactivated: "workflow.assignment.substitution.deactivated",
   decisionCreated: "workflow.decision.created",
   decisionDeployed: "workflow.decision.deployed",
+  delegationCreated: "workflow.delegation.created",
+  delegationRevoked: "workflow.delegation.revoked",
+  authorityLimitCreated: "workflow.authority.limit.created",
+  authorityLimitApproved: "workflow.authority.limit.approved",
+  authorityLimitRevoked: "workflow.authority.limit.revoked",
+  calendarCreated: "workflow.calendar.created",
+  taskSlaPaused: "workflow.task.sla.paused",
+  taskSlaResumed: "workflow.task.sla.resumed",
+  deviationRaised: "workflow.deviation.raised",
+  deviationReviewed: "workflow.deviation.reviewed",
+  deviationRevoked: "workflow.deviation.revoked",
+  workbasketUpserted: "workflow.workbasket.upserted",
 } as const;
 
 /** Cross-service commands dispatched when a workflow task completes. */
