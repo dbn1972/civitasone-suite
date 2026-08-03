@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
@@ -114,35 +116,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
 
     const results: Array<Record<string, unknown>> = [];
     let skipped = 0;
-    await db.transaction(async (tx) => {
-      for (const e of emps) {
-        if (alreadyIncremented.has(e.id)) {
-          skipped += 1;
-          results.push({ employeeId: e.id, status: "already_incremented" });
-          continue;
-        }
-        const basic = Number(e.basicMinor);
-        let lvl = 0;
-        for (const L of sortedLevels) { if ((ENTRY_PAY_PAISE[L] ?? Infinity) <= basic) lvl = L; }
-        if (!lvl) { results.push({ employeeId: e.id, status: "off_matrix" }); continue; }
-        const cells = PAY_MATRIX[lvl] ?? [];
-        let idx = 0;
-        for (let i = 0; i < cells.length; i++) { if ((cells[i] ?? Infinity) <= basic) idx = i; }
-        if (idx + 1 >= cells.length) { results.push({ employeeId: e.id, level: lvl, status: "at_max" }); continue; }
-        const newBasic = cells[idx + 1] ?? basic;
-        results.push({ employeeId: e.id, level: lvl, fromMinor: basic, toMinor: newBasic });
-        if (!body.dryRun) {
-          await tx.update(hrmsEmployees).set({ basicMinor: BigInt(newBasic), updatedBy: ctx.actorId })
-            .where(eq(hrmsEmployees.id, e.id));
-          await tx.insert(hrmsServiceBookEntries).values({
-            tenantId: ctx.tenantId, employeeId: e.id, entryType: "increment",
-            effectiveDate,
-            description: `Annual increment (Level ${lvl}): Rs ${(basic / 100).toLocaleString("en-IN")} -> Rs ${(newBasic / 100).toLocaleString("en-IN")}`,
-            recordedBy: ctx.actorId, documentRef: null,
-          });
-        }
-      }
-    });
+    await publishF3Write(ctx, "pay_matrix_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     const incremented = results.filter((r) => r.toMinor).length;
     req.log.info({ event: "pay.annual_increment.run", effectiveDate, dryRun: body.dryRun, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment run");
     return reply.send({

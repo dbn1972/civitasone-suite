@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Screening & shortlisting — candidate qualification validation (R-RA-0108/0109).
  *
@@ -9,7 +11,6 @@
  * disciplines + percentage) is stored per job opening; validate-candidate runs the
  * pure experience + education rules against a supplied candidate profile.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -53,10 +54,7 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
     };
     const existing = await repo.findByJob(ctx.tenantId, jobOpeningId);
     try {
-      await db.transaction(async (tx) => {
-        if (existing) await repo.updateRequirement(tx, ctx.tenantId, jobOpeningId, patch, existing.version);
-        else await repo.insertRequirement(tx, { id: randomUUID(), tenantId: ctx.tenantId, jobOpeningId, ...patch, createdBy: ctx.actorId });
-      });
+      await publishF3Write(ctx, "recruitment_qualification_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "REQUIREMENT_EXISTS", "a requirement for this job was created concurrently; reload and retry");
       throw e;

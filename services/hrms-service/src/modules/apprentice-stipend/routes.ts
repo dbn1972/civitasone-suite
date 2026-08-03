@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Apprentice / NAPS module (DIC Phase 3). Apprentices draw a monthly STIPEND
  * (Apprentices Act) — not salary, not an invoice. The stipend is pro-rated by
@@ -17,7 +19,6 @@
  * approve computes the pro-rated stipend + NAPS reimbursement and emits a
  * Finance-AP outbox event (net employer cost). Two-person control. Money in paise.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -78,17 +79,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertApprenticeship(tx, {
-      id, tenantId: ctx.tenantId, apprenticeId: body.apprenticeId,
-      napsId: body.napsId ?? (emp.napsId as string | undefined) ?? null,
-      ...(body.trade ? { trade: body.trade } : {}),
-      qualification: body.qualification,
-      monthlyStipendMinor: BigInt(body.monthlyStipendMinor),
-      napsReimbPctBps: body.napsReimbPctBps, napsReimbCapMinor: BigInt(body.napsReimbCapMinor),
-      trainingStart: body.trainingStart,
-      ...(body.trainingEnd ? { trainingEnd: body.trainingEnd } : {}),
-      status: "active", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "apprentice_stipend_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, apprenticeId: body.apprenticeId, status: "active" });
   });
 
@@ -119,7 +110,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     if (body.monthlyStipendMinor !== undefined) patch.monthlyStipendMinor = BigInt(body.monthlyStipendMinor);
     if (body.trainingEnd !== undefined) patch.trainingEnd = body.trainingEnd;
     if (body.status !== undefined) patch.status = body.status;
-    await db.transaction((tx) => repo.updateApprenticeship(tx, ctx.tenantId, id, patch, a.version));
+    await publishF3Write(ctx, "apprentice_stipend_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: body.status ?? a.status });
   });
 
@@ -142,18 +133,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
 
     const stipendId = randomUUID();
     try {
-      await db.transaction((tx) => repo.insertStipend(tx, {
-        id: stipendId, tenantId: ctx.tenantId, apprenticeshipId: id,
-        month: body.month, workingDays: body.workingDays, daysPresent: body.daysPresent,
-        // Snapshot the agreed stipend AND the NAPS rate/cap for THIS period, so a
-        // later edit to the apprenticeship master can't retroactively change how
-        // an already-submitted run is computed at approval.
-        monthlyStipendMinor: a.monthlyStipendMinor,
-        napsReimbPctBps: a.napsReimbPctBps, napsReimbCapMinor: a.napsReimbCapMinor,
-        status: "submitted",
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "apprentice_stipend_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`);
@@ -190,9 +170,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const { stipendId } = stipendParam.parse(req.params);
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', not submitted`);
-    await db.transaction((tx) => repo.updateStipend(tx, ctx.tenantId, stipendId, {
-      status: "verified", verifiedBy: ctx.actorId, verifiedAt: new Date(), updatedBy: ctx.actorId,
-    }, s.version));
+    await publishF3Write(ctx, "apprentice_stipend_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: stipendId, status: "verified" }));
   });
 
@@ -214,26 +192,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
       workingDays: s.workingDays, daysPresent: s.daysPresent,
       napsReimbPctBps: s.napsReimbPctBps, napsReimbCapMinor: s.napsReimbCapMinor,
     });
-    await db.transaction(async (tx) => {
-      await repo.updateStipend(tx, ctx.tenantId, stipendId, {
-        status: "approved",
-        grossStipendMinor: stipend.grossStipendMinor,
-        napsReimbMinor: stipend.napsReimbMinor,
-        employerCostMinor: stipend.employerCostMinor,
-        approvedBy: ctx.actorId, approvedAt: new Date(),
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, s.version);
-      await enqueue(tx, {
-        topic: EVENTS.apprenticeStipendApproved, eventType: EVENTS.apprenticeStipendApproved,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          stipendId, apprenticeshipId: s.apprenticeshipId, apprenticeId: a.apprenticeId, napsId: a.napsId,
-          month: s.month, grossStipendMinor: stipend.grossStipendMinor.toString(),
-          napsReimbMinor: stipend.napsReimbMinor.toString(), employerCostMinor: stipend.employerCostMinor.toString(),
-        },
-      });
-    });
+    await publishF3Write(ctx, "apprentice_stipend_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: stipendId, status: "approved", month: s.month,
       grossStipendMinor: stipend.grossStipendMinor, napsReimbMinor: stipend.napsReimbMinor,
@@ -250,11 +209,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     if (s.status !== "submitted" && s.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', cannot reject`);
     }
-    await db.transaction((tx) => repo.updateStipend(tx, ctx.tenantId, stipendId, {
-      status: "rejected",
-      ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-      updatedBy: ctx.actorId,
-    }, s.version));
+    await publishF3Write(ctx, "apprentice_stipend_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: stipendId, status: "rejected" }));
   });
 
@@ -265,19 +220,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "approved") throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', not approved`);
-    await db.transaction(async (tx) => {
-      await repo.updateStipend(tx, ctx.tenantId, stipendId, {
-        status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
-      }, s.version);
-      await enqueue(tx, {
-        topic: EVENTS.apprenticeStipendPaid, eventType: EVENTS.apprenticeStipendPaid,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          stipendId, apprenticeshipId: s.apprenticeshipId, month: s.month,
-          grossStipendMinor: s.grossStipendMinor.toString(), paymentRef: body.paymentRef,
-        },
-      });
-    });
+    await publishF3Write(ctx, "apprentice_stipend_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: stipendId, status: "paid", paymentRef: body.paymentRef }));
   });
 

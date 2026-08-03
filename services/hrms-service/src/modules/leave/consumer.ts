@@ -4,7 +4,9 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { and, eq } from "drizzle-orm";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
 import * as repo from "./repo.js";
 import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./domain.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
@@ -159,4 +161,36 @@ async function audit(tx: any, msg: any, action: string, resourceType: string, re
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
     payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
   });
+
+  queue.subscribe(COMMANDS.leaveCancel, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rows = await tx.select().from(hrmsLeaveApps)
+        .where(and(eq(hrmsLeaveApps.id, p.id), eq(hrmsLeaveApps.tenantId, p.tenantId))).limit(1);
+      const application = rows[0];
+      if (!application) return;
+      if (application.status === "cancelled") return;
+      const wasApproved = application.status === "approved";
+      await tx.update(hrmsLeaveApps)
+        .set({ status: "cancelled", updatedAt: new Date(), updatedBy: msg.actorId })
+        .where(eq(hrmsLeaveApps.id, p.id));
+      if (wasApproved && application.daysApplied > 0) {
+        const allocRows = await tx.select().from(hrmsLeaveAllocs)
+          .where(eq(hrmsLeaveAllocs.id, application.allocId)).limit(1);
+        const alloc = allocRows[0];
+        if (alloc) {
+          await tx.update(hrmsLeaveAllocs)
+            .set({ balanceDays: (alloc.balanceDays ?? 0) + application.daysApplied, updatedAt: new Date() })
+            .where(eq(hrmsLeaveAllocs.id, alloc.id));
+        }
+      }
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: "cancel", resourceType: "leave_application", resourceId: p.id, outcome: "success" },
+      });
+    });
+  });
+
 }

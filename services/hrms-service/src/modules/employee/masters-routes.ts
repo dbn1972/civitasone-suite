@@ -1,10 +1,11 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Department + Designation master CRUD — needed for first-time tenant setup
  * so employees can be properly classified.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
@@ -55,16 +56,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsDepartments).values({
-      id, tenantId: ctx.tenantId, code: body.code, name: body.name,
-      parentId: body.parentId ?? null,
-      ...(body.type ? { type: body.type } : {}),
-      ...(body.level !== undefined ? { level: body.level } : {}),
-      ...(body.govtTier ? { govtTier: body.govtTier } : {}),
-      ...(body.locationId ? { locationId: body.locationId } : {}),
-      ...(body.headEmployeeId ? { headEmployeeId: body.headEmployeeId } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "employee_masters_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "created" });
   });
 
@@ -81,11 +73,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createDesignationBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsDesignations).values({
-      id, tenantId: ctx.tenantId, code: body.code, name: body.name,
-      level: body.level ?? 0, payGrade: body.payGrade ?? null,
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "employee_masters_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "created" });
   });
 

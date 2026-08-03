@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Face Verification Routes
  * - Upload profile photo (one-time during onboarding)
@@ -11,7 +13,6 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead} from "../../shared/db.js";
 import { verifyFace, type FaceConfig } from "./engine.js";
 import { hrmsProfilePhotos, hrmsFaceVerificationLog, hrmsFaceConfig } from "./schema.js";
-import { randomUUID } from "node:crypto";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 const ALL_ROLES = [...HR_ROLES, "officer", "employee", "manager"];
@@ -32,20 +33,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id))).limit(1));
 
     const photoId = randomUUID();
-    await db.transaction(async (tx) => {
-      if (existing[0]) {
-        // One-time update allowed — deactivate old, insert new
-        await tx.update(hrmsProfilePhotos)
-          .set({ isActive: false } as any)
-          .where(eq(hrmsProfilePhotos.id, existing[0].id));
-      }
-
-      await tx.insert(hrmsProfilePhotos).values({
-        id: photoId, tenantId: ctx.tenantId, employeeId: id,
-        photoKey: body.photoKey, photoBucket: body.photoBucket,
-        uploadedAt: new Date(), isActive: true,
-      } as any);
-    });
+    await publishF3Write(ctx, "face_verification_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id: photoId, status: "uploaded", message: "Profile photo uploaded. Will be used for attendance face verification." });
   });
@@ -104,17 +92,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     );
 
     // Log verification attempt
-    await db.transaction((tx) => tx.insert(hrmsFaceVerificationLog).values({
-      id: randomUUID(), tenantId: ctx.tenantId, employeeId: body.employeeId,
-      geoAttendanceId: body.geoAttendanceId ?? null,
-      selfieKey: body.selfieKey, profilePhotoKey: profile.photoKey,
-      verificationMethod: result.method, similarityScore: String(result.finalScore),
-      confidenceThreshold: String(faceConfig.onnxThreshold),
-      isMatch: result.isMatch, rekognitionUsed: result.method === "rekognition",
-      onnxScore: result.onnxScore !== null ? String(result.onnxScore) : null,
-      rekognitionScore: result.rekognitionScore !== null ? String(result.rekognitionScore) : null,
-      processingMs: result.processingMs, failureReason: result.failureReason,
-    } as any));
+    await publishF3Write(ctx, "face_verification_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({
       verified: result.isMatch,
@@ -147,8 +125,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       allowManualOverride: z.boolean().optional(),
     }).parse(req.body);
 
-    await db.transaction((tx) => tx.update(hrmsFaceConfig).set({ ...body, updatedAt: new Date() } as any)
-      .where(eq(hrmsFaceConfig.tenantId, ctx.tenantId)));
+    await publishF3Write(ctx, "face_verification_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ status: "updated" });
   });
 

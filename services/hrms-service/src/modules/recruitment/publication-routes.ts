@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Job publication & career portal (checklist R-RA-0063/0067/0068/0069/0071).
  *
@@ -59,7 +61,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt", "minExperienceYears"] as const) {
       if ((body as Record<string, unknown>)[k] !== undefined) patch[k] = (body as Record<string, unknown>)[k];
     }
-    await db.transaction((tx) => repo.updateVacancy(tx, ctx.tenantId, id, patch, v.version));
+    await publishF3Write(ctx, "recruitment_publication_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, updated: true });
   });
 
@@ -71,10 +73,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be amended");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await db.transaction(async (tx) => {
-      await repo.insertCorrigendum(tx, { tenantId: ctx.tenantId, jobOpeningId: id, seq, action: "corrigendum", changes: body.changes, actorId: ctx.actorId });
-      await repo.updateVacancy(tx, ctx.tenantId, id, { corrigendumCount: seq, updatedBy: ctx.actorId }, v.version);
-    });
+    await publishF3Write(ctx, "recruitment_publication_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, corrigendumSeq: seq });
   });
 
@@ -89,14 +88,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const newDeadline = new Date(body.newDeadline);
     if (oldDeadline && newDeadline <= oldDeadline) throw new HttpError(400, "NOT_AN_EXTENSION", "the new deadline must be later than the current one");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await db.transaction(async (tx) => {
-      await repo.insertCorrigendum(tx, {
-        tenantId: ctx.tenantId, jobOpeningId: id, seq, action: "extension",
-        changes: body.reason ?? `deadline extended to ${body.newDeadline}`, oldDeadline, newDeadline, actorId: ctx.actorId,
-      });
-      // Extending REOPENS a closed vacancy so applications can resume (R-RA-0069).
-      await repo.updateVacancy(tx, ctx.tenantId, id, { applicationDeadline: newDeadline, status: "open", corrigendumCount: seq, updatedBy: ctx.actorId }, v.version);
-    });
+    await publishF3Write(ctx, "recruitment_publication_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id, status: "open", applicationDeadline: newDeadline, corrigendumSeq: seq }));
   });
 
@@ -108,11 +100,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "vacancy is already cancelled");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await db.transaction(async (tx) => {
-      await repo.insertCorrigendum(tx, { tenantId: ctx.tenantId, jobOpeningId: id, seq, action: "cancellation", changes: body.reason, actorId: ctx.actorId });
-      // Cancel preserves the advert (row untouched except status) — R-RA-0068.
-      await repo.updateVacancy(tx, ctx.tenantId, id, { status: "cancelled", corrigendumCount: seq, updatedBy: ctx.actorId }, v.version);
-    });
+    await publishF3Write(ctx, "recruitment_publication_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "cancelled" });
   });
 

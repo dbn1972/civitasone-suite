@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Assessment management — result finalisation (R-RA-0132/0133/0134).
  *
@@ -81,10 +83,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     if (OBJECTIVE_TYPES.has(entry.qtype)) throw new HttpError(422, "NOT_MANUAL", "objective questions are auto-scored, not manually evaluated");
     if (body.score > entry.marks) throw new HttpError(422, "SCORE_TOO_HIGH", `score cannot exceed the question's ${entry.marks} marks`);
 
-    await db.transaction(async (tx) => {
-      await repo.saveEvaluation(tx, { tenantId: ctx.tenantId, attemptId: id, questionId: body.questionId, evaluatorId: ctx.actorId, score: String(body.score), maxMarks: entry.marks, remarks: body.remarks ?? null });
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "evaluate", detail: { questionId: body.questionId, score: body.score }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ attemptId: id, questionId: body.questionId, scored: true });
   });
 
@@ -126,15 +125,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     // that no longer matches the score). Recorded explicitly for the auditor.
     const priorMod = (a.moderation ?? {}) as { proposedBy?: string };
     const hadModeration = Boolean(priorMod.proposedBy || a.moderatedBy);
-    await db.transaction(async (tx) => {
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, {
-        totalScore: String(result.totalScore), rawTotalScore: String(result.totalScore), maxScore: String(result.maxScore),
-        sectionScores: result.sectionScores as never, needsManualEval: false, result: result.result, evaluatedAt: new Date(),
-        moderation: {} as never, moderatedBy: null, moderatedAt: null, updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "consolidate", detail: { totalScore: result.totalScore, result: result.result }, actorId: ctx.actorId });
-      if (hadModeration) await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "moderation_reset", detail: { reason: "re-consolidation invalidated the prior moderation" }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ attemptId: id, totalScore: result.totalScore, maxScore: result.maxScore, result: result.result }));
   });
 
@@ -151,15 +142,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const errors = validateModeration(body as Moderation);
     if (errors.length > 0) throw new HttpError(422, "INVALID_MODERATION", errors.join("; "));
 
-    await db.transaction(async (tx) => {
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, {
-        // rawSnapshot binds the checker's approval to the exact raw score under
-        // review, so an approval cannot be applied against a different raw total.
-        moderation: { method: body.method, factor: body.factor ?? null, notes: body.notes ?? null, proposedBy: ctx.actorId, proposedAt: new Date().toISOString(), rawSnapshot: String(a.rawTotalScore) } as never,
-        moderatedBy: null, moderatedAt: null, updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "moderate_propose", detail: { method: body.method, factor: body.factor ?? null }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ attemptId: id, moderation: { method: body.method, factor: body.factor ?? null }, status: "proposed" });
   });
 
@@ -188,13 +171,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const moderatedTotal = applyModeration(raw, max, mod as Moderation);
     const result = resultAfterModeration(a.sectionScores as never, { ...(scoring.totalCutoffPct != null ? { totalCutoffPct: scoring.totalCutoffPct } : {}), sections: scoring.sections ?? [] }, moderatedTotal, max);
 
-    await db.transaction(async (tx) => {
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, {
-        totalScore: String(moderatedTotal), result, moderatedBy: ctx.actorId, moderatedAt: new Date(),
-        moderation: { ...mod, approvedBy: ctx.actorId, approvedAt: new Date().toISOString() } as never, updatedBy: ctx.actorId,
-      }, a.version);
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "moderate_approve", detail: { rawTotal: raw, moderatedTotal, result }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ attemptId: id, rawTotalScore: raw, totalScore: moderatedTotal, result }));
   });
 
@@ -211,10 +188,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     // SoD: when a moderation was applied, the person who approved it cannot also
     // perform the irreversible freeze — preserve an independent final sign-off.
     if (a.moderatedBy && a.moderatedBy === ctx.actorId) throw new HttpError(403, "SOD_VIOLATION", "the moderation approver cannot also freeze the result; an independent authorised user must freeze");
-    await db.transaction(async (tx) => {
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, { frozen: true, frozenBy: ctx.actorId, frozenAt: new Date(), updatedBy: ctx.actorId }, a.version);
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "freeze", detail: { result: a.result, totalScore: a.totalScore }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ attemptId: id, frozen: true });
   });
 
@@ -226,10 +200,7 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const a = await mustAttempt(ctx.tenantId, id);
     if (!a.frozen) throw new HttpError(409, "NOT_FROZEN", "a result can only be published after it is frozen");
     if (a.published) throw new HttpError(409, "ALREADY_PUBLISHED", "the result is already published");
-    await db.transaction(async (tx) => {
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, { published: true, publishedAt: new Date(), updatedBy: ctx.actorId }, a.version);
-      await repo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "publish", detail: { result: a.result }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_result_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ attemptId: id, published: true, result: a.result });
   });
 

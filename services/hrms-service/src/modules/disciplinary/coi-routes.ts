@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * 0176 — COI / confidentiality declaration routes.
  *
@@ -12,7 +14,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
@@ -48,19 +49,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const declId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(hrmsCoiDeclarations).values({
-        id: declId,
-        tenantId: ctx.tenantId,
-        employeeId: id,
-        declarationType: body.declarationType,
-        declarationDate: body.declarationDate,
-        details: body.details,
-        status: "active",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-    });
+    await publishF3Write(ctx, "disciplinary_coi_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: declId, employeeId: id, declarationType: body.declarationType, status: "active" },
@@ -102,26 +91,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
-    await db.transaction(async (tx) => {
-      const rows = await tx.select({ id: hrmsCoiDeclarations.id, status: hrmsCoiDeclarations.status, version: hrmsCoiDeclarations.version })
-        .from(hrmsCoiDeclarations)
-        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.tenantId, ctx.tenantId)))
-        .limit(1);
-      const decl = rows[0];
-      if (!decl) throw new HttpError(404, "NOT_FOUND", "declaration not found");
-      if (decl.status !== "active") {
-        throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot revoke`);
-      }
-      await tx.update(hrmsCoiDeclarations)
-        .set({
-          status: "revoked",
-          revokedAt: new Date(),
-          revokeReason: body.reason,
-          updatedBy: ctx.actorId,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.version, decl.version)));
-    });
+    await publishF3Write(ctx, "disciplinary_coi_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ data: { id: declId, status: "revoked" } });
   });
@@ -132,24 +102,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ALL_ROLES);
     const { declId } = declIdParam.parse(req.params);
 
-    await db.transaction(async (tx) => {
-      const rows = await tx.select({ id: hrmsCoiDeclarations.id, status: hrmsCoiDeclarations.status, version: hrmsCoiDeclarations.version })
-        .from(hrmsCoiDeclarations)
-        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.tenantId, ctx.tenantId)))
-        .limit(1);
-      const decl = rows[0];
-      if (!decl) throw new HttpError(404, "NOT_FOUND", "declaration not found");
-      if (decl.status !== "active") {
-        throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot acknowledge`);
-      }
-      await tx.update(hrmsCoiDeclarations)
-        .set({
-          acknowledgedAt: new Date(),
-          updatedBy: ctx.actorId,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.version, decl.version)));
-    });
+    await publishF3Write(ctx, "disciplinary_coi_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ data: { id: declId, acknowledged: true } });
   });

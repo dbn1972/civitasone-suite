@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Selection & offer lifecycle (checklist R-RA-0155/0156/0158/0161/0163/0164).
  *
@@ -19,7 +21,6 @@
  * authority); the offer's creator can never approve it (SoD); only a fully-
  * approved offer can be released; a decline must carry a structured reason.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -88,18 +89,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, id)) + 1;
     const c = comp(body);
     try {
-    await db.transaction((tx) => repo.insertOffer(tx, {
-      id: offerId, tenantId: ctx.tenantId, applicationId: id,
-      offerNo: `OFR-${offerId.slice(0, 8).toUpperCase()}`, offerVersion: nextVersion,
-      basicMinor: c.basicMinor, joiningBonusMinor: c.joiningBonusMinor,
-      relocationMinor: c.relocationMinor, variablePayMinor: c.variablePayMinor,
-      grossCtcMinor: c.grossCtcMinor, ctcMinor: c.grossCtcMinor, // keep legacy ctc_minor in sync
-      ...(body.grade ? { grade: body.grade } : {}),
-      ...(body.templateRef ? { templateRef: body.templateRef } : {}),
-      ...(body.joiningDate ? { joiningDate: body.joiningDate } : {}),
-      approvalChain: chain, currentStage: -1, status: "draft",
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "recruitment_offer_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
       throw err;
@@ -135,10 +125,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const { offerId } = offerParam.parse(req.params);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (!isOfferEditable(o.status)) throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', cannot submit`);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "pending_approval", currentStage: 0 }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "submit", actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "pending_approval", currentStage: 0 }));
   });
 
@@ -154,11 +141,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [role, "super_admin"]);
     if (o.createdBy === ctx.actorId) throw new HttpError(409, "SOD_VIOLATION", "the offer creator cannot approve their own offer");
     const final = isFinalStage(chain, o.currentStage);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId,
-        final ? { status: "approved", approvedAt: new Date() } : { currentStage: o.currentStage + 1 }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "approve", remarks: body.comments ?? null, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: final ? "approved" : "pending_approval", currentStage: final ? o.currentStage : o.currentStage + 1 }));
   });
 
@@ -172,10 +155,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const role = currentStageRole(chain, o.currentStage);
     if (!role) throw new HttpError(409, "NO_STAGE", "no active approval stage");
     requireRole(ctx, [role, "super_admin"]);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "returned", currentStage: -1 }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "return", remarks: body.comments, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "returned" }));
   });
 
@@ -186,10 +166,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.body ?? {});
     const o = await mustOffer(ctx.tenantId, offerId);
     if (!canRelease(o.status)) throw new HttpError(409, "NOT_APPROVED", `offer is '${o.status}', not approved — cannot release`);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "released", releasedAt: new Date(), ...(body.expiresAt ? { expiresAt: body.expiresAt } : {}) }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "release", actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "released" }));
   });
 
@@ -202,12 +179,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
     // R-RA-0162: capture acceptance timestamp, the accepted version, and IP/device.
     const meta = { ip: (req.headers["x-forwarded-for"] as string) ?? req.ip, userAgent: req.headers["user-agent"] ?? null, device: body.device ?? null };
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, {
-        status: "accepted", acceptedAt: new Date(), acceptedVersion: o.offerVersion, acceptanceMeta: meta as never,
-      }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "accept", actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "accepted", acceptedVersion: o.offerVersion }));
   });
 
@@ -218,10 +190,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ reasonCode: z.enum(DECLINE_REASON_CODES), remarks: z.string().max(2000).optional() }).parse(req.body);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "declined", declinedAt: new Date(), declineReasonCode: body.reasonCode, declineRemarks: body.remarks ?? null }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "decline", reasonCode: body.reasonCode, remarks: body.remarks ?? null, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "declined", reasonCode: body.reasonCode }));
   });
 
@@ -232,10 +201,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const o = await mustOffer(ctx.tenantId, offerId);
     if (isTerminal(o.status)) throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', cannot withdraw`);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "withdrawn", withdrawReason: body.reason }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "withdraw", remarks: body.reason, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "withdrawn" }));
   });
 
@@ -245,10 +211,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const { offerId } = offerParam.parse(req.params);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
-    await db.transaction(async (tx) => {
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "expired" }, o.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId, applicationId: o.applicationId, action: "expire", actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__8", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: offerId, status: "expired" }));
   });
 
@@ -274,22 +237,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const newId = randomUUID();
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, prev.applicationId)) + 1;
     try {
-    await db.transaction(async (tx) => {
-      // supersede the previous
-      await repo.updateOffer(tx, ctx.tenantId, offerId, { status: "revised" }, prev.version);
-      await repo.insertOffer(tx, {
-        id: newId, tenantId: ctx.tenantId, applicationId: prev.applicationId,
-        offerNo: `OFR-${newId.slice(0, 8).toUpperCase()}`, offerVersion: nextVersion,
-        basicMinor: c.basicMinor, joiningBonusMinor: c.joiningBonusMinor,
-        relocationMinor: c.relocationMinor, variablePayMinor: c.variablePayMinor,
-        grossCtcMinor: c.grossCtcMinor, ctcMinor: c.grossCtcMinor,
-        grade: (body.grade ?? prev.grade) as string | null,
-        approvalChain: prev.approvalChain as never, currentStage: -1, status: "draft",
-        supersedesOfferId: offerId,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, offerId: newId, applicationId: prev.applicationId, action: "revise", remarks: `supersedes ${prev.offerNo ?? offerId}`, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_offer_routes__9", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
       throw err;

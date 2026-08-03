@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Screening & shortlisting — reservation roster + category/location shortlist
  * (R-RA-0116).
@@ -13,7 +15,6 @@
  * of screened-eligible candidates; the frozen list is recorded via the selection
  * list (#256).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -54,20 +55,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     if (existing && existing.status === "approved") throw new HttpError(409, "APPROVED", "an approved roster cannot be changed");
 
     try {
-      await db.transaction(async (tx) => {
-        if (existing) {
-          await repo.updateRoster(tx, ctx.tenantId, jobOpeningId, {
-            totalVacancies: body.totalVacancies, categoryVacancies: body.categoryVacancies as never,
-            locationRosters: (body.locationRosters ?? {}) as never, updatedBy: ctx.actorId,
-          }, existing.version);
-        } else {
-          await repo.insertRoster(tx, {
-            id: randomUUID(), tenantId: ctx.tenantId, jobOpeningId, totalVacancies: body.totalVacancies,
-            categoryVacancies: body.categoryVacancies as never, locationRosters: (body.locationRosters ?? {}) as never,
-            status: "draft", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-          });
-        }
-      });
+      await publishF3Write(ctx, "recruitment_reservation_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // Two concurrent first-time sets on the same new job collide on UNIQUE(tenant,job).
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");
@@ -84,9 +72,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     const roster = await mustRoster(ctx.tenantId, jobOpeningId);
     if (roster.status === "approved") throw new HttpError(409, "ALREADY_APPROVED", "the roster is already approved");
     if (roster.createdBy === ctx.actorId) throw new HttpError(403, "SOD_VIOLATION", "the roster creator cannot approve it; an independent authorised user must approve");
-    await db.transaction((tx) => repo.updateRoster(tx, ctx.tenantId, jobOpeningId, {
-      status: "approved", approvedBy: ctx.actorId, approvedAt: new Date(), updatedBy: ctx.actorId,
-    }, roster.version));
+    await publishF3Write(ctx, "recruitment_reservation_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ jobOpeningId, status: "approved" });
   });
 

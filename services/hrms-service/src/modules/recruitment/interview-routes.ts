@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Interview CRUD (persisted in recruitment.hrms_interviews — migration 0008).
  * - POST  /v1/hrms/interviews                  schedule interview
@@ -10,7 +12,6 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 
@@ -64,24 +65,7 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
     const scheduledTime = when.toISOString().slice(11, 16); // HH:MM
 
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertInterview(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        applicationId: body.applicationId,
-        jobOpeningId: body.jobOpeningId,
-        roundNumber: body.roundNumber,
-        roundType: body.roundType,
-        scheduledDate,
-        scheduledTime,
-        durationMinutes: body.durationMinutes,
-        mode: MODE_DB[body.mode] ?? "video",
-        panelMembers: body.interviewerIds,
-        status: "scheduled",
-        feedback: body.notes ?? null,
-        createdBy: ctx.actorId,
-      });
-    });
+    await publishF3Write(ctx, "recruitment_interview_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id, status: "scheduled", message: "interview scheduled" });
   });
@@ -115,9 +99,7 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
       submittedBy: ctx.actorId,
       submittedAt: new Date().toISOString(),
     };
-    await db.transaction(async (tx) => {
-      await repo.updateInterviewScorecard(tx, id, ctx.tenantId, scorecard, RECO_DB[body.recommendation] ?? null);
-    });
+    await publishF3Write(ctx, "recruitment_interview_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ id, status: "completed", message: "scorecard submitted" });
   });

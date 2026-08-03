@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Onboarding tasks CRUD (T19) + buddy assignment (T20).
  *
@@ -7,7 +9,6 @@
  *   POST /v1/hrms/employees/:id/buddy              assign buddy/mentor
  *   GET  /v1/hrms/employees/:id/buddy              list buddy assignments
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql } from "drizzle-orm";
@@ -29,11 +30,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       assignedTo: z.string().uuid().optional(),
     }).parse(req.body);
     const tid = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsOnboardingTasks).values({
-      id: tid, tenantId: ctx.tenantId, employeeId: id,
-      title: body.title, dueByDay: body.dueByDay, assignedTo: body.assignedTo ?? null,
-      createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: tid, employeeId: id, status: "pending" });
   });
 
@@ -48,9 +45,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/onboarding-tasks/:taskId/complete", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { taskId } = taskParam.parse(req.params);
-    await db.transaction((tx) => tx.update(hrmsOnboardingTasks)
-      .set({ status: "completed", completedAt: new Date(), version: sql`${hrmsOnboardingTasks.version} + 1` })
-      .where(and(eq(hrmsOnboardingTasks.tenantId, ctx.tenantId), eq(hrmsOnboardingTasks.id, taskId))));
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id: taskId, status: "completed" });
   });
 
@@ -62,9 +57,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       role: z.enum(["buddy", "mentor"]).default("buddy"),
     }).parse(req.body);
     const bid = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsBuddyAssignments).values({
-      id: bid, tenantId: ctx.tenantId, employeeId: id, ...body, createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: bid, employeeId: id, role: body.role });
   });
 

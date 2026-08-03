@@ -17,6 +17,7 @@ import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
 import { registerLifecycleMutationConsumers } from "./modules/lifecycle/consumer.js";
 import { registerLoanConsumers } from "./modules/employee/loans-consumer.js";
+import { registerF3LeftoverAll } from "./modules/f3-leftover-register.js";
 import { registerTrainingConsumers }   from "./modules/training/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerAppraisalConsumers }  from "./modules/appraisals/consumer.js";
@@ -73,6 +74,7 @@ registerAttendanceConsumers(queue);
 registerRecruitmentConsumers(queue);
 registerRecruitmentEOfficeConsumers(queue);
 registerTrainingConsumers(queue);
+registerF3LeftoverAll(queue);
 registerIntegrationConsumers(queue);
 registerAppraisalConsumers(queue);
 // Previous batch

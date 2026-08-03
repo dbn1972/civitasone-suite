@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -33,10 +34,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createBankBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertBank(tx, {
-      id, tenantId: ctx.tenantId, title: body.title,
-      competencyRef: body.competencyRef ?? null, createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "assessment_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "active" });
   });
 
@@ -60,10 +58,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "MAKER_CHECKER", "question-bank change requires a checker different from the bank creator");
     }
     const qid = randomUUID();
-    await db.transaction((tx) => repo.insertQuestion(tx, {
-      id: qid, tenantId: ctx.tenantId, bankId: id, qtype: body.qtype,
-      stem: body.stem, options: body.options, correct: body.correct, marks: String(body.marks),
-    }));
+    await publishF3Write(ctx, "assessment_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: qid });
   });
 
@@ -81,12 +76,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const bank = await repo.getBank(ctx.tenantId, body.bankId);
     if (!bank) throw new HttpError(404, "NOT_FOUND", "question bank not found");
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertAssessment(tx, {
-      id, tenantId: ctx.tenantId, title: body.title, courseRef: body.courseRef ?? null,
-      bankId: body.bankId, passingScore: String(body.passingScore), durationMins: body.durationMins,
-      maxAttempts: body.maxAttempts, validityMonths: body.validityMonths ?? null,
-      status: "draft", createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "assessment_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "draft" });
   });
 
@@ -110,7 +100,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (a.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "passing-score change requires a checker different from the assessment creator");
     }
-    const row = await db.transaction((tx) => repo.updatePassingScore(tx, ctx.tenantId, id, String(body.passingScore)));
+    const row = await publishF3Write(ctx, "assessment_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "passing score can only be changed while draft");
     return reply.send({ id, passingScore: row.passingScore });
   });
@@ -121,7 +111,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const a = await repo.getAssessment(ctx.tenantId, id);
     if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
-    const row = await db.transaction((tx) => repo.submitForApproval(tx, ctx.tenantId, id));
+    const row = await publishF3Write(ctx, "assessment_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft can be submitted for approval");
     return reply.send({ id, status: row.status });
   });
@@ -136,7 +126,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (a.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "publish requires an approver different from the creator");
     }
-    const row = await db.transaction((tx) => repo.publishAssessment(tx, ctx.tenantId, id, ctx.actorId));
+    const row = await publishF3Write(ctx, "assessment_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "only an assessment pending approval can be published");
     return reply.send({ id, status: row.status, approvedBy: row.approvedBy });
   });
@@ -145,7 +135,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const row = await db.transaction((tx) => repo.retireAssessment(tx, ctx.tenantId, id));
+    const row = await publishF3Write(ctx, "assessment_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "only a published assessment can be retired");
     return reply.send({ id, status: row.status });
   });
@@ -164,10 +154,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ATTEMPT_LIMIT", "maximum attempts exhausted");
     }
     const attemptId = randomUUID();
-    const attempt = await db.transaction((tx) => repo.insertAttempt(tx, {
-      id: attemptId, tenantId: ctx.tenantId, assessmentId: id, employeeId: body.employeeId,
-      attemptNo: priorCount + 1, status: "in_progress",
-    }));
+    const attempt = await publishF3Write(ctx, "assessment_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: attempt.id, attemptNo: attempt.attemptNo, status: attempt.status });
   });
 
@@ -190,53 +177,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const graded = gradeAttempt(gradable, body.answers);
     const passed = decidePass(graded.score, Number(a.passingScore));
 
-    const result = await db.transaction(async (tx) => {
-      const row = await repo.gradeAttemptRow(tx, ctx.tenantId, id, { score: String(graded.score), passed });
-      if (!row) return null; // lost the race — already graded
-      const awardById = new Map(graded.perQuestion.map((p) => [p.questionId, p.awarded]));
-      await repo.insertAnswers(tx, body.answers.map((ans) => ({
-        tenantId: ctx.tenantId, attemptId: id, questionId: ans.questionId,
-        response: ans.response, awardedMarks: String(awardById.get(ans.questionId) ?? 0),
-      })));
-
-      let certificate = null as null | { certificateNo: string; verifyToken: string };
-      if (passed) {
-        const cert = issueCertificate(
-          { validityMonths: a.validityMonths },
-          row,
-          {
-            certificateNo: `CERT-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
-            verifyToken: randomUUID().replace(/-/g, ""),
-            issuedAt: new Date(),
-            validityMonths: a.validityMonths,
-          },
-        );
-        const inserted = await repo.insertCertificate(tx, {
-          tenantId: ctx.tenantId, assessmentId: a.id, attemptId: id, employeeId: attempt.employeeId,
-          certificateNo: cert.certificateNo, verifyToken: cert.verifyToken, validUntil: cert.validUntil,
-        });
-        // inserted === null ⇒ a certificate for this attempt already exists
-        // (UNIQUE attempt_id): idempotent no-op, do NOT re-emit the event.
-        if (inserted) {
-          certificate = { certificateNo: inserted.certificateNo, verifyToken: inserted.verifyToken };
-          await enqueue(tx, {
-            topic: EVENTS.certificateIssued,
-            eventType: EVENTS.certificateIssued,
-            tenantId: ctx.tenantId,
-            actorId: ctx.actorId,
-            correlationId: ctx.correlationId,
-            payload: {
-              tenant_id: ctx.tenantId,
-              employee_id: attempt.employeeId,
-              assessment_id: a.id,
-              certificate_no: inserted.certificateNo,
-              competency_ref: bank?.competencyRef ?? null,
-            },
-          });
-        }
-      }
-      return { score: graded.score, passed, certificate };
-    });
+    const result = await publishF3Write(ctx, "assessment_routes__8", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!result) throw new HttpError(409, "INVALID_STATE", "attempt already submitted");
     return reply.send({ id, status: "graded", score: result.score, passed: result.passed, certificate: result.certificate });
   });

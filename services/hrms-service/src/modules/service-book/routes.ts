@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -28,16 +29,7 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
       documentRef: z.string().optional(),
     }).parse(req.body);
     const entryId = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertServiceBookEntry(tx, {
-        id: entryId, tenantId: ctx.tenantId, employeeId,
-        recordedBy: ctx.actorId,
-        entryType: body.entryType,
-        effectiveDate: body.effectiveDate,
-        description: body.description,
-        documentRef: body.documentRef ?? null,
-      });
-    });
+    await publishF3Write(ctx, "service_book_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: entryId });
   });
 

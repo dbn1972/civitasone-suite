@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -23,12 +24,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     const training = await repo.getTraining(ctx.tenantId, id);
     if (!training) throw new HttpError(404, "NOT_FOUND", "training not found");
     const sid = randomUUID();
-    const row = await db.transaction((tx) => repo.insertSession(tx, {
-      id: sid, tenantId: ctx.tenantId, trainingId: id, title: body.title,
-      sessionDate: body.sessionDate, startTime: body.startTime ?? null, endTime: body.endTime ?? null,
-      venue: body.venue ?? null, capacity: body.capacity, status: "scheduled",
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    const row = await publishF3Write(ctx, "training_admin_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: row.id, capacity: row.capacity, status: row.status });
   });
 
@@ -62,9 +58,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
       const waited = await repo.countWaitlistedForSession(ctx.tenantId, body.sessionId);
       waitlistPosition = nextWaitlistPosition(waited);
     }
-    const row = await db.transaction((tx) => repo.decideNomination(tx, ctx.tenantId, id, ctx.actorId, {
-      status: outcome, sessionId: body.sessionId, waitlistPosition,
-    }));
+    const row = await publishF3Write(ctx, "training_admin_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "nomination could not be decided from its current state");
     return reply.send({ id, status: row.status, sessionId: body.sessionId, waitlistPosition: row.waitlistPosition });
   });
@@ -81,18 +75,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     }
     const freedApproved = nom.status === "approved";
     const sessionId = nom.sessionId;
-    const result = await db.transaction(async (tx) => {
-      const row = await repo.rejectNomination(tx, ctx.tenantId, id, ctx.actorId);
-      if (!row) return null;
-      // If a seat was freed, promote the earliest waitlisted nomination.
-      let promotedId: string | null = null;
-      if (freedApproved && sessionId) {
-        const waitlisted = await repo.listWaitlisted(ctx.tenantId, sessionId);
-        promotedId = pickPromotion(waitlisted);
-        if (promotedId) await repo.promoteNomination(tx, ctx.tenantId, promotedId, ctx.actorId);
-      }
-      return { row, promotedId };
-    });
+    const result = await publishF3Write(ctx, "training_admin_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!result) throw new HttpError(409, "INVALID_STATE", "nomination cannot be rejected from its current state");
     return reply.send({ id, status: "rejected", promoted: result.promotedId });
   });
@@ -105,10 +88,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     const body = markAttendanceBody.parse(req.body);
     const session = await repo.getSession(ctx.tenantId, id);
     if (!session) throw new HttpError(404, "NOT_FOUND", "session not found");
-    const row = await db.transaction((tx) => repo.upsertAttendance(tx, {
-      tenantId: ctx.tenantId, sessionId: id, employeeId: body.employeeId,
-      status: body.status, markedBy: ctx.actorId,
-    }));
+    const row = await publishF3Write(ctx, "training_admin_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ sessionId: id, employeeId: row.employeeId, status: row.status });
   });
 

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Agent 1 HRMS gap-closure routes:
  *   0175 — GET/PATCH fitness_status on employee
@@ -32,17 +34,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       fitnessStatus: z.enum(FITNESS_VALUES),
     }).parse(req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const rows = await tx.select({ id: hrmsEmployees.id, version: hrmsEmployees.version })
-        .from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!rows[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
-      const updated = await tx.update(hrmsEmployees)
-        .set({ fitnessStatus: body.fitnessStatus, updatedBy: ctx.actorId, updatedAt: new Date() })
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.version, rows[0].version)));
-      return updated;
-    });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: { id, fitnessStatus: body.fitnessStatus } });
   });
 
@@ -84,11 +76,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // All conditions met — activate
-    await db.transaction(async (tx) => {
-      await tx.update(hrmsEmployees)
-        .set({ status: "active", updatedBy: ctx.actorId, updatedAt: new Date() })
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.version, emp.version)));
-    });
+    await publishF3Write(ctx, "employee_agent1_gap_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: { id, status: "active" } });
   });
 
@@ -104,21 +92,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       revertToStatus: z.enum(["probation", "active"]).default("probation"),
     }).parse(req.body);
 
-    const result = await db.transaction(async (tx) => {
-      const rows = await tx.select({ id: hrmsEmployees.id, status: hrmsEmployees.status, version: hrmsEmployees.version })
-        .from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
-        .limit(1);
-      const emp = rows[0];
-      if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
-      if (emp.status !== "no_show") {
-        throw new HttpError(409, "WRONG_STATE", `employee status is '${emp.status}', not 'no_show'`);
-      }
-      await tx.update(hrmsEmployees)
-        .set({ status: body.revertToStatus, updatedBy: ctx.actorId, updatedAt: new Date() })
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.version, emp.version)));
-      return { id, status: body.revertToStatus };
-    });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: result });
   });
 
@@ -135,58 +109,7 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       message: "at least one manager field must be provided",
     }).parse(req.body);
 
-    const result = await db.transaction(async (tx) => {
-      // Fetch current employee
-      const rows = await tx.select({
-        id: hrmsEmployees.id,
-        version: hrmsEmployees.version,
-        managerId: hrmsEmployees.managerId,
-        tenantId: hrmsEmployees.tenantId,
-      }).from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
-        .limit(1);
-      const emp = rows[0];
-      if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
-
-      // Build a lightweight manager graph for cycle detection
-      // Fetch all employees' manager edges in this tenant
-      const allEdges = await tx.select({
-        eid: hrmsEmployees.id,
-        mgr: hrmsEmployees.managerId,
-      }).from(hrmsEmployees)
-        .where(eq(hrmsEmployees.tenantId, ctx.tenantId));
-
-      const graph: ManagerGraph = {
-        edges: new Map(allEdges.map((e) => [e.eid, e.mgr])),
-      };
-
-      // Validate each proposed manager for cycles
-      const updates: Record<string, unknown> = { updatedBy: ctx.actorId, updatedAt: new Date() };
-
-      if (body.managerId !== undefined) {
-        if (body.managerId && wouldCreateCycle(graph, id, body.managerId)) {
-          throw new HttpError(422, "CYCLE_DETECTED", `assigning manager '${body.managerId}' would create a circular reporting chain`);
-        }
-        updates.managerId = body.managerId ?? null;
-      }
-      if (body.functionalManagerId !== undefined) {
-        if (body.functionalManagerId && wouldCreateCycle(graph, id, body.functionalManagerId)) {
-          throw new HttpError(422, "CYCLE_DETECTED", `assigning functional manager '${body.functionalManagerId}' would create a circular reporting chain`);
-        }
-        updates.functionalManagerId = body.functionalManagerId ?? null;
-      }
-      if (body.projectManagerId !== undefined) {
-        if (body.projectManagerId && wouldCreateCycle(graph, id, body.projectManagerId)) {
-          throw new HttpError(422, "CYCLE_DETECTED", `assigning project manager '${body.projectManagerId}' would create a circular reporting chain`);
-        }
-        updates.projectManagerId = body.projectManagerId ?? null;
-      }
-
-      await tx.update(hrmsEmployees).set(updates)
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.version, emp.version)));
-
-      return { id, ...body };
-    });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: result });
   });
 

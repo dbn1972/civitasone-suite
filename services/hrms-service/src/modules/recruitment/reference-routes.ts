@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate profile — reservation attributes (R-RA-0082) + references and
  * prior-relationship declarations (R-RA-0083).
@@ -54,13 +56,7 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     // Persist a NORMALISED (uppercase) category so the reservation-shortlist module
     // (#257) sees a canonical value and never mis-buckets a lowercase "obc".
     const category = body.category ? body.category.trim().toUpperCase() : null;
-    await db.transaction((tx) => repo.updateCandidateFields(tx, ctx.tenantId, id, {
-      category, subCategory: body.subCategory ?? null, disability: body.disability,
-      disabilityType: body.disability ? (body.disabilityType ?? null) : null,
-      disabilityPercentage: body.disability ? (body.disabilityPercentage ?? null) : null,
-      exServiceman: body.exServiceman, freedomFighterDependent: body.freedomFighterDependent,
-      reservationDocs: (body.reservationDocs ?? []) as never, updatedBy: ctx.actorId,
-    } as never));
+    await publishF3Write(ctx, "recruitment_reference_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     void c;
     return reply.send({ id, updated: true });
   });
@@ -86,11 +82,7 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     const errors = validateReferences(body.references as Reference[], { email: c.email, phone: c.mobile });
     if (errors.length > 0) throw new HttpError(422, "INVALID_REFERENCES", errors.join("; "));
 
-    await db.transaction((tx) => repo.setReferences(tx, ctx.tenantId, id, body.references.map((r) => ({
-      tenantId: ctx.tenantId, candidateId: id, refName: r.name, relationship: r.relationship,
-      organisation: r.organisation ?? null, designation: r.designation ?? null,
-      email: r.email ?? null, phone: r.phone ?? null, yearsKnown: r.yearsKnown ?? null,
-    }))));
+    await publishF3Write(ctx, "recruitment_reference_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, references: body.references.length });
   });
 
@@ -108,12 +100,7 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     const errors = validateRelationshipDeclaration(body as RelationshipDeclaration);
     if (errors.length > 0) throw new HttpError(422, "INVALID_DECLARATION", errors.join("; "));
 
-    await db.transaction((tx) => repo.updateCandidateFields(tx, ctx.tenantId, id, {
-      // Drop any relations when the flag is false so the stored record can't be an
-      // inconsistent "false + populated relations" (which a COI consumer would miss).
-      relationshipDeclaration: { hasPriorRelationship: body.hasPriorRelationship, relations: body.hasPriorRelationship ? (body.relations ?? []) : [] } as never,
-      updatedBy: ctx.actorId,
-    } as never));
+    await publishF3Write(ctx, "recruitment_reference_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, hasPriorRelationship: body.hasPriorRelationship });
   });
 

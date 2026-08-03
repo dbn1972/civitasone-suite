@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * ICC / POSH complaint CRUD (Sprint 4: T25–T29).
  *
@@ -6,7 +8,6 @@
  *   POST /v1/hrms/icc/complaints/:id/hearings   record a hearing
  *   GET  /v1/hrms/icc/complaints/:id/hearings   list hearings
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
@@ -26,11 +27,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       summary: z.string().min(10).max(5000),
     }).parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsIccComplaints).values({
-      id, tenantId: ctx.tenantId, complainantId: body.complainantId,
-      respondentId: body.respondentId ?? null, summary: body.summary,
-      createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "disciplinary_icc_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "filed", confidential: true });
   });
 
@@ -51,11 +48,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       finding: z.string().max(24).optional(),
     }).parse(req.body);
     const hid = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsIccHearings).values({
-      id: hid, tenantId: ctx.tenantId, complaintId: id,
-      hearingDate: body.hearingDate, notes: body.notes ?? null,
-      finding: body.finding ?? null, conductedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "disciplinary_icc_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: hid, complaintId: id });
   });
 
