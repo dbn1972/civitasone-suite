@@ -11,13 +11,12 @@ import * as queries from "./queries.js";
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
 export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
-  // Issue — returns the plaintext key exactly once.
   app.post("/identity/api-keys", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const body = issueApiKeyBody.parse(req.body);
     const result = await commands.issueApiKey(ctx, body);
-    return reply.code(201).send(result);
+    return reply.code(202).send(result);
   });
 
   app.get("/identity/api-keys", async (req, reply) => {
@@ -36,34 +35,28 @@ export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(view);
   });
 
-  // Rotate — new secret for same id; previous secret invalidated immediately.
   app.post("/identity/api-keys/:id/rotate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = apiKeyIdParam.parse(req.params);
     const body = rotateApiKeyBody.parse(req.body ?? {});
     const result = await commands.rotateApiKey(ctx, id, body.reason);
-    return reply.code(200).send(result);
+    return reply.code(202).send(result);
   });
 
-  // Revoke — terminal + idempotent.
   app.delete("/identity/api-keys/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = apiKeyIdParam.parse(req.params);
     const body = revokeApiKeyBody.parse(req.body ?? {});
-    return reply.send(await commands.revokeApiKey(ctx, id, body.reason));
+    return reply.code(202).send(await commands.revokeApiKey(ctx, id, body.reason));
   });
 
-  // Verify — internal introspection used by other services / gateways to
-  // validate a presented key + scope. Admin/internal-gated.
   app.post("/identity/api-keys/verify", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const body = verifyApiKeyBody.parse(req.body);
     const result = await commands.verifyApiKey(body.key, body.requiredScope);
-    // tenant isolation: a verified key from another tenant must not be treated
-    // as valid for the caller's tenant.
     if (result.valid && result.tenantId && result.tenantId !== ctx.tenantId) {
       return reply.send({ valid: false, reason: "cross-tenant key" });
     }

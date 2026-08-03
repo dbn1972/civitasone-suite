@@ -8,6 +8,8 @@ import {
 } from "@civitasone/schemas/identity";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext } from "../../shared/context.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 export async function deviceRoutes(app: FastifyInstance): Promise<void> {
@@ -15,23 +17,31 @@ export async function deviceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const body = deviceRegisterRequestSchema.parse(req.body);
     const trustToken = repo.mintTrustToken(body.deviceId, ctx.actorId);
-    await repo.upsertDevice({
-      id: body.deviceId,
+    await queue.publish(COMMANDS.deviceUpsert, {
+      messageId: randomUUID(),
+      type: COMMANDS.deviceUpsert,
       tenantId: ctx.tenantId,
-      userId: ctx.actorId,
-      platform: body.platform,
-      label: body.label,
-      fingerprint: body.fingerprint,
-      trustToken,
-      trustLevel: "recognized",
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        id: body.deviceId,
+        tenantId: ctx.tenantId,
+        userId: ctx.actorId,
+        platform: body.platform,
+        label: body.label,
+        fingerprint: body.fingerprint,
+        trustToken,
+        trustLevel: "recognized",
+      },
     });
-    sendValidated(reply, deviceRegisterResponseSchema, {
-      deviceId: body.deviceId,
-      trustToken,
-      trustLevel: "recognized",
-    });
+    return reply.code(202).send(
+      deviceRegisterResponseSchema.parse({
+        deviceId: body.deviceId,
+        trustToken,
+        trustLevel: "recognized",
+      }),
+    );
   });
 
   app.post("/v1/devices/step-up", async (req, reply) => {

@@ -21,6 +21,10 @@ export const COMMANDS = {
   rbacRevokePermission:  "identity.rbac.permission.revoke",
   rbacAssignRole:        "identity.rbac.role.assign",
   rbacRevokeRole:        "identity.rbac.role.revoke",
+  apiKeyIssue:   "identity.apikey.issue",
+  apiKeyRotate:  "identity.apikey.rotate",
+  apiKeyRevoke:  "identity.apikey.revoke",
+  deviceUpsert:  "identity.device.upsert",
 } as const;
 
 export const EVENTS = {
