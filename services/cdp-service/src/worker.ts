@@ -14,6 +14,7 @@ import { registerSegmentConsumers } from "./modules/segments/consumer.js";
 import { registerStewardConsumers } from "./modules/steward/consumer.js";
 import { registerActivationConsumers } from "./modules/activations/consumer.js";
 import { registerDsarConsumers } from "./modules/dsar/consumer.js";
+import { registerF3CdpConsumers } from "./modules/f3-consumer.js";
 import { handleCrmContactCreated, handleCrmContactUpdated } from "./modules/identity/crm-consumer.js";
 import { tenantScoped } from "./shared/tenant-queue.js";
 import { CONSUMED_EVENTS } from "./topics.js";
@@ -27,6 +28,7 @@ registerSegmentConsumers(queue);
 registerStewardConsumers(queue);
 registerActivationConsumers(queue);
 registerDsarConsumers(queue);
+registerF3CdpConsumers(queue);
 
 // Cross-service CRM events
 const scoped = tenantScoped(queue);

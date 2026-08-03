@@ -20,6 +20,7 @@ export const COMMANDS = {
   dependencyCreate:        "project.dependency.create",
   dependencyDelete:        "project.dependency.delete",
   baselineCreate:          "project.baseline.create",
+  f3RouteWrite:            "project.f3.route_write",
 } as const;
 
 export const EVENTS = {

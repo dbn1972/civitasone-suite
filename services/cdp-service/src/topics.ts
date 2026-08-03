@@ -38,6 +38,7 @@ export const COMMANDS = {
    * Consumed by modules/activations/consumer.ts, which hands the run to the channel.
    */
   activateSegment: "cdp.segment.activate",
+  f3RouteWrite: "cdp.f3.route_write",
 } as const;
 
 export const EVENTS = {

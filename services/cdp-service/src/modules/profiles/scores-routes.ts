@@ -6,10 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as repo from "./scores-repo.js";
 import * as profilesRepo from "./repo.js";
 
@@ -63,62 +60,16 @@ export async function profileScoreRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findByType(id, ctx.tenantId, scoreType);
     const scoreId = existing?.id ?? randomUUID();
 
-    await db.transaction(async (tx) => {
-      if (existing) {
-        const ok = await repo.updateScore(tx, existing.id, ctx.tenantId, existing.version, {
-          score: stored,
-          modelVersion: body.modelVersion,
-          computedAt,
-        });
-        if (!ok) {
-          throw new HttpError(409, "VERSION_CONFLICT", "score has been modified; retry with current version");
-        }
-      } else {
-        await repo.insert(tx, {
-          id: scoreId,
-          tenantId: ctx.tenantId,
-          profileId: id,
-          scoreType,
-          score: stored,
-          modelVersion: body.modelVersion,
-          computedAt,
-        });
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.scoreUpserted,
-        eventType: EVENTS.scoreUpserted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { profileId: id, scoreType, score: stored, modelVersion: body.modelVersion },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: existing ? "profile_score_updated" : "profile_score_created",
-          resourceType: "profile_score",
-          resourceId: scoreId,
-          outcome: "success",
-          metadata: { profileId: id, scoreType, modelVersion: body.modelVersion },
-        },
-      });
+    await publishF3Write(ctx, "score_upsert", scoreId, {
+      profileId: id,
+      scoreType,
+      score: stored,
+      modelVersion: body.modelVersion,
+      computedAt: computedAt.toISOString(),
+      existing: existing ? { id: existing.id, version: existing.version } : null,
     });
 
-    // No command is published here. The upsert above IS the authoritative write and
-    // `cdp.profile.score_upserted` (outbox, same transaction) is the downstream contract.
-    // Nothing in this service acts on a stored score asynchronously — segment criteria
-    // evaluate profile attributes, not scores — so a command would only advertise
-    // processing that does not exist.
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", id));
-
-    return reply.send({
+    return reply.status(202).send({
       data: {
         id: scoreId,
         profileId: id,
@@ -127,6 +78,8 @@ export async function profileScoreRoutes(app: FastifyInstance): Promise<void> {
         modelVersion: body.modelVersion,
         computedAt: computedAt.toISOString(),
         created: existing === null,
+        status: "accepted",
+        correlationId: ctx.correlationId,
       },
     });
   });

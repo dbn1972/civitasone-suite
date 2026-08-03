@@ -25,6 +25,7 @@ export const COMMANDS = {
   fleetScheduleMaintenance:  "asset.fleet.schedule_maintenance",
   fleetDeviceRegister:       "asset.fleet_device.register",
   fleetDeviceTelemetry:      "asset.fleet_device.telemetry",
+  f3RouteWrite:              "asset.f3.route_write",
 } as const;
 
 export const EVENTS = {

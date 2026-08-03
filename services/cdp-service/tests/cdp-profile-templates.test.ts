@@ -450,6 +450,7 @@ const H = vi.hoisted(() => ({
   profileFindByIdMock: vi.fn(),
   profileUpdateMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(async () => "m"),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -462,7 +463,7 @@ vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqu
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
-  queue: { publish: vi.fn(async () => "m") },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/profiles/template-repo.js", () => ({
@@ -648,13 +649,14 @@ describe("POST /v1/cdp/profile-templates", () => {
     sourcePriority: ["crm", "web"],
   };
 
-  it("201 — registers the template and emits event + audit", async () => {
+  it("202 — publishes template create command", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.version).toBe(1);
-    expect(H.insertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.insertMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -722,15 +724,16 @@ describe("POST /v1/cdp/profile-templates", () => {
 describe("PATCH /v1/cdp/profile-templates/:id", () => {
   const url = `/v1/cdp/profile-templates/${TPL_ID}`;
 
-  it("200 — amends the label and rules", async () => {
+  it("202 — publishes template update", async () => {
     H.findByIdMock.mockResolvedValue(makeTemplate());
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url, headers: auth(),
       payload: { label: "Retail (v2)", conflictRules: { email: { strategy: "most_recent" } }, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.version).toBe(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -773,12 +776,13 @@ describe("PATCH /v1/cdp/profile-templates/:id", () => {
     await app.close();
   });
 
-  it("409 — stale version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByIdMock.mockResolvedValue(makeTemplate());
     H.updateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url, headers: auth(), payload: { label: "x", version: 1 } });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -895,41 +899,27 @@ describe("POST /v1/cdp/profiles/:id/apply-template", () => {
     ],
   };
 
-  it("200 — writes the surviving attributes, keeps existing ones and appends lineage", async () => {
+  it("202 — publishes apply-template command", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     H.findByIdMock.mockResolvedValue(makeTemplate());
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.applied).toHaveLength(2);
     expect(r.json().data.ignoredAttributes).toEqual(["zodiac"]);
-    expect(r.json().data.version).toBe(2);
-
-    const patch = H.profileUpdateMock.mock.calls[0]?.[3] as {
-      attributes: Record<string, unknown>;
-      sourceLineage: Array<{ source: string }>;
-    };
-    expect(patch.attributes).toEqual({
-      existing: "kept",
-      email: "new@example.gov.in",
-      phone: "9876543210",
-    });
-    // One lineage entry per contributing source, deduplicated and sorted.
-    expect(patch.sourceLineage.map((e) => e.source)).toEqual(["crm", "web"]);
+    expect(r.json().data.status).toBe("accepted");
+    expect(H.profileUpdateMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — emits the applied event carrying names and sources but no values", async () => {
+  it("202 — route does not enqueue events directly", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     H.findByIdMock.mockResolvedValue(makeTemplate());
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
-    const applied = H.enqueueMock.mock.calls
-      .map((c) => c[1] as { eventType: string; payload: Record<string, unknown> })
-      .find((e) => e.eventType === "cdp.profile.template_applied");
-    expect(applied).toBeDefined();
-    expect(JSON.stringify(applied?.payload)).not.toContain("new@example.gov.in");
+    expect(r.statusCode).toBe(202);
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -958,13 +948,14 @@ describe("POST /v1/cdp/profiles/:id/apply-template", () => {
     await app.close();
   });
 
-  it("409 — stale profile version", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     H.findByIdMock.mockResolvedValue(makeTemplate());
     H.profileUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

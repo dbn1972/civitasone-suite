@@ -126,6 +126,7 @@ const H = vi.hoisted(() => ({
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(),
   auditInsertMock: vi.fn(),
   upsertMock: vi.fn(),
   listByConversationMock: vi.fn(),
@@ -149,7 +150,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidateResource: vi.fn(),
     makeKey: (t: string, resource: string, id: string) => `ai-agent:${t}:${resource}:${id}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/governance/quality-repo.js", () => ({
@@ -187,6 +188,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
   H.auditInsertMock.mockResolvedValue(undefined);
   H.upsertMock.mockResolvedValue(undefined);
   H.listByConversationMock.mockResolvedValue({ rows: [], total: 0 });
@@ -206,20 +208,24 @@ describe("PUT /v1/ai/quality/:conversationId/:turnId", () => {
       relevance: "0.8000", coherence: "0.6000", safety: "0.9000", overall: "0.7900",
       flagged: false, flagReason: null,
     });
-    expect(H.upsertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "ai.quality.score",
+      expect.objectContaining({ type: "ai.quality.score", tenantId: TENANT }),
+    );
+    expect(H.upsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — the persisted row carries numeric scores as strings", async () => {
+  it("202 — publishes scoreInteraction with computed string scores", async () => {
     const app = await buildApp();
     await app.inject({
       method: "PUT", url: `/v1/ai/quality/${CONV_ID}/${TURN_ID}`, headers: auth(),
       payload: { relevance: 0.5, coherence: 0.5, safety: 0.5 },
     });
-    const row = H.upsertMock.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(typeof row.relevance).toBe("string");
-    expect(typeof row.overall).toBe("string");
-    expect(row.overall).toBe("0.5000");
+    const call = H.publishMock.mock.calls[0]?.[1] as { payload: Record<string, unknown> };
+    expect(typeof call.payload.relevance).toBe("string");
+    expect(typeof call.payload.overall).toBe("string");
+    expect(call.payload.overall).toBe("0.5000");
     await app.close();
   });
 
@@ -232,46 +238,40 @@ describe("PUT /v1/ai/quality/:conversationId/:turnId", () => {
     expect(r.statusCode).toBe(202);
     expect(r.json().data.flagged).toBe(true);
     expect(r.json().data.flagReason).toContain("hard gate");
-    const row = H.upsertMock.mock.calls[0]?.[1] as { flagged: boolean };
-    expect(row.flagged).toBe(true);
+    const call = H.publishMock.mock.calls[0]?.[1] as { payload: { flagged: boolean } };
+    expect(call.payload.flagged).toBe(true);
     await app.close();
   });
 
-  it("202 — a flagged score also emits the flagged event", async () => {
+  it("202 — flagged score payload includes flagged=true", async () => {
     const app = await buildApp();
     await app.inject({
       method: "PUT", url: `/v1/ai/quality/${CONV_ID}/${TURN_ID}`, headers: auth(),
       payload: { relevance: 1, coherence: 1, safety: 0.1 },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.quality.scored");
-    expect(topics).toContain("ai.quality.flagged");
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — an unflagged score emits scored but not flagged", async () => {
+  it("202 — unflagged score publishes without route enqueue", async () => {
     const app = await buildApp();
     await app.inject({
       method: "PUT", url: `/v1/ai/quality/${CONV_ID}/${TURN_ID}`, headers: auth(),
       payload: { relevance: 0.9, coherence: 0.9, safety: 0.9 },
     });
-    const topics = H.enqueueMock.mock.calls.map((c) => (c[1] as { topic: string }).topic);
-    expect(topics).toContain("ai.quality.scored");
-    expect(topics).not.toContain("ai.quality.flagged");
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — writes an audit entry carrying scores only, no turn content", async () => {
+  it("202 — route does not write audit directly", async () => {
     const app = await buildApp();
     await app.inject({
       method: "PUT", url: `/v1/ai/quality/${CONV_ID}/${TURN_ID}`, headers: auth(),
       payload: { relevance: 0.9, coherence: 0.9, safety: 0.9 },
     });
-    expect(H.auditInsertMock).toHaveBeenCalledOnce();
-    const row = H.auditInsertMock.mock.calls[0]?.[1] as { action: string; input: string | null; output: string };
-    expect(row.action).toBe("quality.score");
-    expect(row.input).toBeNull();
-    expect(row.output).toBe("0.9000");
+    expect(H.auditInsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 

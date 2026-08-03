@@ -5,43 +5,40 @@ import { COMMANDS } from "../../topics.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function createChecklist(
+export async function storePut(
   ctx: RequestContext,
-  body: { title: string; description?: string | null; items: string[] },
+  pluginId: string,
+  key: string,
+  value: unknown,
+  sizeBytes: number,
 ): Promise<Accepted> {
   const id = randomUUID();
-  await queue.publish(COMMANDS.checklistCreate, {
+  await queue.publish(COMMANDS.storePut, {
     messageId: id,
-    type: COMMANDS.checklistCreate,
+    type: COMMANDS.storePut,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: {
-      id,
-      tenantId: ctx.tenantId,
-      title: body.title,
-      description: body.description ?? null,
-      items: body.items,
-    },
+    payload: { id, tenantId: ctx.tenantId, pluginId, key, value, sizeBytes },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function completeChecklist(
+export async function storeDelete(
   ctx: RequestContext,
-  id: string,
-  version: number,
+  pluginId: string,
+  key: string,
 ): Promise<Accepted> {
-  const messageId = randomUUID();
-  await queue.publish(COMMANDS.checklistComplete, {
-    messageId,
-    type: COMMANDS.checklistComplete,
+  const id = randomUUID();
+  await queue.publish(COMMANDS.storeDelete, {
+    messageId: id,
+    type: COMMANDS.storeDelete,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, version },
+    payload: { tenantId: ctx.tenantId, pluginId, key },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
