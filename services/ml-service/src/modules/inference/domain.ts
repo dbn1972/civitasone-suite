@@ -414,10 +414,13 @@ async function logPrediction(
         fallbackReason: response.reason ?? null,
       });
 
-      // Emit event via outbox for downstream consumers
+      // The outbox relay routes on `topic`, so it must be the domain-specific
+      // topic: notification-service and plugin-service subscribe per domain and
+      // never see events published under a single generic topic.
+      const eventTopic = getEventTypeForDomain(domain);
       await enqueue(tx, {
-        topic: EVENTS.leadScored, // Generic — actual topic depends on domain
-        eventType: getEventTypeForDomain(domain),
+        topic: eventTopic,
+        eventType: eventTopic,
         tenantId,
         actorId: tenantId, // system-generated prediction
         correlationId,
@@ -432,6 +435,9 @@ async function logPrediction(
           modelVersion: response.modelVersion ?? null,
           timestamp: new Date().toISOString(),
           correlationId,
+          ...(domain === "transactions"
+            ? { severity: anomalySeverity(response.prediction) }
+            : {}),
         },
       });
     });
@@ -439,6 +445,18 @@ async function logPrediction(
     // Best-effort — never block the prediction response
     log.error({ tenantId, domain, entityId, err: (err as Error).message }, "failed to log prediction");
   }
+}
+
+/**
+ * Anomaly severity band for the transactions domain. Downstream consumers gate
+ * anomaly alerts on `severity === "high"`, so the event is inert without it.
+ * Bands mirror DEFAULT_THRESHOLDS in platform-integration.
+ */
+function anomalySeverity(prediction: number | null): "low" | "medium" | "high" {
+  if (prediction == null) return "low";
+  if (prediction > 0.70) return "high";
+  if (prediction > 0.40) return "medium";
+  return "low";
 }
 
 /**
