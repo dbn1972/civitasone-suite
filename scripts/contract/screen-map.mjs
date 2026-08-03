@@ -101,6 +101,7 @@ const SERVICE_DIR_MAP = {
   'workflow': 'workflow-service',
   'analytics': 'analytics-service',
   'recommendations': 'recommendation-service',
+  'ai': 'ai-agent-service',
   'locations': 'location-service',
   'tenant': 'tenant-service',
   'sync': 'identity-service',

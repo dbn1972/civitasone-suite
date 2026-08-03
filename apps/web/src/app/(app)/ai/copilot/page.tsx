@@ -1,21 +1,42 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getAiCopilot } from "../_data";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { Card, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { getCopilotTurns } from "../../../_data/loaders";
+import { AskCopilotForm } from "./AskCopilotForm";
+import { summariseTurns } from "./copilot";
+import { TurnHistoryTable } from "./TurnHistoryTable";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const { data, source } = await getAiCopilot();
+export default async function CopilotPage() {
+  const { data: turns, source } = await getCopilotTurns();
+  const summary = summariseTurns(turns);
+
   return (
-    <main className="page-main" aria-labelledby="page-heading">
-      <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/ai">AI & Copilot</a>
-      </nav>
-      <ModuleListPage
-        title="AI — Copilot"
-        description="In-context copilot turns."
-        rows={data}
-        source={source}
+    <>
+      <PageHeader
+        title="Copilot"
+        subtitle="Ask a question in context. Every turn is recorded with its sources and latency."
+        back="/ai"
+        actions={<a className="btn" href="/ai/governance">Governance</a>}
       />
-    </main>
+      {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="💬" iconBg="#e0f2fe" label="Turns" value={summary.total.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#dcfce7" label="Answered" value={summary.answered.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" iconBg="#fef3c7" label="Awaiting" value={summary.awaiting.toLocaleString("en-IN")} />
+        <StatCard
+          icon="⚡"
+          iconBg="#fce7f3"
+          label="Avg Latency"
+          value={summary.averageLatencyMs > 0 ? `${summary.averageLatencyMs.toLocaleString("en-IN")} ms` : "—"}
+        />
+      </StatGrid>
+
+      <AskCopilotForm />
+
+      <Card title="Turn History">
+        <TurnHistoryTable turns={turns} />
+      </Card>
+    </>
   );
 }

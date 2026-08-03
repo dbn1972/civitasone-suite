@@ -16,6 +16,7 @@ import type {
   CRMForecast,
   AccountHealthEntry,
   AccountHealthBreakdown,
+  CopilotTurn,
   DealSummary,
   ContactDetail,
   CRMActivityEntry,
@@ -179,6 +180,8 @@ import {
   crmForecastSchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
+  copilotTurnsListSchema,
+  copilotTurnDetailSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
@@ -2337,6 +2340,39 @@ export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[
     revalidateSeconds: 30,
     telemetryKey: "crm.pipeline.deals",
     mapResponse: mapPipelineDeals,
+  });
+}
+
+/** Recent copilot turns for the tenant, newest first. */
+export async function getCopilotTurns(): Promise<LoaderResult<CopilotTurn[]>> {
+  return fetchJson("/api/v1/ai/copilot/turns?limit=50", [] as CopilotTurn[], {
+    revalidateSeconds: 0,
+    telemetryKey: "ai.copilot.turns",
+    responseSchema: copilotTurnsListSchema,
+    mapResponse: (payload) => payload.data.map((turn) => ({
+      ...turn,
+      sourceCitations: (turn.sourceCitations ?? []).map((citation) => ({
+        ...citation,
+        id: citation.id ?? "",
+      })),
+    })),
+  });
+}
+
+/** A single copilot turn, including the service-classified latency bucket. */
+export async function getCopilotTurn(id: string): Promise<LoaderResult<CopilotTurn | null>> {
+  return fetchJson(`/api/v1/ai/copilot/turns/${id}`, null as CopilotTurn | null, {
+    revalidateSeconds: 0,
+    telemetryKey: "ai.copilot.turn",
+    responseSchema: copilotTurnDetailSchema,
+    mapResponse: (payload) => ({
+      ...payload.data,
+      latencyBucket: payload.data.latencyBucket ?? null,
+      sourceCitations: (payload.data.sourceCitations ?? []).map((citation) => ({
+        ...citation,
+        id: citation.id ?? "",
+      })),
+    }),
   });
 }
 

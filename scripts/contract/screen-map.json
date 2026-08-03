@@ -274,14 +274,33 @@
     },
     {
       "module": "ai",
+      "screen": "/ai/copilot/[id]",
+      "loaders": [
+        "getCopilotTurn"
+      ],
+      "apiPaths": [
+        "/api/v1/ai/copilot/turns/:param"
+      ],
+      "upstream": "ai → /v1/ai/copilot/turns/:param",
+      "routeHandler": "/v1/ai/copilot/turns/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "ai",
       "screen": "/ai/copilot",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getCopilotTurns"
+      ],
+      "apiPaths": [
+        "/api/v1/ai/copilot/turns"
+      ],
+      "upstream": "ai → /v1/ai/copilot/turns",
+      "routeHandler": "/v1/ai/copilot/turns",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "ai",
@@ -7980,9 +7999,9 @@
     }
   ],
   "counts": {
-    "wired": 207,
+    "wired": 209,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 443
+    "noLoader": 442
   }
 }

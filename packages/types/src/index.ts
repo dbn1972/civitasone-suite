@@ -135,6 +135,34 @@ export interface CRMDealSummary {
   valueDisplay: string;
 }
 
+/** A retrieved document cited by a copilot answer. */
+export interface CopilotCitation {
+  id: string;
+  title?: string;
+  url?: string;
+  /** Retrieval relevance, when the retriever reported one. */
+  score?: number;
+}
+
+/**
+ * One copilot question and its answer. `response` is null until the consumer
+ * has produced the answer — the ask endpoint returns 202, not the answer.
+ */
+export interface CopilotTurn {
+  id: string;
+  userId: string | null;
+  prompt: string;
+  response: string | null;
+  sourceCitations: CopilotCitation[];
+  model: string | null;
+  tokens: number | null;
+  latencyMs: number | null;
+  createdAt: string;
+  version: number;
+  /** Latency band as classified by ai-agent-service; only on the detail read. */
+  latencyBucket?: 'fast' | 'normal' | 'slow' | null;
+}
+
 /** Health bands owned by recommendation-service scoring. */
 export type HealthBand = 'critical' | 'at_risk' | 'healthy' | 'thriving';
 

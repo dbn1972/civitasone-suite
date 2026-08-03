@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-08-03T19:54:57.167Z
+Generated: 2026-08-03T20:03:36.381Z
 
-**Summary:** 207 WIRED | 0 MISSING | 0 MISMATCH | 443 NO_LOADER
+**Summary:** 209 WIRED | 0 MISSING | 0 MISMATCH | 442 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -30,7 +30,8 @@ Generated: 2026-08-03T19:54:57.167Z
 | admin | /admin/tenants | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/agents | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/chat | — | — | — | — | — | — NO_LOADER |
-| ai | /ai/copilot | — | — | — | — | — | — NO_LOADER |
+| ai | /ai/copilot/[id] | getCopilotTurn | /api/v1/ai/copilot/turns/:param | ai → /v1/ai/copilot/turns/:param | ✓ `/v1/ai/copilot/turns/:id` | ✓ | ✅ WIRED |
+| ai | /ai/copilot | getCopilotTurns | /api/v1/ai/copilot/turns | ai → /v1/ai/copilot/turns | ✓ `/v1/ai/copilot/turns` | ✓ | ✅ WIRED |
 | ai | /ai/governance | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/guardrails | — | — | — | — | — | — NO_LOADER |
 | ai | /ai | — | — | — | — | — | — NO_LOADER |
