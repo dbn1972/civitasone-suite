@@ -19,6 +19,8 @@ const executeStepBody = z.object({
   profileId: z.string().uuid(),
   stepIndex: z.number().int().min(0),
   stepType: z.string().min(1),
+  /** Attributes a `condition_check` step evaluates against. */
+  context: z.record(z.unknown()).optional(),
 });
 
 export async function stepRoutes(app: FastifyInstance): Promise<void> {
@@ -67,12 +69,35 @@ export async function stepRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_STEP_INDEX", indexError);
     }
 
+    // The journey definition — not the request — decides what this step does.
+    // Without this check a caller holding execute permission could ask for a
+    // different action than the step the journey actually declares, and the
+    // config the consumer dispatches on comes from the stored definition only.
+    const step = journey.steps[body.stepIndex] ?? {};
+    const declaredType = typeof step["type"] === "string" ? (step["type"] as string) : null;
+    if (declaredType !== null && declaredType !== body.stepType) {
+      throw new HttpError(
+        422,
+        "STEP_TYPE_MISMATCH",
+        `step ${body.stepIndex} of this journey is '${declaredType}', not '${body.stepType}'`,
+      );
+    }
+
+    const rawConfig = step["config"];
+    const stepConfig =
+      rawConfig !== null && typeof rawConfig === "object" && !Array.isArray(rawConfig)
+        ? (rawConfig as Record<string, unknown>)
+        : {};
+
     return reply.code(202).send(
       await commands.executeStep(ctx, {
         journeyId: body.journeyId,
         profileId: body.profileId,
         stepIndex: body.stepIndex,
         stepType: body.stepType,
+        stepConfig,
+        totalSteps: journey.steps.length,
+        ...(body.context !== undefined ? { context: body.context } : {}),
       }),
     );
   });

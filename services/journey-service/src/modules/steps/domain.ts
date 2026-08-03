@@ -2,17 +2,24 @@
  * steps/domain.ts — Step type validation and execution logic.
  *
  * Step types: send_notification, wait, condition_check, api_call
+ *   Each type's dispatch (and its config contract) lives in ./dispatch.ts.
  * Step statuses: pending → executing → completed / failed / skipped
+ *   `waiting` is the parked state of a `wait` step: the run stops there until
+ *   resume_at elapses and the wait sweeper resumes it.
  */
 
 export type StepType = "send_notification" | "wait" | "condition_check" | "api_call";
-export type StepStatus = "pending" | "executing" | "completed" | "failed" | "skipped";
+export type StepStatus = "pending" | "executing" | "waiting" | "completed" | "failed" | "skipped";
 
-const VALID_STEP_TYPES: StepType[] = ["send_notification", "wait", "condition_check", "api_call"];
+/** The step types this service actually dispatches. Single source of truth. */
+export const STEP_TYPES = ["send_notification", "wait", "condition_check", "api_call"] as const;
+
+const VALID_STEP_TYPES: StepType[] = [...STEP_TYPES];
 
 const STEP_STATUS_TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  pending: ["executing"],
-  executing: ["completed", "failed", "skipped"],
+  pending: ["executing", "waiting"],
+  executing: ["waiting", "completed", "failed", "skipped"],
+  waiting: ["executing", "completed", "failed", "skipped"],
   completed: [],
   failed: [],
   skipped: [],
@@ -45,6 +52,14 @@ export function validateStepTransition(from: StepStatus, to: StepStatus): string
  */
 export function isStepTerminal(status: StepStatus): boolean {
   return status === "completed" || status === "failed" || status === "skipped";
+}
+
+/**
+ * A parked `wait` step: not terminal, but not making progress either. The run
+ * resumes only when the sweeper finds its resume_at due.
+ */
+export function isStepParked(status: StepStatus): boolean {
+  return status === "waiting";
 }
 
 /**

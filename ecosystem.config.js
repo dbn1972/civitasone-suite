@@ -372,7 +372,7 @@ module.exports = {
     worker("ai-agent",     "ai_agent_svc",     "civitas_ai_agent"),
     worker("field",        "field_svc",        "civitas_field"),
     worker("catalogue",    "catalogue_svc",    "civitas_catalogue"),
-    worker("journey",      "journey_svc",     "civitas_journey"),
+    worker("journey",      "journey_svc",      "civitas_journey", { JOURNEY_SCANNER_DATABASE_URL: scannerDbUrl("journey_scanner", "civitas_journey", "JOURNEY_SCANNER_DATABASE_URL") }),
     worker("loyalty",      "loyalty_svc",      "civitas_loyalty"),
     worker("recommendation", "recommendation_svc", "civitas_recommendation"),
     worker("cdp",          "cdp_svc",         "civitas_cdp"),
