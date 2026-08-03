@@ -2,6 +2,7 @@
  * INT-12 — bounce ingestion + suppression list management.
  *
  * POST   /v1/notification/bounces                    — record a bounce (202)
+ * POST   /v1/notification/complaints                 — record a spam complaint (202)
  * GET    /v1/notification/suppressions               — list suppression entries
  * GET    /v1/notification/suppressions/check         — is a recipient suppressed?
  * DELETE /v1/notification/suppressions/:id           — release a suppression (202)
@@ -29,6 +30,23 @@ const recordBounceBody = z.object({
   occurredAt: z.string().datetime().optional(),
 });
 
+/**
+ * A complaint needs no smtpCode and no reason: the recipient pressing "report
+ * spam" IS the fact, so there is no 422 counterpart to the bounce route's
+ * unclassifiable check. `feedbackType` is optional and free-form-tolerant —
+ * the consumer normalises it (see normalizeFeedbackType) rather than the route
+ * rejecting an ESP whose label spelling is unfamiliar, because rejecting a real
+ * complaint would leave the recipient receiving mail.
+ */
+const recordComplaintBody = z.object({
+  recipient: z.string().min(3).max(254),
+  deliveryId: z.string().uuid().optional(),
+  channel: z.enum(["email", "sms", "whatsapp", "push"]).optional(),
+  feedbackType: z.string().min(1).max(32).optional(),
+  reason: z.string().min(1).max(2000).optional(),
+  occurredAt: z.string().datetime().optional(),
+});
+
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200),
   offset: z.coerce.number().int().min(0).default(0),
@@ -52,6 +70,13 @@ export async function bounceRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "UNCLASSIFIABLE_BOUNCE", "at least one of smtpCode or reason is required");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordBounce(ctx, body));
+  });
+
+  app.post("/v1/notification/complaints", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = recordComplaintBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordComplaint(ctx, body));
   });
 
   app.get("/v1/notification/suppressions", async (req, reply) => {

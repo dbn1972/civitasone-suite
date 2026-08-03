@@ -65,6 +65,8 @@ export const COMMANDS = {
   // INT-12: Bounce classification + suppression
   recordBounce:           "notification.bounce.record",
   releaseSuppression:     "notification.suppression.release",
+  // P1-3: ESP feedback-loop spam complaints
+  recordComplaint:        "notification.complaint.record",
   // F.5: Human handoff — AI pause/resume protocol
   transitionHandoff:      "notification.inbox.handoff.transition",
 } as const;
@@ -229,11 +231,26 @@ export const EVENTS = {
    */
   bounceRecorded:          "notification.bounce.recorded",
   /**
+   * P1-3 — a spam/abuse complaint relayed by an ESP feedback loop has been
+   * recorded, and the recipient suppressed.
+   * Payload: `{ complaintEventId: string; deliveryId: string | null; channel: string;
+   *            feedbackType: "abuse"|"fraud"|"virus"|"other"; complaintCount: number }`
+   * Fires: once per recorded complaint. Always accompanied by
+   * `recipientSuppressed` — unlike a bounce there is no threshold, so a
+   * complaint that did not suppress is impossible. The recipient address is NOT
+   * in the payload. `complaintCount` includes this complaint.
+   */
+  complaintRecorded:       "notification.complaint.recorded",
+  /**
    * A recipient has been added to the tenant's suppression list.
-   * Payload: `{ bounceEventId: string; recipientHash: string; channel: string;
-   *            reason: "hard_bounce"|"soft_bounce_threshold"; softBounceCount: number }`
-   * Fires: on a hard bounce, or when soft bounces reach the configured
-   * threshold. `recipientHash` is an irreversible blind index, not an address.
+   * Payload: `{ bounceEventId: string | null; complaintEventId: string | null;
+   *            recipientHash: string; channel: string;
+   *            reason: "hard_bounce"|"soft_bounce_threshold"|"complaint";
+   *            softBounceCount: number }`
+   * Fires: on a hard bounce, when soft bounces reach the configured threshold,
+   * or on any spam complaint. Exactly one of `bounceEventId` /
+   * `complaintEventId` is non-null, identifying which feedback caused it.
+   * `recipientHash` is an irreversible blind index, not an address.
    */
   recipientSuppressed:     "notification.suppression.added",
   /**

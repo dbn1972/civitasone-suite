@@ -24,6 +24,25 @@ export async function recordBounce(ctx: RequestContext, payload: RecordBouncePay
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+export interface RecordComplaintPayload {
+  recipient: string;
+  deliveryId?: string | undefined;
+  channel?: string | undefined;
+  feedbackType?: string | undefined;
+  reason?: string | undefined;
+  occurredAt?: string | undefined;
+}
+
+export async function recordComplaint(ctx: RequestContext, payload: RecordComplaintPayload): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.recordComplaint, {
+    messageId: id, type: COMMANDS.recordComplaint, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...payload },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function releaseSuppression(ctx: RequestContext, suppressionId: string): Promise<Accepted> {
   const messageId = randomUUID();
   await queue.publish(COMMANDS.releaseSuppression, {
