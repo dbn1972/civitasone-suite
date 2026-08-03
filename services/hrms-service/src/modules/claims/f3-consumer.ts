@@ -17,6 +17,8 @@ export function registerF3_claims_Consumers(queue: Queue): void {
       "claims_routes__1",
       "claims_routes__2",
       "claims_routes__3",
+      "claims_routes__4",
+      "claims_routes__5",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -58,6 +60,46 @@ export function registerF3_claims_Consumers(queue: Queue): void {
                     ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
                     updatedBy: msg.actorId,
                   }, c.version);
+            break;
+          }
+          case "claims_routes__4": {
+            const employeeId = String(params.id ?? "");
+            await repo.insertLtc(tx, {
+              id,
+              tenantId: p.tenantId,
+              employeeId,
+              blockYear: body.blockYear,
+              ltcType: body.ltcType,
+              journeyFrom: body.journeyFrom,
+              journeyTo: body.journeyTo,
+              travelDate: body.travelDate,
+              familyMembers: Number(body.familyMembers ?? 1),
+              claimedFareMinor: BigInt(body.claimedFareMinor ?? 0),
+              entitlementMinor: BigInt(body.entitlementMinor ?? 0),
+              status: "submitted",
+              ...(body.remarks ? { remarks: body.remarks } : {}),
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
+            break;
+          }
+          case "claims_routes__5": {
+            const employeeId = String(params.id ?? "");
+            await repo.insertCea(tx, {
+              id,
+              tenantId: p.tenantId,
+              employeeId,
+              academicYear: body.academicYear,
+              childName: body.childName,
+              childRef: body.childRef,
+              claimKind: body.claimKind,
+              claimedAmountMinor: BigInt(body.claimedAmountMinor ?? 0),
+              annualCapMinor: BigInt(body.annualCapMinor ?? 0),
+              status: "submitted",
+              ...(body.remarks ? { remarks: body.remarks } : {}),
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
             break;
           }
         }

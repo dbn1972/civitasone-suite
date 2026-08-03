@@ -3,7 +3,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -29,8 +28,8 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
       documentRef: z.string().optional(),
     }).parse(req.body);
     const entryId = randomUUID();
-    await publishF3Write(ctx, "service_book_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: entryId }) as any;
+    await publishF3Write(ctx, "service_book_routes__0", entryId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(202).send({ id: entryId, status: "accepted" }) as any;
   });
 
   // Edit an entry — refused once the entry has been attested (immutable).
@@ -45,8 +44,12 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const entry = await repo.getEntry(ctx.tenantId, entryId);
     if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");
     if (entry.attested) throw new HttpError(409, "ATTESTED_IMMUTABLE", "entry is attested and cannot be edited");
-    await repo.updateEntryDescription(ctx.tenantId, entryId, body.description, body.documentRef ?? null);
-    return reply.send({ id: entryId, updated: true });
+    await publishF3Write(ctx, "service_book_routes__1", entryId, {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+    });
+    return reply.code(202).send({ id: entryId, status: "accepted", updated: true }) as any;
   });
 
   // Attestation: competent-authority sign-off, immutable thereafter.
@@ -58,9 +61,12 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const entry = await repo.getEntry(ctx.tenantId, entryId);
     if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");
     if (entry.attested) throw new HttpError(409, "ALREADY_ATTESTED", "entry is already attested");
-    const row = await repo.attestEntry(ctx.tenantId, entryId, ctx.actorId, body.remarks ?? null);
-    if (!row) throw new HttpError(409, "ALREADY_ATTESTED", "entry is already attested");
-    return reply.send({ id: entryId, attested: true, attestedBy: row.attestedBy, attestedAt: row.attestedAt });
+    await publishF3Write(ctx, "service_book_routes__2", entryId, {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+    });
+    return reply.code(202).send({ id: entryId, status: "accepted", attested: true }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

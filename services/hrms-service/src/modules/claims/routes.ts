@@ -24,7 +24,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import type { LtcClaimRow, CeaClaimRow } from "./schema.js";
@@ -75,19 +75,13 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     await mustEmployee(ctx.tenantId, id);
 
     const claimId = randomUUID();
-    await repo.insertLtc(db, {
-      id: claimId, tenantId: ctx.tenantId, employeeId: id,
-      blockYear: body.blockYear, ltcType: body.ltcType,
-      journeyFrom: body.journeyFrom, journeyTo: body.journeyTo,
-      travelDate: body.travelDate, familyMembers: body.familyMembers,
-      claimedFareMinor: BigInt(body.claimedFareMinor),
-      entitlementMinor: BigInt(body.entitlementMinor),
-      status: "submitted",
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "claims_routes__4", claimId, {
+      body: { ...body, claimedFareMinor: body.claimedFareMinor, entitlementMinor: body.entitlementMinor },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send(jsonSafe({
-      id: claimId, employeeId: id, status: "submitted",
+    return reply.code(202).send(jsonSafe({
+      id: claimId, employeeId: id, status: "accepted",
       claimedFareMinor: BigInt(body.claimedFareMinor), entitlementMinor: BigInt(body.entitlementMinor),
     }));
   });
@@ -163,16 +157,17 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const claimId = randomUUID();
-    await repo.insertCea(db, {
-      id: claimId, tenantId: ctx.tenantId, employeeId: id,
-      academicYear: body.academicYear, childName: body.childName, childRef: body.childRef,
-      claimKind: body.claimKind, claimedAmountMinor: claimed, annualCapMinor: cap,
-      status: "submitted",
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "claims_routes__5", claimId, {
+      body: {
+        ...body,
+        claimedAmountMinor: body.claimedAmountMinor,
+        annualCapMinor: body.annualCapMinor,
+      },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send(jsonSafe({
-      id: claimId, employeeId: id, status: "submitted",
+    return reply.code(202).send(jsonSafe({
+      id: claimId, employeeId: id, status: "accepted",
       claimedAmountMinor: claimed, annualCapMinor: cap,
       remainingCapMinor: cap - committed - claimed,
     }));

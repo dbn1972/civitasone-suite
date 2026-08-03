@@ -29,7 +29,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -308,18 +308,16 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       );
     }
     const suspId = randomUUID();
-    await repo.insertSuspension(db, {
-      id: suspId, tenantId: ctx.tenantId, employeeId: id,
-      fromDate: body.fromDate, paySuspended: body.paySuspended,
-      subsistencePct: body.subsistencePct.toFixed(2), status: "active",
-      ...(body.caseId ? { caseId: body.caseId } : {}),
-      ...(body.orderRef ? { orderRef: body.orderRef } : {}),
-      ...(body.toDate ? { toDate: body.toDate } : {}),
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "disciplinary_routes__3", suspId, {
+      body: {
+        ...body,
+        subsistencePct: body.subsistencePct,
+      },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send({
-      id: suspId, employeeId: id, status: "active",
+    return reply.code(202).send({
+      id: suspId, employeeId: id, status: "accepted",
       paySuspended: body.paySuspended, subsistencePct: body.subsistencePct,
     });
   });

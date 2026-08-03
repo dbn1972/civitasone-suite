@@ -3,7 +3,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   fileRtiBody, assignPioBody, respondRtiBody, appealRtiBody, closeRtiBody, idParam,
 } from "./validators.js";
@@ -51,8 +50,12 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const body = fileRtiBody.parse(req.body);
     const id = randomUUID();
     const dueDate = addDays(body.receivedDate, body.slaDays);
-    await publishF3Write(ctx, "rti_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "filed", dueDate }) as any;
+    await publishF3Write(ctx, "rti_routes__0", id, {
+      body: { ...(req.body as Record<string, unknown>), dueDate },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+    });
+    return reply.code(202).send({ id, status: "accepted", dueDate }) as any;
   });
 
   // Assign a PIO (filed -> assigned).
@@ -61,11 +64,16 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = assignPioBody.parse(req.body);
-    const row = await repo.transitionRti(ctx.tenantId, id, ctx.actorId, {
-      from: ["filed"], to: "assigned", set: { pioId: body.pioId },
+    const existing = await repo.getRti(ctx.tenantId, id);
+    if (!existing || existing.status !== "filed") {
+      throw new HttpError(409, "INVALID_STATE", "request must be 'filed' to assign a PIO");
+    }
+    await publishF3Write(ctx, "rti_routes__1", id, {
+      body: { ...(req.body as Record<string, unknown>), from: ["filed"], to: "assigned" },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    if (!row) throw new HttpError(409, "INVALID_STATE", "request must be 'filed' to assign a PIO");
-    return reply.send({ id, status: "assigned", pioId: body.pioId });
+    return reply.code(202).send({ id, status: "accepted", pioId: body.pioId }) as any;
   });
 
   // PIO responds (filed|assigned -> responded).
@@ -74,12 +82,16 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = respondRtiBody.parse(req.body);
-    const row = await repo.transitionRti(ctx.tenantId, id, ctx.actorId, {
-      from: ["filed", "assigned"], to: "responded",
-      set: { responseText: body.responseText, respondedDate: body.respondedDate },
+    const existing = await repo.getRti(ctx.tenantId, id);
+    if (!existing || (existing.status !== "filed" && existing.status !== "assigned")) {
+      throw new HttpError(409, "INVALID_STATE", "request must be open to respond");
+    }
+    await publishF3Write(ctx, "rti_routes__2", id, {
+      body: { ...(req.body as Record<string, unknown>), from: ["filed", "assigned"], to: "responded" },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    if (!row) throw new HttpError(409, "INVALID_STATE", "request must be open to respond");
-    return reply.send({ id, status: "responded" });
+    return reply.code(202).send({ id, status: "accepted" }) as any;
   });
 
   // First appeal (responded -> appealed).
@@ -88,12 +100,16 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = appealRtiBody.parse(req.body);
-    const row = await repo.transitionRti(ctx.tenantId, id, ctx.actorId, {
-      from: ["responded"], to: "appealed",
-      set: { appealText: body.appealText, appealDate: body.appealDate },
+    const existing = await repo.getRti(ctx.tenantId, id);
+    if (!existing || existing.status !== "responded") {
+      throw new HttpError(409, "INVALID_STATE", "only a responded request can be appealed");
+    }
+    await publishF3Write(ctx, "rti_routes__3", id, {
+      body: { ...(req.body as Record<string, unknown>), from: ["responded"], to: "appealed" },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a responded request can be appealed");
-    return reply.send({ id, status: "appealed" });
+    return reply.code(202).send({ id, status: "accepted" }) as any;
   });
 
   // Close (responded|appealed -> closed).
@@ -102,12 +118,16 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = closeRtiBody.parse(req.body);
-    const row = await repo.transitionRti(ctx.tenantId, id, ctx.actorId, {
-      from: ["responded", "appealed"], to: "closed",
-      set: { closedDate: body.closedDate },
+    const existing = await repo.getRti(ctx.tenantId, id);
+    if (!existing || (existing.status !== "responded" && existing.status !== "appealed")) {
+      throw new HttpError(409, "INVALID_STATE", "request must be responded or appealed to close");
+    }
+    await publishF3Write(ctx, "rti_routes__4", id, {
+      body: { ...(req.body as Record<string, unknown>), from: ["responded", "appealed"], to: "closed" },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    if (!row) throw new HttpError(409, "INVALID_STATE", "request must be responded or appealed to close");
-    return reply.send({ id, status: "closed" });
+    return reply.code(202).send({ id, status: "accepted" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {
