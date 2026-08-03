@@ -5,7 +5,7 @@
  * Determinism across repeated HTTP calls is asserted here as well as in the
  * pure-domain tests.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -137,6 +137,19 @@ beforeEach(() => {
   H.listForProfileMock.mockResolvedValue({ rows: [], total: 0 });
   H.matrixListMock.mockResolvedValue({ rows: [], total: 0 });
   H.predictiveFindMock.mockResolvedValue(null);
+  // P2-1: consent is now resolved against crm-service. This suite is not about
+  // consent (see nba-consent-server-side.test.ts), so the lookup is stubbed to
+  // fail — which fails closed — and no real socket is ever opened.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("crm-service not available in this suite");
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 // ── POST /v1/recommendations/nba/generate ─────────────────────────────────────
@@ -231,7 +244,7 @@ describe("POST /v1/recommendations/nba/generate", () => {
       headers: auth(),
       payload: {
         profileId: PROFILE_ID,
-        context: { channel: "web", hasConsent: false },
+        context: { channel: "web" },
         candidates: [
           { id: "needs-consent", actionType: "x", signals: { affinity: 1 }, eligibility: { requiresConsent: true } },
           { id: "open", actionType: "x", signals: { affinity: 0.5 } },

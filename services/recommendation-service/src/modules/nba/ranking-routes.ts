@@ -21,6 +21,7 @@ import {
   type ActionCandidate,
   type EligibilityContext,
 } from "./ranking-domain.js";
+import { resolveConsentGranted } from "./consent-resolution.js";
 import { MAX_MATRIX_PRIORITY } from "./domain.js";
 
 const REC_ROLES = ["recommendation_admin", "crm_user", "sales_user", "super_admin"];
@@ -56,17 +57,33 @@ const eligibilitySchema = z
   })
   .strict();
 
+/**
+ * Request-supplied ranking context.
+ *
+ * P2-1: `hasConsent` is still ACCEPTED and then DISCARDED. Consent is a fact
+ * owned by crm-service, so letting the caller assert it was a consent bypass;
+ * but rejecting the key outright would turn a security fix into a 400 for any
+ * client still sending it. The transform allow-lists the fields that survive,
+ * so the parsed type carries no `hasConsent` and no downstream code can read it
+ * even by accident — the verdict can only come from consent-resolution.ts.
+ */
+const generateContext = z
+  .object({
+    channel: z.string().trim().min(1).max(64).optional(),
+    segment: z.string().trim().min(1).max(64).optional(),
+    hasConsent: z.boolean().optional(),
+    healthScore: z.number().min(0).max(100).optional(),
+  })
+  .strict()
+  .transform((ctx) => ({
+    ...(ctx.channel !== undefined ? { channel: ctx.channel } : {}),
+    ...(ctx.segment !== undefined ? { segment: ctx.segment } : {}),
+    ...(ctx.healthScore !== undefined ? { healthScore: ctx.healthScore } : {}),
+  }));
+
 const generateBody = z.object({
   profileId: z.string().uuid(),
-  context: z
-    .object({
-      channel: z.string().trim().min(1).max(64).optional(),
-      segment: z.string().trim().min(1).max(64).optional(),
-      hasConsent: z.boolean().optional(),
-      healthScore: z.number().min(0).max(100).optional(),
-    })
-    .strict()
-    .optional(),
+  context: generateContext.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(5),
   weights: z
     .object({
@@ -156,7 +173,17 @@ export async function nbaRankingRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const eligibilityContext: EligibilityContext = body.context ?? {};
+    // Consent is resolved here, at the edge, and handed to the pure domain as a
+    // boolean — and only when something in the candidate set is actually gated,
+    // so the ordinary request adds no CRM round-trip to the read budget.
+    const consentGranted = await resolveConsentGranted(
+      candidates,
+      body.profileId,
+      ctx.tenantId,
+      ctx.correlationId,
+    );
+
+    const eligibilityContext: EligibilityContext = { ...(body.context ?? {}), consentGranted };
     const eligible = applyEligibility(candidates, eligibilityContext);
     const ranked = rankActions(eligible, body.weights).slice(0, body.limit);
 
