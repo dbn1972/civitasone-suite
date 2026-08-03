@@ -2780,8 +2780,7 @@ export async function getLibraryBooks(query?: { search?: string; status?: "avail
   const params = new URLSearchParams();
   if (query?.search) params.set("search", query.search);
   if (query?.status) params.set("status", query.status);
-  const qs = params.toString();
-  return fetchJson<unknown, LibraryBookSummary[]>(`/api/v1/estab/library/books${qs ? `?${qs}` : ""}`, [], {
+  return fetchJson<unknown, LibraryBookSummary[]>(`/api/v1/estab/library/books?${params.toString()}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "estab.library.books",
     responseSchema: LibraryBookSummaryListSchema,
@@ -2799,8 +2798,9 @@ export async function getLibraryBookById(id: string): Promise<LoaderResult<Libra
 }
 
 export async function getLibraryIssues(status?: "issued" | "returned" | "overdue"): Promise<LoaderResult<LibraryIssueSummary[]>> {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return fetchJson<unknown, LibraryIssueSummary[]>(`/api/v1/estab/library/issues${qs}`, [], {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  return fetchJson<unknown, LibraryIssueSummary[]>(`/api/v1/estab/library/issues?${params.toString()}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "estab.library.issues",
     responseSchema: LibraryIssueSummaryListSchema,
@@ -4136,7 +4136,7 @@ export type RequestBreachReport = {
 
 /** Browse the service catalogue (active offerings). */
 export async function getCatalogueOfferings(): Promise<LoaderResult<CatalogueOfferingSummary[]>> {
-  return fetchJson<unknown, CatalogueOfferingSummary[]>("/v1/helpdesk/catalogue/offerings", [], {
+  return fetchJson<unknown, CatalogueOfferingSummary[]>("/api/v1/helpdesk/catalogue/offerings", [], {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.catalogue.offerings",
     mapResponse: (p) => ((p as { data?: CatalogueOfferingSummary[] } | null)?.data ?? []),
@@ -4145,7 +4145,7 @@ export async function getCatalogueOfferings(): Promise<LoaderResult<CatalogueOff
 
 /** Offering detail incl. request form schema, fulfilment stages and OLAs. */
 export async function getCatalogueOffering(id: string): Promise<LoaderResult<CatalogueOfferingSummary | null>> {
-  return fetchJson<unknown, CatalogueOfferingSummary | null>(`/v1/helpdesk/catalogue/offerings/${id}`, null, {
+  return fetchJson<unknown, CatalogueOfferingSummary | null>(`/api/v1/helpdesk/catalogue/offerings/${encodeURIComponent(id)}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.catalogue.offering",
     mapResponse: (p) => ((p as { data?: CatalogueOfferingSummary } | null)?.data ?? null),
@@ -4154,7 +4154,7 @@ export async function getCatalogueOffering(id: string): Promise<LoaderResult<Cat
 
 /** The current user's service requests (self-service portal — my requests). */
 export async function getMyServiceRequests(): Promise<LoaderResult<ServiceRequestSummary[]>> {
-  return fetchJson<unknown, ServiceRequestSummary[]>("/v1/helpdesk/catalogue/requests?mine=true", [], {
+  return fetchJson<unknown, ServiceRequestSummary[]>("/api/v1/helpdesk/catalogue/requests?mine=true", [], {
     revalidateSeconds: 15,
     telemetryKey: "helpdesk.catalogue.my_requests",
     mapResponse: (p) => ((p as { data?: ServiceRequestSummary[] } | null)?.data ?? []),
@@ -4164,7 +4164,7 @@ export async function getMyServiceRequests(): Promise<LoaderResult<ServiceReques
 /** SLA-breach report over service requests. */
 export async function getRequestBreachReport(): Promise<LoaderResult<RequestBreachReport>> {
   const empty: RequestBreachReport = { data: [], summary: { breached: 0, atRisk: 0, escalated: 0, total: 0 } };
-  return fetchJson<unknown, RequestBreachReport>("/v1/helpdesk/catalogue/requests/breaches", empty, {
+  return fetchJson<unknown, RequestBreachReport>("/api/v1/helpdesk/catalogue/requests/breaches", empty, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.catalogue.breaches",
     mapResponse: (p) => {
