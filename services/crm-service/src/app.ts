@@ -34,6 +34,7 @@ import { captureRoutes } from "./modules/activities/capture-routes.js";
 import { recurringTaskRoutes } from "./modules/activities/recurring-routes.js";
 import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
+import { sentimentRoutes } from "./modules/sentiment/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -81,6 +82,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(campaignRoiRoutes);
   // P1-9: customer onboarding raised on a won deal, gated on KYC verification.
   await app.register(onboardingRoutes);
+  // P2-6: Voice-of-Customer reporting over scored interactions.
+  await app.register(sentimentRoutes);
 
   return app;
 }

@@ -70,6 +70,13 @@ export const COMMANDS = {
   advanceOnboardingStage: "crm.onboarding_case.advance_stage",
   /** Record a KYC outcome against an onboarding case (P1-9). */
   recordOnboardingKyc: "crm.onboarding_case.record_kyc",
+  /**
+   * Score an interaction's text for Voice-of-Customer reporting (P2-6).
+   * Payload: { activityId, activityType, contactId, dealId, text }.
+   * The ONLY crm topic that carries interaction text — deliberately narrow, so the
+   * customer's words are not broadcast to every consumer of activity events (DPDP).
+   */
+  analyseSentiment: "crm.sentiment.analyse",
 } as const;
 
 export const EVENTS = {
@@ -168,6 +175,13 @@ export const EVENTS = {
    * Payload: { caseId, fromStatus, toStatus } — never the provider reference.
    */
   onboardingKycRecorded: "crm.onboarding_case.kyc_recorded",
+
+  // ── Voice of Customer (P2-6) ────────────────────────────────────────────────
+  /**
+   * An interaction was scored for sentiment.
+   * Payload: { activityId, polarity, score, themes, model } — never the text.
+   */
+  sentimentScored: "crm.interaction.sentiment_scored",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

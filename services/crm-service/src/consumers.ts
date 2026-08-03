@@ -24,6 +24,7 @@ import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.j
 import { registerTeamConsumers } from "./modules/teams/consumer.js";
 import { registerResidualF3Consumers } from "./modules/residual-f3/consumer.js";
 import { registerOnboardingConsumers } from "./modules/onboarding/consumer.js";
+import { registerSentimentConsumers } from "./modules/sentiment/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -42,4 +43,5 @@ export function registerAllConsumers(queue: Queue): void {
   registerTeamConsumers(queue);
   registerResidualF3Consumers(queue);
   registerOnboardingConsumers(queue);
+  registerSentimentConsumers(queue);
 }

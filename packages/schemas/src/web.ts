@@ -323,6 +323,30 @@ export const crmForecastSchema = z.object({
   }),
 });
 
+/**
+ * Voice-of-Customer aggregate (P2-6). `truncated` is nullish-tolerant so an older
+ * service that predates the flag reads as "the window was complete" rather than
+ * failing the whole response.
+ */
+export const crmVocSummarySchema = z.object({
+  data: z.object({
+    total: z.number().int(),
+    byPolarity: z.object({
+      positive: z.number().int(),
+      neutral: z.number().int(),
+      negative: z.number().int(),
+    }),
+    averageScore: z.number(),
+    negativeShare: z.number(),
+    topThemes: z.array(z.object({
+      theme: z.string(),
+      count: z.number().int(),
+      negativeCount: z.number().int(),
+    })),
+    truncated: z.boolean().nullish().transform((v) => v ?? false),
+  }),
+});
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });
