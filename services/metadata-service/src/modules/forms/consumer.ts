@@ -3,7 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { withTenant } from "../../shared/scope.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { formVersions, formPublicEndpoints } from "./schema.js";
+import { formVersions, formPublicEndpoints, formSubmissions } from "./schema.js";
 
 export function registerFormConsumers(q: Queue): void {
   q.subscribe(COMMANDS.FORM_MUTATE, async (msg) => {
@@ -78,6 +78,42 @@ export function registerFormConsumers(q: Queue): void {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "metadata", action: `form_${op}`, resourceType: "form_version", resourceId: p.id, outcome: "success" },
+      });
+    });
+  });
+
+  q.subscribe(COMMANDS.PUBLIC_FORM_SUBMIT, async (msg) => {
+    const p = msg.payload as Record<string, any>;
+    await withTenant(p.tenantId, async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.insert(formSubmissions).values({
+        id: p.id,
+        tenantId: p.tenantId,
+        formVersionId: p.formVersionId,
+        publicEndpointId: p.publicEndpointId,
+        contactName: p.contactName,
+        ...(p.contactEmail !== undefined ? { contactEmail: p.contactEmail } : {}),
+        ...(p.contactPhone !== undefined ? { contactPhone: p.contactPhone } : {}),
+        answers: p.answers,
+        ...p.utmColumns,
+        channel: "public_web_form",
+        strippedFields: p.strippedFields,
+        leadStatus: "captured",
+        createdBy: p.actorId,
+        updatedBy: p.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.LEAD_CAPTURED, eventType: EVENTS.LEAD_CAPTURED,
+        tenantId: p.tenantId, actorId: p.actorId, correlationId: msg.correlationId,
+        payload: p.leadPayload,
+      });
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: p.tenantId, actorId: p.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "metadata", action: "capture_public_lead",
+          resourceType: "form_submission", resourceId: p.id, outcome: "success",
+        },
       });
     });
   });
