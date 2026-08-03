@@ -553,16 +553,24 @@ describe("POST /v1/segments", () => {
   });
 });
 
+/**
+ * These three assertions used to accept 500 alongside the real status
+ * (`expect([200, 500])`, `expect([404, 500])`), which is why nobody noticed that
+ * EVERY segments read returned 500: `segments.recipient_segments.cached_count`
+ * was declared in the Drizzle schema but had never been created by a migration,
+ * so any select() on the table failed with 42703. Migration 0034 adds the
+ * column; the assertions are narrowed so the outage cannot hide again.
+ */
 describe("GET /v1/segments", () => {
-  it("returns 200 with data array (or 500 without DB)", async () => {
+  it("returns 200 with a data array", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/segments",
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect([200, 500]).toContain(res.statusCode);
-    if (res.statusCode === 200) expect(res.json()).toHaveProperty("data");
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json().data)).toBe(true);
   });
 });
 
@@ -574,7 +582,7 @@ describe("GET /v1/segments/:id", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect([404, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -586,11 +594,13 @@ describe("GET /v1/segments/:id/preview", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    expect([404, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(404);
   });
 });
 
 describe("PATCH /v1/segments/:id", () => {
+  // Also narrowed: this handler reads the segment before enqueueing the update,
+  // so it hit the same missing-column failure.
   it("returns 404 for non-existent segment", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -599,7 +609,7 @@ describe("PATCH /v1/segments/:id", () => {
       payload: { name: "Updated" },
     });
     await app.close();
-    expect([404, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(404);
   });
 });
 

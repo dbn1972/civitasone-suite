@@ -10,9 +10,11 @@ import { db, readScoped } from "../../shared/db.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
 import {
   bounceEvents,
+  complaintEvents,
   suppressionList,
   suppressionSettings,
   type BounceEventInsert,
+  type ComplaintEventInsert,
   type SuppressionInsert,
   type SuppressionRow,
 } from "./schema.js";
@@ -21,6 +23,30 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insertBounceEvent(tx: Writer, row: BounceEventInsert): Promise<void> {
   await tx.insert(bounceEvents).values(row);
+}
+
+export async function insertComplaintEvent(tx: Writer, row: ComplaintEventInsert): Promise<void> {
+  await tx.insert(complaintEvents).values(row);
+}
+
+/**
+ * Complaint total for a recipient within the tenant (blind-index lookup).
+ *
+ * Not used to gate suppression — the first complaint already suppresses. It is
+ * the honest count for the complaint-rate figure ESPs police, and it lets the
+ * emitted event say whether this was a repeat.
+ */
+export async function countComplaints(
+  tx: Writer, tenantId: string, recipientHash: string,
+): Promise<number> {
+  const rows = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(complaintEvents)
+    .where(and(
+      eq(complaintEvents.tenantId, tenantId),
+      eq(complaintEvents.recipientHash, recipientHash),
+    ));
+  return rows[0]?.n ?? 0;
 }
 
 /** Soft-bounce total for a recipient within the tenant (blind-index lookup). */

@@ -48,6 +48,31 @@ export const suppressionList = bouncesSchema.table("suppression_list", {
   version:       integer("version").notNull().default(1),
 });
 
+/**
+ * Spam/abuse complaints relayed by an ESP feedback loop (RFC 5965 ARF).
+ *
+ * Deliberately NOT stored in `bounce_events`: that table's `classification`
+ * column is constrained to hard/soft/unknown and carries the invariant "unknown
+ * must never suppress". A complaint has no classification and no threshold — it
+ * always suppresses — so `feedback_type` here is diagnostic only.
+ */
+export const complaintEvents = bouncesSchema.table("complaint_events", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  deliveryId:    uuid("delivery_id"),
+  recipient:     encryptedText("recipient").notNull(),        // PII — encrypted
+  recipientHash: text("recipient_hash").notNull(),            // HMAC blind index
+  channel:       varchar("channel", { length: 32 }).notNull().default("email"),
+  feedbackType:  varchar("feedback_type", { length: 32 }).notNull().default("abuse"),
+  reason:        text("reason"),
+  occurredAt:    timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  updatedBy:     uuid("updated_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
 export const suppressionSettings = bouncesSchema.table("suppression_settings", {
   id:                  uuid("id").primaryKey().defaultRandom(),
   tenantId:            uuid("tenant_id").notNull(),
@@ -61,8 +86,10 @@ export const suppressionSettings = bouncesSchema.table("suppression_settings", {
 
 export type BounceEventRow = typeof bounceEvents.$inferSelect;
 export type BounceEventInsert = typeof bounceEvents.$inferInsert;
+export type ComplaintEventRow = typeof complaintEvents.$inferSelect;
+export type ComplaintEventInsert = typeof complaintEvents.$inferInsert;
 export type SuppressionRow = typeof suppressionList.$inferSelect;
 export type SuppressionInsert = typeof suppressionList.$inferInsert;
 export type SuppressionSettingsRow = typeof suppressionSettings.$inferSelect;
 
-export const bouncesModuleSchema = { bounceEvents, suppressionList, suppressionSettings };
+export const bouncesModuleSchema = { bounceEvents, complaintEvents, suppressionList, suppressionSettings };

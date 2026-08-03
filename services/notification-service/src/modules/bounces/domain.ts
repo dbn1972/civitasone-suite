@@ -166,6 +166,62 @@ export function resolveSoftBounceThreshold(
   return DEFAULT_SOFT_BOUNCE_THRESHOLD;
 }
 
+/* ---------------------------------------------------------------------------
+ * P1-3 — spam complaints (ESP feedback loop)
+ *
+ * A complaint is not a bounce and shares none of the classification machinery
+ * above. A bounce is the receiving MTA's opinion about an address, which can be
+ * wrong, transient or unreadable — hence hard/soft/unknown and a threshold. A
+ * complaint is the RECIPIENT stating that our mail is unwanted. There is nothing
+ * to classify and nothing to accumulate: one complaint is terminal.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * RFC 5965 §7.3 feedback-types this service accepts.
+ *
+ * All four mean "do not mail this recipient again", so the type never changes
+ * the suppression decision — it is kept for diagnostics and complaint-rate
+ * reporting. `not-spam` and `opt-out` are deliberately excluded: the first
+ * reverses a complaint (an un-suppression, which is the operator-driven release
+ * endpoint's job) and the second is a list-unsubscribe already covered by
+ * `reason = 'unsubscribe'` on the inbound opt-out path.
+ */
+export const COMPLAINT_FEEDBACK_TYPES = ["abuse", "fraud", "virus", "other"] as const;
+
+export type ComplaintFeedbackType = (typeof COMPLAINT_FEEDBACK_TYPES)[number];
+
+/**
+ * Canonicalise the feedback-type an ESP reported.
+ *
+ * ESPs are inconsistent about case and spacing ("Abuse", "ABUSE", " abuse ") and
+ * SES reports its complaint feedback type as `abuse`/`fraud`/`virus`/`other`
+ * but also emits values outside RFC 5965 (`not-spam`). An unrecognised value
+ * degrades to `"other"` rather than being rejected: the complaint itself is the
+ * fact that matters, and dropping a real complaint because its label was
+ * unfamiliar would leave the recipient receiving mail. Returns null only for a
+ * value that carries no information at all.
+ */
+export function normalizeFeedbackType(raw: string | null | undefined): ComplaintFeedbackType | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (v.length === 0) return null;
+  return (COMPLAINT_FEEDBACK_TYPES as readonly string[]).includes(v)
+    ? (v as ComplaintFeedbackType)
+    : "other";
+}
+
+/**
+ * Whether a recorded complaint suppresses the recipient.
+ *
+ * Always true, for every accepted feedback-type. This exists as a named function
+ * rather than an inline `true` so the invariant is stated once, is unit-tested,
+ * and so a future "complaint tolerance threshold" request has one place to be
+ * argued about instead of being quietly added at a call site.
+ */
+export function decideComplaintSuppression(): { suppress: true; reason: "complaint" } {
+  return { suppress: true, reason: "complaint" };
+}
+
 export type SuppressionDecision =
   | { suppress: false; reason: "transient" | "not_a_bounce" }
   | { suppress: true; reason: "hard_bounce" | "soft_bounce_threshold" };

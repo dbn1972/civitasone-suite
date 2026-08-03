@@ -24,7 +24,13 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
-import { classifyBounce, decideSuppression, resolveSoftBounceThreshold } from "./domain.js";
+import {
+  classifyBounce,
+  decideComplaintSuppression,
+  decideSuppression,
+  normalizeFeedbackType,
+  resolveSoftBounceThreshold,
+} from "./domain.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -41,6 +47,33 @@ type RecordBouncePayload = {
   occurredAt?: string;
 };
 
+type RecordComplaintPayload = {
+  id: string;
+  tenantId: string;
+  recipient: string;
+  deliveryId?: string;
+  channel?: string;
+  feedbackType?: string;
+  reason?: string;
+  occurredAt?: string;
+};
+
+/**
+ * Parse an optional ISO-8601 `occurredAt`, defaulting to now.
+ *
+ * An unparseable timestamp is a payload-shape problem that no retry can fix, so
+ * it goes straight to the DLQ. Shared by the bounce and complaint consumers so
+ * the two cannot disagree about what a valid timestamp is.
+ */
+function parseOccurredAt(raw: string | undefined, kind: "BOUNCE" | "COMPLAINT"): Date {
+  if (raw === undefined) return new Date();
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new NonRetryableError(`INVALID_${kind}_PAYLOAD: occurredAt must be an ISO-8601 timestamp`);
+  }
+  return parsed;
+}
+
 export function registerBounceConsumers(q: Queue): void {
   // RLS (#146): handlers run outside an HTTP request, so the tenant context has
   // to come from the message — tables are FORCE RLS.
@@ -51,14 +84,7 @@ export function registerBounceConsumers(q: Queue): void {
     if (typeof p.recipient !== "string" || p.recipient.trim().length === 0) {
       throw new NonRetryableError("INVALID_BOUNCE_PAYLOAD: recipient is required");
     }
-    let occurredAt = new Date();
-    if (p.occurredAt !== undefined) {
-      const parsed = new Date(p.occurredAt);
-      if (Number.isNaN(parsed.getTime())) {
-        throw new NonRetryableError("INVALID_BOUNCE_PAYLOAD: occurredAt must be an ISO-8601 timestamp");
-      }
-      occurredAt = parsed;
-    }
+    const occurredAt = parseOccurredAt(p.occurredAt, "BOUNCE");
 
     const classification = classifyBounce({ smtpCode: p.smtpCode, reason: p.reason });
     const recipientHash = blindIndex(p.recipient);
@@ -108,7 +134,10 @@ export function registerBounceConsumers(q: Queue): void {
           tenantId: p.tenantId,
           actorId: msg.actorId,
           correlationId: msg.correlationId,
-          payload: { bounceEventId: p.id, recipientHash, channel, reason: decision.reason, softBounceCount: softCount },
+          payload: {
+            bounceEventId: p.id, complaintEventId: null, recipientHash, channel,
+            reason: decision.reason, softBounceCount: softCount,
+          },
         });
       }
 
@@ -138,6 +167,108 @@ export function registerBounceConsumers(q: Queue): void {
 
     await cache.invalidate(cache.makeKey(p.tenantId, "suppression", recipientHash));
     log.info({ bounceEventId: p.id, classification }, "bounce recorded");
+  });
+
+  /**
+   * P1-3 — an ESP feedback-loop spam complaint.
+   *
+   * The suppression is written in the SAME transaction as the complaint row, for
+   * the reason the inbound opt-out path documents: a consent withdrawal that is
+   * only eventually applied is one that can be missed by a campaign fan-out
+   * still reading the recipient as consenting.
+   *
+   * No gate change is needed downstream — the R1 consent gate already refuses
+   * every send to an un-released `suppression_list` entry, so writing the row IS
+   * the fix.
+   */
+  q.subscribe<RecordComplaintPayload>(COMMANDS.recordComplaint, async (msg) => {
+    const p = msg.payload;
+    if (typeof p.recipient !== "string" || p.recipient.trim().length === 0) {
+      throw new NonRetryableError("INVALID_COMPLAINT_PAYLOAD: recipient is required");
+    }
+    const occurredAt = parseOccurredAt(p.occurredAt, "COMPLAINT");
+    // An absent feedback type is normal (not every ESP sends one) and means
+    // "unspecified abuse report", not an invalid message. An unrecognised one
+    // degrades to "other" — see normalizeFeedbackType.
+    const feedbackType = normalizeFeedbackType(p.feedbackType) ?? "abuse";
+    const recipientHash = blindIndex(p.recipient);
+    const channel = p.channel ?? "email";
+    const decision = decideComplaintSuppression();
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      await repo.insertComplaintEvent(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        deliveryId: p.deliveryId ?? null,
+        recipient: p.recipient,
+        recipientHash,
+        channel,
+        feedbackType,
+        reason: p.reason ?? null,
+        occurredAt,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+        version: 1,
+      });
+
+      // Counted after the insert so the figure includes this complaint.
+      const complaintCount = await repo.countComplaints(tx, p.tenantId, recipientHash);
+
+      await repo.upsertSuppression(tx, {
+        tenantId: p.tenantId,
+        recipient: p.recipient,
+        recipientHash,
+        channel,
+        reason: decision.reason,
+        source: "complaint",
+        // A complaint carries no soft-bounce history; 0 is the honest value.
+        softBounceCount: 0,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+        version: 1,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.complaintRecorded,
+        eventType: EVENTS.complaintRecorded,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          complaintEventId: p.id, deliveryId: p.deliveryId ?? null, channel,
+          feedbackType, complaintCount,
+        },
+      });
+      await enqueue(tx, {
+        topic: EVENTS.recipientSuppressed,
+        eventType: EVENTS.recipientSuppressed,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          bounceEventId: null, complaintEventId: p.id, recipientHash, channel,
+          reason: decision.reason, softBounceCount: 0,
+        },
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "record_complaint", resourceType: "complaint_event",
+          resourceId: p.id, outcome: "success", channel, feedbackType,
+          reason: decision.reason, source: "complaint",
+        },
+      });
+    });
+
+    await cache.invalidate(cache.makeKey(p.tenantId, "suppression", recipientHash));
+    // PII: the complainant's address never reaches a log line.
+    log.info({ complaintEventId: p.id, channel, feedbackType }, "complaint recorded - recipient suppressed");
   });
 
   q.subscribe<{ id: string; tenantId: string }>(COMMANDS.releaseSuppression, async (msg) => {
