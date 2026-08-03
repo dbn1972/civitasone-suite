@@ -358,6 +358,7 @@ describe("maker-checker approvals + fulfilment workflow", () => {
     const c = await createOffering(adminA(), { approvalRequired: true });
     const id = c.json().data.id as string;
     const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, token(TENANT_A, ADMIN_A, ["helpdesk_admin"]), { formData: { reason: "x" } });
+    await flush();
     const requestId = raise.json().data.requestId;
     const adv = await post(`/v1/helpdesk/catalogue/requests/${requestId}/advance`, adminA(), { toStage: "provision" });
     expect(adv.statusCode).toBe(409);

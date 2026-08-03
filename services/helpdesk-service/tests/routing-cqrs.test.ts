@@ -17,8 +17,8 @@ import { registerRoutingConsumers } from "../src/modules/routing/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
 const { outboxMessages } = outboxSchema;
-const TENANT = "aaaaaaaa-0000-4000-8000-00000000rt01";
-const ACTOR = "00000000-aaaa-4000-8000-00000000rt99";
+const TENANT = "aaaaaaaa-0000-4000-8000-000000007201";
+const ACTOR = "00000000-aaaa-4000-8000-000000007299";
 
 const publish = vi.fn().mockResolvedValue(undefined);
 vi.mock("../src/shared/infra.js", () => ({

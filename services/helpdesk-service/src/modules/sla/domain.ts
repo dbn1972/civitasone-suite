@@ -107,6 +107,17 @@ export function isCsatWindowOpen(resolvedAt: Date, now: Date): boolean {
   return elapsed >= 0 && elapsed <= windowMs;
 }
 
+/**
+ * Highest CSAT rating (1–5 scale) still counted as a detractor. A detractor
+ * response opens a service-recovery escalation rather than closing the loop.
+ */
+export const CSAT_DETRACTOR_MAX_RATING = 2;
+
+/** True when a CSAT rating is low enough to require service recovery. */
+export function isCsatDetractor(rating: number): boolean {
+  return isValidCsatRating(rating) && rating <= CSAT_DETRACTOR_MAX_RATING;
+}
+
 /** Default SLA policies when no tenant config exists. */
 export const DEFAULT_SLA_POLICIES: Omit<SlaPolicy, "id" | "tenantId">[] = [
   { priority: "critical", category: null, responseMinutes: 30, resolutionMinutes: 240 },

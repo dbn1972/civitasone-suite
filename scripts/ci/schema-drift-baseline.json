@@ -1,7 +1,7 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a column a Drizzle model declares that its database lacks, so any SELECT built from that model fails at runtime. The gate fails on NEW drift and on stale entries. Burn these down; regenerate with --write-baseline.",
   "generatedAt": "2026-07-27",
-  "count": 174,
+  "count": 172,
   "entries": [
     "audit.events.events.ip_address",
     "audit.events.events.new_value",
@@ -17,8 +17,6 @@
     "finance.payments.finance_pao.version",
     "finance.payments.finance_pfms_config.created_by",
     "finance.payments.finance_pfms_config.updated_by",
-    "helpdesk.helpdesk.ticket_escalations.created_by",
-    "helpdesk.helpdesk.ticket_escalations.updated_by",
     "hrms.employee.hrms_fraud_alerts.created_by",
     "hrms.employee.hrms_fraud_alerts.updated_by",
     "legal.reminders.legal_reminders.created_by",

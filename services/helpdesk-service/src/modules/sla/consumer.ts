@@ -1,9 +1,12 @@
 import { pino } from "pino";
+import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { eq, and, sql, isNull, gte } from "drizzle-orm";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { isCsatDetractor } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { tickets } from "../tickets/schema.js";
 import { ticketEscalations, slaPolicies, csatResponses } from "./schema.js";
@@ -14,6 +17,8 @@ import { cesResponses } from "./ces-schema.js";
 
 const log = pino({ name: "helpdesk.sla.consumer" });
 const AUDIT = "audit.event.record";
+/** System actor for helpdesk-initiated actions (mirrors the CSAT/SLA sweepers). */
+const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-0000000000d1";
 
 async function audit(
   tx: Parameters<typeof enqueue>[0],
@@ -96,7 +101,57 @@ export function registerSlaConsumers(rawQueue: Queue): void {
         comment: p.comment ?? null,
         createdBy: msg.actorId,
       });
+      await enqueue(tx, {
+        topic: EVENTS.csatSubmitted, eventType: EVENTS.csatSubmitted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { csatId: p.id, ticketId: p.ticketId, rating: p.rating },
+      });
       await audit(tx, msg, "csat_submit", "csat", p.id);
+
+      if (!isCsatDetractor(p.rating)) return;
+
+      // Service recovery: a detractor rating reopens the loop with the owning
+      // agent as a tracked escalation, so it lands in the escalation register
+      // alongside SLA breaches instead of dying as a statistic.
+      const [levelRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(ticketEscalations)
+        .where(and(eq(ticketEscalations.tenantId, p.tenantId), eq(ticketEscalations.ticketId, p.ticketId)));
+      const recoveryId = randomUUID();
+      await tx.insert(ticketEscalations).values({
+        id: recoveryId,
+        tenantId: p.tenantId,
+        ticketId: p.ticketId,
+        escalatedBy: SYSTEM_ACTOR_ID,
+        reason: `service recovery: CSAT rating ${p.rating}`,
+        level: (levelRow?.count ?? 0) + 1,
+        createdBy: SYSTEM_ACTOR_ID,
+        updatedBy: SYSTEM_ACTOR_ID,
+      });
+      const owner = ticket.assigneeId ?? ticket.createdBy;
+      await enqueue(tx, {
+        topic: EVENTS.csatServiceRecovery, eventType: EVENTS.csatServiceRecovery,
+        tenantId: msg.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
+        payload: {
+          csatId: p.id, ticketId: p.ticketId, rating: p.rating,
+          escalationId: recoveryId, owner,
+        },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: EVENTS.csatServiceRecovery,
+          recipient: owner,
+          variables: {
+            ticketId: p.ticketId,
+            rating: String(p.rating),
+            summary: `Service recovery needed — CSAT ${p.rating}/5 on: ${ticket.subject}`,
+            link: `/helpdesk/tickets/${p.ticketId}`,
+          },
+        }),
+      });
+      await audit(tx, { ...msg, actorId: SYSTEM_ACTOR_ID }, "csat_service_recovery", "ticket", p.ticketId);
     });
   });
 
