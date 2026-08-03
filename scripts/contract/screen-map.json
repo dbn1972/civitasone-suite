@@ -285,6 +285,17 @@
     },
     {
       "module": "ai",
+      "screen": "/ai/governance",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "ai",
       "screen": "/ai/guardrails",
       "loaders": [],
       "apiPaths": [],
@@ -7897,6 +7908,6 @@
     "wired": 202,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 442
+    "noLoader": 443
   }
 }
