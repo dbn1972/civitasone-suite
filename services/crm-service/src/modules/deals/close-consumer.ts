@@ -14,6 +14,7 @@ import { cache } from "../../shared/infra.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { invalidateDashboard } from "../dashboard/queries.js";
+import * as repo from "./repo.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 
 const log = pino({ name: "crm-deal-close-consumer" });
@@ -68,6 +69,10 @@ export function registerDealCloseConsumer(queue: Queue): void {
           return;
         }
 
+        // Stamped on the event so a won deal can open a customer onboarding without
+        // the onboarding module ever reading a deal or contact row (P1-9).
+        const accountId = await repo.findAccountId(tx, p.dealId, msg.tenantId);
+
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.dealClosed,
           action: "close",
@@ -77,6 +82,7 @@ export function registerDealCloseConsumer(queue: Queue): void {
             dealId: p.dealId,
             outcome: p.outcome,
             stage,
+            accountId,
             closedValueMinor: String(row.closedValueMinor),
           },
         });

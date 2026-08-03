@@ -53,11 +53,15 @@ export function registerDealConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "update_stage", p.id, "version_conflict");
         return;
       }
+      // A Won stage move opens a customer onboarding (P1-9). The account is resolved
+      // here and stamped on the event so the onboarding module never reads a deal.
+      const accountId = p.stage === "Won" ? await repo.findAccountId(tx, p.id, p.tenantId) : null;
       // Emit stage transition audit event with prev/new stage
       await emit(tx, msg, EVENTS.dealStageUpdated, {
         dealId: p.id,
         previousStage: result.previousStage,
         newStage: p.stage,
+        accountId,
         transitionTimestamp: new Date().toISOString(),
       }, "update_stage", p.id);
     });

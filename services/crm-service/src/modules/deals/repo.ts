@@ -167,6 +167,21 @@ export async function updateStageWithVersion(
   return { updated: result.length > 0, previousStage };
 }
 
+/**
+ * Account the deal rolls up to, via its contact. Resolved here (inside the deals
+ * module, which already owns the contact join) so the deal-won event can carry the
+ * account as an opaque id and downstream modules never have to look one up.
+ * Null when the deal has no contact, or the contact is not attached to an account.
+ */
+export async function findAccountId(tx: Writer, dealId: string, tenantId: string): Promise<string | null> {
+  const rows = await (tx as typeof db).select({ accountId: contacts.accountId })
+    .from(deals)
+    .leftJoin(contacts, and(eq(deals.contactId, contacts.id), eq(contacts.tenantId, deals.tenantId)))
+    .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId)))
+    .limit(1);
+  return rows[0]?.accountId ?? null;
+}
+
 /** Tenant-scoped existence check for a deal (cross-tenant FK guard). */
 export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(deals)

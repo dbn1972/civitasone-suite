@@ -10,6 +10,7 @@ import { schema as dealsModule } from "../modules/deals/schema.js";
 import { schema as activitiesModule } from "../modules/activities/schema.js";
 import { schema as pipelinesModule } from "../modules/pipelines/schema.js";
 import { schema as customFieldsModule } from "../modules/custom-fields/schema.js";
+import { schema as onboardingModule } from "../modules/onboarding/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -18,6 +19,7 @@ const SCHEMA = {
   ...activitiesModule,
   ...pipelinesModule,
   ...customFieldsModule,
+  ...onboardingModule,
   ...outboxSchema,
 };
 

@@ -66,6 +66,10 @@ export const COMMANDS = {
   upsertCampaignPerformance: "crm.campaign_performance.upsert",
   /** Set / clear account parentId with cycle checks done at the route boundary (CM-002). */
   setAccountParent: "crm.account.set_parent",
+  /** Move a customer onboarding case to its next stage (P1-9). */
+  advanceOnboardingStage: "crm.onboarding_case.advance_stage",
+  /** Record a KYC outcome against an onboarding case (P1-9). */
+  recordOnboardingKyc: "crm.onboarding_case.record_kyc",
 } as const;
 
 export const EVENTS = {
@@ -150,6 +154,20 @@ export const EVENTS = {
   campaignPerformanceRecorded: "crm.campaign_performance.recorded",
   /** Account parent hierarchy changed (CM-002). */
   accountParentSet: "crm.account.parent_set",
+
+  // ── Customer onboarding (P1-9) ──────────────────────────────────────────────
+  /**
+   * Onboarding case raised because a deal reached Won.
+   * Payload: { caseId, dealId, accountId, stage, kycStatus }.
+   */
+  onboardingCaseOpened: "crm.onboarding_case.opened",
+  /** Onboarding case moved stage. Payload: { caseId, fromStage, toStage }. */
+  onboardingStageAdvanced: "crm.onboarding_case.stage_advanced",
+  /**
+   * KYC outcome recorded on an onboarding case.
+   * Payload: { caseId, fromStatus, toStatus } — never the provider reference.
+   */
+  onboardingKycRecorded: "crm.onboarding_case.kyc_recorded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
