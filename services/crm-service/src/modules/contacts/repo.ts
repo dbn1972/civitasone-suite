@@ -193,12 +193,36 @@ export async function insertAccount(tx: Writer, row: AccountInsert): Promise<voi
   await tx.insert(accounts).values(row);
 }
 
-export async function listAccounts(tenantId: string, limit = 500): Promise<{ id: string; name: string; industry: string | null }[]> {
-  return scopedRead((tx) => tx.select({ id: accounts.id, name: accounts.name, industry: accounts.industry })
+export interface AccountListRow {
+  id: string;
+  name: string;
+  industry: string | null;
+  website: string | null;
+  parentId: string | null;
+  contactCount: number;
+}
+
+export async function listAccounts(tenantId: string, limit = 500): Promise<AccountListRow[]> {
+  const rows = await scopedRead((tx) => tx.select({
+    id: accounts.id,
+    name: accounts.name,
+    industry: accounts.industry,
+    website: accounts.website,
+    parentId: accounts.parentId,
+    contactCount: sql<string>`count(${contacts.id})`,
+  })
     .from(accounts)
+    .leftJoin(contacts, and(
+      eq(contacts.accountId, accounts.id),
+      eq(contacts.tenantId, accounts.tenantId),
+      eq(contacts.status, "active"),
+    ))
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
+    .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId)
     .orderBy(accounts.name)
     .limit(limit));
+  // count() arrives as a bigint string from pg — normalise to a JSON number.
+  return rows.map((r) => ({ ...r, contactCount: Number(r.contactCount ?? 0) }));
 }
 
 /** Tenant-scoped existence check for an account (cross-tenant FK guard). */

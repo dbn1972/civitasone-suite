@@ -13,6 +13,8 @@ export const accounts = crmSchema.table("accounts", {
   industry: varchar("industry", { length: 64 }),
   website: varchar("website", { length: 320 }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
+  // Self-referencing org hierarchy (migration 0020). Null = root account.
+  parentId: uuid("parent_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

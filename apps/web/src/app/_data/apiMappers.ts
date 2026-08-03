@@ -20,6 +20,8 @@ import type {
   VendorSummary,
   PurchaseOrderSummary,
   TenantUserSummary,
+  CRMAccountNode,
+  CRMAccountSummary,
   CRMDealSummary,
 } from "@civitasone/types";
 
@@ -404,6 +406,41 @@ export function mapCrmDealSummaries(payload: unknown): CRMDealSummary[] | null {
     const valueDisplay = toText(row.valueDisplay) ?? "—";
     if (!id || !name || !stage) continue;
     mapped.push({ id, name, stage, valueDisplay });
+  }
+  return mapped;
+}
+
+export function mapCrmAccounts(payload: unknown): CRMAccountSummary[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: CRMAccountSummary[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    mapped.push({
+      id,
+      name,
+      industry: toText(row.industry),
+      website: toText(row.website),
+      parentId: toText(row.parentId),
+      contactCount: parseMinor(row.contactCount),
+    });
+  }
+  return mapped;
+}
+
+export function mapCrmAccountNodes(payload: unknown): CRMAccountNode[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: CRMAccountNode[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (!id || !name) continue;
+    mapped.push({ id, name });
   }
   return mapped;
 }
