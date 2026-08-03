@@ -1,9 +1,39 @@
 import { eq, and, lte } from "drizzle-orm";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { db, scopedRead } from "../../shared/db.js";
-import { dndWindows, heldNotifications } from "./schema.js";
+import { dndWindows, heldNotifications, type HeldNotificationInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * Enabled DND windows for a user, read inside the caller's transaction.
+ *
+ * The send gate must run in the same transaction as the delivery write, so it
+ * cannot use `findActiveWindows` (which opens its own tenant transaction) — a
+ * separate connection would let a window change mid-send.
+ */
+export async function findActiveWindowsTx(
+  tx: Writer, tenantId: string, userId: string,
+): Promise<typeof dndWindows.$inferSelect[]> {
+  return tx.select().from(dndWindows)
+    .where(and(
+      eq(dndWindows.tenantId, tenantId),
+      eq(dndWindows.userId, userId),
+      eq(dndWindows.enabled, true),
+    ));
+}
+
+/**
+ * Park a notification until its DND window ends. `sweepHeldNotifications`
+ * re-publishes `deliveryPayload` verbatim once `holdUntil` passes, so the
+ * payload must carry the original `deliveryId` for the release to update the
+ * same delivery row instead of creating a second one.
+ */
+export async function insertHeldNotification(
+  tx: Writer, row: HeldNotificationInsert,
+): Promise<void> {
+  await tx.insert(heldNotifications).values(row);
+}
 
 /** Find all active (enabled) DND windows for a user within a tenant. */
 export async function findActiveWindows(

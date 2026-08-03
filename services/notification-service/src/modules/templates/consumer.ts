@@ -53,7 +53,10 @@ export function registerTemplateConsumers(q: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.template}_list`, msg.tenantId));
   });
 
-  q.subscribe<{ id: string; tenantId: string; userId: string; eventType: string; inApp: boolean; email: boolean; push: boolean }>(
+  q.subscribe<{
+    id: string; tenantId: string; userId: string; eventType: string;
+    inApp: boolean; email: boolean; push: boolean; sms?: boolean; whatsapp?: boolean;
+  }>(
     COMMANDS.setPrefs, async (msg) => {
       const p = msg.payload;
       if (typeof p.inApp !== "boolean" || typeof p.email !== "boolean" || typeof p.push !== "boolean") {
@@ -64,6 +67,9 @@ export function registerTemplateConsumers(q: Queue): void {
         await repo.upsertPrefs(tx, {
           id: p.id, tenantId: p.tenantId, userId: p.userId, eventType: p.eventType,
           inApp: p.inApp, email: p.email, push: p.push,
+          // A command from an older producer omits the commercial channels; the
+          // fail-closed default (no consent) is the only safe interpretation.
+          sms: p.sms ?? false, whatsapp: p.whatsapp ?? false,
           createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
         });
         await emitAudit(tx, msg, EVENTS.prefSet, { userId: p.userId, eventType: p.eventType }, "set_prefs", p.id);
@@ -72,7 +78,10 @@ export function registerTemplateConsumers(q: Queue): void {
     },
   );
 
-  q.subscribe<{ id: string; tenantId: string; prefId: string; inApp?: boolean; email?: boolean; push?: boolean }>(
+  q.subscribe<{
+    id: string; tenantId: string; prefId: string;
+    inApp?: boolean; email?: boolean; push?: boolean; sms?: boolean; whatsapp?: boolean;
+  }>(
     COMMANDS.updatePrefs, async (msg) => {
       let changed = 0;
       await db.transaction(async (tx) => {
@@ -80,7 +89,7 @@ export function registerTemplateConsumers(q: Queue): void {
         const p = msg.payload;
         changed = await repo.updatePrefsById(
           tx, p.tenantId, p.prefId,
-          { inApp: p.inApp, email: p.email, push: p.push },
+          { inApp: p.inApp, email: p.email, push: p.push, sms: p.sms, whatsapp: p.whatsapp },
           msg.actorId,
         );
         // Audit the admin pref change. (changed===0 means the row vanished

@@ -12,9 +12,18 @@ import {
   sendWithFallback,
   CHANNEL_NONE,
 } from "./channel.js";
-import { notificationTemplates, notificationPrefs } from "../templates/schema.js";
+import { notificationTemplates } from "../templates/schema.js";
 import { eq } from "drizzle-orm";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import * as dndRepo from "../dnd/repo.js";
+import {
+  decideGate,
+  isMarketingSend,
+  type MarketingConsent,
+  type SkipReason,
+} from "./consent-gate.js";
+import { asUserUuid, loadConsentSignals } from "./consent-gate-io.js";
+import { fetchMarketingConsent, type ConsentLookup } from "./crm-consent-client.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -34,7 +43,28 @@ type SendPayload = {
   body?: string;
   // Legal cron shape (hearing-reminders)
   type?: string;
+  /**
+   * R1: marks the send as commercial so the CRM `marketing_consent` check
+   * applies. Absent → transactional (the safe default for the existing
+   * producers, which all send operational notifications).
+   */
+  category?: "transactional" | "marketing";
+  /** Set by the bulk campaign fan-out; also implies a marketing send. */
+  campaignId?: string;
 };
+
+/**
+ * Test seam for the CRM consent lookup. Production always uses the real HTTP
+ * client; tests swap it so they can assert the fail-closed branches without a
+ * running crm-service.
+ */
+let consentLookup: ConsentLookup = fetchMarketingConsent;
+export function setConsentLookupForTests(fn: ConsentLookup): void {
+  consentLookup = fn;
+}
+export function resetConsentLookup(): void {
+  consentLookup = fetchMarketingConsent;
+}
 
 export function registerDeliveryConsumers(q: Queue): void {
   // RLS (#146): every handler must run inside the message's tenant context.
@@ -60,6 +90,21 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
   const inlineBody = p.body;   // present only on legacy direct-body shape
   const inlineSubject = p.subject ?? undefined;
 
+  // R1: the CRM marketing-consent lookup is an outbound HTTP call, so it runs
+  // BEFORE the transaction opens — calling another service from inside a DB
+  // transaction pins a pooled connection for the duration of a remote timeout.
+  // It only runs for commercial sends; transactional traffic never leaves the
+  // service for consent.
+  const marketingRequired = isMarketingSend({
+    category: p.category,
+    campaignId: p.campaignId,
+    eventType: p.eventType,
+  });
+  const marketingConsent: MarketingConsent = marketingRequired
+    ? await consentLookup(recipientId ?? effectiveRecipient, msg.tenantId, msg.correlationId)
+    : "unknown"; // ignored when not required — never read as consent
+  const marketing = { required: marketingRequired, consent: marketingConsent };
+
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -68,11 +113,14 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
       : [];
     const template = templateRows[0];
     const userId = recipientId ?? effectiveRecipient;
-    const prefRows = await tx.select().from(notificationPrefs).where(eq(notificationPrefs.userId, userId));
-    const prefs = prefRows.map((r) => ({
-      id: r.id, tenantId: r.tenantId, userId: r.userId, eventType: r.eventType,
-      inApp: r.inApp, email: r.email, push: r.push, version: r.version,
-    }));
+    const prefUserId = asUserUuid(userId);
+
+    // R1: suppression, DND windows and per-channel prefs are all read here, in
+    // the send transaction, so the gate below decides on the same snapshot the
+    // delivery row is written against.
+    const { suppressed, dnd, prefs } = await loadConsentSignals(
+      tx, msg.tenantId, effectiveRecipient, prefUserId,
+    );
 
     // P1-1: opt-out is decided from prefs FIRST, using only a CALLER-specified
     // channel (`p.channel`) as an explicit override. The template's default
@@ -112,10 +160,47 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
 
     const attemptChannels = [preferred, ...fallbacks];
 
+    // ---------------------------------------------------------------------
+    // R1 CONSENT GATE — nothing below this point may reach a channel adapter
+    // until the gate clears it. suppression → marketing consent → per-channel
+    // consent → DND. See consent-gate.ts for the ordering rationale.
+    // ---------------------------------------------------------------------
+    const decision = decideGate({
+      suppressed,
+      dnd,
+      prefs,
+      eventType: p.eventType,
+      candidateChannels: attemptChannels,
+      marketing,
+    });
+
+    if (decision.action === "skip") {
+      await recordGateSkip(tx, msg, {
+        deliveryId, hasExistingDelivery: Boolean(p.deliveryId),
+        templateId: effectiveTemplateId, recipient: effectiveRecipient, recipientId,
+        channel: preferred, retryCount, reason: decision.reason,
+      });
+      return;
+    }
+
+    if (decision.action === "hold") {
+      await holdForDnd(tx, msg, {
+        deliveryId, hasExistingDelivery: Boolean(p.deliveryId),
+        templateId: effectiveTemplateId, recipient: effectiveRecipient, recipientId,
+        channel: preferred, retryCount, userId: prefUserId, releaseAt: decision.releaseAt,
+        payload: { ...p, deliveryId },
+      });
+      return;
+    }
+
+    // Only the channels the recipient actually consented to — a consented
+    // preferred channel must not fall back onto a refused one.
+    const consentedChannels = decision.channels;
+
     if (!p.deliveryId) {
       await repo.insertDelivery(tx, {
         id: deliveryId, tenantId: msg.tenantId, templateId: effectiveTemplateId,
-        recipient: effectiveRecipient, recipientId, channel: preferred, status: "sending",
+        recipient: effectiveRecipient, recipientId, channel: consentedChannels[0] ?? preferred, status: "sending",
         retryCount, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
     } else {
@@ -123,7 +208,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     }
 
     const body = inlineBody ?? template?.body ?? "(no template body)";
-    const sendResult = await sendWithFallback(attemptChannels, {
+    const sendResult = await sendWithFallback(consentedChannels, {
       recipient: effectiveRecipient,
       subject: template?.subject ?? inlineSubject ?? null,
       body,
@@ -179,6 +264,106 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
       actorId: msg.actorId, correlationId: msg.correlationId,
       payload: { service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId, outcome: "success", recipient: maskRecipient(effectiveRecipient) },
     });
+  });
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type GateContext = {
+  deliveryId: string;
+  hasExistingDelivery: boolean;
+  templateId: string;
+  recipient: string;
+  recipientId: string | null;
+  channel: string;
+  retryCount: number;
+};
+
+/**
+ * Terminal refusal: record the delivery as `skipped`, emit the consent-blocked
+ * domain event and an audit record, and send nothing. Not retried — a refusal
+ * is an answer, not a failure.
+ */
+async function recordGateSkip(
+  tx: Tx,
+  msg: CommandEnvelope<SendPayload>,
+  ctx: GateContext & { reason: SkipReason },
+): Promise<void> {
+  if (!ctx.hasExistingDelivery) {
+    await repo.insertDelivery(tx, {
+      id: ctx.deliveryId, tenantId: msg.tenantId, templateId: ctx.templateId,
+      recipient: ctx.recipient, recipientId: ctx.recipientId, channel: ctx.channel,
+      status: "skipped", retryCount: ctx.retryCount,
+      createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+    });
+  } else {
+    await repo.updateDeliveryStatus(tx, ctx.deliveryId, "skipped", msg.actorId, ctx.retryCount + 1);
+  }
+
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: EVENTS.consentBlocked, eventType: EVENTS.consentBlocked, tenantId: msg.tenantId,
+    actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      deliveryId: ctx.deliveryId, reason: ctx.reason,
+      channel: ctx.channel, recipientId: ctx.recipientId,
+    },
+  });
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
+    actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "notification", action: "send", resourceType: "delivery", resourceId: ctx.deliveryId,
+      outcome: "skipped", channel: ctx.channel, reason: ctx.reason,
+      recipient: maskRecipient(ctx.recipient),
+    },
+  });
+}
+
+/**
+ * Deferral: park the original command in `dnd.held_notifications` so the DND
+ * release sweeper republishes it once the window closes, and leave the delivery
+ * `queued` (postponed, not refused) with no retry timestamp.
+ */
+async function holdForDnd(
+  tx: Tx,
+  msg: CommandEnvelope<SendPayload>,
+  ctx: GateContext & { userId: string | null; releaseAt: Date; payload: SendPayload },
+): Promise<void> {
+  if (!ctx.hasExistingDelivery) {
+    await repo.insertDelivery(tx, {
+      id: ctx.deliveryId, tenantId: msg.tenantId, templateId: ctx.templateId,
+      recipient: ctx.recipient, recipientId: ctx.recipientId, channel: ctx.channel,
+      status: "queued", retryCount: ctx.retryCount,
+      createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+    });
+  }
+  await repo.deferDeliveryForDnd(tx, ctx.deliveryId, msg.actorId, ctx.releaseAt);
+
+  await dndRepo.insertHeldNotification(tx, {
+    tenantId: msg.tenantId,
+    // A DND window can only exist for a uuid user, so this is non-null here.
+    userId: ctx.userId ?? msg.actorId,
+    deliveryPayload: ctx.payload,
+    holdUntil: ctx.releaseAt,
+    status: "held",
+  });
+
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: EVENTS.dndHeld, eventType: EVENTS.dndHeld, tenantId: msg.tenantId,
+    actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      deliveryId: ctx.deliveryId, recipientId: ctx.recipientId,
+      releaseAt: ctx.releaseAt.toISOString(),
+    },
+  });
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
+    actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "notification", action: "send", resourceType: "delivery", resourceId: ctx.deliveryId,
+      outcome: "held", channel: ctx.channel, reason: "dnd_window",
+      releaseAt: ctx.releaseAt.toISOString(),
+    },
   });
 }
 

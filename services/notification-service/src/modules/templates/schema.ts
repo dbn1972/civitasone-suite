@@ -33,6 +33,11 @@ export const notificationPrefs = templatesSchema.table("prefs", {
   inApp:     boolean("in_app").notNull().default(true),
   email:     boolean("email").notNull().default(true),
   push:      boolean("push").notNull().default(false),
+  // SMS and WhatsApp are commercial channels under TRAI/DLT: they require a
+  // recorded opt-in, so they default to false and the send gate treats a
+  // missing pref row as "not consented" for them (migration 0029).
+  sms:       boolean("sms").notNull().default(false),
+  whatsapp:  boolean("whatsapp").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
