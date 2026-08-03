@@ -64,6 +64,8 @@ export const COMMANDS = {
   cancelQbr: "crm.qbr.cancel",
   matchCapturedActivity: "crm.activity.capture_match",
   upsertCampaignPerformance: "crm.campaign_performance.upsert",
+  /** Set / clear account parentId with cycle checks done at the route boundary (CM-002). */
+  setAccountParent: "crm.account.set_parent",
 } as const;
 
 export const EVENTS = {
@@ -146,6 +148,8 @@ export const EVENTS = {
   quotationRejected: "crm.quotation.rejected",
   /** Campaign responses/cost/revenue upserted for a period (MK-004). Money as STRINGS. */
   campaignPerformanceRecorded: "crm.campaign_performance.recorded",
+  /** Account parent hierarchy changed (CM-002). */
+  accountParentSet: "crm.account.parent_set",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

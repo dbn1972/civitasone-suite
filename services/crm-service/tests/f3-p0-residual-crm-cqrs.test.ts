@@ -6,10 +6,12 @@ const MOD = join(__dirname, "../src/modules");
 
 const TARGETS = [
   "deals/tenders-routes.ts",
+  "deals/routes.ts",
   "activities/next-action-routes.ts",
   "activities/recurring-routes.ts",
   "accounts/plans-routes.ts",
   "accounts/qbr-routes.ts",
+  "accounts/hierarchy-routes.ts",
   "activities/capture-routes.ts",
   "dashboard/campaign-roi-routes.ts",
 ];
@@ -30,5 +32,6 @@ describe("F3 P0 residual CRM CQRS", () => {
     expect(src).toContain("createTender");
     expect(src).toContain("captureActivity");
     expect(src).toContain("upsertCampaignPerformance");
+    expect(src).toContain("setAccountParent");
   });
 });
