@@ -4,14 +4,15 @@
  * Lineage answers "which system told us this, and when". It is append-only and read in
  * insertion order: a rewritten or re-sorted lineage would destroy the provenance trail
  * that a data-quality dispute is settled with.
+ *
+ * Writes are queue-first (CQRS): the route validates and publishes; the F3 consumer
+ * applies the append via markProcessed.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const CDP_ROLES = ["cdp_user", "cdp_admin", "super_admin", "tenant_admin"];
@@ -75,54 +76,23 @@ export async function profileLineageRoutes(app: FastifyInstance): Promise<void> 
       timestamp: body.entry.timestamp ?? new Date().toISOString(),
     };
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { sourceLineage: [...existing.sourceLineage, entry], updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "profile has been modified; retry with current version");
-      }
+    const sourceLineage = [...existing.sourceLineage, entry];
 
-      await enqueue(tx, {
-        topic: EVENTS.lineageAppended,
-        eventType: EVENTS.lineageAppended,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { profileId: id, entry },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "profile_lineage_appended",
-          resourceType: "profile",
-          resourceId: id,
-          outcome: "success",
-          metadata: { source: entry.source },
-        },
-      });
+    await publishF3Write(ctx, "lineage_append", id, {
+      profileId: id,
+      version: body.version,
+      entry,
+      sourceLineage,
     });
 
-    // No command is published here. The append above IS the authoritative write, and
-    // `cdp.profile.lineage_appended` (emitted through the outbox inside the same
-    // transaction) is what downstream services need. A command carrying the identical
-    // payload had no subscriber and implied processing that never happened.
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_lineage", id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile", id));
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "profile_summary", id));
-
     return reply.code(202).send({
-      data: { profileId: id, entry, version: body.version + 1, status: "accepted" },
+      data: {
+        profileId: id,
+        entry,
+        version: body.version + 1,
+        status: "accepted",
+        correlationId: ctx.correlationId,
+      },
     });
   });
 }

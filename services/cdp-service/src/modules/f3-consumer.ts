@@ -10,12 +10,17 @@ import * as templateRepo from "./profiles/template-repo.js";
 import * as profilesRepo from "./profiles/repo.js";
 import * as deviceRepo from "./identity/device-repo.js";
 import * as taxonomyRepo from "./events/taxonomy-repo.js";
+import * as taxonomyVersionRepo from "./events/taxonomy-version-repo.js";
 import * as visitorRepo from "./identity/visitor-repo.js";
 import * as identityRepo from "./identity/repo.js";
 import * as eventsRepo from "./events/repo.js";
 import * as nameKeyRepo from "./identity/name-key-repo.js";
+import * as segmentRepo from "./segments/repo.js";
+import * as membershipRepo from "./segments/membership-repo.js";
+import * as activationsRepo from "./activations/repo.js";
 import { hashIdentifier } from "./identity/domain.js";
 import { ANONYMOUS_PROFILE_TYPE } from "./identity/stitch-domain.js";
+import type { SegmentCriteria } from "./segments/domain.js";
 
 const log = pino({ name: "cdp-f3-consumer" });
 const VISITOR_IDENTIFIER_TYPE = "visitorId";
@@ -28,6 +33,9 @@ export function registerF3CdpConsumers(queue: Queue): void {
       "score_upsert", "template_create", "template_update", "template_apply",
       "device_link", "taxonomy_create", "taxonomy_update", "taxonomy_approve",
       "visitor_track", "visitor_touch", "visitor_stitch",
+      "lineage_append", "name_key_index",
+      "taxonomy_version_create", "taxonomy_version_activate", "taxonomy_version_deprecate",
+      "segment_compute",
     ]);
     if (!ops.has(op)) return;
     try {
@@ -371,6 +379,249 @@ export function registerF3CdpConsumers(queue: Queue): void {
             });
             break;
           }
+          case "lineage_append": {
+            const ok = await profilesRepo.update(
+              tx,
+              p.profileId as string,
+              p.tenantId as string,
+              { sourceLineage: p.sourceLineage, updatedBy: msg.actorId },
+              p.version as number,
+            );
+            if (!ok) return;
+            await enqueue(tx, {
+              topic: EVENTS.lineageAppended,
+              eventType: EVENTS.lineageAppended,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: { profileId: p.profileId, entry: p.entry },
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: "profile_lineage_appended",
+                resourceType: "profile",
+                resourceId: p.profileId,
+                outcome: "success",
+                metadata: { source: (p.entry as { source: string }).source },
+              },
+            });
+            break;
+          }
+          case "name_key_index": {
+            await nameKeyRepo.upsert(tx, {
+              id: p.id as string,
+              tenantId: p.tenantId as string,
+              profileId: p.profileId as string,
+              nameNormalized: p.nameNormalized as string,
+              phoneticKey: p.phoneticKey as string,
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
+            await enqueue(tx, {
+              topic: EVENTS.nameKeyIndexed,
+              eventType: EVENTS.nameKeyIndexed,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: { profileId: p.profileId, phoneticKey: p.phoneticKey, reindexed: p.reindexed },
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: p.reindexed ? "name_key_reindexed" : "name_key_indexed",
+                resourceType: "profile_name_key",
+                resourceId: p.id,
+                outcome: "success",
+                metadata: { profileId: p.profileId },
+              },
+            });
+            break;
+          }
+          case "taxonomy_version_create": {
+            await taxonomyVersionRepo.insert(tx, {
+              id: p.id as string,
+              tenantId: p.tenantId as string,
+              taxonomyId: p.taxonomyId as string,
+              schemaVersion: p.schemaVersion as number,
+              schemaJson: p.schemaJson as Record<string, unknown>,
+              status: "draft",
+              ...(p.notes !== undefined ? { notes: p.notes as string } : {}),
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
+            await enqueue(tx, {
+              topic: EVENTS.taxonomyVersionCreated,
+              eventType: EVENTS.taxonomyVersionCreated,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                taxonomyId: p.taxonomyId,
+                eventName: p.eventName,
+                schemaVersion: p.schemaVersion,
+                breaking: p.breaking,
+              },
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: "event_taxonomy_version_created",
+                resourceType: "event_taxonomy_version",
+                resourceId: p.id,
+                outcome: "success",
+                metadata: { eventName: p.eventName, schemaVersion: p.schemaVersion, breaking: p.breaking },
+              },
+            });
+            break;
+          }
+          case "taxonomy_version_activate": {
+            const ok = await taxonomyVersionRepo.setStatus(
+              tx,
+              p.targetId as string,
+              p.tenantId as string,
+              { status: "active", activatedAt: new Date(), updatedBy: msg.actorId },
+              p.version as number,
+            );
+            if (!ok) return;
+            const retired = await taxonomyVersionRepo.deprecateActive(
+              tx,
+              p.taxonomyId as string,
+              p.tenantId as string,
+              p.targetId as string,
+              msg.actorId,
+            );
+            await enqueue(tx, {
+              topic: EVENTS.taxonomyVersionActivated,
+              eventType: EVENTS.taxonomyVersionActivated,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                taxonomyId: p.taxonomyId,
+                eventName: p.eventName,
+                schemaVersion: p.schemaVersion,
+                deprecatedCount: retired,
+              },
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: "event_taxonomy_version_activated",
+                resourceType: "event_taxonomy_version",
+                resourceId: p.targetId,
+                outcome: "success",
+                metadata: { eventName: p.eventName, schemaVersion: p.schemaVersion, deprecatedCount: retired },
+              },
+            });
+            break;
+          }
+          case "taxonomy_version_deprecate": {
+            const ok = await taxonomyVersionRepo.setStatus(
+              tx,
+              p.targetId as string,
+              p.tenantId as string,
+              { status: "deprecated", deprecatedAt: new Date(), updatedBy: msg.actorId },
+              p.version as number,
+            );
+            if (!ok) return;
+            await enqueue(tx, {
+              topic: EVENTS.taxonomyVersionDeprecated,
+              eventType: EVENTS.taxonomyVersionDeprecated,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: { taxonomyId: p.taxonomyId, eventName: p.eventName, schemaVersion: p.schemaVersion },
+            });
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: "event_taxonomy_version_deprecated",
+                resourceType: "event_taxonomy_version",
+                resourceId: p.targetId,
+                outcome: "success",
+                metadata: { eventName: p.eventName, schemaVersion: p.schemaVersion },
+              },
+            });
+            break;
+          }
+          case "segment_compute": {
+            const runAt = new Date(p.computedAt as string);
+            const criteria = p.criteria as SegmentCriteria;
+            const count = await membershipRepo.recompute(
+              tx,
+              p.tenantId as string,
+              p.segmentId as string,
+              criteria,
+              runAt,
+            );
+            await segmentRepo.updateMemberCount(tx, p.segmentId as string, p.tenantId as string, count);
+            const refreshed = await activationsRepo.refreshPendingAudience(
+              tx,
+              p.tenantId as string,
+              p.segmentId as string,
+              count,
+            );
+            await enqueue(tx, {
+              topic: EVENTS.segmentComputed,
+              eventType: EVENTS.segmentComputed,
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: { segmentId: p.segmentId, memberCount: count, computedAt: runAt.toISOString() },
+            });
+            if (refreshed.length > 0) {
+              await enqueue(tx, {
+                topic: EVENTS.activationAudienceRefreshed,
+                eventType: EVENTS.activationAudienceRefreshed,
+                tenantId: msg.tenantId,
+                actorId: msg.actorId,
+                correlationId: msg.correlationId,
+                payload: { segmentId: p.segmentId, memberCount: count, activationIds: refreshed },
+              });
+            }
+            await enqueue(tx, {
+              topic: "audit.event.record",
+              eventType: "audit.event.record",
+              tenantId: msg.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                service: "cdp",
+                action: "segment_recomputed",
+                resourceType: "segment",
+                resourceId: p.segmentId,
+                outcome: "success",
+                metadata: { memberCount: count, activationIds: refreshed },
+              },
+            });
+            break;
+          }
         }
       });
       if (op === "score_upsert") {
@@ -378,6 +629,14 @@ export function registerF3CdpConsumers(queue: Queue): void {
       }
       if (op === "device_link") {
         await cache.invalidate(cache.makeKey(msg.tenantId, "profile_summary", p.profileId as string));
+      }
+      if (op === "lineage_append") {
+        await cache.invalidate(cache.makeKey(msg.tenantId, "profile_lineage", p.profileId as string));
+        await cache.invalidate(cache.makeKey(msg.tenantId, "profile", p.profileId as string));
+        await cache.invalidate(cache.makeKey(msg.tenantId, "profile_summary", p.profileId as string));
+      }
+      if (op === "segment_compute") {
+        await cache.invalidate(cache.makeKey(msg.tenantId, "segment_members", p.segmentId as string));
       }
       if (op === "template_apply" || op === "visitor_stitch") {
         await cache.invalidate(cache.makeKey(msg.tenantId, "profile", p.profileId as string ?? p.knownProfileId as string));

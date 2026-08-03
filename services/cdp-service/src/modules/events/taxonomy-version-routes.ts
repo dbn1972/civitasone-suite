@@ -6,14 +6,15 @@
  * here with its own draft → active → deprecated lifecycle. Validation resolves the active
  * revision, or an explicitly requested one, so an event captured under an older contract
  * can still be explained.
+ *
+ * Writes are queue-first (CQRS): the route validates and publishes; the F3 consumer
+ * applies inserts / status transitions via markProcessed.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as taxonomyRepo from "./taxonomy-repo.js";
 import * as repo from "./taxonomy-version-repo.js";
 import { validateSchemaDefinition } from "./taxonomy-domain.js";
@@ -96,61 +97,26 @@ export async function eventTaxonomyVersionRoutes(app: FastifyInstance): Promise<
     const diff = diffSchemas(active?.schemaJson ?? {}, body.schemaJson);
 
     const versionId = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id: versionId,
-        tenantId: ctx.tenantId,
-        taxonomyId: id,
-        schemaVersion,
-        schemaJson: body.schemaJson,
-        // A new revision is always a draft: authoring is not activation.
-        status: "draft",
-        ...(body.notes !== undefined ? { notes: body.notes } : {}),
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyVersionCreated,
-        eventType: EVENTS.taxonomyVersionCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          taxonomyId: id,
-          eventName: taxonomy.eventName,
-          schemaVersion,
-          breaking: diff.breaking,
-        },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_version_created",
-          resourceType: "event_taxonomy_version",
-          resourceId: versionId,
-          outcome: "success",
-          metadata: { eventName: taxonomy.eventName, schemaVersion, breaking: diff.breaking },
-        },
-      });
+    await publishF3Write(ctx, "taxonomy_version_create", versionId, {
+      taxonomyId: id,
+      eventName: taxonomy.eventName,
+      schemaVersion,
+      schemaJson: body.schemaJson,
+      ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      breaking: diff.breaking,
     });
 
-    return reply.code(201).send({
+    return reply.code(202).send({
       data: {
         id: versionId,
         taxonomyId: id,
         eventName: taxonomy.eventName,
         schemaVersion,
-        status: "draft",
+        status: "accepted",
         version: 1,
         comparedWith: active?.schemaVersion ?? null,
         diff,
+        correlationId: ctx.correlationId,
       },
     });
   });
@@ -172,63 +138,22 @@ export async function eventTaxonomyVersionRoutes(app: FastifyInstance): Promise<
       throw new HttpError(422, "INVALID_TRANSITION", `cannot activate a ${target.status} schema version`);
     }
 
-    const deprecated = await db.transaction(async (tx) => {
-      const ok = await repo.setStatus(
-        tx,
-        target.id,
-        ctx.tenantId,
-        { status: "active", activatedAt: new Date(), updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "schema version has been modified; retry with current version");
-      }
-
-      // Exactly one revision is in force. The predecessor is retired in the same
-      // transaction, never deleted — historical events still refer to it.
-      const retired = await repo.deprecateActive(tx, id, ctx.tenantId, target.id, ctx.actorId);
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyVersionActivated,
-        eventType: EVENTS.taxonomyVersionActivated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          taxonomyId: id,
-          eventName: taxonomy.eventName,
-          schemaVersion,
-          deprecatedCount: retired,
-        },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_version_activated",
-          resourceType: "event_taxonomy_version",
-          resourceId: target.id,
-          outcome: "success",
-          metadata: { eventName: taxonomy.eventName, schemaVersion, deprecatedCount: retired },
-        },
-      });
-
-      return retired;
+    await publishF3Write(ctx, "taxonomy_version_activate", target.id, {
+      taxonomyId: id,
+      eventName: taxonomy.eventName,
+      schemaVersion,
+      version: body.version,
+      targetId: target.id,
     });
 
-    return reply.send({
+    return reply.code(202).send({
       data: {
         taxonomyId: id,
         eventName: taxonomy.eventName,
         schemaVersion,
-        status: "active",
+        status: "accepted",
         version: body.version + 1,
-        deprecatedCount: deprecated,
+        correlationId: ctx.correlationId,
       },
     });
   });
@@ -250,51 +175,22 @@ export async function eventTaxonomyVersionRoutes(app: FastifyInstance): Promise<
       throw new HttpError(422, "INVALID_TRANSITION", `cannot deprecate a ${target.status} schema version`);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.setStatus(
-        tx,
-        target.id,
-        ctx.tenantId,
-        { status: "deprecated", deprecatedAt: new Date(), updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "schema version has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyVersionDeprecated,
-        eventType: EVENTS.taxonomyVersionDeprecated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taxonomyId: id, eventName: taxonomy.eventName, schemaVersion },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_version_deprecated",
-          resourceType: "event_taxonomy_version",
-          resourceId: target.id,
-          outcome: "success",
-          metadata: { eventName: taxonomy.eventName, schemaVersion },
-        },
-      });
+    await publishF3Write(ctx, "taxonomy_version_deprecate", target.id, {
+      taxonomyId: id,
+      eventName: taxonomy.eventName,
+      schemaVersion,
+      version: body.version,
+      targetId: target.id,
     });
 
-    return reply.send({
+    return reply.code(202).send({
       data: {
         taxonomyId: id,
         eventName: taxonomy.eventName,
         schemaVersion,
-        status: "deprecated",
+        status: "accepted",
         version: body.version + 1,
+        correlationId: ctx.correlationId,
       },
     });
   });
