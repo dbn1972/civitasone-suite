@@ -25,7 +25,8 @@ export type PrefView = {
   inApp: boolean;
   email: boolean;
   push: boolean;
-  sms: boolean;
-  whatsapp: boolean;
+  /** Tri-state: `null` = no choice recorded, `false` = opt-out, `true` = opt-in. */
+  sms: boolean | null;
+  whatsapp: boolean | null;
   version: number;
 };

@@ -18,13 +18,20 @@ import type { DndDecision } from "../src/modules/dnd/domain.js";
 const DELIVER: DndDecision = { action: "deliver" };
 const HOLD: DndDecision = { action: "hold", releaseAt: new Date("2026-08-04T00:30:00.000Z") };
 
+/**
+ * A pref row. The commercial channels default to `null` — "no choice recorded",
+ * which is the state of every recipient who has never been asked. A test that
+ * means "explicitly refused" passes `sms: false` and says so.
+ */
 function pref(over: Partial<ConsentPref> = {}): ConsentPref {
   return {
     eventType: "alert",
-    inApp: true, email: true, push: false, sms: false, whatsapp: false,
+    inApp: true, email: true, push: false, sms: null, whatsapp: null,
     ...over,
   };
 }
+
+const MARKETING = { required: true, consent: "granted" } as const;
 
 function input(over: Partial<Parameters<typeof decideGate>[0]> = {}): Parameters<typeof decideGate>[0] {
   return {
@@ -94,21 +101,56 @@ describe("R1 gate — per-channel consent", () => {
     expect(decideGate(input({ prefs, eventType: "alert" })).action).toBe("send");
   });
 
-  it("sms is refused when no opt-in was ever recorded (TRAI/DLT fail closed)", () => {
-    const d = decideGate(input({ prefs: [], candidateChannels: ["sms"] }));
+  it("MARKETING sms is refused when no opt-in was ever recorded (TRAI/DLT fail closed)", () => {
+    const d = decideGate(input({ prefs: [], candidateChannels: ["sms"], marketing: MARKETING }));
     expect(d).toEqual({ action: "skip", reason: "channel_consent_denied" });
   });
 
-  it("whatsapp is refused when no opt-in was ever recorded", () => {
-    const d = decideGate(input({ prefs: [], candidateChannels: ["whatsapp"] }));
+  it("MARKETING whatsapp is refused when no opt-in was ever recorded", () => {
+    const d = decideGate(input({ prefs: [], candidateChannels: ["whatsapp"], marketing: MARKETING }));
     expect(d).toEqual({ action: "skip", reason: "channel_consent_denied" });
   });
 
   it("sms is allowed once the recipient has opted in", () => {
     const d = decideGate(input({
-      prefs: [pref({ sms: true })], candidateChannels: ["sms"],
+      prefs: [pref({ sms: true })], candidateChannels: ["sms"], marketing: MARKETING,
     }));
     expect(d).toEqual({ action: "send", channels: ["sms"] });
+  });
+
+  // The R1 regression: a fail-closed rule written for promotional traffic was
+  // applied to every send, so a login OTP and an evacuation alert were refused
+  // on SMS and silently re-routed to the email fallback — with a phone number as
+  // the address. TRAI/DLT requires the opt-in for MARKETING only.
+  it("TRANSACTIONAL sms is allowed when no choice was ever recorded", () => {
+    const d = decideGate(input({ prefs: [], candidateChannels: ["sms", "email"] }));
+    expect(d).toEqual({ action: "send", channels: ["sms", "email"] });
+  });
+
+  it("TRANSACTIONAL whatsapp is allowed when no choice was ever recorded", () => {
+    const d = decideGate(input({ prefs: [], candidateChannels: ["whatsapp"] }));
+    expect(d).toEqual({ action: "send", channels: ["whatsapp"] });
+  });
+
+  it("TRANSACTIONAL sms is allowed when a pref row exists but records no sms choice", () => {
+    const d = decideGate(input({
+      prefs: [pref({ email: true, sms: null })], candidateChannels: ["sms"],
+    }));
+    expect(d).toEqual({ action: "send", channels: ["sms"] });
+  });
+
+  it("an EXPLICIT sms opt-out is honoured on a transactional send too", () => {
+    const d = decideGate(input({
+      prefs: [pref({ sms: false })], candidateChannels: ["sms"],
+    }));
+    expect(d).toEqual({ action: "skip", reason: "channel_consent_denied" });
+  });
+
+  it("an explicit sms opt-out does not remove the recipient's other channels", () => {
+    const d = decideGate(input({
+      prefs: [pref({ email: true, sms: false })], candidateChannels: ["sms", "email"],
+    }));
+    expect(d).toEqual({ action: "send", channels: ["email"] });
   });
 
   it("email with no pref row at all is still delivered (transactional default)", () => {
@@ -151,20 +193,50 @@ describe("R1 gate — CRM marketing consent", () => {
     const d = decideGate(input({ dnd: HOLD, marketing: { required: true, consent: "denied" } }));
     expect(d).toEqual({ action: "skip", reason: "marketing_consent_denied" });
   });
+
+  // The bulk fan-out runs inside a transaction and cannot make the CRM HTTP
+  // call, so it declares the send marketing with the verdict deferred: strict
+  // sms/whatsapp opt-in applies here, the CRM check happens per recipient later.
+  it("a DEFERRED CRM verdict does not itself refuse the send", () => {
+    const d = decideGate(input({ marketing: { required: true, consent: "deferred" } }));
+    expect(d).toEqual({ action: "send", channels: ["email"] });
+  });
+
+  it("a DEFERRED CRM verdict still enforces the commercial-channel opt-in", () => {
+    const d = decideGate(input({
+      candidateChannels: ["sms"], marketing: { required: true, consent: "deferred" },
+    }));
+    expect(d).toEqual({ action: "skip", reason: "channel_consent_denied" });
+  });
 });
 
 describe("channelConsented / findPref", () => {
   it("a matching pref row overrides implied consent for every channel", () => {
-    expect(channelConsented("email", pref({ email: false }))).toBe(false);
-    expect(channelConsented("push", pref({ push: true }))).toBe(true);
+    expect(channelConsented("email", pref({ email: false }), false)).toBe(false);
+    expect(channelConsented("push", pref({ push: true }), false)).toBe(true);
   });
 
   it("webhook is a machine endpoint — recipient consent does not gate it", () => {
-    expect(channelConsented("webhook", undefined)).toBe(true);
+    expect(channelConsented("webhook", undefined, false)).toBe(true);
+    expect(channelConsented("webhook", undefined, true)).toBe(true);
   });
 
   it("an unrecognised channel with no pref row is refused", () => {
-    expect(channelConsented("carrier_pigeon", undefined)).toBe(false);
+    expect(channelConsented("carrier_pigeon", undefined, false)).toBe(false);
+  });
+
+  it("sms with no recorded choice depends ONLY on whether the send is marketing", () => {
+    expect(channelConsented("sms", undefined, false)).toBe(true);
+    expect(channelConsented("sms", undefined, true)).toBe(false);
+    expect(channelConsented("whatsapp", undefined, false)).toBe(true);
+    expect(channelConsented("whatsapp", undefined, true)).toBe(false);
+  });
+
+  it("a recorded sms choice is authoritative for marketing and transactional alike", () => {
+    for (const marketing of [true, false]) {
+      expect(channelConsented("sms", pref({ sms: true }), marketing)).toBe(true);
+      expect(channelConsented("sms", pref({ sms: false }), marketing)).toBe(false);
+    }
   });
 
   it("findPref prefers the event-specific row and falls back to the first", () => {

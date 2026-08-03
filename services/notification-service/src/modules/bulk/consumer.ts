@@ -66,17 +66,19 @@ export function registerBulkConsumers(q: Queue): void {
         const { suppressed, dnd, prefs } = await loadConsentSignals(
           tx, msg.tenantId, r.recipientId, asUserUuid(r.recipientId),
         );
-        // The CRM `marketing_consent` lookup is an HTTP call and this loop runs
-        // inside a transaction, so it is deliberately NOT done here — the
-        // per-recipient send consumer performs it outside its own transaction,
-        // fail closed, before any adapter runs. `campaignId` in the payload is
-        // what tells it this is a marketing send.
+        // A campaign is always a marketing send, so `required: true` — that is
+        // what keeps the strict recorded-opt-in rule on sms/whatsapp here.
+        // `consent: "deferred"` because the CRM `marketing_consent` lookup is an
+        // HTTP call and this loop runs inside a transaction: the per-recipient
+        // send consumer performs it outside its own transaction, fail closed,
+        // before any adapter runs. `campaignId` in the payload is what tells it
+        // this is a marketing send.
         const decision = decideGate({
           suppressed,
           dnd,
           prefs,
           candidateChannels: [campaignChannel],
-          marketing: { required: false, consent: "unknown" },
+          marketing: { required: true, consent: "deferred" },
         });
         // `hold` is a deferral, not a refusal: let the send consumer park it in
         // the DND hold table so the sweeper releases it when the window closes.

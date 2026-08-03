@@ -97,7 +97,9 @@ export async function upsertPrefs(tx: Writer, row: PrefInsert): Promise<void> {
     await tx.update(notificationPrefs)
       .set({
         inApp: row.inApp ?? true, email: row.email ?? true, push: row.push ?? false,
-        sms: row.sms ?? false, whatsapp: row.whatsapp ?? false,
+        // Tri-state: an omitted commercial channel clears the choice rather than
+        // recording an opt-out the recipient never made.
+        sms: row.sms ?? null, whatsapp: row.whatsapp ?? null,
         updatedBy: row.updatedBy, version: (existing[0]?.version ?? 0) + 1, updatedAt: new Date(),
       })
       .where(eq(notificationPrefs.id, existing[0]!.id));
@@ -147,7 +149,8 @@ export async function updatePrefsById(
   id: string,
   patch: {
     inApp?: boolean | undefined; email?: boolean | undefined; push?: boolean | undefined;
-    sms?: boolean | undefined; whatsapp?: boolean | undefined;
+    // `null` withdraws a recorded commercial-channel choice; `undefined` leaves it.
+    sms?: boolean | null | undefined; whatsapp?: boolean | null | undefined;
   },
   actorId: string,
 ): Promise<number> {
