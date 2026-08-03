@@ -190,6 +190,37 @@ export const crmAccountHierarchyNodeSchema = z.object({
   name: z.string(),
 });
 
+const healthBandSchema = z.enum(["critical", "at_risk", "healthy", "thriving"]);
+
+export const accountHealthEntryApiSchema = z.object({
+  accountId: z.string().uuid(),
+  score: z.number(),
+  band: healthBandSchema,
+  computedAt: z.string(),
+});
+
+export const accountHealthWatchlistSchema = z.object({
+  data: z.array(accountHealthEntryApiSchema),
+});
+
+export const accountHealthBreakdownSchema = z.object({
+  data: z.object({
+    accountId: z.string().uuid(),
+    score: z.number(),
+    storedScore: z.number(),
+    band: healthBandSchema,
+    contributingFactors: z.array(z.object({
+      signal: z.string(),
+      value: z.number(),
+      weight: z.number(),
+      contribution: z.number(),
+      clamped: z.boolean(),
+    })),
+    computedAt: z.string(),
+    version: z.number().int(),
+  }),
+});
+
 export const crmForecastStageApiSchema = z.object({
   stageId: z.string().min(1),
   stageName: z.string(),

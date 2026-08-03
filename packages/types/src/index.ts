@@ -135,6 +135,41 @@ export interface CRMDealSummary {
   valueDisplay: string;
 }
 
+/** Health bands owned by recommendation-service scoring. */
+export type HealthBand = 'critical' | 'at_risk' | 'healthy' | 'thriving';
+
+/** One account on the health watchlist. */
+export interface AccountHealthEntry {
+  accountId: string;
+  /** Integer 0–100. */
+  score: number;
+  band: HealthBand;
+  computedAt: string;
+}
+
+/** One weighted signal behind an account's health score. */
+export interface AccountHealthFactor {
+  signal: string;
+  value: number;
+  weight: number;
+  contribution: number;
+  /** True when the upstream signal was out of range and was clamped. */
+  clamped: boolean;
+}
+
+/** Full health breakdown for a single account. */
+export interface AccountHealthBreakdown {
+  accountId: string;
+  /** Score recomputed from the signals below — always agrees with `band`. */
+  score: number;
+  /** Score as persisted; may lag `score` until the next recompute. */
+  storedScore: number;
+  band: HealthBand;
+  contributingFactors: AccountHealthFactor[];
+  computedAt: string;
+  version: number;
+}
+
 /** One stage's contribution to the weighted revenue forecast. */
 export interface CRMForecastStage {
   stageId: string;
