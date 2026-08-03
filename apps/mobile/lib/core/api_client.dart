@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth/pkce_auth.dart';
 
 // Fix: [AUDIT-P1-3] Retry interceptor for 5xx responses (exponential backoff)
@@ -13,12 +12,20 @@ class RetryInterceptor extends Interceptor {
 
   RetryInterceptor({required this.dio, this.maxRetries = 3});
 
+  /// Only these methods may be replayed automatically. A 5xx does not tell us
+  /// whether the server already applied a write, so replaying POST/PUT/PATCH/
+  /// DELETE can duplicate a payment, approval or outbox command.
+  static const _retryableMethods = {'GET', 'HEAD', 'OPTIONS'};
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final statusCode = err.response?.statusCode ?? 0;
     final retryCount = (err.requestOptions.extra['retryCount'] as int?) ?? 0;
+    final method = err.requestOptions.method.toUpperCase();
 
-    if (statusCode >= 500 && retryCount < maxRetries) {
+    if (statusCode >= 500 &&
+        retryCount < maxRetries &&
+        _retryableMethods.contains(method)) {
       final delay = Duration(seconds: math.pow(2, retryCount).toInt());
       await Future.delayed(delay);
 
@@ -46,19 +53,20 @@ class ApiClient {
   final String baseUrl;
   final PkceAuthService auth;
   final Dio _dio;
-  final FlutterSecureStorage _storage;
   final Queue<_QueuedRequest> _offlineQueue = Queue();
 
   /// Callback invoked when a 401 is received and user must re-authenticate.
   void Function()? onAuthExpired;
 
+  /// Marks a request that is already a replay of a queued write, so a repeated
+  /// failure re-queues it once instead of appending another copy.
+  static const _replayFlag = 'civitasoneOfflineReplay';
+
   ApiClient({
     required this.baseUrl,
     required this.auth,
     Dio? dio,
-    FlutterSecureStorage? storage,
-  })  : _dio = dio ?? Dio(),
-        _storage = storage ?? const FlutterSecureStorage() {
+  }) : _dio = dio ?? Dio() {
     _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 15);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
@@ -123,7 +131,8 @@ class ApiClient {
     if (err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.unknown ||
         err.type == DioExceptionType.connectionError) {
-      if (_isWriteMethod(err.requestOptions.method)) {
+      if (_isWriteMethod(err.requestOptions.method) &&
+          err.requestOptions.extra[_replayFlag] != true) {
         _offlineQueue.add(_QueuedRequest(
           method: err.requestOptions.method,
           path: err.requestOptions.path,
@@ -170,7 +179,10 @@ class ApiClient {
           req.path,
           data: req.data,
           queryParameters: req.queryParameters,
-          options: Options(method: req.method),
+          options: Options(
+            method: req.method,
+            extra: const {_replayFlag: true},
+          ),
         );
         succeeded++;
       } catch (_) {
