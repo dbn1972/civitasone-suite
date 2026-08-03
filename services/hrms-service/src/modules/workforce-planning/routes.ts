@@ -14,8 +14,25 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "finance_officer"];
+
+/**
+ * employee.hrms_employees / hrms_departments / hrms_designations all have RLS
+ * ENABLEd and FORCEd, and this module talks to `sqlClient` directly (no
+ * Drizzle schema here, so there is no `db.transaction()` — where
+ * `wrapWithTenantGuc` injects `app.tenant_id` — in the call path). Without
+ * this, every query below ran with no GUC set and the connecting role
+ * (`hrms_svc`, NOBYPASSRLS non-superuser) got zero rows back, silently: RLS
+ * fails CLOSED. See `@civitasone/db`'s `withRawTenantGuc` for the shared fix.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (tx: typeof sqlClient) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, fn);
+}
 
 export async function workforcePlanningRoutes(app: FastifyInstance): Promise<void> {
   // Current headcount by department, grade, employee type
@@ -27,31 +44,32 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       groupBy: z.enum(["department", "grade", "type"]).default("department"),
     }).parse(req.query);
 
-    let rows;
-    if (query.groupBy === "department") {
-      rows = await sqlClient`
-        SELECT d.name AS group_key, COUNT(*)::int AS count
-        FROM employee.hrms_employees e
-        JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
-        WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
-        GROUP BY d.name ORDER BY count DESC
-      `;
-    } else if (query.groupBy === "grade") {
-      rows = await sqlClient`
-        SELECT COALESCE(dg.pay_grade, 'ungraded') AS group_key, COUNT(*)::int AS count
-        FROM employee.hrms_employees e
-        JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
-        WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
-        GROUP BY dg.pay_grade ORDER BY count DESC
-      `;
-    } else {
-      rows = await sqlClient`
-        SELECT employee_type AS group_key, COUNT(*)::int AS count
-        FROM employee.hrms_employees
-        WHERE tenant_id = ${ctx.tenantId} AND status != 'separated'
-        GROUP BY employee_type ORDER BY count DESC
-      `;
-    }
+    const rows = await withTenantGuc(ctx.tenantId, async (tx) => {
+      if (query.groupBy === "department") {
+        return tx`
+          SELECT d.name AS group_key, COUNT(*)::int AS count
+          FROM employee.hrms_employees e
+          JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+          WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
+          GROUP BY d.name ORDER BY count DESC
+        `;
+      } else if (query.groupBy === "grade") {
+        return tx`
+          SELECT COALESCE(dg.pay_grade, 'ungraded') AS group_key, COUNT(*)::int AS count
+          FROM employee.hrms_employees e
+          JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
+          WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
+          GROUP BY dg.pay_grade ORDER BY count DESC
+        `;
+      } else {
+        return tx`
+          SELECT employee_type AS group_key, COUNT(*)::int AS count
+          FROM employee.hrms_employees
+          WHERE tenant_id = ${ctx.tenantId} AND status != 'separated'
+          GROUP BY employee_type ORDER BY count DESC
+        `;
+      }
+    });
 
     const total = rows.reduce((s, r) => s + (r.count as number), 0);
     return reply.send({ data: { total, breakdown: rows } });
@@ -64,12 +82,12 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
 
     // Superannuation age default: 60 years
     const retirementAge = 60;
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT
         CASE
-          WHEN (date_of_birth + INTERVAL '${sqlClient.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
-          WHEN (date_of_birth + INTERVAL '${sqlClient.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
-          WHEN (date_of_birth + INTERVAL '${sqlClient.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
+          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
+          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
+          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
           ELSE 'beyond_5_years'
         END AS horizon,
         COUNT(*)::int AS count
@@ -79,7 +97,7 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
         AND date_of_birth IS NOT NULL
       GROUP BY horizon
       ORDER BY horizon
-    `;
+    `);
 
     return reply.send({ data: rows });
   });
@@ -104,19 +122,19 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       groupExpr = "TO_CHAR(date_of_birth + INTERVAL '60 years', 'YYYY')";
     }
 
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT
-        ${sqlClient.unsafe(groupExpr)} AS period,
+        ${tx.unsafe(groupExpr)} AS period,
         COUNT(*)::int AS retiring_count
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId}
         AND status != 'separated'
         AND date_of_birth IS NOT NULL
-        AND (date_of_birth + INTERVAL '${sqlClient.unsafe(String(retirementAge))} years')
-            BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${sqlClient.unsafe(String(query.years))} years')
+        AND (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years')
+            BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${tx.unsafe(String(query.years))} years')
       GROUP BY period
       ORDER BY period
-    `;
+    `);
 
     return reply.send({ data: rows });
   });

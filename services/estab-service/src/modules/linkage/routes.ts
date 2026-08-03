@@ -2,6 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { withRawTenantGuc } from "@civitasone/db";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { fileFromModuleBody, refQuery } from "./validators.js";
@@ -58,7 +59,13 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = refQuery.parse(req.query);
 
-    const rows = await sqlClient`
+    // files.estab_files has RLS ENABLEd AND FORCEd; this module has no Drizzle
+    // schema for a composite by-ref lookup, so there is no db.transaction() —
+    // the only place wrapWithTenantGuc sets app.tenant_id — in the call path.
+    // Without this, the connecting role (estab_svc, not a superuser) gets
+    // zero rows back on every call, silently: RLS fails CLOSED. See
+    // @civitasone/db's withRawTenantGuc for the shared fix.
+    const rows = await withRawTenantGuc(sqlClient, ctx.tenantId, (tx) => tx`
       SELECT id, file_no, subject, status, classification, current_with,
              source_ref_type, source_ref_id, initiated_by, approval_chain, created_at, updated_at
       FROM files.estab_files
@@ -67,7 +74,7 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
         AND source_ref_id = ${q.refId}
       ORDER BY created_at DESC
       LIMIT 1
-    `;
+    `);
 
     if (rows.length === 0) {
       throw new HttpError(404, "NOT_FOUND", "no file found for this reference");
@@ -84,12 +91,14 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { id } = req.params as { id: string };
 
-    const rows = await sqlClient`
+    // files.module_decision_log is also RLS ENABLEd AND FORCEd — same gap as
+    // above, see withRawTenantGuc.
+    const rows = await withRawTenantGuc(sqlClient, ctx.tenantId, (tx) => tx`
       SELECT decision, callback_topic, noting_id, dsc_hash, decided_by, decided_at
       FROM files.module_decision_log
       WHERE tenant_id = ${ctx.tenantId} AND file_id = ${id}
       ORDER BY decided_at DESC
-    `;
+    `);
     return reply.send({ data: rows });
   });
 

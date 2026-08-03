@@ -50,6 +50,9 @@ export {
 export { withTenantConsumer } from "./tenant-consumer.js";
 // SAST-003f: One-line db wrapper for tenant GUC injection.
 export { wrapWithTenantGuc } from "./wrap-tenant-db.js";
+// Tenant GUC for raw `postgres.Sql` template-literal queries — for modules
+// with no Drizzle schema to attach db.transaction()/wrapWithTenantGuc to.
+export { withRawTenantGuc } from "./raw-tenant-guc.js";
 // Phase 1 hyperscale: per-tenant quota enforcement plugin.
 export { quotaCheckPlugin, type QuotaCheckStore, type QuotaCheckOptions, type TenantQuota } from "./quota-check.js";
 

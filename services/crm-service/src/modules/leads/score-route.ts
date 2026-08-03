@@ -8,6 +8,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { withRawTenantGuc } from "@civitasone/db";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -40,15 +41,42 @@ export async function leadScoreRoutes(app: FastifyInstance): Promise<void> {
     const params = leadIdParamSchema.parse(req.params);
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
 
-    // Fetch lead data for feature extraction
-    const rows = await sqlClient`
+    // Fetch lead data for feature extraction.
+    //
+    // Wrapped in withRawTenantGuc: crm.contacts, crm.deals, crm.activities and
+    // crm.accounts all have RLS ENABLEd AND FORCEd, and this module talks to
+    // `sqlClient` directly (there is no Drizzle schema for this composite
+    // read, so `db.transaction()` — where `wrapWithTenantGuc` sets
+    // `app.tenant_id` — was never in the call path). Without this, the
+    // connecting role (`crm_svc`, not a superuser) got zero rows back on
+    // every call, silently: RLS fails CLOSED. Every call to this route fell
+    // through to the "not found" branch and returned a default fallback
+    // score regardless of whether the lead existed. See `@civitasone/db`'s
+    // `withRawTenantGuc` for the shared fix — the same defect shape was
+    // found in helpdesk-service, estab-service, hrms-service and
+    // payroll-service.
+    //
+    // This query also referenced two columns that do not exist on this
+    // schema (`c.stage_entered_at`, `acc.metadata`), which threw a 500 on
+    // every call independent of RLS/GUC — found while reproducing the RLS
+    // defect, since that error masked it. Stage-entry time is derived from
+    // the most recent row in crm.lead_transitions (the lifecycle audit
+    // trail) instead; there is no employee-count data source anywhere in
+    // this schema, so that feature now resolves to "unknown" via NULL
+    // rather than silently reading a nonexistent column.
+    const rows = await withRawTenantGuc(sqlClient, ctx.tenantId, (tx) => tx`
       SELECT
         c.id,
         c.tenant_id,
         c.lead_source,
         c.last_activity_at,
         c.company,
-        c.stage_entered_at,
+        (
+          SELECT lt.created_at FROM crm.lead_transitions lt
+          WHERE lt.contact_id = c.id AND lt.tenant_id = c.tenant_id
+          ORDER BY lt.created_at DESC
+          LIMIT 1
+        ) AS stage_entered_at,
         c.lead_status,
         COALESCE(
           (SELECT COUNT(*)::int FROM crm.activities a WHERE a.contact_id = c.id AND a.tenant_id = c.tenant_id),
@@ -58,14 +86,11 @@ export async function leadScoreRoutes(app: FastifyInstance): Promise<void> {
           (SELECT MAX(d.value_minor) FROM crm.deals d WHERE d.contact_id = c.id AND d.tenant_id = c.tenant_id AND d.status = 'active'),
           0
         ) AS deal_value_paise,
-        COALESCE(
-          (SELECT (acc.metadata->>'employee_count')::int FROM crm.accounts acc WHERE acc.id = c.account_id AND acc.tenant_id = c.tenant_id),
-          0
-        ) AS employee_count
+        NULL::int AS employee_count
       FROM crm.contacts c
       WHERE c.id = ${params.id} AND c.tenant_id = ${ctx.tenantId} AND c.status = 'active'
       LIMIT 1
-    `;
+    `);
 
     if (rows.length === 0) {
       // Entity not found — return fallback with default features (200, not 404)

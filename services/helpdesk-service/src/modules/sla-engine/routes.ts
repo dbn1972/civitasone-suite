@@ -11,9 +11,29 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 const ADMIN_ROLES = ["helpdesk_admin", "super_admin", "admin"];
 const READER_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin", "admin"];
+
+/**
+ * helpdesk.tickets has RLS ENABLEd and FORCEd, and this module talks to
+ * `sqlClient` directly (there is no Drizzle schema for sla_config, so
+ * `db.transaction()` — which is where `wrapWithTenantGuc` injects
+ * `app.tenant_id` — was never in the call path). Without this, every query
+ * below ran with no GUC set and the connecting role (`helpdesk_svc`, not a
+ * superuser) got zero rows back, silently: RLS fails CLOSED. Every endpoint
+ * in this module returned empty results for every tenant in production.
+ * See `@civitasone/db`'s `withRawTenantGuc` for the shared fix — the same
+ * defect shape was found in crm-service, estab-service, hrms-service and
+ * payroll-service.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (tx: typeof sqlClient) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, fn);
+}
 
 const slaConfigUpdateBody = z.object({
   rules: z.array(z.object({
@@ -30,7 +50,7 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT priority, response_time_minutes, resolution_time_minutes,
              escalate_after_minutes, updated_at
       FROM helpdesk.sla_config
@@ -42,7 +62,7 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
           WHEN 'medium' THEN 3
           WHEN 'low' THEN 4
         END
-    `;
+    `);
 
     // Return defaults if no config exists
     if (rows.length === 0) {
@@ -68,25 +88,27 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = slaConfigUpdateBody.parse(req.body);
 
-    for (const rule of body.rules) {
-      await sqlClient`
-        INSERT INTO helpdesk.sla_config (
-          tenant_id, priority, response_time_minutes, resolution_time_minutes,
-          escalate_after_minutes, updated_by, updated_at
-        ) VALUES (
-          ${ctx.tenantId}, ${rule.priority}, ${rule.responseTimeMinutes},
-          ${rule.resolutionTimeMinutes}, ${rule.escalateAfterMinutes ?? null},
-          ${ctx.actorId}, NOW()
-        )
-        ON CONFLICT (tenant_id, priority)
-        DO UPDATE SET
-          response_time_minutes = EXCLUDED.response_time_minutes,
-          resolution_time_minutes = EXCLUDED.resolution_time_minutes,
-          escalate_after_minutes = EXCLUDED.escalate_after_minutes,
-          updated_by = EXCLUDED.updated_by,
-          updated_at = NOW()
-      `;
-    }
+    await withTenantGuc(ctx.tenantId, async (tx) => {
+      for (const rule of body.rules) {
+        await tx`
+          INSERT INTO helpdesk.sla_config (
+            tenant_id, priority, response_time_minutes, resolution_time_minutes,
+            escalate_after_minutes, updated_by, updated_at
+          ) VALUES (
+            ${ctx.tenantId}, ${rule.priority}, ${rule.responseTimeMinutes},
+            ${rule.resolutionTimeMinutes}, ${rule.escalateAfterMinutes ?? null},
+            ${ctx.actorId}, NOW()
+          )
+          ON CONFLICT (tenant_id, priority)
+          DO UPDATE SET
+            response_time_minutes = EXCLUDED.response_time_minutes,
+            resolution_time_minutes = EXCLUDED.resolution_time_minutes,
+            escalate_after_minutes = EXCLUDED.escalate_after_minutes,
+            updated_by = EXCLUDED.updated_by,
+            updated_at = NOW()
+        `;
+      }
+    });
 
     return reply.send({ data: { updated: body.rules.length, message: "SLA config updated" } });
   });
@@ -103,7 +125,7 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     // Default SLA thresholds in minutes if no config exists
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       WITH sla AS (
         SELECT priority, resolution_time_minutes
         FROM helpdesk.sla_config
@@ -116,7 +138,7 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
           SELECT 1 FROM helpdesk.sla_config WHERE tenant_id = ${ctx.tenantId}
         )
       )
-      SELECT t.id, t.subject, t.priority, t.status, t.assigned_to,
+      SELECT t.id, t.subject, t.priority, t.status, t.assignee_id,
              t.created_at,
              EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 60 AS elapsed_minutes,
              s.resolution_time_minutes AS sla_minutes,
@@ -126,10 +148,10 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
       WHERE t.tenant_id = ${ctx.tenantId}
         AND t.status NOT IN ('closed', 'resolved')
         AND EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 60 > s.resolution_time_minutes
-        ${query.priority ? sqlClient`AND LOWER(t.priority) = LOWER(${query.priority})` : sqlClient``}
+        ${query.priority ? tx`AND LOWER(t.priority) = LOWER(${query.priority})` : tx``}
       ORDER BY breach_minutes DESC
       LIMIT ${query.limit} OFFSET ${query.offset}
-    `;
+    `);
 
     return reply.send({ data: rows });
   });
@@ -144,59 +166,63 @@ export async function slaEngineRoutes(app: FastifyInstance): Promise<void> {
       toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).parse(req.query);
 
-    const [metrics] = await sqlClient`
-      WITH resolved AS (
+    const { metrics, openBreaches } = await withTenantGuc(ctx.tenantId, async (tx) => {
+      const [metricsRow] = await tx`
+        WITH resolved AS (
+          SELECT
+            t.id,
+            t.priority,
+            EXTRACT(EPOCH FROM (COALESCE(t.resolved_at, NOW()) - t.created_at)) / 60 AS resolution_minutes
+          FROM helpdesk.tickets t
+          WHERE t.tenant_id = ${ctx.tenantId}
+            AND t.status IN ('closed', 'resolved')
+            ${query.fromDate ? tx`AND t.created_at >= ${query.fromDate}::date` : tx``}
+            ${query.toDate ? tx`AND t.created_at <= ${query.toDate}::date + INTERVAL '1 day'` : tx``}
+        ),
+        sla AS (
+          SELECT priority, resolution_time_minutes
+          FROM helpdesk.sla_config
+          WHERE tenant_id = ${ctx.tenantId}
+          UNION ALL
+          SELECT p, m FROM (VALUES
+            ('critical', 240), ('high', 480), ('medium', 1440), ('low', 2880)
+          ) AS defaults(p, m)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM helpdesk.sla_config WHERE tenant_id = ${ctx.tenantId}
+          )
+        )
         SELECT
-          t.id,
-          t.priority,
-          EXTRACT(EPOCH FROM (COALESCE(t.resolved_at, NOW()) - t.created_at)) / 60 AS resolution_minutes
+          COUNT(r.id)::int AS total_resolved,
+          ROUND(AVG(r.resolution_minutes)::numeric, 2) AS avg_resolution_minutes,
+          COUNT(CASE WHEN r.resolution_minutes <= s.resolution_time_minutes THEN 1 END)::int AS within_sla,
+          COUNT(CASE WHEN r.resolution_minutes > s.resolution_time_minutes THEN 1 END)::int AS breached,
+          CASE
+            WHEN COUNT(r.id) > 0
+            THEN ROUND(COUNT(CASE WHEN r.resolution_minutes <= s.resolution_time_minutes THEN 1 END)::numeric * 100 / COUNT(r.id), 2)
+            ELSE 0
+          END AS sla_compliance_pct
+        FROM resolved r
+        LEFT JOIN sla s ON LOWER(s.priority) = LOWER(r.priority)
+      `;
+
+      // Current open breaches
+      const [openBreachesRow] = await tx`
+        SELECT COUNT(*)::int AS count
         FROM helpdesk.tickets t
         WHERE t.tenant_id = ${ctx.tenantId}
-          AND t.status IN ('closed', 'resolved')
-          ${query.fromDate ? sqlClient`AND t.created_at >= ${query.fromDate}::date` : sqlClient``}
-          ${query.toDate ? sqlClient`AND t.created_at <= ${query.toDate}::date + INTERVAL '1 day'` : sqlClient``}
-      ),
-      sla AS (
-        SELECT priority, resolution_time_minutes
-        FROM helpdesk.sla_config
-        WHERE tenant_id = ${ctx.tenantId}
-        UNION ALL
-        SELECT p, m FROM (VALUES
-          ('critical', 240), ('high', 480), ('medium', 1440), ('low', 2880)
-        ) AS defaults(p, m)
-        WHERE NOT EXISTS (
-          SELECT 1 FROM helpdesk.sla_config WHERE tenant_id = ${ctx.tenantId}
-        )
-      )
-      SELECT
-        COUNT(r.id)::int AS total_resolved,
-        ROUND(AVG(r.resolution_minutes)::numeric, 2) AS avg_resolution_minutes,
-        COUNT(CASE WHEN r.resolution_minutes <= s.resolution_time_minutes THEN 1 END)::int AS within_sla,
-        COUNT(CASE WHEN r.resolution_minutes > s.resolution_time_minutes THEN 1 END)::int AS breached,
-        CASE
-          WHEN COUNT(r.id) > 0
-          THEN ROUND(COUNT(CASE WHEN r.resolution_minutes <= s.resolution_time_minutes THEN 1 END)::numeric * 100 / COUNT(r.id), 2)
-          ELSE 0
-        END AS sla_compliance_pct
-      FROM resolved r
-      LEFT JOIN sla s ON LOWER(s.priority) = LOWER(r.priority)
-    `;
+          AND t.status NOT IN ('closed', 'resolved')
+          AND EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 60 > COALESCE(
+            (SELECT resolution_time_minutes FROM helpdesk.sla_config
+             WHERE tenant_id = ${ctx.tenantId} AND LOWER(priority) = LOWER(t.priority)),
+            CASE LOWER(t.priority)
+              WHEN 'critical' THEN 240 WHEN 'high' THEN 480
+              WHEN 'medium' THEN 1440 ELSE 2880
+            END
+          )
+      `;
 
-    // Current open breaches
-    const [openBreaches] = await sqlClient`
-      SELECT COUNT(*)::int AS count
-      FROM helpdesk.tickets t
-      WHERE t.tenant_id = ${ctx.tenantId}
-        AND t.status NOT IN ('closed', 'resolved')
-        AND EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 60 > COALESCE(
-          (SELECT resolution_time_minutes FROM helpdesk.sla_config
-           WHERE tenant_id = ${ctx.tenantId} AND LOWER(priority) = LOWER(t.priority)),
-          CASE LOWER(t.priority)
-            WHEN 'critical' THEN 240 WHEN 'high' THEN 480
-            WHEN 'medium' THEN 1440 ELSE 2880
-          END
-        )
-    `;
+      return { metrics: metricsRow, openBreaches: openBreachesRow };
+    });
 
     return reply.send({
       data: {
