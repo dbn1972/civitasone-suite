@@ -63,6 +63,12 @@ export const COMMANDS = {
   securityIncidentClose: "admin.security_incident.close",
   securityBreachNotificationCreate: "admin.security_breach_notification.create",
   securityBreachNotificationSubmit: "admin.security_breach_notification.submit",
+  // F3 leftover — security-compliance sync writes
+  vaptReportIngest: "admin.vapt.report.ingest",
+  complianceControlsSeed: "admin.compliance.controls.seed",
+  complianceControlCreate: "admin.compliance.control.create",
+  complianceControlUpdate: "admin.compliance.control.update",
+  complianceEvidenceAttach: "admin.compliance.evidence.attach",
 } as const;
 
 export const EVENTS = {
