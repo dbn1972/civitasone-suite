@@ -149,6 +149,9 @@ export default async function Page() {
           </ol>
         </div>
       )}
+    <p className="back" style={{ marginTop: 16 }}>
+        <a href="/install/console">Open install console →</a>
+      </p>
     </PageShell>
   );
 }
