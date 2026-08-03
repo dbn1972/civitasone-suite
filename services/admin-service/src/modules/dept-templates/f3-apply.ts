@@ -1,3 +1,5 @@
+/** Auto-generated F3 apply (dept-templates). */
+
 /**
  * ORG-07 — department template clone. HTTP routes.
  *
@@ -25,9 +27,6 @@
  * department itself lives in the org-owning service, which creates it from the
  * published `admin.department.instantiated` event (documented in src/topics.ts).
  */
-import { randomUUID } from "node:crypto";
-import { publishAdminCommand } from "../../shared/f3-publish.js";
-import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -119,11 +118,8 @@ function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: stri
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
 }
 
-export async function departmentTemplateRoutes(app: FastifyInstance): Promise<void> {
-  // ── clone a department config into a template ─────────────────────────────
-  app.post("/v1/admin/department-templates", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TEMPLATE_ROLES);
+export async function apply_dept_templates_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+  // post:"/v1/admin/department-templates"
     const body = parseOrThrow(createBody, req.body);
     if (Object.keys(body.config).length > MAX_CONFIG_KEYS) {
       throw new HttpError(422, "CONFIG_TOO_LARGE", `a department config may hold at most ${MAX_CONFIG_KEYS} top-level keys`);
@@ -133,71 +129,109 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     const { config, droppedRefs } = sanitizeTemplateConfig(body.config, ctx.tenantId);
     assertConfigNotEmpty(config);
 
-    const __f3Id = randomUUID();
-    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
-      op: 'dept_templates_op_0',
-      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
-      params: req.params as Record<string, unknown>,
-      query: req.query as Record<string, unknown>,
-      preId: ((req.params as any)?.id as string) || __f3Id,
+    const created = await db.transaction(async (tx) => {
+      const w = tx as repo.Writer;
+      const clash = await repo.findTemplateByCodeTx(w, ctx.tenantId, body.code);
+      if (clash) throw new HttpError(409, "TEMPLATE_EXISTS", `a template with code '${body.code}' already exists`);
+      const row = await repo.insertTemplate(w, {
+        tenantId: ctx.tenantId,
+        code: body.code,
+        name: body.name,
+        sourceDepartmentId: body.sourceDepartmentId ?? null,
+        config,
+        droppedRefs,
+        status: "active",
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+      await domainEvent(tx, outboxCtx(ctx), EVENTS.departmentTemplateCreated, {
+        templateId: row.id, code: row.code, droppedRefCount: droppedRefs.length,
+      });
+      await auditEvent(tx, outboxCtx(ctx), "department_template.created", RESOURCE, row.id, {
+        code: row.code, droppedRefCount: droppedRefs.length, foreignTenantRefCount: foreignRefs.length,
+      });
+      return row;
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send(singleEnvelope({
-      ...serializeTemplate(created),
-      // Surfaced so a cross-tenant clone attempt is visible, not silently cleaned.
-      foreignTenantRefs: foreignRefs,
-    }));
-  });
+    return;
+  
+}
 
-  app.get("/v1/admin/department-templates", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TEMPLATE_ROLES);
-    const q = parseOrThrow(listQuery, req.query);
-    const { rows, total } = await repo.listTemplates(ctx.tenantId, q.limit, (q.page - 1) * q.limit, q.status);
-    return reply.send(listEnvelope(rows.map(serializeTemplate), { page: q.page, pageSize: q.limit, total }));
-  });
-
-  app.get("/v1/admin/department-templates/:id/instantiations", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TEMPLATE_ROLES);
+export async function apply_dept_templates_1(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+  // post:"/v1/admin/department-templates/:id/instantiate"
     const { id } = parseOrThrow(idParam, req.params);
-    const q = parseOrThrow(instListQuery, req.query);
-    const template = await repo.findTemplate(ctx.tenantId, id);
-    if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");
-    const { rows, total } = await repo.listInstantiations(ctx.tenantId, id, q.limit, (q.page - 1) * q.limit);
-    return reply.send(listEnvelope(rows.map(serializeInstantiation), { page: q.page, pageSize: q.limit, total }));
-  });
+    const body = parseOrThrow(instantiateBody, req.body);
 
-  // ── update (optimistic-locked) ────────────────────────────────────────────
-  app.patch("/v1/admin/department-templates/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TEMPLATE_ROLES);
+    const result = await db.transaction(async (tx) => {
+      const w = tx as repo.Writer;
+      const template = await repo.findTemplateTx(w, ctx.tenantId, id);
+      if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");
+      assertTemplateActive(template.status);
+
+      const existing = await repo.findInstantiationByKeyTx(w, ctx.tenantId, id, body.idempotencyKey);
+      if (existing) {
+        // Idempotent replay: no write, no event. The caller gets the first result.
+        return { row: existing, idempotent: true as const };
+      }
+      const codeClash = await repo.findInstantiationByCodeTx(w, ctx.tenantId, body.departmentCode);
+      if (codeClash) {
+        throw new HttpError(409, "DEPARTMENT_EXISTS",
+          `a department with code '${body.departmentCode}' was already instantiated`);
+      }
+
+      const row = await repo.insertInstantiation(w, {
+        tenantId: ctx.tenantId,
+        templateId: id,
+        templateVersion: template.version,
+        departmentCode: body.departmentCode,
+        departmentName: body.departmentName,
+        idempotencyKey: body.idempotencyKey,
+        // Re-sanitised at instantiate time so a template stored before a
+        // sanitiser change can still never emit a foreign-tenant reference.
+        config: sanitizeTemplateConfig(template.config, ctx.tenantId).config,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+      await domainEvent(tx, outboxCtx(ctx), EVENTS.departmentInstantiated, {
+        instantiationId: row.id,
+        templateId: id,
+        templateVersion: template.version,
+        departmentCode: row.departmentCode,
+        departmentName: row.departmentName,
+        config: row.config,
+      });
+      await auditEvent(tx, outboxCtx(ctx), "department_template.instantiated", RESOURCE, row.id, {
+        templateId: id, departmentCode: row.departmentCode,
+      });
+      return { row, idempotent: false as const };
+    });
+
+    const payload = { ...serializeInstantiation(result.row), idempotent: result.idempotent };
+    return;
+  
+}
+
+export async function apply_dept_templates_2(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {
+  // patch:"/v1/admin/department-templates/:id"
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(patchBody, req.body);
     if (body.name === undefined && body.status === undefined) {
       throw new HttpError(400, "EMPTY_PATCH", "provide at least one of: name, status");
     }
 
-    const __f3Id = randomUUID();
-    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
-      op: 'dept_templates_op_2',
-      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
-      params: req.params as Record<string, unknown>,
-      query: req.query as Record<string, unknown>,
-      preId: ((req.params as any)?.id as string) || __f3Id,
+    const result = await db.transaction(async (tx) => {
+      const w = tx as repo.Writer;
+      const template = await repo.findTemplateTx(w, ctx.tenantId, id);
+      if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");
+      assertVersionMatch(template.version, body.expectedVersion);
+      const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
+      if (body.name !== undefined) patch.name = body.name;
+      if (body.status !== undefined) patch.status = body.status;
+      const moved = await repo.updateTemplate(w, ctx.tenantId, id, body.expectedVersion, patch);
+      if (!moved) throw new HttpError(409, "VERSION_CONFLICT", "template was modified concurrently; re-read and retry");
+      await auditEvent(tx, outboxCtx(ctx), "department_template.updated", RESOURCE, id);
+      return { id, version: body.expectedVersion + 1 };
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
-  });
-
-  app.get("/v1/admin/department-templates/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, TEMPLATE_ROLES);
-    const { id } = parseOrThrow(idParam, req.params);
-    const row = await repo.findTemplate(ctx.tenantId, id);
-    if (!row) throw new HttpError(404, "NOT_FOUND", "department template not found");
-    return reply.send(singleEnvelope(serializeTemplate(row)));
-  });
-
-  registerEnvelopeErrorHandler(app);
+    return;
+  
 }
+

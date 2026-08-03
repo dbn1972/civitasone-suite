@@ -26,6 +26,16 @@ export const COMMANDS = {
   closeDeal: "crm.deal.close",
   /** Transfer contact ownership to another agent (AS-002). */
   transferOwnership: "crm.contact.transfer",
+  // F3 leftover — roles / teams / quotations sync writes
+  createContactRole: "crm.contact_role.create",
+  deleteContactRole: "crm.contact_role.delete",
+  createTeam: "crm.team.create",
+  updateAgentCapacity: "crm.agent_workload.update_capacity",
+  createQuotation: "crm.quotation.create",
+  versionQuotation: "crm.quotation.version",
+  sendQuotation: "crm.quotation.send",
+  acceptQuotation: "crm.quotation.accept",
+  rejectQuotation: "crm.quotation.reject",
   /**
    * Ingest an automatically captured email/calendar item (AC-004, WC-003).
    * Payload: { capturedId, source: 'email'|'calendar', externalId, contactId|null,
