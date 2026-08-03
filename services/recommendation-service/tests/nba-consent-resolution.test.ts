@@ -20,7 +20,8 @@ import type { ActionCandidate } from "../src/modules/nba/ranking-domain.js";
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const PROFILE_ID = "bbbbbbbb-1111-4000-8000-000000000001";
 const CORR = "corr-1";
-const INTERNAL_SECRET = "internal_secret_for_tests_32chars";
+const INTERNAL_SECRET =
+  process.env.INTERNAL_SERVICE_SECRET ?? "test-internal-service-secret-32chr";
 
 function candidate(overrides: Partial<ActionCandidate> = {}): ActionCandidate {
   return {

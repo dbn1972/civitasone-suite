@@ -18,7 +18,8 @@ const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const ATTACKER_TENANT = "aaaaaaaa-0002-4000-8000-000000000002";
 const USER = "aaaaaaaa-1111-4000-8000-000000000001";
 const PROFILE_ID = "bbbbbbbb-1111-4000-8000-000000000001";
-const INTERNAL_SECRET = "internal_secret_for_tests_32chars";
+const INTERNAL_SECRET =
+  process.env.INTERNAL_SERVICE_SECRET ?? "test-internal-service-secret-32chr";
 
 const H = vi.hoisted(() => ({
   dbTransactionMock: vi.fn(),
