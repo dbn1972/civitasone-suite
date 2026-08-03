@@ -17,6 +17,9 @@ import {
   SetQueueAttributesCommand,
   ListQueuesCommand,
 } from "@aws-sdk/client-sqs";
+import { Agent as HttpAgent } from "node:http";
+import { Agent as HttpsAgent } from "node:https";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
 import { parseEnvelope } from "@civitasone/events";
 import { withTenantConsumer } from "@civitasone/db";
@@ -226,6 +229,57 @@ function topicQueuePrefix(topic: string): string {
   return `${topicBaseName(topic)}__`;
 }
 
+/**
+ * HTTP connection ceiling for the SQS client.
+ *
+ * This is not a tuning knob — the AWS SDK default of 50 is a hard outage on this
+ * fleet. `start()` runs ONE long-poll loop per subscribed topic, and each poll
+ * holds a connection for `WaitTimeSeconds: 20`. Services subscribe to far more
+ * topics than that default allows (hrms ~143, procurement ~63, finance ~58,
+ * crm ~54), so the loops alone exhaust the pool. Everything else then queues
+ * behind them indefinitely — including the outbox relay's SendMessage, which
+ * means committed writes are never published and CQRS commands never apply.
+ * The symptom is `@smithy/node-http-handler:WARN socket usage at capacity=50
+ * and N additional requests are enqueued` with N growing without bound.
+ *
+ * The ceiling must therefore exceed the largest subscriber count with room for
+ * concurrent publishes. Sockets are opened on demand, so a high ceiling costs
+ * nothing while idle — the only thing a low one buys is the stall above.
+ */
+export const DEFAULT_SQS_MAX_SOCKETS = 256;
+
+export function resolveMaxSockets(
+  raw: string | undefined = process.env.SQS_MAX_SOCKETS,
+): number {
+  const parsed = Number(raw);
+  // A malformed or non-positive override must not silently reintroduce a stall.
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_MAX_SOCKETS;
+  return Math.floor(parsed);
+}
+
+/**
+ * Connection pools for the SQS client, both carrying the same ceiling.
+ *
+ * Both schemes are configured because the endpoint differs by environment:
+ * LocalStack is plain http, deployed AWS is https. Setting only one would leave
+ * the SDK's default 50-socket agent in place wherever the other scheme is used —
+ * which is the stall, just moved to a different environment.
+ */
+export function buildSqsAgents(maxSockets: number = resolveMaxSockets()): {
+  httpAgent: HttpAgent;
+  httpsAgent: HttpsAgent;
+} {
+  return {
+    httpAgent: new HttpAgent({ maxSockets, keepAlive: true }),
+    httpsAgent: new HttpsAgent({ maxSockets, keepAlive: true }),
+  };
+}
+
+/** SQS request handler with an explicit connection ceiling. */
+export function buildRequestHandler(maxSockets: number = resolveMaxSockets()): NodeHttpHandler {
+  return new NodeHttpHandler(buildSqsAgents(maxSockets));
+}
+
 export class SqsQueue implements Queue {
   private client: SQSClient;
   private handlers = new Map<string, Handler[]>();
@@ -262,6 +316,7 @@ export class SqsQueue implements Queue {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "test",
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
       },
+      requestHandler: buildRequestHandler(),
     });
   }
 
