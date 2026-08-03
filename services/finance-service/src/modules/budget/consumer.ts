@@ -348,6 +348,152 @@ export function registerBudgetConsumers(queue: Queue): void {
     });
   });
 
+  // ── F3 CQRS residuals: outcome / supplementary ────────────────────────────
+  sub(COMMANDS.budgetOutcomeCreate, async (msg) => {
+    const outcomeRepo = await import("./outcome-repo.js");
+    const p = msg.payload as {
+      id: string; tenantId: string; headId: string; fy: string;
+      allocationId: string | null; schemeId: string | null;
+      outputDesc: string; outcomeDesc: string; indicator: string; unit: string;
+      baselineValue: number; targetValue: number; allocatedMinor: number;
+      currency: string; effectiveFrom: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await outcomeRepo.insertOutcome(tx, {
+        id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
+        allocationId: p.allocationId, schemeId: p.schemeId,
+        outputDesc: p.outputDesc, outcomeDesc: p.outcomeDesc,
+        indicator: p.indicator, unit: p.unit,
+        baselineValue: BigInt(p.baselineValue), targetValue: BigInt(p.targetValue),
+        achievedValue: 0n, allocatedMinor: BigInt(p.allocatedMinor),
+        currency: p.currency, status: "active",
+        effectiveFrom: p.effectiveFrom,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "budget_outcome", p.id);
+    });
+  });
+
+  sub(COMMANDS.budgetOutcomeAchievement, async (msg) => {
+    const outcomeRepo = await import("./outcome-repo.js");
+    const { DomainError } = await import("./domain.js");
+    const p = msg.payload as { id: string; tenantId: string; achievedValue: number };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await outcomeRepo.findOutcomeByIdTx(tx, p.id, p.tenantId);
+      if (!row) throw new DomainError("NOT_FOUND", "outcome not found");
+      if (row.status === "evaluated" || row.status === "closed") {
+        throw new DomainError("OUTCOME_ALREADY_EVALUATED", `achievement is locked once the outcome is ${row.status}`);
+      }
+      await outcomeRepo.updateOutcome(tx, p.id, {
+        achievedValue: BigInt(p.achievedValue), updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "record_achievement", "budget_outcome", p.id);
+    });
+  });
+
+  sub(COMMANDS.budgetOutcomeEvaluate, async (msg) => {
+    const outcomeRepo = await import("./outcome-repo.js");
+    const { assertEvaluatorDistinct, classifyAchievement } = await import("./outcome-domain.js");
+    const p = msg.payload as { id: string; tenantId: string; note: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await outcomeRepo.findOutcomeByIdTx(tx, p.id, p.tenantId);
+      if (!row) return;
+      assertEvaluatorDistinct(row.createdBy, msg.actorId);
+      const rating = classifyAchievement(
+        { targetValue: row.targetValue, baselineValue: row.baselineValue },
+        row.achievedValue,
+      );
+      await outcomeRepo.updateOutcome(tx, p.id, {
+        status: "evaluated", evaluationRating: rating, evaluationNote: p.note,
+        evaluatedBy: msg.actorId, evaluatedAt: new Date(), updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.outcomeEvaluated, eventType: EVENTS.outcomeEvaluated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          outcomeId: p.id, headId: row.headId, fy: row.fy, rating,
+          achievedValue: row.achievedValue.toString(), targetValue: row.targetValue.toString(),
+        },
+      });
+      await audit(tx, msg, "evaluate", "budget_outcome", p.id);
+    });
+  });
+
+  sub(COMMANDS.supplementaryCreate, async (msg) => {
+    const suppRepo = await import("./supplementary-repo.js");
+    const p = msg.payload as {
+      id: string; tenantId: string; fy: string; budgetId: string; headId: string;
+      amountMinor: number; limitMinor: number; currency: string; kind: string;
+      authority: string; reason: string; effectiveFrom: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await suppRepo.insertSupplementary(tx, {
+        id: p.id, tenantId: p.tenantId, fy: p.fy, budgetId: p.budgetId, headId: p.headId,
+        amountMinor: BigInt(p.amountMinor), limitMinor: BigInt(p.limitMinor),
+        currency: p.currency, kind: p.kind, authority: p.authority, reason: p.reason,
+        status: "pending_approval", effectiveFrom: p.effectiveFrom,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "supplementary_demand", p.id);
+    });
+  });
+
+  sub(COMMANDS.supplementaryApprove, async (msg) => {
+    const suppRepo = await import("./supplementary-repo.js");
+    const budgetRepo = await import("./repo.js");
+    const {
+      assertSupplementaryTransition, assertSupplementaryApproverDistinct,
+    } = await import("./supplementary-domain.js");
+    const { DomainError } = await import("./domain.js");
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await suppRepo.findSupplementaryByIdTx(tx, p.id, p.tenantId);
+      if (!row) return;
+      assertSupplementaryTransition(row.status as any, "approved");
+      assertSupplementaryApproverDistinct(row.createdBy, msg.actorId);
+      const budget = await budgetRepo.findBudgetByIdTx(tx, row.budgetId);
+      if (!budget || budget.tenantId !== p.tenantId) {
+        throw new DomainError("NOT_FOUND", "target budget not found");
+      }
+      const applied = await suppRepo.applySupplementaryToBudget(tx as any, row.budgetId, p.tenantId, row.amountMinor, msg.actorId);
+      if (!applied) throw new DomainError("APPLY_FAILED", "could not apply supplementary to budget");
+      await suppRepo.updateSupplementary(tx, p.id, {
+        status: "approved", approvedBy: msg.actorId, approvedAt: new Date(), updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.supplementaryApproved, eventType: EVENTS.supplementaryApproved,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          supplementaryId: p.id, budgetId: row.budgetId, headId: row.headId, fy: row.fy,
+          amountMinor: row.amountMinor.toString(), kind: row.kind, authority: row.authority,
+        },
+      });
+      await audit(tx, msg, "approve", "supplementary_demand", p.id);
+    });
+  });
+
+  sub(COMMANDS.supplementaryReject, async (msg) => {
+    const suppRepo = await import("./supplementary-repo.js");
+    const { assertSupplementaryTransition } = await import("./supplementary-domain.js");
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await suppRepo.findSupplementaryByIdTx(tx, p.id, p.tenantId);
+      if (!row) return;
+      assertSupplementaryTransition(row.status as any, "rejected");
+      await suppRepo.updateSupplementary(tx, p.id, {
+        status: "rejected", rejectReason: p.reason, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "reject", "supplementary_demand", p.id);
+    });
+  });
+
+
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

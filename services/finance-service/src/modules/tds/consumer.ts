@@ -4,13 +4,14 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { encryptPii } from "../../shared/pii-crypto.js";
+import { COMMANDS } from "../../topics.js";
 
 const log = pino({ name: "finance.tds.consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerTdsConsumers(queue: Queue): void {
-  queue.subscribe("finance.tds.deduction_record", async (msg) => {
+  queue.subscribe(COMMANDS.tdsDeductionRecord, async (msg) => {
     const p = msg.payload as {
       id?: string; tenantId: string; vendorId: string; vendorName?: string;
       pan?: string; billId?: string; paymentId?: string; section?: string;
@@ -22,22 +23,22 @@ export function registerTdsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { sql } = await import("drizzle-orm");
       const encryptedPan = p.pan ? encryptPii(p.pan) : null;
-      const rows = await (tx as any).execute(sql`
+      const id = p.id ?? msg.messageId;
+      await (tx as any).execute(sql`
         INSERT INTO gl.finance_vendor_tds (
-          tenant_id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
+          id, tenant_id, vendor_id, vendor_name, pan, bill_id, payment_id, section,
           gross_amount_minor, tds_rate_pct, tds_amount_minor, surcharge_minor,
           cess_minor, net_payment_minor, deduction_date, quarter, fy
         ) VALUES (
-          ${p.tenantId}::uuid, ${p.vendorId}::uuid, ${p.vendorName ?? null},
+          ${id}::uuid, ${p.tenantId}::uuid, ${p.vendorId}::uuid, ${p.vendorName ?? null},
           ${encryptedPan}, ${p.billId ?? null}::uuid, ${p.paymentId ?? null}::uuid,
           ${p.section ?? "194C"}, ${p.grossAmountMinor}::bigint, ${p.tdsRatePct},
           ${p.tdsAmountMinor}::bigint, ${p.surchargeMinor ?? 0}::bigint,
           ${p.cessMinor ?? 0}::bigint, ${p.netPaymentMinor}::bigint,
           ${p.deductionDate}::date, ${p.quarter}, ${p.fy}
         )
-        RETURNING id
+        ON CONFLICT (id) DO NOTHING
       `);
-      const id = (rows as any)[0]?.id ?? msg.messageId;
       await enqueue(tx, {
         topic: "finance.tds.deduction_recorded", eventType: "finance.tds.deduction_recorded",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -49,7 +50,7 @@ export function registerTdsConsumers(queue: Queue): void {
     log.info({ id: msg.messageId }, "Processed tds.deduction_record");
   });
 
-  queue.subscribe("finance.tds.deposit_mark", async (msg) => {
+  queue.subscribe(COMMANDS.tdsDepositMark, async (msg) => {
     const p = msg.payload as {
       tenantId: string; id: string; depositDate: string; challanNo: string;
     };

@@ -1,13 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
 export async function recurringRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/finance/recurring-entries — list standing instructions
   app.get("/v1/finance/recurring-entries", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -32,7 +34,6 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // POST /v1/finance/recurring-entries — create new recurring entry
   app.post("/v1/finance/recurring-entries", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -49,23 +50,20 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
       endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).parse(req.body);
 
-    const rows = await db.execute(sql`
-      INSERT INTO gl.finance_recurring_entries (
-        tenant_id, name, voucher_type, frequency, debit_account_id, credit_account_id,
-        amount_minor, narration, next_run_date, end_date, created_by
-      ) VALUES (
-        ${ctx.tenantId}::uuid, ${body.name}, ${body.voucherType}, ${body.frequency},
-        ${body.debitAccountId}::uuid, ${body.creditAccountId}::uuid,
-        ${body.amountMinor}, ${body.narration ?? null},
-        ${body.nextRunDate}::date, ${body.endDate ?? null}::date, ${ctx.actorId}::uuid
-      )
-      RETURNING id, name, frequency, amount_minor, next_run_date, is_active
-    `);
-
-    return reply.code(201).send({ data: (rows as unknown[])[0] });
+    const id = randomUUID();
+    await queue.publish(COMMANDS.recurringEntryCreate, {
+      messageId: id, type: COMMANDS.recurringEntryCreate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id, tenantId: ctx.tenantId, name: body.name, voucherType: body.voucherType,
+        frequency: body.frequency, debitAccountId: body.debitAccountId,
+        creditAccountId: body.creditAccountId, amountMinor: body.amountMinor,
+        narration: body.narration, nextRunDate: body.nextRunDate, endDate: body.endDate,
+      },
+    });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
-  // PATCH /v1/finance/recurring-entries/:id — update/deactivate
   app.patch("/v1/finance/recurring-entries/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -81,40 +79,20 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
       isActive: z.boolean().optional(),
     }).parse(req.body);
 
-    // Build dynamic SET clause
-    const sets: string[] = [];
-    const vals: any[] = [];
-    if (body.name !== undefined) sets.push("name");
-    if (body.frequency !== undefined) sets.push("frequency");
-    if (body.amountMinor !== undefined) sets.push("amount_minor");
-    if (body.narration !== undefined) sets.push("narration");
-    if (body.nextRunDate !== undefined) sets.push("next_run_date");
-    if (body.endDate !== undefined) sets.push("end_date");
-    if (body.isActive !== undefined) sets.push("is_active");
-
-    if (sets.length === 0) {
+    if (
+      body.name === undefined && body.frequency === undefined && body.amountMinor === undefined &&
+      body.narration === undefined && body.nextRunDate === undefined &&
+      body.endDate === undefined && body.isActive === undefined
+    ) {
       throw new HttpError(400, "NO_CHANGES", "no fields provided to update");
     }
 
-    const rows = await db.execute(sql`
-      UPDATE gl.finance_recurring_entries
-      SET
-        name = COALESCE(${body.name ?? null}, name),
-        frequency = COALESCE(${body.frequency ?? null}, frequency),
-        amount_minor = COALESCE(${body.amountMinor ?? null}::bigint, amount_minor),
-        narration = COALESCE(${body.narration ?? null}, narration),
-        next_run_date = COALESCE(${body.nextRunDate ?? null}::date, next_run_date),
-        end_date = ${body.endDate === undefined ? sql`end_date` : body.endDate === null ? sql`NULL` : sql`${body.endDate}::date`},
-        is_active = COALESCE(${body.isActive ?? null}::boolean, is_active)
-      WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
-      RETURNING id, name, frequency, amount_minor, next_run_date, is_active
-    `);
-
-    const result = rows as unknown as any[];
-    if (!result || result.length === 0) {
-      throw new HttpError(404, "NOT_FOUND", "recurring entry not found");
-    }
-
-    return reply.send({ data: result[0] });
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.recurringEntryUpdate, {
+      messageId, type: COMMANDS.recurringEntryUpdate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, ...body },
+    });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 }
