@@ -78,6 +78,19 @@ export async function rolesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id: contactId, roleId } = roleIdParam.parse(req.params);
+
+    // Without this the consumer's DELETE simply matches nothing and the caller
+    // is told 202 Accepted for a role that never existed.
+    const found = await scopedRead(async (tx) => {
+      return tx.execute(sql`
+        SELECT id FROM crm.contact_roles
+        WHERE id = ${roleId} AND contact_id = ${contactId} AND tenant_id = ${ctx.tenantId}
+      `) as unknown as Array<{ id: string }>;
+    });
+    if (found.length === 0) {
+      throw new HttpError(404, "NOT_FOUND", "contact role not found");
+    }
+
     return sendAccepted(
       reply,
       acceptedResponseSchema,

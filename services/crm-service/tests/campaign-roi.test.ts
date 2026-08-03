@@ -2,11 +2,18 @@
  * Campaign responses / cost / ROI tests (MK-004).
  * The ROI maths is integer basis points computed with BigInt; the zero-cost case
  * must not divide by zero, and large values must not lose precision.
+ *
+ * Writes are CQRS: the PUT returns 202 Accepted and the consumer applies the
+ * upsert, so the helper drains the queue and the numbers are asserted through
+ * the ROI read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 import {
   computeRoi,
   computeNetMinor,
@@ -42,9 +49,14 @@ async function cleanup(): Promise<void> {
   }).catch(() => {});
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  registerAllConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -58,7 +70,37 @@ async function upsert(campaignId: string, payload: Record<string, unknown>, role
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
+}
+
+/** Read one applied period back through the ROI read path. */
+async function period(campaignId: string, periodStart: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: `/v1/crm/campaigns/${campaignId}/roi`,
+    headers: headers(["crm_user"]),
+  });
+  await app.close();
+  const row = res.json().data.periods.find(
+    (p: { periodStart: string }) => String(p.periodStart).slice(0, 10) === periodStart,
+  );
+  expect(row, `period ${periodStart} was never applied by the consumer`).toBeDefined();
+  return row;
+}
+
+/** `version` is not part of the ROI view, so the upsert bump is read directly. */
+async function storedVersions(campaignId: string): Promise<number[]> {
+  const rows = await sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    return tx`
+      SELECT version FROM crm.campaign_performance
+      WHERE tenant_id = ${TENANT} AND campaign_id = ${campaignId}
+      ORDER BY period_start
+    `;
+  }) as unknown as Array<{ version: number }>;
+  return rows.map((r) => r.version);
 }
 
 describe("roi-domain — computeRoi (pure)", () => {
@@ -120,7 +162,7 @@ describe("roi-domain — computeRoi (pure)", () => {
 });
 
 describe("PUT /v1/crm/campaigns/:id/performance", () => {
-  it("inserts a period → 200 with ROI in basis points", async () => {
+  it("inserts a period → 202, applied with ROI in basis points", async () => {
     const res = await upsert(CAMPAIGN_A, {
       responses: 400,
       costMinor: "100000",
@@ -129,15 +171,15 @@ describe("PUT /v1/crm/campaigns/:id/performance", () => {
       periodEnd: "2026-03-31",
     });
 
-    expect(res.statusCode).toBe(200);
-    const d = res.json().data;
+    expect(res.statusCode).toBe(202);
+    const d = await period(CAMPAIGN_A, "2026-01-01");
     expect(d.costMinor).toBe("100000");
     expect(d.revenueMinor).toBe("250000");
     expect(d.netMinor).toBe("150000");
     expect(d.roiBasisPoints).toBe("15000");
     expect(d.roiPercent).toBe("150.00");
     expect(d.costPerResponseMinor).toBe("250");
-    expect(d.version).toBe(1);
+    expect(await storedVersions(CAMPAIGN_A)).toEqual([1]);
   });
 
   it("upserts the same period instead of double-counting", async () => {
@@ -148,8 +190,9 @@ describe("PUT /v1/crm/campaigns/:id/performance", () => {
       periodStart: "2026-01-01",
     });
 
-    expect(second.statusCode).toBe(200);
-    expect(second.json().data.version).toBe(2);
+    expect(second.statusCode).toBe(202);
+    expect(await storedVersions(CAMPAIGN_A)).toEqual([2]);
+    expect((await period(CAMPAIGN_A, "2026-01-01")).costMinor).toBe("120000");
 
     const rows = await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
@@ -169,9 +212,10 @@ describe("PUT /v1/crm/campaigns/:id/performance", () => {
       periodStart: "2026-04-01",
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.costMinor).toBe(ABOVE_2_53);
-    expect(res.json().data.roiBasisPoints).toBe("0");
+    expect(res.statusCode).toBe(202);
+    const d = await period(CAMPAIGN_B, "2026-04-01");
+    expect(d.costMinor).toBe(ABOVE_2_53);
+    expect(d.roiBasisPoints).toBe("0");
   });
 
   it("records a zero-cost campaign without dividing by zero", async () => {
@@ -182,10 +226,11 @@ describe("PUT /v1/crm/campaigns/:id/performance", () => {
       periodStart: "2026-05-01",
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.roiBasisPoints).toBeNull();
-    expect(res.json().data.roiPercent).toBeNull();
-    expect(res.json().data.costPerResponseMinor).toBe("0");
+    expect(res.statusCode).toBe(202);
+    const d = await period(CAMPAIGN_FREE, "2026-05-01");
+    expect(d.roiBasisPoints).toBeNull();
+    expect(d.roiPercent).toBeNull();
+    expect(d.costPerResponseMinor).toBe("0");
   });
 
   it("rejects a float cost → 400", async () => {

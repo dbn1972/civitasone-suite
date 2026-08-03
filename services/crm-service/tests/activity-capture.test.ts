@@ -2,11 +2,18 @@
  * Automatic email/calendar capture tests (AC-004, WC-003, WC-004).
  * Covers idempotent ingest on (source, externalId), manual matching, the
  * capture-health report, and the deliberate no-body/PII posture.
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 import { resolveMatch } from "../src/modules/activities/capture-routes.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -49,9 +56,12 @@ async function cleanup(): Promise<void> {
 beforeAll(async () => {
   await cleanup();
   await seed();
+  registerAllConsumers(queue);
+  await queue.start();
 });
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -65,7 +75,22 @@ async function ingest(payload: Record<string, unknown>, roles = ["crm_user"]) {
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
+}
+
+/** Read a captured item back through the real list route. */
+async function fetchCapture(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: "/v1/crm/activities/capture?limit=200",
+    headers: headers(),
+  });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `captured activity ${id} was never applied by the consumer`).toBeDefined();
+  return row;
 }
 
 describe("resolveMatch (pure)", () => {
@@ -317,7 +342,7 @@ describe("GET /v1/crm/activities/capture/health", () => {
 });
 
 describe("POST /v1/crm/activities/capture/:id/match", () => {
-  it("attaches an unmatched item to a contact → 200", async () => {
+  it("attaches an unmatched item to a contact → 202, applied as matched", async () => {
     const created = await ingest({ source: "email", externalId: "graph-msg-0010", subject: "Cold email" });
     const id = created.json().id;
 
@@ -329,11 +354,13 @@ describe("POST /v1/crm/activities/capture/:id/match", () => {
       payload: { contactId: CONTACT_B },
     });
     await app.close();
+    await drainQueue();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.matchStatus).toBe("matched");
-    expect(res.json().data.contactId).toBe(CONTACT_B);
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchCapture(id);
+    expect(row.matchStatus).toBe("matched");
+    expect(row.contactId).toBe(CONTACT_B);
+    expect(row.version).toBe(2);
   });
 
   it("returns 404 for an unknown captured item", async () => {

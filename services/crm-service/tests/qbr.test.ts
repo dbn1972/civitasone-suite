@@ -2,11 +2,18 @@
  * Quarterly business review tests (KA-005).
  * Covers scheduling, completion with outcomes, cancellation with a mandatory
  * reason, the upcoming window, and invalid-state guards.
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000062";
@@ -33,9 +40,14 @@ async function cleanup(): Promise<void> {
   }).catch(() => {});
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  registerAllConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -44,11 +56,35 @@ async function schedule(payload: Record<string, unknown>, roles = ["crm_user"]) 
   const app = await buildApp();
   const res = await app.inject({ method: "POST", url: "/v1/crm/qbr", headers: headers(roles), payload });
   await app.close();
+  await drainQueue();
   return res;
 }
 
+async function act(id: string, action: "complete" | "cancel", payload: Record<string, unknown>) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "POST",
+    url: `/v1/crm/qbr/${id}/${action}`,
+    headers: headers(),
+    payload,
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+/** Read a review back through the real list route, after the consumer applied. */
+async function fetchQbr(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({ method: "GET", url: "/v1/crm/qbr?limit=200", headers: headers() });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `qbr ${id} was never applied by the consumer`).toBeDefined();
+  return row;
+}
+
 describe("POST /v1/crm/qbr", () => {
-  it("schedules a review → 201", async () => {
+  it("schedules a review → 202, applied as scheduled", async () => {
     const res = await schedule({
       accountId: ACCOUNT,
       quarter: "2026-Q1",
@@ -57,9 +93,10 @@ describe("POST /v1/crm/qbr", () => {
       agenda: ["Adoption review", "Renewal"],
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("scheduled");
-    expect(res.json().data.quarter).toBe("2026-Q1");
+    expect(res.statusCode).toBe(202);
+    const row = await fetchQbr(res.json().id);
+    expect(row.status).toBe("scheduled");
+    expect(row.quarter).toBe("2026-Q1");
   });
 
   it("rejects a duplicate account/quarter → 409", async () => {
@@ -172,59 +209,39 @@ describe("GET /v1/crm/qbr/upcoming", () => {
 });
 
 describe("POST /v1/crm/qbr/:id/complete", () => {
-  it("records outcomes → 200", async () => {
+  it("records outcomes → 202, applied as completed", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2028-Q1", scheduledAt: inDays(2) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [{ topic: "Renewal", decision: "Committed for FY27" }] },
+    const res = await act(id, "complete", {
+      outcomes: [{ topic: "Renewal", decision: "Committed for FY27" }],
     });
-    await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("completed");
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchQbr(id);
+    expect(row.status).toBe("completed");
+    expect(row.version).toBe(2);
   });
 
   it("supports recording a no_show", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2028-Q2", scheduledAt: inDays(2) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [{ topic: "Nobody attended" }], status: "no_show" },
+    const res = await act(id, "complete", {
+      outcomes: [{ topic: "Nobody attended" }],
+      status: "no_show",
     });
-    await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("no_show");
+    expect(res.statusCode).toBe(202);
+    expect((await fetchQbr(id)).status).toBe("no_show");
   });
 
   it("refuses to complete twice → 422", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2028-Q3", scheduledAt: inDays(2) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [{ topic: "Done" }] },
-    });
-    const again = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [{ topic: "Again" }] },
-    });
-    await app.close();
+    expect((await act(id, "complete", { outcomes: [{ topic: "Done" }] })).statusCode).toBe(202);
+    const again = await act(id, "complete", { outcomes: [{ topic: "Again" }] });
 
     expect(again.statusCode).toBe(422);
     expect(again.json().code).toBe("INVALID_STATE");
@@ -232,16 +249,9 @@ describe("POST /v1/crm/qbr/:id/complete", () => {
 
   it("rejects empty outcomes → 400", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2028-Q4", scheduledAt: inDays(2) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [] },
-    });
-    await app.close();
+    const res = await act(id, "complete", { outcomes: [] });
     expect(res.statusCode).toBe(400);
   });
 
@@ -270,65 +280,35 @@ describe("POST /v1/crm/qbr/:id/complete", () => {
 });
 
 describe("POST /v1/crm/qbr/:id/cancel", () => {
-  it("cancels with a reason → 200", async () => {
+  it("cancels with a reason → 202, applied as cancelled", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2029-Q1", scheduledAt: inDays(3) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/cancel`,
-      headers: headers(),
-      payload: { reason: "Customer postponed to next quarter" },
-    });
-    await app.close();
+    const res = await act(id, "cancel", { reason: "Customer postponed to next quarter" });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("cancelled");
+    expect(res.statusCode).toBe(202);
+    expect((await fetchQbr(id)).status).toBe("cancelled");
   });
 
   it("requires a reason of 10+ chars → 400", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2029-Q2", scheduledAt: inDays(3) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const short = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/cancel`,
-      headers: headers(),
-      payload: { reason: "busy" },
-    });
-    const missing = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/cancel`,
-      headers: headers(),
-      payload: {},
-    });
-    await app.close();
+    const short = await act(id, "cancel", { reason: "busy" });
+    const missing = await act(id, "cancel", {});
 
     expect(short.statusCode).toBe(400);
     expect(short.json().code).toBe("REASON_REQUIRED");
     expect(missing.statusCode).toBe(400);
+    expect((await fetchQbr(id)).status).toBe("scheduled");
   });
 
   it("refuses to cancel a completed review → 422", async () => {
     const created = await schedule({ accountId: ACCOUNT, quarter: "2029-Q3", scheduledAt: inDays(3) });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/complete`,
-      headers: headers(),
-      payload: { outcomes: [{ topic: "Held" }] },
-    });
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/qbr/${id}/cancel`,
-      headers: headers(),
-      payload: { reason: "Trying to cancel a completed review" },
-    });
-    await app.close();
+    expect((await act(id, "complete", { outcomes: [{ topic: "Held" }] })).statusCode).toBe(202);
+    const res = await act(id, "cancel", { reason: "Trying to cancel a completed review" });
 
     expect(res.statusCode).toBe(422);
   });

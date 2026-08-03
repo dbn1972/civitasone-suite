@@ -2,11 +2,18 @@
  * Recurring task + escalation tests (AC-005).
  * The pure recurrence maths is exercised directly (month-end rollover, leap
  * years, DST-agnostic UTC behaviour) and through the /run endpoint.
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 import { nextOccurrence, shouldEscalate, isCadence } from "../src/modules/activities/recurrence-domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -35,9 +42,14 @@ async function cleanup(): Promise<void> {
   }).catch(() => {});
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  registerAllConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -51,7 +63,47 @@ async function createTask(payload: Record<string, unknown>, roles = ["crm_user"]
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
+}
+
+async function patchTask(id: string, payload: Record<string, unknown>) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "PATCH",
+    url: `/v1/crm/recurring-tasks/${id}`,
+    headers: headers(),
+    payload,
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+async function runTask(id: string) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "POST",
+    url: `/v1/crm/recurring-tasks/${id}/run`,
+    headers: headers(),
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+/** Read a definition back through the real list route, after the consumer applied. */
+async function fetchTask(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: "/v1/crm/recurring-tasks?limit=200",
+    headers: headers(),
+  });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `recurring task ${id} was never applied by the consumer`).toBeDefined();
+  return row;
 }
 
 describe("recurrence-domain — nextOccurrence (pure)", () => {
@@ -131,7 +183,7 @@ describe("recurrence-domain — shouldEscalate (pure)", () => {
 });
 
 describe("POST /v1/crm/recurring-tasks", () => {
-  it("creates a definition → 201", async () => {
+  it("creates a definition → 202, applied as enabled and never run", async () => {
     const res = await createTask({
       name: "Monthly check-in",
       subjectType: "contact",
@@ -141,10 +193,11 @@ describe("POST /v1/crm/recurring-tasks", () => {
       escalateAfterHours: 24,
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.cadence).toBe("monthly");
-    expect(res.json().data.enabled).toBe(true);
-    expect(res.json().data.lastRunAt).toBeNull();
+    expect(res.statusCode).toBe(202);
+    const row = await fetchTask(res.json().id);
+    expect(row.cadence).toBe("monthly");
+    expect(row.enabled).toBe(true);
+    expect(row.lastRunAt).toBeNull();
   });
 
   it("rejects an unknown cadence → 400", async () => {
@@ -286,7 +339,7 @@ describe("GET /v1/crm/recurring-tasks/due", () => {
 });
 
 describe("PATCH /v1/crm/recurring-tasks/:id", () => {
-  it("amends cadence and disables → 200", async () => {
+  it("amends cadence and disables → 202, applied with a version bump", async () => {
     const created = await createTask({
       name: "Patch me",
       subjectType: "contact",
@@ -294,19 +347,15 @@ describe("PATCH /v1/crm/recurring-tasks/:id", () => {
       cadence: "daily",
       nextRunAt: inHours(5),
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/recurring-tasks/${id}`,
-      headers: headers(),
-      payload: { cadence: "quarterly", enabled: false, version: 1 },
-    });
-    await app.close();
+    const res = await patchTask(id, { cadence: "quarterly", enabled: false, version: 1 });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchTask(id);
+    expect(row.cadence).toBe("quarterly");
+    expect(row.enabled).toBe(false);
+    expect(row.version).toBe(2);
   });
 
   it("returns 409 on a stale version", async () => {
@@ -317,17 +366,14 @@ describe("PATCH /v1/crm/recurring-tasks/:id", () => {
       cadence: "daily",
       nextRunAt: inHours(5),
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/recurring-tasks/${id}`,
-      headers: headers(),
-      payload: { enabled: false, version: 77 },
-    });
-    await app.close();
+    const res = await patchTask(id, { enabled: false, version: 77 });
     expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("VERSION_CONFLICT");
+    // The stale write must never reach the consumer, or it would be dropped
+    // silently after the caller was told the command was accepted.
+    expect((await fetchTask(id)).enabled).toBe(true);
   });
 
   it("rejects an empty patch → 400", async () => {
@@ -367,7 +413,7 @@ describe("PATCH /v1/crm/recurring-tasks/:id", () => {
 });
 
 describe("POST /v1/crm/recurring-tasks/:id/run", () => {
-  it("materialises the occurrence and advances the schedule → 201", async () => {
+  it("materialises the occurrence and advances the schedule → 202", async () => {
     const dueAt = "2026-01-31T10:00:00.000Z";
     const created = await createTask({
       name: "Month-end review",
@@ -376,32 +422,26 @@ describe("POST /v1/crm/recurring-tasks/:id/run", () => {
       cadence: "monthly",
       nextRunAt: dueAt,
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/recurring-tasks/${id}/run`,
-      headers: headers(),
-    });
-    await app.close();
+    const res = await runTask(id);
+    expect(res.statusCode).toBe(202);
 
-    expect(res.statusCode).toBe(201);
-    const d = res.json().data;
-    expect(d.dueAt).toBe(dueAt);
+    const row = await fetchTask(id);
+    expect(row.lastRunAt).toBeTruthy();
     // Month-end rollover through the endpoint, not just the unit test.
-    expect(d.nextRunAt).toBe("2026-02-28T10:00:00.000Z");
-    expect(d.materialisedActionId).toBeDefined();
+    expect(new Date(row.nextRunAt as string).toISOString()).toBe("2026-02-28T10:00:00.000Z");
 
     const actions = await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
       return tx`
-        SELECT action_type, subject_id FROM crm.next_actions
-        WHERE tenant_id = ${TENANT} AND id = ${d.materialisedActionId}
+        SELECT action_type, subject_id, due_at FROM crm.next_actions
+        WHERE tenant_id = ${TENANT} AND notes = 'Month-end review'
       `;
-    });
+    }) as unknown as Array<{ action_type: string; subject_id: string; due_at: string }>;
     expect(actions[0]?.action_type).toBe("recurring_followup");
     expect(actions[0]?.subject_id).toBe(SUBJECT);
+    expect(new Date(actions[0]?.due_at ?? 0).toISOString()).toBe(dueAt);
   });
 
   it("refuses to run a disabled definition → 422", async () => {
@@ -413,15 +453,9 @@ describe("POST /v1/crm/recurring-tasks/:id/run", () => {
       nextRunAt: inHours(-1),
       enabled: false,
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/recurring-tasks/${id}/run`,
-      headers: headers(),
-    });
-    await app.close();
+    const res = await runTask(id);
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("TASK_DISABLED");

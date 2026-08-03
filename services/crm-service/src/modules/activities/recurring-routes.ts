@@ -176,8 +176,18 @@ export async function recurringTaskRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
       `) as unknown as Array<{ id: string; version: number }>;
     });
-    if (current.length === 0) {
+    const task = current[0];
+    if (!task) {
       throw new HttpError(404, "NOT_FOUND", "recurring task not found");
+    }
+    // The consumer's UPDATE is guarded on `version`, so a stale value there is a
+    // silent no-op after a 202. Reject it here while the caller can still see it.
+    if (body.version !== undefined && body.version !== task.version) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        `recurring task is at version ${task.version}, not ${body.version}`,
+      );
     }
 
     return sendAccepted(
