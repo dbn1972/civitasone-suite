@@ -1,11 +1,18 @@
 /**
  * Contact roles tests (CM-003).
  * Tests CRUD for relationship roles and stakeholder views.
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000020";
@@ -54,6 +61,7 @@ async function cleanup(): Promise<void> {
 }
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -61,50 +69,58 @@ afterAll(async () => {
 beforeAll(async () => {
   await cleanup();
   await seedData();
+  registerAllConsumers(queue);
+  await queue.start();
 });
 
-describe("POST /v1/crm/contacts/:id/roles", () => {
-  it("creates a role assignment (201)", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
-      headers: headers(),
-      payload: { dealId: DEAL_ID, role: "decision_maker" },
-    });
-    await app.close();
+async function createRole(payload: Record<string, unknown>, roles = ["crm_user"]) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "POST",
+    url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
+    headers: { authorization: `Bearer ${token(roles)}`, "x-tenant-id": TENANT },
+    payload,
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
 
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.id).toBeDefined();
-    expect(body.data.role).toBe("decision_maker");
-    expect(body.data.contactId).toBe(CONTACT_ID);
-    expect(body.data.dealId).toBe(DEAL_ID);
+/** Read a role back through the real list route, after the consumer applied. */
+async function fetchRole(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
+    headers: headers(),
+  });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `contact role ${id} was never applied by the consumer`).toBeDefined();
+  return row;
+}
+
+describe("POST /v1/crm/contacts/:id/roles", () => {
+  it("creates a role assignment (202)", async () => {
+    const res = await createRole({ dealId: DEAL_ID, role: "decision_maker" });
+
+    expect(res.statusCode).toBe(202);
+    const row = await fetchRole(res.json().id);
+    expect(row.role).toBe("decision_maker");
+    expect(row.contactId).toBe(CONTACT_ID);
+    expect(row.dealId).toBe(DEAL_ID);
   });
 
   it("creates different roles on same deal", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
-      headers: headers(),
-      payload: { dealId: DEAL_ID, role: "influencer" },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.role).toBe("influencer");
+    const res = await createRole({ dealId: DEAL_ID, role: "influencer" });
+    expect(res.statusCode).toBe(202);
+    expect((await fetchRole(res.json().id)).role).toBe("influencer");
   });
 
   it("creates a role on a second deal", async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
-      headers: headers(),
-      payload: { dealId: DEAL_ID_2, role: "champion" },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(201);
+    const res = await createRole({ dealId: DEAL_ID_2, role: "champion" });
+    expect(res.statusCode).toBe(202);
+    expect((await fetchRole(res.json().id)).dealId).toBe(DEAL_ID_2);
   });
 
   it("rejects invalid role value (400)", async () => {
@@ -217,25 +233,29 @@ describe("GET /v1/crm/deals/:id/stakeholders", () => {
 });
 
 describe("DELETE /v1/crm/contacts/:id/roles/:roleId", () => {
-  it("deletes a role assignment (204)", async () => {
-    const app = await buildApp();
-    // Create a role to delete
-    const createRes = await app.inject({
-      method: "POST",
-      url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
-      headers: headers(),
-      payload: { dealId: DEAL_ID, role: "end_user" },
-    });
-    const roleId = createRes.json().data.id;
+  it("deletes a role assignment (202, applied)", async () => {
+    const createRes = await createRole({ dealId: DEAL_ID, role: "end_user" });
+    const roleId = createRes.json().id;
 
+    const app = await buildApp();
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/crm/contacts/${CONTACT_ID}/roles/${roleId}`,
       headers: headers(),
     });
     await app.close();
+    await drainQueue();
 
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(202);
+
+    const listApp = await buildApp();
+    const listed = await listApp.inject({
+      method: "GET",
+      url: `/v1/crm/contacts/${CONTACT_ID}/roles`,
+      headers: headers(),
+    });
+    await listApp.close();
+    expect(listed.json().data.map((r: { id: string }) => r.id)).not.toContain(roleId);
   });
 
   it("returns 404 for non-existent role", async () => {

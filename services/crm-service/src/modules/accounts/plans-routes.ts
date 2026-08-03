@@ -192,8 +192,18 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
       `) as unknown as Array<{ id: string; version: number }>;
     });
-    if (current.length === 0) {
+    const plan = current[0];
+    if (!plan) {
       throw new HttpError(404, "NOT_FOUND", "account plan not found");
+    }
+    // The consumer's UPDATE is guarded on `version`, so a stale value there is a
+    // silent no-op after a 202. Reject it here while the caller can still see it.
+    if (body.version !== undefined && body.version !== plan.version) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        `account plan is at version ${plan.version}, not ${body.version}`,
+      );
     }
 
     return sendAccepted(

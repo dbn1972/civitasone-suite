@@ -208,6 +208,15 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     if (isBidStage(tender.bidStage) && isTerminalStage(tender.bidStage)) {
       throw new HttpError(422, "TENDER_CLOSED", `cannot amend a tender in terminal stage '${tender.bidStage}'`);
     }
+    // The consumer's UPDATE is guarded on `version`, so a stale value there is a
+    // silent no-op after a 202. Reject it here while the caller can still see it.
+    if (body.version !== undefined && body.version !== tender.version) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        `tender is at version ${tender.version}, not ${body.version}`,
+      );
+    }
 
     return sendAccepted(
       reply,

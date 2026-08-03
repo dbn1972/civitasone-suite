@@ -2,11 +2,20 @@
  * Tender / RFP tracking tests (KA-003).
  * Covers the bid-stage state machine (invalid + terminal → 422), the mandatory
  * loss reason (400), and exact bigint money round-tripping above 2^53.
+ *
+ * Writes are CQRS: the route validates and returns 202 Accepted, and the
+ * consumer applies the row. Every mutating helper therefore drains the queue
+ * before returning, and state is asserted through the read path rather than
+ * from the command response.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { EVENTS } from "../src/topics.js";
+import { drainQueue } from "./consumer-harness.js";
 import {
   canTransition,
   isTerminalStage,
@@ -37,12 +46,18 @@ async function cleanup(): Promise<void> {
   await sqlClient.begin(async (tx) => {
     await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
     await tx`DELETE FROM crm.tenders WHERE tenant_id = ${TENANT}`.catch(() => {});
+    await tx`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`.catch(() => {});
   }).catch(() => {});
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  registerAllConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -51,6 +66,7 @@ async function createTender(payload: Record<string, unknown>) {
   const app = await buildApp();
   const res = await app.inject({ method: "POST", url: "/v1/crm/tenders", headers: headers(), payload });
   await app.close();
+  await drainQueue();
   return res;
 }
 
@@ -63,7 +79,45 @@ async function moveStage(id: string, payload: Record<string, unknown>) {
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
+}
+
+async function patchTender(id: string, payload: Record<string, unknown>) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "PATCH",
+    url: `/v1/crm/tenders/${id}`,
+    headers: headers(),
+    payload,
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+/** Read a tender back through the real list route, after the consumer applied. */
+async function fetchTender(id: string): Promise<Record<string, string | number>> {
+  const app = await buildApp();
+  const res = await app.inject({ method: "GET", url: "/v1/crm/tenders?limit=200", headers: headers() });
+  await app.close();
+  const row = res.json().data.find((t: { id: string }) => t.id === id);
+  expect(row, `tender ${id} was never applied by the consumer`).toBeDefined();
+  return row;
+}
+
+/** Stage-change events carry the transition; the row only carries the result. */
+async function stageEvents(id: string): Promise<Array<{ fromStage: string; toStage: string }>> {
+  const rows = await sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    return tx`
+      SELECT payload FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND event_type = ${EVENTS.tenderStageChanged}
+        AND payload->>'tenderId' = ${id}
+      ORDER BY created_at
+    `;
+  }) as unknown as Array<{ payload: { fromStage: string; toStage: string } }>;
+  return rows.map((r) => ({ fromStage: r.payload.fromStage, toStage: r.payload.toStage }));
 }
 
 describe("tender-domain (pure)", () => {
@@ -105,7 +159,7 @@ describe("tender-domain (pure)", () => {
 });
 
 describe("POST /v1/crm/tenders", () => {
-  it("registers a tender → 201", async () => {
+  it("registers a tender → 202, applied as identified", async () => {
     const res = await createTender({
       accountId: ACCOUNT,
       tenderRef: "T-2026-001",
@@ -113,12 +167,12 @@ describe("POST /v1/crm/tenders", () => {
       estimatedValueMinor: "250000000",
       competitors: ["Acme", "Globex"],
     });
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.bidStage).toBe("identified");
-    expect(body.data.estimatedValueMinor).toBe("250000000");
-    expect(typeof body.data.estimatedValueMinor).toBe("string");
-    expect(body.data.currency).toBe("INR");
+    expect(res.statusCode).toBe(202);
+    const row = await fetchTender(res.json().id);
+    expect(row.bidStage).toBe("identified");
+    expect(row.estimatedValueMinor).toBe("250000000");
+    expect(typeof row.estimatedValueMinor).toBe("string");
+    expect(row.currency).toBe("INR");
   });
 
   it("round-trips a value above 2^53 exactly as a string", async () => {
@@ -127,8 +181,8 @@ describe("POST /v1/crm/tenders", () => {
       title: "Nationwide fibre",
       estimatedValueMinor: ABOVE_2_53,
     });
-    expect(created.statusCode).toBe(201);
-    expect(created.json().data.estimatedValueMinor).toBe(ABOVE_2_53);
+    expect(created.statusCode).toBe(202);
+    expect((await fetchTender(created.json().id)).estimatedValueMinor).toBe(ABOVE_2_53);
 
     const app = await buildApp();
     const listed = await app.inject({
@@ -286,53 +340,37 @@ describe("GET /v1/crm/tenders/upcoming", () => {
 });
 
 describe("PATCH /v1/crm/tenders/:id", () => {
-  it("amends title and value → 200", async () => {
+  it("amends title and value → 202, applied with a version bump", async () => {
     const created = await createTender({ tenderRef: "T-2026-PATCH", title: "Original" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/tenders/${id}`,
-      headers: headers(),
-      payload: { title: "Amended", estimatedValueMinor: ABOVE_2_53, version: 1 },
-    });
-    await app.close();
+    const res = await patchTender(id, { title: "Amended", estimatedValueMinor: ABOVE_2_53, version: 1 });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.estimatedValueMinor).toBe(ABOVE_2_53);
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchTender(id);
+    expect(row.title).toBe("Amended");
+    expect(row.estimatedValueMinor).toBe(ABOVE_2_53);
+    expect(row.version).toBe(2);
   });
 
   it("returns 409 on a stale version", async () => {
     const created = await createTender({ tenderRef: "T-2026-STALE", title: "Stale test" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/tenders/${id}`,
-      headers: headers(),
-      payload: { title: "Nope", version: 99 },
-    });
-    await app.close();
+    const res = await patchTender(id, { title: "Nope", version: 99 });
 
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("VERSION_CONFLICT");
+    // The stale write must never reach the consumer, or it would be dropped
+    // silently after the caller was told the command was accepted.
+    expect((await fetchTender(id)).title).toBe("Stale test");
   });
 
   it("rejects an empty patch → 400", async () => {
     const created = await createTender({ tenderRef: "T-2026-EMPTY", title: "Empty patch" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/tenders/${id}`,
-      headers: headers(),
-      payload: {},
-    });
-    await app.close();
+    const res = await patchTender(id, {});
     expect(res.statusCode).toBe(400);
   });
 
@@ -361,44 +399,52 @@ describe("PATCH /v1/crm/tenders/:id", () => {
 });
 
 describe("POST /v1/crm/tenders/:id/stage", () => {
-  it("advances one stage at a time → 200", async () => {
+  it("advances one stage at a time → 202 each, applied in order", async () => {
     const created = await createTender({ tenderRef: "T-2026-FLOW", title: "Stage flow" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
     const first = await moveStage(id, { toStage: "qualified" });
-    expect(first.statusCode).toBe(200);
-    expect(first.json().data.bidStage).toBe("qualified");
-    expect(first.json().data.fromStage).toBe("identified");
+    expect(first.statusCode).toBe(202);
+    expect((await fetchTender(id)).bidStage).toBe("qualified");
 
     const second = await moveStage(id, { toStage: "bid_prepared" });
-    expect(second.statusCode).toBe(200);
+    expect(second.statusCode).toBe(202);
 
     const third = await moveStage(id, { toStage: "submitted" });
-    expect(third.statusCode).toBe(200);
+    expect(third.statusCode).toBe(202);
 
     const won = await moveStage(id, { toStage: "won" });
-    expect(won.statusCode).toBe(200);
-    expect(won.json().data.bidStage).toBe("won");
+    expect(won.statusCode).toBe(202);
+    expect((await fetchTender(id)).bidStage).toBe("won");
+
+    expect(await stageEvents(id)).toEqual([
+      { fromStage: "identified", toStage: "qualified" },
+      { fromStage: "qualified", toStage: "bid_prepared" },
+      { fromStage: "bid_prepared", toStage: "submitted" },
+      { fromStage: "submitted", toStage: "won" },
+    ]);
   });
 
   it("rejects a skipped stage → 422", async () => {
     const created = await createTender({ tenderRef: "T-2026-SKIP", title: "Skip" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
     const res = await moveStage(id, { toStage: "submitted" });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("INVALID_TRANSITION");
+    expect((await fetchTender(id)).bidStage).toBe("identified");
   });
 
   it("rejects any move out of a terminal stage → 422", async () => {
     const created = await createTender({ tenderRef: "T-2026-TERM", title: "Terminal" });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
     await moveStage(id, { toStage: "qualified" });
     await moveStage(id, { toStage: "bid_prepared" });
     await moveStage(id, { toStage: "submitted" });
     const lost = await moveStage(id, { toStage: "lost", reason: "Undercut by the incumbent vendor" });
-    expect(lost.statusCode).toBe(200);
+    expect(lost.statusCode).toBe(202);
+    expect((await fetchTender(id)).bidStage).toBe("lost");
 
     const again = await moveStage(id, { toStage: "won" });
     expect(again.statusCode).toBe(422);
@@ -407,20 +453,13 @@ describe("POST /v1/crm/tenders/:id/stage", () => {
 
   it("refuses to amend a terminal tender → 422", async () => {
     const created = await createTender({ tenderRef: "T-2026-TERM-PATCH", title: "Closed" });
-    const id = created.json().data.id;
+    const id = created.json().id;
     await moveStage(id, { toStage: "qualified" });
     await moveStage(id, { toStage: "bid_prepared" });
     await moveStage(id, { toStage: "submitted" });
     await moveStage(id, { toStage: "won" });
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/tenders/${id}`,
-      headers: headers(),
-      payload: { title: "Too late" },
-    });
-    await app.close();
+    const res = await patchTender(id, { title: "Too late" });
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("TENDER_CLOSED");
@@ -428,7 +467,7 @@ describe("POST /v1/crm/tenders/:id/stage", () => {
 
   it("requires a reason of 10+ chars for lost → 400", async () => {
     const created = await createTender({ tenderRef: "T-2026-LOSTREASON", title: "Lost reason" });
-    const id = created.json().data.id;
+    const id = created.json().id;
     await moveStage(id, { toStage: "qualified" });
     await moveStage(id, { toStage: "bid_prepared" });
     await moveStage(id, { toStage: "submitted" });
@@ -444,7 +483,7 @@ describe("POST /v1/crm/tenders/:id/stage", () => {
 
   it("rejects an unknown stage name → 400", async () => {
     const created = await createTender({ tenderRef: "T-2026-BADSTAGE", title: "Bad stage" });
-    const id = created.json().data.id;
+    const id = created.json().id;
     const res = await moveStage(id, { toStage: "archived" });
     expect(res.statusCode).toBe(400);
   });

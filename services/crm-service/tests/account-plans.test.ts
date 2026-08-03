@@ -2,11 +2,18 @@
  * Strategic account plan tests (KA-001).
  * Covers list/filter, create, patch with optimistic locking, and activation
  * (including the 422 for a non-draft plan).
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000061";
@@ -30,9 +37,14 @@ async function cleanup(): Promise<void> {
   }).catch(() => {});
 }
 
-beforeAll(cleanup);
+beforeAll(async () => {
+  await cleanup();
+  registerAllConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -46,11 +58,51 @@ async function createPlan(payload: Record<string, unknown>, roles = ["crm_user"]
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
 }
 
+async function patchPlan(id: string, payload: Record<string, unknown>) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "PATCH",
+    url: `/v1/crm/account-plans/${id}`,
+    headers: headers(),
+    payload,
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+async function activatePlan(accountId: string, planId: string) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "POST",
+    url: `/v1/crm/accounts/${accountId}/plans/${planId}/activate`,
+    headers: headers(["crm_admin"]),
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+/** Read a plan back through the real list route, after the consumer applied. */
+async function fetchPlan(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: "/v1/crm/account-plans?limit=200",
+    headers: headers(),
+  });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `account plan ${id} was never applied by the consumer`).toBeDefined();
+  return row;
+}
+
 describe("POST /v1/crm/account-plans", () => {
-  it("creates a draft plan → 201", async () => {
+  it("creates a draft plan → 202, applied as draft", async () => {
     const res = await createPlan({
       accountId: ACCOUNT_A,
       planYear: 2026,
@@ -60,19 +112,20 @@ describe("POST /v1/crm/account-plans", () => {
       ownerId: ACTOR,
     });
 
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.status).toBe("draft");
-    expect(body.data.planYear).toBe(2026);
-    expect(body.data.objectives).toHaveLength(1);
-    expect(body.data.version).toBe(1);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchPlan(res.json().id);
+    expect(row.status).toBe("draft");
+    expect(row.planYear).toBe(2026);
+    expect(row.objectives).toHaveLength(1);
+    expect(row.version).toBe(1);
   });
 
   it("defaults empty collections", async () => {
     const res = await createPlan({ accountId: ACCOUNT_B, planYear: 2026 });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.objectives).toEqual([]);
-    expect(res.json().data.risks).toEqual([]);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchPlan(res.json().id);
+    expect(row.objectives).toEqual([]);
+    expect(row.risks).toEqual([]);
   });
 
   it("rejects a duplicate account/year → 409", async () => {
@@ -211,38 +264,32 @@ describe("GET /v1/crm/accounts/:id/plans", () => {
 });
 
 describe("PATCH /v1/crm/account-plans/:id", () => {
-  it("amends risks and bumps the version → 200", async () => {
+  it("amends risks and bumps the version → 202", async () => {
     const created = await createPlan({ accountId: ACCOUNT_A, planYear: 2028 });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/account-plans/${id}`,
-      headers: headers(),
-      payload: { risks: [{ description: "Key sponsor is leaving", severity: "high" }], version: 1 },
+    const res = await patchPlan(id, {
+      risks: [{ description: "Key sponsor is leaving", severity: "high" }],
+      version: 1,
     });
-    await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchPlan(id);
+    expect(row.risks).toHaveLength(1);
+    expect(row.version).toBe(2);
   });
 
   it("returns 409 on a stale version", async () => {
     const created = await createPlan({ accountId: ACCOUNT_A, planYear: 2029 });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/crm/account-plans/${id}`,
-      headers: headers(),
-      payload: { status: "closed", version: 42 },
-    });
-    await app.close();
+    const res = await patchPlan(id, { status: "closed", version: 42 });
 
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("VERSION_CONFLICT");
+    // The stale write must never reach the consumer, or it would be dropped
+    // silently after the caller was told the command was accepted.
+    expect((await fetchPlan(id)).status).toBe("draft");
   });
 
   it("rejects an empty patch → 400", async () => {
@@ -282,39 +329,24 @@ describe("PATCH /v1/crm/account-plans/:id", () => {
 });
 
 describe("POST /v1/crm/accounts/:id/plans/:planId/activate", () => {
-  it("promotes a draft to active → 200", async () => {
+  it("promotes a draft to active → 202, applied as active", async () => {
     const created = await createPlan({ accountId: ACCOUNT_B, planYear: 2027 });
-    const planId = created.json().data.id;
+    const planId = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/accounts/${ACCOUNT_B}/plans/${planId}/activate`,
-      headers: headers(["crm_admin"]),
-    });
-    await app.close();
+    const res = await activatePlan(ACCOUNT_B, planId);
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("active");
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchPlan(planId);
+    expect(row.status).toBe("active");
+    expect(row.version).toBe(2);
   });
 
   it("refuses to activate an already active plan → 422", async () => {
     const created = await createPlan({ accountId: ACCOUNT_B, planYear: 2030 });
-    const planId = created.json().data.id;
+    const planId = created.json().id;
 
-    const app = await buildApp();
-    await app.inject({
-      method: "POST",
-      url: `/v1/crm/accounts/${ACCOUNT_B}/plans/${planId}/activate`,
-      headers: headers(["crm_admin"]),
-    });
-    const second = await app.inject({
-      method: "POST",
-      url: `/v1/crm/accounts/${ACCOUNT_B}/plans/${planId}/activate`,
-      headers: headers(["crm_admin"]),
-    });
-    await app.close();
+    expect((await activatePlan(ACCOUNT_B, planId)).statusCode).toBe(202);
+    const second = await activatePlan(ACCOUNT_B, planId);
 
     expect(second.statusCode).toBe(422);
     expect(second.json().code).toBe("INVALID_STATE");
@@ -322,15 +354,9 @@ describe("POST /v1/crm/accounts/:id/plans/:planId/activate", () => {
 
   it("returns 404 when the plan belongs to a different account", async () => {
     const created = await createPlan({ accountId: ACCOUNT_B, planYear: 2031 });
-    const planId = created.json().data.id;
+    const planId = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/accounts/${ACCOUNT_A}/plans/${planId}/activate`,
-      headers: headers(["crm_admin"]),
-    });
-    await app.close();
+    const res = await activatePlan(ACCOUNT_A, planId);
     expect(res.statusCode).toBe(404);
   });
 

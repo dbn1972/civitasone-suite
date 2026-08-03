@@ -2,11 +2,18 @@
  * Mandatory next-action tests (AC-002).
  * Covers create/list/overdue/complete plus the compliance report that names the
  * active leads and open deals with no open next step.
+ *
+ * Writes are CQRS: the route returns 202 Accepted and the consumer applies the
+ * row, so every mutating helper drains the queue and state is asserted through
+ * the read path.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 import { requiresNextAction, isOverdue } from "../src/modules/activities/next-action-domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -63,9 +70,12 @@ async function cleanup(): Promise<void> {
 beforeAll(async () => {
   await cleanup();
   await seed();
+  registerAllConsumers(queue);
+  await queue.start();
 });
 
 afterAll(async () => {
+  await drainQueue();
   await cleanup();
   await sqlClient.end();
 });
@@ -79,7 +89,30 @@ async function createAction(payload: Record<string, unknown>, roles = ["crm_user
     payload,
   });
   await app.close();
+  await drainQueue();
   return res;
+}
+
+async function completeAction(id: string) {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "POST",
+    url: `/v1/crm/next-actions/${id}/complete`,
+    headers: headers(),
+  });
+  await app.close();
+  await drainQueue();
+  return res;
+}
+
+/** Read an action back through the real list route, after the consumer applied. */
+async function fetchAction(id: string): Promise<Record<string, unknown>> {
+  const app = await buildApp();
+  const res = await app.inject({ method: "GET", url: "/v1/crm/next-actions?limit=200", headers: headers() });
+  await app.close();
+  const row = res.json().data.find((r: { id: string }) => r.id === id);
+  expect(row, `next action ${id} was never applied by the consumer`).toBeDefined();
+  return row;
 }
 
 describe("next-action-domain (pure)", () => {
@@ -110,7 +143,7 @@ describe("next-action-domain (pure)", () => {
 });
 
 describe("POST /v1/crm/next-actions", () => {
-  it("creates an action → 201", async () => {
+  it("creates an action → 202, applied as open", async () => {
     const res = await createAction({
       subjectType: "contact",
       subjectId: LEAD_OPEN,
@@ -119,9 +152,10 @@ describe("POST /v1/crm/next-actions", () => {
       notes: "Discovery call",
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.completedAt).toBeNull();
-    expect(res.json().data.subjectType).toBe("contact");
+    expect(res.statusCode).toBe(202);
+    const row = await fetchAction(res.json().id);
+    expect(row.completedAt).toBeNull();
+    expect(row.subjectType).toBe("contact");
   });
 
   it("rejects an unknown subjectType → 400", async () => {
@@ -257,7 +291,7 @@ describe("GET /v1/crm/next-actions/compliance", () => {
       actionType: "call",
       dueAt: inHours(5),
     });
-    expect(created.statusCode).toBe(201);
+    expect(created.statusCode).toBe(202);
 
     // A fresh contact with an open status and no action must appear.
     const NEW_LEAD = "11111111-6300-4000-8000-000000000003";
@@ -314,26 +348,21 @@ describe("GET /v1/crm/next-actions/compliance", () => {
 });
 
 describe("POST /v1/crm/next-actions/:id/complete", () => {
-  it("completes an open action → 200", async () => {
+  it("completes an open action → 202, applied with a version bump", async () => {
     const created = await createAction({
       subjectType: "deal",
       subjectId: DEAL_OPEN,
       actionType: "meeting",
       dueAt: inHours(12),
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/crm/next-actions/${id}/complete`,
-      headers: headers(),
-    });
-    await app.close();
+    const res = await completeAction(id);
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.completedAt).toBeTruthy();
-    expect(res.json().data.version).toBe(2);
+    expect(res.statusCode).toBe(202);
+    const row = await fetchAction(id);
+    expect(row.completedAt).toBeTruthy();
+    expect(row.version).toBe(2);
   });
 
   it("refuses to complete twice → 422", async () => {
@@ -343,16 +372,10 @@ describe("POST /v1/crm/next-actions/:id/complete", () => {
       actionType: "meeting",
       dueAt: inHours(12),
     });
-    const id = created.json().data.id;
+    const id = created.json().id;
 
-    const app = await buildApp();
-    await app.inject({ method: "POST", url: `/v1/crm/next-actions/${id}/complete`, headers: headers() });
-    const again = await app.inject({
-      method: "POST",
-      url: `/v1/crm/next-actions/${id}/complete`,
-      headers: headers(),
-    });
-    await app.close();
+    expect((await completeAction(id)).statusCode).toBe(202);
+    const again = await completeAction(id);
 
     expect(again.statusCode).toBe(422);
     expect(again.json().code).toBe("ALREADY_COMPLETED");
