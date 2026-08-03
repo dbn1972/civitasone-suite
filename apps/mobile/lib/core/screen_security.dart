@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 /// Prevent screenshots on sensitive screens (payslip, ID card, visiting card).
 /// Uses Android FLAG_SECURE and iOS screenshot notification.
