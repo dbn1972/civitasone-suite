@@ -10,13 +10,10 @@
  * Requirements validated: 1.1–1.10, 2.4, 3.1–3.8, 8.1–8.8, 10.2, 10.5, 10.6
  */
 import type { FastifyInstance } from "fastify";
-import { eq, and } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { runWithTenant } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { deviceAuth } from "./device-auth.js";
-import { devices } from "./schema.js";
 import {
   registerDeviceBody,
   updateDeviceBody,
@@ -38,6 +35,7 @@ import {
   publishDeviceConfigPush,
   publishDeviceBulkConfigPush,
   publishDeviceFirmwareSchedule,
+  publishDeviceHeartbeat,
 } from "./commands.js";
 import {
   getDeviceById,
@@ -166,8 +164,8 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
    * POST /v1/visitor/devices/heartbeat — Device heartbeat.
    *
    * Uses deviceAuth preHandler hook for authentication.
-   * Updates Redis status key with TTL 90s.
-   * Updates device.lastSeenAt and device.firmwareVersion in DB.
+   * Updates Redis status key with TTL 90s (sync — online TTL telemetry).
+   * Durable lastSeenAt/firmwareVersion write goes via CQRS command.
    * If device has pending_config → include in response body.
    * Returns 200 with config payload or 204 if no config.
    *
@@ -178,6 +176,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     const body = heartbeatBody.parse(req.body);
 
     const now = new Date();
+    const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
     // 1. Update Redis status key with TTL 90s (device online tracking).
     const statusKey = deviceStatusKey(deviceCtx.tenantId, deviceCtx.deviceId);
@@ -191,21 +190,13 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
       peripheralStatus: body.peripheralStatus,
     }, 90);
 
-    // 2. Update device lastSeenAt and firmwareVersion in DB.
-    await runWithTenant(deviceCtx.tenantId, () => db.transaction((tx) => tx
-      .update(devices)
-      .set({
-        lastSeenAt: now,
-        firmwareVersion: body.firmwareVersion,
-        online: true,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(devices.id, deviceCtx.deviceId),
-          eq(devices.tenantId, deviceCtx.tenantId),
-        ),
-      )));
+    // 2. Durable DB update via CQRS (consumer markProcessed → update devices).
+    await publishDeviceHeartbeat({
+      deviceId: deviceCtx.deviceId,
+      tenantId: deviceCtx.tenantId,
+      firmwareVersion: body.firmwareVersion,
+      lastSeenAt: now.toISOString(),
+    }, { actorId: deviceCtx.deviceId, correlationId });
 
     // 3. Check for pending config and return it in the response.
     const device = await getDeviceById(deviceCtx.tenantId, deviceCtx.deviceId);
@@ -221,6 +212,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
     // No pending config — return 204 No Content.
     return reply.code(204).send();
   });
+
 
   // ─────────────────────────────────────────────────────────────────────────
   // Parameterized admin routes (/:deviceId)

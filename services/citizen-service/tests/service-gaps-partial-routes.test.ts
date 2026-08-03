@@ -164,10 +164,15 @@ describe("SVC-082 draft/ack/tracking + assisted channel", () => {
       method: "POST", url: "/v1/citizen/intake/drafts", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
       payload: { serviceId: SERVICE_ID, channel: "portal", formData: { name: "Asha" }, documentTypes: ["id_proof"] },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("draft");
-    expect(res.json().assistedBy).toBeNull();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
     draftId = res.json().id;
+    const draft = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/intake/drafts/${draftId}`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(draft.status).toBe("draft");
+    expect(draft.assistedBy).toBeNull();
   });
 
   it("resumes/updates the draft", async () => {
@@ -175,15 +180,20 @@ describe("SVC-082 draft/ack/tracking + assisted channel", () => {
       method: "PATCH", url: `/v1/citizen/intake/drafts/${draftId}`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
       payload: { formData: { name: "Asha Kumar" } },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("submit produces an ACKNOWLEDGEMENT with a unique tracking number", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/intake/drafts/${draftId}/submit`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])), payload: {} });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().trackingNo).toMatch(/^CIT-\d{4}-[0-9A-F]{8}$/);
     expect(res.json().channel).toBe("portal");
     trackingNo = res.json().trackingNo;
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/intake/track/${trackingNo}`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
   });
 
   it("re-submitting an already-submitted draft is rejected 409", async () => {
@@ -203,9 +213,14 @@ describe("SVC-082 draft/ack/tracking + assisted channel", () => {
       method: "POST", url: "/v1/citizen/intake/drafts", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { citizenId: CITIZEN, serviceId: SERVICE_ID, channel: "assisted", formData: {} },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().channel).toBe("assisted");
-    expect(res.json().assistedBy).toBe(MAKER);
+    expect(res.statusCode).toBe(202);
+    const id = res.json().id;
+    const draft = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/intake/drafts/${id}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(draft.channel).toBe("assisted");
+    expect(draft.assistedBy).toBe(MAKER);
   });
 
   it("a citizen cannot use the assisted channel (needs officer operator)", async () => {

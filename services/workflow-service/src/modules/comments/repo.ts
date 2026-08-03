@@ -3,6 +3,12 @@ import { and, eq, asc, isNull } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { entityComments, type CommentRow } from "./schema.js";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function withTx<T>(outer: Tx | undefined, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  if (outer) return fn(outer);
+  return db.transaction(fn);
+}
+
 export async function find(tenantId: string, id: string): Promise<CommentRow | undefined> {
   const rows = await scopedRead((tx) => tx.select().from(entityComments)
     .where(and(eq(entityComments.tenantId, tenantId), eq(entityComments.id, id))).limit(1));
@@ -26,9 +32,9 @@ export interface AddInput {
   body: string; visibility: "internal" | "external"; actorId: string;
 }
 
-export async function add(input: AddInput): Promise<CommentRow> {
-  const id = randomUUID();
-  return db.transaction(async (tx) => {
+export async function add(input: AddInput & { id?: string }, outer?: Tx): Promise<CommentRow> {
+  const id = input.id ?? randomUUID();
+  return withTx(outer, async (tx) => {
     // A reply must target a live comment on the SAME entity (tenant-scoped).
     if (input.parentCommentId) {
       const parent = await tx.select({ id: entityComments.id }).from(entityComments)
@@ -51,8 +57,8 @@ export async function add(input: AddInput): Promise<CommentRow> {
 }
 
 /** Edit own comment (author-only enforced in the route). */
-export async function edit(tenantId: string, id: string, body: string, authorId: string): Promise<CommentRow | null> {
-  return db.transaction(async (tx) => {
+export async function edit(tenantId: string, id: string, body: string, authorId: string, outer?: Tx): Promise<CommentRow | null> {
+  return withTx(outer, async (tx) => {
     const res = await tx.update(entityComments)
       .set({ body, editedAt: new Date() })
       .where(and(eq(entityComments.tenantId, tenantId), eq(entityComments.id, id), eq(entityComments.authorId, authorId), isNull(entityComments.deletedAt)))
@@ -62,8 +68,8 @@ export async function edit(tenantId: string, id: string, body: string, authorId:
 }
 
 /** Soft-delete (keeps thread history; hard delete is prohibited by policy). */
-export async function softDelete(tenantId: string, id: string, authorId: string): Promise<boolean> {
-  return db.transaction(async (tx) => {
+export async function softDelete(tenantId: string, id: string, authorId: string, outer?: Tx): Promise<boolean> {
+  return withTx(outer, async (tx) => {
     const res = await tx.update(entityComments)
       .set({ deletedAt: new Date() })
       .where(and(eq(entityComments.tenantId, tenantId), eq(entityComments.id, id), eq(entityComments.authorId, authorId), isNull(entityComments.deletedAt)))

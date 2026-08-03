@@ -1,13 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import { visibleTo, buildThreads, validateBody } from "./domain.js";
 
 const USER = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin", "case_manager"];
 
 export async function commentsRoutes(app: FastifyInstance): Promise<void> {
-  // CAP-038 — add a comment/note (optionally a reply) to any entity.
   app.post("/v1/workflow/comments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, USER);
     const body = z.object({
@@ -19,19 +21,15 @@ export async function commentsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const v = validateBody(body.body);
     if (!v.allowed) throw new HttpError(400, "INVALID", v.errors.join(", "));
-    try {
-      const row = await repo.add({
-        tenantId: ctx.tenantId, entityType: body.entityType, entityId: body.entityId,
-        parentCommentId: body.parentCommentId, body: body.body, visibility: body.visibility, actorId: ctx.actorId,
-      });
-      return reply.code(201).send({ data: row });
-    } catch (e) {
-      if (e instanceof Error && e.message === "PARENT_NOT_FOUND") throw new HttpError(404, "PARENT_NOT_FOUND", "parent comment not found on this entity");
-      throw e;
+    if (body.parentCommentId) {
+      const parent = await repo.find(ctx.tenantId, body.parentCommentId);
+      if (!parent || parent.entityType !== body.entityType || parent.entityId !== body.entityId || parent.deletedAt) {
+        throw new HttpError(404, "PARENT_NOT_FOUND", "parent comment not found on this entity");
+      }
     }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addComment(ctx, body));
   });
 
-  // CAP-038 — list comments for an entity, threaded, visibility-filtered.
   app.get("/v1/workflow/comments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, USER);
     const q = z.object({
@@ -43,23 +41,25 @@ export async function commentsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: buildThreads(visible), meta: { total: visible.length } });
   });
 
-  // CAP-038 — edit your own comment.
   app.patch("/v1/workflow/comments/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, USER);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ body: z.string().min(1).max(8000) }).parse(req.body);
-    const updated = await repo.edit(ctx.tenantId, id, body.body, ctx.actorId);
-    if (!updated) throw new HttpError(404, "NOT_FOUND", "comment not found or not yours");
-    return reply.send({ data: updated });
+    const existing = await repo.find(ctx.tenantId, id);
+    if (!existing || existing.authorId !== ctx.actorId || existing.deletedAt) {
+      throw new HttpError(404, "NOT_FOUND", "comment not found or not yours");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.editComment(ctx, id, body));
   });
 
-  // CAP-038 — soft-delete your own comment (history preserved).
   app.delete("/v1/workflow/comments/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, USER);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const ok = await repo.softDelete(ctx.tenantId, id, ctx.actorId);
-    if (!ok) throw new HttpError(404, "NOT_FOUND", "comment not found or not yours");
-    return reply.send({ data: { id, deleted: true } });
+    const existing = await repo.find(ctx.tenantId, id);
+    if (!existing || existing.authorId !== ctx.actorId || existing.deletedAt) {
+      throw new HttpError(404, "NOT_FOUND", "comment not found or not yours");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteComment(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

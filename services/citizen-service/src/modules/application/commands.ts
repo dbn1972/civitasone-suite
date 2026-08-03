@@ -39,3 +39,64 @@ export async function uploadDocument(ctx: RequestContext, id: string, body: DocU
   });
   return { id: docId, status: "accepted", correlationId: ctx.correlationId, uploadUrl };
 }
+
+export async function saveDraft(
+  ctx: RequestContext,
+  body: {
+    citizenId: string;
+    serviceId: string;
+    serviceKey?: string | undefined;
+    channel: string;
+    assistedBy: string | null;
+    formData: Record<string, unknown>;
+    documentTypes: string[];
+  },
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.draftSave, {
+    messageId: id, type: COMMANDS.draftSave,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateDraft(
+  ctx: RequestContext,
+  id: string,
+  body: { formData?: Record<string, unknown> | undefined; documentTypes?: string[] | undefined },
+): Promise<Accepted> {
+  await queue.publish(COMMANDS.draftUpdate, {
+    messageId: randomUUID(), type: COMMANDS.draftUpdate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function submitDraft(
+  ctx: RequestContext,
+  draftId: string,
+  body: { documentTypes?: string[] | undefined; trackingNo: string; applicationId: string; channel: string },
+): Promise<Accepted & { trackingNo: string; channel: string; applicationId: string }> {
+  await queue.publish(COMMANDS.draftSubmit, {
+    messageId: body.applicationId, type: COMMANDS.draftSubmit,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      id: body.applicationId,
+      draftId,
+      tenantId: ctx.tenantId,
+      trackingNo: body.trackingNo,
+      channel: body.channel,
+      documentTypes: body.documentTypes,
+    },
+  });
+  return {
+    id: body.applicationId,
+    status: "accepted",
+    correlationId: ctx.correlationId,
+    trackingNo: body.trackingNo,
+    channel: body.channel,
+    applicationId: body.applicationId,
+  };
+}

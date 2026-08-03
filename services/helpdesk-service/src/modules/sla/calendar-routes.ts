@@ -1,32 +1,17 @@
 /**
  * SLA Calendar, Pause/Resume, Extension, CES, and Escalation Register routes.
- *
- * Endpoints:
- *  GET    /v1/helpdesk/sla/calendars         — list business calendars
- *  POST   /v1/helpdesk/sla/calendars         — create calendar
- *  PATCH  /v1/helpdesk/sla/calendars/:id     — update calendar
- *  POST   /v1/helpdesk/tickets/:id/sla/pause — pause SLA timer
- *  POST   /v1/helpdesk/tickets/:id/sla/resume — resume SLA timer
- *  POST   /v1/helpdesk/tickets/:id/sla/extend — extend SLA deadline
- *  GET    /v1/helpdesk/sla/escalations       — escalation register view
- *  POST   /v1/helpdesk/csat/ces              — submit CES response
+ * Mutations: route → zod → queue.publish → 202 Accepted (CQRS).
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, sql, desc, gte, isNull } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { businessCalendars, type WorkDay, type Holiday } from "./calendar-schema.js";
-import { slaPauses } from "./pause-schema.js";
-import { slaExtensions } from "./extensions-schema.js";
-import { cesResponses } from "./ces-schema.js";
-import { ticketEscalations } from "./schema.js";
-import { tickets } from "../tickets/schema.js";
+import * as commands from "./commands.js";
+import * as queries from "./calendar-queries.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin", "admin"];
 const ADMIN_ROLES = ["helpdesk_admin", "super_admin", "admin"];
-
-// ─── Validators ───────────────────────────────────────────────────────────────
 
 const workDaySchema = z.object({
   day: z.number().int().min(0).max(6),
@@ -58,7 +43,7 @@ const pauseBody = z.object({
 });
 
 const extendBody = z.object({
-  additionalMinutes: z.number().int().min(1).max(43200), // max 30 days
+  additionalMinutes: z.number().int().min(1).max(43200),
   reason: z.string().min(1).max(2000),
   approverId: z.string().uuid(),
 });
@@ -75,289 +60,97 @@ const paginationQuery = z.object({
 });
 
 export async function calendarRoutes(app: FastifyInstance): Promise<void> {
-  // ─── Business Calendars CRUD ────────────────────────────────────────────
-
-  /** List business calendars */
   app.get("/v1/helpdesk/sla/calendars", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const query = paginationQuery.parse(req.query);
-
-    const rows = await db.transaction((tx) =>
-      tx
-        .select()
-        .from(businessCalendars)
-        .where(eq(businessCalendars.tenantId, ctx.tenantId))
-        .limit(query.limit)
-        .offset(query.offset),
-    );
-
-    const [countRow] = await db.transaction((tx) =>
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(businessCalendars)
-        .where(eq(businessCalendars.tenantId, ctx.tenantId)),
-    );
-
+    const { rows, total } = await queries.listCalendars(ctx.tenantId, query.limit, query.offset);
     return reply.send({
       data: rows,
-      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total },
     });
   });
 
-  /** Create business calendar */
   app.post("/v1/helpdesk/sla/calendars", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createCalendarBody.parse(req.body);
-
-    const [created] = await db.transaction((tx) =>
-      tx.insert(businessCalendars).values({
-        tenantId: ctx.tenantId,
-        name: body.name,
-        timezone: body.timezone,
-        workDays: body.workDays as WorkDay[],
-        holidays: body.holidays as Holiday[],
-      }).returning(),
-    );
-
-    return reply.code(201).send({ data: created });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCalendar(ctx, body));
   });
 
-  /** Update business calendar */
   app.patch("/v1/helpdesk/sla/calendars/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updateCalendarBody.parse(req.body);
-
-    const [updated] = await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(businessCalendars)
-        .where(and(eq(businessCalendars.id, id), eq(businessCalendars.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!existing) throw new HttpError(404, "NOT_FOUND", "calendar not found");
-
-      return tx
-        .update(businessCalendars)
-        .set({
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.timezone !== undefined && { timezone: body.timezone }),
-          ...(body.workDays !== undefined && { workDays: body.workDays as WorkDay[] }),
-          ...(body.holidays !== undefined && { holidays: body.holidays as Holiday[] }),
-          version: sql`${businessCalendars.version} + 1`,
-        })
-        .where(and(eq(businessCalendars.id, id), eq(businessCalendars.version, existing.version)))
-        .returning();
-    });
-
-    if (!updated) throw new HttpError(409, "CONFLICT", "concurrent modification detected");
-    return reply.send({ data: updated });
+    const existing = await queries.findCalendar(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "calendar not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateCalendar(ctx, id, {
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      ...(body.workDays !== undefined ? { workDays: body.workDays } : {}),
+      ...(body.holidays !== undefined ? { holidays: body.holidays } : {}),
+      expectedVersion: existing.version,
+    }));
   });
 
-  // ─── SLA Pause/Resume ──────────────────────────────────────────────────
-
-  /** Pause SLA timer for a ticket */
   app.post("/v1/helpdesk/tickets/:id/sla/pause", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = pauseBody.parse(req.body);
-
-    const record = await db.transaction(async (tx) => {
-      // Verify ticket exists
-      const [ticket] = await tx
-        .select()
-        .from(tickets)
-        .where(and(eq(tickets.id, id), eq(tickets.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-
-      // Check if already paused
-      const [activePause] = await tx
-        .select()
-        .from(slaPauses)
-        .where(and(
-          eq(slaPauses.ticketId, id),
-          eq(slaPauses.tenantId, ctx.tenantId),
-          isNull(slaPauses.resumedAt),
-        ))
-        .limit(1);
-      if (activePause) throw new HttpError(409, "ALREADY_PAUSED", "SLA is already paused for this ticket");
-
-      const [created] = await tx.insert(slaPauses).values({
-        tenantId: ctx.tenantId,
-        ticketId: id,
-        pauseStatus: body.pauseStatus,
-        createdBy: ctx.actorId,
-      }).returning();
-
-      return created;
-    });
-
-    return reply.code(201).send({ data: record });
+    if (!(await queries.ticketExists(ctx.tenantId, id))) {
+      throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    }
+    if (await queries.findActivePause(ctx.tenantId, id)) {
+      throw new HttpError(409, "ALREADY_PAUSED", "SLA is already paused for this ticket");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.pauseSla(ctx, id, body));
   });
 
-  /** Resume SLA timer for a ticket */
   app.post("/v1/helpdesk/tickets/:id/sla/resume", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-
-    const record = await db.transaction(async (tx) => {
-      const [activePause] = await tx
-        .select()
-        .from(slaPauses)
-        .where(and(
-          eq(slaPauses.ticketId, id),
-          eq(slaPauses.tenantId, ctx.tenantId),
-          isNull(slaPauses.resumedAt),
-        ))
-        .limit(1);
-      if (!activePause) throw new HttpError(404, "NOT_PAUSED", "SLA is not currently paused for this ticket");
-
-      const [updated] = await tx
-        .update(slaPauses)
-        .set({ resumedAt: new Date(), version: sql`${slaPauses.version} + 1` })
-        .where(eq(slaPauses.id, activePause.id))
-        .returning();
-
-      return updated;
-    });
-
-    return reply.send({ data: record });
+    if (!(await queries.findActivePause(ctx.tenantId, id))) {
+      throw new HttpError(404, "NOT_PAUSED", "SLA is not currently paused for this ticket");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.resumeSla(ctx, id));
   });
 
-  // ─── SLA Extension ─────────────────────────────────────────────────────
-
-  /** Extend SLA deadline with approval */
   app.post("/v1/helpdesk/tickets/:id/sla/extend", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = extendBody.parse(req.body);
-
-    const record = await db.transaction(async (tx) => {
-      // Verify ticket exists
-      const [ticket] = await tx
-        .select()
-        .from(tickets)
-        .where(and(eq(tickets.id, id), eq(tickets.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-
-      const [created] = await tx.insert(slaExtensions).values({
-        tenantId: ctx.tenantId,
-        ticketId: id,
-        additionalMinutes: body.additionalMinutes,
-        reason: body.reason,
-        approverId: body.approverId,
-        createdBy: ctx.actorId,
-      }).returning();
-
-      return created;
-    });
-
-    return reply.code(201).send({ data: record });
+    if (!(await queries.ticketExists(ctx.tenantId, id))) {
+      throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.extendSla(ctx, id, body));
   });
 
-  // ─── Escalation Register ───────────────────────────────────────────────
-
-  /** Paginated escalation register view */
   app.get("/v1/helpdesk/sla/escalations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const query = paginationQuery.parse(req.query);
-
-    const rows = await db.transaction((tx) =>
-      tx
-        .select({
-          id: ticketEscalations.id,
-          ticketId: ticketEscalations.ticketId,
-          ticketSubject: tickets.subject,
-          escalatedAt: ticketEscalations.escalatedAt,
-          level: ticketEscalations.level,
-          reason: ticketEscalations.reason,
-          escalatedBy: ticketEscalations.escalatedBy,
-        })
-        .from(ticketEscalations)
-        .innerJoin(tickets, eq(ticketEscalations.ticketId, tickets.id))
-        .where(eq(ticketEscalations.tenantId, ctx.tenantId))
-        .orderBy(desc(ticketEscalations.escalatedAt))
-        .limit(query.limit)
-        .offset(query.offset),
-    );
-
-    const [countRow] = await db.transaction((tx) =>
-      tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(ticketEscalations)
-        .where(eq(ticketEscalations.tenantId, ctx.tenantId)),
-    );
-
+    const { rows, total } = await queries.listEscalations(ctx.tenantId, query.limit, query.offset);
     return reply.send({
       data: rows,
-      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
+      meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total },
     });
   });
 
-  // ─── CES Survey ────────────────────────────────────────────────────────
-
-  /** Submit CES (Customer Effort Score) response */
   app.post("/v1/helpdesk/csat/ces", async (req, reply) => {
     const ctx = resolveContext(req);
     const body = cesBody.parse(req.body);
-
-    const record = await db.transaction(async (tx) => {
-      // Verify ticket exists
-      const [ticket] = await tx
-        .select()
-        .from(tickets)
-        .where(and(eq(tickets.id, body.ticketId), eq(tickets.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-
-      // Frequency cap: max 1 per ticket
-      const [existingForTicket] = await tx
-        .select()
-        .from(cesResponses)
-        .where(and(eq(cesResponses.ticketId, body.ticketId), eq(cesResponses.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (existingForTicket) {
-        throw new HttpError(409, "ALREADY_SUBMITTED", "CES response already submitted for this ticket");
-      }
-
-      // Frequency cap: max 3 per customer per 30 days
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const recentResponses = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(cesResponses)
-        .where(and(
-          eq(cesResponses.createdBy, ctx.actorId),
-          eq(cesResponses.tenantId, ctx.tenantId),
-          gte(cesResponses.submittedAt, thirtyDaysAgo),
-        ));
-      const recentCount = recentResponses[0]?.count ?? 0;
-      if (recentCount >= 3) {
-        throw new HttpError(429, "FREQUENCY_CAP_EXCEEDED", "maximum 3 CES responses per 30 days");
-      }
-
-      const [created] = await tx.insert(cesResponses).values({
-        tenantId: ctx.tenantId,
-        ticketId: body.ticketId,
-        effortScore: body.effortScore,
-        comment: body.comment ?? null,
-        createdBy: ctx.actorId,
-      }).returning();
-
-      return created;
-    });
-
-    return reply.code(201).send({ data: record });
+    if (!(await queries.ticketExists(ctx.tenantId, body.ticketId))) {
+      throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    }
+    if (await queries.findCesForTicket(ctx.tenantId, body.ticketId)) {
+      throw new HttpError(409, "ALREADY_SUBMITTED", "CES response already submitted for this ticket");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitCes(ctx, body));
   });
-
-  // ─── Error Handler ──────────────────────────────────────────────────────
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;

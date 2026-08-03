@@ -1,8 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { resolveContext, requireRole, HttpError, resolveCitizenId, isOfficer } from "../../shared/context.js";
 import { idParam, trackingParam, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
+import { buildTrackingNumber, resolveAssistedBy, isAssistedChannel, type IntakeChannel } from "./intake-domain.js";
 import * as intake from "./intake.js";
+import * as commands from "./commands.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 
@@ -11,7 +16,27 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const body = saveDraftBody.parse(req.body);
-    return reply.code(201).send(await intake.saveDraft(ctx, body));
+    const citizenId = resolveCitizenId(ctx, body.citizenId);
+    const channel = body.channel as IntakeChannel;
+    const operatorId = isAssistedChannel(channel) ? (body.operatorId ?? ctx.actorId) : undefined;
+    let assistedBy: string | null;
+    try {
+      assistedBy = resolveAssistedBy(channel, operatorId);
+    } catch {
+      throw new HttpError(422, "ASSISTED_OPERATOR_REQUIRED", "assisted/counter intake requires an operator id");
+    }
+    if (assistedBy && !isOfficer(ctx)) {
+      throw new HttpError(403, "FORBIDDEN", "assisted intake requires an officer-tier operator");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.saveDraft(ctx, {
+      citizenId,
+      serviceId: body.serviceId,
+      serviceKey: body.serviceKey,
+      channel,
+      assistedBy,
+      formData: body.formData,
+      documentTypes: body.documentTypes,
+    }));
   });
 
   app.get("/v1/citizen/intake/drafts", async (req, reply) => {
@@ -36,7 +61,10 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateDraftBody.parse(req.body ?? {});
-    return reply.send(await intake.updateDraft(ctx, id, body));
+    const draft = await intake.getDraft(ctx, id);
+    if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
+    if (draft.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be updated");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDraft(ctx, id, body));
   });
 
   app.post("/v1/citizen/intake/drafts/:id/submit", async (req, reply) => {
@@ -44,7 +72,18 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = submitDraftBody.parse(req.body ?? {});
-    return reply.code(201).send(await intake.submitDraft(ctx, id, body));
+    const draft = await intake.getDraft(ctx, id);
+    if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
+    if (draft.status !== "draft") throw new HttpError(409, "ALREADY_SUBMITTED", "draft has already been submitted");
+    const applicationId = randomUUID();
+    const trackingNo = buildTrackingNumber();
+    const accepted = await commands.submitDraft(ctx, id, {
+      documentTypes: body.documentTypes,
+      trackingNo,
+      applicationId,
+      channel: draft.channel,
+    });
+    return reply.code(202).send(accepted);
   });
 
   app.get("/v1/citizen/intake/track/:trackingNo", async (req, reply) => {

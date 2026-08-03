@@ -61,3 +61,49 @@ export async function escalateTicket(
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+async function pub(
+  ctx: RequestContext,
+  type: string,
+  id: string,
+  payload: Record<string, unknown>,
+): Promise<Accepted> {
+  await queue.publish(type, {
+    messageId: id,
+    type,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { ...payload, id, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export const createCalendar = (
+  ctx: RequestContext,
+  body: { name: string; timezone: string; workDays: unknown[]; holidays: unknown[] },
+) => pub(ctx, COMMANDS.calendarCreate, randomUUID(), body);
+
+export const updateCalendar = (
+  ctx: RequestContext,
+  id: string,
+  body: { name?: string; timezone?: string; workDays?: unknown[]; holidays?: unknown[]; expectedVersion: number },
+) => pub(ctx, COMMANDS.calendarUpdate, id, body);
+
+export const pauseSla = (ctx: RequestContext, ticketId: string, body: { pauseStatus: string }) =>
+  pub(ctx, COMMANDS.slaPause, randomUUID(), { ticketId, ...body });
+
+export const resumeSla = (ctx: RequestContext, ticketId: string) =>
+  pub(ctx, COMMANDS.slaResume, randomUUID(), { ticketId });
+
+export const extendSla = (
+  ctx: RequestContext,
+  ticketId: string,
+  body: { additionalMinutes: number; reason: string; approverId: string },
+) => pub(ctx, COMMANDS.slaExtend, randomUUID(), { ticketId, ...body });
+
+export const submitCes = (
+  ctx: RequestContext,
+  body: { ticketId: string; effortScore: number; comment?: string | undefined },
+) => pub(ctx, COMMANDS.cesSubmit, randomUUID(), body);
