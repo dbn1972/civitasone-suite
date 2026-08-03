@@ -36,6 +36,8 @@ export function registerActivityConsumers(queue: Queue): void {
       });
       if (p.contactId) await contactRepo.touchLastActivity(tx, p.contactId, p.tenantId);
       await emit(tx, msg, EVENTS.activityCreated, { activityId: p.id, contactId: p.contactId }, "create", p.id);
+      // Voice of Customer (P2-6): hand the text to the sentiment module for scoring.
+      await enqueueSentimentAnalysis(tx, msg, p);
       // CRM→helpdesk (chain #5): a complaint-type activity opens a support case.
       // We emit a dedicated, ticket-worthy event carrying the activity id as the
       // stable case ref; helpdesk idempotently auto-opens a ticket (source=crm).
@@ -65,6 +67,38 @@ export function registerActivityConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+}
+
+/**
+ * Hand a newly logged interaction to the sentiment module for Voice-of-Customer
+ * scoring (P2-6). Enqueued in the SAME tx/outbox as activityCreated, so it inherits
+ * the inbox-gated (markProcessed) idempotency: a redelivered activity.create command
+ * never re-requests scoring.
+ *
+ * Every type is sent, not just complaints. `activityType` travels with the command
+ * and the reporting API filters on it, so an operator can narrow to complaints —
+ * whereas a type never scored here could not be recovered without a backfill.
+ *
+ * This is a queue hop rather than a direct call because the sentiment module owns its
+ * own schema; the activities module must not write to it (CLAUDE.md §3.4).
+ */
+async function enqueueSentimentAnalysis(
+  tx: unknown,
+  msg: CommandEnvelope,
+  p: ActivityView,
+): Promise<void> {
+  const t = tx as Parameters<typeof enqueue>[0];
+  await enqueue(t, {
+    topic: COMMANDS.analyseSentiment, eventType: COMMANDS.analyseSentiment,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      activityId: p.id,
+      activityType: p.type,
+      contactId: p.contactId,
+      dealId: p.dealId,
+      text: p.text,
+    },
   });
 }
 

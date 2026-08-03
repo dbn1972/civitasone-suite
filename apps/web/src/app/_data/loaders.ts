@@ -14,6 +14,7 @@ import type {
   CRMDealSummary,
   CRMDashboard,
   CRMForecast,
+  CRMVocSummary,
   AccountHealthEntry,
   AccountHealthBreakdown,
   CopilotTurn,
@@ -180,6 +181,7 @@ import {
   crmDealsListSchema,
   crmActivitiesListSchema,
   crmForecastSchema,
+  crmVocSummarySchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
@@ -2488,6 +2490,45 @@ export async function getCrmForecast(pipelineId?: string): Promise<LoaderResult<
     );
   }
   return fetchJson("/api/v1/crm/forecast", CRM_FORECAST_EMPTY, CRM_FORECAST_OPTIONS);
+}
+
+const CRM_VOC_EMPTY: CRMVocSummary = {
+  total: 0,
+  byPolarity: { positive: 0, neutral: 0, negative: 0 },
+  averageScore: 0,
+  negativeShare: 0,
+  themes: [],
+  truncated: false,
+};
+
+/**
+ * Voice-of-Customer aggregate over scored interactions, optionally windowed.
+ * The aggregate is computed server-side over the tenant's readings, so the date
+ * window is a query parameter rather than a client-side narrowing of a page.
+ */
+export async function getCrmSentimentSummary(
+  range: { from?: string; to?: string } = {},
+): Promise<LoaderResult<CRMVocSummary>> {
+  const qs = new URLSearchParams();
+  if (range.from) qs.set("from", range.from);
+  if (range.to) qs.set("to", range.to);
+  const path = qs.toString()
+    ? `/api/v1/crm/sentiment/summary?${qs}`
+    : "/api/v1/crm/sentiment/summary";
+
+  return fetchJson(path, CRM_VOC_EMPTY, {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.sentiment.summary",
+    responseSchema: crmVocSummarySchema,
+    mapResponse: (payload: z.infer<typeof crmVocSummarySchema>): CRMVocSummary => ({
+      total: payload.data.total,
+      byPolarity: payload.data.byPolarity,
+      averageScore: payload.data.averageScore,
+      negativeShare: payload.data.negativeShare,
+      themes: payload.data.topThemes,
+      truncated: payload.data.truncated,
+    }),
+  });
 }
 
 export async function getContactById(id: string): Promise<LoaderResult<ContactDetail | null>> {

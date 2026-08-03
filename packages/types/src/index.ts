@@ -275,6 +275,26 @@ export interface CRMForecast {
   stages: CRMForecastStage[];
 }
 
+/** A recurring subject in customer interactions, with how often it turned sour. */
+export interface CRMVocTheme {
+  theme: string;
+  count: number;
+  negativeCount: number;
+}
+
+/** Voice-of-Customer aggregate over scored interactions (P2-6). */
+export interface CRMVocSummary {
+  total: number;
+  byPolarity: { positive: number; neutral: number; negative: number };
+  /** Mean sentiment score, -100 (worst) to 100 (best). */
+  averageScore: number;
+  /** Percentage of interactions that were negative, 0-100. */
+  negativeShare: number;
+  themes: CRMVocTheme[];
+  /** True when the scan hit its row cap, so the figures cover a partial window. */
+  truncated: boolean;
+}
+
 export interface CRMContactSummary {
   id?: string;
   name: string;

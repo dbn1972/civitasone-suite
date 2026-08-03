@@ -11,6 +11,7 @@ const crmTiles: NavTile[] = [
 	{ title: "Revenue Forecast", href: "/crm/forecast" },
 	{ title: "Account Health", href: "/crm/health" },
 	{ title: "Activities", href: "/crm/activities" },
+	{ title: "Voice of Customer", href: "/crm/voice-of-customer" },
 ];
 
 export default function Page() {
