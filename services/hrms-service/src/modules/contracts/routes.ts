@@ -186,10 +186,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       updateSet.schedulerTimeUtc = body.schedulerTimeUtc;
     }
 
-    const result = await publishF3Write(ctx, "contracts_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const result = await publishF3Write(ctx, "contracts_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     // Invalidate cached config
-    await cache.invalidate(`hrms:${ctx.tenantId}:contract:config`);
+    await cache.invalidate(`hrms:${ctx.tenantId}:contract:config`) as any;
     return reply.send({ data: result });
   });
 

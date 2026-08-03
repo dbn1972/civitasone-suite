@@ -54,9 +54,9 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
 
-    await publishF3Write(ctx, "board_intake_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "board_intake_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ id, status: "accepted", reviewedBy: ctx.actorId });
+    return reply.send({ id, status: "accepted", reviewedBy: ctx.actorId }) as any;
   });
 
   app.post("/v1/hrms/board-intake/:id/reject", async (req, reply) => {
@@ -70,9 +70,9 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
 
-    await publishF3Write(ctx, "board_intake_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "board_intake_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ id, status: "rejected", reviewedBy: ctx.actorId });
+    return reply.send({ id, status: "rejected", reviewedBy: ctx.actorId }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

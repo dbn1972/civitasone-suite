@@ -50,8 +50,8 @@ export async function offerExtraRoutes(app: FastifyInstance): Promise<void> {
     if (!current) throw new HttpError(409, "NO_JOINING_DATE", "the offer has no joining date to extend");
     if (body.requestedJoiningDate <= current) throw new HttpError(422, "NOT_LATER", "the requested joining date must be later than the current one");
 
-    await publishF3Write(ctx, "recruitment_offer_extra_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ offerId, joiningExtensionStatus: "requested", requestedJoiningDate: body.requestedJoiningDate });
+    await publishF3Write(ctx, "recruitment_offer_extra_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ offerId, joiningExtensionStatus: "requested", requestedJoiningDate: body.requestedJoiningDate }) as any;
   });
 
   // ---- approve (senior) -------------------------------------------------
@@ -63,8 +63,8 @@ export async function offerExtraRoutes(app: FastifyInstance): Promise<void> {
     if (offer.joiningExtensionStatus !== "requested") throw new HttpError(409, "NO_REQUEST", "there is no pending joining-date extension to approve");
     // Maker-checker: the requester cannot approve their own extension (R-RA-0165).
     if (offer.requestedBy && offer.requestedBy === ctx.actorId) throw new HttpError(403, "SOD_VIOLATION", "the requester cannot approve their own joining-date extension; an independent authorised user must approve");
-    await publishF3Write(ctx, "recruitment_offer_extra_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ offerId, joiningExtensionStatus: "approved", joiningDate: offer.requestedJoiningDate });
+    await publishF3Write(ctx, "recruitment_offer_extra_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ offerId, joiningExtensionStatus: "approved", joiningDate: offer.requestedJoiningDate }) as any;
   });
 
   // ---- reject (senior) --------------------------------------------------
@@ -74,8 +74,8 @@ export async function offerExtraRoutes(app: FastifyInstance): Promise<void> {
     const { offerId } = offerParam.parse(req.params);
     const offer = await mustOffer(ctx.tenantId, offerId);
     if (offer.joiningExtensionStatus !== "requested") throw new HttpError(409, "NO_REQUEST", "there is no pending joining-date extension to reject");
-    await publishF3Write(ctx, "recruitment_offer_extra_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ offerId, joiningExtensionStatus: "rejected" });
+    await publishF3Write(ctx, "recruitment_offer_extra_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ offerId, joiningExtensionStatus: "rejected" }) as any;
   });
 
   // ---- offer analytics (R-RA-0167) --------------------------------------

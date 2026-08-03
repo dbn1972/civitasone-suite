@@ -33,9 +33,9 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, id))).limit(1));
 
     const photoId = randomUUID();
-    await publishF3Write(ctx, "face_verification_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "face_verification_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(201).send({ id: photoId, status: "uploaded", message: "Profile photo uploaded. Will be used for attendance face verification." });
+    return reply.code(201).send({ id: photoId, status: "uploaded", message: "Profile photo uploaded. Will be used for attendance face verification." }) as any;
   });
 
   // ── Get employee's profile photo info ──
@@ -92,7 +92,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     );
 
     // Log verification attempt
-    await publishF3Write(ctx, "face_verification_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "face_verification_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({
       verified: result.isMatch,
@@ -101,7 +101,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       threshold: result.method === "onnx" ? faceConfig.onnxThreshold : faceConfig.rekognitionThreshold,
       message: result.isMatch ? "Face verified successfully" : result.failureReason ?? "Face verification failed",
       processingMs: result.processingMs,
-    });
+    }) as any;
   });
 
   // ── Admin: Configure face verification settings ──
@@ -125,8 +125,8 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
       allowManualOverride: z.boolean().optional(),
     }).parse(req.body);
 
-    await publishF3Write(ctx, "face_verification_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ status: "updated" });
+    await publishF3Write(ctx, "face_verification_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ status: "updated" }) as any;
   });
 
   // ── Verification history for an employee ──

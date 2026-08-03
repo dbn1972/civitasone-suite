@@ -77,8 +77,8 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
       contactPhone: z.string().max(20).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "contractor_bill_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, name: body.name, status: "active" });
+    await publishF3Write(ctx, "contractor_bill_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, name: body.name, status: "active" }) as any;
   });
 
   app.get("/v1/hrms/contractors", async (req, reply) => {
@@ -112,8 +112,8 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     if (body.contactEmail !== undefined) patch.contactEmail = body.contactEmail;
     if (body.contactPhone !== undefined) patch.contactPhone = body.contactPhone;
     if (body.status !== undefined) patch.status = body.status;
-    await publishF3Write(ctx, "contractor_bill_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: body.status ?? c.status });
+    await publishF3Write(ctx, "contractor_bill_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: body.status ?? c.status }) as any;
   });
 
   // ══════════════════ bills ══════════════════
@@ -139,10 +139,10 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
 
     const billId = randomUUID();
     try {
-      await publishF3Write(ctx, "contractor_bill_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "contractor_bill_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`);
+        throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`) as any;
       }
       throw err;
     }
@@ -176,8 +176,8 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const { billId } = billParam.parse(req.params);
     const bill = await mustBill(ctx.tenantId, billId);
     if (bill.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', not submitted`);
-    await publishF3Write(ctx, "contractor_bill_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: billId, status: "verified" }));
+    await publishF3Write(ctx, "contractor_bill_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: billId, status: "verified" })) as any;
   });
 
   app.post("/v1/hrms/contractor-bills/:billId/approve", async (req, reply) => {
@@ -212,13 +212,13 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const gstRateBps = body.gstRateBps ?? bill.gstRateBps;
     const fy = financialYearWindow(bill.billDate as unknown as string);
     let tax = { gstMinor: 0n, tdsRateBps: 0, tdsMinor: 0n, netPayableMinor: bill.grossMinor, tdsApplied: false };
-    await publishF3Write(ctx, "contractor_bill_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "contractor_bill_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: billId, status: "approved",
       grossMinor: bill.grossMinor, gstMinor: tax.gstMinor,
       tdsSection: bill.tdsSection, tdsRateBps: tax.tdsRateBps, tdsMinor: tax.tdsMinor,
       tdsApplied: tax.tdsApplied, netPayableMinor: tax.netPayableMinor,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/contractor-bills/:billId/reject", async (req, reply) => {
@@ -230,8 +230,8 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     if (bill.status !== "submitted" && bill.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', cannot reject`);
     }
-    await publishF3Write(ctx, "contractor_bill_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: billId, status: "rejected" }));
+    await publishF3Write(ctx, "contractor_bill_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: billId, status: "rejected" })) as any;
   });
 
   app.post("/v1/hrms/contractor-bills/:billId/mark-paid", async (req, reply) => {
@@ -241,8 +241,8 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const bill = await mustBill(ctx.tenantId, billId);
     if (bill.status !== "approved") throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', not approved`);
-    await publishF3Write(ctx, "contractor_bill_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: billId, status: "paid", paymentRef: body.paymentRef }));
+    await publishF3Write(ctx, "contractor_bill_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: billId, status: "paid", paymentRef: body.paymentRef })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

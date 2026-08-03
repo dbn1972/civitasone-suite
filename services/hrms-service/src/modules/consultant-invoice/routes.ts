@@ -98,11 +98,11 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
       // Wrap in a transaction so the tenant-GUC (app.tenant_id) is set for the
       // INSERT — RLS uses the USING clause as the WITH CHECK and would reject an
       // unscoped write. All the status-transition writes below do the same.
-      await publishF3Write(ctx, "consultant_invoice_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "consultant_invoice_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // Unique (tenant, consultant, invoice_no) — duplicate submission.
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_INVOICE", `invoice '${body.invoiceNo}' already exists for this consultant`);
+        throw new HttpError(409, "DUPLICATE_INVOICE", `invoice '${body.invoiceNo}' already exists for this consultant`) as any;
       }
       throw err;
     }
@@ -140,8 +140,8 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const { invId } = invParam.parse(req.params);
     const inv = await mustInvoice(ctx.tenantId, invId);
     if (inv.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', not submitted`);
-    await publishF3Write(ctx, "consultant_invoice_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: invId, status: "verified" }));
+    await publishF3Write(ctx, "consultant_invoice_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: invId, status: "verified" })) as any;
   });
 
   // ── approve (checker; computes 194J TDS + GST, emits AP event) ────────────
@@ -168,12 +168,12 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const fy = financialYearWindow(inv.invoiceDate as unknown as string);
 
     let tax = { gstMinor: 0n, tdsMinor: 0n, netPayableMinor: inv.grossMinor, tdsApplied: false };
-    await publishF3Write(ctx, "consultant_invoice_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "consultant_invoice_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: invId, status: "approved",
       grossMinor: inv.grossMinor, gstMinor: tax.gstMinor, tdsMinor: tax.tdsMinor,
       tdsApplied: tax.tdsApplied, netPayableMinor: tax.netPayableMinor,
-    }));
+    })) as any;
   });
 
   // ── reject ────────────────────────────────────────────────────────────────
@@ -186,8 +186,8 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     if (inv.status !== "submitted" && inv.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', cannot reject`);
     }
-    await publishF3Write(ctx, "consultant_invoice_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: invId, status: "rejected" }));
+    await publishF3Write(ctx, "consultant_invoice_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: invId, status: "rejected" })) as any;
   });
 
   // ── mark paid ───────────────────────────────────────────────────────────
@@ -198,8 +198,8 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const inv = await mustInvoice(ctx.tenantId, invId);
     if (inv.status !== "approved") throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', not approved`);
-    await publishF3Write(ctx, "consultant_invoice_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: invId, status: "paid", paymentRef: body.paymentRef }));
+    await publishF3Write(ctx, "consultant_invoice_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: invId, status: "paid", paymentRef: body.paymentRef })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -56,7 +56,7 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     // Persist a NORMALISED (uppercase) category so the reservation-shortlist module
     // (#257) sees a canonical value and never mis-buckets a lowercase "obc".
     const category = body.category ? body.category.trim().toUpperCase() : null;
-    await publishF3Write(ctx, "recruitment_reference_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_reference_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
     void c;
     return reply.send({ id, updated: true });
   });
@@ -82,8 +82,8 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     const errors = validateReferences(body.references as Reference[], { email: c.email, phone: c.mobile });
     if (errors.length > 0) throw new HttpError(422, "INVALID_REFERENCES", errors.join("; "));
 
-    await publishF3Write(ctx, "recruitment_reference_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, references: body.references.length });
+    await publishF3Write(ctx, "recruitment_reference_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, references: body.references.length }) as any;
   });
 
   // ---- prior-relationship declaration (R-RA-0083) ----------------------
@@ -100,8 +100,8 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
     const errors = validateRelationshipDeclaration(body as RelationshipDeclaration);
     if (errors.length > 0) throw new HttpError(422, "INVALID_DECLARATION", errors.join("; "));
 
-    await publishF3Write(ctx, "recruitment_reference_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, hasPriorRelationship: body.hasPriorRelationship });
+    await publishF3Write(ctx, "recruitment_reference_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, hasPriorRelationship: body.hasPriorRelationship }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/references", async (req, reply) => {

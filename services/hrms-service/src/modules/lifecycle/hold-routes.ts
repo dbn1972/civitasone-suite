@@ -50,11 +50,11 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const holdId = randomUUID();
-    await publishF3Write(ctx, "lifecycle_hold_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: holdId, employeeId: id, holdType: body.holdType, status: "pending" },
-    });
+    }) as any;
   });
 
   // List holds for an employee
@@ -87,9 +87,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { holdId } = holdIdParam.parse(req.params);
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "active" } });
+    return reply.send({ data: { id: holdId, status: "active" } }) as any;
   });
 
   // Reject a pending hold
@@ -101,9 +101,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().min(1).max(2000).optional(),
     }).parse(req.body ?? {});
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "rejected" } });
+    return reply.send({ data: { id: holdId, status: "rejected" } }) as any;
   });
 
   // Release an active hold
@@ -115,9 +115,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
-    await publishF3Write(ctx, "lifecycle_hold_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "released" } });
+    return reply.send({ data: { id: holdId, status: "released" } }) as any;
   });
 
   // List all active holds (for dashboard / payroll integration)

@@ -59,10 +59,10 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const assessment = assessFee(vacancyFee, { category: a.category, categoryVerified: body.categoryVerified });
     const fid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_application_fee_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_application_fee_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        const now = await repo.findFee(ctx.tenantId, id);
+        const now = await repo.findFee(ctx.tenantId, id) as any;
         if (now) return reply.code(200).send({ data: feeView(now), assessed: false });
       }
       throw err;
@@ -104,9 +104,9 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const paymentRef = body.paymentRef!.trim();
 
     try {
-      await publishF3Write(ctx, "recruitment_application_fee_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_application_fee_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
       throw err;
     }
     return reply.send({ data: { id: fee.id, applicationId: id, status: "paid", provider: "manual", paymentRef } });

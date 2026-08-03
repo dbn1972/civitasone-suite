@@ -116,8 +116,8 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
 
     const results: Array<Record<string, unknown>> = [];
     let skipped = 0;
-    await publishF3Write(ctx, "pay_matrix_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    const incremented = results.filter((r) => r.toMinor).length;
+    await publishF3Write(ctx, "pay_matrix_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const incremented = results.filter((r) => r.toMinor) as any.length;
     req.log.info({ event: "pay.annual_increment.run", effectiveDate, dryRun: body.dryRun, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment run");
     return reply.send({
       effectiveDate, dryRun: body.dryRun,

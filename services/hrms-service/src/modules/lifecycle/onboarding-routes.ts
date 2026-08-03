@@ -30,8 +30,8 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       assignedTo: z.string().uuid().optional(),
     }).parse(req.body);
     const tid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: tid, employeeId: id, status: "pending" });
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: tid, employeeId: id, status: "pending" }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/onboarding-tasks", async (req, reply) => {
@@ -45,8 +45,8 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/onboarding-tasks/:taskId/complete", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { taskId } = taskParam.parse(req.params);
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id: taskId, status: "completed" });
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id: taskId, status: "completed" }) as any;
   });
 
   app.post("/v1/hrms/employees/:id/buddy", async (req, reply) => {
@@ -57,8 +57,8 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       role: z.enum(["buddy", "mentor"]).default("buddy"),
     }).parse(req.body);
     const bid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: bid, employeeId: id, role: body.role });
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: bid, employeeId: id, role: body.role }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/buddy", async (req, reply) => {

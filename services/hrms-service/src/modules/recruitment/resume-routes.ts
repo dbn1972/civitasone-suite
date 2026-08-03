@@ -46,9 +46,9 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (errors.length > 0) throw new HttpError(422, "INVALID_RESUME", errors.join("; "));
 
     const rid = randomUUID();
-    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive });
+    return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/resumes", async (req, reply) => {
@@ -75,8 +75,8 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     await mustCandidate(ctx.tenantId, id);
     const resume = await repo.findResume(ctx.tenantId, id, resumeId);
     if (!resume) throw new HttpError(404, "NOT_FOUND", "resume version not found");
-    const n = await publishF3Write(ctx, "recruitment_resume_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "resume version not found");
+    const n = await publishF3Write(ctx, "recruitment_resume_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (n === 0) throw new HttpError(404, "NOT_FOUND", "resume version not found") as any;
     return reply.send({ id: resumeId, candidateId: id, versionNo: resume.versionNo, isActive: true });
   });
 

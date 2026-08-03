@@ -63,10 +63,10 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Store alerts
     for (const alert of alerts) {
-      await publishF3Write(ctx, "ai_fraud_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "ai_fraud_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     }
 
-    const duration = Date.now() - startTime;
+    const duration = Date.now() as any - startTime;
     return reply.send({
       status: "completed", alertsGenerated: alerts.length, employeesScanned: employees.length,
       durationMs: duration, models: ["ghost_detector_v1", "duplicate_bank_v1", "salary_anomaly_v1"],
@@ -99,9 +99,9 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
         upcomingProbationEnd: [],
       });
       for (const rec of recs) {
-        await publishF3Write(ctx, "ai_fraud_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+        await publishF3Write(ctx, "ai_fraud_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       }
-      const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50));
+      const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50)) as any;
       return reply.send({ data: fresh });
     }
     return reply.send({ data: rows });
@@ -113,8 +113,8 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ status: z.enum(["investigating", "confirmed", "dismissed", "resolved"]), resolutionNotes: z.string().optional() }).parse(req.body);
-    await publishF3Write(ctx, "ai_fraud_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: body.status });
+    await publishF3Write(ctx, "ai_fraud_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: body.status }) as any;
   });
 
   // ── Attrition risk for specific employee ──

@@ -89,8 +89,8 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "employee_employee_types_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "created" });
+    await publishF3Write(ctx, "employee_employee_types_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "created" }) as any;
   });
 
   // Update an employee type
@@ -119,8 +119,8 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     if (body.eligibleForBonus !== undefined) patch.eligibleForBonus = body.eligibleForBonus;
     if (body.leaveEncashment !== undefined) patch.leaveEncashment = body.leaveEncashment;
     if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
-    await publishF3Write(ctx, "employee_employee_types_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "updated" });
+    await publishF3Write(ctx, "employee_employee_types_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "updated" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

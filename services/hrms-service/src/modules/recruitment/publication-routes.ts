@@ -61,8 +61,8 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt", "minExperienceYears"] as const) {
       if ((body as Record<string, unknown>)[k] !== undefined) patch[k] = (body as Record<string, unknown>)[k];
     }
-    await publishF3Write(ctx, "recruitment_publication_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, updated: true });
+    await publishF3Write(ctx, "recruitment_publication_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, updated: true }) as any;
   });
 
   app.post("/v1/hrms/job-openings/:id/corrigendum", async (req, reply) => {
@@ -73,8 +73,8 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be amended");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await publishF3Write(ctx, "recruitment_publication_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, corrigendumSeq: seq });
+    await publishF3Write(ctx, "recruitment_publication_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, corrigendumSeq: seq }) as any;
   });
 
   app.post("/v1/hrms/job-openings/:id/extend", async (req, reply) => {
@@ -88,8 +88,8 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const newDeadline = new Date(body.newDeadline);
     if (oldDeadline && newDeadline <= oldDeadline) throw new HttpError(400, "NOT_AN_EXTENSION", "the new deadline must be later than the current one");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await publishF3Write(ctx, "recruitment_publication_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "open", applicationDeadline: newDeadline, corrigendumSeq: seq }));
+    await publishF3Write(ctx, "recruitment_publication_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "open", applicationDeadline: newDeadline, corrigendumSeq: seq })) as any;
   });
 
   app.post("/v1/hrms/job-openings/:id/cancel", async (req, reply) => {
@@ -100,8 +100,8 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "vacancy is already cancelled");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await publishF3Write(ctx, "recruitment_publication_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "cancelled" });
+    await publishF3Write(ctx, "recruitment_publication_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "cancelled" }) as any;
   });
 
   app.get("/v1/hrms/job-openings/:id/corrigenda", async (req, reply) => {

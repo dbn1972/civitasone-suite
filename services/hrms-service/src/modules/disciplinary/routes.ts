@@ -68,7 +68,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       c.status as CaseStatus, action, c.proceedingType as "minor" | "major");
     if (!check.ok || !check.to) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
     const to: CaseStatus = check.to;
-    await publishF3Write(ctx, "disciplinary_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
     return to;
   }
 
@@ -84,8 +84,8 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     await mustEmployee(ctx.tenantId, id);
     const caseId = randomUUID();
-    await publishF3Write(ctx, "disciplinary_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo });
+    await publishF3Write(ctx, "disciplinary_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/disciplinary-cases", async (req, reply) => {
@@ -335,8 +335,8 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const s = await repo.findSuspension(ctx.tenantId, suspId);
     if (!s) throw new HttpError(404, "NOT_FOUND", "suspension not found");
     if (s.status !== "active") throw new HttpError(409, "WRONG_STATE", `suspension is '${s.status}', not active`);
-    await publishF3Write(ctx, "disciplinary_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id: suspId, status: "revoked" });
+    await publishF3Write(ctx, "disciplinary_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id: suspId, status: "revoked" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

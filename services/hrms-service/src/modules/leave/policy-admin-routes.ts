@@ -115,7 +115,7 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
       updatedBy: ctx.actorId,
     };
 
-    const result = await publishF3Write(ctx, "leave_policy_admin_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const result = await publishF3Write(ctx, "leave_policy_admin_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
 
     const returnedId = result[0]?.id ?? id;
     return reply.code(201).send({ id: returnedId, status: "created", employeeType: body.employeeType, leaveTypeId: body.leaveTypeId });
@@ -128,9 +128,9 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updatePolicyBody.parse(req.body);
 
-    await publishF3Write(ctx, "leave_policy_admin_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "leave_policy_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ id, status: "updated" });
+    return reply.send({ id, status: "updated" }) as any;
   });
 
   // ── Delete (soft: deactivate) a policy rule ──
@@ -139,9 +139,9 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    await publishF3Write(ctx, "leave_policy_admin_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "leave_policy_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(204).send();
+    return reply.code(204).send() as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

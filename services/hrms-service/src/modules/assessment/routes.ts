@@ -34,8 +34,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createBankBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "active" });
+    await publishF3Write(ctx, "assessment_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "active" }) as any;
   });
 
   app.get("/v1/hrms/assessment/question-banks/:id/questions", async (req, reply) => {
@@ -58,8 +58,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "MAKER_CHECKER", "question-bank change requires a checker different from the bank creator");
     }
     const qid = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: qid });
+    await publishF3Write(ctx, "assessment_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: qid }) as any;
   });
 
   // ── Assessments lifecycle ───────────────────────────────────────
@@ -76,8 +76,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const bank = await repo.getBank(ctx.tenantId, body.bankId);
     if (!bank) throw new HttpError(404, "NOT_FOUND", "question bank not found");
     const id = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "draft" });
+    await publishF3Write(ctx, "assessment_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "draft" }) as any;
   });
 
   app.get("/v1/hrms/assessments/:id", async (req, reply) => {
@@ -100,8 +100,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (a.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "passing-score change requires a checker different from the assessment creator");
     }
-    const row = await publishF3Write(ctx, "assessment_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "passing score can only be changed while draft");
+    const row = await publishF3Write(ctx, "assessment_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "passing score can only be changed while draft") as any;
     return reply.send({ id, passingScore: row.passingScore });
   });
 
@@ -111,8 +111,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const a = await repo.getAssessment(ctx.tenantId, id);
     if (!a) throw new HttpError(404, "NOT_FOUND", "assessment not found");
-    const row = await publishF3Write(ctx, "assessment_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft can be submitted for approval");
+    const row = await publishF3Write(ctx, "assessment_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft can be submitted for approval") as any;
     return reply.send({ id, status: row.status });
   });
 
@@ -126,8 +126,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     if (a.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "publish requires an approver different from the creator");
     }
-    const row = await publishF3Write(ctx, "assessment_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only an assessment pending approval can be published");
+    const row = await publishF3Write(ctx, "assessment_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only an assessment pending approval can be published") as any;
     return reply.send({ id, status: row.status, approvedBy: row.approvedBy });
   });
 
@@ -135,8 +135,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const row = await publishF3Write(ctx, "assessment_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a published assessment can be retired");
+    const row = await publishF3Write(ctx, "assessment_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only a published assessment can be retired") as any;
     return reply.send({ id, status: row.status });
   });
 
@@ -154,8 +154,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ATTEMPT_LIMIT", "maximum attempts exhausted");
     }
     const attemptId = randomUUID();
-    const attempt = await publishF3Write(ctx, "assessment_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: attempt.id, attemptNo: attempt.attemptNo, status: attempt.status });
+    const attempt = await publishF3Write(ctx, "assessment_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: attempt.id, attemptNo: attempt.attemptNo, status: attempt.status }) as any;
   });
 
   app.post("/v1/hrms/attempts/:id/submit", async (req, reply) => {
@@ -177,8 +177,8 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const graded = gradeAttempt(gradable, body.answers);
     const passed = decidePass(graded.score, Number(a.passingScore));
 
-    const result = await publishF3Write(ctx, "assessment_routes__8", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!result) throw new HttpError(409, "INVALID_STATE", "attempt already submitted");
+    const result = await publishF3Write(ctx, "assessment_routes__8", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!result) throw new HttpError(409, "INVALID_STATE", "attempt already submitted") as any;
     return reply.send({ id, status: "graded", score: result.score, passed: result.passed, certificate: result.certificate });
   });
 

@@ -112,8 +112,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (b.approvalChain && !privileged) throw new HttpError(403, "CHAIN_NOT_ALLOWED", "only HR admins may set a custom approval chain");
     const chain: ApprovalStage[] = b.approvalChain ?? DEFAULT_GOVT_CHAIN;
     validateChain(chain);
-    await publishF3Write(ctx, "recruitment_requisition_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, requisitionNo: reqNo(id), status: "draft" });
+    await publishF3Write(ctx, "recruitment_requisition_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, requisitionNo: reqNo(id), status: "draft" }) as any;
     function reqNo(x: string) { return `REQ-${x.slice(0, 8).toUpperCase()}`; }
   });
 
@@ -163,8 +163,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
       validateChain(b.approvalChain);
       patch.approvalChain = b.approvalChain;
     }
-    await publishF3Write(ctx, "recruitment_requisition_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: r.status });
+    await publishF3Write(ctx, "recruitment_requisition_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: r.status }) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/submit", async (req, reply) => {
@@ -175,8 +175,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (r.status !== "draft" && r.status !== "returned") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot submit`);
     const chain = r.approvalChain as ApprovalStage[];
     if (!Array.isArray(chain) || chain.length === 0) throw new HttpError(400, "NO_APPROVAL_CHAIN", "requisition has no approval chain configured");
-    await publishF3Write(ctx, "recruitment_requisition_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "pending_approval", currentStage: 0 }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "pending_approval", currentStage: 0 })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/approve", async (req, reply) => {
@@ -200,8 +200,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "SOD_VIOLATION", "you have already approved an earlier stage of this requisition");
     }
     const final = isFinalStage(chain, r.currentStage);
-    await publishF3Write(ctx, "recruitment_requisition_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: final ? "approved" : "pending_approval", currentStage: final ? r.currentStage : r.currentStage + 1 }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: final ? "approved" : "pending_approval", currentStage: final ? r.currentStage : r.currentStage + 1 })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/return", async (req, reply) => {
@@ -214,8 +214,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const role = currentStageRole(chain, r.currentStage);
     if (!role) throw new HttpError(409, "NO_STAGE", "no active approval stage");
     requireRole(ctx, [role, "super_admin"]);
-    await publishF3Write(ctx, "recruitment_requisition_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "returned" }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "returned" })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/hold", async (req, reply) => {
@@ -225,8 +225,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
     if (r.status !== "pending_approval" && r.status !== "approved") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot hold`);
-    await publishF3Write(ctx, "recruitment_requisition_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "on_hold" }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "on_hold" })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/reopen", async (req, reply) => {
@@ -237,8 +237,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (r.status !== "on_hold") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', not on hold`);
     // Restore to where it was: fully approved runs resume 'approved', else back to pending.
     const restored = r.approvedAt ? "approved" : "pending_approval";
-    await publishF3Write(ctx, "recruitment_requisition_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: restored }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: restored })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/cancel", async (req, reply) => {
@@ -250,8 +250,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (r.status === "published" || r.status === "cancelled" || r.status === "closed") {
       throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot cancel`);
     }
-    await publishF3Write(ctx, "recruitment_requisition_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "cancelled" }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "cancelled" })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/close", async (req, reply) => {
@@ -263,8 +263,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (r.status !== "approved" && r.status !== "published" && r.status !== "on_hold") {
       throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot close`);
     }
-    await publishF3Write(ctx, "recruitment_requisition_routes__8", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "closed" }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__8", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "closed" })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/clone", async (req, reply) => {
@@ -275,8 +275,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     assertCanView(ctx, r);
     const newId = randomUUID();
     const carried = cloneFields(r as unknown as Record<string, unknown>);
-    await publishF3Write(ctx, "recruitment_requisition_routes__9", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: newId, clonedFrom: id, status: "draft" });
+    await publishF3Write(ctx, "recruitment_requisition_routes__9", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: newId, clonedFrom: id, status: "draft" }) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/publish", async (req, reply) => {
@@ -288,8 +288,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (!canPublish(r.status)) throw new HttpError(409, "NOT_APPROVED", `requisition is '${r.status}', not fully approved — cannot publish`);
     if (!r.departmentId) throw new HttpError(400, "MISSING_DEPARTMENT", "a department is required to publish a job opening");
     const openingId = randomUUID();
-    await publishF3Write(ctx, "recruitment_requisition_routes__10", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id, status: "published", publishedOpeningId: openingId }));
+    await publishF3Write(ctx, "recruitment_requisition_routes__10", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "published", publishedOpeningId: openingId })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

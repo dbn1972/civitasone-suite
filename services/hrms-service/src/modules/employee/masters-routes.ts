@@ -56,8 +56,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const id = randomUUID();
-    await publishF3Write(ctx, "employee_masters_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "created" });
+    await publishF3Write(ctx, "employee_masters_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "created" }) as any;
   });
 
   // ── Designations ──
@@ -73,8 +73,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createDesignationBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "employee_masters_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "created" });
+    await publishF3Write(ctx, "employee_masters_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "created" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

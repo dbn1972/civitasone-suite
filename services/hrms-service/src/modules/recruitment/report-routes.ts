@@ -61,8 +61,8 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     const body = z.object({ reason: z.string().trim().min(5).max(4000), evidence: z.record(z.unknown()).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status === "void") throw new HttpError(409, "ALREADY_VOID", "the attempt is already voided");
-    await publishF3Write(ctx, "recruitment_report_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ attemptId: id, status: "void", disposition: "malpractice" });
+    await publishF3Write(ctx, "recruitment_report_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ attemptId: id, status: "void", disposition: "malpractice" }) as any;
   });
 
   // ---- reschedule / retest: void + fresh attempt (R-RA-0135) -----------
@@ -89,10 +89,10 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     const newId = randomUUID();
     const order = randomizeQuestionOrder(paperIds, newId);
     try {
-      await publishF3Write(ctx, "recruitment_report_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_report_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // Candidate already holds an active attempt on the target schedule.
-      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ALREADY_SCHEDULED", "the candidate already has an active attempt on the target schedule");
+      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ALREADY_SCHEDULED", "the candidate already has an active attempt on the target schedule") as any;
       throw e;
     }
     return reply.code(201).send({ attemptId: id, status: "void", disposition: body.type, newAttemptId: newId, targetScheduleId });

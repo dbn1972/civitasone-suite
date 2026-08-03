@@ -24,8 +24,8 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     const training = await repo.getTraining(ctx.tenantId, id);
     if (!training) throw new HttpError(404, "NOT_FOUND", "training not found");
     const sid = randomUUID();
-    const row = await publishF3Write(ctx, "training_admin_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: row.id, capacity: row.capacity, status: row.status });
+    const row = await publishF3Write(ctx, "training_admin_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: row.id, capacity: row.capacity, status: row.status }) as any;
   });
 
   app.get("/v1/hrms/trainings/:id/sessions", async (req, reply) => {
@@ -58,8 +58,8 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
       const waited = await repo.countWaitlistedForSession(ctx.tenantId, body.sessionId);
       waitlistPosition = nextWaitlistPosition(waited);
     }
-    const row = await publishF3Write(ctx, "training_admin_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "nomination could not be decided from its current state");
+    const row = await publishF3Write(ctx, "training_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "nomination could not be decided from its current state") as any;
     return reply.send({ id, status: row.status, sessionId: body.sessionId, waitlistPosition: row.waitlistPosition });
   });
 
@@ -75,8 +75,8 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     }
     const freedApproved = nom.status === "approved";
     const sessionId = nom.sessionId;
-    const result = await publishF3Write(ctx, "training_admin_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!result) throw new HttpError(409, "INVALID_STATE", "nomination cannot be rejected from its current state");
+    const result = await publishF3Write(ctx, "training_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!result) throw new HttpError(409, "INVALID_STATE", "nomination cannot be rejected from its current state") as any;
     return reply.send({ id, status: "rejected", promoted: result.promotedId });
   });
 
@@ -88,8 +88,8 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     const body = markAttendanceBody.parse(req.body);
     const session = await repo.getSession(ctx.tenantId, id);
     if (!session) throw new HttpError(404, "NOT_FOUND", "session not found");
-    const row = await publishF3Write(ctx, "training_admin_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ sessionId: id, employeeId: row.employeeId, status: row.status });
+    const row = await publishF3Write(ctx, "training_admin_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ sessionId: id, employeeId: row.employeeId, status: row.status }) as any;
   });
 
   app.get("/v1/hrms/sessions/:id/attendance", async (req, reply) => {

@@ -25,8 +25,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       provider: z.string().max(64).optional(),
     }).parse(req.body);
     const bid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: bid, status: "pending" });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: bid, status: "pending" }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/bgv-checks", async (req, reply) => {
@@ -44,8 +44,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       status: z.enum(["passed", "failed", "inconclusive"]),
       result: z.string().max(2000).optional(),
     }).parse(req.body);
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: body.status });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: body.status }) as any;
   });
 
   // ── Property returns ──
@@ -54,8 +54,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
     const { id } = idParam.parse(req.params);
     const body = z.object({ itemDescription: z.string().min(1).max(500) }).parse(req.body);
     const pid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: pid, returnStatus: "pending" });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: pid, returnStatus: "pending" }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/property-returns", async (req, reply) => {
@@ -69,8 +69,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   app.patch("/v1/hrms/property-returns/:id/return", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, returnStatus: "returned" });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, returnStatus: "returned" }) as any;
   });
 
   // ── Mandatory-doc config ──
@@ -82,8 +82,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       required: z.boolean().default(true),
     }).parse(req.body);
     const mid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: mid });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: mid }) as any;
   });
 
   app.get("/v1/hrms/mandatory-doc-configs", async (req, reply) => {
@@ -102,8 +102,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       policyVersion: z.string().max(24).optional(),
     }).parse(req.body);
     const pid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: pid, acknowledged: true });
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: pid, acknowledged: true }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/policy-acknowledgements", async (req, reply) => {

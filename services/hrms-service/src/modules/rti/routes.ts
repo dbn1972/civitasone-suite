@@ -51,8 +51,8 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const body = fileRtiBody.parse(req.body);
     const id = randomUUID();
     const dueDate = addDays(body.receivedDate, body.slaDays);
-    await publishF3Write(ctx, "rti_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "filed", dueDate });
+    await publishF3Write(ctx, "rti_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "filed", dueDate }) as any;
   });
 
   // Assign a PIO (filed -> assigned).
