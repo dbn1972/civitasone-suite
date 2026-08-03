@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * OTP verification for candidate applications (DEF-RC-003 / R-RA-0077).

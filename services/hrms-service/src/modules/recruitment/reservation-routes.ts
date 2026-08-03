@@ -58,7 +58,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       await publishF3Write(ctx, "recruitment_reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // Two concurrent first-time sets on the same new job collide on UNIQUE(tenant,job).
-      if ((e as { code?: string }).code === "23505") as any throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");
+      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");
       throw e;
     }
     return reply.send({ jobOpeningId, status: "draft", totalVacancies: body.totalVacancies });

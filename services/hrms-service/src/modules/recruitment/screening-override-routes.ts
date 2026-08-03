@@ -94,7 +94,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     try {
       await publishF3Write(ctx, "recruitment_screening_override_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the application or request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the application or request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, applicationId: r.applicationId, status: "approved", screeningDecision: r.toDecision });
@@ -115,7 +115,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     try {
       await publishF3Write(ctx, "recruitment_screening_override_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, status: "rejected" });
@@ -138,7 +138,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     try {
       await publishF3Write(ctx, "recruitment_screening_override_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, status: "cancelled" });

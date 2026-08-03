@@ -71,7 +71,7 @@ export async function interviewCommsRoutes(app: FastifyInstance): Promise<void> 
     try {
       await publishF3Write(ctx, "recruitment_interview_comms_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the interview changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview changed; reload and retry");
       // Concurrent request with the same idempotency key won the race.
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_REQUEST", "a communication with this idempotency key is already being processed");

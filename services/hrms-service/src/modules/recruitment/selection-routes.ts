@@ -74,7 +74,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     } catch (e) {
       // A concurrent set-entries (double-submit / retry) can collide on the DB
       // unique index after its own DELETE affected 0 rows — surface it cleanly.
-      if ((e as { code?: string }).code === "23505") as any throw new HttpError(409, "ENTRIES_CONFLICT", "the list entries were modified concurrently; reload and retry");
+      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ENTRIES_CONFLICT", "the list entries were modified concurrently; reload and retry");
       throw e;
     }
     return reply.send({ id, entries: body.entries.length });
