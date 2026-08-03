@@ -19,6 +19,12 @@ export const COMMANDS = {
   mapLayerCreate: "location.map_layer.create",
   mapLayerUpdate: "location.map_layer.update",
   mapLayerDelete: "location.map_layer.delete",
+  // F3 leftover — road-network / map-markers / spatial-exchange
+  roadSegmentCreate: "location.road_network.segment.create",
+  roadSegmentDelete: "location.road_network.segment.delete",
+  roadNetworkCreate: "location.road_network.network.create",
+  geoPointRegister: "location.geo_point.register",
+  spatialImport: "location.spatial_exchange.import",
 } as const;
 
 export const EVENTS = {

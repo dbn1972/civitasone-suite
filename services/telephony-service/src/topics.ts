@@ -10,6 +10,7 @@ export const COMMANDS = {
   // routing / enrichment (no state change)
   assignCall: "telephony.call.assign",
   recordIvrHit: "telephony.call.ivr_hit",
+  batchIvrHits: "telephony.ivr.batch_hits",
   linkCall: "telephony.call.link",
   attachRecording: "telephony.call.recording",
   // queue + agent administration

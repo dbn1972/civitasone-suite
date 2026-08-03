@@ -1,8 +1,5 @@
 /**
- * IVR routes — batch upsert of IVR hits and read endpoint.
- *
- * POST /v1/telephony/calls/:id/ivr-hits — batch upsert (max 50 total per call)
- * GET  /v1/telephony/calls/:id/ivr-hits — list all IVR hits for a call
+ * IVR routes — batch upsert of IVR hits and read endpoint (CQRS write path).
  */
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -10,18 +7,13 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { batchIvrHitsBody, callIdParam } from "./validators.js";
 import { MAX_IVR_HITS_PER_CALL } from "./domain.js";
 import * as repo from "./repo.js";
-import { db } from "../../shared/db.js";
-import { tenantTransaction } from "@civitasone/db";
 import { randomUUID } from "node:crypto";
 import type { IvrHitInsert } from "./schema.js";
+import * as commands from "./commands.js";
 
 const TELEPHONY_ROLES = ["telephony_user", "telephony_supervisor", "telephony_admin", "super_admin"];
 
 export async function ivrRoutes(app: FastifyInstance): Promise<void> {
-  /**
-   * Batch upsert IVR hits for a call.
-   * Enforces max 50 IVR hits per call. Returns 422 if limit would be exceeded.
-   */
   app.post("/v1/telephony/calls/:id/ivr-hits", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ROLES);
@@ -50,22 +42,18 @@ export async function ivrRoutes(app: FastifyInstance): Promise<void> {
       updatedBy: ctx.actorId,
     }));
 
-    await tenantTransaction(db, ctx.tenantId, async (tx) => {
-      await repo.insertBatch(tx as unknown as typeof db, rows);
+    const accepted = await commands.batchIvrHits(ctx, callId, rows as unknown as Array<Record<string, unknown>>, {
+      inserted: hits.length,
+      totalHits: currentCount + hits.length,
     });
-
-    return reply.code(201).send({
-      data: {
-        callId,
-        inserted: hits.length,
-        totalHits: currentCount + hits.length,
-      },
+    return reply.code(202).send({
+      id: accepted.id,
+      status: "accepted",
+      correlationId: accepted.correlationId,
+      data: { callId, inserted: accepted.inserted, totalHits: accepted.totalHits },
     });
   });
 
-  /**
-   * List all IVR hits for a call, ordered by ordinal.
-   */
   app.get("/v1/telephony/calls/:id/ivr-hits", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ROLES);

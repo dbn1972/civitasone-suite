@@ -17,11 +17,12 @@
  * client-supplied identifier, and no PII is accepted or stored.
  */
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
 import * as repo from "./mobile-repo.js";
+import * as commands from "./mobile-commands.js";
 import {
   BOUNDS,
   PLATFORMS,
@@ -130,43 +131,26 @@ export async function mobileTelemetryRoutes(app: FastifyInstance): Promise<void>
     assertCountsConsistent(body.crashCount, body.anrCount, body.sessionCount);
     assertScreensUnique(body.screens);
 
-    const created = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const event = await repo.insertTelemetry(w, {
-        tenantId: ctx.tenantId,
-        appVersion: body.appVersion,
-        platform: body.platform,
-        osVersion: body.osVersion,
-        deviceModel: body.deviceModel,
-        coldStartMs: body.coldStartMs,
-        warmStartMs: body.warmStartMs ?? null,
-        crashCount: body.crashCount,
-        anrCount: body.anrCount,
-        sessionCount: body.sessionCount,
-        recordedAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await repo.insertScreenRenders(w, body.screens.map((s) => ({
-        tenantId: ctx.tenantId,
-        eventId: event.id,
-        platform: body.platform,
-        appVersion: body.appVersion,
-        screen: s.screen,
-        renderMs: s.renderMs,
-        sampleCount: s.sampleCount,
-        recordedAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      })));
-      return event;
+    const id = randomUUID();
+    const accepted = await commands.recordMobileTelemetry(ctx, id, {
+      appVersion: body.appVersion,
+      platform: body.platform,
+      osVersion: body.osVersion,
+      deviceModel: body.deviceModel,
+      coldStartMs: body.coldStartMs,
+      warmStartMs: body.warmStartMs ?? null,
+      crashCount: body.crashCount,
+      anrCount: body.anrCount,
+      sessionCount: body.sessionCount,
+      recordedAt: recordedAt.toISOString(),
+      screens: body.screens,
     });
-    // No audit event: telemetry is non-authoritative observability data with no
-    // PII, arriving once per app session per device. Emitting an audit record
-    // per ping would multiply audit volume by app traffic without adding any
-    // reviewable fact — the events themselves ARE the record. Every other
-    // mutation in this service does emit one.
-    return reply.code(201).send(singleEnvelope({ id: created.id, recordedAt: iso(created.recordedAt) }));
+    return reply.code(202).send({
+      id: accepted.id,
+      status: "accepted",
+      correlationId: accepted.correlationId,
+      data: { id, recordedAt: recordedAt.toISOString() },
+    });
   });
 
   // ── raw events ────────────────────────────────────────────────────────────

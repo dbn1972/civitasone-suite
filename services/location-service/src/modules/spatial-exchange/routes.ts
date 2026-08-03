@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { parseGeoJson, parseKml, MAX_BYTES } from "./parse.js";
+import * as commands from "./commands.js";
 
 const ADMIN = ["super_admin", "location_admin", "gis_admin"];
 const READER = ["super_admin", "location_admin", "gis_admin", "location_user", "project_admin"];
@@ -10,8 +13,6 @@ const READER = ["super_admin", "location_admin", "gis_admin", "location_user", "
 const datasetRe = /^[A-Za-z0-9._-]{1,128}$/;
 
 export async function spatialExchangeRoutes(app: FastifyInstance): Promise<void> {
-  // SVC-117: IMPORT — parse an uploaded GeoJSON FeatureCollection or KML and
-  // persist its features into the tenant-scoped feature store.
   app.post("/v1/locations/spatial-exchange/import", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const body = z.object({
@@ -32,11 +33,18 @@ export async function spatialExchangeRoutes(app: FastifyInstance): Promise<void>
       features = parseKml(body.data);
     }
 
-    const stored = await repo.importFeatures(ctx.tenantId, ctx.actorId, body.dataset, body.format, features);
-    return reply.code(201).send({ data: { dataset: body.dataset, imported: stored } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.importSpatial(ctx, {
+        dataset: body.dataset,
+        format: body.format,
+        features,
+        featureCount: features.length,
+      }),
+    );
   });
 
-  // SVC-117: EXPORT — emit a dataset as GeoJSON (default) or KML.
   app.get("/v1/locations/spatial-exchange/export", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER);
     const q = z.object({

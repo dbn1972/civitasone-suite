@@ -12,7 +12,7 @@
  *   POST  /v1/admin/documents/expiry-scan         classify expiries + EMIT ALERTS
  *
  * ALERTING BOUNDARY: expiry alerting is published as the events
- * `admin.document.expiring` / `admin.document.expired` on the transactional
+ * 'admin.document.expiring' / 'admin.document.expired' on the transactional
  * outbox (contracts documented in src/topics.ts). notification-service owns the
  * channel and template and consumes them; admin-service does not send anything
  * itself and this sprint does not touch notification-service.
@@ -21,6 +21,9 @@
  * is left alone and no duplicate alert is emitted, so it is safe to run on a
  * schedule or by hand.
  */
+import { randomUUID } from "node:crypto";
+import { publishAdminCommand } from "../../shared/f3-publish.js";
+import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -86,12 +89,12 @@ const documentBody = z.object({
   subjectId: z.string().max(120).default(""),
   storageKey: z.string().min(3).max(1024),
   /**
-   * `offset: true` is required: zod's bare `.datetime()` accepts only a `Z`
-   * suffix, so a client submitting `2027-03-31T00:00:00+05:30` — a perfectly
+   * 'offset: true' is required: zod's bare '.datetime()' accepts only a 'Z'
+   * suffix, so a client submitting '2027-03-31T00:00:00+05:30' — a perfectly
    * unambiguous instant, and the natural form for an IST caller — was refused
-   * with a 400. Both columns are `timestamptz` and every comparison in
-   * doc-domain.ts goes through `new Date`, so an offset stores and classifies as
-   * exactly the same instant. `Z` remains valid.
+   * with a 400. Both columns are 'timestamptz' and every comparison in
+   * doc-domain.ts goes through 'new Date', so an offset stores and classifies as
+   * exactly the same instant. 'Z' remains valid.
    */
   issuedAt: z.string().datetime({ offset: true }).optional(),
   expiresAt: z.string().datetime({ offset: true }).optional(),
@@ -177,27 +180,16 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ONLY);
     const body = parseOrThrow(typeBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const clash = await repo.findTypeByCodeTx(w, ctx.tenantId, body.code);
-      if (clash) throw new HttpError(409, "TYPE_EXISTS", `document type '${body.code}' already exists`);
-      const row = await repo.insertType(w, {
-        tenantId: ctx.tenantId,
-        code: body.code,
-        name: body.name,
-        category: body.category,
-        allowedExtensions: body.allowedExtensions,
-        maxSizeMb: body.maxSizeMb,
-        expiryRequired: body.expiryRequired,
-        expiryWarnDays: body.expiryWarnDays,
-        status: "active",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "document_type.created", RESOURCE_TYPE, row.id, { code: row.code });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'uploads_op_0',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeType(created)));
+    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/document-types", async (req, reply) => {
@@ -219,18 +211,15 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
       throw new HttpError(400, "EMPTY_PATCH", "provide at least one field to update");
     }
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const row = await repo.findTypeTx(w, ctx.tenantId, id);
-      if (!row) throw new HttpError(404, "NOT_FOUND", "document type not found");
-      assertVersionMatch(row.version, body.expectedVersion);
-      const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
-      for (const key of patchKeys) patch[key] = body[key];
-      const moved = await repo.updateType(w, ctx.tenantId, id, body.expectedVersion, patch);
-      if (!moved) throw new HttpError(409, "VERSION_CONFLICT", "document type was modified concurrently; re-read and retry");
-      await auditEvent(tx, outboxCtx(ctx), "document_type.updated", RESOURCE_TYPE, id);
-      return { id, version: body.expectedVersion + 1 };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'uploads_op_1',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: __f3Id,
     });
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.send(singleEnvelope(result));
   });
 
@@ -240,26 +229,16 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ONLY);
     const body = parseOrThrow(requirementBody, req.body);
 
-    const saved = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const type = await repo.findTypeByCodeTx(w, ctx.tenantId, body.documentTypeCode);
-      if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
-      assertTypeActive(type.status);
-      const row = await repo.upsertRequirement(w, {
-        tenantId: ctx.tenantId,
-        contextType: body.contextType,
-        contextKey: body.contextKey,
-        documentTypeCode: body.documentTypeCode,
-        mandatory: body.mandatory,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      await auditEvent(tx, outboxCtx(ctx), "document_requirement.set", RESOURCE_TYPE, row.id, {
-        contextType: row.contextType, documentTypeCode: row.documentTypeCode, mandatory: row.mandatory,
-      });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'uploads_op_2',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeRequirement(saved)));
+    const saved = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/document-requirements", async (req, reply) => {
@@ -278,37 +257,16 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, DOC_ROLES);
     const body = parseOrThrow(documentBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const type = await repo.findTypeByCodeTx(w, ctx.tenantId, body.documentTypeCode);
-      if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
-      assertTypeActive(type.status);
-      assertExpiryPresentWhenRequired(type.expiryRequired, body.expiresAt);
-      assertExpiryAfterIssue(body.issuedAt, body.expiresAt);
-      assertExtensionAllowed(body.storageKey, type.allowedExtensions);
-
-      const expiresAt = body.expiresAt !== undefined ? new Date(body.expiresAt) : null;
-      const status = classifyExpiry("active", expiresAt, type.expiryWarnDays);
-      const row = await repo.insertDocument(w, {
-        tenantId: ctx.tenantId,
-        documentTypeCode: body.documentTypeCode,
-        contextType: body.contextType,
-        contextKey: body.contextKey,
-        subjectId: body.subjectId,
-        storageKey: body.storageKey,
-        issuedAt: body.issuedAt !== undefined ? new Date(body.issuedAt) : null,
-        expiresAt,
-        status,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-      // Identifiers only — never the document contents or a subject's name.
-      await auditEvent(tx, outboxCtx(ctx), "document.registered", RESOURCE_DOC, row.id, {
-        documentTypeCode: row.documentTypeCode, contextType: row.contextType, status: row.status,
-      });
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'uploads_op_3',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: __f3Id,
     });
-    return reply.code(201).send(singleEnvelope(serializeDocument(created)));
+    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/documents", async (req, reply) => {
@@ -358,78 +316,15 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ONLY);
     const body = parseOrThrow(scanBody, req.body ?? {});
 
-    const result = await db.transaction(async (tx) => {
-      const w = tx as repo.Writer;
-      const now = new Date();
-      // Widest configured warning window bounds the scan horizon.
-      const { rows: typeRows } = await repo.listTypes(ctx.tenantId, 200, 0, "active");
-      const widestWarnDays = typeRows.reduce((m, t) => (t.expiryWarnDays > m ? t.expiryWarnDays : m), 30);
-      const horizon = new Date(now.getTime() + widestWarnDays * 24 * 60 * 60_000);
-      const warnDays: Record<string, number> = {};
-      for (const t of typeRows) warnDays[t.code] = t.expiryWarnDays;
-
-      const candidates = await repo.expiryCandidatesTx(w, ctx.tenantId, horizon, body.limit);
-      let expiring = 0;
-      let expired = 0;
-      let unchanged = 0;
-      /**
-       * A document can also move BACKWARDS — `expiring` → `active` — when an
-       * administrator narrows a type's `expiryWarnDays` after the document was
-       * already flagged. That is a real state change but NOT an alert, so it is
-       * counted separately: without its own counter the row was re-classified
-       * while `scanned` disagreed with expiring+expired+unchanged, and the
-       * caller had no way to see that anything happened.
-       */
-      let recovered = 0;
-
-      for (const doc of candidates) {
-        const next = classifyExpiry(doc.status, doc.expiresAt, warnDays[doc.documentTypeCode] ?? 30, now);
-        if (next === doc.status) {
-          unchanged++;
-          continue;
-        }
-        // `lastAlertAt` records when an alert was SENT. Only stamp it on a
-        // transition that actually publishes one, otherwise a recovery would
-        // leave behind a timestamp for an alert that never went out.
-        const alerting = next === "expiring" || next === "expired";
-        const moved = await repo.updateDocument(w, ctx.tenantId, doc.id, doc.version, {
-          status: next, ...(alerting ? { lastAlertAt: now } : {}), updatedBy: ctx.actorId,
-        });
-        if (!moved) {
-          // Concurrently modified: leave it for the next scan rather than
-          // clobbering someone else's write.
-          unchanged++;
-          continue;
-        }
-        const base = {
-          documentId: doc.id,
-          documentTypeCode: doc.documentTypeCode,
-          contextType: doc.contextType,
-          contextKey: doc.contextKey,
-          subjectId: doc.subjectId,
-          expiresAt: iso(doc.expiresAt) ?? "",
-        };
-        if (next === "expiring") {
-          expiring++;
-          await domainEvent(tx, outboxCtx(ctx), EVENTS.documentExpiring, {
-            ...base, daysRemaining: doc.expiresAt !== null ? daysUntil(doc.expiresAt, now) : 0,
-          });
-        } else if (next === "expired") {
-          expired++;
-          await domainEvent(tx, outboxCtx(ctx), EVENTS.documentExpired, base);
-        } else {
-          recovered++;
-        }
-      }
-
-      await auditEvent(tx, outboxCtx(ctx), "document.expiry_scan", RESOURCE_DOC, ctx.tenantId, {
-        scanned: candidates.length, expiring, expired, unchanged, recovered,
-      });
-      return {
-        scanned: candidates.length, expiring, expired, unchanged, recovered,
-        horizon: horizon.toISOString(),
-      };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'uploads_op_4',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: __f3Id,
     });
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.send(singleEnvelope(result));
   });
 
