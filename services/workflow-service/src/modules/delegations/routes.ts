@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 
@@ -16,15 +19,12 @@ export async function delegationRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().max(256).optional(),
     }).parse(req.body);
 
-    const record = await repo.create({
-      tenantId: ctx.tenantId,
-      delegatorId: ctx.actorId,
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDelegation(ctx, {
       delegateId: body.delegateId,
       fromDate: body.fromDate,
-      toDate: body.toDate ?? null,
-      reason: body.reason ?? null,
-    });
-    return reply.code(201).send({ data: record });
+      ...(body.toDate !== undefined ? { toDate: body.toDate } : {}),
+      ...(body.reason !== undefined ? { reason: body.reason } : {}),
+    }));
   });
 
   app.get("/v1/workflow/delegations", async (req, reply) => {
@@ -42,9 +42,9 @@ export async function delegationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const record = await repo.revoke(id, ctx.tenantId);
-    if (!record) throw new HttpError(404, "NOT_FOUND", "delegation not found");
-    return reply.send({ data: record });
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "delegation not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeDelegation(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

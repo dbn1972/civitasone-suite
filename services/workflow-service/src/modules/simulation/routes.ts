@@ -1,8 +1,9 @@
+import { scopedRead } from "../../shared/db.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as defRepo from "../definitions/repo.js";
-import { db } from "../../shared/db.js";
+import { db } ;
 import { simulateProcess } from "./domain.js";
 import { compareVersions } from "./compare.js";
 
@@ -51,7 +52,7 @@ export async function simulationRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body ?? {});
 
     const graphFor = async (version: number) => {
-      const def = await db.transaction((tx) => defRepo.findByCodeVersionTx(tx as unknown as typeof db, ctx.tenantId, code, version));
+      const def = await scopedRead((tx) => defRepo.findByCodeVersionTx(tx as unknown as typeof db, ctx.tenantId, code, version));
       if (!def) return null;
       const [nodes, edges] = await Promise.all([defRepo.listNodes(def.id), defRepo.listEdges(def.id)]);
       return {
