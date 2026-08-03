@@ -23,6 +23,7 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
       "disciplinary_routes__0",
       "disciplinary_routes__1",
       "disciplinary_routes__2",
+      "disciplinary_routes__3",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -129,6 +130,25 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
                     ...(body.remarks ? { remarks: body.remarks } : {}),
                     updatedBy: msg.actorId,
                   }, s.version);
+            break;
+          }
+          case "disciplinary_routes__3": {
+            const employeeId = String(params.id ?? "");
+            await repo.insertSuspension(tx, {
+              id,
+              tenantId: p.tenantId,
+              employeeId,
+              fromDate: body.fromDate,
+              paySuspended: Boolean(body.paySuspended),
+              subsistencePct: Number(body.subsistencePct ?? 50).toFixed(2),
+              status: "active",
+              ...(body.caseId ? { caseId: body.caseId } : {}),
+              ...(body.orderRef ? { orderRef: body.orderRef } : {}),
+              ...(body.toDate ? { toDate: body.toDate } : {}),
+              ...(body.remarks ? { remarks: body.remarks } : {}),
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
             break;
           }
         }
