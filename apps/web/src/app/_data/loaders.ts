@@ -7,6 +7,8 @@ import type {
   AttendanceSummaryItem,
   AuditRowSummary,
   ActivitySummary,
+  CRMAccountNode,
+  CRMAccountSummary,
   CRMContactSummary,
   CRMDealSummary,
   CRMDashboard,
@@ -165,6 +167,8 @@ import {
   tenantModulesResponseSchema,
   userListResponseSchema,
   roleListResponseSchema,
+  crmAccountHierarchyListSchema,
+  crmAccountsListSchema,
   crmContactsListSchema,
   crmDealsListSchema,
   crmActivitiesListSchema,
@@ -277,6 +281,8 @@ import {
   mapAssetDetail,
   mapDepreciationEntries,
   mapAssetMaintenanceHistory,
+  mapCrmAccountNodes,
+  mapCrmAccounts,
   mapCrmDealSummaries,
   mapDealSummaries,
   mapEstabFileSummaries,
@@ -1150,6 +1156,35 @@ export async function getCrmContacts(opts?: { search?: string; segment?: string 
     telemetryKey: "crm.contacts",
     responseSchema: crmContactsListSchema,
     mapResponse: mapCrmContacts,
+  });
+}
+
+export async function getCrmAccounts(): Promise<LoaderResult<CRMAccountSummary[]>> {
+  return fetchJson("/api/v1/crm/accounts", [] as CRMAccountSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.accounts",
+    responseSchema: crmAccountsListSchema,
+    mapResponse: mapCrmAccounts,
+  });
+}
+
+/** Parent chain for an account, ordered nearest parent → root. */
+export async function getCrmAccountAncestors(id: string): Promise<LoaderResult<CRMAccountNode[]>> {
+  return fetchJson(`/api/v1/crm/accounts/${id}/ancestors`, [] as CRMAccountNode[], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.account_ancestors",
+    responseSchema: crmAccountHierarchyListSchema,
+    mapResponse: mapCrmAccountNodes,
+  });
+}
+
+/** Immediate child accounts of an account. */
+export async function getCrmAccountChildren(id: string): Promise<LoaderResult<CRMAccountNode[]>> {
+  return fetchJson(`/api/v1/crm/accounts/${id}/children`, [] as CRMAccountNode[], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.account_children",
+    responseSchema: crmAccountHierarchyListSchema,
+    mapResponse: mapCrmAccountNodes,
   });
 }
 

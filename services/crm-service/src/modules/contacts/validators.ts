@@ -53,6 +53,17 @@ export type CreateAccountBody = z.infer<typeof createAccountBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+export const accountViewSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  industry: z.string().nullable(),
+  website: z.string().nullable(),
+  parentId: z.string().uuid().nullable(),
+  contactCount: z.number().int().nonnegative(),
+});
+
+export const accountsListSchema = z.object({ data: z.array(accountViewSchema) });
+
 export const contactViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

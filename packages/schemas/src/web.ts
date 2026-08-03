@@ -176,7 +176,23 @@ export const crmActivityApiSchema = z.object({
   createdAt: z.string(),
 });
 
+export const crmAccountApiSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  industry: z.string().nullable(),
+  website: z.string().nullable(),
+  parentId: z.string().uuid().nullable(),
+  contactCount: z.number().int(),
+});
+
+export const crmAccountHierarchyNodeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+});
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
+export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
+export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });
 export const crmDealsListSchema = paginatedSchema(crmDealApiSchema);
 export const crmActivitiesListSchema = paginatedSchema(crmActivityApiSchema);
 export const userListResponseSchema = z.array(z.object({

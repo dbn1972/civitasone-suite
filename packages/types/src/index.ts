@@ -146,6 +146,22 @@ export interface CRMContactSummary {
   lastActivity?: string;
 }
 
+/** CRM account (organisation) row for the accounts list + hierarchy screens. */
+export interface CRMAccountSummary {
+  id: string;
+  name: string;
+  industry: string | null;
+  website: string | null;
+  parentId: string | null;
+  contactCount: number;
+}
+
+/** Minimal account node used for hierarchy breadcrumbs and child lists. */
+export interface CRMAccountNode {
+  id: string;
+  name: string;
+}
+
 export interface ActivitySummary {
   id: string;
   actor: string;

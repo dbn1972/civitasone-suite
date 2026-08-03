@@ -1,5 +1,70 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes } from "./apiMappers";
+
+describe("mapCrmAccounts", () => {
+  it("maps the accounts payload including hierarchy and contact count", () => {
+    const mapped = mapCrmAccounts({
+      data: [
+        {
+          id: "11111111-1111-4000-8000-000000000001",
+          name: "Head Office",
+          industry: "Government",
+          website: "https://example.gov.in",
+          parentId: null,
+          contactCount: 4,
+        },
+      ],
+    });
+
+    expect(mapped).toEqual([
+      {
+        id: "11111111-1111-4000-8000-000000000001",
+        name: "Head Office",
+        industry: "Government",
+        website: "https://example.gov.in",
+        parentId: null,
+        contactCount: 4,
+      },
+    ]);
+  });
+
+  it("normalises absent optional fields to null and a zero count", () => {
+    const mapped = mapCrmAccounts([{ id: "a", name: "Branch" }]);
+
+    expect(mapped).toEqual([
+      { id: "a", name: "Branch", industry: null, website: null, parentId: null, contactCount: 0 },
+    ]);
+  });
+
+  it("accepts a contact count that arrives as a bigint string", () => {
+    const mapped = mapCrmAccounts([{ id: "a", name: "Branch", contactCount: "12" }]);
+
+    expect(mapped?.[0]?.contactCount).toBe(12);
+  });
+
+  it("skips rows without an id or name", () => {
+    const mapped = mapCrmAccounts([{ id: "a" }, { name: "No id" }, { id: "b", name: "Good" }]);
+
+    expect(mapped).toHaveLength(1);
+    expect(mapped?.[0]?.id).toBe("b");
+  });
+
+  it("returns null when the payload is not a list", () => {
+    expect(mapCrmAccounts({ nope: true })).toBeNull();
+  });
+});
+
+describe("mapCrmAccountNodes", () => {
+  it("keeps only id and name from hierarchy responses", () => {
+    const mapped = mapCrmAccountNodes({ data: [{ id: "a", name: "Parent", industry: "Government" }] });
+
+    expect(mapped).toEqual([{ id: "a", name: "Parent" }]);
+  });
+
+  it("returns null when the payload is not a list", () => {
+    expect(mapCrmAccountNodes(null)).toBeNull();
+  });
+});
 
 describe("getArrayPayload", () => {
   it("returns array directly when input is array", () => {

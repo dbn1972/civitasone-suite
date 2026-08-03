@@ -136,14 +136,21 @@ function getServiceRoutes(routeName) {
 
   for (const entry of moduleDirs) {
     if (!entry.isDirectory()) continue;
-    const routesFile = join(modulesDir, entry.name, 'routes.ts');
-    if (!existsSync(routesFile)) continue;
-    const src = readFileSync(routesFile, 'utf8');
-    let m;
-    while ((m = routeRe.exec(src)) !== null) {
-      routes.push({ method: m[1].toUpperCase(), path: m[2] });
+    const moduleDir = join(modulesDir, entry.name);
+    // Modules may split their routes across several files, plural or singular
+    // (routes.ts, hierarchy-routes.ts, forecast-route.ts, …) — read them all.
+    let moduleFiles;
+    try { moduleFiles = readdirSync(moduleDir); }
+    catch { continue; }
+    for (const file of moduleFiles) {
+      if (!/route(s)?\.ts$/.test(file) || file.endsWith('.test.ts')) continue;
+      const src = readFileSync(join(moduleDir, file), 'utf8');
+      let m;
+      while ((m = routeRe.exec(src)) !== null) {
+        routes.push({ method: m[1].toUpperCase(), path: m[2] });
+      }
+      routeRe.lastIndex = 0;
     }
-    routeRe.lastIndex = 0;
   }
 
   // Also check top-level routes.ts

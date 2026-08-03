@@ -5,7 +5,7 @@ import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
-  listContactsQuery, createAccountBody, idParam, contactsListSchema,
+  listContactsQuery, createAccountBody, idParam, contactsListSchema, accountsListSchema,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -111,7 +111,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    return reply.send({ data: await queries.listAccounts(ctx.tenantId) });
+    sendValidated(reply, accountsListSchema, { data: await queries.listAccounts(ctx.tenantId) });
   });
 
   app.post("/v1/crm/accounts", async (req, reply) => {
