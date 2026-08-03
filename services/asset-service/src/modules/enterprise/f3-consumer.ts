@@ -1,4 +1,3 @@
-// @ts-nocheck — F3 leftover consumer; ops closed over from enterprise routes
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
