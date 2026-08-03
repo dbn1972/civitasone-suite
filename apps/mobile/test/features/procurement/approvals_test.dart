@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:civitasone_mobile/core/providers.dart';
 import 'package:civitasone_mobile/core/sync/sync_database.dart';
+import 'package:civitasone_mobile/core/widgets/skeleton_card.dart';
 import 'package:civitasone_mobile/core/sync/sync_engine.dart';
 import 'package:civitasone_mobile/features/procurement/approvals_screen.dart';
 
@@ -46,13 +49,13 @@ void main() {
 
   group('ApprovalsScreen (Procurement)', () {
     testWidgets('shows skeleton loading while database loads', (tester) async {
-      // Override dbProvider to never resolve (simulates loading)
+      // Override dbProvider with a future that never resolves (simulates
+      // loading) without leaving a pending timer behind.
+      final never = Completer<SyncDatabase>();
+      addTearDown(() => never.complete(mockDb));
       final widget = ProviderScope(
         overrides: [
-          dbProvider.overrideWith((_) => Future.delayed(
-                const Duration(seconds: 10),
-                () => mockDb,
-              )),
+          dbProvider.overrideWith((_) => never.future),
           syncEngineProvider.overrideWithValue(mockEngine),
         ],
         child: const MaterialApp(
@@ -63,8 +66,8 @@ void main() {
       await tester.pumpWidget(widget);
       await tester.pump();
 
-      // SkeletonList should be showing
       expect(find.text('Approvals'), findsOneWidget); // AppBar title
+      expect(find.byType(SkeletonList), findsOneWidget);
     });
 
     testWidgets('shows empty state when no pending approvals', (tester) async {

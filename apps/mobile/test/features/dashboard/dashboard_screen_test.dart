@@ -31,8 +31,10 @@ void main() {
         if (enabledModules != null)
           enabledModulesProvider.overrideWith((_) => Future.value(enabledModules)),
       ],
+      // DashboardScreen is a route body rendered into AppShell's Scaffold, so
+      // the quick-action InkWells need a Material ancestor here too.
       child: const MaterialApp(
-        home: DashboardScreen(),
+        home: Scaffold(body: DashboardScreen()),
       ),
     );
   }
@@ -43,10 +45,24 @@ void main() {
     }
   }
 
+  Future<void> pumpDashboard(
+    WidgetTester tester, {
+    List<String>? enabledModules,
+  }) async {
+    // The dashboard is a lazy ListView roughly 2,000px tall (8 quick actions +
+    // 17 module cards). In the default 800x600 test viewport the module section
+    // is never built at all, so lay it out on a phone-width surface tall
+    // enough to hold the whole screen.
+    await tester.binding.setSurfaceSize(const Size(400, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(buildSubject(enabledModules: enabledModules));
+    await pumpUntilSettled(tester);
+  }
+
   group('DashboardScreen (Main Employee Dashboard)', () {
     testWidgets('renders greeting based on time of day', (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       // Should show some form of greeting
       expect(
@@ -57,8 +73,7 @@ void main() {
 
     testWidgets('renders "What would you like to do today?" prompt',
         (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(
         find.text('What would you like to do today?'),
@@ -67,8 +82,7 @@ void main() {
     });
 
     testWidgets('shows quick action grid items', (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(find.text('Check In'), findsOneWidget);
       expect(find.text('Leave'), findsOneWidget);
@@ -79,15 +93,13 @@ void main() {
     });
 
     testWidgets('shows module section heading', (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(find.text('Modules'), findsOneWidget);
     });
 
     testWidgets('shows module cards with descriptions', (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(find.text('HR & Self-Service'), findsOneWidget);
       expect(find.text('GPS Attendance'), findsOneWidget);
@@ -97,8 +109,7 @@ void main() {
 
     testWidgets('filters modules based on enabled modules list',
         (tester) async {
-      await tester.pumpWidget(buildSubject(enabledModules: ['hrms', 'finance']));
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester, enabledModules: ['hrms', 'finance']);
 
       // HR and Finance should be visible
       expect(find.text('HR & Self-Service'), findsOneWidget);
@@ -110,8 +121,7 @@ void main() {
 
     testWidgets('shows all modules when enabledModules is null (backward compat)',
         (tester) async {
-      await tester.pumpWidget(buildSubject(enabledModules: null));
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester, enabledModules: null);
 
       // All modules should show
       expect(find.text('HR & Self-Service'), findsOneWidget);
@@ -122,15 +132,13 @@ void main() {
 
     testWidgets('uses ListView (not Column) for scrollable content',
         (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(find.byType(ListView), findsOneWidget);
     });
 
     testWidgets('quick actions have InkWell for tap handling', (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       // Verify InkWell widgets exist (one per quick action visible)
       expect(find.byType(InkWell), findsWidgets);
@@ -138,8 +146,7 @@ void main() {
 
     testWidgets('module cards use ListTile with trailing chevron',
         (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       expect(find.byType(ListTile), findsWidgets);
       expect(find.byIcon(Icons.chevron_right), findsWidgets);
@@ -148,8 +155,7 @@ void main() {
     // Accessibility tests
     testWidgets('accessibility: module cards have descriptive subtitle',
         (tester) async {
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
+      await pumpDashboard(tester);
 
       // Check that descriptions exist for screen readers
       expect(

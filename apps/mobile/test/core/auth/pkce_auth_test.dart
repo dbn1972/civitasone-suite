@@ -28,8 +28,13 @@ void main() {
   late PkceAuthService auth;
 
   setUpAll(() {
-    registerFallbackValue(AuthorizationTokenRequest('', ''));
-    registerFallbackValue(TokenRequest('', ''));
+    // flutter_appauth asserts that a request carries an issuer, a discovery URL
+    // or a service configuration, so the fallback values need one too.
+    const issuer = 'https://keycloak.test/realms/civitasone';
+    registerFallbackValue(
+      AuthorizationTokenRequest('client', 'redirect', issuer: issuer),
+    );
+    registerFallbackValue(TokenRequest('client', 'redirect', issuer: issuer));
   });
 
   setUp(() {

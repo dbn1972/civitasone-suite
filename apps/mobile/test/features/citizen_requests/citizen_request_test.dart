@@ -7,7 +7,6 @@ import 'package:civitasone_mobile/core/sync/sync_database.dart';
 import 'package:civitasone_mobile/core/sync/sync_engine.dart';
 import 'package:civitasone_mobile/features/citizen_requests/citizen_requests_screen.dart';
 import 'package:civitasone_mobile/features/citizen_requests/request_filing_screen.dart';
-import 'package:civitasone_mobile/features/citizen_requests/request_detail_screen.dart';
 import 'package:civitasone_mobile/features/citizen_requests/models.dart';
 
 class MockSyncDatabase extends Mock implements SyncDatabase {}

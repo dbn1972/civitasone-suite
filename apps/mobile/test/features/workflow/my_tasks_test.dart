@@ -67,6 +67,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
+      // Drain the mocked response delay so no timer outlives the tree.
+      await tester.pump(const Duration(seconds: 6));
+
       await pumpUntilSettled(tester);
     });
 
@@ -179,10 +182,10 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('All'), findsOneWidget);
-      expect(find.text('Overdue'), findsOneWidget);
-      expect(find.text('Due Today'), findsOneWidget);
-      expect(find.text('Upcoming'), findsOneWidget);
+      expect(find.text('All (0)'), findsOneWidget);
+      expect(find.text('Overdue (0)'), findsOneWidget);
+      expect(find.text('Due Today (0)'), findsOneWidget);
+      expect(find.text('Upcoming (0)'), findsOneWidget);
     });
 
     testWidgets('overdue tasks show red due date indicator', (tester) async {
@@ -236,15 +239,18 @@ void main() {
       expect(find.text('Overdue Task'), findsOneWidget);
       expect(find.text('Future Task'), findsOneWidget);
 
+      // Chip labels carry a count badge, e.g. "Overdue (1)".
+      expect(find.text('All (2)'), findsOneWidget);
+
       // Switch to Overdue filter
-      await tester.tap(find.text('Overdue'));
+      await tester.tap(find.text('Overdue (1)'));
       await tester.pump();
 
       expect(find.text('Overdue Task'), findsOneWidget);
       expect(find.text('Future Task'), findsNothing);
 
       // Switch to Upcoming filter
-      await tester.tap(find.text('Upcoming'));
+      await tester.tap(find.text('Upcoming (1)'));
       await tester.pump();
 
       expect(find.text('Overdue Task'), findsNothing);
@@ -331,8 +337,12 @@ void main() {
       expect(find.text('Complete Task'), findsOneWidget);
       expect(find.textContaining('Review Report'), findsWidgets);
 
-      // Confirm completion
-      await tester.tap(find.widgetWithText(FilledButton, 'Complete'));
+      // Confirm completion — scope to the dialog, the card behind it also has
+      // a FilledButton labelled "Complete".
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Complete'),
+      ));
       await pumpUntilSettled(tester);
 
       verify(() => mockApi.post<dynamic>(
