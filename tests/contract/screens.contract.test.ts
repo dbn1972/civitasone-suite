@@ -4,9 +4,6 @@
  * Runs screen-map.mjs (static analyzer) and asserts:
  *   - Every screen with a loader is WIRED (gateway + route + table all present).
  *
- * This test is intentionally FAILING at baseline (4.5/10). Remediation prompts
- * must fix broken chains until this test goes green.
- *
  * Does NOT require running services — purely static analysis.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -83,6 +80,44 @@ describe('screen contract map', () => {
         `${unwired.length}/${loaderScreens.length} screens not fully wired:\n${details}\n`,
       );
     }
+  });
+
+  it('every loader api path is addressed through the /api gateway prefix', () => {
+    // A path written as "/v1/helpdesk/..." still reaches the service at runtime,
+    // because fetchJson prepends "/api". But no gateway registry prefix matches
+    // it, so the screen's chain cannot be proven and the screen is unverifiable.
+    const offenders = screenMap.rows
+      .flatMap(r => r.apiPaths.map(p => ({ screen: `${r.module}${r.screen}`, path: p })))
+      .filter(e => !e.path.startsWith('/api/'));
+    expect(offenders.map(e => `${e.screen} → ${e.path}`)).toEqual([]);
+  });
+
+  it('no loader api path interpolates a segment without its separator', () => {
+    // `${base}${qs}` where qs carries its own "?" collapses to
+    // "/library/books:param", which matches no registered route. The "?" or "/"
+    // must be literal in the template so the path stays statically resolvable.
+    const offenders = screenMap.rows
+      .flatMap(r => r.apiPaths.map(p => ({ screen: `${r.module}${r.screen}`, path: p })))
+      .filter(e => /[^/]:(?:param|id)\b/.test(e.path));
+    expect(offenders.map(e => `${e.screen} → ${e.path}`)).toEqual([]);
+  });
+
+  it.each([
+    ['estab', '/estab/library', 'getLibraryBooks'],
+    ['estab', '/estab/library/issues', 'getLibraryBooks'],
+    ['estab', '/estab/library/issues', 'getLibraryIssues'],
+    ['helpdesk', '/helpdesk/catalogue', 'getCatalogueOfferings'],
+    ['helpdesk', '/helpdesk/catalogue/[id]', 'getCatalogueOffering'],
+    ['helpdesk', '/helpdesk/catalogue/my-requests', 'getMyServiceRequests'],
+  ])('%s %s stays wired via %s', (module, screen, loader) => {
+    const row = screenMap.rows.find(
+      r => r.module === module && r.screen === screen && r.loaders.includes(loader),
+    );
+    expect(row, `no screen-map row for ${module}${screen} loader=${loader}`).toBeDefined();
+    expect(row!.status).toBe('WIRED');
+    expect(row!.upstream).toBeTruthy();
+    expect(row!.routeHandler).toBeTruthy();
+    expect(row!.tablesPresent).toBe(true);
   });
 
   it('reports wired screen count (informational)', () => {
