@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import type { RequestContext } from "@civitasone/types";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -18,6 +19,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { commandId } from "../src/shared/idempotency.js";
 import { captureHandlers, drainQueue, envelope } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -27,6 +29,15 @@ const SUBJECT_ID = "77777777-dddd-4000-8000-000000000009";
 const CLOSE_DEAL_ID = "77777777-eeee-4000-8000-000000000001";
 const RUN = randomUUID();
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Minimal RequestContext for asserting id derivation without a live request. */
+const baseCtx: RequestContext = {
+  tenantId: TENANT,
+  actorId: ACTOR,
+  actorType: "user",
+  roles: ["crm_user"],
+  correlationId: "corr-idem-scope",
+};
 
 function headers(idempotencyKey?: string): Record<string, string> {
   const h: Record<string, string> = {
@@ -243,5 +254,33 @@ describe("R2 idempotency — POST /v1/crm/deals/:id/close", () => {
         AND payload->>'dealId' = ${CLOSE_DEAL_ID}
     `) as unknown as Array<{ n: number }>;
     expect(events[0]?.n).toBe(1);
+  });
+});
+
+describe("R2 idempotency — tenant scoping of derived ids", () => {
+  const OTHER_TENANT = "bbbbbbbb-2222-4000-8000-000000000077";
+
+  it("derives different ids for two tenants that reuse one client key", () => {
+    // `_inbox.processed` is keyed on message_id alone with no tenant column, so
+    // a shared derivation would let tenant A's command mark tenant B's
+    // redelivery as already processed and silently drop tenant B's write.
+    const key = `${RUN}:cross-tenant`;
+    const a = commandId({ ...baseCtx, tenantId: TENANT, idempotencyKey: key }, COMMANDS.createDeal);
+    const b = commandId({ ...baseCtx, tenantId: OTHER_TENANT, idempotencyKey: key }, COMMANDS.createDeal);
+
+    expect(a).toMatch(UUID_SHAPE);
+    expect(b).toMatch(UUID_SHAPE);
+    expect(a).not.toBe(b);
+  });
+
+  it("stays stable for the same tenant, key and scope", () => {
+    const key = `${RUN}:stable`;
+    const ctx = { ...baseCtx, tenantId: TENANT, idempotencyKey: key };
+    expect(commandId(ctx, COMMANDS.createDeal)).toBe(commandId(ctx, COMMANDS.createDeal));
+  });
+
+  it("separates scopes within one tenant and key", () => {
+    const ctx = { ...baseCtx, tenantId: TENANT, idempotencyKey: `${RUN}:scoped` };
+    expect(commandId(ctx, COMMANDS.createDeal)).not.toBe(commandId(ctx, COMMANDS.createNextAction));
   });
 });
