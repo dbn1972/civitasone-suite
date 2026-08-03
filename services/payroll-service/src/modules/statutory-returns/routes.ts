@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
@@ -124,23 +125,25 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       const totalVariance = unmatched.reduce((acc, r) => acc + BigInt(r.varianceMinor), 0n);
       // Exception: this read-side export performs no entity mutation; the
       // transaction persists only its mandatory audit outbox record.
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-          payload: {
-            service: "payroll",
-            action: "force_file_24q",
-            resourceType: "statutory_return",
-            resourceId: `24Q:${fy}:${q}`,
-            outcome: "forced",
-            fy, quarter: q,
-            varianceMinor: totalVariance.toString(),
-            unreconciledPeriods: unmatched.map((r) => ({
-              period: r.period, status: r.status, varianceMinor: r.varianceMinor,
-            })),
-          },
-        });
+      await queue.publish(AUDIT_TOPIC, {
+        messageId: randomUUID(),
+        type: AUDIT_TOPIC,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        schemaVersion: "1.0",
+        payload: {
+          service: "payroll",
+          action: "force_file_24q",
+          resourceType: "statutory_return",
+          resourceId: `24Q:${fy}:${q}`,
+          outcome: "forced",
+          fy, quarter: q,
+          varianceMinor: totalVariance.toString(),
+          unreconciledPeriods: unmatched.map((r) => ({
+            period: r.period, status: r.status, varianceMinor: r.varianceMinor,
+          })),
+        },
       });
     }
 
