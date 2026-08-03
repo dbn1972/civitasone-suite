@@ -47,6 +47,23 @@ export const COMMANDS = {
   createCustomField: "crm.custom_field.create",
   updateCustomField: "crm.custom_field.update",
   deleteCustomField: "crm.custom_field.delete",
+  // F3 residual — tenders / next-actions / recurring / plans / qbr / capture / campaign-roi
+  createTender: "crm.tender.create",
+  updateTender: "crm.tender.update",
+  changeTenderStage: "crm.tender.stage_change",
+  createNextAction: "crm.next_action.create",
+  completeNextAction: "crm.next_action.complete",
+  createRecurringTask: "crm.recurring_task.create",
+  updateRecurringTask: "crm.recurring_task.update",
+  runRecurringTask: "crm.recurring_task.run",
+  createAccountPlan: "crm.account_plan.create",
+  updateAccountPlan: "crm.account_plan.update",
+  activateAccountPlan: "crm.account_plan.activate",
+  scheduleQbr: "crm.qbr.schedule",
+  completeQbr: "crm.qbr.complete",
+  cancelQbr: "crm.qbr.cancel",
+  matchCapturedActivity: "crm.activity.capture_match",
+  upsertCampaignPerformance: "crm.campaign_performance.upsert",
 } as const;
 
 export const EVENTS = {

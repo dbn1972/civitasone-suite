@@ -85,6 +85,18 @@ export const COMMANDS = {
   tripLogComplete:         "estab.fleet.trip_log.complete",
   vehicleDocCreate:        "estab.fleet.vehicle_doc.create",
   driverRosterCreate:      "estab.fleet.driver_roster.create",
+  // F3 residual — spaces inventory / allotment / maintenance
+  spaceBuildingCreate:     "estab.space.building.create",
+  spaceFloorCreate:        "estab.space.floor.create",
+  spaceRoomCreate:         "estab.space.room.create",
+  spaceSeatCreate:         "estab.space.seat.create",
+  spaceAllotmentRequest:   "estab.space.allotment.request",
+  spaceAllotmentAllot:     "estab.space.allotment.allot",
+  spaceAllotmentOccupy:    "estab.space.allotment.occupy",
+  spaceAllotmentRelease:   "estab.space.allotment.release",
+  spaceAllotmentCancel:    "estab.space.allotment.cancel",
+  spaceMaintenanceCreate:  "estab.space.maintenance.create",
+  spaceMaintenanceStatus:  "estab.space.maintenance.status",
 } as const;
 
 /**

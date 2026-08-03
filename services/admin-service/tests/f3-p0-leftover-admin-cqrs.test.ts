@@ -14,6 +14,7 @@ const TARGETS = [
   "integration-settings/routes.ts",
   "uploads/doc-routes.ts",
   "support/routes.ts",
+  "integration-ops/routes.ts",
 ];
 
 describe("F3 P0 leftover admin CQRS", () => {
