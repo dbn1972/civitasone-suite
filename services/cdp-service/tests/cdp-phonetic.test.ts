@@ -309,6 +309,7 @@ const H = vi.hoisted(() => ({
   findCandidatesMock: vi.fn(),
   profileFindByIdMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -321,7 +322,7 @@ vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqu
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
-  queue: { publish: vi.fn(async () => "m") },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/identity/name-key-repo.js", () => ({
@@ -370,6 +371,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue("m");
   H.upsertMock.mockResolvedValue(undefined);
   H.findByProfileMock.mockResolvedValue(null);
   H.findCandidatesMock.mockResolvedValue([]);
@@ -380,25 +382,36 @@ describe("POST /v1/cdp/identity/name-keys", () => {
   const url = "/v1/cdp/identity/name-keys";
   const payload = { profileId: PROFILE_ID, name: "Shri Rajesh Kumar" };
 
-  it("202 — indexes the name and emits event + audit", async () => {
+  it("202 — publishes name-key index command", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.statusCode).toBe(202);
     expect(r.json().data.phoneticKey).toBe("K560 R220");
     expect(r.json().data.reindexed).toBe(false);
-    expect(H.upsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          op: "name_key_index",
+          profileId: PROFILE_ID,
+          nameNormalized: "rajesh kumar",
+          phoneticKey: "K560 R220",
+        }),
+      }),
+    );
+    expect(H.upsertMock).not.toHaveBeenCalled();
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — stores the normalized name, and the event carries no name", async () => {
+  it("202 — command carries normalized name; response omits raw name", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.statusCode).toBe(202);
-    const row = H.upsertMock.mock.calls[0]?.[1] as { nameNormalized: string };
-    expect(row.nameNormalized).toBe("rajesh kumar");
-    const emitted = JSON.stringify(H.enqueueMock.mock.calls[0]?.[1]);
-    expect(emitted).not.toContain("rajesh kumar");
+    const published = JSON.stringify(H.publishMock.mock.calls[0]?.[1]);
+    expect(published).toContain("rajesh kumar");
+    expect(published).not.toContain("Shri Rajesh Kumar");
+    expect(JSON.stringify(r.json().data)).not.toContain("rajesh kumar");
     await app.close();
   });
 
@@ -409,6 +422,10 @@ describe("POST /v1/cdp/identity/name-keys", () => {
     expect(r.statusCode).toBe(202);
     expect(r.json().data.reindexed).toBe(true);
     expect(r.json().data.id).toBe("dddddddd-1111-4000-8000-000000000001");
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "name_key_index", reindexed: true }) }),
+    );
     await app.close();
   });
 
