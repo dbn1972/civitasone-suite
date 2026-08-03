@@ -7,8 +7,6 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { batchIvrHitsBody, callIdParam } from "./validators.js";
 import { MAX_IVR_HITS_PER_CALL } from "./domain.js";
 import * as repo from "./repo.js";
-import { randomUUID } from "node:crypto";
-import type { IvrHitInsert } from "./schema.js";
 import * as commands from "./commands.js";
 
 const TELEPHONY_ROLES = ["telephony_user", "telephony_supervisor", "telephony_admin", "super_admin"];
@@ -20,6 +18,9 @@ export async function ivrRoutes(app: FastifyInstance): Promise<void> {
     const { id: callId } = callIdParam.parse(req.params);
     const { hits } = batchIvrHitsBody.parse(req.body);
 
+    // Fast fail so a caller learns immediately that the batch cannot fit. The
+    // authoritative check is repeated by the consumer inside the write
+    // transaction, because this count can go stale between accept and apply.
     const currentCount = await repo.countByCall(ctx.tenantId, callId);
     if (currentCount + hits.length > MAX_IVR_HITS_PER_CALL) {
       throw new HttpError(
@@ -29,20 +30,7 @@ export async function ivrRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const startOrdinal = await repo.maxOrdinal(ctx.tenantId, callId);
-    const rows: IvrHitInsert[] = hits.map((hit, idx) => ({
-      id: randomUUID(),
-      tenantId: ctx.tenantId,
-      callId,
-      menuKey: hit.menuKey,
-      digit: hit.digit,
-      timestamp: new Date(hit.timestamp),
-      ordinal: startOrdinal + idx + 1,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    }));
-
-    const accepted = await commands.batchIvrHits(ctx, callId, rows as unknown as Array<Record<string, unknown>>, {
+    const accepted = await commands.batchIvrHits(ctx, callId, hits, {
       inserted: hits.length,
       totalHits: currentCount + hits.length,
     });

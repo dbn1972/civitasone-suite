@@ -12,8 +12,8 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { pino } from "pino";
 import { validateTwilioSignature, validateExotelToken } from "./domain.js";
-import { resolveTenant, DEFAULT_TENANT_ID } from "../did/domain.js";
-import { loadActiveMappings } from "../did/queries.js";
+import { DEFAULT_TENANT_ID } from "../did/domain.js";
+import { resolveTenantForNumber } from "../did/queries.js";
 
 const log = pino({ name: "telephony-webhooks" });
 
@@ -53,11 +53,10 @@ function rejectUnauthorized(reply: FastifyReply): void {
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Resolve the tenant for an inbound call using DID mappings.
-   * Loads active mappings from cache/DB and matches calleeNumber.
+   * The lookup is cached per dialed number and falls back to DEFAULT_TENANT_ID.
    */
   async function resolveCallTenant(calleeNumber: string): Promise<string> {
-    const mappings = await loadActiveMappings();
-    return resolveTenant(calleeNumber, mappings, DEFAULT_TENANT_ID);
+    return resolveTenantForNumber(calleeNumber);
   }
 
   /** Twilio inbound voice webhook — new incoming call */

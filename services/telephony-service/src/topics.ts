@@ -46,4 +46,8 @@ export const RESOURCE = "call";
 export const QUEUE_RESOURCE = "queue";
 export const AGENT_RESOURCE = "agent";
 export const DID_RESOURCE = "did-mapping";
-export const DID_ACTIVE_MAPPINGS_CACHE = "global:did-mappings:active";
+/**
+ * Cache prefix for inbound DID → tenant resolution, keyed by normalised number.
+ * Deliberately tenant-less: the lookup runs before a tenant is known.
+ */
+export const DID_NUMBER_CACHE_PREFIX = "global:did-number:";

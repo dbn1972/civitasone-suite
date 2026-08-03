@@ -4,11 +4,17 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS, DID_RESOURCE, DID_ACTIVE_MAPPINGS_CACHE } from "../../topics.js";
+import { COMMANDS, EVENTS, DID_RESOURCE, DID_NUMBER_CACHE_PREFIX } from "../../topics.js";
 import * as repo from "./repo.js";
+import { normalizeNumber } from "./domain.js";
 import { createDidMappingPayload, deleteDidMappingPayload } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/** Drop the inbound-resolution cache entry for one DID number. */
+async function invalidateNumber(didNumber: string): Promise<void> {
+  await cache.invalidate(`${DID_NUMBER_CACHE_PREFIX}${normalizeNumber(didNumber)}`);
+}
 
 export function registerDidConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
@@ -29,7 +35,7 @@ export function registerDidConsumers(rawQueue: Queue): void {
       });
       await emit(tx, msg, EVENTS.didMappingCreated, { didMappingId: p.id, didNumber: p.didNumber }, "create_did_mapping", p.id);
     });
-    await cache.invalidate(DID_ACTIVE_MAPPINGS_CACHE);
+    await invalidateNumber(p.didNumber);
     await cache.invalidateResource(msg.tenantId, DID_RESOURCE);
   });
 
@@ -37,13 +43,17 @@ export function registerDidConsumers(rawQueue: Queue): void {
     const parsed = deleteDidMappingPayload.safeParse(msg.payload);
     if (!parsed.success) throw new Error(`invalid deleteDidMapping payload: ${parsed.error.message}`);
     const p = parsed.data;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const deleted = await repo.remove(tx, p.id, p.tenantId);
-      if (deleted === 0) return void (await emitAudit(tx, msg, "delete_did_mapping", p.id, "rejected_not_found"));
+    const removedNumber = await db.transaction(async (tx): Promise<string | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null;
+      const removed = await repo.remove(tx, p.id, p.tenantId);
+      if (removed === null) {
+        await emitAudit(tx, msg, "delete_did_mapping", p.id, "rejected_not_found");
+        return null;
+      }
       await emit(tx, msg, EVENTS.didMappingDeleted, { didMappingId: p.id }, "delete_did_mapping", p.id);
+      return removed;
     });
-    await cache.invalidate(DID_ACTIVE_MAPPINGS_CACHE);
+    if (removedNumber !== null) await invalidateNumber(removedNumber);
     await cache.invalidate(cache.makeKey(msg.tenantId, DID_RESOURCE, p.id));
     await cache.invalidateResource(msg.tenantId, DID_RESOURCE);
   });

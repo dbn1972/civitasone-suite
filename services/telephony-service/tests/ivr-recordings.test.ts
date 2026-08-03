@@ -13,6 +13,12 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vites
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db } from "../src/shared/db.js";
+import { ivrHits } from "../src/modules/ivr/schema.js";
+import { recordings } from "../src/modules/recordings/schema.js";
 import type { FastifyInstance } from "fastify";
 
 // Mock @civitasone/storage so we don't need a real S3/MinIO instance.
@@ -38,15 +44,24 @@ function makeToken(roles: string[] = ["telephony_admin", "super_admin"]): string
 let app: FastifyInstance;
 
 beforeAll(async () => {
+  // The IVR write path is queue-first, so the consumers have to be running for
+  // any of these POSTs to reach Postgres.
+  registerConsumersOnce();
   app = await buildApp();
 });
 
 beforeEach(async () => {
-  // Clean up IVR hits and recordings between tests (uses superuser-like access via civitas_admin).
-  // In test env with RLS, we truncate via raw SQL to avoid RLS restrictions.
-  const { db: testDb } = await import("../src/shared/db.js");
-  await testDb.execute(
-    (await import("drizzle-orm")).sql`TRUNCATE telephony.ivr_hits, telephony.recordings`,
+  // Let any batch still in flight from the previous test apply before wiping,
+  // otherwise its rows land after the cleanup and leak into this test.
+  await drainQueue();
+  // Delete only THIS suite's tenant. A `TRUNCATE telephony.ivr_hits` here wiped
+  // every tenant's hits, including rows another test file was mid-way through
+  // asserting on, because vitest runs files in parallel processes.
+  await runWithTenant(TENANT_ID, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(ivrHits).where(eq(ivrHits.tenantId, TENANT_ID));
+      await tx.delete(recordings).where(eq(recordings.tenantId, TENANT_ID));
+    }),
   );
 });
 
@@ -60,7 +75,7 @@ afterAll(async () => {
 describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
   const token = makeToken();
 
-  it("creates IVR hits with valid payload (201)", async () => {
+  it("accepts IVR hits with a valid payload (202) and the consumer persists them", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/telephony/calls/${CALL_ID}/ivr-hits`,
@@ -72,11 +87,19 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
         ],
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.data.callId).toBe(CALL_ID);
     expect(body.data.inserted).toBe(2);
     expect(body.data.totalHits).toBe(2);
+
+    await drainQueue();
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/telephony/calls/${CALL_ID}/ivr-hits`,
+      headers: { authorization: `Bearer ${token}`, "x-tenant-id": TENANT_ID },
+    });
+    expect(read.json().data.map((h: { menuKey: string }) => h.menuKey)).toEqual(["main_menu", "billing"]);
   });
 
   it("assigns ordinals sequentially", async () => {
@@ -92,6 +115,7 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
         ],
       },
     });
+    await drainQueue();
     // Second batch
     await app.inject({
       method: "POST",
@@ -103,6 +127,7 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
         ],
       },
     });
+    await drainQueue();
 
     // Read them back
     const res = await app.inject({
@@ -130,8 +155,10 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
       headers: { authorization: `Bearer ${token}`, "x-tenant-id": TENANT_ID },
       payload: { hits: first49 },
     });
-    expect(fillRes.statusCode).toBe(201);
+    expect(fillRes.statusCode).toBe(202);
     expect(fillRes.json().data.totalHits).toBe(49);
+    // The 422 below is only reachable once those 49 are committed.
+    await drainQueue();
 
     // Try to add 2 more (would exceed 50)
     const overflowRes = await app.inject({
@@ -162,8 +189,17 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
       headers: { authorization: `Bearer ${token}`, "x-tenant-id": TENANT_ID },
       payload: { hits: hits50 },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().data.totalHits).toBe(50);
+
+    await drainQueue();
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/telephony/calls/${callIdBoundary}/ivr-hits`,
+      headers: { authorization: `Bearer ${token}`, "x-tenant-id": TENANT_ID },
+    });
+    expect(read.json().data).toHaveLength(50);
+    expect(read.json().data[49].ordinal).toBe(50);
   });
 
   it("validates DTMF digits (400 on invalid)", async () => {
@@ -264,8 +300,16 @@ describe("POST /v1/telephony/calls/:callId/ivr-hits", () => {
         ],
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().data.inserted).toBe(3);
+
+    await drainQueue();
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/telephony/calls/${callIdSpec}/ivr-hits`,
+      headers: { authorization: `Bearer ${token}`, "x-tenant-id": TENANT_ID },
+    });
+    expect(read.json().data.map((h: { digit: string }) => h.digit)).toEqual(["*", "#", "*9#"]);
   });
 });
 
