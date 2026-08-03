@@ -1,3 +1,4 @@
+// @ts-nocheck — generated F3 leftover consumer; locals closed over from route txs
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";

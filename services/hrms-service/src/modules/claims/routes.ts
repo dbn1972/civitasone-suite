@@ -116,12 +116,12 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     // Ceiling enforcement: approved fare cannot exceed the entitlement.
     const approved = bmin(c.claimedFareMinor, c.entitlementMinor);
-    await publishF3Write(ctx, "claims_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "claims_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedFareMinor: c.claimedFareMinor,
       entitlementMinor: c.entitlementMinor, approvedFareMinor: approved,
       cappedToEntitlement: c.claimedFareMinor > c.entitlementMinor,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/ltc-claims/:claimId/reject", async (req, reply) => {
@@ -131,8 +131,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustLtc(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await publishF3Write(ctx, "claims_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
+    await publishF3Write(ctx, "claims_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: claimId, status: "rejected" })) as any;
   });
 
   // ======================= CEA =======================
@@ -206,12 +206,12 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
     const remaining = c.annualCapMinor - otherCommitted;
     const approved = remaining <= 0n ? 0n : bmin(c.claimedAmountMinor, remaining);
-    await publishF3Write(ctx, "claims_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "claims_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedAmountMinor: c.claimedAmountMinor,
       annualCapMinor: c.annualCapMinor, approvedAmountMinor: approved,
       cappedToAnnualCap: c.claimedAmountMinor > remaining,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/cea-claims/:claimId/reject", async (req, reply) => {
@@ -221,8 +221,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCea(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await publishF3Write(ctx, "claims_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
+    await publishF3Write(ctx, "claims_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: claimId, status: "rejected" })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

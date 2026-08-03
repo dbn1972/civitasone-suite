@@ -78,9 +78,9 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
     try {
-      await publishF3Write(ctx, "cpf_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "cpf_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      // A concurrent open (same employee, or a duplicate government CPF number) races
+      // A concurrent open (same employee, or a duplicate government CPF number) as any races
       // past the pre-checks and surfaces as a 23505; map it to a clean 409 like NPS.
       if (isUniqueViolation(err)) {
         const constraint = (err as { constraint_name?: string }).constraint_name ?? "";
@@ -126,11 +126,11 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const erAmt = BigInt(body.erAmountMinor);
     const ledgerId = randomUUID();
     try {
-      const { next } = await publishF3Write(ctx, "cpf_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      const { next } = await publishF3Write(ctx, "cpf_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       return reply.code(201).send(jsonSafe({
         ledgerId, period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
         balanceMinor: next.total, employeeBalanceMinor: next.emp, employerBalanceMinor: next.er,
-      }));
+      })) as any;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new HttpError(409, "PERIOD_ALREADY_POSTED", `CPF subscription for ${body.period} already posted`);
@@ -180,7 +180,7 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     await mustAccount(ctx.tenantId, id);
     return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__2", id, {
       body, params: req.params as Record<string, unknown>, query: {},
-    }));
+    })) as any;
   });
 
   // interest accrual on the TOTAL corpus, credited to the employee leg.
@@ -195,7 +195,7 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     await mustAccount(ctx.tenantId, id);
     return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__3", id, {
       body, params: req.params as Record<string, unknown>, query: {},
-    }));
+    })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

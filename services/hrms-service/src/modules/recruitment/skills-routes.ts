@@ -38,8 +38,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateSkills(body.skills as Skill[]);
     if (errors.length > 0) throw new HttpError(422, "INVALID_SKILLS", errors.join("; "));
-    await publishF3Write(ctx, "recruitment_skills_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, skills: body.skills.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, skills: body.skills.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/certifications", async (req, reply) => {
@@ -54,8 +54,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateCertifications(body.certifications as Certification[], Date.now());
     if (errors.length > 0) throw new HttpError(422, "INVALID_CERTIFICATIONS", errors.join("; "));
-    await publishF3Write(ctx, "recruitment_skills_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, certifications: body.certifications.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, certifications: body.certifications.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/languages", async (req, reply) => {
@@ -69,8 +69,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateLanguages(body.languages as Language[]);
     if (errors.length > 0) throw new HttpError(422, "INVALID_LANGUAGES", errors.join("; "));
-    await publishF3Write(ctx, "recruitment_skills_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, languages: body.languages.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, languages: body.languages.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/credentials", async (req, reply) => {
@@ -84,8 +84,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateCredentials(body.credentials as Credential[], Date.now());
     if (errors.length > 0) throw new HttpError(422, "INVALID_CREDENTIALS", errors.join("; "));
-    await publishF3Write(ctx, "recruitment_skills_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, credentials: body.credentials.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, credentials: body.credentials.length }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/professional-profile", async (req, reply) => {

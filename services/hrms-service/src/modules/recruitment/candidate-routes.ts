@@ -79,10 +79,10 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     }
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_candidate_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_candidate_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" });
+        return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" }) as any;
       }
       throw err;
     }
@@ -126,8 +126,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const locked = lockedFieldsIn(c.status, requested);
     if (locked.length > 0) throw new HttpError(409, "FIELDS_LOCKED", `these fields are locked after submission: ${locked.join(", ")}`);
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId, ...pick(body) };
-    await publishF3Write(ctx, "recruitment_candidate_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: c.status });
+    await publishF3Write(ctx, "recruitment_candidate_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: c.status }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/education", async (req, reply) => {
@@ -143,8 +143,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await publishF3Write(ctx, "recruitment_candidate_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: eid, candidateId: id });
+    await publishF3Write(ctx, "recruitment_candidate_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/employment", async (req, reply) => {
@@ -160,8 +160,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await publishF3Write(ctx, "recruitment_candidate_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: eid, candidateId: id });
+    await publishF3Write(ctx, "recruitment_candidate_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/education", async (req, reply) => {
@@ -188,8 +188,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     if (submissionRequiresVerification(otpVerificationEnabled(process.env), c.emailVerified)) {
       throw new HttpError(422, "EMAIL_NOT_VERIFIED", "email must be verified (OTP) before the profile can be submitted");
     }
-    await publishF3Write(ctx, "recruitment_candidate_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "submitted", consentVersion: body.consentVersion });
+    await publishF3Write(ctx, "recruitment_candidate_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "submitted", consentVersion: body.consentVersion }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/withdraw", async (req, reply) => {
@@ -198,8 +198,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const c = await mustCand(ctx.tenantId, id);
     if (c.status === "withdrawn") throw new HttpError(409, "ALREADY_WITHDRAWN", "profile is already withdrawn");
-    await publishF3Write(ctx, "recruitment_candidate_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "withdrawn" });
+    await publishF3Write(ctx, "recruitment_candidate_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "withdrawn" }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/data-request", async (req, reply) => {
@@ -207,8 +207,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const c = await mustCand(ctx.tenantId, id);
-    await publishF3Write(ctx, "recruitment_candidate_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, dataRequestRecorded: true });
+    await publishF3Write(ctx, "recruitment_candidate_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, dataRequestRecorded: true }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

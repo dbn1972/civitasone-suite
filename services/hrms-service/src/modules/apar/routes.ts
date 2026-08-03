@@ -120,8 +120,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         "reporting, reviewing and accepting officers must be three distinct people");
     }
     const id = randomUUID();
-    await publishF3Write(ctx, "apar_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "self_pending" });
+    await publishF3Write(ctx, "apar_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "self_pending" }) as any;
   });
 
   // --- stage 1: officer submits self-appraisal -> reporting_officer ---------
@@ -132,8 +132,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "self_pending");
-    await publishF3Write(ctx, "apar_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "reporting_officer" });
+    await publishF3Write(ctx, "apar_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "reporting_officer" }) as any;
   });
 
   // --- stage 2: reporting officer scores + pen-picture -> reviewing_officer -
@@ -152,8 +152,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "reporting_officer");
-    await publishF3Write(ctx, "apar_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "reviewing_officer" });
+    await publishF3Write(ctx, "apar_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "reviewing_officer" }) as any;
   });
 
   // --- stage 3: reviewing officer concurrence/variation -> accepting --------
@@ -172,8 +172,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "reviewing_officer");
-    await publishF3Write(ctx, "apar_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "accepting_authority", decision: body.decision });
+    await publishF3Write(ctx, "apar_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "accepting_authority", decision: body.decision }) as any;
   });
 
   // --- stage 4: accepting authority finalises; grade computed server-side ---
@@ -190,8 +190,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       attribute: s.attribute, weight: Number(s.weight), score: s.score,
     }));
     const grade = computeOverallGrade(scores);
-    await publishF3Write(ctx, "apar_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "disclosed", overallGrade: grade.overallGrade, band: grade.band });
+    await publishF3Write(ctx, "apar_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "disclosed", overallGrade: grade.overallGrade, band: grade.band }) as any;
   });
 
   // --- stage 5: officer files representation (optional) ---------------------
@@ -202,8 +202,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "disclosed");
-    await publishF3Write(ctx, "apar_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "representation" });
+    await publishF3Write(ctx, "apar_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "representation" }) as any;
   });
 
   // --- finalise (HR closes; from disclosed or representation) ---------------
@@ -215,8 +215,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     if (a.status !== "disclosed" && a.status !== "representation") {
       throw new HttpError(409, "WRONG_STAGE", `cannot finalise from '${a.status}'`);
     }
-    await publishF3Write(ctx, "apar_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: "finalised", overallGrade: a.overallGrade, band: a.overallBand });
+    await publishF3Write(ctx, "apar_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "finalised", overallGrade: a.overallGrade, band: a.overallBand }) as any;
   });
 
   // --- read: full APAR with scores + stage history --------------------------

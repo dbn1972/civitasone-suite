@@ -58,10 +58,10 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "RESCHEDULE_PENDING", "a reschedule request is already pending for this interview");
+        throw new HttpError(409, "RESCHEDULE_PENDING", "a reschedule request is already pending for this interview") as any;
       }
       throw err;
     }
@@ -90,9 +90,9 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     if (!canCommunicate(iv.status)) throw new HttpError(409, "INTERVIEW_NOT_COMMABLE", `the interview is '${iv.status}'; it cannot be rescheduled`);
 
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, interviewId: r.interviewId, status: "approved", scheduledDate: r.preferredDate, scheduledTime: r.preferredTime });
@@ -110,9 +110,9 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     if (!isDecidable(r.status)) throw new HttpError(409, "NOT_PENDING", `request is '${r.status}', not pending`);
 
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, status: "declined" });

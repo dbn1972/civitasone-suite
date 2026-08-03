@@ -89,9 +89,9 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, id)) + 1;
     const c = comp(body);
     try {
-    await publishF3Write(ctx, "recruitment_offer_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
+      if (String((err as { code?: string }).code) === "23505") as any throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
       throw err;
     }
     return reply.code(201).send(jsonSafe({ id: offerId, offerNo: `OFR-${offerId.slice(0, 8).toUpperCase()}`, offerVersion: nextVersion, grossCtcMinor: c.grossCtcMinor, status: "draft" }));
@@ -125,8 +125,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const { offerId } = offerParam.parse(req.params);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (!isOfferEditable(o.status)) throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', cannot submit`);
-    await publishF3Write(ctx, "recruitment_offer_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "pending_approval", currentStage: 0 }));
+    await publishF3Write(ctx, "recruitment_offer_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "pending_approval", currentStage: 0 })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/approve", async (req, reply) => {
@@ -141,8 +141,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [role, "super_admin"]);
     if (o.createdBy === ctx.actorId) throw new HttpError(409, "SOD_VIOLATION", "the offer creator cannot approve their own offer");
     const final = isFinalStage(chain, o.currentStage);
-    await publishF3Write(ctx, "recruitment_offer_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: final ? "approved" : "pending_approval", currentStage: final ? o.currentStage : o.currentStage + 1 }));
+    await publishF3Write(ctx, "recruitment_offer_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: final ? "approved" : "pending_approval", currentStage: final ? o.currentStage : o.currentStage + 1 })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/return", async (req, reply) => {
@@ -155,8 +155,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const role = currentStageRole(chain, o.currentStage);
     if (!role) throw new HttpError(409, "NO_STAGE", "no active approval stage");
     requireRole(ctx, [role, "super_admin"]);
-    await publishF3Write(ctx, "recruitment_offer_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "returned" }));
+    await publishF3Write(ctx, "recruitment_offer_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "returned" })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/release", async (req, reply) => {
@@ -166,8 +166,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(req.body ?? {});
     const o = await mustOffer(ctx.tenantId, offerId);
     if (!canRelease(o.status)) throw new HttpError(409, "NOT_APPROVED", `offer is '${o.status}', not approved — cannot release`);
-    await publishF3Write(ctx, "recruitment_offer_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "released" }));
+    await publishF3Write(ctx, "recruitment_offer_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "released" })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/accept", async (req, reply) => {
@@ -179,8 +179,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
     // R-RA-0162: capture acceptance timestamp, the accepted version, and IP/device.
     const meta = { ip: (req.headers["x-forwarded-for"] as string) ?? req.ip, userAgent: req.headers["user-agent"] ?? null, device: body.device ?? null };
-    await publishF3Write(ctx, "recruitment_offer_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "accepted", acceptedVersion: o.offerVersion }));
+    await publishF3Write(ctx, "recruitment_offer_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "accepted", acceptedVersion: o.offerVersion })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/decline", async (req, reply) => {
@@ -190,8 +190,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ reasonCode: z.enum(DECLINE_REASON_CODES), remarks: z.string().max(2000).optional() }).parse(req.body);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
-    await publishF3Write(ctx, "recruitment_offer_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "declined", reasonCode: body.reasonCode }));
+    await publishF3Write(ctx, "recruitment_offer_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "declined", reasonCode: body.reasonCode })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/withdraw", async (req, reply) => {
@@ -201,8 +201,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const o = await mustOffer(ctx.tenantId, offerId);
     if (isTerminal(o.status)) throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', cannot withdraw`);
-    await publishF3Write(ctx, "recruitment_offer_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "withdrawn" }));
+    await publishF3Write(ctx, "recruitment_offer_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "withdrawn" })) as any;
   });
 
   app.post("/v1/hrms/offers/:offerId/expire", async (req, reply) => {
@@ -211,8 +211,8 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const { offerId } = offerParam.parse(req.params);
     const o = await mustOffer(ctx.tenantId, offerId);
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
-    await publishF3Write(ctx, "recruitment_offer_routes__8", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: offerId, status: "expired" }));
+    await publishF3Write(ctx, "recruitment_offer_routes__8", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: offerId, status: "expired" })) as any;
   });
 
   // Revise: a NEW version cloned from an existing offer; the previous becomes
@@ -237,9 +237,9 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const newId = randomUUID();
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, prev.applicationId)) + 1;
     try {
-    await publishF3Write(ctx, "recruitment_offer_routes__9", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_routes__9", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
+      if (String((err as { code?: string }).code) === "23505") as any throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
       throw err;
     }
     return reply.code(201).send(jsonSafe({ id: newId, offerVersion: nextVersion, supersedesOfferId: offerId, grossCtcMinor: c.grossCtcMinor, status: "draft" }));

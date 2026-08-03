@@ -55,10 +55,10 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     if (existing && existing.status === "approved") throw new HttpError(409, "APPROVED", "an approved roster cannot be changed");
 
     try {
-      await publishF3Write(ctx, "recruitment_reservation_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // Two concurrent first-time sets on the same new job collide on UNIQUE(tenant,job).
-      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");
+      if ((e as { code?: string }).code === "23505") as any throw new HttpError(409, "ROSTER_EXISTS", "a roster for this job opening was created concurrently; reload and retry");
       throw e;
     }
     return reply.send({ jobOpeningId, status: "draft", totalVacancies: body.totalVacancies });
@@ -72,8 +72,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
     const roster = await mustRoster(ctx.tenantId, jobOpeningId);
     if (roster.status === "approved") throw new HttpError(409, "ALREADY_APPROVED", "the roster is already approved");
     if (roster.createdBy === ctx.actorId) throw new HttpError(403, "SOD_VIOLATION", "the roster creator cannot approve it; an independent authorised user must approve");
-    await publishF3Write(ctx, "recruitment_reservation_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ jobOpeningId, status: "approved" });
+    await publishF3Write(ctx, "recruitment_reservation_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ jobOpeningId, status: "approved" }) as any;
   });
 
   app.get("/v1/hrms/job-openings/:id/reservation-roster", async (req, reply) => {

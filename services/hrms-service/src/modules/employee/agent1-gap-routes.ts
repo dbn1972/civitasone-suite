@@ -34,8 +34,8 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       fitnessStatus: z.enum(FITNESS_VALUES),
     }).parse(req.body);
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: { id, fitnessStatus: body.fitnessStatus } });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: { id, fitnessStatus: body.fitnessStatus } }) as any;
   });
 
   // ── 0180: Activation gate (mandatory-condition check) ───────────────────────
@@ -76,8 +76,8 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // All conditions met — activate
-    await publishF3Write(ctx, "employee_agent1_gap_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: { id, status: "active" } });
+    await publishF3Write(ctx, "employee_agent1_gap_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: { id, status: "active" } }) as any;
   });
 
   // ── 0195: No-show reversal workflow ─────────────────────────────────────────
@@ -92,8 +92,8 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       revertToStatus: z.enum(["probation", "active"]).default("probation"),
     }).parse(req.body);
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: result });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: result }) as any;
   });
 
   // ── 0227 + 0230: Assign functional/project managers (with cycle detection) ──
@@ -109,8 +109,8 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       message: "at least one manager field must be provided",
     }).parse(req.body);
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: result });
+    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: result }) as any;
   });
 
   // ── 0233: Span-of-control analytics endpoint ────────────────────────────────

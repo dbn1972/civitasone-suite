@@ -83,8 +83,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     if (OBJECTIVE_TYPES.has(entry.qtype)) throw new HttpError(422, "NOT_MANUAL", "objective questions are auto-scored, not manually evaluated");
     if (body.score > entry.marks) throw new HttpError(422, "SCORE_TOO_HIGH", `score cannot exceed the question's ${entry.marks} marks`);
 
-    await publishF3Write(ctx, "recruitment_result_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ attemptId: id, questionId: body.questionId, scored: true });
+    await publishF3Write(ctx, "recruitment_result_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ attemptId: id, questionId: body.questionId, scored: true }) as any;
   });
 
   // ---- consolidate objective + manual -> final score -------------------
@@ -125,8 +125,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     // that no longer matches the score). Recorded explicitly for the auditor.
     const priorMod = (a.moderation ?? {}) as { proposedBy?: string };
     const hadModeration = Boolean(priorMod.proposedBy || a.moderatedBy);
-    await publishF3Write(ctx, "recruitment_result_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ attemptId: id, totalScore: result.totalScore, maxScore: result.maxScore, result: result.result }));
+    await publishF3Write(ctx, "recruitment_result_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ attemptId: id, totalScore: result.totalScore, maxScore: result.maxScore, result: result.result })) as any;
   });
 
   // ---- moderation propose (maker) --------------------------------------
@@ -142,8 +142,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const errors = validateModeration(body as Moderation);
     if (errors.length > 0) throw new HttpError(422, "INVALID_MODERATION", errors.join("; "));
 
-    await publishF3Write(ctx, "recruitment_result_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ attemptId: id, moderation: { method: body.method, factor: body.factor ?? null }, status: "proposed" });
+    await publishF3Write(ctx, "recruitment_result_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ attemptId: id, moderation: { method: body.method, factor: body.factor ?? null }, status: "proposed" }) as any;
   });
 
   // ---- moderation approve + apply (checker, SoD) -----------------------
@@ -171,8 +171,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const moderatedTotal = applyModeration(raw, max, mod as Moderation);
     const result = resultAfterModeration(a.sectionScores as never, { ...(scoring.totalCutoffPct != null ? { totalCutoffPct: scoring.totalCutoffPct } : {}), sections: scoring.sections ?? [] }, moderatedTotal, max);
 
-    await publishF3Write(ctx, "recruitment_result_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ attemptId: id, rawTotalScore: raw, totalScore: moderatedTotal, result }));
+    await publishF3Write(ctx, "recruitment_result_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ attemptId: id, rawTotalScore: raw, totalScore: moderatedTotal, result })) as any;
   });
 
   // ---- authorised freeze (R-RA-0134) -----------------------------------
@@ -188,8 +188,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     // SoD: when a moderation was applied, the person who approved it cannot also
     // perform the irreversible freeze — preserve an independent final sign-off.
     if (a.moderatedBy && a.moderatedBy === ctx.actorId) throw new HttpError(403, "SOD_VIOLATION", "the moderation approver cannot also freeze the result; an independent authorised user must freeze");
-    await publishF3Write(ctx, "recruitment_result_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ attemptId: id, frozen: true });
+    await publishF3Write(ctx, "recruitment_result_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ attemptId: id, frozen: true }) as any;
   });
 
   // ---- publish (only after freeze, R-RA-0134) --------------------------
@@ -200,8 +200,8 @@ export async function assessmentResultRoutes(app: FastifyInstance): Promise<void
     const a = await mustAttempt(ctx.tenantId, id);
     if (!a.frozen) throw new HttpError(409, "NOT_FROZEN", "a result can only be published after it is frozen");
     if (a.published) throw new HttpError(409, "ALREADY_PUBLISHED", "the result is already published");
-    await publishF3Write(ctx, "recruitment_result_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ attemptId: id, published: true, result: a.result });
+    await publishF3Write(ctx, "recruitment_result_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ attemptId: id, published: true, result: a.result }) as any;
   });
 
   // ---- HR result view + audit ------------------------------------------

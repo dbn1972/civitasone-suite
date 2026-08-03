@@ -79,8 +79,8 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "apprentice_stipend_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, apprenticeId: body.apprenticeId, status: "active" });
+    await publishF3Write(ctx, "apprentice_stipend_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, apprenticeId: body.apprenticeId, status: "active" }) as any;
   });
 
   app.get("/v1/hrms/apprenticeships", async (req, reply) => {
@@ -110,8 +110,8 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     if (body.monthlyStipendMinor !== undefined) patch.monthlyStipendMinor = BigInt(body.monthlyStipendMinor);
     if (body.trainingEnd !== undefined) patch.trainingEnd = body.trainingEnd;
     if (body.status !== undefined) patch.status = body.status;
-    await publishF3Write(ctx, "apprentice_stipend_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ id, status: body.status ?? a.status });
+    await publishF3Write(ctx, "apprentice_stipend_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: body.status ?? a.status }) as any;
   });
 
   // ══════════════════ stipend runs ══════════════════
@@ -133,10 +133,10 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
 
     const stipendId = randomUUID();
     try {
-      await publishF3Write(ctx, "apprentice_stipend_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "apprentice_stipend_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`);
+        throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`) as any;
       }
       throw err;
     }
@@ -170,8 +170,8 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const { stipendId } = stipendParam.parse(req.params);
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', not submitted`);
-    await publishF3Write(ctx, "apprentice_stipend_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: stipendId, status: "verified" }));
+    await publishF3Write(ctx, "apprentice_stipend_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: stipendId, status: "verified" })) as any;
   });
 
   app.post("/v1/hrms/apprentice-stipends/:stipendId/approve", async (req, reply) => {
@@ -192,12 +192,12 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
       workingDays: s.workingDays, daysPresent: s.daysPresent,
       napsReimbPctBps: s.napsReimbPctBps, napsReimbCapMinor: s.napsReimbCapMinor,
     });
-    await publishF3Write(ctx, "apprentice_stipend_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apprentice_stipend_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: stipendId, status: "approved", month: s.month,
       grossStipendMinor: stipend.grossStipendMinor, napsReimbMinor: stipend.napsReimbMinor,
       employerCostMinor: stipend.employerCostMinor,
-    }));
+    })) as any;
   });
 
   app.post("/v1/hrms/apprentice-stipends/:stipendId/reject", async (req, reply) => {
@@ -209,8 +209,8 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     if (s.status !== "submitted" && s.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', cannot reject`);
     }
-    await publishF3Write(ctx, "apprentice_stipend_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: stipendId, status: "rejected" }));
+    await publishF3Write(ctx, "apprentice_stipend_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: stipendId, status: "rejected" })) as any;
   });
 
   app.post("/v1/hrms/apprentice-stipends/:stipendId/mark-paid", async (req, reply) => {
@@ -220,8 +220,8 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const s = await mustStipend(ctx.tenantId, stipendId);
     if (s.status !== "approved") throw new HttpError(409, "WRONG_STATE", `stipend is '${s.status}', not approved`);
-    await publishF3Write(ctx, "apprentice_stipend_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send(jsonSafe({ id: stipendId, status: "paid", paymentRef: body.paymentRef }));
+    await publishF3Write(ctx, "apprentice_stipend_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id: stipendId, status: "paid", paymentRef: body.paymentRef })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

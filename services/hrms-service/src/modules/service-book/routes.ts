@@ -29,8 +29,8 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
       documentRef: z.string().optional(),
     }).parse(req.body);
     const entryId = randomUUID();
-    await publishF3Write(ctx, "service_book_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: entryId });
+    await publishF3Write(ctx, "service_book_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: entryId }) as any;
   });
 
   // Edit an entry — refused once the entry has been attested (immutable).

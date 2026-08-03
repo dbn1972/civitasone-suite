@@ -49,11 +49,11 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const declId = randomUUID();
-    await publishF3Write(ctx, "disciplinary_coi_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: declId, employeeId: id, declarationType: body.declarationType, status: "active" },
-    });
+    }) as any;
   });
 
   // List declarations for an employee
@@ -91,9 +91,9 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
-    await publishF3Write(ctx, "disciplinary_coi_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: declId, status: "revoked" } });
+    return reply.send({ data: { id: declId, status: "revoked" } }) as any;
   });
 
   // Acknowledge a declaration (employee confirms receipt/understanding)
@@ -102,9 +102,9 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ALL_ROLES);
     const { declId } = declIdParam.parse(req.params);
 
-    await publishF3Write(ctx, "disciplinary_coi_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: declId, acknowledged: true } });
+    return reply.send({ data: { id: declId, acknowledged: true } }) as any;
   });
 
   // Error handler

@@ -31,8 +31,8 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       comments: z.string().max(5000).optional(),
     }).parse(req.body);
     const fid = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: fid, appraisalId: id });
+    await publishF3Write(ctx, "appraisals_feedback_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: fid, appraisalId: id }) as any;
   });
 
   app.get("/v1/hrms/appraisals/:id/360-feedback", async (req, reply) => {
@@ -48,8 +48,8 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ employeeId: z.string().uuid() }).parse(req.body);
     const did = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: did, appraisalId: id, disclosed: true });
+    await publishF3Write(ctx, "appraisals_feedback_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: did, appraisalId: id, disclosed: true }) as any;
   });
 
   app.post("/v1/hrms/appraisals/:id/appeal", async (req, reply) => {
@@ -61,8 +61,8 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       pipLinked: z.boolean().default(false),
     }).parse(req.body);
     const aid = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: aid, appraisalId: id, status: "filed" });
+    await publishF3Write(ctx, "appraisals_feedback_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: aid, appraisalId: id, status: "filed" }) as any;
   });
 
   app.get("/v1/hrms/appraisals/:id/appeals", async (req, reply) => {

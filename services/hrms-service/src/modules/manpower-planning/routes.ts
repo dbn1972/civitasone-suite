@@ -58,10 +58,10 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = createPlanBody.parse(req.body);
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "manpower_planning_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "manpower_planning_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_PLAN", "a plan already exists for this unit, cadre and year");
+        throw new HttpError(409, "DUPLICATE_PLAN", "a plan already exists for this unit, cadre and year") as any;
       }
       throw err;
     }
@@ -98,8 +98,8 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = updatePlanBody.parse(req.body);
     const plan = await repo.getPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "manpower plan not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be edited");
+    const row = await publishF3Write(ctx, "manpower_planning_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be edited") as any;
     return reply.send({ data: { ...row, ...withVacancy(row) } });
   });
 
@@ -114,8 +114,8 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     if (plan.status !== "draft" && plan.status !== "pending_approval") {
       throw new HttpError(409, "INVALID_STATE", "roster can only be set before approval");
     }
-    await publishF3Write(ctx, "manpower_planning_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: await repo.listRoster(ctx.tenantId, id) });
+    await publishF3Write(ctx, "manpower_planning_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: await repo.listRoster(ctx.tenantId, id) }) as any;
   });
 
   // ── Submit for approval ─────────────────────────────────────────
@@ -125,8 +125,8 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const { id } = idParam.parse(req.params);
     const plan = await repo.getPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "manpower plan not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be submitted for approval");
+    const row = await publishF3Write(ctx, "manpower_planning_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be submitted for approval") as any;
     return reply.send({ id, status: row.status });
   });
 
@@ -145,9 +145,9 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
 
     const vac = withVacancy(plan);
 
-    const result = await publishF3Write(ctx, "manpower_planning_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const result = await publishF3Write(ctx, "manpower_planning_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    if (!result) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be approved");
+    if (!result) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be approved") as any;
     return reply.send({
       id, status: result.approved.status, approvedBy: result.approved.approvedBy,
       requisition: result.requisition, vacancy: vac.vacancy,
@@ -164,8 +164,8 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     if (plan.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "plan rejection requires a checker different from the plan creator");
     }
-    const row = await publishF3Write(ctx, "manpower_planning_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be rejected");
+    const row = await publishF3Write(ctx, "manpower_planning_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be rejected") as any;
     return reply.send({ id, status: row.status });
   });
 
@@ -185,8 +185,8 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = advertiseRequisitionBody.parse(req.body);
     const existing = await repo.getRequisition(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "requisition not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "could not attach advertisement");
+    const row = await publishF3Write(ctx, "manpower_planning_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!row) throw new HttpError(409, "INVALID_STATE", "could not attach advertisement") as any;
     return reply.send({ id, status: row.status, advertisementRef: row.advertisementRef });
   });
 

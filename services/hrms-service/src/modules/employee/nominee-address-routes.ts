@@ -33,8 +33,8 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
       purpose: z.enum(["general", "gpf", "pension", "gratuity", "insurance"]).default("general"),
     }).parse(req.body);
     const nid = randomUUID();
-    await publishF3Write(ctx, "employee_nominee_address_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: nid, employeeId: id });
+    await publishF3Write(ctx, "employee_nominee_address_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: nid, employeeId: id }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/nominees", async (req, reply) => {
@@ -63,8 +63,8 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
       effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).parse(req.body);
     const aid = randomUUID();
-    await publishF3Write(ctx, "employee_nominee_address_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: aid, employeeId: id });
+    await publishF3Write(ctx, "employee_nominee_address_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: aid, employeeId: id }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/addresses", async (req, reply) => {

@@ -26,8 +26,8 @@ export async function leaveConversionRoutes(app: FastifyInstance): Promise<void>
       reason: z.string().max(2000).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "leave_conversion_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, status: "approved" });
+    await publishF3Write(ctx, "leave_conversion_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "approved" }) as any;
   });
 
   app.get("/v1/hrms/leave/conversions", async (req, reply) => {

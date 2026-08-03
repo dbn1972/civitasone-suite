@@ -79,9 +79,9 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
     try {
-      await publishF3Write(ctx, "nps_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "nps_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (isUniqueViolation(err)) throw new HttpError(409, "PRAN_TAKEN", "PRAN already allocated");
+      if (isUniqueViolation(err)) throw new HttpError(409, "PRAN_TAKEN", "PRAN already allocated") as any;
       throw err;
     }
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, pran: body.pran, tier: body.tier }));
@@ -122,12 +122,12 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     const erAmt = BigInt(body.erAmountMinor);
     const ledgerId = randomUUID();
     try {
-      const { prev, next } = await publishF3Write(ctx, "nps_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      const { prev, next } = await publishF3Write(ctx, "nps_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       return reply.code(201).send(jsonSafe({
         ledgerId, period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
         previousBalanceMinor: prev.total, balanceMinor: next.total,
         employeeBalanceMinor: next.emp, employerBalanceMinor: next.er,
-      }));
+      })) as any;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new HttpError(409, "PERIOD_ALREADY_POSTED", `NPS contribution for ${body.period} already posted`);
@@ -148,11 +148,11 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     const acct = await mustAccount(ctx.tenantId, id);
     const amount = BigInt(body.amountMinor);
     const ledgerId = randomUUID();
-    const { prev, next } = await publishF3Write(ctx, "nps_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const { prev, next } = await publishF3Write(ctx, "nps_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send(jsonSafe({
       ledgerId, entryType: "withdrawal", amountMinor: amount,
       previousBalanceMinor: prev.total, balanceMinor: next.total,
-    }));
+    })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

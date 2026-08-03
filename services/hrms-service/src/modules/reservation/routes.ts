@@ -79,8 +79,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       cfUr: z.coerce.number().int().min(0).default(0),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "reservation_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, cadre: body.cadre, rosterSize: body.rosterSize });
+    await publishF3Write(ctx, "reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, cadre: body.cadre, rosterSize: body.rosterSize }) as any;
   });
 
   app.get("/v1/hrms/reservation/rosters", async (req, reply) => {
@@ -139,8 +139,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       pctObc: Number(r.pctObc), pctEws: Number(r.pctEws),
     });
     // Idempotent: clear and re-materialise.
-    await publishF3Write(ctx, "reservation_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ rosterId: rid, points: points.length, data: points });
+    await publishF3Write(ctx, "reservation_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ rosterId: rid, points: points.length, data: points }) as any;
   });
 
   app.get("/v1/hrms/reservation/rosters/:rid/points", async (req, reply) => {
@@ -166,8 +166,8 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       remarks: z.string().max(2000).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "reservation_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id, cadre: body.cadre, sanctionedStrength: body.sanctionedStrength });
+    await publishF3Write(ctx, "reservation_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, cadre: body.cadre, sanctionedStrength: body.sanctionedStrength }) as any;
   });
 
   app.get("/v1/hrms/sanctioned-posts", async (req, reply) => {
