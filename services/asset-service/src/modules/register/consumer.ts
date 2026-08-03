@@ -180,6 +180,16 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
       await cache.invalidateResource(msg.tenantId, "asset");
     }
   });
+
+  queue.subscribe(COMMANDS.assetTagBarcode, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; barcode: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.updateAssetBarcode(tx, p.id, p.tenantId, p.barcode, msg.actorId);
+      await audit(tx, msg, "tag_barcode", "asset", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.id));
+  });
 }
 
 export { DEFAULT_VEHICLE_CATEGORY, makeBarcode };

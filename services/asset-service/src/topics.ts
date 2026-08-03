@@ -1,5 +1,6 @@
 export const COMMANDS = {
   assetCreate:          "asset.asset.create",
+  assetTagBarcode:      "asset.asset.tag_barcode",
   assetTransfer:        "asset.asset.transfer",
   assetDispose:         "asset.asset.dispose",
   disposalSubmitApproval: "asset.disposal.submit_approval",

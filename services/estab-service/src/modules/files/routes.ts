@@ -12,11 +12,29 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { randomUUID } from "node:crypto";
 import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret } from "./domain.js";
-import { enqueue } from "../../shared/outbox.js";
-import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { isMoveAllowed, isAccessAllowed } from "../operators/eligibility.js";
+
+const AUDIT_TOPIC = "audit.event.record";
+
+async function publishFileAccessAudit(
+  ctx: { tenantId: string; actorId: string; correlationId: string },
+  payload: Record<string, unknown>,
+): Promise<void> {
+  // Queue-first audit side-effect — no Postgres write in the GET handler (F3).
+  await queue.publish(AUDIT_TOPIC, {
+    messageId: randomUUID(),
+    type: AUDIT_TOPIC,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { service: "estab", ...payload },
+  });
+}
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
@@ -256,22 +274,22 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     // is below the file's classification (once the tenant adopts the operator
     // model). The denial itself is audited.
     if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: "audit.event.record", eventType: "audit.event.record",
-          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-          payload: { service: "estab", action: "access_denied_clearance", resourceType: "file", resourceId: id, outcome: "denied", classification: file.classification },
-        });
+      await publishFileAccessAudit(ctx, {
+        action: "access_denied_clearance",
+        resourceType: "file",
+        resourceId: id,
+        outcome: "denied",
+        classification: file.classification,
       });
       throw new HttpError(403, "FORBIDDEN", "insufficient security clearance for this file's classification");
     }
     if (isTopSecret(file.classification)) {
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: "audit.event.record", eventType: "audit.event.record",
-          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-          payload: { service: "estab", action: "read_top_secret", resourceType: "file", resourceId: id, outcome: "success", breakGlass: true },
-        });
+      await publishFileAccessAudit(ctx, {
+        action: "read_top_secret",
+        resourceType: "file",
+        resourceId: id,
+        outcome: "success",
+        breakGlass: true,
       });
     }
     return reply.send(file);
