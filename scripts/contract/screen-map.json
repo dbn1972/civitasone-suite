@@ -1836,6 +1836,51 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/health/[accountId]",
+      "loaders": [
+        "getAccountHealthBreakdown"
+      ],
+      "apiPaths": [
+        "/api/v1/recommendations/health/:param/breakdown"
+      ],
+      "upstream": "recommendations → /v1/recommendations/health/:param/breakdown",
+      "routeHandler": "/v1/recommendations/health/:accountId/breakdown",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/health",
+      "loaders": [
+        "getAccountHealthWatchlist"
+      ],
+      "apiPaths": [
+        "/api/v1/recommendations/health/at-risk"
+      ],
+      "upstream": "recommendations → /v1/recommendations/health/at-risk",
+      "routeHandler": "/v1/recommendations/health/:accountId",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/health",
+      "loaders": [
+        "getCrmAccounts"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/accounts"
+      ],
+      "upstream": "crm → /v1/crm/accounts",
+      "routeHandler": "/v1/crm/accounts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
       "screen": "/crm",
       "loaders": [],
       "apiPaths": [],
@@ -7935,7 +7980,7 @@
     }
   ],
   "counts": {
-    "wired": 204,
+    "wired": 207,
     "missing": 0,
     "mismatch": 0,
     "noLoader": 443

@@ -14,6 +14,8 @@ import type {
   CRMDealSummary,
   CRMDashboard,
   CRMForecast,
+  AccountHealthEntry,
+  AccountHealthBreakdown,
   DealSummary,
   ContactDetail,
   CRMActivityEntry,
@@ -175,6 +177,8 @@ import {
   crmDealsListSchema,
   crmActivitiesListSchema,
   crmForecastSchema,
+  accountHealthWatchlistSchema,
+  accountHealthBreakdownSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
@@ -2334,6 +2338,39 @@ export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[
     telemetryKey: "crm.pipeline.deals",
     mapResponse: mapPipelineDeals,
   });
+}
+
+/**
+ * Accounts scored at risk or critical by recommendation-service, worst first.
+ * Account names are not part of this payload — the health screen joins them
+ * from getCrmAccounts, since the two domains live in different services.
+ */
+export async function getAccountHealthWatchlist(): Promise<LoaderResult<AccountHealthEntry[]>> {
+  return fetchJson("/api/v1/recommendations/health/at-risk?limit=100", [] as AccountHealthEntry[], {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.health.watchlist",
+    responseSchema: accountHealthWatchlistSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
+/**
+ * Health breakdown for one account. Returns null when the account has never
+ * been scored — a 404 here is an expected state, not a failure.
+ */
+export async function getAccountHealthBreakdown(
+  accountId: string,
+): Promise<LoaderResult<AccountHealthBreakdown | null>> {
+  return fetchJson(
+    `/api/v1/recommendations/health/${accountId}/breakdown`,
+    null as AccountHealthBreakdown | null,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "crm.health.breakdown",
+      responseSchema: accountHealthBreakdownSchema,
+      mapResponse: (payload) => payload.data,
+    },
+  );
 }
 
 const CRM_FORECAST_EMPTY: CRMForecast = { totalForecastMinor: "0", dealCount: 0, stages: [] };

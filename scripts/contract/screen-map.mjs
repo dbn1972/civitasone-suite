@@ -100,6 +100,7 @@ const SERVICE_DIR_MAP = {
   'knowledge': 'knowledge-service',
   'workflow': 'workflow-service',
   'analytics': 'analytics-service',
+  'recommendations': 'recommendation-service',
   'locations': 'location-service',
   'tenant': 'tenant-service',
   'sync': 'identity-service',
