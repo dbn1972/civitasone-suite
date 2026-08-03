@@ -10,6 +10,13 @@
  *
  * DLQ safety: malformed payloads and transitions that are illegal from the
  * recorded state are NonRetryableError; retrying them can never succeed.
+ *
+ * P1-6: a rule whose action means "opt out" now WITHDRAWS CONSENT instead of only
+ * being written to `inbound_auto_responses.action` as text. Before this, a
+ * recipient who replied STOP was told they had been unsubscribed, the string
+ * "opt_out" was stored, an event was emitted that nothing consumed — and the next
+ * marketing send to them was still delivered, because no code path had ever
+ * turned an inbound message into a recorded refusal.
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
@@ -21,7 +28,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
-import { matchKeywordRule, planAutoResponse, type MatchType } from "./keyword-domain.js";
+import { isOptOutAction, matchKeywordRule, planAutoResponse, type MatchType } from "./keyword-domain.js";
 import {
   applyHandoffTransition,
   isHandoffState,
@@ -31,6 +38,16 @@ import {
   type HandoffState,
 } from "./handoff-domain.js";
 import * as repo from "./keyword-repo.js";
+/**
+ * P1-6: the opt-out is recorded on `bounces.suppression_list` because that is the
+ * ONE consent signal the send gate reads by recipient ADDRESS. `templates.prefs`
+ * is keyed by `user_id uuid` and an inbound SMS carries only a phone number, so a
+ * pref row can never be located for it (`asUserUuid()` resolves a non-uuid to
+ * null and the gate then loads no prefs at all). Same cross-module boundary the
+ * send path itself already crosses in `deliveries/consent-gate-io.ts`, for the
+ * same reason and with the same table.
+ */
+import * as suppressionRepo from "../bounces/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "consumer:inbox" });
@@ -156,6 +173,7 @@ export function registerInboxConsumers(q: Queue): void {
     }
 
     let reply: { body: string; ruleId: string } | null = null;
+    let optedOut = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rules = await repo.findEnabledRulesInTx(tx, p.tenantId);
@@ -181,6 +199,53 @@ export function registerInboxConsumers(q: Queue): void {
         reply = { body: plan.body, ruleId: plan.ruleId };
       }
 
+      // P1-6: apply the consent withdrawal in the SAME transaction as the
+      // auto-response row. Doing it asynchronously would leave a window in which
+      // a campaign fan-out still saw the sender as consenting, and a consent
+      // decision that is only eventually applied is a consent decision that can
+      // be missed. Idempotent: `upsertSuppression` conflicts on
+      // (tenant_id, recipient_hash), so a resent STOP refreshes one row.
+      if ("action" in plan && isOptOutAction(plan.action)) {
+        await suppressionRepo.upsertSuppression(tx, {
+          tenantId: p.tenantId,
+          recipient: p.from,        // PII — encrypted by the column type
+          recipientHash: senderHash,
+          channel: p.channel,
+          reason: "unsubscribe",
+          source: "inbound",
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+          version: 1,
+        });
+        optedOut = true;
+        await enqueue(tx, {
+          topic: EVENTS.consentOptedOut,
+          eventType: EVENTS.consentOptedOut,
+          tenantId: p.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            ruleId: plan.ruleId, channel: p.channel,
+            reason: "unsubscribe", source: "inbound", recipientHash: senderHash,
+          },
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: p.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            service: "notification", action: "opt_out", resourceType: "suppression",
+            // The blind index, not the address: stable across a repeated STOP
+            // (the upsert keeps the original row id) and not reversible.
+            resourceId: senderHash,
+            outcome: "success", channel: p.channel, reason: "unsubscribe",
+            source: "inbound", ruleId: plan.ruleId,
+          },
+        });
+      }
+
       await enqueue(tx, {
         topic: EVENTS.keywordAutoResponded,
         eventType: EVENTS.keywordAutoResponded,
@@ -204,6 +269,13 @@ export function registerInboxConsumers(q: Queue): void {
         body: planned.body,
       });
       log.info({ ruleId: planned.ruleId, channel: p.channel }, "keyword auto-response queued");
+    }
+    if (optedOut) {
+      // No sender address in the log line — the blind index identifies the row.
+      log.info(
+        { channel: p.channel, recipientHash: blindIndex(p.from) },
+        "inbound opt-out recorded - recipient suppressed",
+      );
     }
   });
 

@@ -135,3 +135,38 @@ export function planAutoResponse(match: KeywordMatch | null): AutoResponsePlan {
   // so we never record an auto-response that had no effect.
   return { kind: "none" };
 }
+
+/**
+ * P1-6 — recognising the action that WITHDRAWS consent.
+ *
+ * `keyword_rules.action` is free-form operator text (varchar(40), no CHECK), so
+ * matching it by `===` would make the opt-out depend on the exact spelling an
+ * operator happened to type. A rule configured as "OPT-OUT" or "Unsubscribe"
+ * expresses the same decision as "opt_out" and must not silently degrade into a
+ * reply-only rule — a missed opt-out is the one failure mode this path exists to
+ * prevent.
+ *
+ * The alias list is deliberately short and explicit rather than fuzzy: it holds
+ * only unambiguous spellings of "stop messaging me". "escalate_to_human" and any
+ * other action must NOT match, or a handoff request would suppress the sender.
+ */
+const OPT_OUT_ACTION_ALIASES = new Set(["opt_out", "optout", "unsubscribe"]);
+
+/**
+ * Canonical form of a rule action: lowercased, with every run of non-alphanumeric
+ * characters folded to a single `_` and the ends trimmed. "OPT-OUT", "opt out"
+ * and "opt_out" all normalise to "opt_out".
+ */
+export function normalizeAction(action: string): string {
+  return action
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/** Does this rule action mean "record a consent withdrawal for the sender"? */
+export function isOptOutAction(action: string | null | undefined): boolean {
+  if (typeof action !== "string") return false;
+  return OPT_OUT_ACTION_ALIASES.has(normalizeAction(action));
+}
