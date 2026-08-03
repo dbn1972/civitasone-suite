@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type {
   AccountSummary,
   AppraisalSummary,
@@ -12,6 +13,7 @@ import type {
   CRMContactSummary,
   CRMDealSummary,
   CRMDashboard,
+  CRMForecast,
   DealSummary,
   ContactDetail,
   CRMActivityEntry,
@@ -172,6 +174,7 @@ import {
   crmContactsListSchema,
   crmDealsListSchema,
   crmActivitiesListSchema,
+  crmForecastSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
@@ -2331,6 +2334,40 @@ export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[
     telemetryKey: "crm.pipeline.deals",
     mapResponse: mapPipelineDeals,
   });
+}
+
+const CRM_FORECAST_EMPTY: CRMForecast = { totalForecastMinor: "0", dealCount: 0, stages: [] };
+
+const CRM_FORECAST_OPTIONS = {
+  revalidateSeconds: 30,
+  telemetryKey: "crm.forecast",
+  responseSchema: crmForecastSchema,
+  mapResponse: (payload: z.infer<typeof crmForecastSchema>): CRMForecast => ({
+    totalForecastMinor: payload.data.totalForecast,
+    dealCount: payload.data.dealCount,
+    stages: payload.data.stages.map((stage) => ({
+      stageId: stage.stageId,
+      stageName: stage.stageName,
+      probability: stage.probability,
+      weightedTotalMinor: stage.weightedTotal,
+    })),
+  }),
+};
+
+/**
+ * Weighted revenue forecast for active deals, optionally scoped to one pipeline.
+ * The total is recomputed server-side from that pipeline's stage probabilities,
+ * so the filter is a query parameter rather than a client-side narrowing.
+ */
+export async function getCrmForecast(pipelineId?: string): Promise<LoaderResult<CRMForecast>> {
+  if (pipelineId) {
+    return fetchJson(
+      `/api/v1/crm/forecast?pipelineId=${encodeURIComponent(pipelineId)}`,
+      CRM_FORECAST_EMPTY,
+      CRM_FORECAST_OPTIONS,
+    );
+  }
+  return fetchJson("/api/v1/crm/forecast", CRM_FORECAST_EMPTY, CRM_FORECAST_OPTIONS);
 }
 
 export async function getContactById(id: string): Promise<LoaderResult<ContactDetail | null>> {

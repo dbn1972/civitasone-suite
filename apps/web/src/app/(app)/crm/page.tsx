@@ -8,6 +8,7 @@ const crmTiles: NavTile[] = [
 	{ title: "Contacts", href: "/crm/contacts" },
 	{ title: "Deals", href: "/crm/deals" },
 	{ title: "Pipeline Board", href: "/crm/pipeline" },
+	{ title: "Revenue Forecast", href: "/crm/forecast" },
 	{ title: "Activities", href: "/crm/activities" },
 ];
 

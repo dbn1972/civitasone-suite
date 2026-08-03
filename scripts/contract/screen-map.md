@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-08-03T19:42:40.727Z
+Generated: 2026-08-03T19:45:25.579Z
 
-**Summary:** 202 WIRED | 0 MISSING | 0 MISMATCH | 443 NO_LOADER
+**Summary:** 204 WIRED | 0 MISSING | 0 MISMATCH | 443 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -154,6 +154,8 @@ Generated: 2026-08-03T19:42:40.727Z
 | crm | /crm/deals/[id] | getDealById | /api/v1/crm/deals/:param | crm → /v1/crm/deals/:param | ✓ `/v1/crm/deals/:id` | ✓ | ✅ WIRED |
 | crm | /crm/deals/new | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/deals | getDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
+| crm | /crm/forecast | getCrmForecast | /api/v1/crm/forecast | crm → /v1/crm/forecast | ✓ `/v1/crm/forecast` | ✓ | ✅ WIRED |
+| crm | /crm/forecast | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
 | crm | /crm | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/pipeline | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
 | crm | /crm/pipeline | getPipelineDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
