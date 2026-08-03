@@ -55,7 +55,8 @@ export function registerTemplateConsumers(q: Queue): void {
 
   q.subscribe<{
     id: string; tenantId: string; userId: string; eventType: string;
-    inApp: boolean; email: boolean; push: boolean; sms?: boolean; whatsapp?: boolean;
+    inApp: boolean; email: boolean; push: boolean;
+    sms?: boolean | null; whatsapp?: boolean | null;
   }>(
     COMMANDS.setPrefs, async (msg) => {
       const p = msg.payload;
@@ -67,9 +68,10 @@ export function registerTemplateConsumers(q: Queue): void {
         await repo.upsertPrefs(tx, {
           id: p.id, tenantId: p.tenantId, userId: p.userId, eventType: p.eventType,
           inApp: p.inApp, email: p.email, push: p.push,
-          // A command from an older producer omits the commercial channels; the
-          // fail-closed default (no consent) is the only safe interpretation.
-          sms: p.sms ?? false, whatsapp: p.whatsapp ?? false,
+          // A command from an older producer omits the commercial channels. That
+          // is "no choice recorded" (null), NOT an opt-out: recording a refusal
+          // the recipient never made would block their transactional SMS too.
+          sms: p.sms ?? null, whatsapp: p.whatsapp ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
         });
         await emitAudit(tx, msg, EVENTS.prefSet, { userId: p.userId, eventType: p.eventType }, "set_prefs", p.id);
@@ -80,7 +82,8 @@ export function registerTemplateConsumers(q: Queue): void {
 
   q.subscribe<{
     id: string; tenantId: string; prefId: string;
-    inApp?: boolean; email?: boolean; push?: boolean; sms?: boolean; whatsapp?: boolean;
+    inApp?: boolean; email?: boolean; push?: boolean;
+    sms?: boolean | null; whatsapp?: boolean | null;
   }>(
     COMMANDS.updatePrefs, async (msg) => {
       let changed = 0;

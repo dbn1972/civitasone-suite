@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { encryptPii, blindIndex } from "../src/shared/pii-crypto.js";
-import { emailAdapter } from "../src/adapters/index.js";
+import { emailAdapter, smsAdapter } from "../src/adapters/index.js";
 import {
   registerDeliveryConsumers,
   setConsentLookupForTests,
@@ -72,14 +72,21 @@ async function seedActiveDndWindow(userId: string): Promise<void> {
             'UTC', ${sql.json(["mon", "tue", "wed", "thu", "fri", "sat", "sun"])}, true, ${SYSTEM}, ${SYSTEM})`);
 }
 
+/**
+ * Seed one pref row. `sms`/`whatsapp` are tri-state (migration 0031) and default
+ * to NULL here — "no choice recorded", which is what a real recipient who has
+ * never opened the preferences screen looks like. Pass `false` explicitly to
+ * record an opt-out.
+ */
 async function seedPref(userId: string, eventType: string, channels: {
-  inApp?: boolean; email?: boolean; push?: boolean; sms?: boolean; whatsapp?: boolean;
+  inApp?: boolean; email?: boolean; push?: boolean;
+  sms?: boolean | null; whatsapp?: boolean | null;
 }): Promise<void> {
   await sqlAsTenant((sql) => sql`
     INSERT INTO templates.prefs (id, tenant_id, user_id, event_type, in_app, email, push, sms, whatsapp, created_by, updated_by)
     VALUES (${randomUUID()}, ${TENANT}, ${userId}, ${eventType},
             ${channels.inApp ?? false}, ${channels.email ?? false}, ${channels.push ?? false},
-            ${channels.sms ?? false}, ${channels.whatsapp ?? false}, ${SYSTEM}, ${SYSTEM})`);
+            ${channels.sms ?? null}, ${channels.whatsapp ?? null}, ${SYSTEM}, ${SYSTEM})`);
 }
 
 type DeliveryRow = { status: string; channel: string; next_retry_at: string | null };
@@ -119,15 +126,18 @@ async function send(payload: Record<string, unknown>): Promise<void> {
 }
 
 let sendSpy: ReturnType<typeof vi.spyOn>;
+let smsSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
   await cleanup();
   await seedTemplate();
   sendSpy = vi.spyOn(emailAdapter, "send");
+  smsSpy = vi.spyOn(smsAdapter, "send");
 });
 
 afterEach(async () => {
   sendSpy.mockRestore();
+  smsSpy.mockRestore();
   resetConsentLookup();
   await cleanup();
 });
@@ -323,6 +333,145 @@ describe("R1 gate (consumer) — per-channel consent", () => {
     });
     expect((await deliveriesFor(recipientId))[0]?.status).toBe("delivered");
     expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Regression for the High defect introduced by the first cut of the R1 gate
+ * (PR #417, merged as 77888af): the TRAI/DLT "no opt-in recorded → refuse"
+ * rule was applied to EVERY send instead of marketing only. A transactional
+ * `channel: "sms"` to a recipient with no pref row had SMS stripped from the
+ * attempt list and fell through to the email fallback — which then handed a
+ * phone number to the email adapter as the address.
+ *
+ * Real traffic that broke: court-service login OTP SMS and visitor-service
+ * emergency evacuation SMS.
+ */
+describe("R1 gate — TRANSACTIONAL sms/whatsapp must not require a marketing opt-in", () => {
+  // The sms adapter fails closed without Twilio credentials (`stub` driver), and
+  // a failed adapter falls back to email — which would mask the very routing
+  // decision under test. Stand in for a configured provider so these assertions
+  // are about the GATE's channel selection and nothing else.
+  beforeEach(() => {
+    smsSpy.mockResolvedValue({ ok: true });
+  });
+
+  it("a transactional sms to a phone-number recipient with NO pref row is delivered on sms", async () => {
+    const recipientId = randomUUID();
+    const phone = "+919812345670";
+
+    await send({
+      templateId: TEMPLATE, recipient: phone, recipientId,
+      eventType: "gate.transactional.sms", channel: "sms",
+    });
+
+    const rows = await deliveriesFor(recipientId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("delivered");
+    // The whole point: sms, NOT the email fallback.
+    expect(rows[0]?.channel).toBe("sms");
+    expect(smsSpy).toHaveBeenCalledTimes(1);
+    // A phone number must never be handed to the email adapter as an address.
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(smsSpy.mock.calls[0]?.[0]).toMatchObject({ recipient: phone });
+  });
+
+  it("court-service login OTP SMS reaches the sms adapter", async () => {
+    const recipientId = randomUUID();
+    await send({
+      templateId: TEMPLATE, recipient: "+919812345671", recipientId,
+      eventType: "court.login.otp", channel: "sms",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("sms");
+    expect(smsSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("visitor-service emergency evacuation SMS reaches the sms adapter", async () => {
+    const recipientId = randomUUID();
+    await send({
+      templateId: TEMPLATE, recipient: "+919812345672", recipientId,
+      eventType: "visitor.emergency.evacuation", channel: "sms",
+      category: "transactional",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("sms");
+    expect(smsSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("a pref row that records NO sms choice does not block a transactional sms", async () => {
+    const recipientId = randomUUID();
+    // The recipient configured email; the sms column stays NULL (never asked).
+    await seedPref(recipientId, "gate.tri.null", { email: true });
+
+    await send({
+      templateId: TEMPLATE, recipient: "+919812345673", recipientId,
+      eventType: "gate.tri.null", channel: "sms",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("sms");
+    expect(smsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("an EXPLICIT sms opt-out still blocks a transactional sms and falls back to email", async () => {
+    const recipientId = randomUUID();
+    await seedPref(recipientId, "gate.tri.optout", { email: true, sms: false });
+
+    await send({
+      templateId: TEMPLATE, recipient: "optout@dept.gov.in", recipientId,
+      eventType: "gate.tri.optout", channel: "sms",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("email");
+    expect(smsSpy).not.toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a MARKETING sms with no recorded opt-in is still refused on sms (TRAI/DLT intact)", async () => {
+    const recipientId = randomUUID();
+    setConsentLookupForTests(async () => "granted");
+
+    await send({
+      templateId: TEMPLATE, recipient: "marketing@dept.gov.in", recipientId,
+      eventType: "marketing.offer", channel: "sms", category: "marketing",
+    });
+
+    // CRM said yes to marketing, but the commercial CHANNEL was never opted in,
+    // so sms is dropped from the attempt list and only the email fallback runs.
+    expect(smsSpy).not.toHaveBeenCalled();
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("email");
+  });
+
+  it("a MARKETING sms with no recorded opt-in AND no other consented channel is skipped", async () => {
+    const recipientId = randomUUID();
+    setConsentLookupForTests(async () => "granted");
+    // Email refused, sms never opted in → nothing left to attempt.
+    await seedPref(recipientId, "marketing.offer.none", { email: false, sms: null });
+
+    await send({
+      templateId: TEMPLATE, recipient: "+919812345674", recipientId,
+      eventType: "marketing.offer.none", channel: "sms", category: "marketing",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.status).toBe("skipped");
+    expect(smsSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("a MARKETING sms IS delivered once the recipient opted in to the channel", async () => {
+    const recipientId = randomUUID();
+    setConsentLookupForTests(async () => "granted");
+    await seedPref(recipientId, "marketing.offer.ok", { sms: true });
+
+    await send({
+      templateId: TEMPLATE, recipient: "+919812345675", recipientId,
+      eventType: "marketing.offer.ok", channel: "sms", category: "marketing",
+    });
+
+    expect((await deliveriesFor(recipientId))[0]?.channel).toBe("sms");
+    expect(smsSpy).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -9,7 +9,13 @@
  *
  * The gate is *fail closed*. When a required consent signal cannot be
  * established (CRM unreachable, contact not found, no recorded opt-in on a
- * commercial channel) the send is refused, not attempted.
+ * commercial channel for a MARKETING send) the send is refused, not attempted.
+ *
+ * "Required" is the load-bearing word. Consent requirements differ by purpose:
+ * a marketing SMS needs a recorded opt-in, a login OTP or an evacuation alert
+ * does not — refusing those is not caution, it is an outage. So the strict
+ * commercial-channel rule is conditional on `marketing.required`, while an
+ * explicit opt-out (`false`) is honoured on every send regardless of purpose.
  *
  * Evaluation order — terminal refusals first, deferral last, so we never park a
  * message in the DND hold table that we would have refused anyway:
@@ -26,18 +32,32 @@
  */
 import type { DndDecision } from "../dnd/domain.js";
 
-/** The consent-bearing subset of a `templates.prefs` row. */
+/**
+ * The consent-bearing subset of a `templates.prefs` row.
+ *
+ * The commercial channels are TRI-STATE (migration 0031): `null` means the
+ * recipient has never expressed a choice, which is not the same fact as `false`
+ * (they refused). Collapsing the two is what made the gate refuse transactional
+ * SMS.
+ */
 export type ConsentPref = {
   eventType: string;
   inApp: boolean;
   email: boolean;
   push: boolean;
-  sms: boolean;
-  whatsapp: boolean;
+  sms: boolean | null;
+  whatsapp: boolean | null;
 };
 
 /** Result of the CRM `marketing_consent` lookup. `unknown` fails closed. */
 export type MarketingConsent = "granted" | "denied" | "unknown";
+
+/**
+ * The CRM verdict as the gate receives it. `deferred` means "this IS a marketing
+ * send, but a later stage performs the CRM lookup" — used by the bulk fan-out,
+ * which runs inside a transaction and must not make an outbound HTTP call.
+ */
+export type GateMarketingConsent = MarketingConsent | "deferred";
 
 export type SkipReason =
   | "recipient_suppressed"
@@ -66,9 +86,10 @@ export type GateInput = {
   /**
    * Whether this send is a commercial/marketing message, and the CRM consent
    * that was looked up for it. `required: false` means a transactional send —
-   * CRM marketing consent does not apply and is not consulted.
+   * CRM marketing consent does not apply and is not consulted, and the
+   * commercial channels do not demand a recorded opt-in.
    */
-  marketing: { required: boolean; consent: MarketingConsent };
+  marketing: { required: boolean; consent: GateMarketingConsent };
 };
 
 const CHANNEL_CONSENT_FIELD: Record<string, keyof ConsentPref> = {
@@ -80,18 +101,30 @@ const CHANNEL_CONSENT_FIELD: Record<string, keyof ConsentPref> = {
 };
 
 /**
- * Channels that may be used when the recipient has no pref row at all.
+ * Channels a recipient is presumed to accept when they have expressed no choice.
  *
- * `email`/`in_app`/`push` are the transactional channels a government
- * recipient is expected to receive on (a payslip, an approval, an OTP) and
- * pre-date the prefs table, so absence of a row means "no preference
- * expressed", not "refused".
+ * `email`/`in_app`/`push` are the channels a government recipient is expected to
+ * receive on (a payslip, an approval, an OTP) and pre-date the prefs table, so
+ * absence of a choice means "no preference expressed", not "refused".
+ * `webhook` is a tenant-configured machine endpoint, not a person, so recipient
+ * consent does not apply to it.
  *
- * `sms` and `whatsapp` are commercial channels under TRAI/DLT: absence of a
- * recorded opt-in means NOT consented. `webhook` is a tenant-configured
- * machine endpoint, not a person, so recipient consent does not apply to it.
+ * `sms` and `whatsapp` are deliberately absent — see
+ * `OPT_IN_REQUIRED_FOR_MARKETING`.
  */
-const CONSENT_IMPLIED_WITHOUT_PREF = new Set(["email", "in_app", "push", "webhook"]);
+const CONSENT_IMPLIED_WITHOUT_CHOICE = new Set(["email", "in_app", "push", "webhook"]);
+
+/**
+ * Channels that require a RECORDED opt-in before a commercial send.
+ *
+ * TRAI/DLT and DPDP purpose limitation govern *promotional* traffic, and only
+ * that: statutory and transactional messages on these channels are expressly
+ * permitted without a marketing opt-in, and are the normal carrier for a login
+ * OTP or an emergency evacuation alert. So the strict rule is scoped to
+ * marketing sends. For transactional traffic, "no choice recorded" behaves like
+ * every other channel: allowed. An explicit `false` still refuses both kinds.
+ */
+const OPT_IN_REQUIRED_FOR_MARKETING = new Set(["sms", "whatsapp"]);
 
 /** The pref row governing this send: event-specific if present, else the first. */
 export function findPref(prefs: ConsentPref[], eventType?: string | undefined): ConsentPref | undefined {
@@ -105,17 +138,27 @@ export function findPref(prefs: ConsentPref[], eventType?: string | undefined): 
 /**
  * Has the recipient consented to this channel?
  *
- * A matching pref row is authoritative — including when the caller passed an
- * explicit `channel` override, which used to bypass prefs entirely and was the
- * simplest way to send to someone who had opted out.
+ * A recorded choice is authoritative in BOTH directions — including when the
+ * caller passed an explicit `channel` override, which used to bypass prefs
+ * entirely and was the simplest way to send to someone who had opted out.
+ *
+ * When no choice is recorded, the answer depends on the channel and on whether
+ * this is a marketing send: only the commercial channels demand a positive
+ * opt-in, and only for marketing.
  */
 export function channelConsented(
   channel: string,
   pref: ConsentPref | undefined,
+  marketingRequired: boolean,
 ): boolean {
   const field = CHANNEL_CONSENT_FIELD[channel];
-  if (pref && field) return pref[field] === true;
-  return CONSENT_IMPLIED_WITHOUT_PREF.has(channel);
+  if (!field) return CONSENT_IMPLIED_WITHOUT_CHOICE.has(channel);
+
+  const recorded = pref?.[field] ?? null;
+  if (recorded !== null) return recorded === true;
+
+  if (OPT_IN_REQUIRED_FOR_MARKETING.has(channel)) return !marketingRequired;
+  return CONSENT_IMPLIED_WITHOUT_CHOICE.has(channel);
 }
 
 /**
@@ -125,7 +168,9 @@ export function channelConsented(
 export function decideGate(input: GateInput): GateDecision {
   if (input.suppressed) return { action: "skip", reason: "recipient_suppressed" };
 
-  if (input.marketing.required) {
+  // `deferred` is not a verdict — the caller has told us a later stage does the
+  // CRM lookup, so there is nothing to evaluate here yet.
+  if (input.marketing.required && input.marketing.consent !== "deferred") {
     if (input.marketing.consent === "denied") {
       return { action: "skip", reason: "marketing_consent_denied" };
     }
@@ -138,7 +183,9 @@ export function decideGate(input: GateInput): GateDecision {
   const pref = findPref(input.prefs, input.eventType);
   // Filter the whole attempt list, not just the preferred channel: otherwise a
   // consented preferred channel could still fall back onto a refused one.
-  const channels = input.candidateChannels.filter((c) => channelConsented(c, pref));
+  const channels = input.candidateChannels.filter(
+    (c) => channelConsented(c, pref, input.marketing.required),
+  );
   if (channels.length === 0) return { action: "skip", reason: "channel_consent_denied" };
 
   if (input.dnd.action === "hold") return { action: "hold", releaseAt: input.dnd.releaseAt };

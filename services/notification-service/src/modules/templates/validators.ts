@@ -21,9 +21,11 @@ export const setPrefsBody = z.object({
   inApp:     z.boolean().default(true),
   email:     z.boolean().default(true),
   push:      z.boolean().default(false),
-  // Commercial channels default to false: consent must be given, never assumed.
-  sms:       z.boolean().default(false),
-  whatsapp:  z.boolean().default(false),
+  // Commercial channels are tri-state and have NO default: an omitted field
+  // records "no choice", which is not the same as an opt-out. Consent is still
+  // never assumed — a marketing send requires `true`.
+  sms:       z.boolean().nullish(),
+  whatsapp:  z.boolean().nullish(),
 });
 export type SetPrefsBody = z.infer<typeof setPrefsBody>;
 
@@ -35,8 +37,9 @@ export const updatePrefsBody = z.object({
   inApp:    z.boolean().optional(),
   email:    z.boolean().optional(),
   push:     z.boolean().optional(),
-  sms:      z.boolean().optional(),
-  whatsapp: z.boolean().optional(),
+  // `null` is a meaningful value here: it withdraws a recorded choice.
+  sms:      z.boolean().nullish(),
+  whatsapp: z.boolean().nullish(),
 }).refine(
   (b) => b.inApp !== undefined || b.email !== undefined || b.push !== undefined
     || b.sms !== undefined || b.whatsapp !== undefined,
