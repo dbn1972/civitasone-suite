@@ -1,12 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   MAX_WEIGHT_BPS,
   detectDuplicate,
@@ -136,52 +133,8 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "MATRIX_DUPLICATE", "a matrix entry with the same scope already exists");
     }
 
-    const id = randomUUID();
-    const effectiveFrom = body.effectiveFrom === undefined ? null : new Date(body.effectiveFrom);
-    const effectiveTo = body.effectiveTo === undefined ? null : new Date(body.effectiveTo);
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        triggerProductId: body.triggerProductId,
-        recommendedProductId: body.recommendedProductId,
-        segment: body.segment ?? null,
-        channel: body.channel ?? null,
-        priority: body.priority,
-        weightBps: body.weightBps,
-        effectiveFrom,
-        effectiveTo,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.matrixEntryCreated,
-        eventType: EVENTS.matrixEntryCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          matrixId: id,
-          triggerProductId: body.triggerProductId,
-          recommendedProductId: body.recommendedProductId,
-          segment: body.segment ?? null,
-          channel: body.channel ?? null,
-          priority: body.priority,
-          weightBps: body.weightBps,
-          effectiveFrom: body.effectiveFrom ?? null,
-          effectiveTo: body.effectiveTo ?? null,
-        },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "matrix", id));
-
-    return reply.code(201).send({
-      data: {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createMatrixEntry(ctx, {
         triggerProductId: body.triggerProductId,
         recommendedProductId: body.recommendedProductId,
         segment: body.segment ?? null,
@@ -190,9 +143,8 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
         weightBps: body.weightBps,
         effectiveFrom: body.effectiveFrom ?? null,
         effectiveTo: body.effectiveTo ?? null,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /**
@@ -289,41 +241,23 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
     const windowError = validateEffectiveWindow(mergedWindow);
     if (windowError) throw new HttpError(422, "MATRIX_INVALID", windowError);
 
-    const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
+    if (body.version !== existing.version) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        "matrix entry has been modified; retry with current version",
+      );
+    }
+
+    const patch: Record<string, unknown> = {};
     if (body.segment !== undefined) patch.segment = body.segment;
     if (body.channel !== undefined) patch.channel = body.channel;
     if (body.priority !== undefined) patch.priority = body.priority;
     if (body.weightBps !== undefined) patch.weightBps = body.weightBps;
-    if (body.effectiveFrom !== undefined) {
-      patch.effectiveFrom = body.effectiveFrom === null ? null : new Date(body.effectiveFrom);
-    }
-    if (body.effectiveTo !== undefined) {
-      patch.effectiveTo = body.effectiveTo === null ? null : new Date(body.effectiveTo);
-    }
+    if (body.effectiveFrom !== undefined) patch.effectiveFrom = body.effectiveFrom;
+    if (body.effectiveTo !== undefined) patch.effectiveTo = body.effectiveTo;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(
-          409,
-          "VERSION_CONFLICT",
-          "matrix entry has been modified; retry with current version",
-        );
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.matrixEntryUpdated,
-        eventType: EVENTS.matrixEntryUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { matrixId: id, patch },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "matrix", id));
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateMatrixEntry(ctx, id, { version: body.version, patch }));
   });
 
   /** DELETE /v1/recommendations/matrix/:id — remove a rule. */
@@ -335,22 +269,6 @@ export async function matrixRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "matrix entry not found");
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.deleteById(tx, id, ctx.tenantId);
-      if (!ok) throw new HttpError(404, "NOT_FOUND", "matrix entry not found");
-
-      await enqueue(tx, {
-        topic: EVENTS.matrixEntryDeleted,
-        eventType: EVENTS.matrixEntryDeleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { matrixId: id },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "matrix", id));
-
-    return reply.send({ data: { id, deleted: true } });
+    return reply.code(202).send(await commands.deleteMatrixEntry(ctx, id));
   });
 }

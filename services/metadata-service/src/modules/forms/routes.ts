@@ -37,6 +37,7 @@ import { registerStandardErrorHandler } from "../../shared/api-errors.js";
 import { ADMIN, DATA } from "../../shared/roles.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
+import { mutateForm } from "./commands.js";
 import { fieldDefinitions, layoutDefinitions } from "../entities/schema.js";
 import { maskEmail, maskPhone } from "../../shared/pii-crypto.js";
 import { formPublicEndpoints, formSubmissions, formVersions } from "./schema.js";
@@ -196,31 +197,19 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     const { layoutId } = layoutParam.parse(req.params);
     const body = createVersionSchema.parse(req.body ?? {});
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    const prep = await withTenant(ctx.tenantId, async (tx) => {
       const known = await formFieldNames(tx, ctx.tenantId, layoutId);
       assertRulesValid(body.cascadeRules, body.visibilityRules, known);
-
       const existing = await tx
         .select({ versionNumber: formVersions.versionNumber })
         .from(formVersions)
         .where(and(eq(formVersions.layoutDefId, layoutId), eq(formVersions.tenantId, ctx.tenantId)));
-
-      const [created] = await tx
-        .insert(formVersions)
-        .values({
-          tenantId: ctx.tenantId,
-          layoutDefId: layoutId,
-          versionNumber: nextVersionNumber(existing.map((e) => e.versionNumber)),
-          status: "draft",
-          visibilityRules: body.visibilityRules,
-          cascadeRules: body.cascadeRules,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })
-        .returning();
-      return created;
+      return { versionNumber: nextVersionNumber(existing.map((e) => e.versionNumber)) };
     });
-    return reply.code(201).send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "create_version", {
+      layoutId, versionNumber: prep.versionNumber,
+      visibilityRules: body.visibilityRules, cascadeRules: body.cascadeRules,
+    }) });
   });
 
   // ─── Read one version ─────────────────────────────────────────────────────
@@ -239,29 +228,18 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = patchVersionSchema.parse(req.body ?? {});
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    const prep = await withTenant(ctx.tenantId, async (tx) => {
       const existing = await loadVersion(tx, ctx.tenantId, id);
       assertAllowed(assertEditable(toState(existing)));
-
       const cascadeRules = body.cascadeRules ?? existing.cascadeRules;
       const visibilityRules = body.visibilityRules ?? existing.visibilityRules;
       const known = await formFieldNames(tx, ctx.tenantId, existing.layoutDefId);
       assertRulesValid(cascadeRules, visibilityRules, known);
-
-      const [updated] = await tx
-        .update(formVersions)
-        .set({
-          cascadeRules,
-          visibilityRules,
-          updatedAt: new Date(),
-          updatedBy: ctx.actorId,
-          version: existing.version + 1,
-        })
-        .where(and(eq(formVersions.id, id), eq(formVersions.tenantId, ctx.tenantId)))
-        .returning();
-      return updated;
+      return { cascadeRules, visibilityRules, version: existing.version };
     });
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "update_version", {
+      id, cascadeRules: prep.cascadeRules, visibilityRules: prep.visibilityRules, version: prep.version,
+    }) });
   });
 
   // ─── FRM-07: submit for approval ──────────────────────────────────────────
@@ -270,26 +248,11 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = idParam.parse(req.params);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const existing = await loadVersion(tx, ctx.tenantId, id);
-      const decision = canSubmit(toState(existing));
-      assertAllowed(decision);
-
-      const [updated] = await tx
-        .update(formVersions)
-        .set({
-          status: "pending_approval",
-          submittedBy: ctx.actorId,
-          submittedAt: new Date(),
-          updatedAt: new Date(),
-          updatedBy: ctx.actorId,
-          version: existing.version + 1,
-        })
-        .where(and(eq(formVersions.id, id), eq(formVersions.tenantId, ctx.tenantId)))
-        .returning();
-      return updated;
+      assertAllowed(canSubmit(toState(existing)));
     });
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "submit_version", { id }) });
   });
 
   // ─── FRM-07: approve + publish (separation of duties) ─────────────────────
@@ -298,88 +261,11 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = idParam.parse(req.params);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const existing = await loadVersion(tx, ctx.tenantId, id);
-      // The SoD check and the state transition are in the SAME transaction, so
-      // two concurrent approvals cannot both see pending_approval and commit.
       assertAllowed(canApprove(toState(existing), ctx.actorId));
-
-      const now = new Date();
-      const [updated] = await tx
-        .update(formVersions)
-        .set({
-          status: "published",
-          publishedBy: ctx.actorId,
-          publishedAt: now,
-          updatedAt: now,
-          updatedBy: ctx.actorId,
-          version: existing.version + 1,
-        })
-        .where(
-          and(
-            eq(formVersions.id, id),
-            eq(formVersions.tenantId, ctx.tenantId),
-            // Optimistic guard: only transition a row still awaiting approval.
-            eq(formVersions.status, "pending_approval"),
-          ),
-        )
-        .returning();
-      if (!updated) throw new HttpError(409, "CONFLICT", "form version changed concurrently");
-
-      // Supersede the version this one replaces. The superseded row keeps its
-      // definition verbatim — that is what makes past submissions auditable.
-      const prior = await tx
-        .select({ id: formVersions.id })
-        .from(formVersions)
-        .where(
-          and(
-            eq(formVersions.layoutDefId, existing.layoutDefId),
-            eq(formVersions.tenantId, ctx.tenantId),
-            eq(formVersions.status, "published"),
-            sql`${formVersions.id} <> ${id}`,
-          ),
-        );
-      for (const p of prior) {
-        await tx
-          .update(formVersions)
-          .set({ status: "superseded", supersededBy: id, updatedAt: now, updatedBy: ctx.actorId })
-          .where(and(eq(formVersions.id, p.id), eq(formVersions.tenantId, ctx.tenantId)));
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.FORM_VERSION_PUBLISHED,
-        eventType: EVENTS.FORM_VERSION_PUBLISHED,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          formVersionId: id,
-          layoutDefId: existing.layoutDefId,
-          tenantId: ctx.tenantId,
-          versionNumber: existing.versionNumber,
-          submittedBy: existing.submittedBy,
-          approvedBy: ctx.actorId,
-          supersededVersionId: prior[0]?.id ?? null,
-          publishedAt: now.toISOString(),
-        },
-      });
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "metadata",
-          action: "publish_form_version",
-          resourceType: "form_version",
-          resourceId: id,
-          outcome: "success",
-        },
-      });
-      return updated;
     });
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "approve_version", { id }) });
   });
 
   // ─── FRM-07: reject back to draft ─────────────────────────────────────────
@@ -389,41 +275,11 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ reason: z.string().min(1).max(1000).optional() }).strict().parse(req.body ?? {});
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const existing = await loadVersion(tx, ctx.tenantId, id);
       assertAllowed(canReject(toState(existing)));
-      const [updated] = await tx
-        .update(formVersions)
-        .set({
-          status: "draft",
-          submittedBy: null,
-          submittedAt: null,
-          updatedAt: new Date(),
-          updatedBy: ctx.actorId,
-          version: existing.version + 1,
-        })
-        .where(and(eq(formVersions.id, id), eq(formVersions.tenantId, ctx.tenantId)))
-        .returning();
-      if (body.reason !== undefined) {
-        await enqueue(tx, {
-          topic: "audit.event.record",
-          eventType: "audit.event.record",
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: {
-            service: "metadata",
-            action: "reject_form_version",
-            resourceType: "form_version",
-            resourceId: id,
-            outcome: "success",
-            reason: body.reason,
-          },
-        });
-      }
-      return updated;
     });
-    return reply.send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "reject_version", { id, reason: body.reason }) });
   });
 
   // ─── FRM-07: revise — a published version is never mutated ────────────────
@@ -432,7 +288,7 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = idParam.parse(req.params);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    const prep = await withTenant(ctx.tenantId, async (tx) => {
       const source = await loadVersion(tx, ctx.tenantId, id);
       const existing = await tx
         .select({ versionNumber: formVersions.versionNumber })
@@ -440,22 +296,14 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
         .where(
           and(eq(formVersions.layoutDefId, source.layoutDefId), eq(formVersions.tenantId, ctx.tenantId)),
         );
-      const [created] = await tx
-        .insert(formVersions)
-        .values({
-          tenantId: ctx.tenantId,
-          layoutDefId: source.layoutDefId,
-          versionNumber: nextVersionNumber(existing.map((e) => e.versionNumber)),
-          status: "draft",
-          visibilityRules: source.visibilityRules,
-          cascadeRules: source.cascadeRules,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })
-        .returning();
-      return created;
+      return {
+        layoutId: source.layoutDefId,
+        versionNumber: nextVersionNumber(existing.map((e) => e.versionNumber)),
+        visibilityRules: source.visibilityRules,
+        cascadeRules: source.cascadeRules,
+      };
     });
-    return reply.code(201).send({ data: row });
+    return reply.code(202).send({ data: await mutateForm(ctx, "revise_version", prep) });
   });
 
   // ─── FRM-04 / FRM-05: server-side resolution ──────────────────────────────
@@ -494,10 +342,8 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ label: z.string().min(1).max(256) }).strict().parse(req.body);
 
-    const row = await withTenant(ctx.tenantId, async (tx) => {
+    await withTenant(ctx.tenantId, async (tx) => {
       const version = await loadVersion(tx, ctx.tenantId, id);
-      // Only a published version may be exposed publicly: a draft has not
-      // passed maker-checker, so putting it on the internet would bypass FRM-07.
       if (version.status !== "published") {
         throw new HttpError(
           422,
@@ -505,25 +351,16 @@ export async function formRoutes(app: FastifyInstance): Promise<void> {
           "only a published form version can be exposed on a public endpoint",
         );
       }
-      const [created] = await tx
-        .insert(formPublicEndpoints)
-        .values({
-          tenantId: ctx.tenantId,
-          formVersionId: id,
-          // 32 random bytes: the key is a capability, so it must be
-          // unguessable. A human-readable slug would be enumerable.
-          publicKey: randomBytes(32).toString("hex"),
-          label: body.label,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })
-        .returning();
-      return created;
     });
-    return reply.code(201).send({
+    const publicKey = randomBytes(32).toString("hex");
+    const accepted = await mutateForm(ctx, "create_public_endpoint", {
+      formVersionId: id, publicKey, label: body.label,
+    });
+    return reply.code(202).send({
       data: {
-        ...row,
-        submitUrl: `/v1/metadata/public/tenants/${ctx.tenantId}/forms/${row?.publicKey ?? ""}/submissions`,
+        ...accepted,
+        publicKey,
+        submitUrl: `/v1/metadata/public/tenants/${ctx.tenantId}/forms/${publicKey}/submissions`,
       },
     });
   });

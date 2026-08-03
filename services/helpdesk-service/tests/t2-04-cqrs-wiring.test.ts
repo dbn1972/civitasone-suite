@@ -15,7 +15,7 @@ const ctx = {
   roles: ["helpdesk_admin"],
 };
 
-describe("T2-04 helpdesk automation + sla CQRS", () => {
+describe("T2-04 helpdesk automation + sla + routing + catalogue CQRS", () => {
   beforeEach(() => publish.mockClear());
 
   it("automation routes have zero db.transaction", () => {
@@ -27,6 +27,19 @@ describe("T2-04 helpdesk automation + sla CQRS", () => {
   it("sla routes have zero db.transaction", () => {
     const src = readFileSync(resolve(__dirname, "../src/modules/sla/routes.ts"), "utf8");
     expect(src).not.toMatch(/db\.transaction/);
+  });
+
+  it("routing routes have zero db.transaction on writes", () => {
+    const src = readFileSync(resolve(__dirname, "../src/modules/routing/routes.ts"), "utf8");
+    expect(src).toMatch(/commands\./);
+    expect(src).not.toMatch(/tx\.insert\(routingRules\)/);
+    expect(src).not.toMatch(/tx\.insert\(holdQueue\)/);
+  });
+
+  it("catalogue routes have zero db.transaction on writes", () => {
+    const src = readFileSync(resolve(__dirname, "../src/modules/catalogue/routes.ts"), "utf8");
+    expect(src).toMatch(/commands\./);
+    expect(src).not.toMatch(/repo\.insertOffering\(tx/);
   });
 
   it("automation createRule publishes", async () => {
@@ -41,9 +54,11 @@ describe("T2-04 helpdesk automation + sla CQRS", () => {
     expect(publish).toHaveBeenCalled();
   });
 
-  it("worker registers automation + sla consumers", () => {
+  it("worker registers automation + sla + routing + catalogue consumers", () => {
     const src = readFileSync(resolve(__dirname, "../src/worker.ts"), "utf8");
     expect(src).toMatch(/registerAutomationConsumers/);
     expect(src).toMatch(/registerSlaConsumers/);
+    expect(src).toMatch(/registerRoutingConsumers/);
+    expect(src).toMatch(/registerCatalogueConsumers/);
   });
 });

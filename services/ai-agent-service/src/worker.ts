@@ -13,6 +13,7 @@ import { registerCopilotConsumers } from "./modules/copilot/consumer.js";
 import { registerGuardrailConsumers } from "./modules/guardrails/consumer.js";
 import { registerProtocolConsumers } from "./modules/protocols/consumer.js";
 import { registerToolConsumers } from "./modules/tools/consumer.js";
+import { registerGovernanceConsumers } from "./modules/governance/consumer.js";
 
 const log = pino({ name: "ai-agent-worker" });
 
@@ -23,6 +24,7 @@ registerCopilotConsumers(queue);
 registerGuardrailConsumers(queue);
 registerProtocolConsumers(queue);
 registerToolConsumers(queue);
+registerGovernanceConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue, 1000, SERVICE);

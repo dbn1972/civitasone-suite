@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -20,10 +21,8 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createFrameworkBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertFramework(tx, {
-      id, tenantId: ctx.tenantId, name: body.name, description: body.description ?? null, createdBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id, status: "active" });
+    await publishF3Write(ctx, "competency_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "active" }) as any;
   });
 
   app.get("/v1/hrms/competency/frameworks", async (req, reply) => {
@@ -40,12 +39,8 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const fw = await repo.getFramework(ctx.tenantId, id);
     if (!fw) throw new HttpError(404, "NOT_FOUND", "framework not found");
     const cid = randomUUID();
-    const row = await db.transaction((tx) => repo.insertCompetency(tx, {
-      id: cid, tenantId: ctx.tenantId, frameworkId: id, code: body.code, name: body.name,
-      description: body.description ?? null, category: body.category,
-      maxLevel: body.maxLevel, certifiedLevel: body.certifiedLevel,
-    }));
-    return reply.code(201).send({ id: row.id, code: row.code });
+    const row = await publishF3Write(ctx, "competency_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: row.id, code: row.code }) as any;
   });
 
   app.get("/v1/hrms/competency/competencies", async (req, reply) => {
@@ -61,11 +56,8 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const body = roleRequirementBody.parse(req.body);
     const comp = await repo.getCompetency(ctx.tenantId, body.competencyId);
     if (!comp) throw new HttpError(404, "NOT_FOUND", "competency not found");
-    await db.transaction((tx) => repo.upsertRoleRequirement(tx, {
-      id: randomUUID(), tenantId: ctx.tenantId, roleCode: body.roleCode,
-      competencyId: body.competencyId, requiredLevel: body.requiredLevel,
-    }));
-    return reply.code(201).send({ roleCode: body.roleCode, competencyId: body.competencyId, requiredLevel: body.requiredLevel });
+    await publishF3Write(ctx, "competency_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ roleCode: body.roleCode, competencyId: body.competencyId, requiredLevel: body.requiredLevel }) as any;
   });
 
   app.get("/v1/hrms/competency/roles/:roleCode/requirements", async (req, reply) => {
@@ -84,11 +76,8 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const comp = await repo.getCompetency(ctx.tenantId, body.competencyId);
     if (!comp) throw new HttpError(404, "NOT_FOUND", "competency not found");
     const level = Math.min(body.currentLevel, comp.maxLevel);
-    await db.transaction((tx) => repo.upsertEmployeeCompetency(tx, {
-      tenantId: ctx.tenantId, employeeId: id, competencyId: body.competencyId,
-      currentLevel: level, source: body.source, evidenceRef: body.evidenceRef ?? null,
-    }));
-    return reply.send({ employeeId: id, competencyId: body.competencyId, currentLevel: mergeLevel(0, level) });
+    await publishF3Write(ctx, "competency_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ employeeId: id, competencyId: body.competencyId, currentLevel: mergeLevel(0, level) }) as any;
   });
 
   app.get("/v1/hrms/competency/employees/:id/profile", async (req, reply) => {

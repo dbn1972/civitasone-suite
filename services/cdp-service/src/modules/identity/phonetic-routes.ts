@@ -4,14 +4,15 @@
  * Two endpoints: one indexes a profile's name so it can be found, one searches. Scoring
  * is done by phonetic-domain.ts (pure) against a bounded candidate window returned by
  * name-key-repo.ts — see the note there on why the score is not computed in SQL.
+ *
+ * Index writes are queue-first (CQRS): the route validates and publishes; the F3 consumer
+ * upserts via markProcessed.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as nameKeyRepo from "./name-key-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 import {
@@ -64,47 +65,22 @@ export async function identityPhoneticRoutes(app: FastifyInstance): Promise<void
     const existing = await nameKeyRepo.findByProfile(body.profileId, ctx.tenantId);
     const id = existing?.id ?? randomUUID();
 
-    await db.transaction(async (tx) => {
-      await nameKeyRepo.upsert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        profileId: body.profileId,
-        nameNormalized,
-        phoneticKey: key,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.nameKeyIndexed,
-        eventType: EVENTS.nameKeyIndexed,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        // The phonetic key is a lossy 4-char-per-token code, not the name. The
-        // normalized name IS personal data and is deliberately absent from the event.
-        payload: { profileId: body.profileId, phoneticKey: key, reindexed: existing !== null },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: existing ? "name_key_reindexed" : "name_key_indexed",
-          resourceType: "profile_name_key",
-          resourceId: id,
-          outcome: "success",
-          metadata: { profileId: body.profileId },
-        },
-      });
+    await publishF3Write(ctx, "name_key_index", id, {
+      profileId: body.profileId,
+      nameNormalized,
+      phoneticKey: key,
+      reindexed: existing !== null,
     });
 
     return reply.code(202).send({
-      data: { id, profileId: body.profileId, phoneticKey: key, reindexed: existing !== null, status: "accepted" },
+      data: {
+        id,
+        profileId: body.profileId,
+        phoneticKey: key,
+        reindexed: existing !== null,
+        status: "accepted",
+        correlationId: ctx.correlationId,
+      },
     });
   });
 

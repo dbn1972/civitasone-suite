@@ -13,6 +13,7 @@ import { registerApprovalConsumers } from "./modules/approvals/consumer.js";
 import { registerObligationConsumers } from "./modules/obligations/consumer.js";
 import { registerRenewalConsumers } from "./modules/renewals/consumer.js";
 import { registerEsignConsumers } from "./modules/esign/consumer.js";
+import { registerVersionConsumers } from "./modules/versions/consumer.js";
 
 const log = pino({ name: "contract-worker" });
 
@@ -42,6 +43,7 @@ registerApprovalConsumers(queue);
 registerObligationConsumers(queue);
 registerRenewalConsumers(queue);
 registerEsignConsumers(queue);
+registerVersionConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

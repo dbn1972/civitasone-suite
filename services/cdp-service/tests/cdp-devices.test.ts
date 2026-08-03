@@ -119,25 +119,25 @@ describe("POST /v1/cdp/identity/devices", () => {
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.statusCode).toBe(202);
     expect(r.json().data.relinked).toBe(false);
-    expect(H.insertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "device_link" }) }),
+    );
+    expect(H.insertMock).not.toHaveBeenCalled();
     expect(H.relinkMock).not.toHaveBeenCalled();
-    // The summary projection counts devices, so it must be invalidated.
-    expect(H.cacheInvalidateMock).toHaveBeenCalledWith(`cdp:${TENANT}:profile_summary:${PROFILE_ID}`);
+    expect(H.cacheInvalidateMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — never echoes the token back to the caller or onto the event", async () => {
+  it("202 — never echoes the token back to the caller", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
     expect(r.body).not.toContain(TOKEN);
-    expect(JSON.stringify(H.enqueueMock.mock.calls)).not.toContain(TOKEN);
-    // The route publishes no command (the write is synchronous); the token must not
-    // reach the outbox event either.
-    expect(H.publishMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
-  it("202 — an existing token moves to the new profile instead of duplicating", async () => {
+  it("202 — an existing token publishes relink payload", async () => {
     H.findByTokenMock.mockResolvedValue(makeDevice({ profileId: "bbbbbbbb-9999-4000-8000-000000000009" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
@@ -145,7 +145,8 @@ describe("POST /v1/cdp/identity/devices", () => {
     expect(r.json().data.relinked).toBe(true);
     expect(r.json().data.id).toBe(DEVICE_ID);
     expect(H.insertMock).not.toHaveBeenCalled();
-    expect(H.relinkMock).toHaveBeenCalledOnce();
+    expect(H.relinkMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
@@ -193,12 +194,13 @@ describe("POST /v1/cdp/identity/devices", () => {
     await app.close();
   });
 
-  it("409 — concurrent re-link loses the version race", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.findByTokenMock.mockResolvedValue(makeDevice());
     H.relinkMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

@@ -59,8 +59,8 @@ export async function insert(tx: Writer, row: DidMappingInsert): Promise<void> {
   await tx.insert(didMappings).values(row);
 }
 
-export async function remove(id: string, tenantId: string): Promise<number> {
-  const deleted = await db
+export async function remove(tx: Writer, id: string, tenantId: string): Promise<number> {
+  const deleted = await tx
     .delete(didMappings)
     .where(and(eq(didMappings.id, id), eq(didMappings.tenantId, tenantId)))
     .returning({ id: didMappings.id });

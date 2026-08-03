@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate professional profile — skills, certifications, languages and
  * credentials (publications/patents/memberships/awards). R-RA-0086.
@@ -36,12 +38,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateSkills(body.skills as Skill[]);
     if (errors.length > 0) throw new HttpError(422, "INVALID_SKILLS", errors.join("; "));
-    await db.transaction((tx) => repo.setSkills(tx, ctx.tenantId, id, body.skills.map((s) => ({
-      // Round to the column's 1-decimal scale so we don't silently store a
-      // rounded value that differs from what was submitted.
-      tenantId: ctx.tenantId, candidateId: id, skill: s.skill, proficiency: s.proficiency, yearsExperience: s.yearsExperience != null ? String(Math.round(s.yearsExperience * 10) / 10) : null,
-    }))));
-    return reply.send({ id, skills: body.skills.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, skills: body.skills.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/certifications", async (req, reply) => {
@@ -56,11 +54,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateCertifications(body.certifications as Certification[], Date.now());
     if (errors.length > 0) throw new HttpError(422, "INVALID_CERTIFICATIONS", errors.join("; "));
-    await db.transaction((tx) => repo.setCertifications(tx, ctx.tenantId, id, body.certifications.map((c) => ({
-      tenantId: ctx.tenantId, candidateId: id, certName: c.name, issuer: c.issuer,
-      issueDate: c.issueDate ?? null, expiryDate: c.expiryDate ?? null, credentialId: c.credentialId ?? null, credentialUrl: c.credentialUrl ?? null,
-    }))));
-    return reply.send({ id, certifications: body.certifications.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, certifications: body.certifications.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/languages", async (req, reply) => {
@@ -74,10 +69,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateLanguages(body.languages as Language[]);
     if (errors.length > 0) throw new HttpError(422, "INVALID_LANGUAGES", errors.join("; "));
-    await db.transaction((tx) => repo.setLanguages(tx, ctx.tenantId, id, body.languages.map((l) => ({
-      tenantId: ctx.tenantId, candidateId: id, language: l.language, canRead: l.canRead, canWrite: l.canWrite, canSpeak: l.canSpeak, proficiency: l.proficiency ?? null,
-    }))));
-    return reply.send({ id, languages: body.languages.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, languages: body.languages.length }) as any;
   });
 
   app.put("/v1/hrms/candidates/:id/credentials", async (req, reply) => {
@@ -91,10 +84,8 @@ export async function candidateSkillsRoutes(app: FastifyInstance): Promise<void>
     await mustDraft(ctx.tenantId, id);
     const errors = validateCredentials(body.credentials as Credential[], Date.now());
     if (errors.length > 0) throw new HttpError(422, "INVALID_CREDENTIALS", errors.join("; "));
-    await db.transaction((tx) => repo.setCredentials(tx, ctx.tenantId, id, body.credentials.map((c) => ({
-      tenantId: ctx.tenantId, candidateId: id, kind: c.kind, title: c.title, detail: c.detail ?? null, credYear: c.year ?? null, referenceUrl: c.referenceUrl ?? null,
-    }))));
-    return reply.send({ id, credentials: body.credentials.length });
+    await publishF3Write(ctx, "recruitment_skills_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, credentials: body.credentials.length }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/professional-profile", async (req, reply) => {

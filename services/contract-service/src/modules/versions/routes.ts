@@ -1,3 +1,5 @@
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -16,8 +18,7 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = contractIdParam.parse(req.params);
     const body = createVersionBody.parse(req.body);
 
-    const result = await commands.createVersion(ctx, id, body);
-    return reply.code(201).send(result);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createVersion(ctx, id, body));
   });
 
   // ── List versions ─────────────────────────────────────────────────────

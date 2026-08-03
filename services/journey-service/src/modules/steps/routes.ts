@@ -1,14 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as journeyRepo from "../journeys/repo.js";
 import { validateStepType, validateStepIndex } from "./domain.js";
+import * as commands from "./commands.js";
 
 const JOURNEY_ROLES = ["journey_admin", "marketing_admin", "super_admin"];
 
@@ -71,33 +67,13 @@ export async function stepRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_STEP_INDEX", indexError);
     }
 
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.executeStep(ctx, {
         journeyId: body.journeyId,
         profileId: body.profileId,
         stepIndex: body.stepIndex,
-        status: "executing",
-        executedAt: new Date(),
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.stepCompleted,
-        eventType: EVENTS.stepCompleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { stepExecutionId: id, journeyId: body.journeyId, profileId: body.profileId, stepIndex: body.stepIndex },
-      });
-    });
-
-    return reply.code(201).send({
-      data: { id, journeyId: body.journeyId, profileId: body.profileId, stepIndex: body.stepIndex, status: "executing" },
-    });
+        stepType: body.stepType,
+      }),
+    );
   });
 }

@@ -64,6 +64,17 @@ export async function findOffering(id: string, tenantId: string): Promise<Offeri
   return rows[0] ?? null;
 }
 
+export async function findOfferingByName(name: string, tenantId: string): Promise<OfferingRow | null> {
+  const rows = await db.transaction((tx) =>
+    tx
+      .select()
+      .from(catalogueOfferings)
+      .where(and(eq(catalogueOfferings.tenantId, tenantId), eq(catalogueOfferings.name, name)))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 export async function updateOffering(
   tx: Writer,
   id: string,

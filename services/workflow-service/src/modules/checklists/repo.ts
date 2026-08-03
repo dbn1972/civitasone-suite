@@ -4,6 +4,12 @@ import { db, scopedRead } from "../../shared/db.js";
 import { checklistTemplates, checklistInstances, type ChecklistTemplateRow, type ChecklistInstanceRow } from "./schema.js";
 import { instantiate, type ChecklistItem } from "./domain.js";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function withTx<T>(outer: Tx | undefined, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  if (outer) return fn(outer);
+  return db.transaction(fn);
+}
+
 export async function listTemplates(tenantId: string): Promise<ChecklistTemplateRow[]> {
   return scopedRead((tx) => tx.select().from(checklistTemplates)
     .where(eq(checklistTemplates.tenantId, tenantId)).orderBy(asc(checklistTemplates.code)));
@@ -14,9 +20,9 @@ export async function findTemplate(tenantId: string, id: string): Promise<Checkl
   return rows[0];
 }
 
-export async function upsertTemplate(input: { tenantId: string; code: string; name: string; items: Array<{ key: string; label: string; required?: boolean }>; actorId: string }): Promise<ChecklistTemplateRow> {
-  const id = randomUUID();
-  return db.transaction(async (tx) => {
+export async function upsertTemplate(input: { tenantId: string; code: string; name: string; items: Array<{ key: string; label: string; required?: boolean }>; actorId: string; id?: string }, outer?: Tx): Promise<ChecklistTemplateRow> {
+  const id = input.id ?? randomUUID();
+  return withTx(outer, async (tx) => {
     const tplRows = await tx.insert(checklistTemplates).values({
       id, tenantId: input.tenantId, code: input.code, name: input.name, items: input.items, createdBy: input.actorId,
     }).onConflictDoUpdate({
@@ -39,14 +45,14 @@ export async function listInstancesForEntity(tenantId: string, entityType: strin
 }
 
 /** Instantiate a template against an entity (fresh unchecked items). */
-export async function createInstance(input: { tenantId: string; templateId: string; entityType: string; entityId: string; actorId: string }): Promise<ChecklistInstanceRow | null> {
-  return db.transaction(async (tx) => {
+export async function createInstance(input: { tenantId: string; templateId: string; entityType: string; entityId: string; actorId: string; id?: string }, outer?: Tx): Promise<ChecklistInstanceRow | null> {
+  return withTx(outer, async (tx) => {
     const tpl = (await tx.select().from(checklistTemplates)
       .where(and(eq(checklistTemplates.tenantId, input.tenantId), eq(checklistTemplates.id, input.templateId))).limit(1))[0];
     if (!tpl) return null;
     const items = instantiate(tpl.items);
     const instRows = await tx.insert(checklistInstances).values({
-      id: randomUUID(), tenantId: input.tenantId, templateId: input.templateId,
+      id: input.id ?? randomUUID(), tenantId: input.tenantId, templateId: input.templateId,
       entityType: input.entityType, entityId: input.entityId, items, createdBy: input.actorId,
     }).returning();
     return instRows[0]!;
@@ -54,8 +60,8 @@ export async function createInstance(input: { tenantId: string; templateId: stri
 }
 
 /** Persist an updated item set for an instance (optimistic-safe: full replace). */
-export async function saveItems(tenantId: string, id: string, items: ChecklistItem[]): Promise<ChecklistInstanceRow | null> {
-  return db.transaction(async (tx) => {
+export async function saveItems(tenantId: string, id: string, items: ChecklistItem[], outer?: Tx): Promise<ChecklistInstanceRow | null> {
+  return withTx(outer, async (tx) => {
     const res = await tx.update(checklistInstances)
       .set({ items, updatedAt: new Date() })
       .where(and(eq(checklistInstances.tenantId, tenantId), eq(checklistInstances.id, id)))

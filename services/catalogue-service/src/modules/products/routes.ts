@@ -1,13 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
-import { productAvailability } from "./schema.js";
 import * as repo from "./repo.js";
 import { validateTransition, isEditable } from "./domain.js";
+import * as commands from "./commands.js";
 
 const CATALOGUE_ROLES = ["catalogue_user", "catalogue_admin", "super_admin"];
 const ADMIN_ROLES = ["catalogue_admin", "super_admin"];
@@ -34,7 +30,6 @@ const updateProductBody = z.object({
   effectiveFrom: z.string().date().nullable().optional(),
   effectiveTo: z.string().date().nullable().optional(),
   regulatoryMetadata: z.record(z.unknown()).optional(),
-  /** Optional optimistic-lock guard. Falls back to the row's current version. */
   version: z.number().int().positive().optional(),
 });
 
@@ -56,7 +51,6 @@ const availabilityBody = z.object({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
-  // List products with filters
   app.get("/v1/catalogue/products", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
@@ -73,17 +67,13 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows, meta: { page, pageSize: q.limit, total } });
   });
 
-  // Full hierarchy tree
   app.get("/v1/catalogue/products/tree", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
     const all = await repo.listByTenant(ctx.tenantId);
-    // Build tree: Product Line → Family → Product → Variant
-    const tree = buildHierarchyTree(all);
-    return reply.send({ data: tree });
+    return reply.send({ data: buildHierarchyTree(all) });
   });
 
-  // Get single product
   app.get("/v1/catalogue/products/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
@@ -93,17 +83,12 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: product });
   });
 
-  // Create product
   app.post("/v1/catalogue/products", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createProductBody.parse(req.body);
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insertProduct(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createProduct(ctx, {
         name: body.name,
         description: body.description ?? null,
         lineId: body.lineId ?? null,
@@ -113,32 +98,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
         effectiveFrom: body.effectiveFrom ?? null,
         effectiveTo: body.effectiveTo ?? null,
         regulatoryMetadata: body.regulatoryMetadata,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-        version: 1,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.productCreated,
-        eventType: EVENTS.productCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          productId: id,
-          name: body.name,
-          lifecycleStatus: body.lifecycleStatus,
-          ...(body.lineId !== undefined ? { lineId: body.lineId } : {}),
-          ...(body.familyId !== undefined ? { familyId: body.familyId } : {}),
-          ...(body.parentId !== undefined ? { parentId: body.parentId } : {}),
-        },
-      });
-    });
-
-    return reply.code(201).send({ data: { id } });
+      }),
+    );
   });
 
-  // Update product (with lifecycle transition validation)
   app.patch("/v1/catalogue/products/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -148,7 +111,6 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Product not found");
 
-    // Lifecycle transition validation
     if (body.lifecycleStatus && body.lifecycleStatus !== existing.lifecycleStatus) {
       const result = validateTransition(existing.lifecycleStatus, body.lifecycleStatus);
       if (!result.valid) {
@@ -156,7 +118,6 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // Can't edit metadata on non-editable products (unless only changing lifecycle)
     const metadataChange = body.name ?? body.description ?? body.lineId ?? body.familyId ?? body.parentId ?? body.regulatoryMetadata;
     if (metadataChange !== undefined && !isEditable(existing.lifecycleStatus)) {
       throw new HttpError(422, "NOT_EDITABLE", `Cannot modify product in '${existing.lifecycleStatus}' status`);
@@ -173,99 +134,37 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     if (body.effectiveTo !== undefined) patch["effectiveTo"] = body.effectiveTo;
     if (body.regulatoryMetadata !== undefined) patch["regulatoryMetadata"] = body.regulatoryMetadata;
 
+    if (body.version !== undefined && body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "Product has been modified; retry with current version");
+    }
     const expectedVersion = body.version ?? existing.version;
-
-    await db.transaction(async (tx) => {
-      const ok = await repo.updateProduct(tx, id, ctx.tenantId, patch as Partial<typeof existing>, expectedVersion);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "Product has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.productUpdated,
-        eventType: EVENTS.productUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { productId: id, patch, previousVersion: expectedVersion },
-      });
-    });
-
-    return reply.send({ data: { id, version: expectedVersion + 1 } });
+    return reply.code(202).send(await commands.updateProduct(ctx, id, { version: expectedVersion, patch }));
   });
 
-  // Soft delete (withdraws product)
   app.delete("/v1/catalogue/products/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Product not found");
-
-    await db.transaction(async (tx) => {
-      const ok = await repo.softDelete(tx, id, ctx.tenantId, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "Product has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.productDeleted,
-        eventType: EVENTS.productDeleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { productId: id, lifecycleStatus: "withdrawn", previousVersion: existing.version },
-      });
-    });
-
-    return reply.code(200).send({ data: { id, lifecycleStatus: "withdrawn" } });
+    return reply.code(202).send(await commands.deleteProduct(ctx, id, existing.version));
   });
 
-  // Set availability for a product (circle/region/office)
   app.post("/v1/catalogue/products/:id/availability", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = availabilityBody.parse(req.body);
-
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Product not found");
-
-    const avId = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await tx.insert(productAvailability).values({
-        id: avId,
-        tenantId: ctx.tenantId,
-        productId: id,
+    return reply.code(202).send(
+      await commands.recordProductAvailability(ctx, id, {
         circleId: body.circleId ?? null,
         regionId: body.regionId ?? null,
         officeId: body.officeId ?? null,
-        available: body.available ? 1 : 0,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-        version: 1,
-      });
-
-      // Availability is part of the product's published shape — reuse productUpdated.
-      await enqueue(tx, {
-        topic: EVENTS.productUpdated,
-        eventType: EVENTS.productUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          productId: id,
-          availabilityId: avId,
-          available: body.available,
-          ...(body.circleId !== undefined ? { circleId: body.circleId } : {}),
-          ...(body.regionId !== undefined ? { regionId: body.regionId } : {}),
-          ...(body.officeId !== undefined ? { officeId: body.officeId } : {}),
-        },
-      });
-    });
-
-    return reply.code(201).send({ data: { id: avId, productId: id } });
+        available: body.available,
+      }),
+    );
   });
 }
 
@@ -281,10 +180,6 @@ interface TreeNode {
 type FlatProduct = Awaited<ReturnType<typeof repo.listByTenant>>[number];
 
 function buildHierarchyTree(products: FlatProduct[]): TreeNode[] {
-  // Group: lines (lineId=null, familyId=null, parentId=null → assume top-level),
-  // families (parentId refers to line), products (parentId refers to family), variants (parentId refers to product)
-  // Simplified: use parentId to build parent→child relationships
-  const byId = new Map(products.map((p) => [p.id, p]));
   const childrenMap = new Map<string, typeof products>();
 
   for (const p of products) {

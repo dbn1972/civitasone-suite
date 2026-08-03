@@ -8,9 +8,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { fnfSettlements } from "./schema.js";
 import { exemptionCeilings } from "./schema.js";
@@ -91,43 +92,43 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
 
     const body = computeFnfBody.parse(req.body);
 
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: COMMANDS.fnfCompute,
-        eventType: COMMANDS.fnfCompute,
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.fnfCompute, {
+      messageId,
+      type: COMMANDS.fnfCompute,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        employeeId: body.employeeId,
         tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          employeeId: body.employeeId,
-          tenantId: ctx.tenantId,
-          separationDate: body.separationDate,
-          separationType: body.separationType,
-          employeeCategory: body.employeeCategory,
-          noticeBuyoutMinor: body.noticeBuyoutMinor.toString(),
-          leaveEncashmentGrossMinor: body.leaveEncashmentGrossMinor.toString(),
-          gratuityGrossMinor: body.gratuityGrossMinor.toString(),
-          retrenchmentCompMinor: body.retrenchmentCompMinor.toString(),
-          vrsCompMinor: body.vrsCompMinor.toString(),
-          arrearsMinor: body.arrearsMinor.toString(),
-          lastDrawnWagesMinor: body.lastDrawnWagesMinor.toString(),
-          completedYears: body.completedYears,
-          avgSalaryLast10MonthsMinor: body.avgSalaryLast10MonthsMinor.toString(),
-          leaveBalanceDays: body.leaveBalanceDays,
-          priorLeaveEncashExemptionMinor: body.priorLeaveEncashExemptionMinor.toString(),
-          remainingMonthsToRetirement: body.remainingMonthsToRetirement,
-          taxRegime: body.taxRegime,
-          salaryYtdMinor: body.salaryYtdMinor.toString(),
-          tdsYtdMinor: body.tdsYtdMinor.toString(),
-          deductions80cMinor: body.deductions80cMinor.toString(),
-          deductions80dMinor: body.deductions80dMinor.toString(),
-          otherDeductionsMinor: body.otherDeductionsMinor.toString(),
-          fyStartYear: body.fyStartYear,
-        },
-      });
+        separationDate: body.separationDate,
+        separationType: body.separationType,
+        employeeCategory: body.employeeCategory,
+        noticeBuyoutMinor: body.noticeBuyoutMinor.toString(),
+        leaveEncashmentGrossMinor: body.leaveEncashmentGrossMinor.toString(),
+        gratuityGrossMinor: body.gratuityGrossMinor.toString(),
+        retrenchmentCompMinor: body.retrenchmentCompMinor.toString(),
+        vrsCompMinor: body.vrsCompMinor.toString(),
+        arrearsMinor: body.arrearsMinor.toString(),
+        lastDrawnWagesMinor: body.lastDrawnWagesMinor.toString(),
+        completedYears: body.completedYears,
+        avgSalaryLast10MonthsMinor: body.avgSalaryLast10MonthsMinor.toString(),
+        leaveBalanceDays: body.leaveBalanceDays,
+        priorLeaveEncashExemptionMinor: body.priorLeaveEncashExemptionMinor.toString(),
+        remainingMonthsToRetirement: body.remainingMonthsToRetirement,
+        taxRegime: body.taxRegime,
+        salaryYtdMinor: body.salaryYtdMinor.toString(),
+        tdsYtdMinor: body.tdsYtdMinor.toString(),
+        deductions80cMinor: body.deductions80cMinor.toString(),
+        deductions80dMinor: body.deductions80dMinor.toString(),
+        otherDeductionsMinor: body.otherDeductionsMinor.toString(),
+        fyStartYear: body.fyStartYear,
+      },
     });
 
-    return reply.status(202).send({ data: { message: "fnf compute queued", employeeId: body.employeeId } });
+    return reply.status(202).send({ data: { id: messageId, message: "fnf compute queued", employeeId: body.employeeId } });
   });
 
   /**

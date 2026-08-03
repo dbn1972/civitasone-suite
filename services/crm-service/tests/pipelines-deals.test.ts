@@ -251,17 +251,16 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/crm/deals/:id/stage — rejects non-existent deal with 409 (version mismatch or not found)", async () => {
+  it("PATCH /v1/crm/deals/:id/stage — enqueues CQRS command (202)", async () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/crm/deals/${randomUUID()}/stage`,
       headers: { authorization: `Bearer ${token()}` },
       payload: { stage: "Proposal", version: 1 },
     });
-    // Non-existent deal returns 409 (can't match version)
-    expect(res.statusCode).toBe(409);
-    const body = res.json();
-    expect(body.code).toBe("VERSION_CONFLICT");
+    // Version conflict is applied asynchronously by the consumer
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("PATCH /v1/crm/deals/:id/stage — rejects invalid stage (400)", async () => {
@@ -274,7 +273,7 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/crm/deals/:id/stage — accepts valid stage with stageId", async () => {
+  it("PATCH /v1/crm/deals/:id/stage — accepts valid stage with stageId → 202", async () => {
     const stageId = randomUUID();
     const res = await app.inject({
       method: "PATCH",
@@ -282,8 +281,8 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
       headers: { authorization: `Bearer ${token()}` },
       payload: { stage: "Won", stageId, version: 1 },
     });
-    // Will be 409 because deal doesn't exist, but validates body parsing works
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("PATCH /v1/crm/deals/:id/stage — returns 403 for unauthorized role", async () => {

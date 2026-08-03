@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate identity & profile (checklist R-RA-0080/0081/0082/0084/0085/0089/0090/0091).
  *
@@ -11,7 +13,6 @@
  *   POST /v1/hrms/candidates/:id/withdraw          withdraw the profile
  *   POST /v1/hrms/candidates/:id/data-request      record a DPDP data/erasure request
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -78,16 +79,10 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     }
     const id = randomUUID();
     try {
-      await db.transaction((tx) => repo.insertCandidate(tx, {
-        id, tenantId: ctx.tenantId, email: body.email, normalizedEmail: nEmail,
-        ...(body.mobile ? { mobile: body.mobile, normalizedMobile: nMobile ?? null } : {}),
-        emailVerified: body.emailVerified ?? false, mobileVerified: body.mobileVerified ?? false,
-        ...pick(body),
-        status: "draft", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_candidate_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" });
+        return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" }) as any;
       }
       throw err;
     }
@@ -131,8 +126,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const locked = lockedFieldsIn(c.status, requested);
     if (locked.length > 0) throw new HttpError(409, "FIELDS_LOCKED", `these fields are locked after submission: ${locked.join(", ")}`);
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId, ...pick(body) };
-    await db.transaction((tx) => repo.updateCandidate(tx, ctx.tenantId, id, patch, c.version));
-    return reply.send({ id, status: c.status });
+    await publishF3Write(ctx, "recruitment_candidate_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: c.status }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/education", async (req, reply) => {
@@ -148,17 +143,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await db.transaction((tx) => repo.insertEducation(tx, {
-      id: eid, tenantId: ctx.tenantId, candidateId: id, qualification: body.qualification,
-      ...(body.subject ? { subject: body.subject } : {}),
-      ...(body.institution ? { institution: body.institution } : {}),
-      ...(body.boardUniversity ? { boardUniversity: body.boardUniversity } : {}),
-      ...(body.yearOfPassing != null ? { yearOfPassing: body.yearOfPassing } : {}),
-      ...(body.marksPercent != null ? { marksPercent: String(body.marksPercent) } : {}),
-      ...(body.grade ? { grade: body.grade } : {}),
-      createdBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id: eid, candidateId: id });
+    await publishF3Write(ctx, "recruitment_candidate_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/employment", async (req, reply) => {
@@ -174,17 +160,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await db.transaction((tx) => repo.insertEmployment(tx, {
-      id: eid, tenantId: ctx.tenantId, candidateId: id, employer: body.employer,
-      ...(body.roleTitle ? { roleTitle: body.roleTitle } : {}),
-      ...(body.fromDate ? { fromDate: body.fromDate } : {}),
-      ...(body.toDate ? { toDate: body.toDate } : {}),
-      ...(body.noticePeriodDays != null ? { noticePeriodDays: body.noticePeriodDays } : {}),
-      ...(body.ctcMinor != null ? { ctcMinor: BigInt(body.ctcMinor) } : {}),
-      ...(body.reasonForLeaving ? { reasonForLeaving: body.reasonForLeaving } : {}),
-      createdBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id: eid, candidateId: id });
+    await publishF3Write(ctx, "recruitment_candidate_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/education", async (req, reply) => {
@@ -211,11 +188,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     if (submissionRequiresVerification(otpVerificationEnabled(process.env), c.emailVerified)) {
       throw new HttpError(422, "EMAIL_NOT_VERIFIED", "email must be verified (OTP) before the profile can be submitted");
     }
-    await db.transaction((tx) => repo.updateCandidate(tx, ctx.tenantId, id, {
-      status: "submitted", submittedAt: new Date(),
-      consentVersion: body.consentVersion ?? null, consentAcceptedAt: new Date(), updatedBy: ctx.actorId,
-    }, c.version));
-    return reply.send({ id, status: "submitted", consentVersion: body.consentVersion });
+    await publishF3Write(ctx, "recruitment_candidate_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "submitted", consentVersion: body.consentVersion }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/withdraw", async (req, reply) => {
@@ -224,8 +198,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const c = await mustCand(ctx.tenantId, id);
     if (c.status === "withdrawn") throw new HttpError(409, "ALREADY_WITHDRAWN", "profile is already withdrawn");
-    await db.transaction((tx) => repo.updateCandidate(tx, ctx.tenantId, id, { status: "withdrawn", withdrawnAt: new Date(), updatedBy: ctx.actorId }, c.version));
-    return reply.send({ id, status: "withdrawn" });
+    await publishF3Write(ctx, "recruitment_candidate_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "withdrawn" }) as any;
   });
 
   app.post("/v1/hrms/candidates/:id/data-request", async (req, reply) => {
@@ -233,8 +207,8 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const c = await mustCand(ctx.tenantId, id);
-    await db.transaction((tx) => repo.updateCandidate(tx, ctx.tenantId, id, { dataRequestAt: new Date(), updatedBy: ctx.actorId }, c.version));
-    return reply.send({ id, dataRequestRecorded: true });
+    await publishF3Write(ctx, "recruitment_candidate_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, dataRequestRecorded: true }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

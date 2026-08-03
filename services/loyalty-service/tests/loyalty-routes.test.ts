@@ -50,6 +50,7 @@ const H = vi.hoisted(() => ({
   // Shared
   enqueueMock: vi.fn(),
   dbTransactionMock: vi.fn(),
+  publishMock: vi.fn(),
 }));
 
 // ─── vi.mock declarations ─────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn().mockReturnValue("k") },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/programs/repo.js", () => ({
@@ -198,6 +199,7 @@ beforeEach(() => {
   H.redemptionVoidMock.mockResolvedValue(true);
   H.tierInsertAssignmentMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
 });
 
@@ -237,7 +239,7 @@ describe("Programs CRUD + lifecycle", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/loyalty/programs — 201 creates program", async () => {
+  it("POST /v1/loyalty/programs — 202 accepts create", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -246,10 +248,11 @@ describe("Programs CRUD + lifecycle", () => {
       payload: { name: "Rewards Plus", earnRatio: 100 },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.name).toBe("Rewards Plus");
-    expect(res.json().data.status).toBe("draft");
-    expect(H.programInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBeTruthy();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.programInsertMock).not.toHaveBeenCalled();
   });
 
   it("GET /v1/loyalty/programs — 200 lists programs", async () => {
@@ -302,7 +305,7 @@ describe("Programs CRUD + lifecycle", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("PATCH /v1/loyalty/programs/:id — 200 updates program", async () => {
+  it("PATCH /v1/loyalty/programs/:id — 202 accepts update", async () => {
     H.programFindByIdMock.mockResolvedValue(makeProgram({ status: "draft" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -312,8 +315,9 @@ describe("Programs CRUD + lifecycle", () => {
       payload: { name: "Updated Name", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.updated).toBe(true);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("PATCH /v1/loyalty/programs/:id — 422 when not editable", async () => {
@@ -342,9 +346,8 @@ describe("Programs CRUD + lifecycle", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("PATCH /v1/loyalty/programs/:id — 409 on version conflict", async () => {
+  it("PATCH /v1/loyalty/programs/:id — 202 version race handled by consumer", async () => {
     H.programFindByIdMock.mockResolvedValue(makeProgram({ status: "draft" }));
-    H.programUpdateMock.mockResolvedValue(false);
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -353,10 +356,12 @@ describe("Programs CRUD + lifecycle", () => {
       payload: { name: "X", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("POST /v1/loyalty/programs/:id/activate — 200 activates draft program", async () => {
+  it("POST /v1/loyalty/programs/:id/activate — 202 accepts transition", async () => {
     H.programFindByIdMock.mockResolvedValue(makeProgram({ status: "draft" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -366,8 +371,9 @@ describe("Programs CRUD + lifecycle", () => {
       payload: { status: "active", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("active");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("POST /v1/loyalty/programs/:id/activate — 422 invalid transition", async () => {
@@ -383,7 +389,7 @@ describe("Programs CRUD + lifecycle", () => {
     expect(res.statusCode).toBe(422);
   });
 
-  it("DELETE /v1/loyalty/programs/:id — 200 archives program", async () => {
+  it("DELETE /v1/loyalty/programs/:id — 202 accepts archive", async () => {
     H.programFindByIdMock.mockResolvedValue(makeProgram({ status: "active" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -392,8 +398,9 @@ describe("Programs CRUD + lifecycle", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("archived");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("DELETE /v1/loyalty/programs/:id — 404 for non-existent", async () => {
@@ -457,7 +464,7 @@ describe("Enrolments", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/loyalty/enrol — 201 enrols member", async () => {
+  it("POST /v1/loyalty/enrol — 202 accepts enrol", async () => {
     H.programFindByIdMock.mockResolvedValue(makeProgram({ status: "active" }));
     H.enrolmentFindByProgramAndProfileMock.mockResolvedValue(null);
     const app = await buildApp();
@@ -468,9 +475,10 @@ describe("Enrolments", () => {
       payload: { programId: PROGRAM_ID, profileId: PROFILE_ID },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("active");
-    expect(H.enrolmentInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.enrolmentInsertMock).not.toHaveBeenCalled();
   });
 
   it("POST /v1/loyalty/enrol — 404 when program not found", async () => {
@@ -581,7 +589,7 @@ describe("Enrolments", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("PATCH /v1/loyalty/enrolments/:id/status — 200 suspends", async () => {
+  it("PATCH /v1/loyalty/enrolments/:id/status — 202 accepts status change", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -591,8 +599,9 @@ describe("Enrolments", () => {
       payload: { status: "suspended", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("suspended");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("PATCH /v1/loyalty/enrolments/:id/status — 422 invalid transition", async () => {
@@ -658,7 +667,7 @@ describe("Accruals", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/loyalty/accrue — 201 accrues points", async () => {
+  it("POST /v1/loyalty/accrue — 202 accepts accrue", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -668,10 +677,10 @@ describe("Accruals", () => {
       payload: { enrolmentId: ENROLMENT_ID, points: 100, source: "purchase", txType: "purchase" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.points).toBe("100");
-    expect(H.accrualInsertMock).toHaveBeenCalledOnce();
-    expect(H.enrolmentAdjustBalanceMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.accrualInsertMock).not.toHaveBeenCalled();
   });
 
   it("POST /v1/loyalty/accrue — 404 when enrolment not found", async () => {
@@ -778,7 +787,7 @@ describe("Redemptions", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/loyalty/redeem — 201 redeems points", async () => {
+  it("POST /v1/loyalty/redeem — 202 accepts redeem", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active", pointsBalance: BigInt(500) }));
     const app = await buildApp();
     const res = await app.inject({
@@ -788,9 +797,10 @@ describe("Redemptions", () => {
       payload: { enrolmentId: ENROLMENT_ID, points: 100, rewardType: "voucher" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("fulfilled");
-    expect(H.redemptionInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.redemptionInsertMock).not.toHaveBeenCalled();
   });
 
   it("POST /v1/loyalty/redeem — 404 when enrolment not found", async () => {
@@ -832,7 +842,7 @@ describe("Redemptions", () => {
     expect(res.statusCode).toBe(422);
   });
 
-  it("POST /v1/loyalty/redemptions/:id/void — 200 voids redemption", async () => {
+  it("POST /v1/loyalty/redemptions/:id/void — 202 accepts void", async () => {
     H.redemptionFindByIdMock.mockResolvedValue(makeRedemption({ status: "fulfilled", enrolmentId: ENROLMENT_ID }));
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment());
     const app = await buildApp();
@@ -843,8 +853,9 @@ describe("Redemptions", () => {
       payload: { reason: "Customer request", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("voided");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("POST /v1/loyalty/redemptions/:id/void — 404 for non-existent", async () => {
@@ -1030,7 +1041,7 @@ describe("Tiers", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("POST /v1/loyalty/tiers/evaluate — 200 evaluates tier (no change)", async () => {
+  it("POST /v1/loyalty/tiers/evaluate — 202 accepts evaluate", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ lifetimePoints: BigInt(100) }));
     H.tierListDefinitionsMock.mockResolvedValue([
       { id: TIER_DEF_ID, tenantId: TENANT, programId: PROGRAM_ID, name: "Bronze", level: 1, minPointsThreshold: BigInt(0), benefits: {}, version: 1, createdAt: new Date(), updatedAt: new Date() },
@@ -1044,17 +1055,13 @@ describe("Tiers", () => {
       payload: { enrolmentId: ENROLMENT_ID, programId: PROGRAM_ID },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.changed).toBe(false);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("POST /v1/loyalty/tiers/evaluate — 200 evaluates tier (upgrade)", async () => {
+  it("POST /v1/loyalty/tiers/evaluate — 202 accepts evaluate (upgrade path)", async () => {
     H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ lifetimePoints: BigInt(600) }));
-    H.tierListDefinitionsMock.mockResolvedValue([
-      { id: "t1", tenantId: TENANT, programId: PROGRAM_ID, name: "Bronze", level: 1, minPointsThreshold: BigInt(0), benefits: {}, version: 1, createdAt: new Date(), updatedAt: new Date() },
-      { id: "t2", tenantId: TENANT, programId: PROGRAM_ID, name: "Silver", level: 2, minPointsThreshold: BigInt(500), benefits: {}, version: 1, createdAt: new Date(), updatedAt: new Date() },
-    ]);
-    H.tierFindCurrentAssignmentMock.mockResolvedValue({ tierDefinitionId: "t1" });
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -1063,10 +1070,9 @@ describe("Tiers", () => {
       payload: { enrolmentId: ENROLMENT_ID, programId: PROGRAM_ID },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.changed).toBe(true);
-    expect(res.json().data.direction).toBe("upgrade");
-    expect(res.json().data.newTier).toBe("Silver");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("POST /v1/loyalty/tiers/evaluate — 404 for non-existent enrolment", async () => {

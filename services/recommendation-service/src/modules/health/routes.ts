@@ -1,12 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import { classifyHealth, computeHealthScore, validateFactors, type HealthFactors } from "./domain.js";
 
 const REC_ROLES = ["recommendation_admin", "crm_user", "sales_user", "super_admin"];
@@ -77,45 +74,9 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     if (validationError) throw new HttpError(422, "FACTORS_INVALID", validationError);
 
     const score = computeHealthScore(factors);
-    const classification = classifyHealth(score);
-    const id = randomUUID();
-    const computedAt = new Date();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        accountId,
-        score,
-        factors,
-        computedAt,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.healthScoreUpdated,
-        eventType: EVENTS.healthScoreUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { healthScoreId: id, accountId, score, classification },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "health", accountId));
-
-    return reply.code(201).send({
-      data: {
-        id,
-        tenantId: ctx.tenantId,
-        accountId,
-        score,
-        classification,
-        factors,
-        computedAt: computedAt.toISOString(),
-        version: 1,
-      },
-    });
+    const computedAt = new Date().toISOString();
+    return reply.code(202).send(
+      await commands.recomputeHealth(ctx, { accountId, score, factors, computedAt }),
+    );
   });
 }

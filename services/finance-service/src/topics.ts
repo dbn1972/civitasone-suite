@@ -45,6 +45,34 @@ export const COMMANDS = {
   // recon (CAP-059)
   reconRun:             "finance.recon.run",
   reconExceptionAction: "finance.recon.exception_action",
+  // masters (bank / FY / opening balances)
+  bankAccountCreate: "finance.masters.bank_account.create",
+  fiscalYearCreate: "finance.masters.fiscal_year.create",
+  fiscalYearActivate: "finance.masters.fiscal_year.activate",
+  openingBalancesEnter: "finance.masters.opening_balances.enter",
+  // budget allocation / distribution / formulation (F3 CQRS)
+  budgetAllocationUpsert: "finance.budget.allocation.upsert",
+  budgetAllocationReappropriate: "finance.budget.allocation.reappropriate",
+  allocationDistributionCreate: "finance.budget.distribution.create",
+  allocationDistributionIssue: "finance.budget.distribution.issue",
+  allocationDistributionAcknowledge: "finance.budget.distribution.acknowledge",
+  budgetProposalCreate: "finance.budget.proposal.create",
+  budgetProposalSubmit: "finance.budget.proposal.submit",
+  budgetProposalReview: "finance.budget.proposal.review",
+  budgetProposalRevise: "finance.budget.proposal.revise",
+  budgetProposalApprove: "finance.budget.proposal.approve",
+  // budget outcome / supplementary (F3 CQRS residuals)
+  budgetOutcomeCreate: "finance.budget.outcome.create",
+  budgetOutcomeAchievement: "finance.budget.outcome.achievement",
+  budgetOutcomeEvaluate: "finance.budget.outcome.evaluate",
+  supplementaryCreate: "finance.budget.supplementary.create",
+  supplementaryApprove: "finance.budget.supplementary.approve",
+  supplementaryReject: "finance.budget.supplementary.reject",
+  // recurring / tds (wire routes to existing consumers)
+  recurringEntryCreate: "finance.recurring.entry_create",
+  recurringEntryUpdate: "finance.recurring.entry_update",
+  tdsDeductionRecord: "finance.tds.deduction_record",
+  tdsDepositMark: "finance.tds.deposit_mark",
 } as const;
 
 export const EVENTS = {

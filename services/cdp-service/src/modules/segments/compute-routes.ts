@@ -1,16 +1,16 @@
 /**
  * segments/compute-routes.ts — CDP-005 membership recompute.
+ *
+ * Queue-first (CQRS): the route validates criteria and publishes; the F3 consumer
+ * materialises membership, emits events, refreshes pending activation audiences, and
+ * invalidates the member-list cache via markProcessed.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { queue, cache } from "../../shared/infra.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as repo from "./repo.js";
-import * as membershipRepo from "./membership-repo.js";
-import { validateCriteria, type SegmentCriteria } from "./domain.js";
+import { validateCriteria } from "./domain.js";
 
 const ADMIN_ROLES = ["cdp_admin", "super_admin", "tenant_admin"];
 
@@ -35,55 +35,21 @@ export async function segmentComputeRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(422, "INVALID_CRITERIA", criteriaError);
     }
 
-    const criteria = segment.criteria as unknown as SegmentCriteria;
-    const runAt = new Date();
+    const runAt = new Date().toISOString();
 
-    const memberCount = await db.transaction(async (tx) => {
-      const count = await membershipRepo.recompute(tx, ctx.tenantId, id, criteria, runAt);
-      await repo.updateMemberCount(tx, id, ctx.tenantId, count);
-
-      await enqueue(tx, {
-        topic: EVENTS.segmentComputed,
-        eventType: EVENTS.segmentComputed,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { segmentId: id, memberCount: count, computedAt: runAt.toISOString() },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "segment_recomputed",
-          resourceType: "segment",
-          resourceId: id,
-          outcome: "success",
-          metadata: { memberCount: count },
-        },
-      });
-
-      return count;
+    await publishF3Write(ctx, "segment_compute", id, {
+      segmentId: id,
+      criteria: segment.criteria,
+      computedAt: runAt,
     });
-
-    // Downstream fan-out (activation refresh, analytics) happens off the request path.
-    await queue.publish(COMMANDS.computeSegment, {
-      type: COMMANDS.computeSegment,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { segmentId: id, memberCount, computedAt: runAt.toISOString() },
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "segment_members", id));
 
     return reply.code(202).send({
-      data: { segmentId: id, memberCount, computedAt: runAt.toISOString(), status: "accepted" },
+      data: {
+        segmentId: id,
+        computedAt: runAt,
+        status: "accepted",
+        correlationId: ctx.correlationId,
+      },
     });
   });
 }

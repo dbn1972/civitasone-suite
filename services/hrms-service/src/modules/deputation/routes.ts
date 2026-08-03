@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Deputation lifecycle (depute-out / repatriate).
  *
@@ -13,7 +15,6 @@
  * snapshot is restored. The deputation (duty) allowance is stored in paise.
  * Service-book entries are written for both depute and repatriation.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -80,46 +81,14 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     if (existing) throw new HttpError(409, "ALREADY_DEPUTED", "employee already has an active deputation");
 
     const depId = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertDeputation(tx, {
-        id: depId, tenantId: ctx.tenantId, employeeId: id,
-        parentCadre: body.parentCadre,
-        parentDepartmentId: emp.departmentId,
-        ...(emp.managerId ? { parentManagerId: emp.managerId } : {}),
-        borrowingDepartment: body.borrowingDepartment,
-        ...(body.borrowingDepartmentId ? { borrowingDepartmentId: body.borrowingDepartmentId } : {}),
-        ...(body.borrowingManagerId ? { borrowingManagerId: body.borrowingManagerId } : {}),
-        deputationAllowanceMinor: BigInt(body.deputationAllowanceMinor),
-        tenureFrom: body.tenureFrom, tenureTo: body.tenureTo,
-        status: "active",
-        ...(body.orderRef ? { orderRef: body.orderRef } : {}),
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-
-      // Switch the employee's effective posting/reporting for the deputation.
-      const empSet: Record<string, unknown> = { updatedBy: ctx.actorId };
-      if (body.borrowingDepartmentId) empSet.departmentId = body.borrowingDepartmentId;
-      if (body.borrowingManagerId) empSet.managerId = body.borrowingManagerId;
-      await tx.update(hrmsEmployees).set(empSet)
-        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)));
-
-      await tx.insert(hrmsServiceBookEntries).values({
-        tenantId: ctx.tenantId, employeeId: id, entryType: "deputation_out",
-        effectiveDate: body.tenureFrom,
-        description: `Deputed to ${body.borrowingDepartment} (parent cadre ${body.parentCadre}) from ${body.tenureFrom} to ${body.tenureTo}`
-          + (body.deputationAllowanceMinor > 0 ? `, deputation allowance Rs ${(body.deputationAllowanceMinor / 100).toLocaleString("en-IN")}/month` : ""),
-        recordedBy: ctx.actorId,
-        ...(body.orderRef ? { documentRef: body.orderRef } : {}),
-      });
-    });
+    await publishF3Write(ctx, "deputation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send(jsonSafe({
       id: depId, employeeId: id, status: "active",
       parentCadre: body.parentCadre, borrowingDepartment: body.borrowingDepartment,
       deputationAllowanceMinor: BigInt(body.deputationAllowanceMinor),
       tenureFrom: body.tenureFrom, tenureTo: body.tenureTo,
-    }));
+    })) as any;
   });
 
   app.get("/v1/hrms/employees/:id/deputations", async (req, reply) => {
@@ -153,35 +122,11 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     }
     const effectiveDate = body.repatriatedOn ?? new Date().toISOString().slice(0, 10);
 
-    await db.transaction(async (tx) => {
-      await repo.closeDeputation(tx, ctx.tenantId, depId, {
-        status: newStatus,
-        repatriatedOn: effectiveDate,
-        ...(body.note ? { repatriationNote: body.note } : {}),
-        updatedBy: ctx.actorId,
-      }, dep.version);
-
-      // Restore the parent posting/reporting snapshot.
-      await tx.update(hrmsEmployees).set({
-        departmentId: dep.parentDepartmentId,
-        managerId: dep.parentManagerId,
-        updatedBy: ctx.actorId,
-      }).where(and(eq(hrmsEmployees.id, dep.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId)));
-
-      await tx.insert(hrmsServiceBookEntries).values({
-        tenantId: ctx.tenantId, employeeId: dep.employeeId,
-        entryType: newStatus === "repatriated" ? "repatriation" : "deputation_cancelled",
-        effectiveDate,
-        description: newStatus === "repatriated"
-          ? `Repatriated from ${dep.borrowingDepartment} back to parent cadre ${dep.parentCadre}`
-          : `Deputation to ${dep.borrowingDepartment} cancelled`,
-        recordedBy: ctx.actorId,
-      });
-    });
+    await publishF3Write(ctx, "deputation_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send(jsonSafe({
       id: depId, employeeId: dep.employeeId, status: newStatus, effectiveDate,
-    }));
+    })) as any;
   }
 
   app.post("/v1/hrms/deputations/:depId/repatriate", (req, reply) => close(req, reply, "repatriated"));

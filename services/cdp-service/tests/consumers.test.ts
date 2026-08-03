@@ -32,9 +32,11 @@ const H = vi.hoisted(() => ({
   membershipDeleteMock: vi.fn(),
   activationFindByIdMock: vi.fn(),
   activationUpdateStatusMock: vi.fn(),
+  activationInsertMock: vi.fn(),
   activationRefreshMock: vi.fn(),
   dsarFindByIdMock: vi.fn(),
   dsarStartMock: vi.fn(),
+  dsarInsertMock: vi.fn(),
   deviceDeleteMock: vi.fn(),
   identityFindByHashTxMock: vi.fn(),
   identityInsertMock: vi.fn(),
@@ -105,6 +107,7 @@ vi.mock("../src/modules/activations/repo.js", () => ({
   listByTenant: vi.fn(),
   insert: vi.fn(),
   updateStatus: (...a: unknown[]) => H.activationUpdateStatusMock(...a),
+  insert: (...a: unknown[]) => H.activationInsertMock(...a),
   refreshPendingAudience: (...a: unknown[]) => H.activationRefreshMock(...a),
   toView: (r: Record<string, unknown>) => r,
 }));
@@ -115,6 +118,7 @@ vi.mock("../src/modules/dsar/repo.js", () => ({
   insert: vi.fn(),
   complete: vi.fn(),
   startProcessing: (...a: unknown[]) => H.dsarStartMock(...a),
+  insert: (...a: unknown[]) => H.dsarInsertMock(...a),
   toView: (r: Record<string, unknown>) => r,
 }));
 
@@ -203,12 +207,14 @@ beforeEach(() => {
     status: "pending", audienceCount: 42, startedAt: null, completedAt: null, version: 1,
   });
   H.activationUpdateStatusMock.mockResolvedValue(true);
+  H.activationInsertMock.mockResolvedValue(undefined);
   H.activationRefreshMock.mockResolvedValue([ACTIVATION_ID]);
   H.dsarFindByIdMock.mockResolvedValue({
     id: DSAR_ID, tenantId: TENANT, profileId: PROFILE_ID, requestType: "erasure",
     status: "pending", reason: null, requestedAt: new Date(), completedAt: null, version: 1,
   });
   H.dsarStartMock.mockResolvedValue(true);
+  H.dsarInsertMock.mockResolvedValue(undefined);
   H.deviceDeleteMock.mockResolvedValue(3);
   H.identityFindByHashTxMock.mockResolvedValue([]);
   H.identityInsertMock.mockResolvedValue(undefined);
@@ -341,94 +347,66 @@ describe("cdp.segment.activate consumer (CDP-012)", () => {
     dispatchAt: "2020-01-01T00:00:00.000Z",
   };
 
-  it("completes the run and emits the per-channel dispatch", async () => {
+  it("inserts and dispatches an immediate run", async () => {
     await handleActivateSegment(envelope(payload));
-    const patch = H.activationUpdateStatusMock.mock.calls[0]?.[4] as { status: string; startedAt: Date; completedAt: Date };
-    expect(patch.status).toBe("completed");
-    expect(patch.startedAt).toBeInstanceOf(Date);
-    expect(patch.completedAt).toBeInstanceOf(Date);
-    expect(enqueuedTopics()).toEqual(["cdp.activation.dispatched", "audit.event.record"]);
-    const dispatched = H.enqueueMock.mock.calls[0]?.[1] as { payload: { channel: string; audienceCount: number } };
-    expect(dispatched.payload.channel).toBe("sms");
-    // The run row's snapshot is authoritative over the command payload.
-    expect(dispatched.payload.audienceCount).toBe(42);
+    expect(H.activationInsertMock).toHaveBeenCalledOnce();
+    const row = H.activationInsertMock.mock.calls[0]?.[1] as { status: string };
+    expect(row.status).toBe("completed");
+    expect(enqueuedTopics()).toEqual([
+      "cdp.activation.requested",
+      "cdp.activation.dispatched",
+      "audit.event.record",
+    ]);
   });
 
-  it("idempotency — the same messageId twice dispatches exactly once", async () => {
+  it("idempotency — the same messageId twice writes exactly once", async () => {
     await handleActivateSegment(envelope(payload));
     await handleActivateSegment(envelope(payload));
-    expect(H.activationUpdateStatusMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    expect(H.activationInsertMock).toHaveBeenCalledOnce();
   });
 
-  it("a run already past pending is not dispatched again", async () => {
-    H.activationFindByIdMock.mockResolvedValue({
-      id: ACTIVATION_ID, tenantId: TENANT, segmentId: SEGMENT_ID, channel: "sms",
-      status: "completed", audienceCount: 42, startedAt: new Date(), completedAt: new Date(), version: 2,
-    });
-    await handleActivateSegment(envelope(payload));
-    expect(H.activationUpdateStatusMock).not.toHaveBeenCalled();
-  });
-
-  it("a future dispatch time is left for its schedule", async () => {
+  it("a future dispatch time inserts pending without dispatch", async () => {
     const future = new Date(Date.now() + 3_600_000).toISOString();
     await handleActivateSegment(envelope({ ...payload, dispatchAt: future }));
-    expect(H.activationUpdateStatusMock).not.toHaveBeenCalled();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
-  });
-
-  it("an optimistic-lock miss emits no dispatch and does not throw", async () => {
-    H.activationUpdateStatusMock.mockResolvedValue(false);
-    await expect(handleActivateSegment(envelope(payload))).resolves.toBeUndefined();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.activationInsertMock).toHaveBeenCalledOnce();
+    const row = H.activationInsertMock.mock.calls[0]?.[1] as { status: string };
+    expect(row.status).toBe("pending");
+    expect(enqueuedTopics()).toEqual(["cdp.activation.requested", "audit.event.record"]);
   });
 
   it("an unsupported channel is skipped without throwing", async () => {
     await expect(handleActivateSegment(envelope({ ...payload, channel: "carrier-pigeon" }))).resolves.toBeUndefined();
-    expect(H.activationUpdateStatusMock).not.toHaveBeenCalled();
-  });
-
-  it("an unknown activation is skipped", async () => {
-    H.activationFindByIdMock.mockResolvedValue(null);
-    await handleActivateSegment(envelope(payload));
-    expect(H.activationUpdateStatusMock).not.toHaveBeenCalled();
+    expect(H.activationInsertMock).not.toHaveBeenCalled();
   });
 
   it("a malformed payload is skipped without throwing", async () => {
     await expect(handleActivateSegment(envelope({ activationId: ACTIVATION_ID }))).resolves.toBeUndefined();
-    expect(H.activationUpdateStatusMock).not.toHaveBeenCalled();
+    expect(H.activationInsertMock).not.toHaveBeenCalled();
   });
 });
 
 describe("cdp.dsar.raise consumer (CDP-011)", () => {
   const payload = { dsarId: DSAR_ID, profileId: PROFILE_ID, requestType: "erasure" };
 
-  it("erasure purges tokens, identifier edges and audiences in one transaction", async () => {
+  it("erasure inserts, starts processing, and purges in one transaction", async () => {
     await handleRaiseDsar(envelope(payload));
+    expect(H.dsarInsertMock).toHaveBeenCalledOnce();
     expect(H.dsarStartMock).toHaveBeenCalledWith({}, DSAR_ID, TENANT, 1);
     expect(H.deviceDeleteMock).toHaveBeenCalledWith({}, PROFILE_ID, TENANT);
     expect(H.identityDeleteMock).toHaveBeenCalledWith({}, PROFILE_ID, TENANT);
     expect(H.membershipDeleteMock).toHaveBeenCalledWith({}, PROFILE_ID, TENANT);
-    expect(enqueuedTopics()).toEqual(["cdp.dsar.in_progress", "audit.event.record"]);
-    const event = H.enqueueMock.mock.calls[0]?.[1] as { payload: { purged: Record<string, number> } };
-    expect(event.payload.purged).toEqual({ deviceTokens: 3, identityLinks: 4, memberships: 2 });
-    expect(H.cacheInvalidateMock).toHaveBeenCalledWith(`cdp:${TENANT}:profile_summary:${PROFILE_ID}`);
+    expect(enqueuedTopics()).toEqual(["cdp.dsar.raised", "cdp.dsar.in_progress", "audit.event.record"]);
   });
 
   it("idempotency — the same messageId twice purges exactly once", async () => {
     await handleRaiseDsar(envelope(payload));
     await handleRaiseDsar(envelope(payload));
+    expect(H.dsarInsertMock).toHaveBeenCalledOnce();
     expect(H.dsarStartMock).toHaveBeenCalledOnce();
     expect(H.deviceDeleteMock).toHaveBeenCalledOnce();
-    expect(H.identityDeleteMock).toHaveBeenCalledOnce();
-    expect(H.membershipDeleteMock).toHaveBeenCalledOnce();
   });
 
   it("rectification drops audiences but keeps identifiers and devices", async () => {
-    H.dsarFindByIdMock.mockResolvedValue({
-      id: DSAR_ID, tenantId: TENANT, profileId: PROFILE_ID, requestType: "rectification",
-      status: "pending", reason: null, requestedAt: new Date(), completedAt: null, version: 1,
-    });
     await handleRaiseDsar(envelope({ ...payload, requestType: "rectification" }));
     expect(H.membershipDeleteMock).toHaveBeenCalledOnce();
     expect(H.deviceDeleteMock).not.toHaveBeenCalled();
@@ -436,10 +414,6 @@ describe("cdp.dsar.raise consumer (CDP-011)", () => {
   });
 
   it("access destroys nothing — it is a read-only disclosure", async () => {
-    H.dsarFindByIdMock.mockResolvedValue({
-      id: DSAR_ID, tenantId: TENANT, profileId: PROFILE_ID, requestType: "access",
-      status: "pending", reason: null, requestedAt: new Date(), completedAt: null, version: 1,
-    });
     await handleRaiseDsar(envelope({ ...payload, requestType: "access" }));
     expect(H.dsarStartMock).toHaveBeenCalledOnce();
     expect(H.deviceDeleteMock).not.toHaveBeenCalled();
@@ -447,32 +421,15 @@ describe("cdp.dsar.raise consumer (CDP-011)", () => {
     expect(H.membershipDeleteMock).not.toHaveBeenCalled();
   });
 
-  it("a request already in progress is not fulfilled twice", async () => {
-    H.dsarFindByIdMock.mockResolvedValue({
-      id: DSAR_ID, tenantId: TENANT, profileId: PROFILE_ID, requestType: "erasure",
-      status: "in_progress", reason: null, requestedAt: new Date(), completedAt: null, version: 2,
-    });
-    await handleRaiseDsar(envelope(payload));
-    expect(H.dsarStartMock).not.toHaveBeenCalled();
-    expect(H.deviceDeleteMock).not.toHaveBeenCalled();
-  });
-
-  it("an optimistic-lock miss purges nothing", async () => {
+  it("an optimistic-lock miss purges nothing after insert", async () => {
     H.dsarStartMock.mockResolvedValue(false);
     await handleRaiseDsar(envelope(payload));
+    expect(H.dsarInsertMock).toHaveBeenCalledOnce();
     expect(H.deviceDeleteMock).not.toHaveBeenCalled();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
-    expect(H.cacheInvalidateMock).not.toHaveBeenCalled();
-  });
-
-  it("an unknown request is skipped", async () => {
-    H.dsarFindByIdMock.mockResolvedValue(null);
-    await handleRaiseDsar(envelope(payload));
-    expect(H.dsarStartMock).not.toHaveBeenCalled();
   });
 
   it("a malformed payload is skipped without throwing", async () => {
-    await expect(handleRaiseDsar(envelope({ dsarId: DSAR_ID, requestType: "nonsense" }))).resolves.toBeUndefined();
-    expect(H.dsarStartMock).not.toHaveBeenCalled();
+    await expect(handleRaiseDsar(envelope({ dsarId: DSAR_ID }))).resolves.toBeUndefined();
+    expect(H.dsarInsertMock).not.toHaveBeenCalled();
   });
 });

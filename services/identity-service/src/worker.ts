@@ -9,8 +9,11 @@ import { registerSessionConsumers } from "./modules/sessions/consumer.js";
 import { reapExpiredSessions }      from "./modules/sessions/repo.js";
 import { sweepExpiredGrants }       from "./modules/breakglass/repo.js";
 import { registerMfaConsumers }     from "./modules/mfa/consumer.js";
+import { registerScimConsumers }    from "./modules/scim/consumer.js";
 import { registerSyncFeederConsumers } from "./modules/sync/feeder.js";
 import { registerIdentityTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
+import { registerApiKeyConsumers } from "./modules/apikeys/consumer.js";
+import { registerDeviceConsumers } from "./modules/devices/consumer.js";
 import * as keycloak from "./shared/keycloak.js";
 import { reconcileDueDeactivations, countPending } from "./shared/kc-reconcile.js";
 
@@ -20,8 +23,11 @@ registerUserConsumers(queue);
 registerRbacConsumers(queue);
 registerSessionConsumers(queue);
 registerMfaConsumers(queue);
+registerScimConsumers(queue);
 registerSyncFeederConsumers(queue);
 registerIdentityTenantOnboardConsumers(queue);
+registerApiKeyConsumers(queue);
+registerDeviceConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

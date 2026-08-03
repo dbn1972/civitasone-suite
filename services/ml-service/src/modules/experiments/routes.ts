@@ -10,10 +10,12 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { mlExperiments } from "../training/schema.js";
-import { mlModels } from "../models/schema.js";
+import * as commands from "./commands.js";
 
 const EXPERIMENT_ROLES = ["ml_admin", "super_admin"];
 
@@ -101,77 +103,30 @@ export async function experimentRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * POST /v1/ml/experiments — Create a new A/B experiment
+   * POST /v1/ml/experiments — Create a new A/B experiment (CQRS — 202 Accepted)
    * Requires: ml_admin
    */
   app.post("/v1/ml/experiments", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, EXPERIMENT_ROLES);
 
     const body = createExperimentBody.parse(req.body);
-
-    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-    // before these reads/write — bare db calls run with no RLS GUC set.
-    const created = await db.transaction(async (tx) => {
-      // Validate that both models exist and belong to the tenant
-      const [challenger] = await tx
-        .select()
-        .from(mlModels)
-        .where(and(eq(mlModels.id, body.challengerModelId), eq(mlModels.tenantId, ctx.tenantId)))
-        .limit(1);
-
-      if (!challenger) {
-        throw new HttpError(404, "NOT_FOUND", "challenger model not found");
-      }
-
-      const [current] = await tx
-        .select()
-        .from(mlModels)
-        .where(and(eq(mlModels.id, body.currentModelId), eq(mlModels.tenantId, ctx.tenantId)))
-        .limit(1);
-
-      if (!current) {
-        throw new HttpError(404, "NOT_FOUND", "current model not found");
-      }
-
-      // Ensure both models are for the same domain as specified
-      if (challenger.domain !== body.domain || current.domain !== body.domain) {
-        throw new HttpError(422, "DOMAIN_MISMATCH", "both models must match the specified domain");
-      }
-
-      const [row] = await tx.insert(mlExperiments).values({
-        tenantId: ctx.tenantId,
-        domain: body.domain,
-        name: body.name,
-        challengerModelId: body.challengerModelId,
-        currentModelId: body.currentModelId,
-        splitPct: body.splitPct,
-        status: "active",
-        createdBy: ctx.actorId,
-      }).returning();
-
-      return row;
-    });
-
-    return reply.code(201).send({ data: created });
+    sendAccepted(reply, acceptedResponseSchema, await commands.experimentCreate(ctx, body));
   });
 
   /**
-   * PATCH /v1/ml/experiments/:id — End an experiment
+   * PATCH /v1/ml/experiments/:id — End an experiment (CQRS — 202 Accepted)
    * Requires: ml_admin
    */
   app.patch("/v1/ml/experiments/:id", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, EXPERIMENT_ROLES);
 
     const { id } = experimentIdParams.parse(req.params);
     const body = endExperimentBody.parse(req.body);
 
-    // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-    // before this read/write — bare db calls run with no RLS GUC set.
-    const updated = await db.transaction(async (tx) => {
+    // Synchronous read validates state before enqueueing the command.
+    await db.transaction(async (tx) => {
       const [experiment] = await tx
         .select()
         .from(mlExperiments)
@@ -185,21 +140,9 @@ export async function experimentRoutes(app: FastifyInstance): Promise<void> {
       if (experiment.status !== "active") {
         throw new HttpError(422, "ALREADY_ENDED", `experiment is already ${experiment.status}`);
       }
-
-      const [row] = await tx
-        .update(mlExperiments)
-        .set({
-          status: body.status,
-          endedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(mlExperiments.id, id))
-        .returning();
-
-      return row;
     });
 
-    return reply.send({ data: updated });
+    sendAccepted(reply, acceptedResponseSchema, await commands.experimentEnd(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -75,6 +75,41 @@ export function registerUtilisationConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "compliance", p.applicationId));
   });
+
+  queue.subscribe(COMMANDS.ucValidate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; ucId: string;
+      status: "validated" | "rejected"; remarks: string | null;
+      validatedAt: string; applicationId: string; installmentNo: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertUcValidation(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        ucId: p.ucId,
+        status: p.status,
+        remarks: p.remarks,
+        validatedBy: msg.actorId,
+        validatedAt: new Date(p.validatedAt),
+      });
+      await repo.setUcValidationStatus(
+        tx, p.ucId, p.tenantId, p.status, msg.actorId, p.remarks,
+      );
+      const eventType = p.status === "validated" ? EVENTS.ucValidated : EVENTS.ucRejected;
+      await enqueue(tx, {
+        topic: eventType, eventType,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          ucId: p.ucId, applicationId: p.applicationId,
+          installmentNo: p.installmentNo, status: p.status,
+        },
+      });
+      await audit(tx, msg, `uc_${p.status}`, "grant_uc_statement", p.ucId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "uc", p.applicationId));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "uc", p.ucId));
+  });
 }
 
 async function audit(tx: Parameters<typeof markProcessed>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {

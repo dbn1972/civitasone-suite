@@ -211,7 +211,7 @@ describe("GET /v1/crm/accounts/:id/ancestors", () => {
 });
 
 describe("PATCH /v1/crm/accounts/:id/parent", () => {
-  it("sets parent successfully", async () => {
+  it("sets parent successfully → 202", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -221,11 +221,12 @@ describe("PATCH /v1/crm/accounts/:id/parent", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.parentId).toBe(PARENT_ID);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBe(ORPHAN_ID);
   });
 
-  it("clears parent (set to null)", async () => {
+  it("clears parent (set to null) → 202", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -235,8 +236,8 @@ describe("PATCH /v1/crm/accounts/:id/parent", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.parentId).toBeNull();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("rejects cycle (child as parent of its ancestor)", async () => {

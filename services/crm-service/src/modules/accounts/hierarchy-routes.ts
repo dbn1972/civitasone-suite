@@ -2,15 +2,19 @@
  * Account hierarchy routes (CM-002).
  * GET /v1/crm/accounts/:id/children — list child accounts
  * GET /v1/crm/accounts/:id/ancestors — list parent chain (recursive)
- * PATCH /v1/crm/accounts/:id/parent — set parentId (validate no cycles)
+ * PATCH /v1/crm/accounts/:id/parent — set parentId (validate no cycles) → 202
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { wouldCreateCycle, buildAncestorChain, type AccountNode } from "./hierarchy-domain.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
+import { cache } from "../../shared/infra.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -72,14 +76,14 @@ export async function hierarchyRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: ancestors });
   });
 
-  /** Set or clear the parent of an account (with cycle detection) */
+  /** Set or clear the parent of an account (cycle detection before enqueue). */
   app.patch("/v1/crm/accounts/:id/parent", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const { parentId } = setParentBody.parse(req.body);
 
-    // Load all accounts for cycle detection
+    // Load all accounts for cycle detection (read path — OK)
     const allAccounts = await scopedRead(async (tx) => {
       return tx.execute(sql`
         SELECT id, parent_id as "parentId"
@@ -106,17 +110,8 @@ export async function hierarchyRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // Update in transaction
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        UPDATE crm.accounts
-        SET parent_id = ${parentId}, updated_at = now(), updated_by = ${ctx.actorId}
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-      `);
-    });
-
+    const accepted = await publishCrmCommand(ctx, COMMANDS.setAccountParent, id, { parentId });
     await cache.invalidateResource(ctx.tenantId, "account");
-
-    return reply.code(200).send({ data: { id, parentId } });
+    return sendAccepted(reply, acceptedResponseSchema, accepted);
   });
 }

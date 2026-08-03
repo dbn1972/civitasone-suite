@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Leave Policy Admin Routes — HR Admin can configure leave rules per employee type
  * This is the "input box" for configuring different policies for:
@@ -14,7 +16,6 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsLeavePolicyRules } from "./policy-schema.js";
 import { hrmsLeaveTypes } from "./schema.js";
-import { randomUUID } from "node:crypto";
 
 const HR_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -114,29 +115,7 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
       updatedBy: ctx.actorId,
     };
 
-    const result = await db.transaction((tx) => tx.insert(hrmsLeavePolicyRules).values(upsertValues)
-      .onConflictDoUpdate({
-        target: [hrmsLeavePolicyRules.tenantId, hrmsLeavePolicyRules.leaveTypeId, hrmsLeavePolicyRules.employeeType],
-        set: {
-          maxDaysPerYear: body.maxDaysPerYear,
-          carryForward: body.carryForward,
-          maxAccumulation: body.maxAccumulation,
-          encashable: body.encashable,
-          countMethod: body.countMethod,
-          maxContinuousDays: body.maxContinuousDays,
-          minServiceMonths: body.minServiceMonths,
-          genderRestriction: body.genderRestriction,
-          requiresMedicalCert: body.requiresMedicalCert,
-          requiresMedicalCertAfterDays: body.requiresMedicalCertAfterDays,
-          prefixSuffixRule: body.prefixSuffixRule,
-          sandwichRule: body.sandwichRule,
-          proRataOnJoining: body.proRataOnJoining,
-          updatedBy: ctx.actorId,
-          updatedAt: new Date(),
-          isActive: true,
-        },
-      })
-      .returning({ id: hrmsLeavePolicyRules.id }));
+    const result = await publishF3Write(ctx, "leave_policy_admin_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
 
     const returnedId = result[0]?.id ?? id;
     return reply.code(201).send({ id: returnedId, status: "created", employeeType: body.employeeType, leaveTypeId: body.leaveTypeId });
@@ -149,17 +128,9 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updatePolicyBody.parse(req.body);
 
-    await db.transaction(async (tx) => {
-      const existing = await tx.select().from(hrmsLeavePolicyRules)
-        .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))).limit(1);
-      if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "policy rule not found");
+    await publishF3Write(ctx, "leave_policy_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-      await tx.update(hrmsLeavePolicyRules)
-        .set({ ...body, updatedBy: ctx.actorId, updatedAt: new Date() } as any)
-        .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId)));
-    });
-
-    return reply.send({ id, status: "updated" });
+    return reply.send({ id, status: "updated" }) as any;
   });
 
   // ── Delete (soft: deactivate) a policy rule ──
@@ -168,11 +139,9 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    await db.transaction((tx) => tx.update(hrmsLeavePolicyRules)
-      .set({ isActive: false, updatedBy: ctx.actorId, updatedAt: new Date() } as any)
-      .where(and(eq(hrmsLeavePolicyRules.id, id), eq(hrmsLeavePolicyRules.tenantId, ctx.tenantId))));
+    await publishF3Write(ctx, "leave_policy_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(204).send();
+    return reply.code(204).send() as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

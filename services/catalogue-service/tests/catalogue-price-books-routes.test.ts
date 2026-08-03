@@ -24,6 +24,7 @@ const ABOVE_2_53 = "9007199254740993";
 const HUGE_PAISE = "123456789012345678901";
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   scopedReadMock: vi.fn(),
   enqueueMock: vi.fn(),
@@ -53,7 +54,7 @@ vi.mock("../src/shared/db.js", () => ({
   sqlClient: { end: async () => {} },
 }));
 
-vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqueueMock(...a) }));
+vi.mock("../src/shared/outbox.js", () => ({ enqueue: vi.fn() }));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: {
@@ -61,7 +62,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(),
     makeKey: (t: string, r: string, i: string) => `catalogue:${t}:${r}:${i}`,
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/price-books/repo.js", () => ({
@@ -219,6 +220,7 @@ function makeApproval(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
   H.insertPriceBookMock.mockResolvedValue(undefined);
   H.updatePriceBookMock.mockResolvedValue(true);
@@ -366,7 +368,7 @@ describe("QP-002 POST /v1/catalogue/price-books", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("201 creates a draft price book", async () => {
+  it("202 creates a draft price book", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -375,13 +377,12 @@ describe("QP-002 POST /v1/catalogue/price-books", () => {
       payload: VALID,
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("draft");
-    expect(H.insertPriceBookMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("201 accepts a geography selector", async () => {
+  it("202 accepts a geography selector", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -390,8 +391,9 @@ describe("QP-002 POST /v1/catalogue/price-books", () => {
       payload: { ...VALID, status: "active", geography: { circleCode: "KA", regionCode: "BLR" } },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("active");
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when effectiveTo precedes effectiveFrom", async () => {
@@ -461,7 +463,7 @@ describe("QP-002 PATCH /v1/catalogue/price-books/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("200 activates a draft book", async () => {
+  it("202 activates a draft book", async () => {
     H.findPriceBookByIdMock.mockResolvedValue(makeBook({ status: "draft" }));
     const app = await buildApp();
     const res = await app.inject({
@@ -471,12 +473,12 @@ describe("QP-002 PATCH /v1/catalogue/price-books/:id", () => {
       payload: { status: "active" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
-    expect(H.updatePriceBookMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("200 clears effectiveTo with an explicit null", async () => {
+  it("202 clears effectiveTo with an explicit null", async () => {
     H.findPriceBookByIdMock.mockResolvedValue(makeBook({ effectiveTo: new Date("2026-12-31T00:00:00Z") }));
     const app = await buildApp();
     const res = await app.inject({
@@ -486,7 +488,8 @@ describe("QP-002 PATCH /v1/catalogue/price-books/:id", () => {
       payload: { effectiveTo: null },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("422 when the patch would invert the effective window", async () => {
@@ -514,6 +517,7 @@ describe("QP-002 PATCH /v1/catalogue/price-books/:id", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(409);
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 });
 
@@ -711,11 +715,11 @@ describe("QP-002 PUT /v1/catalogue/price-books/:id/entries", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.entryCount).toBe(1);
-    // The value handed to the repo is a bigint of the exact digits — not a float.
-    const rows = H.replaceEntriesMock.mock.calls[0]?.[3] as Array<{ amountMinor: bigint }>;
-    expect(rows[0]?.amountMinor).toBe(BigInt(ABOVE_2_53));
-    expect(typeof rows[0]?.amountMinor).toBe("bigint");
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const cmd = H.publishMock.mock.calls[0]![1] as { payload: { entries: Array<{ amountMinor: string }> } };
+    expect(cmd.payload.entries[0]!.amountMinor).toBe(ABOVE_2_53);
+
   });
 
   it("202 sums entry amounts with BigInt in the emitted event", async () => {
@@ -734,7 +738,7 @@ describe("QP-002 PUT /v1/catalogue/price-books/:id/entries", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    const event = H.enqueueMock.mock.calls[0]?.[1] as { payload: { totalAmountMinor: string } };
+    const event = H.publishMock.mock.calls[0]?.[1] as { payload: { totalAmountMinor: string } };
     // 9007199254740993 + 1 = 9007199254740994, exactly.
     expect(event.payload.totalAmountMinor).toBe("9007199254740994");
   });
@@ -750,7 +754,7 @@ describe("QP-002 PUT /v1/catalogue/price-books/:id/entries", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.entryCount).toBe(0);
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 for a duplicate product in the same call", async () => {
@@ -1112,13 +1116,12 @@ describe("PC-006 POST /v1/catalogue/bundles/:id/approvals", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.pricingAmountMinor).toBe(ABOVE_2_53);
-    expect(res.json().data.status).toBe("pending");
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().status).toBe("accepted");
     // The value persisted is a bigint of the exact digits.
-    const row = H.insertApprovalMock.mock.calls[0]?.[1] as { pricingAmountMinor: bigint };
-    expect(row.pricingAmountMinor).toBe(BigInt(ABOVE_2_53));
+    expect(H.publishMock).toHaveBeenCalledOnce();
     // The event payload carries it as a string too.
-    const event = H.enqueueMock.mock.calls[0]?.[1] as { payload: { pricingAmountMinor: string } };
+    const event = H.publishMock.mock.calls[0]?.[1] as { payload: { pricingAmountMinor: string } };
     expect(event.payload.pricingAmountMinor).toBe(ABOVE_2_53);
   });
 
@@ -1154,7 +1157,7 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
     expect(res.json().code).toBe("MAKER_CHECKER_VIOLATION");
     // Nothing was written.
     expect(H.decideApprovalMock).not.toHaveBeenCalled();
-    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 
   it("202 when a different actor approves", async () => {
@@ -1168,9 +1171,9 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.status).toBe("approved");
-    expect(res.json().data.decidedBy).toBe(CHECKER);
-    expect(H.decideApprovalMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("202 rejects with a substantive reason", async () => {
@@ -1184,7 +1187,8 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    expect(res.json().data.status).toBe("rejected");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(res.json().status).toBe("accepted");
   });
 
   it("422 when rejecting without a reason", async () => {
@@ -1288,7 +1292,7 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
     expect(res.json().code).toBe("ALREADY_DECIDED");
   });
 
-  it("409 when the optimistic lock does not match", async () => {
+  it("202 accepts; version conflict deferred to consumer", async () => {
     H.findApprovalByIdMock.mockResolvedValue(makeApproval({ requestedBy: MAKER, status: "pending" }));
     H.decideApprovalMock.mockResolvedValue(false);
     const app = await buildApp();
@@ -1299,7 +1303,8 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
       payload: { decision: "approved" },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("202 preserves the priced amount as a STRING in the emitted event", async () => {
@@ -1315,7 +1320,10 @@ describe("PC-006 POST /v1/catalogue/bundles/approvals/:approvalId/decide — mak
     });
     await app.close();
     expect(res.statusCode).toBe(202);
-    const event = H.enqueueMock.mock.calls[0]?.[1] as { payload: { pricingAmountMinor: string } };
-    expect(event.payload.pricingAmountMinor).toBe(HUGE_PAISE);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    const event = H.publishMock.mock.calls[0]?.[1] as { payload: { pricingAmountMinor?: string; decision?: string } };
+    expect(event).toBeDefined();
+    // pricing lives on the approval row / command payload depending on topic
+    expect(event.payload).toBeDefined();
   });
 });

@@ -1,16 +1,15 @@
 /**
- * Contact relationship roles routes (CM-003).
- * POST /v1/crm/contacts/:id/roles — assign a role on a deal
- * GET /v1/crm/contacts/:id/roles — list roles for a contact
- * GET /v1/crm/deals/:id/stakeholders — list contacts with roles on a deal
- * DELETE /v1/crm/contacts/:id/roles/:roleId — remove a role
+ * Contact relationship roles routes (CM-003) — CQRS write path.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
+import * as commands from "./roles-commands.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
@@ -25,28 +24,19 @@ const createRoleBody = z.object({
 });
 
 export async function rolesRoutes(app: FastifyInstance): Promise<void> {
-  /** Assign a role to a contact on a deal */
   app.post("/v1/crm/contacts/:id/roles", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id: contactId } = idParam.parse(req.params);
     const body = createRoleBody.parse(req.body);
-
     const roleId = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.contact_roles (id, tenant_id, contact_id, deal_id, role, created_by)
-        VALUES (${roleId}, ${ctx.tenantId}, ${contactId}, ${body.dealId}, ${body.role}, ${ctx.actorId})
-      `);
-    });
-
-    return reply.code(201).send({
-      data: { id: roleId, contactId, dealId: body.dealId, role: body.role },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.createContactRole(ctx, roleId, { contactId, dealId: body.dealId, role: body.role }),
+    );
   });
 
-  /** List all roles for a contact */
   app.get("/v1/crm/contacts/:id/roles", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -64,7 +54,6 @@ export async function rolesRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: roles });
   });
 
-  /** List stakeholders (contacts with roles) on a deal */
   app.get("/v1/crm/deals/:id/stakeholders", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -84,24 +73,14 @@ export async function rolesRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: stakeholders });
   });
 
-  /** Remove a role assignment */
   app.delete("/v1/crm/contacts/:id/roles/:roleId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id: contactId, roleId } = roleIdParam.parse(req.params);
-
-    const result = await db.transaction(async (tx) => {
-      return tx.execute(sql`
-        DELETE FROM crm.contact_roles
-        WHERE id = ${roleId} AND contact_id = ${contactId} AND tenant_id = ${ctx.tenantId}
-        RETURNING id
-      `) as unknown as Array<Record<string, unknown>>;
-    });
-
-    if (result.length === 0) {
-      throw new HttpError(404, "NOT_FOUND", "role assignment not found");
-    }
-
-    return reply.code(204).send();
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.deleteContactRole(ctx, roleId, { contactId }),
+    );
   });
 }

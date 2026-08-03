@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Assessment management — blueprint & question bank (R-RA-0120/0121/0123/0125).
  *
@@ -19,7 +21,6 @@
  * checked (approver != author) and written to an immutable audit trail. Invalid
  * scoring combinations are rejected at activation (R-RA-0125).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -86,18 +87,9 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
 
     const id = randomUUID();
     try {
-      await db.transaction(async (tx) => {
-        await repo.insertBlueprint(tx, {
-          id, tenantId: ctx.tenantId, code: body.code, title: body.title,
-          roleTitle: body.roleTitle ?? null, designationId: body.designationId ?? null,
-          competencies: body.competencies as never, allowedTypes: body.allowedTypes as never,
-          durationMinutes: body.durationMinutes, scoringConfig: body.scoringConfig as never,
-          status: "draft", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        });
-        await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "blueprint", entityId: id, action: "create", detail: { code: body.code }, actorId: ctx.actorId });
-      });
+      await publishF3Write(ctx, "recruitment_blueprint_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
-      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_CODE", `a blueprint with code "${body.code}" already exists`);
+      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_CODE", `a blueprint with code "${body.code}" already exists`) as any;
       throw e;
     }
     return reply.code(201).send({ id, status: "draft" });
@@ -130,11 +122,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     if (body.scoringConfig !== undefined) patch.scoringConfig = body.scoringConfig;
 
     const changedFields = Object.keys(patch).filter((k) => k !== "updatedBy");
-    await db.transaction(async (tx) => {
-      await repo.updateBlueprint(tx, ctx.tenantId, id, patch as never, bp.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "blueprint", entityId: id, action: "update", detail: { changedFields }, actorId: ctx.actorId });
-    });
-    return reply.send({ id, updated: true });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, updated: true }) as any;
   });
 
   app.post("/v1/hrms/assessments/blueprints/:id/activate", async (req, reply) => {
@@ -160,13 +149,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     if (errors.length > 0) throw new HttpError(422, "INVALID_BLUEPRINT", errors.join("; "));
 
     const effectiveFrom = body.effectiveFrom ? new Date(body.effectiveFrom) : new Date();
-    await db.transaction(async (tx) => {
-      await repo.updateBlueprint(tx, ctx.tenantId, id, {
-        status: "active", effectiveFrom, activatedBy: ctx.actorId, activatedAt: new Date(), updatedBy: ctx.actorId,
-      } as never, bp.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "blueprint", entityId: id, action: "activate", detail: { effectiveFrom: effectiveFrom.toISOString(), totalMarks: totalMarks(bp.scoringConfig as never) }, actorId: ctx.actorId });
-    });
-    return reply.send(jsonSafe({ id, status: "active", effectiveFrom }));
+    await publishF3Write(ctx, "recruitment_blueprint_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send(jsonSafe({ id, status: "active", effectiveFrom })) as any;
   });
 
   app.post("/v1/hrms/assessments/blueprints/:id/deactivate", async (req, reply) => {
@@ -176,11 +160,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     const body = z.object({ reason: z.string().max(2000).optional() }).parse(req.body ?? {});
     const bp = await mustBlueprint(ctx.tenantId, id);
     if (bp.status !== "active") throw new HttpError(409, "NOT_ACTIVE", "only an active blueprint can be deactivated");
-    await db.transaction(async (tx) => {
-      await repo.updateBlueprint(tx, ctx.tenantId, id, { status: "inactive", updatedBy: ctx.actorId } as never, bp.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "blueprint", entityId: id, action: "deactivate", detail: { reason: body.reason ?? null }, actorId: ctx.actorId });
-    });
-    return reply.send({ id, status: "inactive" });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "inactive" }) as any;
   });
 
   app.get("/v1/hrms/assessments/blueprints", async (req, reply) => {
@@ -216,16 +197,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     requireRole(ctx, HR_ROLES);
     const body = questionBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertQuestion(tx, {
-        id, tenantId: ctx.tenantId, topic: body.topic, qtype: body.qtype, stem: body.stem,
-        options: (body.options ?? []) as never, answerKey: (body.answerKey ?? {}) as never,
-        difficulty: body.difficulty, marks: body.marks, status: "draft",
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "question", entityId: id, action: "create", detail: { topic: body.topic, qtype: body.qtype }, actorId: ctx.actorId });
-    });
-    return reply.code(201).send({ id, status: "draft" });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id, status: "draft" }) as any;
   });
 
   app.patch("/v1/hrms/assessments/questions/:id", async (req, reply) => {
@@ -245,11 +218,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     if (body.answerKey !== undefined) patch.answerKey = body.answerKey;
 
     const changedFields = Object.keys(patch).filter((k) => k !== "updatedBy");
-    await db.transaction(async (tx) => {
-      await repo.updateQuestion(tx, ctx.tenantId, id, patch as never, q.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "question", entityId: id, action: "update", detail: { changedFields }, actorId: ctx.actorId });
-    });
-    return reply.send({ id, updated: true });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, updated: true }) as any;
   });
 
   app.post("/v1/hrms/assessments/questions/:id/validate", async (req, reply) => {
@@ -271,11 +241,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     });
     if (errors.length > 0) throw new HttpError(422, "INCOMPLETE_QUESTION", errors.join("; "));
 
-    await db.transaction(async (tx) => {
-      await repo.updateQuestion(tx, ctx.tenantId, id, { status: "validated", validatedBy: ctx.actorId, validatedAt: new Date(), updatedBy: ctx.actorId } as never, q.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "question", entityId: id, action: "validate", detail: {}, actorId: ctx.actorId });
-    });
-    return reply.send({ id, status: "validated" });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "validated" }) as any;
   });
 
   app.post("/v1/hrms/assessments/questions/:id/retire", async (req, reply) => {
@@ -285,11 +252,8 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     const body = z.object({ reason: z.string().max(2000).optional() }).parse(req.body ?? {});
     const q = await mustQuestion(ctx.tenantId, id);
     if (q.status === "retired") throw new HttpError(409, "ALREADY_RETIRED", "question is already retired");
-    await db.transaction(async (tx) => {
-      await repo.updateQuestion(tx, ctx.tenantId, id, { status: "retired", updatedBy: ctx.actorId } as never, q.version);
-      await repo.insertEvent(tx, { tenantId: ctx.tenantId, entityType: "question", entityId: id, action: "retire", detail: { reason: body.reason ?? null }, actorId: ctx.actorId });
-    });
-    return reply.send({ id, status: "retired" });
+    await publishF3Write(ctx, "recruitment_blueprint_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "retired" }) as any;
   });
 
   app.get("/v1/hrms/assessments/questions", async (req, reply) => {

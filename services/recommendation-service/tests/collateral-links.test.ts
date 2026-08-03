@@ -132,6 +132,8 @@ const validPayload = {
 };
 
 beforeEach(() => {
+  H.queuePublishMock.mockReset();
+  H.queuePublishMock.mockResolvedValue(undefined);
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
@@ -357,7 +359,7 @@ describe("POST /v1/recommendations/:id/collateral", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: validPayload });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.status).toBe("queued");
+    expect(r.json().status).toBe("accepted");
     expect(H.queuePublishMock).toHaveBeenCalledOnce();
     // The route itself must not write.
     expect(H.insertMock).not.toHaveBeenCalled();
@@ -368,7 +370,7 @@ describe("POST /v1/recommendations/:id/collateral", () => {
     H.listAllForRecommendationMock.mockResolvedValue([{ ordinal: 0 }, { ordinal: 3 }]);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: validPayload });
-    expect(r.json().data.ordinal).toBe(4);
+    expect((H.queuePublishMock.mock.calls[0]?.[1] as any).payload.ordinal).toBe(4);
     await app.close();
   });
 
@@ -380,7 +382,7 @@ describe("POST /v1/recommendations/:id/collateral", () => {
       headers: auth(),
       payload: { ...validPayload, ordinal: 9 },
     });
-    expect(r.json().data.ordinal).toBe(9);
+    expect((H.queuePublishMock.mock.calls[0]?.[1] as any).payload.ordinal).toBe(9);
     await app.close();
   });
 
@@ -473,14 +475,13 @@ describe("POST /v1/recommendations/:id/collateral", () => {
 describe("DELETE /v1/recommendations/collateral/:linkId", () => {
   const url = `/v1/recommendations/collateral/${LINK_ID}`;
 
-  it("200 — deletes the link and emits an event", async () => {
+  it("202 — accepts detach", async () => {
     H.findByIdMock.mockResolvedValue(makeLink());
     const app = await buildApp();
     const r = await app.inject({ method: "DELETE", url, headers: auth() });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toEqual({ id: LINK_ID, deleted: true });
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    expect(H.cacheInvalidateMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.queuePublishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -492,12 +493,12 @@ describe("DELETE /v1/recommendations/collateral/:linkId", () => {
     await app.close();
   });
 
-  it("404 — the delete matched no row (concurrent removal)", async () => {
+  it("202 — accepts detach when row exists", async () => {
     H.findByIdMock.mockResolvedValue(makeLink());
     H.deleteByIdMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "DELETE", url, headers: auth() });
-    expect(r.statusCode).toBe(404);
+    expect(r.statusCode).toBe(202);
     await app.close();
   });
 
@@ -586,7 +587,7 @@ describe("handleAttachCollateral", () => {
     await handleAttachCollateral(msg);
     expect(H.markProcessedMock).toHaveBeenCalledWith(expect.anything(), msg.messageId);
     expect(H.insertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
     expect(H.cacheInvalidateMock).toHaveBeenCalledOnce();
   });
 

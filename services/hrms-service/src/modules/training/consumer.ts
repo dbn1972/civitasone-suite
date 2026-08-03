@@ -1,3 +1,4 @@
+import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -31,6 +32,33 @@ export function registerTrainingConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "nominate", "nomination", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.nominationComplete, async (msg) => {
+    const p = msg.payload as {
+      id: string;
+      tenantId: string;
+      completedDate: string;
+      result: string;
+      score?: number | null;
+      certificateRef?: string | null;
+      trainingTitle?: string | null;
+      trainingId?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await repo.completeNomination(tx, p.tenantId, p.id, msg.actorId, {
+        completedDate: p.completedDate, result: p.result,
+        score: p.score ?? null, certificateRef: p.certificateRef ?? null,
+      });
+      if (!row) return;
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: row.employeeId, entryType: "training",
+        effectiveDate: p.completedDate,
+        description: `Completed training "${p.trainingTitle ?? row.trainingId}" — result ${p.result}`,
+        recordedBy: msg.actorId, documentRef: p.certificateRef ?? null,
+      });
     });
   });
 }

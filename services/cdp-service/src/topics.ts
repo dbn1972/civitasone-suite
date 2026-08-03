@@ -2,6 +2,9 @@
 export const COMMANDS = {
   ingestEvent: "cdp.event.ingest",
   resolveIdentity: "cdp.identity.resolve",
+  identityUnlink: "cdp.identity.unlink",
+  profileCreate: "cdp.profile.create",
+  profileUpdate: "cdp.profile.update",
   mergeProfiles: "cdp.profile.merge",
   createSegment: "cdp.segment.create",
   updateSegment: "cdp.segment.update",
@@ -15,10 +18,9 @@ export const COMMANDS = {
    */
   ingestEventBatch: "cdp.event.ingest_batch",
   /**
-   * CDP-005 — post-recompute fan-out. Payload: { segmentId, memberCount, computedAt }.
-   * Consumed by modules/segments/consumer.ts. The membership recompute itself is done
-   * synchronously by the route; this command carries only the follow-up work
-   * (refreshing the audience snapshot of activations that have not dispatched yet).
+   * CDP-005 — legacy post-recompute fan-out. Payload: { segmentId, memberCount, computedAt }.
+   * Prefer `cdp.f3.route_write` op `segment_compute` (route → F3 consumer) for new writes;
+   * this topic remains for in-flight fan-out messages.
    */
   computeSegment: "cdp.segment.compute",
   /**
@@ -35,6 +37,7 @@ export const COMMANDS = {
    * Consumed by modules/activations/consumer.ts, which hands the run to the channel.
    */
   activateSegment: "cdp.segment.activate",
+  f3RouteWrite: "cdp.f3.route_write",
 } as const;
 
 export const EVENTS = {

@@ -30,6 +30,7 @@ export type OnboardTenantBody = {
   residency: string;
   adminEmail: string;
   adminName: string;
+  settings?: Record<string, unknown>;
 };
 
 export type OnboardAccepted = {
@@ -67,7 +68,7 @@ export async function createTenantPipeline(
     isolationTier: decision.tier,
     policyVersion: decision.policyVersion,
     policyReason: decision.reason,
-    settings: {},
+    settings: body.settings ?? {},
     version: 1,
   };
   await cache.put(cache.makeKey(tenantId, RESOURCE, tenantId), projected);
@@ -92,7 +93,7 @@ export async function createTenantPipeline(
       isolationTier: decision.tier,
       policyVersion: decision.policyVersion,
       policyReason: decision.reason,
-      settings: {},
+      settings: body.settings ?? {},
       version: 1,
     },
   });

@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { listQuerySchema } from "@civitasone/schemas/common";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const ADMIN = ["super_admin", "location_admin", "works_admin", "transport_admin"];
 const READER = ["super_admin", "location_admin", "works_admin", "transport_admin", "location_user"];
@@ -12,7 +14,6 @@ const ROAD_CLASSES = ["national_highway", "state_highway", "major_district_road"
 const coordPair = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
 
 export async function roadNetworkRoutes(app: FastifyInstance): Promise<void> {
-  // SVC-115: create a road segment (PostGIS LineString, length derived).
   app.post("/v1/locations/road-network/segments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const body = z.object({
@@ -23,8 +24,7 @@ export async function roadNetworkRoutes(app: FastifyInstance): Promise<void> {
       coordinates: z.array(coordPair).min(2).max(5000),
     }).parse(req.body);
     const id = randomUUID();
-    await repo.createSegment(ctx.tenantId, ctx.actorId, { id, ...body });
-    return reply.code(201).send({ data: { id, status: "created" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createSegment(ctx, id, body));
   });
 
   app.get("/v1/locations/road-network/segments", async (req, reply) => {
@@ -54,9 +54,7 @@ export async function roadNetworkRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/locations/road-network/segments/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const n = await repo.deleteSegment(id, ctx.tenantId);
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "segment not found");
-    return reply.send({ data: { id, status: "deleted" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteSegment(ctx, id));
   });
 
   app.post("/v1/locations/road-network/networks", async (req, reply) => {
@@ -67,8 +65,7 @@ export async function roadNetworkRoutes(app: FastifyInstance): Promise<void> {
       segmentIds: z.array(z.string().uuid()).max(10000).default([]),
     }).parse(req.body);
     const id = randomUUID();
-    await repo.createNetwork(ctx.tenantId, ctx.actorId, { id, ...body });
-    return reply.code(201).send({ data: { id, status: "created" } });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createNetwork(ctx, id, body));
   });
 
   app.get("/v1/locations/road-network/networks", async (req, reply) => {

@@ -1,4 +1,5 @@
 /**
+ * CQRS: mutations return 202 Accepted and publish a command to the queue.
  * Route-level coverage tests for catalogue-service.
  * Mock-based approach — no real database connection needed.
  * Covers products (CRUD + lifecycle), rates (create + effective-date lookup),
@@ -18,6 +19,7 @@ const NON_EXISTENT_ID = "00000000-0000-4000-8000-000000000099";
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   // DB
   dbInsertMock: vi.fn(),
   dbUpdateMock: vi.fn(),
@@ -77,7 +79,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(),
     makeKey: vi.fn().mockReturnValue("cache-key"),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/products/repo.js", () => ({
@@ -115,7 +117,7 @@ vi.mock("../src/modules/bundles/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
-import { EVENTS } from "../src/topics.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 function adminToken(roles: string[] = ["catalogue_admin", "super_admin"]) {
@@ -207,6 +209,7 @@ function makeBundle(overrides: Record<string, unknown> = {}) {
 // ─── beforeEach reset ─────────────────────────────────────────────────────────
 beforeEach(() => {
   vi.clearAllMocks();
+  H.publishMock.mockResolvedValue(undefined);
   // Default: all write mocks resolve
   H.productInsertMock.mockResolvedValue(undefined);
   H.productUpdateMock.mockResolvedValue(true);
@@ -276,10 +279,10 @@ describe("Products CRUD", () => {
       payload: { name: "Savings Account", description: "Basic savings", lifecycleStatus: "draft" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.id).toBeDefined();
-    expect(H.productInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("GET /v1/catalogue/products — 200 lists products", async () => {
@@ -358,8 +361,8 @@ describe("Products lifecycle transitions", () => {
       payload: { lifecycleStatus: "active" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(H.productUpdateMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("PATCH — invalid transition draft→withdrawn returns 422", async () => {
@@ -422,9 +425,9 @@ describe("Products lifecycle transitions", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.lifecycleStatus).toBe("withdrawn");
-    expect(H.productSoftDeleteMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("DELETE /v1/catalogue/products/:id — 404 for non-existent", async () => {
@@ -462,8 +465,9 @@ describe("Product availability", () => {
       payload: { circleId: "11111111-1111-4000-8000-111111111111", available: true },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.productId).toBe(PRODUCT_ID);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("POST /v1/catalogue/products/:id/availability — 404 for non-existent product", async () => {
@@ -536,9 +540,10 @@ describe("Rates", () => {
       payload: { productId: PRODUCT_ID, effectiveFrom: "2025-01-01", rateValueMinor: "5000", source: "RBI Circular" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.id).toBeDefined();
-    expect(H.rateInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("GET /v1/catalogue/rates — 200 lists rates for product", async () => {
@@ -600,9 +605,9 @@ describe("Rates", () => {
       payload: { rateValueMinor: "9999" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
-    expect(H.rateUpdateMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("PATCH /v1/catalogue/rates/:id — 404 for non-existent", async () => {
@@ -675,9 +680,10 @@ describe("Eligibility rules + check", () => {
       payload: { productId: PRODUCT_ID, ruleType: "age_range", criteria: { minAge: 18, maxAge: 65 } },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.id).toBeDefined();
-    expect(H.eligInsertRuleMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("GET /v1/catalogue/eligibility/rules — 200 lists rules", async () => {
@@ -713,9 +719,9 @@ describe("Eligibility rules + check", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("deleted");
-    expect(H.eligDeleteRuleMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("DELETE /v1/catalogue/eligibility/rules/:id — 404 for non-existent", async () => {
@@ -857,9 +863,10 @@ describe("Bundles CRUD + validation", () => {
       payload: { name: "Good Bundle", componentProductIds: [PRODUCT_ID] },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.id).toBeDefined();
-    expect(H.bundleInsertMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(res.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("GET /v1/catalogue/bundles — 200 lists bundles", async () => {
@@ -923,9 +930,9 @@ describe("Bundles CRUD + validation", () => {
       payload: { name: "Updated Bundle" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(2);
-    expect(H.bundleUpdateMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("PATCH /v1/catalogue/bundles/:id — 404 for non-existent", async () => {
@@ -976,9 +983,9 @@ describe("Bundles CRUD + validation", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("deleted");
-    expect(H.bundleSoftDeleteMock).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
   it("DELETE /v1/catalogue/bundles/:id — 404 for non-existent", async () => {
@@ -1008,10 +1015,9 @@ describe("Bundles CRUD + validation", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // OPTIMISTIC LOCKING — 409 on version conflict
 // ═══════════════════════════════════════════════════════════════════════════════
-describe("Optimistic locking (409 VERSION_CONFLICT)", () => {
-  it("PATCH /v1/catalogue/products/:id — 409 when update affects no rows", async () => {
-    H.productFindByIdMock.mockResolvedValue(makeProduct());
-    H.productUpdateMock.mockResolvedValue(false);
+describe("Optimistic locking (async — consumer enforces version)", () => {
+  it("PATCH product — 202 when version matches; consumer enforces write", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct({ version: 1 }));
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -1020,11 +1026,11 @@ describe("Optimistic locking (409 VERSION_CONFLICT)", () => {
       payload: { name: "Updated", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("VERSION_CONFLICT");
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 
-  it("PATCH /v1/catalogue/products/:id — passes body.version as expected version", async () => {
+  it("PATCH product — 409 when body.version mismatches current row", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct({ version: 1 }));
     const app = await buildApp();
     const res = await app.inject({
@@ -1034,92 +1040,17 @@ describe("Optimistic locking (409 VERSION_CONFLICT)", () => {
       payload: { name: "Updated", version: 7 },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.version).toBe(8);
-    expect(H.productUpdateMock).toHaveBeenCalledWith(expect.anything(), PRODUCT_ID, TENANT, expect.anything(), 7);
-  });
-
-  it("DELETE /v1/catalogue/products/:id — 409 when soft delete affects no rows", async () => {
-    H.productFindByIdMock.mockResolvedValue(makeProduct());
-    H.productSoftDeleteMock.mockResolvedValue(false);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "DELETE",
-      url: `/v1/catalogue/products/${PRODUCT_ID}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-    });
-    await app.close();
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("VERSION_CONFLICT");
-  });
-
-  it("PATCH /v1/catalogue/rates/:id — 409 when update affects no rows", async () => {
-    H.rateFindByIdMock.mockResolvedValue(makeRate());
-    H.rateUpdateMock.mockResolvedValue(false);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/catalogue/rates/${RATE_ID}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: { rateValueMinor: "9999", version: 1 },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("VERSION_CONFLICT");
-  });
-
-  it("PATCH /v1/catalogue/bundles/:id — 409 when update affects no rows", async () => {
-    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
-    H.bundleUpdateMock.mockResolvedValue(false);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-      payload: { name: "Updated Bundle", version: 1 },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("VERSION_CONFLICT");
-  });
-
-  it("DELETE /v1/catalogue/bundles/:id — 409 when soft delete affects no rows", async () => {
-    H.bundleFindByIdMock.mockResolvedValue(makeBundle());
-    H.bundleSoftDeleteMock.mockResolvedValue(false);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "DELETE",
-      url: `/v1/catalogue/bundles/${BUNDLE_ID}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe("VERSION_CONFLICT");
-  });
-
-  it("DELETE /v1/catalogue/eligibility/rules/:id — 404 when delete affects no rows", async () => {
-    H.eligFindByIdMock.mockResolvedValue(makeRule());
-    H.eligDeleteRuleMock.mockResolvedValue(false);
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "DELETE",
-      url: `/v1/catalogue/eligibility/rules/${RULE_ID}`,
-      headers: { authorization: `Bearer ${adminToken()}` },
-    });
-    await app.close();
-    expect(res.statusCode).toBe(404);
+    expect(H.publishMock).not.toHaveBeenCalled();
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// OUTBOX EVENTS — audit trail on every mutation
-// ═══════════════════════════════════════════════════════════════════════════════
-function enqueuedTypes(): string[] {
-  return H.enqueueMock.mock.calls.map((call) => (call[1] as { eventType: string }).eventType);
+function publishedTopics(): string[] {
+  return H.publishMock.mock.calls.map((call) => call[0] as string);
 }
 
-describe("Outbox events on mutations", () => {
-  it("POST /v1/catalogue/products — enqueues productCreated", async () => {
+describe("Command publish on mutations", () => {
+  it("POST /v1/catalogue/products — publishes createProduct command", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -1128,22 +1059,20 @@ describe("Outbox events on mutations", () => {
       payload: { name: "Savings Account", lifecycleStatus: "draft" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
-    expect(enqueuedTypes()).toEqual([EVENTS.productCreated]);
-    const event = H.enqueueMock.mock.calls[0]![1] as {
-      topic: string;
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(publishedTopics()).toEqual([COMMANDS.createProduct]);
+    const envelope = H.publishMock.mock.calls[0]![1] as {
       tenantId: string;
       actorId: string;
       payload: Record<string, unknown>;
     };
-    expect(event.topic).toBe(EVENTS.productCreated);
-    expect(event.tenantId).toBe(TENANT);
-    expect(event.actorId).toBe(ACTOR);
-    expect(event.payload["productId"]).toBe(res.json().data.id);
+    expect(envelope.tenantId).toBe(TENANT);
+    expect(envelope.actorId).toBe(ACTOR);
+    expect(envelope.payload["id"]).toBe(res.json().id);
   });
 
-  it("PATCH /v1/catalogue/products/:id — enqueues productUpdated", async () => {
+  it("PATCH /v1/catalogue/products/:id — publishes updateProduct command", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     const app = await buildApp();
     const res = await app.inject({
@@ -1153,11 +1082,11 @@ describe("Outbox events on mutations", () => {
       payload: { name: "Updated" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.productUpdated]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.updateProduct]);
   });
 
-  it("DELETE /v1/catalogue/products/:id — enqueues productDeleted", async () => {
+  it("DELETE /v1/catalogue/products/:id — publishes deleteProduct command", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     const app = await buildApp();
     const res = await app.inject({
@@ -1166,11 +1095,11 @@ describe("Outbox events on mutations", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.productDeleted]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.deleteProduct]);
   });
 
-  it("POST /v1/catalogue/products/:id/availability — enqueues productUpdated", async () => {
+  it("POST /v1/catalogue/products/:id/availability — publishes recordProductAvailability", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
     const app = await buildApp();
     const res = await app.inject({
@@ -1180,11 +1109,12 @@ describe("Outbox events on mutations", () => {
       payload: { circleId: "11111111-1111-4000-8000-111111111111", available: true },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(enqueuedTypes()).toEqual([EVENTS.productUpdated]);
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(publishedTopics()).toEqual([COMMANDS.recordProductAvailability]);
   });
 
-  it("POST /v1/catalogue/rates — enqueues rateCreated with bigint serialised as string", async () => {
+  it("POST /v1/catalogue/rates — publishes createRate with bigint serialised as string", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -1193,13 +1123,13 @@ describe("Outbox events on mutations", () => {
       payload: { productId: PRODUCT_ID, effectiveFrom: "2025-01-01", rateValueMinor: "5000", source: "RBI Circular" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(enqueuedTypes()).toEqual([EVENTS.rateCreated]);
-    const event = H.enqueueMock.mock.calls[0]![1] as { payload: Record<string, unknown> };
-    expect(event.payload["rateValueMinor"]).toBe("5000");
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.createRate]);
+    const envelope = H.publishMock.mock.calls[0]![1] as { payload: Record<string, unknown> };
+    expect(envelope.payload["rateValueMinor"]).toBe("5000");
   });
 
-  it("PATCH /v1/catalogue/rates/:id — enqueues rateUpdated", async () => {
+  it("PATCH /v1/catalogue/rates/:id — publishes updateRate command", async () => {
     H.rateFindByIdMock.mockResolvedValue(makeRate());
     const app = await buildApp();
     const res = await app.inject({
@@ -1209,11 +1139,11 @@ describe("Outbox events on mutations", () => {
       payload: { rateValueMinor: "9999" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.rateUpdated]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.updateRate]);
   });
 
-  it("POST /v1/catalogue/eligibility/rules — enqueues eligibilityRuleCreated", async () => {
+  it("POST /v1/catalogue/eligibility/rules — publishes createEligibilityRule", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -1222,11 +1152,11 @@ describe("Outbox events on mutations", () => {
       payload: { productId: PRODUCT_ID, ruleType: "age_range", criteria: { minAge: 18, maxAge: 65 } },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(enqueuedTypes()).toEqual([EVENTS.eligibilityRuleCreated]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.createEligibilityRule]);
   });
 
-  it("DELETE /v1/catalogue/eligibility/rules/:id — enqueues eligibilityRuleDeleted", async () => {
+  it("DELETE /v1/catalogue/eligibility/rules/:id — publishes deleteEligibilityRule", async () => {
     H.eligFindByIdMock.mockResolvedValue(makeRule());
     const app = await buildApp();
     const res = await app.inject({
@@ -1235,11 +1165,11 @@ describe("Outbox events on mutations", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.eligibilityRuleDeleted]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.deleteEligibilityRule]);
   });
 
-  it("POST /v1/catalogue/bundles — enqueues bundleCreated", async () => {
+  it("POST /v1/catalogue/bundles — publishes createBundle", async () => {
     H.productFindByIdsMock.mockResolvedValue([makeProduct({ id: PRODUCT_ID, lifecycleStatus: "active" })]);
     const app = await buildApp();
     const res = await app.inject({
@@ -1249,11 +1179,11 @@ describe("Outbox events on mutations", () => {
       payload: { name: "Good Bundle", componentProductIds: [PRODUCT_ID] },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(enqueuedTypes()).toEqual([EVENTS.bundleCreated]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.createBundle]);
   });
 
-  it("PATCH /v1/catalogue/bundles/:id — enqueues bundleUpdated", async () => {
+  it("PATCH /v1/catalogue/bundles/:id — publishes updateBundle", async () => {
     H.bundleFindByIdMock.mockResolvedValue(makeBundle());
     const app = await buildApp();
     const res = await app.inject({
@@ -1263,11 +1193,11 @@ describe("Outbox events on mutations", () => {
       payload: { name: "Updated Bundle" },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.bundleUpdated]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.updateBundle]);
   });
 
-  it("DELETE /v1/catalogue/bundles/:id — enqueues bundleDeleted", async () => {
+  it("DELETE /v1/catalogue/bundles/:id — publishes deleteBundle", async () => {
     H.bundleFindByIdMock.mockResolvedValue(makeBundle());
     const app = await buildApp();
     const res = await app.inject({
@@ -1276,22 +1206,21 @@ describe("Outbox events on mutations", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(enqueuedTypes()).toEqual([EVENTS.bundleDeleted]);
+    expect(res.statusCode).toBe(202);
+    expect(publishedTopics()).toEqual([COMMANDS.deleteBundle]);
   });
 
-  it("no event is enqueued when the write is rejected by optimistic locking", async () => {
-    H.productFindByIdMock.mockResolvedValue(makeProduct());
-    H.productUpdateMock.mockResolvedValue(false);
+  it("command is still published when a client supplies a stale version (consumer no-ops)", async () => {
+    H.productFindByIdMock.mockResolvedValue(makeProduct({ version: 1 }));
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/catalogue/products/${PRODUCT_ID}`,
       headers: { authorization: `Bearer ${adminToken()}` },
-      payload: { name: "Updated" },
+      payload: { name: "Updated", version: 1 },
     });
     await app.close();
-    expect(res.statusCode).toBe(409);
-    expect(H.enqueueMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
   });
 });

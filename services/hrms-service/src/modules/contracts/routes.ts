@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { sql } from "drizzle-orm";
@@ -184,20 +186,10 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
       updateSet.schedulerTimeUtc = body.schedulerTimeUtc;
     }
 
-    const result = await db.transaction(async (tx) => {
-      const updated = await tx
-        .insert(hrmsContractConfig)
-        .values(insertValues as typeof hrmsContractConfig.$inferInsert)
-        .onConflictDoUpdate({
-          target: hrmsContractConfig.tenantId,
-          set: updateSet,
-        })
-        .returning();
-      return updated[0] ?? null;
-    });
+    const result = await publishF3Write(ctx, "contracts_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     // Invalidate cached config
-    await cache.invalidate(`hrms:${ctx.tenantId}:contract:config`);
+    await cache.invalidate(`hrms:${ctx.tenantId}:contract:config`) as any;
     return reply.send({ data: result });
   });
 

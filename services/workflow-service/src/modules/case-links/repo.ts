@@ -7,6 +7,12 @@ import { cases } from "../case-registry/schema.js";
 import { validateLink, type CaseLink, type LinkType } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function withTx<T>(outer: Tx | undefined, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  if (outer) return fn(outer);
+  return db.transaction(fn);
+}
+
 /** All links for a tenant as domain-shaped edges (for cycle checks). */
 export async function allLinks(tenantId: string): Promise<CaseLink[]> {
   const rows = await scopedRead((tx) =>
@@ -86,10 +92,10 @@ export type CreateLinkResult =
  *     4xx; CYCLE_DETECTED/DUPLICATE_LINK -> 409) and the tx rolls back.
  *  4. Otherwise INSERT + audit.
  */
-export async function createLinkChecked(input: CreateLinkInput): Promise<CreateLinkResult> {
-  const id = randomUUID();
+export async function createLinkChecked(input: CreateLinkInput & { id?: string }, outer?: Tx): Promise<CreateLinkResult> {
+  const id = input.id ?? randomUUID();
   const lockIds = Array.from(new Set([input.fromCaseId, input.toCaseId]));
-  return db.transaction(async (tx) => {
+  return withTx(outer, async (tx) => {
     await tx.select({ id: cases.id }).from(cases)
       .where(and(eq(cases.tenantId, input.tenantId), inArray(cases.id, lockIds)))
       .orderBy(asc(cases.id))
@@ -130,8 +136,8 @@ export interface SplitPersistInput {
  * for each carrying its allocation, mark the parent status='split', and audit.
  * Returns the created child case ids.
  */
-export async function persistSplit(input: SplitPersistInput): Promise<string[]> {
-  return db.transaction(async (tx) => {
+export async function persistSplit(input: SplitPersistInput, outer?: Tx): Promise<string[]> {
+  return withTx(outer, async (tx) => {
     // PR #169 (MEDIUM) -- lock the parent row FIRST, then assert it is still
     // 'open'. Without this a second split (or two concurrent splits) on the
     // same parent would each create a full child set -> duplicate children /
@@ -189,8 +195,8 @@ export interface MergePersistInput {
  * merged_from link (target -> source) preserving lineage, and audit. Returns the
  * count of sources actually consolidated.
  */
-export async function persistMerge(input: MergePersistInput): Promise<number> {
-  return db.transaction(async (tx) => {
+export async function persistMerge(input: MergePersistInput, outer?: Tx): Promise<number> {
+  return withTx(outer, async (tx) => {
     // PR #169 (MEDIUM) -- lock target + all sources FOR UPDATE up front, in
     // ascending id order (deadlock-safe), then enforce that every case that
     // participates is still 'open'. Without this a merge could consume an

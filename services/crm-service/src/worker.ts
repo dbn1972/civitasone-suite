@@ -12,6 +12,11 @@ import { registerContactConsumers } from "./modules/contacts/consumer.js";
 import { registerDealConsumers } from "./modules/deals/consumer.js";
 import { registerActivityConsumers } from "./modules/activities/consumer.js";
 import { registerLeadScoringConsumers } from "./modules/leads/consumer.js";
+import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.js";
+import { registerContactRoleConsumers } from "./modules/contacts/roles-consumer.js";
+import { registerTeamConsumers } from "./modules/teams/consumer.js";
+import { registerQuotationConsumers } from "./modules/deals/quotation-consumer.js";
+import { registerResidualF3Consumers } from "./modules/residual-f3/consumer.js";
 
 const log = pino({ name: "crm-worker" });
 
@@ -19,6 +24,11 @@ registerContactConsumers(queue);
 registerDealConsumers(queue);
 registerActivityConsumers(queue);
 registerLeadScoringConsumers(queue);
+registerCustomFieldConsumers(queue);
+registerContactRoleConsumers(queue);
+registerTeamConsumers(queue);
+registerQuotationConsumers(queue);
+registerResidualF3Consumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

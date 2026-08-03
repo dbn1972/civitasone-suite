@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Screening & shortlisting (checklist R-RA-0106/0110/0111/0112/0113/0114/0119).
  *
@@ -50,24 +52,8 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const applications = await repo.listApplicationsForVacancy(ctx.tenantId, id);
     let screened = 0, skipped = 0;
-    await db.transaction(async (tx) => {
-      for (const a of applications) {
-        if (a.screeningDecision !== "pending") { skipped++; continue; }
-        const decision = autoScreenDecision(a.eligibilityResult as { eligible?: boolean } | null);
-        if (decision === "pending") { skipped++; continue; } // never evaluated for eligibility
-        await repo.setScreeningById(tx, ctx.tenantId, a.id, {
-          screeningDecision: decision,
-          screeningReasonCode: decision === "ineligible" ? "eligibility" : null,
-          screenedBy: ctx.actorId, screenedAt: new Date(),
-        });
-        await repo.insertEvent(tx, {
-          tenantId: ctx.tenantId, applicationId: a.id, jobOpeningId: id, action: "auto_screen",
-          decision, reasonCode: decision === "ineligible" ? "eligibility" : null, actorId: ctx.actorId,
-        });
-        screened++;
-      }
-    });
-    return reply.send({ jobOpeningId: id, screened, skipped, total: applications.length });
+    await publishF3Write(ctx, "recruitment_screening_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ jobOpeningId: id, screened, skipped, total: applications.length }) as any;
   });
 
   // ── record a screening decision (R-RA-0112/0113), with override (R-RA-0111) ──
@@ -104,20 +90,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
 
     // First-time decision on a still-pending application.
     try {
-      await db.transaction(async (tx) => {
-        await repo.setScreening(tx, ctx.tenantId, id, {
-          screeningDecision: body.decision,
-          screeningReasonCode: body.reasonCode ?? null,
-          screeningRemarks: body.remarks ?? null,
-          screenedBy: ctx.actorId, screenedAt: new Date(),
-        }, a.version);
-        await repo.insertEvent(tx, {
-          tenantId: ctx.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
-          action: "decision", decision: body.decision,
-          reasonCode: body.reasonCode ?? null, remarks: body.remarks ?? null,
-          isOverride: false, actorId: ctx.actorId,
-        });
-      });
+      await publishF3Write(ctx, "recruitment_screening_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
       throw err;
@@ -133,27 +106,8 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ applicationIds: z.array(z.string().uuid()).min(1).max(500) }).parse(req.body);
     const apps = await repo.findApplicationsByIds(ctx.tenantId, id, body.applicationIds);
     let shortlisted = 0, skipped = 0;
-    await db.transaction(async (tx) => {
-      for (const a of apps) {
-        if (a.shortlistFrozen) { skipped++; continue; }
-        // Bulk shortlist advances the NORMAL forward path (pending / eligible ->
-        // shortlisted; idempotent on shortlisted). It must NOT silently overturn a
-        // deliberate non-shortlist decision — a rejection (ineligible), a
-        // waitlist, or a manual-review hold. Overturning one of those is an
-        // override that must go through the screening-decision endpoint (admin +
-        // reason, audited as an override).
-        if (BULK_SHORTLIST_BLOCKED.has(a.screeningDecision)) { skipped++; continue; }
-        await repo.setScreeningById(tx, ctx.tenantId, a.id, {
-          screeningDecision: "shortlisted", screenedBy: ctx.actorId, screenedAt: new Date(),
-        });
-        await repo.insertEvent(tx, {
-          tenantId: ctx.tenantId, applicationId: a.id, jobOpeningId: id, action: "shortlist",
-          decision: "shortlisted", actorId: ctx.actorId,
-        });
-        shortlisted++;
-      }
-    });
-    return reply.send({ jobOpeningId: id, shortlisted, skipped, requested: body.applicationIds.length });
+    await publishF3Write(ctx, "recruitment_screening_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ jobOpeningId: id, shortlisted, skipped, requested: body.applicationIds.length }) as any;
   });
 
   // ── freeze the shortlist (R-RA-0114): after this, no screening changes ──
@@ -163,16 +117,8 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const all = await repo.listApplicationsForVacancy(ctx.tenantId, id);
     const shortlisted = all.filter((a) => a.screeningDecision === "shortlisted" && !a.shortlistFrozen);
-    await db.transaction(async (tx) => {
-      for (const a of shortlisted) {
-        await repo.setScreeningById(tx, ctx.tenantId, a.id, { shortlistFrozen: true });
-        await repo.insertEvent(tx, {
-          tenantId: ctx.tenantId, applicationId: a.id, jobOpeningId: id, action: "freeze",
-          decision: "shortlisted", actorId: ctx.actorId,
-        });
-      }
-    });
-    return reply.send({ jobOpeningId: id, frozen: shortlisted.length });
+    await publishF3Write(ctx, "recruitment_screening_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ jobOpeningId: id, frozen: shortlisted.length }) as any;
   });
 
   // ── blind list (R-RA-0110): protected attributes withheld ──

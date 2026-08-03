@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
 
@@ -38,8 +41,7 @@ export async function sponsorConfigRoutes(app: FastifyInstance): Promise<void> {
 
     const body = upsertBodySchema.parse(req.body);
 
-    await repo.upsert(ctx.tenantId, {
-      tenantId: ctx.tenantId,
+    return sendAccepted(reply, acceptedResponseSchema, await commands.upsertSponsorConfig(ctx, {
       sponsorCode: body.sponsorCode,
       sponsorIfsc: body.sponsorIfsc,
       sponsorAccount: body.sponsorAccount,
@@ -49,14 +51,8 @@ export async function sponsorConfigRoutes(app: FastifyInstance): Promise<void> {
       nachEnabled: body.nachEnabled,
       apbsEnabled: body.apbsEnabled,
       maxRecordsPerFile: body.maxRecordsPerFile,
-      maxAmountPerFileMinor: body.maxAmountPerFileMinor,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    });
-
-    return reply.status(200).send({ status: "ok" });
+      maxAmountPerFileMinor: body.maxAmountPerFileMinor.toString(),
+    }));
   });
 
   app.setErrorHandler((err: unknown, req, reply) => {

@@ -3,23 +3,22 @@
  *
  * GET    /api/v1/catalogue               list (filter: status, module)
  * GET    /api/v1/catalogue/:id           get one + changelog
- * POST   /api/v1/catalogue               register a new API surface
- * POST   /api/v1/catalogue/:id/deprecate deprecate (dates + note)
- * POST   /api/v1/catalogue/:id/lifecycle generic transition (activate/retire/reinstate/deprecate)
- * POST   /api/v1/catalogue/seed          seed from the live gateway route registry
+ * POST   /api/v1/catalogue               register → queue → 202
+ * POST   /api/v1/catalogue/:id/deprecate lifecycle → queue → 202
+ * POST   /api/v1/catalogue/:id/lifecycle lifecycle → queue → 202
+ * POST   /api/v1/catalogue/seed          seed → queue → 202
  *
- * Every DB op runs inside withTenantScope() so FORCE-RLS is satisfied by the
- * app.tenant_id GUC (gateway_svc is NOBYPASSRLS).
+ * Reads use withTenant() (FORCE-RLS via app.tenant_id GUC).
+ * Writes are CQRS: validate → publish → 202; consumer applies under RLS.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { withTenantScope } from "@civitasone/db";
 import { resolveContext, requireRole, HttpError } from "./context.js";
-import { db } from "./db.js";
+import { withTenant } from "../../shared/scope.js";
 import * as repo from "./repo.js";
 import type { ApiEntryRow, ApiChangelogRow } from "./schema.js";
-import { seedFromRegistry } from "./seed.js";
-import { applyLifecycle, changeTypeForAction, type ApiAction, type ApiStatus } from "./domain.js";
+import { applyLifecycle, type ApiAction, type ApiStatus } from "./domain.js";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["super_admin", "platform_admin", "api_admin"];
 
@@ -60,7 +59,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
         module: z.string().max(120).optional(),
       })
       .parse(req.query);
-    const rows = await withTenantScope<unknown, ApiEntryRow[]>(db, ctx.tenantId, (tx) =>
+    const rows = await withTenant(ctx.tenantId, (tx) =>
       repo.listEntries(tx as any, ctx.tenantId, q),
     );
     return reply.send({ data: rows, meta: { total: rows.length } });
@@ -70,10 +69,9 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/catalogue/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const result = await withTenantScope<unknown, { entry: ApiEntryRow; changelog: ApiChangelogRow[] } | null>(
-      db,
+    const result = await withTenant(
       ctx.tenantId,
-      async (tx) => {
+      async (tx): Promise<{ entry: ApiEntryRow; changelog: ApiChangelogRow[] } | null> => {
         const entry = await repo.getEntry(tx as any, ctx.tenantId, id);
         if (!entry) return null;
         const changelog = await repo.listChangelog(tx as any, ctx.tenantId, id);
@@ -84,58 +82,36 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: result.entry, changelog: result.changelog });
   });
 
-  // ── Register ───────────────────────────────────────────────────────────────
+  // ── Register (CQRS) ───────────────────────────────────────────────────────
   app.post("/api/v1/catalogue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = registerBody.parse(req.body);
 
-    const row = await withTenantScope<unknown, ApiEntryRow>(db, ctx.tenantId, async (tx) => {
-      const existing = await repo.findByKey(tx as any, ctx.tenantId, {
+    const existing = await withTenant(ctx.tenantId, (tx) =>
+      repo.findByKey(tx as any, ctx.tenantId, {
         name: body.name,
         version: body.version,
         method: body.method,
         path: body.path,
-      });
-      if (existing) {
-        throw new HttpError(409, "ALREADY_EXISTS", "an API with this name/version/method/path is already registered");
-      }
-      const created = await repo.upsertEntry(tx as any, {
-        tenantId: ctx.tenantId,
-        name: body.name,
-        module: body.module,
-        version: body.version,
-        path: body.path,
-        method: body.method,
-        status: body.status,
-        source: "manual",
-        createdBy: ctx.actorId,
-        ...(body.upstream ? { upstream: body.upstream } : {}),
-        ...(body.owner ? { owner: body.owner } : {}),
-        ...(body.description ? { description: body.description } : {}),
-      });
-      await repo.insertChangelog(tx as any, {
-        tenantId: ctx.tenantId,
-        apiId: created.id,
-        changeType: "registered",
-        toStatus: created.status,
-        note: "registered via catalogue API",
-        actorId: ctx.actorId,
-      });
-      return created;
-    });
+      }),
+    );
+    if (existing) {
+      throw new HttpError(409, "ALREADY_EXISTS", "an API with this name/version/method/path is already registered");
+    }
 
-    return reply.code(201).send({ data: row });
+    const accepted = await commands.registerApi(ctx, body);
+    return reply.code(202).send({ data: accepted });
   });
 
-  // ── Deprecate (convenience wrapper over the lifecycle transition) ───────────
+  // ── Deprecate (convenience wrapper) ───────────────────────────────────────
   app.post("/api/v1/catalogue/:id/deprecate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = deprecateBody.parse(req.body ?? {});
-    const row = await transition(ctx, id, "deprecate", body);
-    return reply.send({ data: row });
+    const accepted = await enqueueLifecycle(ctx, id, "deprecate", body);
+    return reply.code(202).send({ data: accepted });
   });
 
   // ── Generic lifecycle transition ────────────────────────────────────────────
@@ -144,55 +120,43 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = lifecycleBody.parse(req.body);
-    const row = await transition(ctx, id, body.action, body);
-    return reply.send({ data: row });
+    const accepted = await enqueueLifecycle(ctx, id, body.action, body);
+    return reply.code(202).send({ data: accepted });
   });
 
-  // ── Seed from the live route registry (platform bootstrap) ──────────────────
+  // ── Seed from the live route registry ─────────────────────────────────────
   app.post("/api/v1/catalogue/seed", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["super_admin", "platform_admin"]);
-    const result = await withTenantScope<unknown, { total: number; created: number }>(
-      db,
-      ctx.tenantId,
-      (tx) => seedFromRegistry(tx as any, ctx.tenantId, ctx.actorId),
-    );
-    return reply.send({ data: result });
+    const accepted = await commands.seedCatalogue(ctx);
+    return reply.code(202).send({ data: accepted });
   });
 
-  // ── shared transition helper ────────────────────────────────────────────────
-  async function transition(
+  async function enqueueLifecycle(
     ctx: ReturnType<typeof resolveContext>,
     id: string,
     action: ApiAction,
     opts: { deprecationDate?: string | undefined; sunsetDate?: string | undefined; note?: string | undefined },
   ) {
-    return withTenantScope<unknown, ApiEntryRow | undefined>(db, ctx.tenantId, async (tx) => {
-      const entry = await repo.getEntry(tx as any, ctx.tenantId, id);
-      if (!entry) throw new HttpError(404, "NOT_FOUND", "api not found");
-      const from = entry.status as ApiStatus;
-      let to: ApiStatus;
-      try {
-        to = applyLifecycle(from, action);
-      } catch (err) {
-        throw new HttpError(409, "INVALID_TRANSITION", (err as Error).message);
-      }
-      const patch: { status: string; deprecationDate?: string | null; sunsetDate?: string | null } = { status: to };
-      if (action === "deprecate") {
-        patch.deprecationDate = opts.deprecationDate ?? new Date().toISOString().slice(0, 10);
-        if (opts.sunsetDate) patch.sunsetDate = opts.sunsetDate;
-      }
-      const updated = await repo.updateStatus(tx as any, ctx.tenantId, id, patch);
-      await repo.insertChangelog(tx as any, {
-        tenantId: ctx.tenantId,
-        apiId: id,
-        changeType: changeTypeForAction(action),
-        fromStatus: from,
-        toStatus: to,
-        note: opts.note ?? null,
-        actorId: ctx.actorId,
-      });
-      return updated;
-    });
+    const entry = await withTenant(ctx.tenantId, (tx) => repo.getEntry(tx as any, ctx.tenantId, id));
+    if (!entry) throw new HttpError(404, "NOT_FOUND", "api not found");
+    try {
+      applyLifecycle(entry.status as ApiStatus, action);
+    } catch (err) {
+      throw new HttpError(409, "INVALID_TRANSITION", (err as Error).message);
+    }
+    return commands.lifecycleApi(ctx, id, action, opts);
   }
+
+  app.setErrorHandler((err, req, reply) => {
+    const cid = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId: cid });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId: cid });
+    }
+    req.log.error({ err }, "unhandled");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId: cid });
+  });
 }

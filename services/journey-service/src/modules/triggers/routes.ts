@@ -1,13 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { validateTriggerConfig, type TriggerType } from "./domain.js";
+import * as commands from "./commands.js";
 
 const JOURNEY_ROLES = ["journey_admin", "marketing_admin", "super_admin"];
 
@@ -44,33 +40,13 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_CONFIG", configError);
     }
 
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createTrigger(ctx, {
         journeyId: body.journeyId,
         triggerType: body.triggerType,
         config: body.config,
-        status: "active",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.journeyStarted,
-        eventType: "journey.trigger.created",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { triggerId: id, journeyId: body.journeyId, triggerType: body.triggerType },
-      });
-    });
-
-    return reply.code(201).send({
-      data: { id, tenantId: ctx.tenantId, journeyId: body.journeyId, triggerType: body.triggerType, config: body.config, status: "active", version: 1 },
-    });
+      }),
+    );
   });
 
   // GET /v1/journeys/triggers — list triggers
@@ -116,6 +92,10 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "trigger not found");
     }
 
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "trigger has been modified; retry with current version");
+    }
+
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.triggerType !== undefined) patch["triggerType"] = body.triggerType;
     if (body.config !== undefined) patch["config"] = body.config;
@@ -129,14 +109,7 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_CONFIG", configError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "trigger has been modified; retry with current version");
-      }
-    });
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateTrigger(ctx, id, { version: body.version, patch }));
   });
 
   // DELETE /v1/journeys/triggers/:id — soft-delete trigger
@@ -150,13 +123,6 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "trigger not found");
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.softDelete(tx, id, ctx.tenantId, existing.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "trigger has been modified; retry with current version");
-      }
-    });
-
-    return reply.send({ data: { id, status: "inactive" } });
+    return reply.code(202).send(await commands.deleteTrigger(ctx, id, existing.version));
   });
 }

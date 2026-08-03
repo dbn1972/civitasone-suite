@@ -63,14 +63,15 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { DetailedHttpError, registerStandardErrorHandler } from "../../shared/api-errors.js";
 import { withTenant, type Tx } from "../../shared/scope.js";
-import { enqueue } from "../../shared/outbox.js";
-import { ANONYMOUS_ACTOR_ID, EVENTS } from "../../topics.js";
+import { queue } from "../../shared/infra.js";
+import { ANONYMOUS_ACTOR_ID, COMMANDS } from "../../topics.js";
 import { fieldDefinitions, layoutDefinitions } from "../entities/schema.js";
-import { formPublicEndpoints, formSubmissions, formVersions } from "./schema.js";
+import { formPublicEndpoints, formVersions } from "./schema.js";
 import { applyVisibility, resolveCascadeOptions, validateFormSubmission } from "./domain.js";
 import type { FieldDef } from "../rules/domain.js";
 import {
@@ -299,11 +300,10 @@ export async function publicFormRoutes(app: FastifyInstance): Promise<void> {
         ...(body.utm === undefined && body.landingUrl !== undefined ? utmFromUrl(body.landingUrl) : {}),
       } as Record<string, unknown>);
 
-      const submissionId = await withTenant(tenantId, async (tx) => {
+      const prepared = await withTenant(tenantId, async (tx) => {
         const form = await resolvePublicForm(tx, tenantId, formKey);
         const declared = form.fields.map((f) => f.apiName);
 
-        // Boundary checks: unknown fields, oversized values, markup, control chars.
         const answerCheck = checkAnswers(body.answers, declared);
         const rejections = [...contactRejections, ...utmCheck.rejections, ...answerCheck.rejections];
         if (rejections.length > 0) {
@@ -315,9 +315,6 @@ export async function publicFormRoutes(app: FastifyInstance): Promise<void> {
           );
         }
 
-        // FRM-05: hidden fields are stripped, then required/type validation runs
-        // on what survived. A hidden required field cannot block the submission
-        // and a hidden field's value cannot be persisted.
         const validated = validateFormSubmission(
           form.fields,
           form.visibilityRules,
@@ -325,80 +322,51 @@ export async function publicFormRoutes(app: FastifyInstance): Promise<void> {
           answerCheck.answers,
         );
         if (validated.errors.length > 0) {
-          // These messages are built from server-declared field labels only.
           throw new DetailedHttpError(422, "SUBMISSION_INVALID", "the submission failed validation", {
             reasons: validated.errors,
           });
         }
 
-        const utm = utmCheck.utm;
-        const [created] = await tx
-          .insert(formSubmissions)
-          .values({
-            tenantId,
-            formVersionId: form.formVersionId,
-            publicEndpointId: form.endpointId,
-            contactName: body.contact.name.trim(),
-            ...(body.contact.email !== undefined ? { contactEmail: body.contact.email.trim() } : {}),
-            ...(body.contact.phone !== undefined ? { contactPhone: body.contact.phone.trim() } : {}),
-            answers: JSON.stringify(validated.values),
-            ...utmColumns(utm),
-            channel: "public_web_form",
-            strippedFields: validated.stripped,
-            leadStatus: "captured",
-            createdBy: ANONYMOUS_ACTOR_ID,
-            updatedBy: ANONYMOUS_ACTOR_ID,
-          })
-          .returning({ id: formSubmissions.id });
-        if (!created) throw new HttpError(500, "INTERNAL", "submission could not be stored");
+        return { form, validated, utm: utmCheck.utm };
+      });
 
-        // Transactional outbox: the event is written in the same transaction as
-        // the row, so "committed ⇒ delivered" with no dual-write hole. It is an
-        // EVENT (something happened), not a command, because no consumer exists
-        // yet — the crm-service lead ingest is a tracked follow-up.
-        await enqueue(tx, {
-          topic: EVENTS.LEAD_CAPTURED,
-          eventType: EVENTS.LEAD_CAPTURED,
+      const submissionId = randomUUID();
+      const utm = prepared.utm;
+      await queue.publish(COMMANDS.PUBLIC_FORM_SUBMIT, {
+        messageId: submissionId,
+        type: COMMANDS.PUBLIC_FORM_SUBMIT,
+        tenantId,
+        actorId: ANONYMOUS_ACTOR_ID,
+        correlationId: req.id,
+        schemaVersion: "1.0",
+        payload: {
+          id: submissionId,
           tenantId,
+          formVersionId: prepared.form.formVersionId,
+          publicEndpointId: prepared.form.endpointId,
+          contactName: body.contact.name.trim(),
+          ...(body.contact.email !== undefined ? { contactEmail: body.contact.email.trim() } : {}),
+          ...(body.contact.phone !== undefined ? { contactPhone: body.contact.phone.trim() } : {}),
+          answers: JSON.stringify(prepared.validated.values),
+          utmColumns: utmColumns(utm),
+          strippedFields: prepared.validated.stripped,
           actorId: ANONYMOUS_ACTOR_ID,
-          correlationId: req.id,
-          payload: {
-            submissionId: created.id,
-            formVersionId: form.formVersionId,
+          leadPayload: {
+            submissionId,
+            formVersionId: prepared.form.formVersionId,
             tenantId,
             channel: "public_web_form",
             capturedAt: new Date().toISOString(),
             utm,
-            answerFieldCount: Object.keys(validated.values).length,
+            answerFieldCount: Object.keys(prepared.validated.values).length,
             hasEmail: body.contact.email !== undefined,
             hasPhone: body.contact.phone !== undefined,
           },
-        });
-
-        await enqueue(tx, {
-          topic: "audit.event.record",
-          eventType: "audit.event.record",
-          tenantId,
-          actorId: ANONYMOUS_ACTOR_ID,
-          correlationId: req.id,
-          payload: {
-            service: "metadata",
-            action: "capture_public_lead",
-            resourceType: "form_submission",
-            resourceId: created.id,
-            outcome: "success",
-          },
-        });
-
-        return created.id;
+        },
       });
 
-      // Log the id only. Never the name, email, phone, answers or IP-with-PII.
-      req.log.info({ submissionId }, "public form submission captured");
-
-      // 201 with the id only: the response tells the caller nothing it did not
-      // already know, and echoes none of what it sent.
-      return reply.code(201).send({ data: { id: submissionId, status: "captured" } });
+      req.log.info({ submissionId }, "public form submission accepted");
+      return reply.code(202).send({ data: { id: submissionId, status: "accepted" } });
     },
   );
 

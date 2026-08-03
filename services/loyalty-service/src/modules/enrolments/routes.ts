@@ -1,13 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as programRepo from "../programs/repo.js";
 import { validateEnrolment, isValidTransition, type EnrolmentStatus } from "./domain.js";
+import * as commands from "./commands.js";
 
 const READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
 const WRITE_ROLES = ["loyalty_admin", "super_admin"];
@@ -33,19 +30,16 @@ const statusBody = z.object({
 });
 
 export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/loyalty/enrol — enrol a profile in a program
   app.post("/v1/loyalty/enrol", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = enrolBody.parse(req.body);
 
-    // Validate program exists and is active
     const program = await programRepo.findById(body.programId, ctx.tenantId);
     if (!program) {
       throw new HttpError(404, "NOT_FOUND", "program not found");
     }
 
-    // Check for duplicate
     const existing = await repo.findByProgramAndProfile(ctx.tenantId, body.programId, body.profileId);
 
     const validation = validateEnrolment({
@@ -56,46 +50,15 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "ENROLMENT_INVALID", validation.error!);
     }
 
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.enrolMember(ctx, {
         programId: body.programId,
         profileId: body.profileId,
-        status: "active",
         tier: body.tier,
-        pointsBalance: BigInt(0),
-        lifetimePoints: BigInt(0),
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.memberEnrolled,
-        eventType: EVENTS.memberEnrolled,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { enrolmentId: id, programId: body.programId, profileId: body.profileId },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id,
-        programId: body.programId,
-        profileId: body.profileId,
-        status: "active",
-        tier: body.tier,
-        pointsBalance: "0",
-        lifetimePoints: "0",
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
-  // GET /v1/loyalty/enrolments — list enrolments (optionally by program)
   app.get("/v1/loyalty/enrolments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -109,7 +72,6 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
 
-  // GET /v1/loyalty/members/:profileId — list enrolments for a profile
   app.get("/v1/loyalty/members/:profileId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -122,7 +84,6 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
 
-  // GET /v1/loyalty/enrolments/:id — get single enrolment
   app.get("/v1/loyalty/enrolments/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -136,7 +97,6 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: repo.toView(enrolment) });
   });
 
-  // PATCH /v1/loyalty/enrolments/:id/status — suspend or cancel
   app.patch("/v1/loyalty/enrolments/:id/status", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
@@ -152,14 +112,8 @@ export async function enrolmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", `cannot transition from ${existing.status} to ${body.status}`);
     }
 
-    const ok = await db.transaction(async (tx) => {
-      return repo.update(tx, id, ctx.tenantId, { status: body.status, updatedBy: ctx.actorId }, body.version);
-    });
-
-    if (!ok) {
-      throw new HttpError(409, "VERSION_CONFLICT", "enrolment has been modified; retry with current version");
-    }
-
-    return reply.send({ data: { id, status: body.status, version: body.version + 1 } });
+    return reply
+      .code(202)
+      .send(await commands.updateEnrolmentStatus(ctx, id, { status: body.status, version: body.version }));
   });
 }

@@ -8,7 +8,10 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import * as loanCommands from "./loans-commands.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 
 const HR_ROLES = ["hr_admin", "finance_admin", "super_admin"];
@@ -90,23 +93,8 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createLoanBody.parse(req.body);
-    const id = randomUUID();
     const emi = Math.ceil(body.sanctionedAmountMinor / body.totalEmis);
-    await db.transaction((tx) => tx.insert(hrmsLoans).values({
-      id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-      loanType: body.loanType,
-      sanctionedAmountMinor: BigInt(body.sanctionedAmountMinor),
-      disbursedAmountMinor: BigInt(body.sanctionedAmountMinor),
-      outstandingMinor: BigInt(body.sanctionedAmountMinor),
-      interestRateBps: body.interestRateBps,
-      emiMinor: BigInt(emi),
-      totalEmis: body.totalEmis, emisPaid: 0,
-      sanctionDate: body.sanctionDate,
-      firstEmiDate: body.firstEmiDate ?? null,
-      purpose: body.purpose ?? null,
-      status: "active", createdBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id, status: "created", emiMinor: emi });
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.createLoan(ctx, { ...body, emiMinor: emi }));
   });
 
   // Record EMI payment (called by payroll after deduction)
@@ -116,11 +104,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const loan = (await scopedRead((tx) => tx.select().from(hrmsLoans).where(and(eq(hrmsLoans.id, id), eq(hrmsLoans.tenantId, ctx.tenantId)))))[0];
     if (!loan) return reply.code(404).send({ code: "NOT_FOUND", message: "loan not found" });
-    const newOutstanding = loan.outstandingMinor - loan.emiMinor;
-    const newPaid = loan.emisPaid + 1;
-    const newStatus = newOutstanding <= 0n ? "completed" : "active";
-    await db.transaction((tx) => tx.update(hrmsLoans).set({ outstandingMinor: newOutstanding < 0n ? 0n : newOutstanding, emisPaid: newPaid, status: newStatus }).where(eq(hrmsLoans.id, id)));
-    return reply.send({ id, emisPaid: newPaid, outstandingMinor: Number(newOutstanding < 0n ? 0n : newOutstanding), status: newStatus });
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.recordEmiPaid(ctx, id));
   });
 
   // ── SALARY ADVANCES ──
@@ -136,19 +120,10 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = createAdvanceBody.parse(req.body);
-    const id = randomUUID();
     const emi = Math.ceil(body.amountMinor / body.recoveryMonths);
-    await db.transaction((tx) => tx.insert(hrmsSalaryAdvances).values({
-      id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-      amountMinor: BigInt(body.amountMinor),
-      purpose: body.purpose,
-      recoveryMonths: body.recoveryMonths,
-      emiMinor: BigInt(emi),
-      recoveredMinor: 0n,
-      requestDate: body.requestDate ?? new Date().toISOString().slice(0, 10),
-      status: "pending", createdBy: ctx.actorId,
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.createAdvance(ctx, {
+      ...body, emiMinor: emi, requestDate: body.requestDate ?? new Date().toISOString().slice(0, 10),
     }));
-    return reply.code(201).send({ id, status: "pending", emiMinor: emi });
   });
 
   // Approve advance
@@ -156,8 +131,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await db.transaction((tx) => tx.update(hrmsSalaryAdvances).set({ status: "active", approvedBy: ctx.actorId }).where(and(eq(hrmsSalaryAdvances.id, id), eq(hrmsSalaryAdvances.tenantId, ctx.tenantId))));
-    return reply.send({ id, status: "approved" });
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.approveAdvance(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

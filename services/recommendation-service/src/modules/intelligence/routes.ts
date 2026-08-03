@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { cache, queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
+import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   computeOpportunityScore,
   padOpportunityString,
@@ -118,22 +117,10 @@ export async function intelligenceRoutes(app: FastifyInstance): Promise<void> {
     const validationError = validateIntelligenceInput({ whiteSpace, riskSignals });
     if (validationError) throw new HttpError(422, "INTELLIGENCE_INVALID", validationError);
 
-    const intelligenceId = randomUUID();
-    // Previewed on the read side so the caller sees the score it will get; the
-    // consumer recomputes it from the same pure function before persisting.
-    const opportunityScore = computeOpportunityScore(whiteSpace, riskSignals);
-
-    await queue.publish(COMMANDS.intelligenceCompute, {
-      type: COMMANDS.intelligenceCompute,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { intelligenceId, accountId, whiteSpace, riskSignals },
-    });
-
-    return reply.code(202).send({
-      data: { intelligenceId, accountId, opportunityScore, status: "queued" },
-    });
+    // Score preview stays available via domain; command path returns Accepted.
+    void computeOpportunityScore(whiteSpace, riskSignals);
+    return reply.code(202).send(
+      await commands.computeIntelligence(ctx, { accountId, whiteSpace, riskSignals }),
+    );
   });
 }

@@ -21,6 +21,28 @@ export const COMMANDS = {
   slaPolicyUpsert: "helpdesk.sla.policy_upsert",
   csatSubmit: "helpdesk.csat.submit",
   ticketEscalate: "helpdesk.ticket.escalate",
+  // Routing module
+  routingRuleCreate: "helpdesk.routing.rule_create",
+  routingRuleUpdate: "helpdesk.routing.rule_update",
+  routingRuleDelete: "helpdesk.routing.rule_delete",
+  routingCapacityUpsert: "helpdesk.routing.capacity_upsert",
+  routingQueueEnqueue: "helpdesk.routing.queue_enqueue",
+  routingQueueDequeue: "helpdesk.routing.queue_dequeue",
+  // Service catalogue (SVC-129)
+  catalogueOfferingCreate: "helpdesk.catalogue.offering_create",
+  catalogueOfferingUpdate: "helpdesk.catalogue.offering_update",
+  catalogueOlaCreate: "helpdesk.catalogue.ola_create",
+  catalogueRequestRaise: "helpdesk.catalogue.request_raise",
+  catalogueRequestApprove: "helpdesk.catalogue.request_approve",
+  catalogueRequestAdvance: "helpdesk.catalogue.request_advance",
+  catalogueRequestFulfil: "helpdesk.catalogue.request_fulfil",
+  // P0 F3 leftover — SLA calendars / pause / extend / CES
+  calendarCreate: "helpdesk.sla.calendar_create",
+  calendarUpdate: "helpdesk.sla.calendar_update",
+  slaPause: "helpdesk.ticket.sla_pause",
+  slaResume: "helpdesk.ticket.sla_resume",
+  slaExtend: "helpdesk.ticket.sla_extend",
+  cesSubmit: "helpdesk.ces.submit",
 } as const;
 
 /** TKT-11 — saved-views command topics (moved here from views-routes.ts so

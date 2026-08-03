@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * CPF (Contributory Provident Fund) account + subscription/advance ledger.
  *
@@ -12,12 +14,11 @@
  * Money in paise (bigint); employee + employer running balances on every row.
  * Monthly subscription is idempotent per (account, period).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import type { CpfAccountRow } from "./schema.js";
@@ -77,25 +78,9 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
     try {
-      await db.transaction(async (tx) => {
-        await repo.insertAccount(tx, {
-          id: acctId, tenantId: ctx.tenantId, employeeId: id, cpfNumber: body.cpfNumber,
-          openingEmpMinor: openEmp, openingErMinor: openEr,
-          monthlySubscriptionMinor: BigInt(body.monthlySubscriptionMinor),
-          interestRatePct: String(body.interestRatePct),
-          createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        });
-        if (openEmp > 0n || openEr > 0n) {
-          await repo.insertLedger(tx, {
-            id: randomUUID(), tenantId: ctx.tenantId, accountId: acctId, employeeId: id,
-            entryType: "opening", empAmountMinor: openEmp, erAmountMinor: openEr,
-            deltaMinor: openEmp + openEr, empBalanceMinor: openEmp, erBalanceMinor: openEr,
-            balanceMinor: openEmp + openEr, narrative: "opening balance", createdBy: ctx.actorId,
-          });
-        }
-      });
+      await publishF3Write(ctx, "cpf_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      // A concurrent open (same employee, or a duplicate government CPF number) races
+      // A concurrent open (same employee, or a duplicate government CPF number) as any races
       // past the pre-checks and surfaces as a 23505; map it to a clean 409 like NPS.
       if (isUniqueViolation(err)) {
         const constraint = (err as { constraint_name?: string }).constraint_name ?? "";
@@ -141,23 +126,11 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const erAmt = BigInt(body.erAmountMinor);
     const ledgerId = randomUUID();
     try {
-      const { next } = await db.transaction(async (tx) => {
-        const prev = await repo.lockedBalance(tx, ctx.tenantId, acct);
-        const n = { emp: prev.emp + empAmt, er: prev.er + erAmt, total: prev.total + empAmt + erAmt };
-        await repo.insertLedger(tx, {
-          id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-          entryType: "subscription", period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
-          deltaMinor: empAmt + erAmt, empBalanceMinor: n.emp, erBalanceMinor: n.er, balanceMinor: n.total,
-          ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
-          createdBy: ctx.actorId,
-        });
-        await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
-        return { next: n };
-      });
+      const { next } = await publishF3Write(ctx, "cpf_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       return reply.code(201).send(jsonSafe({
         ledgerId, period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
         balanceMinor: next.total, employeeBalanceMinor: next.emp, employerBalanceMinor: next.er,
-      }));
+      })) as any;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new HttpError(409, "PERIOD_ALREADY_POSTED", `CPF subscription for ${body.period} already posted`);
@@ -166,8 +139,8 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // debit ops: advance / withdrawal draw down employer leg first then employee leg.
-  async function debit(reqBody: unknown, params: unknown, ctxTenant: string, actor: string,
+  // debit ops: advance / withdrawal — CQRS publish (consumer draws employer leg first).
+  async function debit(ctx: { tenantId: string; actorId: string; correlationId: string }, reqBody: unknown, params: unknown,
     entryType: "advance" | "withdrawal") {
     const { id } = idParam.parse(params);
     const body = z.object({
@@ -175,38 +148,24 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       narrative: z.string().max(500).optional(),
       effectiveDate: z.string().optional(),
     }).parse(reqBody);
-    const acct = await mustAccount(ctxTenant, id);
-    const amount = BigInt(body.amountMinor);
-    const ledgerId = randomUUID();
-    return db.transaction(async (tx) => {
-      const prev = await repo.lockedBalance(tx, ctxTenant, acct);
-      if (prev.total - amount < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available CPF balance");
-      const erDraw = amount <= prev.er ? amount : prev.er;
-      const empDraw = amount - erDraw;
-      const n = { emp: prev.emp - empDraw, er: prev.er - erDraw, total: prev.total - amount };
-      await repo.insertLedger(tx, {
-        id: ledgerId, tenantId: ctxTenant, accountId: acct.id, employeeId: id,
-        entryType, empAmountMinor: empDraw, erAmountMinor: erDraw,
-        deltaMinor: -amount, empBalanceMinor: n.emp, erBalanceMinor: n.er, balanceMinor: n.total,
-        ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
-        ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
-        createdBy: actor,
-      });
-      await repo.bumpAccountVersion(tx, ctxTenant, acct.id, actor, acct.version);
-      return { ledgerId, entryType, amountMinor: amount, previousBalanceMinor: prev.total, balanceMinor: n.total };
+    await mustAccount(ctx.tenantId, id);
+    return publishF3Write(ctx as any, "cpf_routes__debit", id, {
+      body: { ...body, entryType },
+      params: params as Record<string, unknown>,
+      query: {},
     });
   }
 
   app.post("/v1/hrms/employees/:id/cpf/advance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    return reply.code(201).send(jsonSafe(await debit(req.body, req.params, ctx.tenantId, ctx.actorId, "advance")));
+    return reply.code(202).send(await debit(ctx, req.body, req.params, "advance"));
   });
 
   app.post("/v1/hrms/employees/:id/cpf/withdrawal", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    return reply.code(201).send(jsonSafe(await debit(req.body, req.params, ctx.tenantId, ctx.actorId, "withdrawal")));
+    return reply.code(202).send(await debit(ctx, req.body, req.params, "withdrawal"));
   });
 
   // refund of an advance: credit to the employee leg.
@@ -218,23 +177,10 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       amountMinor: z.coerce.number().int().positive(),
       narrative: z.string().max(500).optional(),
     }).parse(req.body);
-    const acct = await mustAccount(ctx.tenantId, id);
-    const amount = BigInt(body.amountMinor);
-    const ledgerId = randomUUID();
-    const { next } = await db.transaction(async (tx) => {
-      const prev = await repo.lockedBalance(tx, ctx.tenantId, acct);
-      const n = { emp: prev.emp + amount, er: prev.er, total: prev.total + amount };
-      await repo.insertLedger(tx, {
-        id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType: "refund", empAmountMinor: amount, erAmountMinor: 0n,
-        deltaMinor: amount, empBalanceMinor: n.emp, erBalanceMinor: n.er, balanceMinor: n.total,
-        ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
-        createdBy: ctx.actorId,
-      });
-      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
-      return { next: n };
-    });
-    return reply.code(201).send(jsonSafe({ ledgerId, entryType: "refund", amountMinor: amount, balanceMinor: next.total }));
+    await mustAccount(ctx.tenantId, id);
+    return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__2", id, {
+      body, params: req.params as Record<string, unknown>, query: {},
+    })) as any;
   });
 
   // interest accrual on the TOTAL corpus, credited to the employee leg.
@@ -246,32 +192,10 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       months: z.coerce.number().int().min(1).max(12).default(12),
       ratePctOverride: z.coerce.number().min(0).max(20).optional(),
     }).parse(req.body);
-    const acct = await mustAccount(ctx.tenantId, id);
-    const ratePct = body.ratePctOverride ?? Number(acct.interestRatePct);
-    const ledgerId = randomUUID();
-    const { interest, next } = await db.transaction(async (tx) => {
-      const prev = await repo.lockedBalance(tx, ctx.tenantId, acct);
-      // No float on money: keep the corpus in bigint paise. Convert the rate percent
-      // (bounded config, <=2 decimals) to integer basis points, then
-      //   interest = corpus_paise * rate_bps * months / (10000 * 12)
-      // in BigInt throughout, rounded half-up via (num + den/2) / den.
-      const rateBps = BigInt(Math.round(ratePct * 100));
-      const num = prev.total * rateBps * BigInt(body.months);
-      const den = 120000n; // 10000 (bps -> fraction) * 12 (months per year)
-      const interestMinor = (num + den / 2n) / den;
-      const n = { emp: prev.emp + interestMinor, er: prev.er, total: prev.total + interestMinor };
-      await repo.insertLedger(tx, {
-        id: ledgerId, tenantId: ctx.tenantId, accountId: acct.id, employeeId: id,
-        entryType: "interest", empAmountMinor: interestMinor, erAmountMinor: 0n,
-        deltaMinor: interestMinor, empBalanceMinor: n.emp, erBalanceMinor: n.er, balanceMinor: n.total,
-        narrative: `interest @ ${ratePct}% for ${body.months} month(s)`, createdBy: ctx.actorId,
-      });
-      await repo.bumpAccountVersion(tx, ctx.tenantId, acct.id, ctx.actorId, acct.version);
-      return { interest: interestMinor, next: n };
-    });
-    return reply.code(201).send(jsonSafe({
-      ledgerId, ratePct, months: body.months, interestMinor: interest, balanceMinor: next.total,
-    }));
+    await mustAccount(ctx.tenantId, id);
+    return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__3", id, {
+      body, params: req.params as Record<string, unknown>, query: {},
+    })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

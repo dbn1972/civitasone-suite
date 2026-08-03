@@ -28,4 +28,21 @@ export const scheduledReports = domainSchema.table("scheduled_reports", {
 export type ScheduledReportRow = typeof scheduledReports.$inferSelect;
 export type ScheduledReportInsert = typeof scheduledReports.$inferInsert;
 
+export type ScheduledReportView = {
+  id: string;
+  tenantId: string;
+  templateId: string;
+  cadence: ScheduledReportCadence;
+  recipients: string[];
+  format: string;
+  enabled: boolean;
+  lastRunAt: Date | null;
+  nextRunAt: Date;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  updatedBy: string;
+};
+
 export const scheduledReportsSchema = { scheduledReports };

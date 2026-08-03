@@ -5,9 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import * as repo from "./taxonomy-repo.js";
 import { validateSchemaDefinition, validatePayload, canTransition } from "./taxonomy-domain.js";
 
@@ -82,47 +80,14 @@ export async function eventTaxonomyRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        eventName: body.eventName,
-        category: body.category,
-        schemaJson: body.schemaJson,
-        // New definitions always start as drafts — registration is not approval.
-        status: "draft",
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyCreated,
-        eventType: EVENTS.taxonomyCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taxonomyId: id, eventName: body.eventName, category: body.category },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_created",
-          resourceType: "event_taxonomy",
-          resourceId: id,
-          outcome: "success",
-          metadata: { eventName: body.eventName, category: body.category },
-        },
-      });
+    await publishF3Write(ctx, "taxonomy_create", id, {
+      eventName: body.eventName,
+      category: body.category,
+      schemaJson: body.schemaJson,
     });
 
-    return reply.code(201).send({
-      data: { id, eventName: body.eventName, category: body.category, status: "draft", version: 1 },
+    return reply.code(202).send({
+      data: { id, eventName: body.eventName, category: body.category, status: "accepted", version: 1, correlationId: ctx.correlationId },
     });
   });
 
@@ -156,39 +121,14 @@ export async function eventTaxonomyRoutes(app: FastifyInstance): Promise<void> {
     if (body.schemaJson !== undefined) patch.schemaJson = body.schemaJson;
     if (body.status !== undefined) patch.status = body.status;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "taxonomy definition has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyUpdated,
-        eventType: EVENTS.taxonomyUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taxonomyId: id, eventName: existing.eventName, patch: { ...patch } },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_updated",
-          resourceType: "event_taxonomy",
-          resourceId: id,
-          outcome: "success",
-          metadata: { eventName: existing.eventName },
-        },
-      });
+    await publishF3Write(ctx, "taxonomy_update", id, {
+      patch,
+      version: body.version,
+      eventName: existing.eventName,
+      changed: Object.keys(patch).filter((k) => k !== "updatedBy"),
     });
 
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send({ data: { id, updated: true, status: "accepted", version: body.version + 1, correlationId: ctx.correlationId } });
   });
 
   // POST /v1/cdp/events/taxonomy/:id/approve — make a definition publishable (CDP-004)
@@ -206,46 +146,13 @@ export async function eventTaxonomyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_TRANSITION", `cannot approve a ${existing.status} definition`);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "approved", updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "taxonomy definition has been modified; retry with current version");
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.taxonomyApproved,
-        eventType: EVENTS.taxonomyApproved,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taxonomyId: id, eventName: existing.eventName },
-      });
-
-      await enqueue(tx, {
-        topic: "audit.event.record",
-        eventType: "audit.event.record",
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          service: "cdp",
-          action: "event_taxonomy_approved",
-          resourceType: "event_taxonomy",
-          resourceId: id,
-          outcome: "success",
-          metadata: { eventName: existing.eventName },
-        },
-      });
+    await publishF3Write(ctx, "taxonomy_approve", id, {
+      version: body.version,
+      eventName: existing.eventName,
     });
 
-    return reply.send({
-      data: { id, eventName: existing.eventName, status: "approved", version: body.version + 1 },
+    return reply.code(202).send({
+      data: { id, eventName: existing.eventName, status: "accepted", version: body.version + 1, correlationId: ctx.correlationId },
     });
   });
 

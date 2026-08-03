@@ -13,15 +13,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import { rankActions } from "../nba/ranking-domain.js";
 import { validateEffectiveWindow, validateWeightBps, MAX_WEIGHT_BPS } from "../matrix/domain.js";
 import * as repo from "./repo.js";
+import * as commands from "./commands.js";
 import {
   evaluateTriggers,
   triggersToCandidates,
@@ -278,49 +275,8 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
     const clash = await repo.findByName(ctx.tenantId, body.name);
     if (clash) throw new HttpError(409, "TRIGGER_RULE_DUPLICATE", "a rule with that name already exists");
 
-    const id = randomUUID();
-
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        ruleType: body.ruleType,
-        name: body.name,
-        sourceCategory: body.sourceCategory ?? null,
-        targetCategory: body.targetCategory,
-        eventCode: body.eventCode ?? null,
-        conditions: body.conditions,
-        priority: body.priority,
-        weightBps: body.weightBps,
-        active: body.active,
-        effectiveFrom: body.effectiveFrom === undefined ? null : new Date(body.effectiveFrom),
-        effectiveTo: body.effectiveTo === undefined ? null : new Date(body.effectiveTo),
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.triggerRuleCreated,
-        eventType: EVENTS.triggerRuleCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          ruleId: id,
-          ruleType: body.ruleType,
-          targetCategory: body.targetCategory,
-          priority: body.priority,
-          weightBps: body.weightBps,
-        },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "trigger-rule", id));
-
-    return reply.code(201).send({
-      data: {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createTriggerRule(ctx, {
         ruleType: body.ruleType,
         name: body.name,
         sourceCategory: body.sourceCategory ?? null,
@@ -332,9 +288,8 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
         active: body.active,
         effectiveFrom: body.effectiveFrom ?? null,
         effectiveTo: body.effectiveTo ?? null,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** PATCH /v1/recommendations/trigger-rules/:id — update a rule. */
@@ -382,7 +337,15 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
     });
     if (windowError) throw new HttpError(422, "TRIGGER_RULE_INVALID", windowError);
 
-    const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
+    if (body.version !== existing.version) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        "trigger rule has been modified; retry with current version",
+      );
+    }
+
+    const patch: Record<string, unknown> = {};
     if (body.name !== undefined) patch.name = body.name;
     if (body.sourceCategory !== undefined) patch.sourceCategory = body.sourceCategory;
     if (body.targetCategory !== undefined) patch.targetCategory = body.targetCategory;
@@ -391,36 +354,10 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
     if (body.priority !== undefined) patch.priority = body.priority;
     if (body.weightBps !== undefined) patch.weightBps = body.weightBps;
     if (body.active !== undefined) patch.active = body.active;
-    if (body.effectiveFrom !== undefined) {
-      patch.effectiveFrom = body.effectiveFrom === null ? null : new Date(body.effectiveFrom);
-    }
-    if (body.effectiveTo !== undefined) {
-      patch.effectiveTo = body.effectiveTo === null ? null : new Date(body.effectiveTo);
-    }
+    if (body.effectiveFrom !== undefined) patch.effectiveFrom = body.effectiveFrom;
+    if (body.effectiveTo !== undefined) patch.effectiveTo = body.effectiveTo;
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(
-          409,
-          "VERSION_CONFLICT",
-          "trigger rule has been modified; retry with current version",
-        );
-      }
-
-      await enqueue(tx, {
-        topic: EVENTS.triggerRuleUpdated,
-        eventType: EVENTS.triggerRuleUpdated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { ruleId: id, patch },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "trigger-rule", id));
-
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateTriggerRule(ctx, id, { version: body.version, patch }));
   });
 
   /**
@@ -438,22 +375,6 @@ export async function triggerRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "trigger rule not found");
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.deactivate(tx, id, ctx.tenantId, ctx.actorId);
-      if (!ok) throw new HttpError(404, "NOT_FOUND", "trigger rule not found");
-
-      await enqueue(tx, {
-        topic: EVENTS.triggerRuleDeactivated,
-        eventType: EVENTS.triggerRuleDeactivated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { ruleId: id },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "trigger-rule", id));
-
-    return reply.send({ data: { id, active: false } });
+    return reply.code(202).send(await commands.deactivateTriggerRule(ctx, id));
   });
 }

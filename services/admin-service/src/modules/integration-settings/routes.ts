@@ -13,6 +13,9 @@
  *   DELETE  :provider/:env            → disable + clear secret (version++) + audit
  *   GET     (list / one)              → masked reads (secrets NEVER returned)
  */
+import { randomUUID } from "node:crypto";
+import { publishAdminCommand } from "../../shared/f3-publish.js";
+import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -164,28 +167,16 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const { ciphertext } = sealSecrets(secrets);
     const last4 = primaryLast4(provider, secrets);
 
-    const change = await db.transaction(async (tx) => {
-      const live = await repo.findSettingTx(tx as repo.Writer, ctx.tenantId, provider, env);
-      if (live) assertVersionMatch(body.expectedVersion, live.version);
-      const row = await repo.insertChange(tx as repo.Writer, {
-        tenantId: ctx.tenantId,
-        provider,
-        envScope: env,
-        enabled: body.enabled,
-        endpointUrl: body.endpointUrl,
-        config,
-        secretCiphertext: hasSecretInput ? ciphertext : null,
-        secretLast4: hasSecretInput ? last4 : null,
-        secretChanged: hasSecretInput,
-        note: body.note ?? null,
-        status: "pending",
-        proposedBy: ctx.actorId,
-        baseVersion: live?.version ?? null,
-      });
-      await audit(tx, ctx, "integration.change.proposed", row.id);
-      return row;
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'integration_settings_op_0',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(201).send(serializeChange(change));
+    const change = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId });
   });
 
   // ── approve latest pending → apply (maker-checker + version++) ─────────────
@@ -194,62 +185,16 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
 
-    const result = await db.transaction(async (tx) => {
-      const change = await repo.findLatestPendingTx(tx as repo.Writer, ctx.tenantId, provider, env);
-      if (!change) throw new HttpError(404, "NO_PENDING_CHANGE", "no pending change to approve");
-      assertPending(change.status);
-      assertApproverDistinct(change.proposedBy, ctx.actorId);
-
-      const live = await repo.findSettingTx(tx as repo.Writer, ctx.tenantId, provider, env);
-      assertVersionMatch(change.baseVersion, live?.version ?? 0);
-
-      let version: number;
-      // Secret: use the proposal's when it changed the secret, else keep live's.
-      const secretCiphertext = change.secretChanged ? change.secretCiphertext : (live?.secretCiphertext ?? null);
-      const secretLast4 = change.secretChanged ? change.secretLast4 : (live?.secretLast4 ?? null);
-      // Applying a new config invalidates the previous test result.
-      const status = "unconfigured" as const;
-
-      if (live) {
-        version = live.version + 1;
-        await repo.updateSetting(tx as repo.Writer, live.id, ctx.tenantId, {
-          enabled: change.enabled,
-          endpointUrl: change.endpointUrl,
-          config: change.config,
-          secretCiphertext,
-          secretLast4,
-          status,
-          lastError: null,
-          version,
-          updatedBy: ctx.actorId,
-        });
-      } else {
-        version = 1;
-        await repo.insertSetting(tx as repo.Writer, {
-          tenantId: ctx.tenantId,
-          provider,
-          envScope: env,
-          enabled: change.enabled,
-          endpointUrl: change.endpointUrl,
-          config: change.config,
-          secretCiphertext,
-          secretLast4,
-          status,
-          version,
-          createdBy: change.proposedBy,
-          updatedBy: ctx.actorId,
-        });
-      }
-
-      await repo.updateChange(tx as repo.Writer, change.id, ctx.tenantId, {
-        status: "approved",
-        approvedBy: ctx.actorId,
-        approvedAt: new Date(),
-      });
-      await audit(tx, ctx, "integration.change.approved", change.id);
-      return { version };
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'integration_settings_op_1',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.send({ status: "approved", provider, envScope: env, version: result.version });
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   // ── reject latest pending ──────────────────────────────────────────────────
@@ -259,15 +204,13 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const { provider, env } = parseTarget(req.params);
     const body = rejectBody.parse(req.body ?? {});
 
-    await db.transaction(async (tx) => {
-      const change = await repo.findLatestPendingTx(tx as repo.Writer, ctx.tenantId, provider, env);
-      if (!change) throw new HttpError(404, "NO_PENDING_CHANGE", "no pending change to reject");
-      assertPending(change.status);
-      await repo.updateChange(tx as repo.Writer, change.id, ctx.tenantId, {
-        status: "rejected",
-        rejectedReason: body.reason,
-      });
-      await audit(tx, ctx, "integration.change.rejected", change.id);
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'integration_settings_op_2',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
     return reply.send({ status: "rejected", provider, envScope: env });
   });
@@ -292,8 +235,13 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     await repo.recordTest(ctx.tenantId, row.id, result.status, result.ok ? null : (result.error ?? "unknown error"));
 
     // Audit the test action (outside the read tx — its own tx w/ outbox).
-    await db.transaction(async (tx) => {
-      await audit(tx, ctx, `integration.test.${result.status}`, row.id);
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'integration_settings_op_3',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
     return reply.send({ provider, envScope: env, ok: result.ok, status: result.status, error: result.error ?? null, detail: result.detail ?? null });
   });
@@ -304,19 +252,13 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
 
-    await db.transaction(async (tx) => {
-      const live = await repo.findSettingTx(tx as repo.Writer, ctx.tenantId, provider, env);
-      if (!live) throw new HttpError(404, "NOT_FOUND", "integration not configured for this env");
-      await repo.updateSetting(tx as repo.Writer, live.id, ctx.tenantId, {
-        enabled: false,
-        secretCiphertext: null,
-        secretLast4: null,
-        status: "unconfigured",
-        lastError: null,
-        version: live.version + 1,
-        updatedBy: ctx.actorId,
-      });
-      await audit(tx, ctx, "integration.disabled", live.id);
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'integration_settings_op_4',
+      body: (req.body as Record<string, unknown>),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
     });
     return reply.send({ status: "disabled", provider, envScope: env });
   });

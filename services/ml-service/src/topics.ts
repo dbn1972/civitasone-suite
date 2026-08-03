@@ -125,6 +125,20 @@ export const COMMANDS = {
    * Publisher: Domain entity change events or manual admin trigger
    */
   recomputeFeatures: "ml.features.recompute",
+
+  /**
+   * Create an A/B experiment for model comparison.
+   * Payload: { id, tenantId, domain, name, challengerModelId, currentModelId, splitPct }
+   * Publisher: POST /v1/ml/experiments route handler
+   */
+  experimentCreate: "ml.experiment.create",
+
+  /**
+   * End an active A/B experiment (completed or cancelled).
+   * Payload: { id, tenantId, status: "completed" | "cancelled" }
+   * Publisher: PATCH /v1/ml/experiments/:id route handler
+   */
+  experimentEnd: "ml.experiment.end",
 } as const;
 
 // ─── CONSUMED EVENTS (from other services) ───────────────────────────────────

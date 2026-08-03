@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
 import { payrollTds, payrollNps, payrollTdsNonSalary } from "../statutory/schema.js";
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
@@ -10,6 +12,9 @@ import { taxDeclarations } from "../tax/schema.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as taxCommands from "../tax/commands.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -17,6 +22,14 @@ const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employ
 // It must NOT be readable by the self-service `employee` role — admins/officers only.
 const RETURN_FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
 const AUDIT_TOPIC = "audit.event.record";
+const perquisiteComponentBody = z.object({
+  employeeId: z.string().uuid(),
+  fy: z.string().regex(/^\d{4}-\d{2}$/),
+  nature: z.string().trim().min(1).max(64),
+  description: z.string().max(255).optional(),
+  valueByEmployer: z.number().finite().nonnegative().max(1_000_000_000_000),
+  amountRecovered: z.number().finite().nonnegative().max(1_000_000_000_000).optional(),
+});
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -110,23 +123,27 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (!reconciled && force === "1") {
       const unmatched = reconciliation.filter((r) => !r.matched);
       const totalVariance = unmatched.reduce((acc, r) => acc + BigInt(r.varianceMinor), 0n);
-      await db.transaction(async (tx) => {
-        await enqueue(tx, {
-          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-          payload: {
-            service: "payroll",
-            action: "force_file_24q",
-            resourceType: "statutory_return",
-            resourceId: `24Q:${fy}:${q}`,
-            outcome: "forced",
-            fy, quarter: q,
-            varianceMinor: totalVariance.toString(),
-            unreconciledPeriods: unmatched.map((r) => ({
-              period: r.period, status: r.status, varianceMinor: r.varianceMinor,
-            })),
-          },
-        });
+      // Exception: this read-side export performs no entity mutation; the
+      // transaction persists only its mandatory audit outbox record.
+      await queue.publish(AUDIT_TOPIC, {
+        messageId: randomUUID(),
+        type: AUDIT_TOPIC,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        schemaVersion: "1.0",
+        payload: {
+          service: "payroll",
+          action: "force_file_24q",
+          resourceType: "statutory_return",
+          resourceId: `24Q:${fy}:${q}`,
+          outcome: "forced",
+          fy, quarter: q,
+          varianceMinor: totalVariance.toString(),
+          unreconciledPeriods: unmatched.map((r) => ({
+            period: r.period, status: r.status, varianceMinor: r.varianceMinor,
+          })),
+        },
       });
     }
 
@@ -438,50 +455,14 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, STATUTORY_ROLES);
 
-    const b = req.body as {
-      employeeId?: string; fy?: string; nature?: string; description?: string;
-      valueByEmployer?: number; amountRecovered?: number;
-    };
-    if (!b.employeeId) throw new HttpError(400, "VALIDATION_FAILED", "employeeId required");
-    if (!b.fy) throw new HttpError(400, "VALIDATION_FAILED", "fy required (e.g. 2026-27)");
+    const b = perquisiteComponentBody.parse(req.body);
     parseFyOr400(b.fy);
-    if (!b.nature) throw new HttpError(400, "VALIDATION_FAILED", "nature required (e.g. accommodation, car)");
-    if (b.valueByEmployer == null || b.valueByEmployer < 0) throw new HttpError(400, "VALIDATION_FAILED", "valueByEmployer (rupees) required");
 
-    const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
-    const valueMinor = paise(b.valueByEmployer);
-    const recoveredMinor = paise(b.amountRecovered);
-    const taxableMinor = valueMinor - recoveredMinor > 0n ? valueMinor - recoveredMinor : 0n;
-
-    const insertValues = {
-      tenantId: ctx.tenantId,
-      employeeId: b.employeeId,
-      fy: b.fy,
-      nature: b.nature,
-      description: b.description ?? "",
-      valueByEmployerMinor: valueMinor,
-      amountRecoveredMinor: recoveredMinor,
-      taxableValueMinor: taxableMinor,
-      createdBy: ctx.actorId,
-    } as typeof perquisiteComponents.$inferInsert;
-
-    await db.transaction(async (tx) => {
-      await tx.insert(perquisiteComponents).values(insertValues).onConflictDoUpdate({
-        target: [perquisiteComponents.tenantId, perquisiteComponents.employeeId, perquisiteComponents.fy, perquisiteComponents.nature],
-        set: {
-          description: b.description ?? "",
-          valueByEmployerMinor: valueMinor,
-          amountRecoveredMinor: recoveredMinor,
-          taxableValueMinor: taxableMinor,
-        },
-      });
-    });
-
-    return reply.code(201).send({
-      message: "perquisite component saved",
-      employeeId: b.employeeId, fy: b.fy, nature: b.nature,
-      taxableValueMinor: taxableMinor.toString(),
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await taxCommands.upsertPerquisiteComponent(ctx, b),
+    );
   });
 
   /**

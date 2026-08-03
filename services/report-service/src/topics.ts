@@ -6,6 +6,10 @@ export const COMMANDS = {
   updateTemplate: "reports.template.update",
   deleteTemplate: "reports.template.delete",
   executeTemplate: "reports.template.execute",
+  createScheduled: "reports.scheduled.create",
+  updateScheduled: "reports.scheduled.update",
+  disableScheduled: "reports.scheduled.disable",
+  runScheduled: "reports.scheduled.run",
   scheduledGenerate: "reports.scheduled.generate",
 } as const;
 
@@ -17,6 +21,9 @@ export const EVENTS = {
   templateUpdated: "reports.template.updated",
   templateDeleted: "reports.template.deleted",
   templateExecuted: "reports.template.executed",
+  scheduledCreated: "reports.scheduled.created",
+  scheduledUpdated: "reports.scheduled.updated",
+  scheduledDisabled: "reports.scheduled.disabled",
   scheduledGenerated: "reports.scheduled.generated",
   scheduledDelivered: "reports.scheduled.delivered",
   scheduledFailed: "reports.scheduled.failed",

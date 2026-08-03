@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -15,10 +17,10 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = z.object({ verificationDate: z.string(), notes: z.string().optional() }).parse(req.body);
-    return reply.code(201).send({ data: await commands.createVerification(ctx, {
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createVerification(ctx, {
       verificationDate: body.verificationDate,
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
-    }) });
+    }));
   });
 
   app.post("/v1/assets/verifications/:id/items", async (req, reply) => {
@@ -29,26 +31,26 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
       assetId: z.string().uuid(), condition: z.string(),
       foundAtLocation: z.boolean().optional(), remarks: z.string().optional(),
     }).parse(req.body);
-    return reply.code(201).send({ data: await commands.addVerificationItem(ctx, id, {
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addVerificationItem(ctx, id, {
       assetId: body.assetId,
       condition: body.condition,
       ...(body.foundAtLocation !== undefined ? { foundAtLocation: body.foundAtLocation } : {}),
       ...(body.remarks !== undefined ? { remarks: body.remarks } : {}),
-    }) });
+    }));
   });
 
   app.post("/v1/assets/verifications/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    return reply.send({ data: await commands.submitVerification(ctx, id) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitVerification(ctx, id));
   });
 
   app.post("/v1/assets/verifications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    return reply.send({ data: await commands.approveVerification(ctx, id) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveVerification(ctx, id));
   });
 
   app.get("/v1/assets/verifications", async (req, reply) => {
@@ -63,14 +65,14 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ remarks: z.string().optional() }).parse(req.body ?? {});
-    return reply.code(201).send({ data: await commands.requestWriteoff(ctx, id, body.remarks) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requestWriteoff(ctx, id, body.remarks));
   });
 
   app.post("/v1/assets/writeoff-requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITEOFF_APPROVER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    return reply.send({ data: await commands.approveWriteoffRequest(ctx, id) });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveWriteoffRequest(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

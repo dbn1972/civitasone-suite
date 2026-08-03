@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as matrixRepo from "./matrix-repo.js";
-import { db } from "../../shared/db.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
@@ -19,14 +21,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
       priority: z.number().int().min(0).default(1),
     }).parse(req.body);
 
-    const record = await db.transaction((tx) => matrixRepo.insertMatrixRule(tx as unknown as typeof db, {
-      tenantId: ctx.tenantId,
-      roleRef: body.roleRef,
-      conditionExpr: body.conditionExpr ?? null,
-      userId: body.userId,
-      priority: body.priority,
-    }));
-    return reply.code(201).send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createMatrixRule(ctx, body));
   });
 
   app.get("/v1/workflow/assignment/matrix", async (req, reply) => {
@@ -46,9 +41,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const record = await db.transaction((tx) => matrixRepo.deactivateMatrixRule(tx as unknown as typeof db, id, ctx.tenantId));
-    if (!record) throw new HttpError(404, "NOT_FOUND", "matrix rule not found");
-    return reply.send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deactivateMatrixRule(ctx, id));
   });
 
   // ─── Substitution Rules ─────────────────────────────────────────────────────
@@ -64,15 +57,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().max(256).optional(),
     }).parse(req.body);
 
-    const record = await db.transaction((tx) => matrixRepo.insertSubstitution(tx as unknown as typeof db, {
-      tenantId: ctx.tenantId,
-      userId: body.userId,
-      substituteId: body.substituteId,
-      fromDate: body.fromDate,
-      toDate: body.toDate ?? null,
-      reason: body.reason ?? null,
-    }));
-    return reply.code(201).send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createSubstitution(ctx, body));
   });
 
   app.get("/v1/workflow/assignment/substitutions", async (req, reply) => {
@@ -91,9 +76,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const record = await db.transaction((tx) => matrixRepo.deactivateSubstitution(tx as unknown as typeof db, id, ctx.tenantId));
-    if (!record) throw new HttpError(404, "NOT_FOUND", "substitution rule not found");
-    return reply.send({ data: record });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deactivateSubstitution(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

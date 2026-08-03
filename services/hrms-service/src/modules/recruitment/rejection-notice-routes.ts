@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate-facing rejection / outcome communication (checklist R-RA-0118).
  *
@@ -42,8 +44,8 @@ export async function rejectionNoticeRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = z.object({ discloseReason: z.boolean() }).parse(req.body);
-    const ok = await db.transaction((tx) => repo.setDisclosurePolicy(tx, ctx.tenantId, id, body.discloseReason, ctx.actorId));
-    if (!ok) throw new HttpError(404, "NOT_FOUND", "job opening not found");
+    const ok = await publishF3Write(ctx, "recruitment_rejection_notice_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    if (!ok) throw new HttpError(404, "NOT_FOUND", "job opening not found") as any;
     return reply.send({ id, discloseRejectionReason: body.discloseReason });
   });
 

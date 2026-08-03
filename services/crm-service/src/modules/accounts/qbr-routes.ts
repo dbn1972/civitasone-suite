@@ -10,15 +10,15 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "qbr";
-
 const QBR_STATUSES = ["scheduled", "completed", "cancelled", "no_show"] as const;
 
 /** Fiscal quarter label, e.g. 2026-Q1. */
@@ -155,40 +155,17 @@ export async function qbrRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const qbrId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.qbr_schedules
-          (id, tenant_id, account_id, quarter, scheduled_at, status, attendees, agenda,
-           created_by, updated_by)
-        VALUES (
-          ${qbrId}, ${ctx.tenantId}, ${body.accountId}, ${body.quarter},
-          ${body.scheduledAt}::timestamptz, 'scheduled',
-          ${JSON.stringify(body.attendees)}::jsonb,
-          ${JSON.stringify(body.agenda)}::jsonb,
-          ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.qbrScheduled,
-        action: "schedule",
-        resourceType: RESOURCE,
-        resourceId: qbrId,
-        payload: { qbrId, accountId: body.accountId, quarter: body.quarter, scheduledAt: body.scheduledAt },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: qbrId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.scheduleQbr, qbrId, {
         accountId: body.accountId,
         quarter: body.quarter,
         scheduledAt: body.scheduledAt,
-        status: "scheduled",
         attendees: body.attendees,
         agenda: body.agenda,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** Record outcomes. Only a scheduled review can be completed. */
@@ -203,32 +180,15 @@ export async function qbrRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STATE", `cannot complete a QBR in status '${current.status}'`);
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.qbr_schedules
-        SET status = ${body.status},
-            outcomes = ${JSON.stringify(body.outcomes)}::jsonb,
-            updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${current.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.qbrCompleted,
-        action: "complete",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { qbrId: id, status: body.status, outcomeCount: body.outcomes.length },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "QBR was modified by another request");
-    }
-
-    return reply.send({ data: { id, status: body.status, version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.completeQbr, id, {
+        status: body.status,
+        outcomes: body.outcomes,
+        version: current.version,
+      }),
+    );
   });
 
   /** Cancel a review; a reason is mandatory. */
@@ -251,31 +211,14 @@ export async function qbrRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_STATE", `cannot cancel a QBR in status '${current.status}'`);
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.qbr_schedules
-        SET status = 'cancelled', cancel_reason = ${body.reason.trim()},
-            updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${current.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.qbrCancelled,
-        action: "cancel",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { qbrId: id },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "QBR was modified by another request");
-    }
-
-    return reply.send({ data: { id, status: "cancelled", version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.cancelQbr, id, {
+        reason: body.reason.trim(),
+        version: current.version,
+      }),
+    );
   });
 }
 

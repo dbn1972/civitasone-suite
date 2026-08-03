@@ -26,6 +26,26 @@ export const COMMANDS = {
    * Payload: `{ id, tenantId, label?, pluralLabel?, description?, isActive? }`.
    */
   ENTITY_UPDATE: "metadata.entity.update",
+  ENTITY_PUBLISH: "metadata.entity.publish",
+  FIELD_CREATE: "metadata.field.create",
+  FIELD_UPDATE: "metadata.field.update",
+  FIELD_DELETE: "metadata.field.delete",
+  RULE_CREATE: "metadata.rule.create",
+  RULE_UPDATE: "metadata.rule.update",
+  RULE_DELETE: "metadata.rule.delete",
+  RECORD_CREATE: "metadata.record.create",
+  RECORD_UPDATE: "metadata.record.update",
+  RECORD_DELETE: "metadata.record.delete",
+  FORM_MUTATE: "metadata.form.mutate",
+  COMPOSITION_CREATE: "metadata.composition.create",
+  COMPOSITION_PUBLISH: "metadata.composition.publish",
+  LAYOUT_CREATE: "metadata.layout.create",
+  LAYOUT_UPDATE: "metadata.layout.update",
+  NUMBER_FORMAT_CREATE: "metadata.number_format.create",
+  NUMBER_FORMAT_UPDATE: "metadata.number_format.update",
+  NUMBER_FORMAT_PUBLISH: "metadata.number_format.publish",
+  FORMULA_CREATE: "metadata.formula.create",
+  PUBLIC_FORM_SUBMIT: "metadata.form.public_submit",
 } as const;
 
 export const EVENTS = {

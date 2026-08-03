@@ -226,6 +226,7 @@ const H = vi.hoisted(() => ({
   eventsReassignMock: vi.fn(),
   nameKeyDeleteMock: vi.fn(),
   enqueueMock: vi.fn(),
+  publishMock: vi.fn(async () => "m"),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -238,7 +239,7 @@ vi.mock("../src/shared/outbox.js", () => ({ enqueue: (...a: unknown[]) => H.enqu
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { getOrLoad: vi.fn(), invalidate: vi.fn(), makeKey: vi.fn(() => "k") },
-  queue: { publish: vi.fn(async () => "m") },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/identity/visitor-repo.js", () => ({
@@ -355,59 +356,56 @@ describe("POST /v1/cdp/identity/anonymous-visitors", () => {
   const url = "/v1/cdp/identity/anonymous-visitors";
   const payload = { visitorKey: VISITOR_KEY, deviceType: "web" };
 
-  it("201 — registers the visitor with a shell profile and a graph edge", async () => {
+  it("202 — publishes visitor track command", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(["cdp_user"]), payload });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.created).toBe(true);
     expect(r.json().data.status).toBe("anonymous");
-    expect(H.profileInsertMock).toHaveBeenCalledOnce();
-    expect(H.identityInsertMock).toHaveBeenCalledOnce();
-    expect(H.visitorInsertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.profileInsertMock).not.toHaveBeenCalled();
+    expect(H.identityInsertMock).not.toHaveBeenCalled();
+    expect(H.visitorInsertMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("201 — stores only the hash of the visitor key", async () => {
+  it("202 — publish payload excludes raw visitor key", async () => {
     const app = await buildApp();
     await app.inject({ method: "POST", url, headers: auth(), payload });
-    const row = H.visitorInsertMock.mock.calls[0]?.[1] as { visitorKeyHash: string };
-    expect(row.visitorKeyHash).toBe(hashIdentifier("visitorId", VISITOR_KEY));
-    expect(JSON.stringify(H.visitorInsertMock.mock.calls[0])).not.toContain(VISITOR_KEY);
+    expect(JSON.stringify(H.publishMock.mock.calls)).not.toContain(VISITOR_KEY);
     await app.close();
   });
 
-  it("201 — the shell profile is typed anonymous and flagged", async () => {
+  it("202 — publish carries anonymous shell metadata", async () => {
     const app = await buildApp();
     await app.inject({
       method: "POST", url, headers: auth(), payload: { ...payload, attributes: { landingPage: "/schemes" } },
     });
-    const row = H.profileInsertMock.mock.calls[0]?.[1] as {
-      profileType: string; attributes: Record<string, unknown>;
-    };
-    expect(row.profileType).toBe(ANONYMOUS_PROFILE_TYPE);
-    expect(row.attributes).toEqual({ landingPage: "/schemes", anonymous: true });
+    const call = H.publishMock.mock.calls[0]?.[1] as { payload: { attributes: Record<string, unknown> } };
+    expect(call.payload.attributes).toEqual({ landingPage: "/schemes", anonymous: true });
     await app.close();
   });
 
-  it("201 — the tracked event carries no visitor key, hashed or raw", async () => {
+  it("202 — route does not enqueue on track", async () => {
     const app = await buildApp();
     await app.inject({ method: "POST", url, headers: auth(), payload });
-    const emitted = JSON.stringify(H.enqueueMock.mock.calls);
-    expect(emitted).not.toContain(VISITOR_KEY);
-    expect(emitted).not.toContain(hashIdentifier("visitorId", VISITOR_KEY));
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — a returning visitor is a heartbeat, not a second shell", async () => {
+  it("202 — returning visitor publishes touch heartbeat", async () => {
     H.visitorFindByHashMock.mockResolvedValue(makeVisitor());
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.created).toBe(false);
     expect(r.json().data.anonymousProfileId).toBe(ANON_PROFILE);
-    expect(H.visitorTouchMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({ payload: expect.objectContaining({ op: "visitor_touch" }) }),
+    );
+    expect(H.visitorTouchMock).not.toHaveBeenCalled();
     expect(H.profileInsertMock).not.toHaveBeenCalled();
-    // A heartbeat is not a business event.
     expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
@@ -508,29 +506,24 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
     });
   }
 
-  it("200 — moves events, identifiers and devices, and records the counts", async () => {
+  it("202 — publishes visitor stitch command", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: byId });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data).toMatchObject({
       visitorId: VISITOR_ID,
       anonymousProfileId: ANON_PROFILE,
       knownProfileId: KNOWN_PROFILE,
-      eventsMerged: 7,
-      identifiersMerged: 2,
-      devicesMerged: 1,
-      status: "merged",
+      status: "accepted",
     });
-    expect(H.eventsReassignMock).toHaveBeenCalledWith({}, ANON_PROFILE, KNOWN_PROFILE, TENANT);
-    expect(H.identityReassignMock).toHaveBeenCalledWith({}, ANON_PROFILE, KNOWN_PROFILE, TENANT);
-    expect(H.deviceReassignMock).toHaveBeenCalledWith({}, ANON_PROFILE, KNOWN_PROFILE, TENANT);
-    expect(H.nameKeyDeleteMock).toHaveBeenCalledWith({}, ANON_PROFILE, TENANT);
+    expect(H.publishMock).toHaveBeenCalled();
+    expect(H.eventsReassignMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — reuses the existing merge writer with the known profile as winner", async () => {
+  it("202 — stitch command carries merge plan metadata", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles(
       anon({ attributes: { city: "Pune", anonymous: true } }),
@@ -538,42 +531,32 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
     );
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: byId });
-    expect(r.statusCode).toBe(200);
-    const call = H.profileMarkMergedMock.mock.calls[0];
-    expect(call?.[1]).toBe(KNOWN_PROFILE);
-    expect(call?.[2]).toBe(ANON_PROFILE);
-    expect(call?.[4]).toEqual({ name: "Rajesh", city: "Pune" });
+    expect(r.statusCode).toBe(202);
+    expect(H.profileMarkMergedMock).not.toHaveBeenCalled();
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — records the stitch in lineage", async () => {
+  it("202 — stitch response includes lineage entry preview", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: byId });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.lineageEntry.source).toBe("anonymous_stitch");
-    const lineage = H.profileMarkMergedMock.mock.calls[0]?.[5] as Array<{ source: string }>;
-    expect(lineage.at(-1)?.source).toBe("anonymous_stitch");
     await app.close();
   });
 
-  it("200 — emits visitor_stitched, profile.merged and lineage_appended plus audit", async () => {
+  it("202 — route does not enqueue stitch events directly", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
     const app = await buildApp();
     await app.inject({ method: "POST", url, headers: auth(), payload: byId });
-    const types = H.enqueueMock.mock.calls.map((c) => (c[1] as { eventType: string }).eventType);
-    expect(types).toEqual([
-      "cdp.identity.visitor_stitched",
-      "cdp.profile.merged",
-      "cdp.profile.lineage_appended",
-      "audit.event.record",
-    ]);
+    expect(H.enqueueMock).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("200 — resolves the known profile deterministically from identifiers", async () => {
+  it("202 — resolves known profile then publishes stitch", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
     H.identityFindByHashMock.mockResolvedValue([{ profileId: KNOWN_PROFILE }]);
@@ -582,9 +565,8 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
       method: "POST", url, headers: auth(),
       payload: { identifiers: [{ type: "email", value: "rajesh@example.gov.in" }], version: 1 },
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.knownProfileId).toBe(KNOWN_PROFILE);
-    // Resolution reuses the same hashing the deterministic resolve endpoint uses.
     expect(H.identityFindByHashMock).toHaveBeenCalledWith(
       hashIdentifier("email", "rajesh@example.gov.in"), TENANT,
     );
@@ -679,13 +661,14 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
     await app.close();
   });
 
-  it("409 — a concurrent stitch already claimed the visitor", async () => {
+  it("202 — version conflicts deferred to consumer", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
     H.visitorMarkMergedMock.mockResolvedValue(false);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url, headers: auth(), payload: byId });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalled();
     await app.close();
   });
 

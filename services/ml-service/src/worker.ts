@@ -6,12 +6,14 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { startTrainingCron } from "./modules/training/orchestrator.js";
 import { registerPurgeConsumer } from "./modules/purge/consumer.js";
 import { registerFeatureStoreConsumers } from "./modules/feature-store/consumer.js";
+import { registerExperimentConsumers } from "./modules/experiments/consumer.js";
 
 const log = pino({ name: "ml-worker" });
 
 // Register consumers
 registerPurgeConsumer(queue);
 registerFeatureStoreConsumers(queue);
+registerExperimentConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

@@ -307,7 +307,7 @@ export async function buildApp(): Promise<FastifyInstance> {
           name: "queue_upstream",
           ping: async () => {
             try {
-              const res = await fetch(process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3019/health", { signal: AbortSignal.timeout(3000) });
+              const res = await fetch(process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health", { signal: AbortSignal.timeout(3000) });
               return res.ok;
             } catch { return false; }
           },

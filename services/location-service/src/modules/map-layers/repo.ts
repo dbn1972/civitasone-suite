@@ -1,5 +1,4 @@
-import { and, eq, asc } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { and, eq, asc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { mapLayers, type MapLayerRow, type MapLayerView } from "./schema.js";
 
@@ -28,29 +27,43 @@ export async function findById(id: string, tenantId: string): Promise<MapLayerVi
   return rows[0] ? toView(rows[0]) : null;
 }
 
-export async function create(
-  tenantId: string,
-  actorId: string,
-  input: { id: string; name: string; sourceType: string; url: string; styleJson?: Record<string, unknown> | null | undefined; zIndex: number; visible: boolean },
-): Promise<MapLayerView> {
-  const row = await db.transaction(async (tx) => {
-    const inserted = await tx.insert(mapLayers).values({
-      id: input.id, tenantId, name: input.name, sourceType: input.sourceType, url: input.url,
-      styleJson: input.styleJson ?? null, zIndex: input.zIndex, visible: input.visible, createdBy: actorId, version: 1,
-    }).returning();
-    return inserted[0]!;
+export type MapLayerInsert = {
+  id: string;
+  tenantId: string;
+  name: string;
+  sourceType: string;
+  url: string;
+  styleJson?: Record<string, unknown> | null;
+  zIndex: number;
+  visible: boolean;
+  createdBy: string;
+  updatedBy?: string;
+  version: number;
+};
+
+export type Writer = Pick<typeof db, "insert" | "update" | "delete">;
+
+export async function insert(tx: Writer, row: MapLayerInsert): Promise<void> {
+  await tx.insert(mapLayers).values({
+    id: row.id,
+    tenantId: row.tenantId,
+    name: row.name,
+    sourceType: row.sourceType,
+    url: row.url,
+    styleJson: row.styleJson ?? null,
+    zIndex: row.zIndex,
+    visible: row.visible,
+    createdBy: row.createdBy,
+    version: row.version,
   });
-  return toView(row);
 }
 
-export async function patch(
+export async function update(
+  tx: Writer,
   id: string,
   tenantId: string,
-  data: {
-    name?: string | undefined; sourceType?: string | undefined; url?: string | undefined;
-    styleJson?: Record<string, unknown> | null | undefined; zIndex?: number | undefined; visible?: boolean | undefined;
-  },
-): Promise<MapLayerView | null> {
+  data: Partial<MapLayerInsert>,
+): Promise<void> {
   const set: Record<string, unknown> = { updatedAt: new Date(), version: sql`${mapLayers.version} + 1` };
   if (data.name !== undefined) set.name = data.name;
   if (data.sourceType !== undefined) set.sourceType = data.sourceType;
@@ -58,13 +71,15 @@ export async function patch(
   if (data.styleJson !== undefined) set.styleJson = data.styleJson;
   if (data.zIndex !== undefined) set.zIndex = data.zIndex;
   if (data.visible !== undefined) set.visible = data.visible;
-  const rows = await db.transaction(async (tx) =>
-    tx.update(mapLayers).set(set).where(and(eq(mapLayers.id, id), eq(mapLayers.tenantId, tenantId))).returning());
-  return rows[0] ? toView(rows[0]) : null;
+  await tx.update(mapLayers).set(set).where(and(eq(mapLayers.id, id), eq(mapLayers.tenantId, tenantId)));
 }
 
-export async function remove(id: string, tenantId: string): Promise<number> {
-  const rows = await db.transaction(async (tx) =>
-    tx.delete(mapLayers).where(and(eq(mapLayers.id, id), eq(mapLayers.tenantId, tenantId))).returning({ id: mapLayers.id }));
+export async function remove(tx: Writer, id: string, tenantId: string): Promise<number> {
+  const rows = await tx
+    .delete(mapLayers)
+    .where(and(eq(mapLayers.id, id), eq(mapLayers.tenantId, tenantId)))
+    .returning({ id: mapLayers.id });
   return rows.length;
 }
+
+export { toView };

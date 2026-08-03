@@ -3,16 +3,16 @@
  *
  * Endpoints:
  *  GET    /v1/helpdesk/routing/rules            — list routing rules
- *  POST   /v1/helpdesk/routing/rules            — create rule
- *  PATCH  /v1/helpdesk/routing/rules/:id        — update rule
- *  DELETE /v1/helpdesk/routing/rules/:id        — soft-delete (disable)
+ *  POST   /v1/helpdesk/routing/rules            — create rule (202)
+ *  PATCH  /v1/helpdesk/routing/rules/:id        — update rule (202)
+ *  DELETE /v1/helpdesk/routing/rules/:id        — soft-delete (202)
  *  POST   /v1/helpdesk/routing/evaluate         — dry-run evaluate
  *  POST   /v1/helpdesk/routing/rules/validate   — detect conflicts
  *  GET    /v1/helpdesk/routing/agents           — list agents + capacity
- *  PATCH  /v1/helpdesk/routing/agents/:agentId/capacity — update capacity
+ *  PATCH  /v1/helpdesk/routing/agents/:agentId/capacity — update capacity (202)
  *  GET    /v1/helpdesk/routing/queues           — list queues
- *  POST   /v1/helpdesk/routing/queues/enqueue   — add to queue
- *  POST   /v1/helpdesk/routing/queues/dequeue   — pick next from queue
+ *  POST   /v1/helpdesk/routing/queues/enqueue   — add to queue (202)
+ *  POST   /v1/helpdesk/routing/queues/dequeue   — pick next from queue (202)
  *  GET    /v1/helpdesk/routing/failures         — list failures
  */
 import type { FastifyInstance } from "fastify";
@@ -28,14 +28,11 @@ import {
   selectAgent,
   validateRulePrecedence,
   detectConflicts,
-  isValidStrategy,
-  VALID_STRATEGIES,
 } from "./domain.js";
+import * as commands from "./commands.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin", "admin"];
 const ADMIN_ROLES = ["helpdesk_admin", "super_admin", "admin"];
-
-// ─── Validators ───────────────────────────────────────────────────────────────
 
 const createRuleBody = z.object({
   name: z.string().min(1).max(255),
@@ -84,9 +81,6 @@ const paginationQuery = z.object({
 });
 
 export async function routingRoutes(app: FastifyInstance): Promise<void> {
-  // ─── Routing Rules CRUD ─────────────────────────────────────────────────
-
-  /** List routing rules for tenant */
   app.get("/v1/helpdesk/routing/rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
@@ -115,86 +109,71 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** Create routing rule */
   app.post("/v1/helpdesk/routing/rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createRuleBody.parse(req.body);
-
-    const [created] = await db.transaction((tx) =>
-      tx.insert(routingRules).values({
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createRule(ctx, {
         name: body.name,
         strategy: body.strategy,
         criteria: body.criteria ?? null,
         weight: body.weight,
         enabled: body.enabled,
         ordinal: body.ordinal,
-        createdBy: ctx.actorId,
-      }).returning(),
+      }),
     );
-
-    return reply.code(201).send({ data: created });
   });
 
-  /** Update routing rule */
   app.patch("/v1/helpdesk/routing/rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updateRuleBody.parse(req.body);
 
-    const [updated] = await db.transaction(async (tx) => {
-      const [existing] = await tx
+    const [existing] = await db.transaction((tx) =>
+      tx
         .select()
         .from(routingRules)
         .where(and(eq(routingRules.id, id), eq(routingRules.tenantId, ctx.tenantId)))
-        .limit(1);
-      if (!existing) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
+        .limit(1),
+    );
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
 
-      return tx
-        .update(routingRules)
-        .set({
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.strategy !== undefined && { strategy: body.strategy }),
-          ...(body.criteria !== undefined && { criteria: body.criteria ?? null }),
-          ...(body.weight !== undefined && { weight: body.weight }),
-          ...(body.enabled !== undefined && { enabled: body.enabled }),
-          ...(body.ordinal !== undefined && { ordinal: body.ordinal }),
-          updatedAt: new Date(),
-          version: sql`${routingRules.version} + 1`,
-        })
-        .where(and(eq(routingRules.id, id), eq(routingRules.version, existing.version)))
-        .returning();
-    });
-
-    if (!updated) throw new HttpError(409, "CONFLICT", "concurrent modification detected");
-    return reply.send({ data: updated });
+    return reply.code(202).send(
+      await commands.updateRule(ctx, id, {
+        version: existing.version,
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.strategy !== undefined && { strategy: body.strategy }),
+        ...(body.criteria !== undefined && { criteria: body.criteria ?? null }),
+        ...(body.weight !== undefined && { weight: body.weight }),
+        ...(body.enabled !== undefined && { enabled: body.enabled }),
+        ...(body.ordinal !== undefined && { ordinal: body.ordinal }),
+      }),
+    );
   });
 
-  /** Soft-delete routing rule (set enabled=false) */
   app.delete("/v1/helpdesk/routing/rules/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    const [updated] = await db.transaction((tx) =>
+    const [existing] = await db.transaction((tx) =>
       tx
-        .update(routingRules)
-        .set({ enabled: false, updatedAt: new Date(), version: sql`${routingRules.version} + 1` })
+        .select()
+        .from(routingRules)
         .where(and(eq(routingRules.id, id), eq(routingRules.tenantId, ctx.tenantId)))
-        .returning(),
+        .limit(1),
     );
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
 
-    if (!updated) throw new HttpError(404, "NOT_FOUND", "routing rule not found");
-    return reply.code(200).send({ data: { id, disabled: true } });
+    return reply.code(202).send(await commands.deleteRule(ctx, id));
   });
 
-  /** Evaluate routing — dry-run which agent would be assigned */
   app.post("/v1/helpdesk/routing/evaluate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
-    const body = evaluateBody.parse(req.body);
+    evaluateBody.parse(req.body);
 
     const rules = await db.transaction((tx) =>
       tx
@@ -215,7 +194,6 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
         .where(and(eq(agentCapacity.tenantId, ctx.tenantId), eq(agentCapacity.available, true))),
     );
 
-    // Try rules in ordinal order
     for (const rule of rules) {
       const result = selectAgent(rule, agents);
       if (result.agentId) {
@@ -233,16 +211,12 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: { selectedAgentId: null, ruleName: null, reason: "no_agents_available" } });
   });
 
-  /** Validate rules — detect conflicts */
   app.post("/v1/helpdesk/routing/rules/validate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
 
     const rules = await db.transaction((tx) =>
-      tx
-        .select()
-        .from(routingRules)
-        .where(eq(routingRules.tenantId, ctx.tenantId)),
+      tx.select().from(routingRules).where(eq(routingRules.tenantId, ctx.tenantId)),
     );
 
     const precedenceIssues = validateRulePrecedence(rules);
@@ -259,9 +233,6 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ─── Agent Capacity ─────────────────────────────────────────────────────
-
-  /** List agents with capacity */
   app.get("/v1/helpdesk/routing/agents", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
@@ -289,51 +260,21 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** Update agent capacity */
   app.patch("/v1/helpdesk/routing/agents/:agentId/capacity", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { agentId } = z.object({ agentId: z.string().uuid() }).parse(req.params);
     const body = updateCapacityBody.parse(req.body);
 
-    const [updated] = await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(agentCapacity)
-        .where(and(eq(agentCapacity.agentId, agentId), eq(agentCapacity.tenantId, ctx.tenantId)))
-        .limit(1);
-
-      if (!existing) {
-        // Create capacity record if it doesn't exist
-        return tx.insert(agentCapacity).values({
-          tenantId: ctx.tenantId,
-          agentId,
-          maxTickets: body.maxTickets ?? 10,
-          skills: body.skills ?? [],
-          available: body.available ?? true,
-        }).returning();
-      }
-
-      return tx
-        .update(agentCapacity)
-        .set({
-          ...(body.maxTickets !== undefined && { maxTickets: body.maxTickets }),
-          ...(body.skills !== undefined && { skills: body.skills }),
-          ...(body.available !== undefined && { available: body.available }),
-          updatedAt: new Date(),
-          version: sql`${agentCapacity.version} + 1`,
-        })
-        .where(and(eq(agentCapacity.id, existing.id), eq(agentCapacity.version, existing.version)))
-        .returning();
-    });
-
-    if (!updated) throw new HttpError(409, "CONFLICT", "concurrent modification detected");
-    return reply.send({ data: updated });
+    return reply.code(202).send(
+      await commands.upsertCapacity(ctx, agentId, {
+        ...(body.maxTickets !== undefined ? { maxTickets: body.maxTickets } : {}),
+        ...(body.skills !== undefined ? { skills: body.skills } : {}),
+        ...(body.available !== undefined ? { available: body.available } : {}),
+      }),
+    );
   });
 
-  // ─── Hold Queue ─────────────────────────────────────────────────────────
-
-  /** List queues with counts */
   app.get("/v1/helpdesk/routing/queues", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
@@ -354,54 +295,20 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  /** Enqueue ticket */
   app.post("/v1/helpdesk/routing/queues/enqueue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const body = enqueueBody.parse(req.body);
-
-    const [created] = await db.transaction((tx) =>
-      tx.insert(holdQueue).values({
-        tenantId: ctx.tenantId,
-        ticketId: body.ticketId,
-        queueName: body.queueName,
-        priority: body.priority,
-      }).returning(),
-    );
-
-    return reply.code(201).send({ data: created });
+    return reply.code(202).send(await commands.enqueueTicket(ctx, body));
   });
 
-  /** Dequeue — pick highest-priority, oldest ticket from queue */
   app.post("/v1/helpdesk/routing/queues/dequeue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
     const body = dequeueBody.parse(req.body);
-
-    const dequeued = await db.transaction(async (tx) => {
-      const [next] = await tx
-        .select()
-        .from(holdQueue)
-        .where(and(eq(holdQueue.tenantId, ctx.tenantId), eq(holdQueue.queueName, body.queueName)))
-        .orderBy(desc(holdQueue.priority), asc(holdQueue.enteredAt))
-        .limit(1);
-
-      if (!next) return null;
-
-      await tx.delete(holdQueue).where(eq(holdQueue.id, next.id));
-      return next;
-    });
-
-    if (!dequeued) {
-      return reply.send({ data: null, message: "queue is empty" });
-    }
-
-    return reply.send({ data: dequeued });
+    return reply.code(202).send(await commands.dequeueTicket(ctx, body));
   });
 
-  // ─── Routing Failures ───────────────────────────────────────────────────
-
-  /** List recent routing failures */
   app.get("/v1/helpdesk/routing/failures", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -429,8 +336,6 @@ export async function routingRoutes(app: FastifyInstance): Promise<void> {
       meta: { page: Math.floor(query.offset / query.limit) + 1, pageSize: query.limit, total: countRow?.count ?? 0 },
     });
   });
-
-  // ─── Error Handler ──────────────────────────────────────────────────────
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;

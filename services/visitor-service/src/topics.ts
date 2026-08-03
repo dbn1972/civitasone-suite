@@ -58,6 +58,7 @@ export const COMMANDS = {
   deviceConfigPush:            "visitor.device.config_push",
   deviceBulkConfigPush:        "visitor.device.bulk_config_push",
   deviceFirmwareSchedule:      "visitor.device.firmware_schedule",
+  deviceHeartbeat:             "visitor.device.heartbeat",
 
   // Badge Print
   printJobCreate:              "visitor.print_job.create",

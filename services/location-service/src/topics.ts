@@ -15,6 +15,16 @@ export const COMMANDS = {
   geofenceCheck: "location.geofence.check",
   // pincode
   pincodeBulkImport: "location.pincode.bulk_import",
+  // map-layers
+  mapLayerCreate: "location.map_layer.create",
+  mapLayerUpdate: "location.map_layer.update",
+  mapLayerDelete: "location.map_layer.delete",
+  // F3 leftover — road-network / map-markers / spatial-exchange
+  roadSegmentCreate: "location.road_network.segment.create",
+  roadSegmentDelete: "location.road_network.segment.delete",
+  roadNetworkCreate: "location.road_network.network.create",
+  geoPointRegister: "location.geo_point.register",
+  spatialImport: "location.spatial_exchange.import",
 } as const;
 
 export const EVENTS = {
@@ -33,6 +43,10 @@ export const EVENTS = {
   geofenceChecked: "location.geofence.checked",
   // pincode
   pincodeBulkImported: "location.pincode.bulk_imported",
+  // map-layers
+  mapLayerCreated: "location.map_layer.created",
+  mapLayerUpdated: "location.map_layer.updated",
+  mapLayerDeleted: "location.map_layer.deleted",
 } as const;
 
 export const SERVICE = "location";
@@ -44,4 +58,5 @@ export const RESOURCES = {
   jurisdiction: "jurisdiction",
   geofence: "geofence",
   pincode: "pincode",
+  mapLayer: "map_layer",
 } as const;

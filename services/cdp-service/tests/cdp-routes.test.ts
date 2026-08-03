@@ -15,6 +15,7 @@ const MERGE_REQ_ID = "dddddddd-1111-4000-8000-000000000001";
 const IDENTITY_ID = "eeeeeeee-1111-4000-8000-000000000001";
 
 const H = vi.hoisted(() => ({
+  publishMock: vi.fn(),
   scopedReadMock: vi.fn(),
   dbTransactionMock: vi.fn(),
   profileFindByIdMock: vi.fn(),
@@ -67,7 +68,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: (...a: unknown[]) => H.cacheInvalidateMock(...a),
     makeKey: (...a: unknown[]) => H.cacheMakeKeyMock(...a),
   },
-  queue: { publish: vi.fn() },
+  queue: { publish: (...a: unknown[]) => H.publishMock(...a) },
 }));
 
 vi.mock("../src/modules/profiles/repo.js", () => ({
@@ -164,6 +165,7 @@ beforeEach(() => {
   H.cacheMakeKeyMock.mockReturnValue("cache-key");
   H.cacheInvalidateMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
+  H.publishMock.mockResolvedValue(undefined);
   H.profileInsertMock.mockResolvedValue(undefined);
   H.profileUpdateMock.mockResolvedValue(true);
   H.profileMarkMergedMock.mockResolvedValue(undefined);
@@ -185,16 +187,18 @@ beforeEach(() => {
 // ── PROFILES ──────────────────────────────────────────────────────────────────
 
 describe("POST /v1/cdp/profiles (create)", () => {
-  it("201 — creates a golden profile", async () => {
+  it("202 — accepts profile creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/profiles",
-      headers: auth(), payload: { profileType: "individual", attributes: { name: "Test" } },
+      headers: auth(),
+      payload: { profileType: "individual", attributes: { name: "Raj" } },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.profileType).toBe("individual");
-    expect(H.profileInsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().id).toBeDefined();
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.profile.create");
     await app.close();
   });
 
@@ -282,19 +286,18 @@ describe("GET /v1/cdp/profiles/:id (get single)", () => {
 // ── PATCH /v1/cdp/profiles/:id (update) ───────────────────────────────────────
 
 describe("PATCH /v1/cdp/profiles/:id (update)", () => {
-  it("200 — updates profile attributes", async () => {
+  it("202 — accepts profile update", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
-    H.profileUpdateMock.mockResolvedValue(true);
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/cdp/profiles/${PROFILE_ID}`,
       headers: auth(),
       payload: { attributes: { city: "Mumbai" }, version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.updated).toBe(true);
-    expect(r.json().data.version).toBe(2);
-    expect(H.profileUpdateMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.profile.update");
     await app.close();
   });
 
@@ -311,10 +314,7 @@ describe("PATCH /v1/cdp/profiles/:id (update)", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.profileFindByIdMock.mockResolvedValue(makeProfile());
-    H.profileUpdateMock.mockImplementation(async () => {
-      throw Object.assign(new Error("profile has been modified; retry with current version"), { statusCode: 409, code: "VERSION_CONFLICT" });
-    });
+    H.profileFindByIdMock.mockResolvedValue(makeProfile({ version: 2 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/cdp/profiles/${PROFILE_ID}`,
@@ -350,7 +350,7 @@ describe("PATCH /v1/cdp/profiles/:id (update)", () => {
 // ── POST /v1/cdp/profiles/merge ───────────────────────────────────────────────
 
 describe("POST /v1/cdp/profiles/merge", () => {
-  it("200 — merges two profiles", async () => {
+  it("202 — accepts profile merge", async () => {
     H.profileFindByIdMock.mockImplementation(async (id: string) => {
       if (id === PROFILE_ID) return makeProfile();
       if (id === PROFILE_ID_2) return makeProfile({ id: PROFILE_ID_2 });
@@ -362,9 +362,10 @@ describe("POST /v1/cdp/profiles/merge", () => {
       headers: auth(),
       payload: { winnerId: PROFILE_ID, loserId: PROFILE_ID_2 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("merged");
-    expect(H.profileMarkMergedMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.profile.merge");
     await app.close();
   });
 
@@ -496,7 +497,7 @@ describe("POST /v1/cdp/resolve", () => {
     attributes: { name: "Raj" },
   };
 
-  it("201 — creates new profile when no match", async () => {
+  it("202 — accepts identity create when no match", async () => {
     H.identityFindByHashMock.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
@@ -504,12 +505,10 @@ describe("POST /v1/cdp/resolve", () => {
       headers: auth(),
       payload: resolvePayload,
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.status).toBe("created");
-    expect(r.json().data.profileId).toBeDefined();
-    expect(r.json().data.confidence).toBe(1.0);
-    expect(H.profileInsertMock).toHaveBeenCalledOnce();
-    expect(H.identityInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.identity.resolve");
     await app.close();
   });
 
@@ -528,7 +527,7 @@ describe("POST /v1/cdp/resolve", () => {
     await app.close();
   });
 
-  it("200 — ambiguous match routes to steward queue", async () => {
+  it("202 — ambiguous match publishes steward command", async () => {
     H.identityFindByHashMock.mockResolvedValue([
       { profileId: PROFILE_ID },
       { profileId: PROFILE_ID_2 },
@@ -539,11 +538,10 @@ describe("POST /v1/cdp/resolve", () => {
       headers: auth(),
       payload: resolvePayload,
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(202);
     expect(r.json().data.status).toBe("ambiguous");
-    expect(r.json().data.matched).toBe(false);
     expect(r.json().data.candidates).toHaveLength(2);
-    expect(H.stewardInsertMock).toHaveBeenCalledOnce();
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -626,18 +624,19 @@ describe("GET /v1/cdp/identity/:profileId", () => {
 // ── DELETE /v1/cdp/identity/:id ───────────────────────────────────────────────
 
 describe("DELETE /v1/cdp/identity/:id", () => {
-  it("204 — deletes identity link", async () => {
+  it("202 — accepts identity unlink", async () => {
     H.identityFindByIdMock.mockResolvedValue({
       id: IDENTITY_ID, profileId: PROFILE_ID, identifierType: "email",
     });
-    H.identityDeleteMock.mockResolvedValue(true);
     const app = await buildApp();
     const r = await app.inject({
       method: "DELETE", url: `/v1/cdp/identity/${IDENTITY_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(204);
-    expect(H.identityDeleteMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.identity.unlink");
     await app.close();
   });
 
@@ -682,7 +681,7 @@ describe("POST /v1/cdp/events", () => {
     occurredAt: "2025-06-01T10:00:00Z",
   };
 
-  it("201 — ingests event successfully", async () => {
+  it("202 — accepts event ingest", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     const app = await buildApp();
     const r = await app.inject({
@@ -690,10 +689,10 @@ describe("POST /v1/cdp/events", () => {
       headers: auth(),
       payload: eventPayload,
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.status).toBe("ingested");
-    expect(r.json().data.profileId).toBe(PROFILE_ID);
-    expect(H.eventsInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.event.ingest_batch");
     await app.close();
   });
 
@@ -748,7 +747,7 @@ describe("POST /v1/cdp/events", () => {
 // ── POST /v1/cdp/events/batch ─────────────────────────────────────────────────
 
 describe("POST /v1/cdp/events/batch", () => {
-  it("201 — batch ingest succeeds", async () => {
+  it("202 — batch ingest accepts events", async () => {
     H.profileFindByIdMock.mockResolvedValue(makeProfile());
     const app = await buildApp();
     const r = await app.inject({
@@ -761,9 +760,10 @@ describe("POST /v1/cdp/events/batch", () => {
         ],
       },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.ingested).toBe(2);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.accepted).toBe(2);
     expect(r.json().data.rejected).toBe(0);
+    expect(H.publishMock).toHaveBeenCalledTimes(2);
     await app.close();
   });
 
@@ -780,7 +780,7 @@ describe("POST /v1/cdp/events/batch", () => {
       },
     });
     expect(r.statusCode).toBe(422);
-    expect(r.json().data.ingested).toBe(0);
+    expect(r.json().data.accepted).toBe(0);
     expect(r.json().data.rejected).toBe(1);
     await app.close();
   });
@@ -880,17 +880,17 @@ describe("GET /v1/cdp/segments/:id (get single)", () => {
 });
 
 describe("POST /v1/cdp/segments (create)", () => {
-  it("201 — creates a segment", async () => {
+  it("202 — accepts segment creation", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/segments",
       headers: auth(),
       payload: { name: "Delhi Users", segmentType: "dynamic", criteria: {} },
     });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().data.name).toBe("Delhi Users");
-    expect(r.json().data.status).toBe("active");
-    expect(H.segmentsInsertMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.segment.create");
     await app.close();
   });
 
@@ -931,17 +931,18 @@ describe("POST /v1/cdp/segments (create)", () => {
 });
 
 describe("PATCH /v1/cdp/segments/:id (update)", () => {
-  it("200 — updates segment", async () => {
+  it("202 — accepts segment update", async () => {
     H.segmentsFindByIdMock.mockResolvedValue(makeSegment());
-    H.segmentsUpdateMock.mockResolvedValue(true);
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/cdp/segments/${SEGMENT_ID}`,
       headers: auth(),
       payload: { name: "Updated Segment", version: 1 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.updated).toBe(true);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.segment.update");
     await app.close();
   });
 
@@ -958,10 +959,7 @@ describe("PATCH /v1/cdp/segments/:id (update)", () => {
   });
 
   it("409 — version conflict", async () => {
-    H.segmentsFindByIdMock.mockResolvedValue(makeSegment());
-    H.segmentsUpdateMock.mockImplementation(async () => {
-      throw Object.assign(new Error("segment has been modified; retry with current version"), { statusCode: 409, code: "VERSION_CONFLICT" });
-    });
+    H.segmentsFindByIdMock.mockResolvedValue(makeSegment({ version: 2 }));
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/cdp/segments/${SEGMENT_ID}`,
@@ -985,16 +983,17 @@ describe("PATCH /v1/cdp/segments/:id (update)", () => {
 });
 
 describe("DELETE /v1/cdp/segments/:id", () => {
-  it("204 — soft deletes segment", async () => {
+  it("202 — accepts segment delete", async () => {
     H.segmentsFindByIdMock.mockResolvedValue(makeSegment());
-    H.segmentsSoftDeleteMock.mockResolvedValue(true);
     const app = await buildApp();
     const r = await app.inject({
       method: "DELETE", url: `/v1/cdp/segments/${SEGMENT_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(204);
-    expect(H.segmentsSoftDeleteMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.segment.delete");
     await app.close();
   });
 
@@ -1009,17 +1008,15 @@ describe("DELETE /v1/cdp/segments/:id", () => {
     await app.close();
   });
 
-  it("409 — version conflict on delete", async () => {
+  it("202 — delete accepts even if consumer may no-op on conflict", async () => {
     H.segmentsFindByIdMock.mockResolvedValue(makeSegment());
-    H.segmentsSoftDeleteMock.mockImplementation(async () => {
-      throw Object.assign(new Error("segment has been modified; retry with current version"), { statusCode: 409, code: "VERSION_CONFLICT" });
-    });
     const app = await buildApp();
     const r = await app.inject({
       method: "DELETE", url: `/v1/cdp/segments/${SEGMENT_ID}`,
       headers: auth(),
     });
-    expect(r.statusCode).toBe(409);
+    expect(r.statusCode).toBe(202);
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -1115,16 +1112,10 @@ describe("GET /v1/cdp/steward/queue", () => {
 });
 
 describe("POST /v1/cdp/steward/decide", () => {
-  it("200 — approve triggers merge", async () => {
+  it("202 — accepts approve decision", async () => {
     H.stewardFindByIdMock.mockResolvedValue({
       id: MERGE_REQ_ID, sourceProfileId: PROFILE_ID, targetProfileId: PROFILE_ID_2,
       status: "pending", tenantId: TENANT,
-    });
-    H.stewardDecideMock.mockResolvedValue(true);
-    H.profileFindByIdMock.mockImplementation(async (id: string) => {
-      if (id === PROFILE_ID) return makeProfile();
-      if (id === PROFILE_ID_2) return makeProfile({ id: PROFILE_ID_2 });
-      return null;
     });
     const app = await buildApp();
     const r = await app.inject({
@@ -1132,28 +1123,27 @@ describe("POST /v1/cdp/steward/decide", () => {
       headers: auth(USER, ["cdp_steward"]),
       payload: { mergeRequestId: MERGE_REQ_ID, decision: "approve" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.decision).toBe("approved");
-    expect(H.profileMarkMergedMock).toHaveBeenCalledOnce();
-    expect(H.identityReassignMock).toHaveBeenCalledOnce();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
+    expect(H.publishMock.mock.calls[0]![0]).toBe("cdp.steward.decide");
     await app.close();
   });
 
-  it("200 — reject does not trigger merge", async () => {
+  it("202 — accepts reject decision", async () => {
     H.stewardFindByIdMock.mockResolvedValue({
       id: MERGE_REQ_ID, sourceProfileId: PROFILE_ID, targetProfileId: PROFILE_ID_2,
       status: "pending", tenantId: TENANT,
     });
-    H.stewardDecideMock.mockResolvedValue(true);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/steward/decide",
       headers: auth(USER, ["cdp_steward"]),
       payload: { mergeRequestId: MERGE_REQ_ID, decision: "reject" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.decision).toBe("rejected");
-    expect(H.profileMarkMergedMock).not.toHaveBeenCalled();
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    expect(H.publishMock).toHaveBeenCalledOnce();
     await app.close();
   });
 

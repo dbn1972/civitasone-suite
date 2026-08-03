@@ -30,6 +30,16 @@ export const COMMANDS = {
   lifecycleConfirm:     "hrms.lifecycle.confirm",
   lifecycleSeparate:    "hrms.lifecycle.separate",
   lifecycleReinstate:   "hrms.lifecycle.reinstate",
+  lifecyclePromotionCreate: "hrms.lifecycle.promotion.create",
+  lifecycleTransferCreate:  "hrms.lifecycle.transfer.create",
+  lifecycleTransferIssue:   "hrms.lifecycle.transfer.issue",
+  lifecycleTransferRelieve: "hrms.lifecycle.transfer.relieve",
+  lifecycleTransferJoin:    "hrms.lifecycle.transfer.join",
+  nominationComplete:       "hrms.nomination.complete",
+  loanCreate:               "hrms.loan.create",
+  loanEmiPaid:              "hrms.loan.emi_paid",
+  salaryAdvanceCreate:      "hrms.salary_advance.create",
+  salaryAdvanceApprove:     "hrms.salary_advance.approve",
 
   // deputation
   deputationCreate:     "hrms.deputation.create",
@@ -102,6 +112,9 @@ export const COMMANDS = {
   contractRenewalBulk:     "hrms.contract.renewal.bulk",
   contractExpiryDetect:    "hrms.contract.expiry.detect",
   contractAutoSeparate:    "hrms.contract.auto_separate",
+  // F3 leftover — generic route-write command bus for residual sync lifts
+  f3RouteWrite: "hrms.f3.route_write",
+  leaveCancel: "hrms.leave.cancel",
 } as const;
 
 export const EVENTS = {

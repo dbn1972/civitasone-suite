@@ -224,6 +224,27 @@ export function registerAgentConsumers(rawQueue: Queue): void {
           },
         });
       }
+      if (p.kind === "orchestration_limit") {
+        const limit = p as typeof p & {
+          orchestrationId?: string;
+          code?: string;
+          depth?: number;
+          hopCount?: number;
+        };
+        await enqueue(tx, {
+          topic: EVENTS.orchestrationLimitExceeded,
+          eventType: EVENTS.orchestrationLimitExceeded,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            orchestrationId: limit.orchestrationId,
+            code: limit.code,
+            depth: limit.depth,
+            hopCount: limit.hopCount,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg) as never, {
         ...(p.agentId !== undefined ? { agentId: p.agentId } : {}),
         action: p.action,

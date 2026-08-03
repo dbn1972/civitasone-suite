@@ -9,16 +9,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 import { requiresNextAction, isOverdue } from "./next-action-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "next_action";
-
 const SUBJECT_TYPES = ["contact", "deal"] as const;
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -65,43 +65,17 @@ export async function nextActionRoutes(app: FastifyInstance): Promise<void> {
     const body = createBody.parse(req.body);
 
     const actionId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.next_actions
-          (id, tenant_id, subject_type, subject_id, action_type, due_at, notes, created_by, updated_by)
-        VALUES (
-          ${actionId}, ${ctx.tenantId}, ${body.subjectType}, ${body.subjectId},
-          ${body.actionType}, ${body.dueAt}::timestamptz, ${body.notes ?? null},
-          ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.nextActionCreated,
-        action: "create",
-        resourceType: RESOURCE,
-        resourceId: actionId,
-        payload: {
-          actionId,
-          subjectType: body.subjectType,
-          subjectId: body.subjectId,
-          actionType: body.actionType,
-          dueAt: body.dueAt,
-        },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: actionId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.createNextAction, actionId, {
         subjectType: body.subjectType,
         subjectId: body.subjectId,
         actionType: body.actionType,
         dueAt: body.dueAt,
         notes: body.notes ?? null,
-        completedAt: null,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** List next actions. */
@@ -224,29 +198,10 @@ export async function nextActionRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "ALREADY_COMPLETED", "next action is already completed");
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.next_actions
-        SET completed_at = now(), updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${action.version}
-        RETURNING id, version, completed_at AS "completedAt"
-      `) as unknown as Array<{ id: string; version: number; completedAt: Date }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.nextActionCompleted,
-        action: "complete",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { actionId: id },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "next action was modified by another request");
-    }
-
-    return reply.send({ data: { id, completedAt: row.completedAt, version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.completeNextAction, id, { version: action.version }),
+    );
   });
 }

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * 0314 — Employee hold/release with approval status.
  *
@@ -14,7 +16,6 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
@@ -49,23 +50,11 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const holdId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(hrmsEmployeeHolds).values({
-        id: holdId,
-        tenantId: ctx.tenantId,
-        employeeId: id,
-        holdType: body.holdType,
-        reason: body.reason,
-        status: "pending",
-        requestedBy: ctx.actorId,
-        effectiveFrom: body.effectiveFrom,
-        ...(body.effectiveTo ? { effectiveTo: body.effectiveTo } : {}),
-      });
-    });
+    await publishF3Write(ctx, "lifecycle_hold_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: holdId, employeeId: id, holdType: body.holdType, status: "pending" },
-    });
+    }) as any;
   });
 
   // List holds for an employee
@@ -98,30 +87,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { holdId } = holdIdParam.parse(req.params);
 
-    await db.transaction(async (tx) => {
-      const rows = await tx.select().from(hrmsEmployeeHolds)
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
-        .limit(1);
-      const hold = rows[0];
-      if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
-      if (hold.status !== "pending") {
-        throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', not 'pending'`);
-      }
-      // Separation of duties: approver cannot be the requester
-      if (hold.requestedBy === ctx.actorId) {
-        throw new HttpError(403, "SOD_VIOLATION", "approver must not be the same person who requested the hold");
-      }
-      await tx.update(hrmsEmployeeHolds)
-        .set({
-          status: "active",
-          approvedBy: ctx.actorId,
-          approvedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.version, hold.version)));
-    });
+    await publishF3Write(ctx, "lifecycle_hold_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "active" } });
+    return reply.send({ data: { id: holdId, status: "active" } }) as any;
   });
 
   // Reject a pending hold
@@ -133,26 +101,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().min(1).max(2000).optional(),
     }).parse(req.body ?? {});
 
-    await db.transaction(async (tx) => {
-      const rows = await tx.select().from(hrmsEmployeeHolds)
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
-        .limit(1);
-      const hold = rows[0];
-      if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
-      if (hold.status !== "pending") {
-        throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', not 'pending'`);
-      }
-      await tx.update(hrmsEmployeeHolds)
-        .set({
-          status: "rejected",
-          approvedBy: ctx.actorId,
-          updatedAt: new Date(),
-          ...(body.reason ? { releaseReason: body.reason } : {}),
-        })
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.version, hold.version)));
-    });
+    await publishF3Write(ctx, "lifecycle_hold_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "rejected" } });
+    return reply.send({ data: { id: holdId, status: "rejected" } }) as any;
   });
 
   // Release an active hold
@@ -164,27 +115,9 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
-    await db.transaction(async (tx) => {
-      const rows = await tx.select().from(hrmsEmployeeHolds)
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
-        .limit(1);
-      const hold = rows[0];
-      if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
-      if (hold.status !== "active" && hold.status !== "approved") {
-        throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', must be 'active' or 'approved' to release`);
-      }
-      await tx.update(hrmsEmployeeHolds)
-        .set({
-          status: "released",
-          releasedBy: ctx.actorId,
-          releasedAt: new Date(),
-          releaseReason: body.reason,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.version, hold.version)));
-    });
+    await publishF3Write(ctx, "lifecycle_hold_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.send({ data: { id: holdId, status: "released" } });
+    return reply.send({ data: { id: holdId, status: "released" } }) as any;
   });
 
   // List all active holds (for dashboard / payroll integration)

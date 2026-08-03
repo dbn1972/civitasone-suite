@@ -36,6 +36,8 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRegisterConsumers } from "../src/modules/register/consumer.js";
 import { registerDepreciationConsumers } from "../src/modules/depreciation/consumer.js";
 import { registerMaintenanceConsumers } from "../src/modules/maintenance/consumer.js";
+import { registerF3EnterpriseConsumers } from "../src/modules/enterprise/f3-consumer.js";
+import { queue as sharedQueue } from "../src/shared/infra.js";
 import { uuidV5 } from "../src/shared/ids.js";
 import { COMMANDS } from "../src/topics.js";
 
@@ -338,17 +340,28 @@ describe("Tenant isolation — depRun is tenant-scoped", () => {
   });
 });
 
-// ── 5. Impairment & Revaluation GL (via HTTP route, internal-bypass JWT) ───────
+// ── 5. Impairment & Revaluation GL (via HTTP route → f3RouteWrite consumer) ───
 
 describe("Impairment & Revaluation GL", () => {
   let app: Awaited<ReturnType<typeof import("../src/app.js").buildApp>>;
   let bearer: string;
+
+  /** Drain the shared MemoryQueue used by publishF3Write (infra.queue). */
+  async function drainShared(): Promise<void> {
+    const q = sharedQueue as MemoryQueue;
+    if (typeof q.drain === "function") await q.drain();
+    else await drain(500);
+  }
 
   beforeAll(async () => {
     const { buildApp } = await import("../src/app.js");
     app = await buildApp();
     const { signToken } = await import("@civitasone/auth");
     bearer = signToken({ sub: ACTOR, tid: TENANT_A, roles: ["asset_admin", "super_admin"] } as never, SECRET);
+
+    // Route publishes to infra.queue; register the F3 consumer so GL lands in outbox.
+    registerF3EnterpriseConsumers(sharedQueue);
+    await sharedQueue.start();
 
     // seed the asset directly so the route can load it (book value 1,000,000)
     await asTenant(TENANT_A, (tx) => tx.insert(assetAssets).values({
@@ -371,6 +384,7 @@ describe("Impairment & Revaluation GL", () => {
       payload: { amountMinor: 300000, reason: "flood damage", eventDate: "2024-06-01" },
     });
     expect(res.statusCode).toBe(202);
+    await drainShared();
 
     const imp = (await glMessages(TENANT_A)).filter((g) => g.type === "asset_impairment");
     expect(imp).toHaveLength(1);
@@ -396,6 +410,7 @@ describe("Impairment & Revaluation GL", () => {
       payload: { newBookValueMinor: 900000, reason: "market revaluation" },
     });
     expect(res.statusCode).toBe(202);
+    await drainShared();
 
     const rev = (await glMessages(TENANT_A)).filter((g) => g.type === "asset_revaluation");
     expect(rev).toHaveLength(1);

@@ -1,13 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { validateTransition, validateAssignment, type TaskStatus } from "./domain.js";
+import * as commands from "./commands.js";
 
 const FIELD_ROLES = ["field_admin", "field_agent", "super_admin"];
 const ADMIN_ROLES = ["field_admin", "super_admin"];
@@ -63,13 +60,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createTaskBody.parse(req.body);
-    const id = randomUUID();
     const status: TaskStatus = body.assigneeId ? "assigned" : "unassigned";
 
-    await db.transaction(async (tx) => {
-      await repo.insert(tx, {
-        id,
-        tenantId: ctx.tenantId,
+    return reply.code(202).send(
+      await commands.createTask(ctx, {
         assigneeId: body.assigneeId ?? null,
         taskType: body.taskType,
         title: body.title,
@@ -79,25 +73,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         latitude: body.latitude?.toString() ?? null,
         longitude: body.longitude?.toString() ?? null,
         address: body.address ?? null,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        dueDate: body.dueDate ?? null,
         metadata: body.metadata ?? null,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.taskCreated,
-        eventType: EVENTS.taskCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taskId: id, taskType: body.taskType, assigneeId: body.assigneeId ?? null, status },
-      });
-    });
-
-    return reply.code(201).send({
-      data: { id, tenantId: ctx.tenantId, status, taskType: body.taskType, title: body.title, version: 1 },
-    });
+      }),
+    );
   });
 
   // GET /v1/field/tasks — list tasks with filters
@@ -160,6 +139,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
 
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
+    }
+
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.title !== undefined) patch.title = body.title;
     if (body.description !== undefined) patch.description = body.description;
@@ -170,16 +153,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     if (body.dueDate !== undefined) patch.dueDate = new Date(body.dueDate);
     if (body.metadata !== undefined) patch.metadata = body.metadata;
 
-    const updated = await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, patch, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
-      return true;
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, updated: true, version: body.version + 1 } });
+    return reply.code(202).send(await commands.updateTask(ctx, id, { version: body.version, patch }));
   });
 
   // POST /v1/field/tasks/:id/assign — assign a task
@@ -199,30 +173,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "ASSIGNMENT_INVALID", assignError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { assigneeId: body.assigneeId, status: "assigned", updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
+    }
 
-      await enqueue(tx, {
-        topic: EVENTS.taskCreated,
-        eventType: EVENTS.taskCreated,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taskId: id, assigneeId: body.assigneeId, action: "assigned" },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, assigneeId: body.assigneeId, status: "assigned", version: body.version + 1 } });
+    return reply.code(202).send(await commands.assignTask(ctx, id, { assigneeId: body.assigneeId, version: body.version }));
   });
 
   // POST /v1/field/tasks/:id/start — start a task
@@ -242,15 +197,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TRANSITION_INVALID", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(tx, id, ctx.tenantId, { status: "in_progress", updatedBy: ctx.actorId }, body.version);
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
-    });
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
+    }
 
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, status: "in_progress", version: body.version + 1 } });
+    return reply.code(202).send(await commands.startTask(ctx, id, body.version));
   });
 
   // POST /v1/field/tasks/:id/complete — complete a task
@@ -270,30 +221,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TRANSITION_INVALID", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "completed", completedAt: new Date(), updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
+    }
 
-      await enqueue(tx, {
-        topic: EVENTS.taskCompleted,
-        eventType: EVENTS.taskCompleted,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: { taskId: id, completedAt: new Date().toISOString() },
-      });
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, status: "completed", version: body.version + 1 } });
+    return reply.code(202).send(await commands.completeTask(ctx, id, body.version));
   });
 
   // POST /v1/field/tasks/:id/cancel — cancel a task
@@ -313,21 +245,11 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TRANSITION_INVALID", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "cancelled", cancelledAt: new Date(), updatedBy: ctx.actorId },
-        body.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
-    });
+    if (body.version !== existing.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
+    }
 
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, status: "cancelled", version: body.version + 1 } });
+    return reply.code(202).send(await commands.cancelTask(ctx, id, body.version));
   });
 
   // DELETE /v1/field/tasks/:id — soft-cancel a task (same as cancel for field tasks)
@@ -346,20 +268,6 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TRANSITION_INVALID", transitionError);
     }
 
-    await db.transaction(async (tx) => {
-      const ok = await repo.update(
-        tx,
-        id,
-        ctx.tenantId,
-        { status: "cancelled", cancelledAt: new Date(), updatedBy: ctx.actorId },
-        existing.version,
-      );
-      if (!ok) {
-        throw new HttpError(409, "VERSION_CONFLICT", "task has been modified; retry with current version");
-      }
-    });
-
-    await cache.invalidate(cache.makeKey(ctx.tenantId, "task", id));
-    return reply.send({ data: { id, status: "cancelled" } });
+    return reply.code(202).send(await commands.deleteTask(ctx, id, existing.version));
   });
 }

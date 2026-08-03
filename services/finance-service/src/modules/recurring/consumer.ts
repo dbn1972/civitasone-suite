@@ -3,34 +3,35 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { COMMANDS } from "../../topics.js";
 
 const log = pino({ name: "finance.recurring.consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerRecurringConsumers(queue: Queue): void {
-  queue.subscribe("finance.recurring.entry_create", async (msg) => {
+  queue.subscribe(COMMANDS.recurringEntryCreate, async (msg) => {
     const p = msg.payload as {
-      tenantId: string; name: string; voucherType?: string;
+      id?: string; tenantId: string; name: string; voucherType?: string;
       frequency?: string; debitAccountId: string; creditAccountId: string;
       amountMinor: number; narration?: string; nextRunDate: string; endDate?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { sql } = await import("drizzle-orm");
-      const rows = await (tx as any).execute(sql`
+      const id = p.id ?? msg.messageId;
+      await (tx as any).execute(sql`
         INSERT INTO gl.finance_recurring_entries (
-          tenant_id, name, voucher_type, frequency, debit_account_id, credit_account_id,
+          id, tenant_id, name, voucher_type, frequency, debit_account_id, credit_account_id,
           amount_minor, narration, next_run_date, end_date, created_by
         ) VALUES (
-          ${p.tenantId}::uuid, ${p.name}, ${p.voucherType ?? "journal"},
+          ${id}::uuid, ${p.tenantId}::uuid, ${p.name}, ${p.voucherType ?? "journal"},
           ${p.frequency ?? "monthly"}, ${p.debitAccountId}::uuid, ${p.creditAccountId}::uuid,
           ${p.amountMinor}::bigint, ${p.narration ?? null},
           ${p.nextRunDate}::date, ${p.endDate ?? null}::date, ${msg.actorId}::uuid
         )
-        RETURNING id
+        ON CONFLICT (id) DO NOTHING
       `);
-      const id = (rows as any)[0]?.id ?? msg.messageId;
       await enqueue(tx, {
         topic: "finance.recurring.entry_created", eventType: "finance.recurring.entry_created",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -42,7 +43,7 @@ export function registerRecurringConsumers(queue: Queue): void {
     log.info({ id: msg.messageId }, "Processed recurring.entry_create");
   });
 
-  queue.subscribe("finance.recurring.entry_update", async (msg) => {
+  queue.subscribe(COMMANDS.recurringEntryUpdate, async (msg) => {
     const p = msg.payload as {
       tenantId: string; id: string; name?: string; frequency?: string;
       amountMinor?: number; narration?: string; nextRunDate?: string;

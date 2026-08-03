@@ -18,16 +18,15 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "captured_activity";
-
 const CAPTURE_SOURCES = ["email", "calendar"] as const;
 const MATCH_STATUSES = ["matched", "unmatched", "ambiguous"] as const;
 
@@ -119,90 +118,44 @@ export async function captureRoutes(app: FastifyInstance): Promise<void> {
     const body = captureBody.parse(req.body);
 
     const resolution = resolveMatch(body.candidateContactIds);
-    const capturedId = randomUUID();
 
-    const inserted = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        INSERT INTO crm.captured_activities
-          (id, tenant_id, source, external_id, contact_id, subject, occurred_at,
-           participants, match_confidence, match_status, raw_ref, created_by, updated_by)
-        VALUES (
-          ${capturedId}, ${ctx.tenantId}, ${body.source}, ${body.externalId},
-          ${resolution.contactId}, ${body.subject ?? null},
-          ${body.occurredAt ?? null}::timestamptz,
-          ${JSON.stringify(body.participants)}::jsonb,
-          ${resolution.confidence}::numeric, ${resolution.matchStatus},
-          ${body.rawRef ?? null}, ${ctx.actorId}, ${ctx.actorId}
-        )
-        ON CONFLICT (tenant_id, source, external_id) DO NOTHING
-        RETURNING id
-      `) as unknown as Array<{ id: string }>;
-
-      if (rows.length === 0) return rows;
-
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.activityCaptured,
-        action: "capture",
-        resourceType: RESOURCE,
-        resourceId: capturedId,
-        // Participant handles are deliberately reduced to a count: the event
-        // stream must not carry contact details.
-        payload: {
-          capturedId,
-          source: body.source,
-          externalId: body.externalId,
-          matchStatus: resolution.matchStatus,
-          participantCount: body.participants.length,
-        },
-      });
-      return rows;
+    // Idempotent read: if (tenant,source,externalId) already exists, accept without re-publish.
+    const existing = await scopedRead(async (tx) => {
+      return tx.execute(sql`
+        SELECT id, match_status AS "matchStatus" FROM crm.captured_activities
+        WHERE tenant_id = ${ctx.tenantId} AND source = ${body.source} AND external_id = ${body.externalId}
+      `) as unknown as Array<{ id: string; matchStatus: string }>;
     });
-
-    if (inserted.length === 0) {
-      const existing = await scopedRead(async (tx) => {
-        return tx.execute(sql`
-          SELECT id, match_status AS "matchStatus" FROM crm.captured_activities
-          WHERE tenant_id = ${ctx.tenantId} AND source = ${body.source} AND external_id = ${body.externalId}
-        `) as unknown as Array<{ id: string; matchStatus: string }>;
-      });
-      const row = existing[0];
-      // A concurrent delete between the conflict and this read is vanishingly
-      // unlikely, but do not pretend to know an id we could not read.
+    if (existing[0]) {
       return reply.code(202).send({
-        id: row?.id ?? null,
+        id: existing[0].id,
         status: "accepted",
         deduplicated: true,
-        matchStatus: row?.matchStatus ?? null,
+        matchStatus: existing[0].matchStatus,
         correlationId: ctx.correlationId,
       });
     }
 
-    // Downstream workers enrich/re-match asynchronously; the command carries no
-    // participant handles for the same DPDP reason as the event above.
-    await queue.publish(COMMANDS.captureActivity, {
-      messageId: randomUUID(),
-      type: COMMANDS.captureActivity,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: {
-        capturedId,
-        source: body.source,
-        externalId: body.externalId,
-        contactId: resolution.contactId,
-        matchStatus: resolution.matchStatus,
-        participantCount: body.participants.length,
-        rawRef: body.rawRef ?? null,
-      },
+    const capturedId = randomUUID();
+    const accepted = await publishCrmCommand(ctx, COMMANDS.captureActivity, capturedId, {
+      capturedId,
+      source: body.source,
+      externalId: body.externalId,
+      contactId: resolution.contactId,
+      subject: body.subject ?? null,
+      occurredAt: body.occurredAt ?? null,
+      participants: body.participants,
+      matchConfidence: resolution.confidence,
+      matchStatus: resolution.matchStatus,
+      participantCount: body.participants.length,
+      rawRef: body.rawRef ?? null,
     });
-
     return reply.code(202).send({
-      id: capturedId,
+      id: accepted.id,
       status: "accepted",
       deduplicated: false,
       matchStatus: resolution.matchStatus,
-      correlationId: ctx.correlationId,
+      correlationId: accepted.correlationId,
     });
   });
 
@@ -300,32 +253,14 @@ export async function captureRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "contact not found");
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.captured_activities
-        SET contact_id = ${body.contactId}, match_status = 'matched', match_confidence = 1.0000,
-            updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${captured.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.activityCaptureMatched,
-        action: "match",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { capturedId: id, contactId: body.contactId, fromStatus: captured.matchStatus },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "captured activity was modified by another request");
-    }
-
-    return reply.send({
-      data: { id, contactId: body.contactId, matchStatus: "matched", version: row.version },
-    });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.matchCapturedActivity, id, {
+        contactId: body.contactId,
+        fromStatus: captured.matchStatus,
+        version: captured.version,
+      }),
+    );
   });
 }

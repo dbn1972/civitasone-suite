@@ -8,6 +8,7 @@ const TENANT_ID = "aaaaaaaa-1111-4000-8000-000000000001";
 const ACTOR_ID = "11111111-1111-1111-1111-111111111111";
 const JOB_ID = "22222222-2222-2222-2222-222222222222";
 const TEMPLATE_ID = "33333333-3333-3333-3333-333333333333";
+const SCHEDULED_ID = "44444444-4444-4444-4444-444444444444";
 
 // ─── Mock state ────────────────────────────────────────────────────
 const mockState = vi.hoisted(() => ({
@@ -94,6 +95,17 @@ vi.mock("../src/modules/templates/repo.js", () => ({
   toView: (r: Record<string, unknown>) => r,
 }));
 
+// ─── Scheduled repo mock ───────────────────────────────────────────
+vi.mock("../src/modules/scheduled/repo.js", () => ({
+  insert: async (_tx: unknown, row: Record<string, unknown>) => { mockState.inserted.push(row); },
+  update: async () => true,
+  disable: async () => true,
+  touchLastRunAt: async () => true,
+  findById: async () => mockState.selectResult[0] ?? null,
+  listByTenant: async () => mockState.selectResult,
+  toView: (r: Record<string, unknown>) => r,
+}));
+
 // ─── Render dependencies ───────────────────────────────────────────
 vi.mock("@civitasone/render/pdf", () => ({
   renderPdf: async () => ({ buffer: Buffer.from("fake-pdf") }),
@@ -121,6 +133,10 @@ vi.mock("../src/topics.js", () => ({
     updateTemplate: "reports.template.update",
     deleteTemplate: "reports.template.delete",
     executeTemplate: "reports.template.execute",
+    createScheduled: "reports.scheduled.create",
+    updateScheduled: "reports.scheduled.update",
+    disableScheduled: "reports.scheduled.disable",
+    runScheduled: "reports.scheduled.run",
     scheduledGenerate: "reports.scheduled.generate",
   },
   EVENTS: {
@@ -130,6 +146,10 @@ vi.mock("../src/topics.js", () => ({
     templateCreated: "reports.template.created",
     templateUpdated: "reports.template.updated",
     templateDeleted: "reports.template.deleted",
+    scheduledCreated: "reports.scheduled.created",
+    scheduledUpdated: "reports.scheduled.updated",
+    scheduledDisabled: "reports.scheduled.disabled",
+    scheduledGenerated: "reports.scheduled.generated",
   },
   SERVICE: "reports",
   RESOURCE: "job",
@@ -291,7 +311,131 @@ describe("handleDeleteTemplate", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// 3. Render Consumer
+// 3. Scheduled Consumer
+// ═══════════════════════════════════════════════════════════════════
+describe("registerScheduledConsumers", () => {
+  it("subscribes to createScheduled and processes message", async () => {
+    const { registerScheduledConsumers } = await import("../src/modules/scheduled/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    const mockQueue = {
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish: async () => {},
+    };
+
+    registerScheduledConsumers(mockQueue as any);
+    expect(handlers.has("reports.scheduled.create")).toBe(true);
+
+    const msg = {
+      messageId: SCHEDULED_ID,
+      type: "reports.scheduled.create",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-sched-1",
+      schemaVersion: "1.0",
+      payload: {
+        id: SCHEDULED_ID,
+        tenantId: TENANT_ID,
+        templateId: TEMPLATE_ID,
+        cadence: "daily",
+        recipients: ["admin@example.com"],
+        format: "pdf",
+        enabled: true,
+        nextRunAt: new Date(),
+        version: 1,
+      },
+    };
+
+    await handlers.get("reports.scheduled.create")!(msg);
+
+    expect(mockState.inserted.length).toBeGreaterThan(0);
+    expect(mockState.enqueueCalls.length).toBe(2);
+    expect(mockState.enqueueCalls[0]!.topic).toBe("reports.scheduled.created");
+    expect(mockState.cacheInvalidations.length).toBeGreaterThan(0);
+  });
+
+  it("skips create when markProcessed returns false", async () => {
+    mockState.markProcessedResult = false;
+    const { registerScheduledConsumers } = await import("../src/modules/scheduled/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    const mockQueue = {
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish: async () => {},
+    };
+
+    registerScheduledConsumers(mockQueue as any);
+    await handlers.get("reports.scheduled.create")!({
+      messageId: "dup-sched",
+      type: "reports.scheduled.create",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-dup",
+      schemaVersion: "1.0",
+      payload: { id: "dup-sched", tenantId: TENANT_ID, templateId: TEMPLATE_ID, cadence: "daily", recipients: [], format: "pdf", enabled: true, nextRunAt: new Date(), version: 1 },
+    });
+
+    expect(mockState.inserted.length).toBe(0);
+    expect(mockState.enqueueCalls.length).toBe(0);
+  });
+
+  it("runScheduled updates lastRunAt and publishes renderJob", async () => {
+    const { registerScheduledConsumers } = await import("../src/modules/scheduled/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    const publishCalls: Record<string, unknown>[] = [];
+    const mockQueue = {
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish: async (topic: string, msg: unknown) => { publishCalls.push({ topic, msg }); },
+    };
+
+    registerScheduledConsumers(mockQueue as any, mockQueue as any);
+    expect(handlers.has("reports.scheduled.run")).toBe(true);
+
+    await handlers.get("reports.scheduled.run")!({
+      messageId: "run-msg-1",
+      type: "reports.scheduled.run",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-run",
+      schemaVersion: "1.0",
+      payload: {
+        scheduledReportId: SCHEDULED_ID,
+        jobId: JOB_ID,
+        templateId: TEMPLATE_ID,
+        format: "pdf",
+      },
+    });
+
+    expect(mockState.enqueueCalls.some((e) => e.topic === "reports.scheduled.generated")).toBe(true);
+    expect(publishCalls.length).toBe(1);
+    expect(publishCalls[0]!.topic).toBe("reports.job.render");
+  });
+});
+
+describe("handleUpdateScheduled", () => {
+  it("processes update command and invalidates cache", async () => {
+    const { handleUpdateScheduled } = await import("../src/modules/scheduled/consumer.js");
+    const ctx = { tenantId: TENANT_ID, actorId: ACTOR_ID, correlationId: "corr-sched-upd" };
+    await handleUpdateScheduled("msg-upd", ctx, { id: SCHEDULED_ID, version: 1, cadence: "weekly" });
+
+    expect(mockState.enqueueCalls.length).toBe(1);
+    expect(mockState.enqueueCalls[0]!.topic).toBe("reports.scheduled.updated");
+    expect(mockState.cacheInvalidations.length).toBe(1);
+  });
+});
+
+describe("handleDisableScheduled", () => {
+  it("processes disable command and invalidates cache", async () => {
+    const { handleDisableScheduled } = await import("../src/modules/scheduled/consumer.js");
+    const ctx = { tenantId: TENANT_ID, actorId: ACTOR_ID, correlationId: "corr-sched-del" };
+    await handleDisableScheduled("msg-del", ctx, { id: SCHEDULED_ID });
+
+    expect(mockState.enqueueCalls.length).toBe(1);
+    expect(mockState.enqueueCalls[0]!.topic).toBe("reports.scheduled.disabled");
+    expect(mockState.cacheInvalidations.length).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 4. Render Consumer
 // ═══════════════════════════════════════════════════════════════════
 describe("registerRenderConsumers", () => {
   it("subscribes to renderJob and processes PDF format", async () => {

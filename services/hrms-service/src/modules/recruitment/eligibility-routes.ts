@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Application & eligibility (checklist R-RA-0093/0094/0095/0098/0100/0102).
  *
@@ -12,7 +14,6 @@
  * blocks a clearly-ineligible applicant with a structured, explainable 422,
  * prevents duplicate applications, and issues a unique application number.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -60,8 +61,8 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_CRITERIA", "an age cut-off date is required when an age limit is set");
     }
     const v = await mustVacancy(ctx.tenantId, id);
-    await db.transaction((tx) => repo.setVacancyEligibility(tx, ctx.tenantId, id, body, v.version));
-    return reply.send({ id, eligibility: body });
+    await publishF3Write(ctx, "recruitment_eligibility_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, eligibility: body }) as any;
   });
 
   app.post("/v1/hrms/job-openings/:id/eligibility-check", async (req, reply) => {
@@ -115,23 +116,10 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     // a hard 23505 rather than a best-effort check.
     const dedupKey = criteria.allowMultiple ? null : body.email.toLowerCase();
     try {
-      await db.transaction((tx) => repo.insertApplication(tx, {
-        id: appId, tenantId: ctx.tenantId, jobOpeningId: id,
-        applicantName: body.applicantName, email: body.email,
-        mobile: body.mobile ?? null, resumeRef: body.resumeRef ?? null,
-        skills: body.skills ?? null,
-        qualification: body.qualification ?? null,
-        experienceYears: body.experienceYears ?? null,
-        applicationNo, dateOfBirth: body.dateOfBirth ?? null,
-        category: body.category ?? null,
-        eligibilityResult: result as never,
-        dedupKey,
-        source: "eligibility_apply", stage: "applied", status: "active",
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_eligibility_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_APPLICATION", "a duplicate application was detected");
+        throw new HttpError(409, "DUPLICATE_APPLICATION", "a duplicate application was detected") as any;
       }
       throw err;
     }
@@ -156,8 +144,8 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
     if (a.status === "withdrawn") throw new HttpError(409, "ALREADY_WITHDRAWN", "application is already withdrawn");
     if (a.stage === "hired") throw new HttpError(409, "WRONG_STATE", "a hired application cannot be withdrawn");
-    await db.transaction((tx) => repo.withdrawApplication(tx, ctx.tenantId, id, body.reason, a.version));
-    return reply.send({ id, status: "withdrawn" });
+    await publishF3Write(ctx, "recruitment_eligibility_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, status: "withdrawn" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

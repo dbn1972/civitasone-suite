@@ -1,3 +1,6 @@
+import type { RequestContext } from "@civitasone/types";
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Disciplinary / Vigilance (CCS (CCA) Rules) module.
  *
@@ -22,12 +25,11 @@
  * append-only event log. A suspension with pay_suspended=true is surfaced by
  * the payroll-input projection.
  */
-import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -62,17 +64,17 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
   async function transition(
     c: DisciplinaryCaseRow, action: CaseAction, actorId: string,
     patch: Partial<typeof c>, notes: string | null,
+    ctx: RequestContext, req: FastifyRequest,
   ): Promise<CaseStatus> {
     const check = canTransition(
       c.status as CaseStatus, action, c.proceedingType as "minor" | "major");
     if (!check.ok || !check.to) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
     const to: CaseStatus = check.to;
-    await db.transaction(async (tx) => {
-      await repo.updateCase(tx, c.tenantId, c.id, { ...patch, status: to, updatedBy: actorId }, c.version);
-      await repo.appendEvent(tx, {
-        tenantId: c.tenantId, caseId: c.id, fromStatus: c.status, toStatus: to,
-        action, notes, actorId,
-      });
+    await publishF3Write(ctx, "disciplinary_routes__0", randomUUID(), {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      action, patch, notes, caseId: c.id, actorId, to,
     });
     return to;
   }
@@ -89,19 +91,8 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     await mustEmployee(ctx.tenantId, id);
     const caseId = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertCase(tx, {
-        id: caseId, tenantId: ctx.tenantId, employeeId: id,
-        caseNo: body.caseNo, proceedingType: body.proceedingType,
-        status: "opened", allegation: body.allegation,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await repo.appendEvent(tx, {
-        tenantId: ctx.tenantId, caseId, fromStatus: null, toStatus: "opened",
-        action: "open", notes: null, actorId: ctx.actorId,
-      });
-    });
-    return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo });
+    await publishF3Write(ctx, "disciplinary_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo }) as any;
   });
 
   app.get("/v1/hrms/employees/:id/disciplinary-cases", async (req, reply) => {
@@ -138,7 +129,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "issue_charge_memo", ctx.actorId,
-      { chargeMemoRef: body.chargeMemoRef, chargeMemoDate: body.chargeMemoDate }, body.notes ?? null);
+      { chargeMemoRef: body.chargeMemoRef, chargeMemoDate: body.chargeMemoDate }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -157,7 +148,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       inquiryOfficerName: body.inquiryOfficerName,
       inquiryAppointedDate: body.inquiryAppointedDate,
       ...(body.inquiryOfficerId ? { inquiryOfficerId: body.inquiryOfficerId } : {}),
-    }, body.notes ?? null);
+    }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -174,7 +165,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const to = await transition(c, "record_finding", ctx.actorId, {
       finding: body.finding, findingDate: body.findingDate,
       ...(body.findingNotes ? { findingNotes: body.findingNotes } : {}),
-    }, body.findingNotes ?? null);
+    }, body.findingNotes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, finding: body.finding });
   });
 
@@ -201,7 +192,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const to = await transition(c, "impose_penalty", ctx.actorId, {
       penaltyClass: pclass, penaltyType: body.penaltyType, penaltyDate: body.penaltyDate,
       ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),
-    }, body.notes ?? null);
+    }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, penaltyClass: pclass, penaltyType: body.penaltyType });
   });
 
@@ -254,7 +245,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "file_appeal", ctx.actorId,
-      { appealFiledDate: body.appealFiledDate, appealAuthority: body.appealAuthority }, body.notes ?? null);
+      { appealFiledDate: body.appealFiledDate, appealAuthority: body.appealAuthority }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -269,7 +260,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "decide_appeal", ctx.actorId,
-      { appealOutcome: body.appealOutcome, appealDecidedDate: body.appealDecidedDate }, body.notes ?? null);
+      { appealOutcome: body.appealOutcome, appealDecidedDate: body.appealDecidedDate }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, appealOutcome: body.appealOutcome });
   });
 
@@ -279,7 +270,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const { caseId } = caseParam.parse(req.params);
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCase(ctx.tenantId, caseId);
-    const to = await transition(c, "close", ctx.actorId, { closedAt: new Date() }, body.notes ?? null);
+    const to = await transition(c, "close", ctx.actorId, { closedAt: new Date() }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -289,7 +280,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const { caseId } = caseParam.parse(req.params);
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCase(ctx.tenantId, caseId);
-    const to = await transition(c, "drop", ctx.actorId, { closedAt: new Date() }, body.notes ?? null);
+    const to = await transition(c, "drop", ctx.actorId, { closedAt: new Date() }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -317,18 +308,16 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       );
     }
     const suspId = randomUUID();
-    await repo.insertSuspension(db, {
-      id: suspId, tenantId: ctx.tenantId, employeeId: id,
-      fromDate: body.fromDate, paySuspended: body.paySuspended,
-      subsistencePct: body.subsistencePct.toFixed(2), status: "active",
-      ...(body.caseId ? { caseId: body.caseId } : {}),
-      ...(body.orderRef ? { orderRef: body.orderRef } : {}),
-      ...(body.toDate ? { toDate: body.toDate } : {}),
-      ...(body.remarks ? { remarks: body.remarks } : {}),
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    await publishF3Write(ctx, "disciplinary_routes__3", suspId, {
+      body: {
+        ...body,
+        subsistencePct: body.subsistencePct,
+      },
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
     });
-    return reply.code(201).send({
-      id: suspId, employeeId: id, status: "active",
+    return reply.code(202).send({
+      id: suspId, employeeId: id, status: "accepted",
       paySuspended: body.paySuspended, subsistencePct: body.subsistencePct,
     });
   });
@@ -351,14 +340,8 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const s = await repo.findSuspension(ctx.tenantId, suspId);
     if (!s) throw new HttpError(404, "NOT_FOUND", "suspension not found");
     if (s.status !== "active") throw new HttpError(409, "WRONG_STATE", `suspension is '${s.status}', not active`);
-    await db.transaction(async (tx) => {
-      await repo.updateSuspension(tx, ctx.tenantId, suspId, {
-        status: "revoked", paySuspended: false, revokedDate: body.revokedDate,
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        updatedBy: ctx.actorId,
-      }, s.version);
-    });
-    return reply.send({ id: suspId, status: "revoked" });
+    await publishF3Write(ctx, "disciplinary_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id: suspId, status: "revoked" }) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -6,8 +6,15 @@
  *
  * Validates: Requirements 15.2
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
+import { MemoryQueue } from "@civitasone/queue";
 import { resolveTenant, normalizeNumber, DEFAULT_TENANT_ID, type DidMapping } from "../src/modules/did/domain.js";
+import {
+  createDidMappingBody,
+  createDidMappingPayload,
+  deleteDidMappingPayload,
+} from "../src/modules/did/validators.js";
+import { COMMANDS } from "../src/topics.js";
 
 const TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -120,5 +127,98 @@ describe("DEFAULT_TENANT_ID", () => {
     expect(DEFAULT_TENANT_ID).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
+  });
+});
+
+// ── CQRS validators + topics ──────────────────────────────────────
+
+describe("DID mapping CQRS validators", () => {
+  it("accepts a valid create body", () => {
+    const body = createDidMappingBody.parse({ didNumber: "+918001112222", label: "Main line" });
+    expect(body.active).toBe(true);
+    expect(body.didNumber).toBe("+918001112222");
+  });
+
+  it("rejects invalid phone numbers in create body", () => {
+    expect(() => createDidMappingBody.parse({ didNumber: "not-a-phone!!!" })).toThrow();
+  });
+
+  it("parses create command payload", () => {
+    const id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const tenantId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    const payload = createDidMappingPayload.parse({
+      id,
+      tenantId,
+      didNumber: "+918001112222",
+      label: null,
+      active: true,
+    });
+    expect(payload.id).toBe(id);
+  });
+
+  it("parses delete command payload", () => {
+    const id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const tenantId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    expect(deleteDidMappingPayload.parse({ id, tenantId }).id).toBe(id);
+  });
+});
+
+describe("DID mapping CQRS topics", () => {
+  it("defines create and delete command topics", () => {
+    expect(COMMANDS.createDidMapping).toBe("telephony.did.create");
+    expect(COMMANDS.deleteDidMapping).toBe("telephony.did.delete");
+  });
+});
+
+describe("DID mapping write-via-queue", () => {
+  let queue: MemoryQueue;
+  const published: Array<{ type: string; payload: Record<string, unknown> }> = [];
+
+  beforeEach(() => {
+    queue = new MemoryQueue();
+    published.length = 0;
+    queue.subscribe(COMMANDS.createDidMapping, async (msg) => {
+      published.push({ type: msg.type, payload: msg.payload as Record<string, unknown> });
+    });
+    queue.subscribe(COMMANDS.deleteDidMapping, async (msg) => {
+      published.push({ type: msg.type, payload: msg.payload as Record<string, unknown> });
+    });
+  });
+
+  it("publishes createDidMapping to the queue", async () => {
+    const tenantId = "11111111-aaaa-4000-8000-000000000001";
+    const id = "22222222-bbbb-4000-8000-000000000002";
+    await queue.publish(COMMANDS.createDidMapping, {
+      messageId: id,
+      type: COMMANDS.createDidMapping,
+      tenantId,
+      actorId: "00000000-aaaa-4000-8000-000000000001",
+      correlationId: "c1",
+      schemaVersion: "1.0",
+      payload: { id, tenantId, didNumber: "+918001112222", label: null, active: true },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(published).toHaveLength(1);
+    expect(published[0]?.type).toBe("telephony.did.create");
+    expect(published[0]?.payload.didNumber).toBe("+918001112222");
+  });
+
+  it("publishes deleteDidMapping to the queue", async () => {
+    const tenantId = "11111111-aaaa-4000-8000-000000000001";
+    const id = "22222222-bbbb-4000-8000-000000000002";
+    const messageId = "33333333-cccc-4000-8000-000000000003";
+    await queue.publish(COMMANDS.deleteDidMapping, {
+      messageId,
+      type: COMMANDS.deleteDidMapping,
+      tenantId,
+      actorId: "00000000-aaaa-4000-8000-000000000001",
+      correlationId: "c2",
+      schemaVersion: "1.0",
+      payload: { id, tenantId },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(published).toHaveLength(1);
+    expect(published[0]?.type).toBe("telephony.did.delete");
+    expect(published[0]?.payload.id).toBe(id);
   });
 });

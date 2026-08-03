@@ -13,16 +13,16 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
-import { emitWithAudit } from "../../shared/route-audit.js";
+import { scopedRead } from "../../shared/db.js";
+import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { EVENTS } from "../../topics.js";
 import { CADENCES, isCadence, nextOccurrence, shouldEscalate } from "./recurrence-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
-const RESOURCE = "recurring_task";
-
 const SUBJECT_TYPES = ["contact", "deal"] as const;
 
 /** A year of escalation delay is already absurd; anything more is a typo. */
@@ -148,40 +148,19 @@ export async function recurringTaskRoutes(app: FastifyInstance): Promise<void> {
     const body = createBody.parse(req.body);
 
     const taskId = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO crm.recurring_tasks
-          (id, tenant_id, name, subject_type, subject_id, cadence, next_run_at,
-           escalate_after_hours, enabled, created_by, updated_by)
-        VALUES (
-          ${taskId}, ${ctx.tenantId}, ${body.name}, ${body.subjectType}, ${body.subjectId},
-          ${body.cadence}, ${body.nextRunAt}::timestamptz,
-          ${body.escalateAfterHours ?? null}, ${body.enabled}, ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.recurringTaskCreated,
-        action: "create",
-        resourceType: RESOURCE,
-        resourceId: taskId,
-        payload: { taskId, cadence: body.cadence, subjectType: body.subjectType, subjectId: body.subjectId },
-      });
-    });
-
-    return reply.code(201).send({
-      data: {
-        id: taskId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.createRecurringTask, taskId, {
         name: body.name,
         subjectType: body.subjectType,
         subjectId: body.subjectId,
         cadence: body.cadence,
         nextRunAt: body.nextRunAt,
-        lastRunAt: null,
         escalateAfterHours: body.escalateAfterHours ?? null,
         enabled: body.enabled,
-        version: 1,
-      },
-    });
+      }),
+    );
   });
 
   /** Amend a recurring definition. */
@@ -201,40 +180,19 @@ export async function recurringTaskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "recurring task not found");
     }
 
-    const sets = [
-      body.name !== undefined ? sql`name = ${body.name}` : null,
-      body.cadence !== undefined ? sql`cadence = ${body.cadence}` : null,
-      body.nextRunAt !== undefined ? sql`next_run_at = ${body.nextRunAt}::timestamptz` : null,
-      body.escalateAfterHours !== undefined ? sql`escalate_after_hours = ${body.escalateAfterHours}` : null,
-      body.enabled !== undefined ? sql`enabled = ${body.enabled}` : null,
-    ].filter((s): s is NonNullable<typeof s> => s !== null);
-
-    const versionGuard = body.version !== undefined ? sql`AND version = ${body.version}` : sql``;
-
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.recurring_tasks
-        SET ${sql.join(sets, sql`, `)}, updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionGuard}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.recurringTaskUpdated,
-        action: "update",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: { taskId: id, changed: Object.keys(body).filter((k) => k !== "version") },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "recurring task was modified by another request");
-    }
-
-    return reply.send({ data: { id, version: row.version } });
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.updateRecurringTask, id, {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.cadence !== undefined ? { cadence: body.cadence } : {}),
+        ...(body.nextRunAt !== undefined ? { nextRunAt: body.nextRunAt } : {}),
+        ...(body.escalateAfterHours !== undefined ? { escalateAfterHours: body.escalateAfterHours } : {}),
+        ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        ...(body.version !== undefined ? { version: body.version } : {}),
+        changed: Object.keys(body).filter((k) => k !== "version"),
+      }),
+    );
   });
 
   /**
@@ -278,55 +236,18 @@ export async function recurringTaskRoutes(app: FastifyInstance): Promise<void> {
     const dueAt = task.nextRunAt instanceof Date ? task.nextRunAt : new Date(task.nextRunAt);
     const nextRunAt = nextOccurrence(task.cadence, dueAt);
     const actionId = randomUUID();
-
-    const updated = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        UPDATE crm.recurring_tasks
-        SET last_run_at = now(), next_run_at = ${nextRunAt.toISOString()}::timestamptz,
-            updated_at = now(), updated_by = ${ctx.actorId}, version = version + 1
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND version = ${task.version}
-        RETURNING id, version
-      `) as unknown as Array<{ id: string; version: number }>;
-      if (rows.length === 0) return rows;
-
-      await tx.execute(sql`
-        INSERT INTO crm.next_actions
-          (id, tenant_id, subject_type, subject_id, action_type, due_at, notes, created_by, updated_by)
-        VALUES (
-          ${actionId}, ${ctx.tenantId}, ${task.subjectType}, ${task.subjectId},
-          'recurring_followup', ${dueAt.toISOString()}::timestamptz, ${task.name},
-          ${ctx.actorId}, ${ctx.actorId}
-        )
-      `);
-
-      await emitWithAudit(tx, ctx, {
-        eventType: EVENTS.recurringTaskRun,
-        action: "run",
-        resourceType: RESOURCE,
-        resourceId: id,
-        payload: {
-          taskId: id,
-          materialisedActionId: actionId,
-          dueAt: dueAt.toISOString(),
-          nextRunAt: nextRunAt.toISOString(),
-        },
-      });
-      return rows;
-    });
-
-    const row = updated[0];
-    if (!row) {
-      throw new HttpError(409, "VERSION_CONFLICT", "recurring task was modified by another request");
-    }
-
-    return reply.code(201).send({
-      data: {
-        id,
-        materialisedActionId: actionId,
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await publishCrmCommand(ctx, COMMANDS.runRecurringTask, id, {
+        actionId,
+        subjectType: task.subjectType,
+        subjectId: task.subjectId,
+        name: task.name,
         dueAt: dueAt.toISOString(),
         nextRunAt: nextRunAt.toISOString(),
-        version: row.version,
-      },
-    });
+        version: task.version,
+      }),
+    );
   });
 }

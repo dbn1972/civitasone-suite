@@ -2,14 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue } from "../../shared/outbox.js";
-import { writeAudit } from "../../shared/audit.js";
 import { READ_ROLES, GOVERNANCE_ROLES } from "../../shared/roles.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./quality-repo.js";
 import { computeOverall, summarizeQuality } from "./quality-domain.js";
+import * as commands from "./commands.js";
 
 const score = z.number().min(0).max(1);
 
@@ -32,8 +29,6 @@ const listQuery = z.object({
 });
 
 export async function qualityRoutes(app: FastifyInstance): Promise<void> {
-  // GET /v1/ai/quality/flagged — human review queue (AG-004).
-  // Registered before the /:conversationId route so "flagged" is never read as an id.
   app.get("/v1/ai/quality/flagged", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, GOVERNANCE_ROLES);
@@ -52,7 +47,6 @@ export async function qualityRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // PUT /v1/ai/quality/:conversationId/:turnId — upsert a turn score (AG-004)
   app.put("/v1/ai/quality/:conversationId/:turnId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
@@ -62,59 +56,17 @@ export async function qualityRoutes(app: FastifyInstance): Promise<void> {
     const computed = computeOverall(body);
     const id = randomUUID();
 
-    await db.transaction(async (tx) => {
-      await repo.upsert(tx, {
-        id,
-        tenantId: ctx.tenantId,
-        conversationId,
-        turnId,
-        relevance: computed.relevance,
-        coherence: computed.coherence,
-        safety: computed.safety,
-        overall: computed.overall,
-        flagged: computed.flagged,
-        flagReason: computed.flagReason,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      await enqueue(tx, {
-        topic: EVENTS.interactionScored,
-        eventType: EVENTS.interactionScored,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          conversationId,
-          turnId,
-          overall: computed.overall,
-          flagged: computed.flagged,
-        },
-      });
-
-      if (computed.flagged) {
-        await enqueue(tx, {
-          topic: EVENTS.interactionFlagged,
-          eventType: EVENTS.interactionFlagged,
-          tenantId: ctx.tenantId,
-          actorId: ctx.actorId,
-          correlationId: ctx.correlationId,
-          payload: { conversationId, turnId, flagReason: computed.flagReason },
-        });
-      }
-
-      // Scores and ids only — never the turn content (DPDP Act 2023).
-      await writeAudit(tx, ctx, {
-        action: "quality.score",
-        input: null,
-        output: computed.overall,
-        blocked: false,
-        reason: computed.flagReason,
-      });
+    await commands.scoreInteraction(ctx, {
+      id,
+      conversationId,
+      turnId,
+      relevance: computed.relevance,
+      coherence: computed.coherence,
+      safety: computed.safety,
+      overall: computed.overall,
+      flagged: computed.flagged,
+      flagReason: computed.flagReason,
     });
-
-    await cache.invalidateResource(ctx.tenantId, "quality-flagged");
-    await cache.invalidateResource(ctx.tenantId, "quality-conversation");
 
     return reply.status(202).send({
       data: {
@@ -126,11 +78,12 @@ export async function qualityRoutes(app: FastifyInstance): Promise<void> {
         overall: computed.overall,
         flagged: computed.flagged,
         flagReason: computed.flagReason,
+        status: "accepted",
+        correlationId: ctx.correlationId,
       },
     });
   });
 
-  // GET /v1/ai/quality/:conversationId — all turn scores for a conversation (AG-004)
   app.get("/v1/ai/quality/:conversationId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, GOVERNANCE_ROLES);

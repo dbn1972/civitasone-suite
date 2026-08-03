@@ -1,3 +1,5 @@
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -15,14 +17,14 @@ export async function discoveryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = grantConsentBody.parse(req.body);
-    return reply.code(201).send(await commands.grantConsent(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.grantConsent(ctx, body));
   });
 
   app.post("/v1/citizen/discovery/consent/revoke", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = revokeConsentBody.parse(req.body);
-    return reply.send(await commands.revokeConsent(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeConsent(ctx, body));
   });
 
   app.get("/v1/citizen/discovery/consent", async (req, reply) => {
@@ -37,7 +39,7 @@ export async function discoveryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = runDiscoveryBody.parse(req.body);
-    return reply.send(await commands.runDiscovery(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.runDiscovery(ctx, body));
   });
 
   app.get("/v1/citizen/discovery/matches", async (req, reply) => {
@@ -52,7 +54,7 @@ export async function discoveryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = enrolBody.parse(req.body ?? {});
-    return reply.code(201).send(await commands.assistedEnrol(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.assistedEnrol(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

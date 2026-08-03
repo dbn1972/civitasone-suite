@@ -7,14 +7,15 @@
  * The synchronous sibling (POST /v1/cdp/events) still writes inline; the two must not be
  * confused, and nothing here re-does work the route already did.
  */
-import type { CommandEnvelope } from "@civitasone/queue";
+import type { CommandEnvelope, Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
-import { EVENTS } from "../../topics.js";
+import { COMMANDS, EVENTS } from "../../topics.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as profilesRepo from "../profiles/repo.js";
 import { validateConsent } from "./domain.js";
@@ -138,4 +139,10 @@ export async function handleIngestEventBatch(msg: CommandEnvelope<unknown>): Pro
     { messageId: msg.messageId, tenantId: msg.tenantId, profileId: p.profileId, eventId, outcome: "processed" },
     "ingest_batch event stored",
   );
+}
+
+export function registerEventConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
+  queue.subscribe(COMMANDS.ingestEventBatch, handleIngestEventBatch);
+  queue.subscribe(COMMANDS.ingestEvent, handleIngestEventBatch);
 }
