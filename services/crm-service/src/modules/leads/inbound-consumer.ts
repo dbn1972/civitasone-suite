@@ -7,15 +7,18 @@
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
-import { db, sqlClient } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import * as contactRepo from "../contacts/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "contact";
 
 interface InboundPayload {
+  /** Pre-allocated by the route so a redelivery cannot create a second contact. */
+  contactId?: string;
   channel: string;
   source: string;
   attributes: {
@@ -34,56 +37,53 @@ interface InboundPayload {
 export function registerInboundCaptureConsumer(queue: Queue): void {
   queue.subscribe(COMMANDS.inboundCapture, async (msg: CommandEnvelope) => {
     const payload = msg.payload as InboundPayload;
+    const contactId = payload.contactId ?? randomUUID();
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contactId = randomUUID();
       const attrs = payload.attributes;
-
-      // INSERT into crm.contacts with lead_status='new', source=channel
-      await sqlClient`
-        INSERT INTO crm.contacts (
-          id, tenant_id, name, email, phone, company, designation, city,
-          lead_source, lead_status, status, version, created_at, updated_at,
-          created_by, updated_by
-        ) VALUES (
-          ${contactId},
-          ${msg.tenantId},
-          ${attrs.name ?? null},
-          ${attrs.email ?? null},
-          ${attrs.phone ?? null},
-          ${attrs.company ?? null},
-          ${attrs.designation ?? null},
-          ${attrs.city ?? null},
-          ${payload.channel},
-          'new',
-          'active',
-          1,
-          now(),
-          now(),
-          ${msg.actorId},
-          ${msg.actorId}
-        )
-      `;
-
-      // Emit crm.lead.captured event via outbox
-      await enqueue(tx, {
-        topic: EVENTS.leadCaptured,
-        eventType: EVENTS.leadCaptured,
+      // Written through the contacts repo (not raw SQL) so email/phone land as
+      // AES-GCM ciphertext and the email blind index is populated — an inbound
+      // lead must be de-duplicable and readable like any other contact.
+      // onConflict on (tenant_id, email_idx) means a channel re-sending a known
+      // address is recorded as a skip instead of failing the whole delivery.
+      const outcome = await contactRepo.bulkInsertRow(tx, {
+        id: contactId,
         tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: {
-          contactId,
-          channel: payload.channel,
-          source: payload.source,
-          attributes: attrs,
-          metadata: payload.metadata,
-        },
+        name: attrs.name ?? "Unknown",
+        ...(attrs.email !== undefined ? { email: attrs.email } : {}),
+        ...(attrs.phone !== undefined ? { phone: attrs.phone } : {}),
+        ...(attrs.company !== undefined ? { company: attrs.company } : {}),
+        ...(attrs.designation !== undefined ? { designation: attrs.designation } : {}),
+        ...(attrs.city !== undefined ? { city: attrs.city } : {}),
+        leadSource: attrs.leadSource ?? payload.channel,
+        leadStatus: "new",
+        status: "active",
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+        version: 1,
       });
 
-      // Audit trail
+      if (outcome === "inserted") {
+        // Emit crm.lead.captured via outbox. Attributes are omitted — the payload
+        // would otherwise carry contact PII into every downstream topic.
+        await enqueue(tx, {
+          topic: EVENTS.leadCaptured,
+          eventType: EVENTS.leadCaptured,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            contactId,
+            channel: payload.channel,
+            source: payload.source,
+            metadata: payload.metadata,
+          },
+        });
+      }
+
+      // Audit trail — a skipped duplicate is still an audited capture attempt.
       await enqueue(tx, {
         topic: AUDIT_TOPIC,
         eventType: AUDIT_TOPIC,
@@ -95,7 +95,7 @@ export function registerInboundCaptureConsumer(queue: Queue): void {
           action: "inbound_lead_captured",
           resourceType: RESOURCE,
           resourceId: contactId,
-          outcome: "success",
+          outcome: outcome === "inserted" ? "success" : "duplicate_email_skipped",
           metadata: { channel: payload.channel, source: payload.source },
         },
       });

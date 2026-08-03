@@ -34,6 +34,8 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     ownerId: body.ownerId ?? ctx.actorId,
     closeDate: body.closeDate ?? null,
     closedAt: null,
+    closeReason: null,
+    closedValueMinor: null,
     probability: body.probability ?? 0,
     status: "active",
     version: 1,

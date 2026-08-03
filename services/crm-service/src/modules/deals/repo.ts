@@ -62,6 +62,8 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
     ownerId: r.ownerId,
     closeDate: r.closeDate ?? null,
     closedAt: r.closedAt?.toISOString() ?? null,
+    closeReason: r.closeReason ?? null,
+    closedValueMinor: r.closedValueMinor?.toString() ?? null,
     probability: r.probability,
     status: r.status,
     version: r.version,
