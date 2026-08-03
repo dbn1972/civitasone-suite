@@ -2,7 +2,6 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, EmptyState } from "../../../_components/ds";
 import { getPlugins } from "../../../_data/loaders";
 import { PluginsTable } from "../PluginsTable";
-import { PluginActions } from "../PluginActions";
 
 type PluginRow = {
 	id?: string;
@@ -43,10 +42,6 @@ export default async function Page() {
 					<DataSourceBadge source={source} />
 				</div>
 			)}
-
-			<div style={{ marginTop: 12 }}>
-				<PluginActions />
-			</div>
 
 			<div className="card" style={{ marginTop: 18 }}>
 				<div className="card-h">
