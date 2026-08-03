@@ -13,6 +13,9 @@ import { registerIntegrationConsumers } from "./modules/integration/consumer.js"
 import { registerNachReturnConsumers } from "./modules/nach-return/consumer.js";
 import { registerFnfConsumers } from "./modules/fnf/consumer.js";
 import { registerForm16BulkConsumers } from "./modules/form16-pdf/bulk-consumer.js";
+import { registerChallanConsumers } from "./modules/statutory-returns/challan-consumer.js";
+import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
+import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
 
 const log = pino({ name: "payroll-worker" });
@@ -56,6 +59,9 @@ registerIntegrationConsumers(queue);
 registerNachReturnConsumers(queue);
 registerFnfConsumers(queue);
 registerForm16BulkConsumers(queue);
+registerChallanConsumers(queue);
+registerDscConfigConsumers(queue);
+registerSponsorConfigConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

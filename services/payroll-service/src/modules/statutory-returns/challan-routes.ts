@@ -1,15 +1,32 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { payrollTdsChallan, payrollTds, payrollTdsNonSalary } from "../statutory/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import * as challanCommands from "./challan-commands.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
 
 /** YYYY-MM guard. */
 const isPeriod = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}$/.test(v);
+
+const challanBodySchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, "period required (YYYY-MM)"),
+  bsrCode: z.string().regex(/^\d{7}$/, "bsrCode must be a 7-digit RBI BSR code"),
+  challanSerial: z.string().min(1, "challanSerial required"),
+  depositDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "depositDate required (YYYY-MM-DD)"),
+  section: z.string().max(8).optional(),
+  formType: z.enum(["24Q", "26Q"]).optional(),
+  tdsAmount: z.number().finite().nonnegative(),
+  totalAmount: z.number().finite().nonnegative().optional(),
+  interest: z.number().finite().nonnegative().optional(),
+  fee: z.number().finite().nonnegative().optional(),
+});
 
 /**
  * Sum of TDS DEDUCTED (payroll_tds) for a tenant+period, restricted to
@@ -159,22 +176,13 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
    * POST /v1/payroll/statutory/challans
    * Ingest a TDS challan (BSR code, serial, deposit date, amount). CIN is
    * derived (BSR + DDMMYYYY + 5-digit serial) and used as the idempotency key.
+   * CQRS: validate → publish → 202.
    */
   app.post("/v1/payroll/statutory/challans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FILER_ROLES);
 
-    const b = req.body as {
-      period?: string; bsrCode?: string; challanSerial?: string; depositDate?: string;
-      section?: string; formType?: string;
-      tdsAmount?: number; totalAmount?: number; interest?: number; fee?: number;
-    };
-    if (!isPeriod(b.period)) throw new HttpError(400, "VALIDATION_FAILED", "period required (YYYY-MM)");
-    if (!b.bsrCode || !/^\d{7}$/.test(b.bsrCode)) throw new HttpError(400, "VALIDATION_FAILED", "bsrCode must be a 7-digit RBI BSR code");
-    if (!b.challanSerial) throw new HttpError(400, "VALIDATION_FAILED", "challanSerial required");
-    if (!b.depositDate || !/^\d{4}-\d{2}-\d{2}$/.test(b.depositDate)) throw new HttpError(400, "VALIDATION_FAILED", "depositDate required (YYYY-MM-DD)");
-    if (b.tdsAmount == null || b.tdsAmount < 0) throw new HttpError(400, "VALIDATION_FAILED", "tdsAmount (rupees) required");
-
+    const b = challanBodySchema.parse(req.body);
     const formType = b.formType === "26Q" ? "26Q" : "24Q";
     const section = b.section ?? (formType === "26Q" ? "194" : "192");
     // CIN = BSR(7) + DDMMYYYY(8) + serial padded to 5.
@@ -187,35 +195,19 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
     const tdsMinor = paise(b.tdsAmount);
     const totalMinor = b.totalAmount != null ? paise(b.totalAmount) : tdsMinor + paise(b.interest) + paise(b.fee);
 
-    const insertValues = {
-      tenantId: ctx.tenantId,
+    return sendAccepted(reply, acceptedResponseSchema, await challanCommands.ingestChallan(ctx, {
       period: b.period,
-      section,
-      formType,
       bsrCode: b.bsrCode,
       challanSerial: b.challanSerial,
       depositDate: b.depositDate,
-      cin,
-      tdsAmountMinor: tdsMinor,
-      totalAmountMinor: totalMinor,
-      interestMinor: paise(b.interest),
-      feeMinor: paise(b.fee),
-      createdBy: ctx.actorId,
-    } as typeof payrollTdsChallan.$inferInsert;
-
-    const inserted = await db.transaction(async (tx) => {
-      return tx.insert(payrollTdsChallan).values(insertValues)
-        .onConflictDoNothing({ target: [payrollTdsChallan.tenantId, payrollTdsChallan.cin] }).returning();
-    });
-
-    const idempotent = inserted.length === 0;
-    return reply.code(idempotent ? 200 : 201).send({
-      message: idempotent ? "challan already ingested (idempotent)" : "challan ingested",
-      cin,
-      period: b.period,
+      section,
       formType,
+      cin,
       tdsAmountMinor: tdsMinor.toString(),
-    });
+      totalAmountMinor: totalMinor.toString(),
+      interestMinor: paise(b.interest).toString(),
+      feeMinor: paise(b.fee).toString(),
+    }));
   });
 
   /**

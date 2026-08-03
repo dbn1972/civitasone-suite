@@ -8,8 +8,7 @@ import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { renderPdf } from "@civitasone/render";
 import { signPdfWithDsc, DscValidationError } from "@civitasone/render";
 import { loadDsc } from "../dsc-config/loader.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { form16BulkJobs } from "./schema.js";
@@ -171,14 +170,14 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
 
         // Read-side PDF issuance has no entity CRUD; this transaction persists
         // only the mandatory audit outbox record after signing.
-        await db.transaction(async (tx) => {
-          await enqueue(tx, {
-            topic: AUDIT_TOPIC,
-            eventType: AUDIT_TOPIC,
-            tenantId: ctx.tenantId,
-            actorId: ctx.actorId,
-            correlationId: ctx.correlationId,
-            payload: {
+        await queue.publish(AUDIT_TOPIC, {
+          messageId: randomUUID(),
+          type: AUDIT_TOPIC,
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          correlationId: ctx.correlationId,
+          schemaVersion: "1.0",
+          payload: {
               service: "payroll",
               action: "form16_signed",
               resourceType: "form16",
@@ -191,7 +190,6 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
                 sha256Fingerprint: signResult.sha256Fingerprint,
               },
             },
-          });
         });
       } else {
         // No DSC available → re-render with watermark
@@ -204,14 +202,14 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
 
         // Read-side PDF issuance has no entity CRUD; this transaction persists
         // only the mandatory audit outbox record after generation.
-        await db.transaction(async (tx) => {
-          await enqueue(tx, {
-            topic: AUDIT_TOPIC,
-            eventType: AUDIT_TOPIC,
-            tenantId: ctx.tenantId,
-            actorId: ctx.actorId,
-            correlationId: ctx.correlationId,
-            payload: {
+        await queue.publish(AUDIT_TOPIC, {
+          messageId: randomUUID(),
+          type: AUDIT_TOPIC,
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          correlationId: ctx.correlationId,
+          schemaVersion: "1.0",
+          payload: {
               service: "payroll",
               action: "form16_generated_unsigned",
               resourceType: "form16",
@@ -219,7 +217,6 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
               outcome: "success",
               detail: { reason: "no_dsc_configured" },
             },
-          });
         });
       }
 

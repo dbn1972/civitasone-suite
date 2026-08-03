@@ -33,6 +33,13 @@ export const COMMANDS = {
   offCycleCreate:         "payroll.off_cycle.create",
   offCycleProcess:        "payroll.off_cycle.process",
   stateRulesUpsert:       "payroll.state_rules.upsert",
+  // F3 leftover CQRS — challan / dsc / sponsor sync route writes
+  tdsChallanIngest:       "payroll.tds_challan.ingest",
+  dscConfigUpsert:        "payroll.dsc_config.upsert",
+  dscConfigRemove:        "payroll.dsc_config.remove",
+  sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
+  // Read-side audit events previously written via route db.transaction+outbox
+  auditRecord:            "payroll.audit.record",
 } as const;
 
 export const EVENTS = {
@@ -59,6 +66,10 @@ export const EVENTS = {
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",
+  tdsChallanIngested:     "payroll.tds_challan.ingested",
+  dscConfigUpserted:      "payroll.dsc_config.upserted",
+  dscConfigRemoved:       "payroll.dsc_config.removed",
+  sponsorConfigUpserted:  "payroll.sponsor_config.upserted",
 } as const;
 
 export const CONSUMED_EVENTS = {
