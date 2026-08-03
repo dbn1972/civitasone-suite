@@ -4,6 +4,14 @@
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
+import {
+  mapAgentStatuses,
+  mapAuditEntries,
+  mapGovernanceCounters,
+  type AgentStatus,
+  type AuditEntry,
+  type GovernanceCounters,
+} from "./governance/governance";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -89,3 +97,34 @@ export const getAiChat = moduleLoader("/api/v1/ai/chat", "ai.chat");
 export const getAiCopilot = moduleLoader("/api/v1/ai/copilot/turns", "ai.copilot");
 export const getAiAgents = moduleLoader("/api/v1/ai/agents", "ai.agents");
 export const getAiGuardrails = moduleLoader("/api/v1/ai/guardrails/rules", "ai.guardrails");
+
+/** Headline governance counters for the AI governance dashboard (P2-10). */
+export function getAiGovernanceCounters(): Promise<LoaderResult<GovernanceCounters | null>> {
+  return fetchJson<unknown, GovernanceCounters | null>("/api/v1/ai/governance/dashboard", null, {
+    revalidateSeconds: 30,
+    telemetryKey: "ai.governance_dashboard",
+    mapResponse: mapGovernanceCounters,
+  });
+}
+
+/** Audit trail of AI actions, optionally narrowed to blocked actions only. */
+export function getAiGovernanceAudit(opts?: { blocked?: boolean }): Promise<LoaderResult<AuditEntry[]>> {
+  const path =
+    opts?.blocked === undefined
+      ? "/api/v1/ai/governance/audit?limit=100"
+      : `/api/v1/ai/governance/audit?limit=100&blocked=${opts.blocked ? "true" : "false"}`;
+  return fetchJson<unknown, AuditEntry[]>(path, [] as AuditEntry[], {
+    revalidateSeconds: 30,
+    telemetryKey: "ai.governance_audit",
+    mapResponse: mapAuditEntries,
+  });
+}
+
+/** Agent definitions with their lifecycle status, for the kill-switch panel. */
+export function getAiAgentStatuses(): Promise<LoaderResult<AgentStatus[]>> {
+  return fetchJson<unknown, AgentStatus[]>("/api/v1/ai/agents?limit=100", [] as AgentStatus[], {
+    revalidateSeconds: 30,
+    telemetryKey: "ai.agent_statuses",
+    mapResponse: mapAgentStatuses,
+  });
+}

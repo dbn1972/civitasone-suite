@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-08-03T19:25:29.698Z
+Generated: 2026-08-03T19:42:40.727Z
 
-**Summary:** 202 WIRED | 0 MISSING | 0 MISMATCH | 442 NO_LOADER
+**Summary:** 202 WIRED | 0 MISSING | 0 MISMATCH | 443 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -31,6 +31,7 @@ Generated: 2026-08-03T19:25:29.698Z
 | ai | /ai/agents | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/chat | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/copilot | — | — | — | — | — | — NO_LOADER |
+| ai | /ai/governance | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/guardrails | — | — | — | — | — | — NO_LOADER |
 | ai | /ai | — | — | — | — | — | — NO_LOADER |
 | analytics | /analytics/ai-insights | getAnalyticsAiInsights | /api/v1/analytics/ai-insights | analytics → /v1/analytics/ai-insights | ✓ `/v1/analytics/ai-insights` | ✓ | ✅ WIRED |

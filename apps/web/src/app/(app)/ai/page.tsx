@@ -7,6 +7,7 @@ const sections: NavTile[] = [
 	{ title: "Copilot", description: "In-context copilot for document drafting and analysis.", href: "/ai/copilot" },
 	{ title: "Agents", description: "Multi-agent workflows and autonomous task execution.", href: "/ai/agents" },
 	{ title: "Guardrails", description: "Safety policies, content filtering, and governance.", href: "/ai/guardrails" },
+	{ title: "Governance", description: "Model monitoring, AI action audit trail, and agent kill-switch.", href: "/ai/governance" },
 ];
 
 export default function Page() {
