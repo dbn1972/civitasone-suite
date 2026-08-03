@@ -6,14 +6,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { eq, and, ne } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { eq, and } from "drizzle-orm";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
 
-// ── Schema (mirrors migration 0022) ──
 const glSchema = pgSchema("gl");
 
 const fiscalYears = glSchema.table("finance_fiscal_years", {
@@ -42,7 +43,6 @@ const openingBalances = glSchema.table("finance_opening_balances", {
   version: integer("version").notNull().default(1),
 });
 
-// ── Validators ──
 const createFYBody = z.object({
   code: z.string().regex(/^\d{4}-\d{2}$/, "Must be YYYY-YY, e.g. 2026-27"),
   label: z.string().min(2).max(64),
@@ -60,9 +60,7 @@ const openingBalanceBody = z.object({
   })).min(1).max(500),
 });
 
-// ── Routes ──
 export async function fyRoutes(app: FastifyInstance): Promise<void> {
-  // List financial years
   app.get("/v1/finance/fiscal-years", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -70,51 +68,40 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // Create a financial year
   app.post("/v1/finance/fiscal-years", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createFYBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      const inserted = await tx.insert(fiscalYears).values({
-        id, tenantId: ctx.tenantId, code: body.code, label: body.label,
-        startDate: body.startDate, endDate: body.endDate, status: "active",
-        createdBy: ctx.actorId,
-      }).onConflictDoNothing().returning({ id: fiscalYears.id });
-      // A no-op insert means the code already exists for this tenant - surface a
-      // 409 instead of a misleading 201 "created".
-      if (inserted.length === 0) {
-        throw new HttpError(409, "ALREADY_EXISTS", `fiscal year ${body.code} already exists`);
-      }
-      // Only one fiscal year may be active at a time - close every OTHER active
-      // year so a freshly-created (active) year does not leave two active.
-      await tx.update(fiscalYears)
-        .set({ status: "closed" })
-        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.status, "active"), ne(fiscalYears.id, id)));
+    await queue.publish(COMMANDS.fiscalYearCreate, {
+      messageId: id,
+      type: COMMANDS.fiscalYearCreate,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, ...body },
     });
-    return reply.code(201).send({ id, status: "created" });
+    return reply.code(202).send({ id, status: "accepted" });
   });
 
-  // Set a FY as active (close the previous one)
   app.patch("/v1/finance/fiscal-years/:code/activate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const code = (req.params as { code: string }).code;
-    // Deactivate all others
-    await db.transaction(async (tx) => {
-      await tx.update(fiscalYears)
-        .set({ status: "closed" })
-        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.status, "active")));
-      // Activate the target
-      await tx.update(fiscalYears)
-        .set({ status: "active" })
-        .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.code, code)));
+    const id = randomUUID();
+    await queue.publish(COMMANDS.fiscalYearActivate, {
+      messageId: id,
+      type: COMMANDS.fiscalYearActivate,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, code },
     });
-    return reply.send({ status: "activated", code });
+    return reply.code(202).send({ id, status: "accepted", code });
   });
 
-  // List opening balances for a FY
   app.get("/v1/finance/opening-balances/:fyCode", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
@@ -124,28 +111,27 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
-  // Enter opening balances (bulk upsert)
   app.post("/v1/finance/opening-balances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = openingBalanceBody.parse(req.body);
-
-    let inserted = 0;
-    await db.transaction(async (tx) => {
-      for (const entry of body.entries) {
-        await tx.insert(openingBalances).values({
-          id: randomUUID(),
-          tenantId: ctx.tenantId,
-          fyCode: body.fyCode,
-          accountCode: entry.accountCode,
-          debitMinor: BigInt(entry.debitMinor),
-          creditMinor: BigInt(entry.creditMinor),
-          narration: entry.narration ?? null,
-          enteredBy: ctx.actorId,
-        }).onConflictDoNothing();
-        inserted++;
-      }
+    const id = randomUUID();
+    const entries = body.entries.map((e) => ({
+      id: randomUUID(),
+      accountCode: e.accountCode,
+      debitMinor: e.debitMinor,
+      creditMinor: e.creditMinor,
+      narration: e.narration ?? null,
+    }));
+    await queue.publish(COMMANDS.openingBalancesEnter, {
+      messageId: id,
+      type: COMMANDS.openingBalancesEnter,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, fyCode: body.fyCode, entries },
     });
-    return reply.code(201).send({ status: "entered", count: inserted });
+    return reply.code(202).send({ id, status: "accepted", count: entries.length });
   });
 }
