@@ -1,4 +1,3 @@
-// @ts-nocheck — F3 residual verification consumer
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
