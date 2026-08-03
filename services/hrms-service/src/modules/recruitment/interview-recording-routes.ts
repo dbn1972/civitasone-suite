@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Interview recording / transcript with consent + retention (R-RA-0152).
  *
@@ -11,7 +13,6 @@
  * Deleting an artefact soft-deletes the record and asks the storage adapter to
  * remove the object (stubbed until the adapter is wired — logged, never faked).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -60,13 +61,7 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
 
     const rid = randomUUID();
     const retentionUntil = computeRetentionUntil(Date.now(), body.retentionDays ?? DEFAULT_RETENTION_DAYS);
-    await db.transaction((tx) => repo.insertRecording(tx, {
-      id: rid, tenantId: ctx.tenantId, interviewId: id, applicationId: iv.applicationId,
-      kind: body.kind, storageKey: body.storageKey,
-      consentGiven: true, consentReference: body.consentReference ?? null,
-      consentBy: ctx.actorId, consentAt: new Date(),
-      retentionUntil, status: "active", createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "recruitment_interview_recording_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: rid, interviewId: id, kind: body.kind, retentionUntil, status: "active" });
   });
 
@@ -85,7 +80,7 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
     const { id } = idParam.parse(req.params);
     const rec = await repo.findRecording(ctx.tenantId, id);
     if (!rec || rec.status !== "active") throw new HttpError(404, "NOT_FOUND", "active recording not found");
-    const ok = await db.transaction((tx) => repo.softDelete(tx, ctx.tenantId, id, ctx.actorId, rec.version));
+    const ok = await publishF3Write(ctx, "recruitment_interview_recording_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!ok) throw new HttpError(409, "VERSION_CONFLICT", "the recording changed; reload and retry");
     await purgeObjectStub(rec.storageKey, req.log);
     // Honest status: the record is soft-deleted, but the object-store bytes are

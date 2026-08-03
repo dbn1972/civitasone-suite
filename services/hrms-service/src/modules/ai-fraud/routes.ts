@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * AI Fraud Detection API Routes
  * - GET /v1/hrms/ai/alerts — list fraud alerts
@@ -13,7 +15,6 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsFraudAlerts, hrmsEmployeeRiskScores, hrmsRecommendations } from "./schema.js";
 import * as engine from "./detection-engine.js";
-import { randomUUID } from "node:crypto";
 
 const ADMIN_ROLES = ["hr_admin", "super_admin", "audit_admin"];
 
@@ -62,11 +63,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Store alerts
     for (const alert of alerts) {
-      await db.transaction((tx) => tx.insert(hrmsFraudAlerts).values({
-        id: randomUUID(), tenantId: ctx.tenantId, alertType: alert.alertType, severity: alert.severity,
-        employeeId: alert.employeeId, description: alert.description, evidence: alert.evidence,
-        riskScore: String(alert.riskScore), mlModel: alert.mlModel, status: "open",
-      } as any));
+      await publishF3Write(ctx, "ai_fraud_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     }
 
     const duration = Date.now() - startTime;
@@ -102,10 +99,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
         upcomingProbationEnd: [],
       });
       for (const rec of recs) {
-        await db.transaction((tx) => tx.insert(hrmsRecommendations).values({
-          id: randomUUID(), tenantId: ctx.tenantId, employeeId: rec.employeeId ?? null,
-          category: rec.category, title: rec.title, description: rec.description, priority: rec.priority,
-        } as any));
+        await publishF3Write(ctx, "ai_fraud_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       }
       const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50));
       return reply.send({ data: fresh });
@@ -119,8 +113,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ status: z.enum(["investigating", "confirmed", "dismissed", "resolved"]), resolutionNotes: z.string().optional() }).parse(req.body);
-    await db.transaction((tx) => tx.update(hrmsFraudAlerts).set({ status: body.status, resolutionNotes: body.resolutionNotes ?? null, resolvedBy: body.status === "resolved" ? ctx.actorId : null, resolvedAt: body.status === "resolved" ? new Date() : null, updatedAt: new Date() } as any)
-      .where(and(eq(hrmsFraudAlerts.id, id), eq(hrmsFraudAlerts.tenantId, ctx.tenantId))));
+    await publishF3Write(ctx, "ai_fraud_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: body.status });
   });
 

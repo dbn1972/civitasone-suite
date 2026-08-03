@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Assessment management — disposition + reporting (R-RA-0135/0136).
  *
@@ -9,7 +11,6 @@
  * Malpractice and reschedule are irreversible, authorised (senior-role) actions,
  * fully audited. Reports are aggregate only (no candidate identity).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -60,15 +61,7 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     const body = z.object({ reason: z.string().trim().min(5).max(4000), evidence: z.record(z.unknown()).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status === "void") throw new HttpError(409, "ALREADY_VOID", "the attempt is already voided");
-    await db.transaction(async (tx) => {
-      // Malpractice is also a post-publish REVOCATION: clear frozen/published so a
-      // voided result can never continue to surface as an authoritative published one.
-      await attemptRepo.updateAttempt(tx, ctx.tenantId, id, {
-        status: "void", disposition: "malpractice", dispositionReason: body.reason, dispositionBy: ctx.actorId, dispositionAt: new Date(),
-        result: "not_qualified", frozen: false, published: false, updatedBy: ctx.actorId,
-      }, a.version);
-      await resultRepo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "malpractice", detail: { reason: body.reason, ...(body.evidence ? { evidence: body.evidence } : {}) }, actorId: ctx.actorId });
-    });
+    await publishF3Write(ctx, "recruitment_report_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ attemptId: id, status: "void", disposition: "malpractice" });
   });
 
@@ -96,19 +89,7 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     const newId = randomUUID();
     const order = randomizeQuestionOrder(paperIds, newId);
     try {
-      await db.transaction(async (tx) => {
-        // Void the original first so the partial unique frees the candidate's slot.
-        await attemptRepo.updateAttempt(tx, ctx.tenantId, id, {
-          status: "void", disposition: body.type, dispositionReason: body.reason, dispositionBy: ctx.actorId, dispositionAt: new Date(),
-          supersededBy: newId, updatedBy: ctx.actorId,
-        }, a.version);
-        await attemptRepo.insertAttempt(tx, {
-          id: newId, tenantId: ctx.tenantId, scheduleId: targetScheduleId, blueprintId: target.blueprintId,
-          candidateId: a.candidateId, applicationId: a.applicationId ?? null, status: "assigned",
-          accommodation: a.accommodation as never, questionOrder: order as never, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        });
-        await resultRepo.insertResultEvent(tx, { tenantId: ctx.tenantId, attemptId: id, action: "reschedule", detail: { type: body.type, reason: body.reason, newAttemptId: newId, targetScheduleId }, actorId: ctx.actorId });
-      });
+      await publishF3Write(ctx, "recruitment_report_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // Candidate already holds an active attempt on the target schedule.
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ALREADY_SCHEDULED", "the candidate already has an active attempt on the target schedule");

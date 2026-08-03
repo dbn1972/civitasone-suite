@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Employee nominees (T04) + addresses (T05) CRUD.
  *
@@ -6,7 +8,6 @@
  *   POST /v1/hrms/employees/:id/addresses       add an address
  *   GET  /v1/hrms/employees/:id/addresses       list addresses (current first)
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
@@ -32,13 +33,7 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
       purpose: z.enum(["general", "gpf", "pension", "gratuity", "insurance"]).default("general"),
     }).parse(req.body);
     const nid = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsEmployeeNominees).values({
-      id: nid, tenantId: ctx.tenantId, employeeId: id,
-      name: body.name, relationship: body.relationship, purpose: body.purpose,
-      dateOfBirth: body.dateOfBirth ?? null, sharePercent: body.sharePercent ?? null,
-      contactPhone: body.contactPhone ?? null,
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "employee_nominee_address_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: nid, employeeId: id });
   });
 
@@ -68,13 +63,7 @@ export async function nomineeAddressRoutes(app: FastifyInstance): Promise<void> 
       effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }).parse(req.body);
     const aid = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsEmployeeAddresses).values({
-      id: aid, tenantId: ctx.tenantId, employeeId: id,
-      addressType: body.addressType, line1: body.line1, line2: body.line2 ?? null,
-      city: body.city ?? null, state: body.state ?? null, pincode: body.pincode ?? null,
-      country: body.country, isCurrent: body.isCurrent, effectiveFrom: body.effectiveFrom ?? null,
-      createdBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "employee_nominee_address_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: aid, employeeId: id });
   });
 

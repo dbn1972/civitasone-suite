@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Candidate interview self-service — confirm / request reschedule (R-RA-0143).
  *
@@ -15,7 +17,6 @@
  * via the R-RA-0142 interview-comms endpoint (a reschedule comm), not duplicated
  * here — this route owns the request lifecycle + the schedule change only.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -57,15 +58,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await db.transaction((tx) => repo.insertResponse(tx, {
-        id: rid, tenantId: ctx.tenantId, interviewId: id, applicationId: iv.applicationId,
-        responseType: body.type, status: initialStatus(body.type as ResponseType),
-        preferredDate: body.type === "reschedule_request" ? body.preferredDate! : null,
-        preferredTime: body.type === "reschedule_request" ? body.preferredTime! : null,
-        reason: body.reason ?? null,
-        fromDate: iv.scheduledDate as unknown as string, fromTime: iv.scheduledTime,
-        createdBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_interview_response_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "RESCHEDULE_PENDING", "a reschedule request is already pending for this interview");
@@ -97,13 +90,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     if (!canCommunicate(iv.status)) throw new HttpError(409, "INTERVIEW_NOT_COMMABLE", `the interview is '${iv.status}'; it cannot be rescheduled`);
 
     try {
-      await db.transaction(async (tx) => {
-        const ok = await ivRepo.rescheduleInterview(tx, ctx.tenantId, r.interviewId, preferredDate, r.preferredTime!, ctx.actorId, iv.version);
-        if (!ok) throw new Error("VERSION_CONFLICT");
-        await repo.setResponseStatus(tx, ctx.tenantId, reqId, {
-          status: "approved", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-        }, r.version);
-      });
+      await publishF3Write(ctx, "recruitment_interview_response_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
       throw err;
@@ -123,9 +110,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     if (!isDecidable(r.status)) throw new HttpError(409, "NOT_PENDING", `request is '${r.status}', not pending`);
 
     try {
-      await db.transaction((tx) => repo.setResponseStatus(tx, ctx.tenantId, reqId, {
-        status: "declined", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-      }, r.version));
+      await publishF3Write(ctx, "recruitment_interview_response_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Consultant / Invoice module (DIC Phase 3).
  *
@@ -16,7 +18,6 @@
  * Finance AP. Two-person control: the approver must differ from the verifier.
  * Money in paise (bigint).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -97,21 +98,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
       // Wrap in a transaction so the tenant-GUC (app.tenant_id) is set for the
       // INSERT — RLS uses the USING clause as the WITH CHECK and would reject an
       // unscoped write. All the status-transition writes below do the same.
-      await db.transaction((tx) => repo.insertInvoice(tx, {
-        id: invId, tenantId: ctx.tenantId, consultantId: id,
-        invoiceNo: body.invoiceNo, invoiceDate: body.invoiceDate,
-        ...(body.periodFrom ? { periodFrom: body.periodFrom } : {}),
-        ...(body.periodTo ? { periodTo: body.periodTo } : {}),
-        ...(body.description ? { description: body.description } : {}),
-        grossMinor: BigInt(body.grossMinor),
-        gstApplicable: body.gstApplicable, gstRateBps: body.gstRateBps,
-        tdsRateBps: body.tdsRateBps,
-        gstin: body.gstin ?? (emp.gstin as string | undefined) ?? null,
-        sacCode: body.sacCode ?? (emp.sacCode as string | undefined) ?? null,
-        status: "submitted",
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "consultant_invoice_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // Unique (tenant, consultant, invoice_no) — duplicate submission.
       if (String((err as { code?: string }).code) === "23505") {
@@ -153,11 +140,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const { invId } = invParam.parse(req.params);
     const inv = await mustInvoice(ctx.tenantId, invId);
     if (inv.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', not submitted`);
-    await db.transaction(async (tx) => {
-      await repo.updateInvoice(tx, ctx.tenantId, invId, {
-        status: "verified", verifiedBy: ctx.actorId, verifiedAt: new Date(), updatedBy: ctx.actorId,
-      }, inv.version);
-    });
+    await publishF3Write(ctx, "consultant_invoice_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: invId, status: "verified" }));
   });
 
@@ -185,37 +168,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const fy = financialYearWindow(inv.invoiceDate as unknown as string);
 
     let tax = { gstMinor: 0n, tdsMinor: 0n, netPayableMinor: inv.grossMinor, tdsApplied: false };
-    await db.transaction(async (tx) => {
-      // Serialize approvals for the same consultant so two concurrent approvals
-      // can't each read a pre-crossing YTD total and both under-withhold 194J.
-      await repo.lockConsultantForInvoicing(tx, ctx.tenantId, inv.consultantId);
-      const ytd = await repo.ytdApprovedGrossTx(tx, ctx.tenantId, inv.consultantId, fy.from, fy.to, inv.id);
-      tax = computeInvoiceTax({
-        grossMinor: inv.grossMinor,
-        gstApplicable: inv.gstApplicable, gstRateBps,
-        tdsRateBps, tdsThresholdMinor: TDS_194J_THRESHOLD_MINOR,
-        ytdGrossMinor: ytd,
-      });
-      await repo.updateInvoice(tx, ctx.tenantId, invId, {
-        status: "approved",
-        gstRateBps, tdsRateBps,
-        gstMinor: tax.gstMinor, tdsMinor: tax.tdsMinor, netPayableMinor: tax.netPayableMinor,
-        approvedBy: ctx.actorId, approvedAt: new Date(),
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, inv.version);
-      // Finance AP: an approved consultant invoice is a payable (194J TDS credit).
-      await enqueue(tx, {
-        topic: EVENTS.consultantInvoiceApproved, eventType: EVENTS.consultantInvoiceApproved,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          invoiceId: invId, consultantId: inv.consultantId, invoiceNo: inv.invoiceNo,
-          grossMinor: inv.grossMinor.toString(), gstMinor: tax.gstMinor.toString(),
-          tdsSection: inv.tdsSection, tdsMinor: tax.tdsMinor.toString(),
-          netPayableMinor: tax.netPayableMinor.toString(), gstin: inv.gstin, sacCode: inv.sacCode,
-        },
-      });
-    });
+    await publishF3Write(ctx, "consultant_invoice_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: invId, status: "approved",
       grossMinor: inv.grossMinor, gstMinor: tax.gstMinor, tdsMinor: tax.tdsMinor,
@@ -233,13 +186,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     if (inv.status !== "submitted" && inv.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', cannot reject`);
     }
-    await db.transaction(async (tx) => {
-      await repo.updateInvoice(tx, ctx.tenantId, invId, {
-        status: "rejected",
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, inv.version);
-    });
+    await publishF3Write(ctx, "consultant_invoice_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: invId, status: "rejected" }));
   });
 
@@ -251,19 +198,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const inv = await mustInvoice(ctx.tenantId, invId);
     if (inv.status !== "approved") throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', not approved`);
-    await db.transaction(async (tx) => {
-      await repo.updateInvoice(tx, ctx.tenantId, invId, {
-        status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
-      }, inv.version);
-      await enqueue(tx, {
-        topic: EVENTS.consultantInvoicePaid, eventType: EVENTS.consultantInvoicePaid,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          invoiceId: invId, consultantId: inv.consultantId, invoiceNo: inv.invoiceNo,
-          netPayableMinor: inv.netPayableMinor.toString(), paymentRef: body.paymentRef,
-        },
-      });
-    });
+    await publishF3Write(ctx, "consultant_invoice_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: invId, status: "paid", paymentRef: body.paymentRef }));
   });
 

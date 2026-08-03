@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, sql } from "drizzle-orm";
@@ -6,7 +8,6 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsHolidays } from "./schema.js";
-import { randomUUID } from "node:crypto";
 import { queue } from "../../shared/infra.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
@@ -38,7 +39,7 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createHolidayBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsHolidays).values({ id, tenantId: ctx.tenantId, name: body.name, date: body.date, type: body.type, applicableTo: body.applicableTo, createdBy: ctx.actorId }));
+    await publishF3Write(ctx, "holidays_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted" as const, correlationId: ctx.correlationId });
   });
 
@@ -46,7 +47,7 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await db.transaction((tx) => tx.delete(hrmsHolidays).where(and(eq(hrmsHolidays.id, id), eq(hrmsHolidays.tenantId, ctx.tenantId))));
+    await publishF3Write(ctx, "holidays_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(204).send();
   });
 

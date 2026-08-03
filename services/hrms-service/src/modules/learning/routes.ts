@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -23,11 +24,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createCourseBody.parse(req.body);
     const id = randomUUID();
-    const row = await db.transaction((tx) => repo.insertCourse(tx, {
-      id, tenantId: ctx.tenantId, code: body.code, title: body.title,
-      description: body.description ?? null, category: body.category,
-      creditHours: String(body.creditHours), status: "draft", createdBy: ctx.actorId,
-    }));
+    const row = await publishF3Write(ctx, "learning_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: row.id, code: row.code, status: row.status });
   });
 
@@ -58,7 +55,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
-    const row = await db.transaction((tx) => repo.publishCourse(tx, ctx.tenantId, id));
+    const row = await publishF3Write(ctx, "learning_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft course can be published");
     return reply.send({ id, status: row.status });
   });
@@ -73,9 +70,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     if (body.prerequisiteCourseId === id) throw new HttpError(409, "INVALID_PREREQ", "a course cannot be its own prerequisite");
     const prereq = await repo.getCourse(ctx.tenantId, body.prerequisiteCourseId);
     if (!prereq) throw new HttpError(404, "NOT_FOUND", "prerequisite course not found");
-    await db.transaction((tx) => repo.insertPrerequisite(tx, {
-      tenantId: ctx.tenantId, courseId: id, prerequisiteCourseId: body.prerequisiteCourseId,
-    }));
+    await publishF3Write(ctx, "learning_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ courseId: id, prerequisiteCourseId: body.prerequisiteCourseId });
   });
 
@@ -87,9 +82,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const body = createModuleBody.parse(req.body);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
-    const row = await db.transaction((tx) => repo.insertModule(tx, {
-      id: randomUUID(), tenantId: ctx.tenantId, courseId: id, title: body.title, sequence: body.sequence,
-    }));
+    const row = await publishF3Write(ctx, "learning_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: row.id, courseId: id, sequence: row.sequence });
   });
 
@@ -100,11 +93,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const body = createLessonBody.parse(req.body);
     const mod = await repo.getModule(ctx.tenantId, id);
     if (!mod) throw new HttpError(404, "NOT_FOUND", "module not found");
-    const row = await db.transaction((tx) => repo.insertLesson(tx, {
-      id: randomUUID(), tenantId: ctx.tenantId, moduleId: id, courseId: mod.courseId,
-      title: body.title, sequence: body.sequence, contentType: body.contentType,
-      contentUri: body.contentUri ?? null, durationMins: body.durationMins,
-    }));
+    const row = await publishF3Write(ctx, "learning_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: row.id, moduleId: id, contentType: row.contentType });
   });
 
@@ -129,9 +118,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     }
     const existing = await repo.getEnrollment(ctx.tenantId, id, body.employeeId);
     if (existing) return reply.code(200).send({ id: existing.id, status: existing.status, progressPct: existing.progressPct });
-    const row = await db.transaction((tx) => repo.insertEnrollment(tx, {
-      id: randomUUID(), tenantId: ctx.tenantId, courseId: id, employeeId: body.employeeId, status: "enrolled", progressPct: 0,
-    }));
+    const row = await publishF3Write(ctx, "learning_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     if (!row) {
       // Lost the race — a concurrent enrolment already created the row.
       const again = await repo.getEnrollment(ctx.tenantId, id, body.employeeId);
@@ -150,20 +137,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const enrollment = await repo.getEnrollment(ctx.tenantId, lesson.courseId, body.employeeId);
     if (!enrollment) throw new HttpError(409, "NOT_ENROLLED", "employee is not enrolled in this course");
 
-    const result = await db.transaction(async (tx) => {
-      await repo.upsertLessonProgress(tx, {
-        tenantId: ctx.tenantId, enrollmentId: enrollment.id, lessonId: id,
-        status: body.status, completedAt: body.status === "completed" ? new Date() : null,
-      });
-      const allLessons = await repo.listLessonsByCourseTx(tx, ctx.tenantId, lesson.courseId);
-      const done = await repo.completedLessonIdsTx(tx, ctx.tenantId, enrollment.id);
-      const doneSet = new Set(done);
-      const progressPct = computeProgress(allLessons.length, doneSet.size);
-      const status = deriveEnrollmentStatus(progressPct);
-      const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
-      const completedAt = status === "completed" ? new Date() : null;
-      return repo.updateEnrollmentProgress(tx, ctx.tenantId, enrollment.id, { progressPct, status, resumeLessonId, completedAt });
-    });
+    const result = await publishF3Write(ctx, "learning_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({
       enrollmentId: enrollment.id, progressPct: result!.progressPct,
       status: result!.status, resumeLessonId: result!.resumeLessonId,

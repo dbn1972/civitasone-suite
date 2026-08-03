@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Board-decision HR intake — human-triage inbox for `meeting.decision.hr`.
  *
@@ -52,14 +54,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
 
-    await db.transaction(async (tx) => {
-      await repo.review(tx, ctx.tenantId, id, "accepted", ctx.actorId, body.note ?? null, row.version);
-      // TODO(choreography): this is the controlled hand-off point. A competent HR
-      // officer has accepted the board decision for action — invoke the normal
-      // create-flow here (e.g. raise a transfer/promotion/disciplinary order via
-      // the module's own command). Intentionally NOT auto-executed: the officer
-      // drives the real order through the service's existing validated route.
-    });
+    await publishF3Write(ctx, "board_intake_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ id, status: "accepted", reviewedBy: ctx.actorId });
   });
@@ -75,9 +70,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "NOT_PENDING", `intake item is '${row.status}', not pending_review`);
     }
 
-    await db.transaction(async (tx) => {
-      await repo.review(tx, ctx.tenantId, id, "rejected", ctx.actorId, body.note, row.version);
-    });
+    await publishF3Write(ctx, "board_intake_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ id, status: "rejected", reviewedBy: ctx.actorId });
   });

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -50,19 +51,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const body = fileRtiBody.parse(req.body);
     const id = randomUUID();
     const dueDate = addDays(body.receivedDate, body.slaDays);
-    await db.transaction(async (tx) => {
-      await repo.insertRti(tx, {
-        id, tenantId: ctx.tenantId, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-        referenceNo: body.referenceNo,
-        applicantName: body.applicantName,
-        applicantContact: body.applicantContact ?? null,
-        subject: body.subject,
-        requestText: body.requestText,
-        receivedDate: body.receivedDate,
-        dueDate,
-        status: "filed",
-      });
-    });
+    await publishF3Write(ctx, "rti_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "filed", dueDate });
   });
 

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Disciplinary / Vigilance (CCS (CCA) Rules) module.
  *
@@ -22,7 +24,6 @@
  * append-only event log. A suspension with pay_suspended=true is surfaced by
  * the payroll-input projection.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -67,13 +68,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       c.status as CaseStatus, action, c.proceedingType as "minor" | "major");
     if (!check.ok || !check.to) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
     const to: CaseStatus = check.to;
-    await db.transaction(async (tx) => {
-      await repo.updateCase(tx, c.tenantId, c.id, { ...patch, status: to, updatedBy: actorId }, c.version);
-      await repo.appendEvent(tx, {
-        tenantId: c.tenantId, caseId: c.id, fromStatus: c.status, toStatus: to,
-        action, notes, actorId,
-      });
-    });
+    await publishF3Write(ctx, "disciplinary_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return to;
   }
 
@@ -89,18 +84,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     await mustEmployee(ctx.tenantId, id);
     const caseId = randomUUID();
-    await db.transaction(async (tx) => {
-      await repo.insertCase(tx, {
-        id: caseId, tenantId: ctx.tenantId, employeeId: id,
-        caseNo: body.caseNo, proceedingType: body.proceedingType,
-        status: "opened", allegation: body.allegation,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      });
-      await repo.appendEvent(tx, {
-        tenantId: ctx.tenantId, caseId, fromStatus: null, toStatus: "opened",
-        action: "open", notes: null, actorId: ctx.actorId,
-      });
-    });
+    await publishF3Write(ctx, "disciplinary_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo });
   });
 
@@ -351,13 +335,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const s = await repo.findSuspension(ctx.tenantId, suspId);
     if (!s) throw new HttpError(404, "NOT_FOUND", "suspension not found");
     if (s.status !== "active") throw new HttpError(409, "WRONG_STATE", `suspension is '${s.status}', not active`);
-    await db.transaction(async (tx) => {
-      await repo.updateSuspension(tx, ctx.tenantId, suspId, {
-        status: "revoked", paySuspended: false, revokedDate: body.revokedDate,
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        updatedBy: ctx.actorId,
-      }, s.version);
-    });
+    await publishF3Write(ctx, "disciplinary_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id: suspId, status: "revoked" });
   });
 

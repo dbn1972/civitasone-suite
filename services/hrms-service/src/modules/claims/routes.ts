@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * LTC and CEA claim modules (submit -> approve, with ceiling enforcement).
  *
@@ -18,7 +20,6 @@
  * Money in paise (bigint). On approval the approved amount is the lesser of the
  * claimed amount and the applicable ceiling (entitlement / remaining annual cap).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
@@ -115,14 +116,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     // Ceiling enforcement: approved fare cannot exceed the entitlement.
     const approved = bmin(c.claimedFareMinor, c.entitlementMinor);
-    await db.transaction(async (tx) => {
-      await repo.updateLtc(tx, ctx.tenantId, claimId, {
-        status: "approved", approvedFareMinor: approved,
-        decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedFareMinor: c.claimedFareMinor,
       entitlementMinor: c.entitlementMinor, approvedFareMinor: approved,
@@ -137,13 +131,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustLtc(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await db.transaction(async (tx) => {
-      await repo.updateLtc(tx, ctx.tenantId, claimId, {
-        status: "rejected", decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
   });
 
@@ -218,14 +206,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
     const remaining = c.annualCapMinor - otherCommitted;
     const approved = remaining <= 0n ? 0n : bmin(c.claimedAmountMinor, remaining);
-    await db.transaction(async (tx) => {
-      await repo.updateCea(tx, ctx.tenantId, claimId, {
-        status: "approved", approvedAmountMinor: approved,
-        decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedAmountMinor: c.claimedAmountMinor,
       annualCapMinor: c.annualCapMinor, approvedAmountMinor: approved,
@@ -240,13 +221,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCea(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
-    await db.transaction(async (tx) => {
-      await repo.updateCea(tx, ctx.tenantId, claimId, {
-        status: "rejected", decidedAt: new Date(), decidedBy: ctx.actorId,
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, c.version);
-    });
+    await publishF3Write(ctx, "claims_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: claimId, status: "rejected" }));
   });
 

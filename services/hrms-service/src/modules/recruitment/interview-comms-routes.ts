@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Interview communications lifecycle (checklist R-RA-0142).
  *
@@ -10,7 +12,6 @@
  * honestly marked. A reschedule updates the interview's date/time and a cancel
  * marks it cancelled, both under an optimistic-version guard.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -68,30 +69,7 @@ export async function interviewCommsRoutes(app: FastifyInstance): Promise<void> 
     const commId = randomUUID();
 
     try {
-      await db.transaction(async (tx) => {
-        if (body.type === "reschedule") {
-          const ok = await repo.rescheduleInterview(tx, ctx.tenantId, id, body.newDate!, body.newTime!, ctx.actorId, iv.version);
-          if (!ok) throw new Error("VERSION_CONFLICT");
-        } else if (body.type === "cancel") {
-          const ok = await repo.cancelInterview(tx, ctx.tenantId, id, iv.version);
-          if (!ok) throw new Error("VERSION_CONFLICT");
-        }
-        await repo.insertComm(tx, {
-          id: commId, tenantId: ctx.tenantId, interviewId: id, applicationId: iv.applicationId,
-          commType: body.type, channel, status, message,
-          scheduledFor: body.type === "reschedule" ? new Date(`${body.newDate!}T${body.newTime!}:00Z`) : null,
-          idempotencyKey: idempotencyKey ?? null,
-          createdBy: ctx.actorId,
-        });
-        // Real dispatch only when the flag is on — queued to the outbox relay.
-        if (status === "queued") {
-          await enqueue(tx, {
-            topic: EVENTS.interviewCommDispatch, eventType: EVENTS.interviewCommDispatch,
-            tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-            payload: { commId, interviewId: id, applicationId: iv.applicationId, type: body.type, channel },
-          });
-        }
-      });
+      await publishF3Write(ctx, "recruitment_interview_comms_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview changed; reload and retry");
       // Concurrent request with the same idempotency key won the race.

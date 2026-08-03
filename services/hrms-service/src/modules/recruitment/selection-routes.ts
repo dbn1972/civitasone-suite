@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Selection & offer — selection list + waitlist (R-RA-0153).
  *
@@ -12,7 +14,6 @@
  * Entries are only editable while draft; a list is approved by an INDEPENDENT
  * senior user (not its creator) with a future validity period, then published.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -43,10 +44,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     const { id: jobOpeningId } = idParam.parse(req.params);
     const body = z.object({ title: z.string().min(1).max(256), vacancies: z.coerce.number().int().min(1) }).parse(req.body);
     const listId = randomUUID();
-    await db.transaction((tx) => repo.insertList(tx, {
-      id: listId, tenantId: ctx.tenantId, jobOpeningId, title: body.title, vacancies: body.vacancies,
-      status: "draft", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "recruitment_selection_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: listId, jobOpeningId, status: "draft", vacancies: body.vacancies });
   });
 
@@ -72,15 +70,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     if (errors.length > 0) throw new HttpError(422, "INVALID_ENTRIES", errors.join("; "));
 
     try {
-      await db.transaction(async (tx) => {
-        await repo.setEntries(tx, ctx.tenantId, id, body.entries.map((e) => ({
-          tenantId: ctx.tenantId, listId: id, applicationId: e.applicationId, candidateName: e.candidateName,
-          category: e.category, rank: e.rank, score: e.score != null ? String(e.score) : null, remarks: e.remarks ?? null,
-        })));
-        // Record who authored the ranking (for SoD against the approver) and bump
-        // the version so a concurrent approve binds to this exact roster.
-        await repo.updateList(tx, ctx.tenantId, id, { entriesSetBy: ctx.actorId, entriesSetAt: new Date(), updatedBy: ctx.actorId }, list.version);
-      });
+      await publishF3Write(ctx, "recruitment_selection_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       // A concurrent set-entries (double-submit / retry) can collide on the DB
       // unique index after its own DELETE affected 0 rows — surface it cleanly.
@@ -113,9 +103,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     if (errors.length > 0) throw new HttpError(422, "INVALID_ENTRIES", errors.join("; "));
 
     const validUntil = new Date(body.validUntil).toISOString().slice(0, 10);
-    await db.transaction((tx) => repo.updateList(tx, ctx.tenantId, id, {
-      status: "approved", validityUntil: validUntil, approvedBy: ctx.actorId, approvedAt: new Date(), updatedBy: ctx.actorId,
-    }, list.version));
+    await publishF3Write(ctx, "recruitment_selection_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "approved", validityUntil: validUntil });
   });
 
@@ -126,7 +114,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const list = await mustList(ctx.tenantId, id);
     if (list.status !== "approved") throw new HttpError(409, "NOT_APPROVED", "only an approved list can be published");
-    await db.transaction((tx) => repo.updateList(tx, ctx.tenantId, id, { status: "published", publishedAt: new Date(), updatedBy: ctx.actorId }, list.version));
+    await publishF3Write(ctx, "recruitment_selection_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "published" });
   });
 
@@ -137,7 +125,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const list = await mustList(ctx.tenantId, id);
     if (list.status === "expired" || list.status === "draft") throw new HttpError(409, "INVALID_STATE", `a ${list.status} list cannot be expired`);
-    await db.transaction((tx) => repo.updateList(tx, ctx.tenantId, id, { status: "expired", updatedBy: ctx.actorId }, list.version));
+    await publishF3Write(ctx, "recruitment_selection_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "expired" });
   });
 

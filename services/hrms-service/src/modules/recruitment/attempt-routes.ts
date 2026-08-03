@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Assessment management — runtime: scheduling, attempts, delivery, auto-save and
  * auto-evaluation (R-RA-0124/0126/0127/0129/0130/0131).
@@ -21,7 +23,6 @@
  * delivery/recovery endpoint. Result is computed but only becomes publishable
  * after the authorised freeze (R-RA-0134, part C).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -117,12 +118,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertSchedule(tx, {
-      id, tenantId: ctx.tenantId, blueprintId: body.blueprintId, title: body.title, mode: body.mode,
-      windowStart: new Date(body.windowStart), windowEnd: new Date(body.windowEnd),
-      slots: body.slots as never, paper: paper as never, totalMarks, status: "scheduled",
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "recruitment_attempt_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "scheduled", totalMarks, questions: paper.length });
   });
 
@@ -133,7 +129,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
       const { id } = idParam.parse(req.params);
       const s = await mustSchedule(ctx.tenantId, id);
       if (!(from as readonly string[]).includes(s.status)) throw new HttpError(409, "INVALID_STATE", `cannot ${action} a schedule in status "${s.status}"`);
-      await db.transaction((tx) => repo.updateSchedule(tx, ctx.tenantId, id, { status: to, updatedBy: ctx.actorId }, s.version));
+      await publishF3Write(ctx, "recruitment_attempt_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       return reply.send({ id, status: to });
     });
   }
@@ -175,12 +171,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const paperIds = (s.paper as PaperEntry[]).map((p) => p.questionId);
     const order = randomizeQuestionOrder(paperIds, attemptId); // per-candidate deterministic order
     try {
-      await db.transaction((tx) => repo.insertAttempt(tx, {
-        id: attemptId, tenantId: ctx.tenantId, scheduleId: id, blueprintId: s.blueprintId,
-        candidateId: body.candidateId, applicationId: body.applicationId ?? null, slotLabel: body.slotLabel ?? null,
-        status: "assigned", accommodation: (body.accommodation ?? {}) as never, questionOrder: order as never,
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_attempt_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_ATTEMPT", "this candidate already has an attempt for this schedule");
       throw e;
@@ -196,7 +187,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ extraTimePct: z.coerce.number().min(0).max(200), notes: z.string().max(2000).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status !== "assigned") throw new HttpError(409, "ALREADY_STARTED", "accommodation must be set before the attempt starts");
-    await db.transaction((tx) => repo.updateAttempt(tx, ctx.tenantId, id, { accommodation: { extraTimePct: body.extraTimePct, notes: body.notes ?? null } as never, updatedBy: ctx.actorId }, a.version));
+    await publishF3Write(ctx, "recruitment_attempt_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, accommodation: { extraTimePct: body.extraTimePct } });
   });
 
@@ -208,9 +199,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ method: z.string().min(1).max(32), meta: z.record(z.unknown()).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status !== "assigned" && a.status !== "in_progress") throw new HttpError(409, "INVALID_STATE", `cannot verify identity in status "${a.status}"`);
-    await db.transaction((tx) => repo.updateAttempt(tx, ctx.tenantId, id, {
-      identityVerified: true, identityMethod: body.method, identityMeta: (body.meta ?? {}) as never, identityVerifiedAt: new Date(), updatedBy: ctx.actorId,
-    }, a.version));
+    await publishF3Write(ctx, "recruitment_attempt_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, identityVerified: true });
   });
 
@@ -231,7 +220,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const durationMinutes = blueprint?.durationMinutes ?? 60;
     const extraPct = Number((a.accommodation as { extraTimePct?: number })?.extraTimePct ?? 0);
     const deadline = new Date(attemptDeadline(now, durationMinutes, extraPct, s.windowEnd.getTime()));
-    await db.transaction((tx) => repo.updateAttempt(tx, ctx.tenantId, id, { status: "in_progress", startedAt: new Date(now), deadlineAt: deadline, updatedBy: ctx.actorId }, a.version));
+    await publishF3Write(ctx, "recruitment_attempt_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id, status: "in_progress", deadlineAt: deadline }));
   });
 
@@ -263,12 +252,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const allowed = new Set((a.questionOrder as string[]));
     for (const r of body.responses) if (!allowed.has(r.questionId)) throw new HttpError(422, "UNKNOWN_QUESTION", `question ${r.questionId} is not part of this attempt`);
 
-    await db.transaction(async (tx) => {
-      for (const r of body.responses) {
-        await repo.saveResponse(tx, { tenantId: ctx.tenantId, attemptId: id, questionId: r.questionId, response: r.response as never });
-      }
-      await repo.updateAttempt(tx, ctx.tenantId, id, { lastSavedAt: new Date(), updatedBy: ctx.actorId }, a.version);
-    });
+    await publishF3Write(ctx, "recruitment_attempt_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, saved: body.responses.length, lastSavedAt: new Date().toISOString() });
   });
 
@@ -311,20 +295,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     }
     const result = computeAttemptResult(paper, scored, { ...(scoring.totalCutoffPct != null ? { totalCutoffPct: scoring.totalCutoffPct } : {}), sections: scoring.sections ?? [] });
 
-    await db.transaction(async (tx) => {
-      for (const entry of paper) {
-        const sc = scored.get(entry.questionId)!;
-        if (sc.auto && respByQ.has(entry.questionId)) {
-          await repo.updateResponseScore(tx, ctx.tenantId, id, entry.questionId, sc.score, sc.isCorrect);
-        }
-      }
-      await repo.updateAttempt(tx, ctx.tenantId, id, {
-        status: "evaluated", submittedAt: new Date(), evaluatedAt: new Date(),
-        totalScore: String(result.totalScore), maxScore: String(result.maxScore),
-        sectionScores: result.sectionScores as never, needsManualEval: result.needsManualEval, result: result.result,
-        updatedBy: ctx.actorId,
-      }, a.version);
-    });
+    await publishF3Write(ctx, "recruitment_attempt_routes__7", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id, status: "evaluated", totalScore: result.totalScore, maxScore: result.maxScore,
       result: result.result, needsManualEval: result.needsManualEval,

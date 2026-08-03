@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * OTP verification for candidate applications (DEF-RC-003 / R-RA-0077).
  *
@@ -9,7 +11,6 @@
  * the DB and returned in the response body (dev/test mode only — never in prod).
  * A real adapter will send the code via the notification service and NOT echo it.
  */
-import { randomUUID, randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -38,10 +39,7 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
     const code = generateOtp(randomBytes);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
     const cid = randomUUID();
-    await db.transaction((tx) => repo.insertChallenge(tx, {
-      id: cid, tenantId: ctx.tenantId, candidateId: id, channel: body.channel,
-      code, expiresAt,
-    }));
+    await publishF3Write(ctx, "recruitment_otp_verify_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     // In dev/test (no delivery adapter), echo the code. In production the
     // notification service sends it. The adapter seam is NOT built here —
@@ -69,11 +67,11 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
 
     const result = verifyOtp(challenge, body.code, Date.now());
     if (!result.valid) {
-      await db.transaction((tx) => repo.incrementAttempts(tx, ctx.tenantId, challenge.id));
+      await publishF3Write(ctx, "recruitment_otp_verify_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       throw new HttpError(422, "OTP_INVALID", result.reason ?? "invalid code");
     }
 
-    await db.transaction((tx) => repo.markVerified(tx, ctx.tenantId, challenge.id, id, body.channel));
+    await publishF3Write(ctx, "recruitment_otp_verify_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ candidateId: id, channel: body.channel, verified: true });
   });
 

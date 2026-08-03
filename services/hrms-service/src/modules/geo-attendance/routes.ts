@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
@@ -5,7 +7,6 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
-import { randomUUID } from "node:crypto";
 
 const ALL_ROLES = ["super_admin", "admin", "hr_admin", "hr_officer", "officer", "employee"];
 const HR_ROLES = ["super_admin", "admin", "hr_admin"];
@@ -43,7 +44,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = z.object({ name: z.string().min(1), address: z.string().optional(), latitude: z.number(), longitude: z.number(), radiusMeters: z.number().int().min(50).max(5000).default(200) }).parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsOfficeLocations).values({ id, tenantId: ctx.tenantId, name: body.name, address: body.address ?? null, latitude: body.latitude, longitude: body.longitude, radiusMeters: body.radiusMeters, createdBy: ctx.actorId }));
+    await publishF3Write(ctx, "geo_attendance_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, name: body.name, radiusMeters: body.radiusMeters });
   });
 
@@ -85,18 +86,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
 
     // 4. Store geo-attendance record
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsGeoAttendance).values({
-      id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-      attendanceDate: today, checkType: "check_in",
-      latitude: body.latitude, longitude: body.longitude,
-      accuracyMeters: body.accuracyMeters ?? null,
-      officeLocationId: body.officeLocationId ?? (officeLoc as any)?.id ?? null,
-      withinGeofence, distanceFromOffice: distance,
-      selfieFileKey: body.selfieFileKey ?? null, selfieVerified: false,
-      deviceId: body.deviceId ?? null,
-      ipAddress: (req.headers["x-forwarded-for"] as string) ?? req.ip ?? null,
-      createdBy: ctx.actorId,
-    } as any));
+    await publishF3Write(ctx, "geo_attendance_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       id, status: withinGeofence ? "within_geofence" : "outside_geofence",
@@ -128,17 +118,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await db.transaction((tx) => tx.insert(hrmsGeoAttendance).values({
-      id, tenantId: ctx.tenantId, employeeId: body.employeeId,
-      attendanceDate: today, checkType: "check_out",
-      latitude: body.latitude, longitude: body.longitude,
-      accuracyMeters: body.accuracyMeters ?? null,
-      officeLocationId: officeLoc?.id ?? null,
-      withinGeofence, distanceFromOffice: distance,
-      selfieFileKey: body.selfieFileKey ?? null, selfieVerified: false,
-      deviceId: body.deviceId ?? null, ipAddress: req.ip ?? null,
-      createdBy: ctx.actorId,
-    } as any));
+    await publishF3Write(ctx, "geo_attendance_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id, status: "check_out_recorded", withinGeofence, distanceMeters: distance ? Math.round(distance) : null });
   });

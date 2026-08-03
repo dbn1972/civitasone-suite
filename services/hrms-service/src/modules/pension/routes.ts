@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Pension / DCRG / Commutation / Family-pension routes (CCS rules).
  *
@@ -10,7 +12,6 @@
  *  GET  /v1/hrms/employees/:id/pension/records
  *       Lists persisted pension records for the employee.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
@@ -95,31 +96,7 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
     let recordId: string | undefined;
     if (q.persist && result.definedBenefit) {
       recordId = randomUUID();
-      await db.transaction(async (tx) => {
-        await repo.insertPensionRecord(tx, {
-          id: recordId!,
-          tenantId: ctx.tenantId,
-          employeeId: id,
-          pensionScheme: result.pensionScheme,
-          retirementDate: q.retirementDate,
-          dateOfJoining: emp.dateOfJoining,
-          lastBasicMinor: emp.basicMinor,
-          daRatePct: String(q.daRatePct),
-          avgEmolumentsMinor: result.avgEmolumentsMinor,
-          qualifyingHalfYears: result.qualifying.halfYears,
-          qualifyingYears: String(result.qualifying.years),
-          monthlyPensionMinor: result.monthlyPensionMinor,
-          commutedPct: String(result.commutation.commutePct),
-          commutedValueMinor: result.commutation.commutedValueMinor,
-          residualPensionMinor: result.commutation.residualMonthlyPensionMinor,
-          dcrgMinor: result.dcrg.payableMinor,
-          familyPensionNormalMinor: result.familyPension.normalMinor,
-          familyPensionEnhancedMinor: result.familyPension.enhancedMinor,
-          breakdown: jsonSafe(result) as Record<string, unknown>,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        });
-      });
+      await publishF3Write(ctx, "pension_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     }
 
     return reply.send(

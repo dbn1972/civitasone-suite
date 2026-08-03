@@ -112,6 +112,9 @@ export const COMMANDS = {
   contractRenewalBulk:     "hrms.contract.renewal.bulk",
   contractExpiryDetect:    "hrms.contract.expiry.detect",
   contractAutoSeparate:    "hrms.contract.auto_separate",
+  // F3 leftover — generic route-write command bus for residual sync lifts
+  f3RouteWrite: "hrms.f3.route_write",
+  leaveCancel: "hrms.leave.cancel",
 } as const;
 
 export const EVENTS = {

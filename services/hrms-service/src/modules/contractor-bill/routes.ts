@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Third-Party / Agency module (DIC Phase 3). DIC is the CLRA principal employer;
  * it pays the licensed contractor/agency (not the deployed worker) under §194C.
@@ -21,7 +23,6 @@
  * derived from the contractor kind (1% individual/HUF, 2% other) — NOT submitter
  * input — so a submitter cannot suppress TDS. Money in paise (bigint).
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -76,16 +77,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
       contactPhone: z.string().max(20).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await db.transaction((tx) => repo.insertContractor(tx, {
-      id, tenantId: ctx.tenantId, name: body.name, contractorKind: body.contractorKind,
-      ...(body.clraLicenseNo ? { clraLicenseNo: body.clraLicenseNo } : {}),
-      ...(body.clraLicenseValidTill ? { clraLicenseValidTill: body.clraLicenseValidTill } : {}),
-      ...(body.pan ? { pan: body.pan } : {}),
-      ...(body.gstin ? { gstin: body.gstin } : {}),
-      ...(body.contactEmail ? { contactEmail: body.contactEmail } : {}),
-      ...(body.contactPhone ? { contactPhone: body.contactPhone } : {}),
-      status: "active", createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }));
+    await publishF3Write(ctx, "contractor_bill_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, name: body.name, status: "active" });
   });
 
@@ -120,7 +112,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     if (body.contactEmail !== undefined) patch.contactEmail = body.contactEmail;
     if (body.contactPhone !== undefined) patch.contactPhone = body.contactPhone;
     if (body.status !== undefined) patch.status = body.status;
-    await db.transaction((tx) => repo.updateContractor(tx, ctx.tenantId, id, patch, c.version));
+    await publishF3Write(ctx, "contractor_bill_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: body.status ?? c.status });
   });
 
@@ -147,20 +139,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
 
     const billId = randomUUID();
     try {
-      await db.transaction((tx) => repo.insertBill(tx, {
-        id: billId, tenantId: ctx.tenantId, contractorId: id,
-        billNo: body.billNo, billDate: body.billDate,
-        ...(body.periodFrom ? { periodFrom: body.periodFrom } : {}),
-        ...(body.periodTo ? { periodTo: body.periodTo } : {}),
-        ...(body.description ? { description: body.description } : {}),
-        workersCount: body.workersCount, wagesDisbursedVerified: body.wagesDisbursedVerified,
-        grossMinor: BigInt(body.grossMinor),
-        gstApplicable: body.gstApplicable, gstRateBps: body.gstRateBps,
-        gstin: (c.gstin as string | undefined) ?? null,
-        status: "submitted",
-        ...(body.remarks ? { remarks: body.remarks } : {}),
-        createdBy: ctx.actorId, updatedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "contractor_bill_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`);
@@ -197,9 +176,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const { billId } = billParam.parse(req.params);
     const bill = await mustBill(ctx.tenantId, billId);
     if (bill.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', not submitted`);
-    await db.transaction((tx) => repo.updateBill(tx, ctx.tenantId, billId, {
-      status: "verified", verifiedBy: ctx.actorId, verifiedAt: new Date(), updatedBy: ctx.actorId,
-    }, bill.version));
+    await publishF3Write(ctx, "contractor_bill_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: billId, status: "verified" }));
   });
 
@@ -235,36 +212,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const gstRateBps = body.gstRateBps ?? bill.gstRateBps;
     const fy = financialYearWindow(bill.billDate as unknown as string);
     let tax = { gstMinor: 0n, tdsRateBps: 0, tdsMinor: 0n, netPayableMinor: bill.grossMinor, tdsApplied: false };
-    await db.transaction(async (tx) => {
-      await repo.lockContractorForBilling(tx, ctx.tenantId, bill.contractorId);
-      const ytd = await repo.ytdApprovedGrossTx(tx, ctx.tenantId, bill.contractorId, fy.from, fy.to, bill.id);
-      tax = computeContractTax({
-        grossMinor: bill.grossMinor,
-        gstApplicable: bill.gstApplicable, gstRateBps,
-        contractorKind: contractor.contractorKind as ContractorKind,
-        singleThresholdMinor: TDS_194C_SINGLE_MINOR,
-        annualThresholdMinor: TDS_194C_ANNUAL_MINOR,
-        ytdGrossMinor: ytd,
-      });
-      await repo.updateBill(tx, ctx.tenantId, billId, {
-        status: "approved",
-        gstRateBps, tdsRateBps: tax.tdsRateBps,
-        gstMinor: tax.gstMinor, tdsMinor: tax.tdsMinor, netPayableMinor: tax.netPayableMinor,
-        approvedBy: ctx.actorId, approvedAt: new Date(),
-        ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-        updatedBy: ctx.actorId,
-      }, bill.version);
-      await enqueue(tx, {
-        topic: EVENTS.contractorBillApproved, eventType: EVENTS.contractorBillApproved,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          billId, contractorId: bill.contractorId, billNo: bill.billNo,
-          grossMinor: bill.grossMinor.toString(), gstMinor: tax.gstMinor.toString(),
-          tdsSection: bill.tdsSection, tdsRateBps: tax.tdsRateBps, tdsMinor: tax.tdsMinor.toString(),
-          netPayableMinor: tax.netPayableMinor.toString(), gstin: bill.gstin,
-        },
-      });
-    });
+    await publishF3Write(ctx, "contractor_bill_routes__4", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: billId, status: "approved",
       grossMinor: bill.grossMinor, gstMinor: tax.gstMinor,
@@ -282,11 +230,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     if (bill.status !== "submitted" && bill.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', cannot reject`);
     }
-    await db.transaction((tx) => repo.updateBill(tx, ctx.tenantId, billId, {
-      status: "rejected",
-      ...(body.approverRemarks ? { approverRemarks: body.approverRemarks } : {}),
-      updatedBy: ctx.actorId,
-    }, bill.version));
+    await publishF3Write(ctx, "contractor_bill_routes__5", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: billId, status: "rejected" }));
   });
 
@@ -297,19 +241,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const body = z.object({ paymentRef: z.string().min(1).max(64) }).parse(req.body ?? {});
     const bill = await mustBill(ctx.tenantId, billId);
     if (bill.status !== "approved") throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', not approved`);
-    await db.transaction(async (tx) => {
-      await repo.updateBill(tx, ctx.tenantId, billId, {
-        status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: ctx.actorId,
-      }, bill.version);
-      await enqueue(tx, {
-        topic: EVENTS.contractorBillPaid, eventType: EVENTS.contractorBillPaid,
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: {
-          billId, contractorId: bill.contractorId, billNo: bill.billNo,
-          netPayableMinor: bill.netPayableMinor.toString(), paymentRef: body.paymentRef,
-        },
-      });
-    });
+    await publishF3Write(ctx, "contractor_bill_routes__6", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id: billId, status: "paid", paymentRef: body.paymentRef }));
   });
 

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * Maker-checker override of a screening decision (R-RA-0111).
  *
@@ -12,7 +14,6 @@
  * actually changed — and it is applied under an optimistic-version guard so a
  * decision that moved on since the request was raised is rejected as stale.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -51,14 +52,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await db.transaction((tx) => repo.createRequest(tx, {
-        id: rid, tenantId: ctx.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
-        fromDecision: a.screeningDecision, toDecision: body.toDecision,
-        applicationVersion: a.version,
-        reasonCode: body.reasonCode ?? null, reason: body.reason,
-        status: "pending", originalScreenedBy: a.screenedBy ?? null,
-        requestedBy: ctx.actorId,
-      }));
+      await publishF3Write(ctx, "recruitment_screening_override_routes__0", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // partial unique index (one pending per application) — concurrent request
       if (String((err as { code?: string }).code) === "23505") {
@@ -98,25 +92,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     }
 
     try {
-      await db.transaction(async (tx) => {
-        await screeningRepo.setScreening(tx, ctx.tenantId, r.applicationId, {
-          screeningDecision: r.toDecision,
-          screeningReasonCode: r.reasonCode ?? null,
-          screeningRemarks: r.reason,
-          screenedBy: ctx.actorId, screenedAt: new Date(),
-        }, a.version);
-        await screeningRepo.insertEvent(tx, {
-          tenantId: ctx.tenantId, applicationId: r.applicationId, jobOpeningId: r.jobOpeningId,
-          action: "override", decision: r.toDecision, reasonCode: r.reasonCode ?? null,
-          remarks: r.reason, isOverride: true, actorId: ctx.actorId,
-        });
-        await repo.setRequestStatus(tx, ctx.tenantId, reqId, {
-          status: "approved", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-        }, r.version);
-        await emitAudit(tx, ctx, "screening_override_approved", "screening_override", reqId, {
-          applicationId: r.applicationId, fromDecision: r.fromDecision, toDecision: r.toDecision, requestedBy: r.requestedBy,
-        });
-      });
+      await publishF3Write(ctx, "recruitment_screening_override_routes__1", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the application or request changed; reload and retry");
       throw err;
@@ -137,9 +113,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     if (ctx.actorId === r.requestedBy) throw new HttpError(403, "SOD_VIOLATION", "separation of duties: the requester cannot decide their own override");
 
     try {
-      await db.transaction((tx) => repo.setRequestStatus(tx, ctx.tenantId, reqId, {
-        status: "rejected", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-      }, r.version));
+      await publishF3Write(ctx, "recruitment_screening_override_routes__2", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
@@ -162,9 +136,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
       throw new HttpError(403, "NOT_REQUESTER", "only the officer who raised the override (or a super_admin) may cancel it");
     }
     try {
-      await db.transaction((tx) => repo.setRequestStatus(tx, ctx.tenantId, reqId, {
-        status: "cancelled", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-      }, r.version));
+      await publishF3Write(ctx, "recruitment_screening_override_routes__3", (typeof id === "string" ? id : randomUUID()), { body: (typeof body !== "undefined" ? body : (req.body as Record<string, unknown>)), params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
