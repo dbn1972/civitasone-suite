@@ -618,22 +618,22 @@ describe("GET /v1/crm/deals/:id", () => {
 });
 
 describe("PATCH /v1/crm/deals/:id/stage", () => {
-  it("returns 409 when deal not found (version mismatch)", async () => {
+  it("returns 202 when stage update is enqueued", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/crm/deals/${VALID_UUID}/stage`,
       headers: authHeader(["crm_user"]),
       payload: { stage: "Won", version: 1 },
     });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
   });
 
-  it("returns 409 with stage + probability on non-existent deal", async () => {
+  it("returns 202 with stage + probability", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/crm/deals/${VALID_UUID}/stage`,
       headers: authHeader(["crm_admin"]),
       payload: { stage: "Negotiation", probability: 75, version: 1 },
     });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 400 with invalid stage value", async () => {

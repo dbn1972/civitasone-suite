@@ -555,4 +555,29 @@ export function registerResidualF3Consumers(queue: Queue): void {
       throw err;
     }
   });
+
+  queue.subscribe(COMMANDS.setAccountParent, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; parentId: string | null };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const rows = await tx.execute(sql`
+          UPDATE crm.accounts
+          SET parent_id = ${p.parentId}, updated_at = now(), updated_by = ${msg.actorId},
+              version = version + 1
+          WHERE id = ${p.id} AND tenant_id = ${p.tenantId}
+          RETURNING id
+        `) as unknown as Array<{ id: string }>;
+        if (rows.length === 0) return;
+        await emitWithAudit(tx, ctxOf(msg) as never, {
+          eventType: EVENTS.accountParentSet, action: "set_parent",
+          resourceType: "account", resourceId: p.id,
+          payload: { accountId: p.id, parentId: p.parentId },
+        });
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "setAccountParent failed");
+      throw err;
+    }
+  });
 }
