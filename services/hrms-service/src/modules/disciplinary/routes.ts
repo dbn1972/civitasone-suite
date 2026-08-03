@@ -1,3 +1,4 @@
+import type { RequestContext } from "@civitasone/types";
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 /**
@@ -24,7 +25,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  * append-only event log. A suspension with pay_suspended=true is surfaced by
  * the payroll-input projection.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -63,12 +64,18 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
   async function transition(
     c: DisciplinaryCaseRow, action: CaseAction, actorId: string,
     patch: Partial<typeof c>, notes: string | null,
+    ctx: RequestContext, req: FastifyRequest,
   ): Promise<CaseStatus> {
     const check = canTransition(
       c.status as CaseStatus, action, c.proceedingType as "minor" | "major");
     if (!check.ok || !check.to) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
     const to: CaseStatus = check.to;
-    await publishF3Write(ctx, "disciplinary_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
+    await publishF3Write(ctx, "disciplinary_routes__0", randomUUID(), {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      action, patch, notes, caseId: c.id, actorId, to,
+    });
     return to;
   }
 
@@ -122,7 +129,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "issue_charge_memo", ctx.actorId,
-      { chargeMemoRef: body.chargeMemoRef, chargeMemoDate: body.chargeMemoDate }, body.notes ?? null);
+      { chargeMemoRef: body.chargeMemoRef, chargeMemoDate: body.chargeMemoDate }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -141,7 +148,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
       inquiryOfficerName: body.inquiryOfficerName,
       inquiryAppointedDate: body.inquiryAppointedDate,
       ...(body.inquiryOfficerId ? { inquiryOfficerId: body.inquiryOfficerId } : {}),
-    }, body.notes ?? null);
+    }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -158,7 +165,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const to = await transition(c, "record_finding", ctx.actorId, {
       finding: body.finding, findingDate: body.findingDate,
       ...(body.findingNotes ? { findingNotes: body.findingNotes } : {}),
-    }, body.findingNotes ?? null);
+    }, body.findingNotes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, finding: body.finding });
   });
 
@@ -185,7 +192,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const to = await transition(c, "impose_penalty", ctx.actorId, {
       penaltyClass: pclass, penaltyType: body.penaltyType, penaltyDate: body.penaltyDate,
       ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),
-    }, body.notes ?? null);
+    }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, penaltyClass: pclass, penaltyType: body.penaltyType });
   });
 
@@ -238,7 +245,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "file_appeal", ctx.actorId,
-      { appealFiledDate: body.appealFiledDate, appealAuthority: body.appealAuthority }, body.notes ?? null);
+      { appealFiledDate: body.appealFiledDate, appealAuthority: body.appealAuthority }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -253,7 +260,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const c = await mustCase(ctx.tenantId, caseId);
     const to = await transition(c, "decide_appeal", ctx.actorId,
-      { appealOutcome: body.appealOutcome, appealDecidedDate: body.appealDecidedDate }, body.notes ?? null);
+      { appealOutcome: body.appealOutcome, appealDecidedDate: body.appealDecidedDate }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to, appealOutcome: body.appealOutcome });
   });
 
@@ -263,7 +270,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const { caseId } = caseParam.parse(req.params);
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCase(ctx.tenantId, caseId);
-    const to = await transition(c, "close", ctx.actorId, { closedAt: new Date() }, body.notes ?? null);
+    const to = await transition(c, "close", ctx.actorId, { closedAt: new Date() }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 
@@ -273,7 +280,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const { caseId } = caseParam.parse(req.params);
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCase(ctx.tenantId, caseId);
-    const to = await transition(c, "drop", ctx.actorId, { closedAt: new Date() }, body.notes ?? null);
+    const to = await transition(c, "drop", ctx.actorId, { closedAt: new Date() }, body.notes ?? null, ctx, req);
     return reply.send({ id: caseId, status: to });
   });
 

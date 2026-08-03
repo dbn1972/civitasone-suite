@@ -153,14 +153,6 @@ export function registerLeaveConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
   });
-}
-
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
-  await enqueue(tx, {
-    topic: AUDIT, eventType: AUDIT,
-    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
-  });
 
   queue.subscribe(COMMANDS.leaveCancel, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
@@ -192,5 +184,12 @@ async function audit(tx: any, msg: any, action: string, resourceType: string, re
       });
     });
   });
+}
 
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT, eventType: AUDIT,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
+  });
 }

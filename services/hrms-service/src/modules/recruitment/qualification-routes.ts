@@ -56,7 +56,7 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
     try {
       await publishF3Write(ctx, "recruitment_qualification_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
-      if ((e as { code?: string }).code === "23505") as any throw new HttpError(409, "REQUIREMENT_EXISTS", "a requirement for this job was created concurrently; reload and retry");
+      if ((e as { code?: string }).code === "23505") throw new HttpError(409, "REQUIREMENT_EXISTS", "a requirement for this job was created concurrently; reload and retry");
       throw e;
     }
     return reply.send({ jobOpeningId, saved: true });

@@ -92,7 +92,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     try {
       await publishF3Write(ctx, "recruitment_interview_response_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, interviewId: r.interviewId, status: "approved", scheduledDate: r.preferredDate, scheduledTime: r.preferredTime });
@@ -112,7 +112,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     try {
       await publishF3Write(ctx, "recruitment_interview_response_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;
     }
     return reply.send({ id: reqId, status: "declined" });

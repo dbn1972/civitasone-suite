@@ -106,7 +106,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     try {
       await publishF3Write(ctx, "recruitment_application_fee_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
       throw err;
     }
     return reply.send({ data: { id: fee.id, applicationId: id, status: "paid", provider: "manual", paymentRef } });

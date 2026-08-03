@@ -81,7 +81,7 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
     const rec = await repo.findRecording(ctx.tenantId, id);
     if (!rec || rec.status !== "active") throw new HttpError(404, "NOT_FOUND", "active recording not found");
     const ok = await publishF3Write(ctx, "recruitment_interview_recording_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!ok) as any throw new HttpError(409, "VERSION_CONFLICT", "the recording changed; reload and retry");
+    if (!ok) throw new HttpError(409, "VERSION_CONFLICT", "the recording changed; reload and retry");
     await purgeObjectStub(rec.storageKey, req.log);
     // Honest status: the record is soft-deleted, but the object-store bytes are
     // only truly purged once the storage adapter is wired — reported as pending,

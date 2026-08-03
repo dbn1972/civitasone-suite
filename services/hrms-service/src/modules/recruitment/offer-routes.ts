@@ -91,7 +91,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     try {
     await publishF3Write(ctx, "recruitment_offer_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") as any throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
+      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
       throw err;
     }
     return reply.code(201).send(jsonSafe({ id: offerId, offerNo: `OFR-${offerId.slice(0, 8).toUpperCase()}`, offerVersion: nextVersion, grossCtcMinor: c.grossCtcMinor, status: "draft" }));
@@ -239,7 +239,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     try {
     await publishF3Write(ctx, "recruitment_offer_routes__9", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") as any throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
+      if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
       throw err;
     }
     return reply.code(201).send(jsonSafe({ id: newId, offerVersion: nextVersion, supersedesOfferId: offerId, grossCtcMinor: c.grossCtcMinor, status: "draft" }));

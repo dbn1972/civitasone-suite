@@ -92,7 +92,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     try {
       await publishF3Write(ctx, "recruitment_screening_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") as any throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
+      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
       throw err;
     }
     return reply.send({ id, screeningDecision: body.decision, isOverride: false });
