@@ -17,7 +17,7 @@ export function registerDeviceConsumers(queue: Queue): void {
         tenantId: p.tenantId,
         userId: p.userId,
         platform: p.platform,
-        label: p.label,
+        label: p.label ?? p.platform,
         fingerprint: p.fingerprint,
         trustToken: p.trustToken,
         trustLevel: p.trustLevel,

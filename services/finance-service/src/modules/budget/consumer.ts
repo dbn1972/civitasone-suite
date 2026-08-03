@@ -244,7 +244,7 @@ export function registerBudgetConsumers(queue: Queue): void {
       assertAcknowledgerDistinct(row.issuedBy ?? row.createdBy, msg.actorId);
       await repo.updateDistribution(tx, p.id, {
         status: "acknowledged", acknowledgedBy: msg.actorId, acknowledgedAt: new Date(),
-        acknowledgeNote: p.note, updatedBy: msg.actorId,
+        acknowledgeNote: p.note ?? null, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "acknowledge", "allocation_distribution", p.id);
     });
@@ -294,7 +294,7 @@ export function registerBudgetConsumers(queue: Queue): void {
       if (!row) return;
       assertProposalTransition(row.status as any, to as any);
       await repo.updateProposal(tx, p.id, {
-        status: to, reviewNote: p.note, reviewedBy: msg.actorId, reviewedAt: new Date(), updatedBy: msg.actorId,
+        status: to, reviewNote: p.note ?? null, reviewedBy: msg.actorId, reviewedAt: new Date(), updatedBy: msg.actorId,
       } as any);
       await audit(tx, msg, `transition_${to}`, "budget_proposal", p.id);
     });
