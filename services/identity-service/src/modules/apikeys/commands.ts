@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { db } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
-  generateSecret, assertValidScopes, assertScope, assertTransition, isUsable,
-  DomainError, type ApiKeyStatus,
+  generateSecret, assertValidScopes, assertScope, isUsable,
+  DomainError, type ApiKeyStatus, sha256Hex,
 } from "./domain.js";
 import type { IssueApiKeyBody } from "./validators.js";
 
@@ -28,86 +30,67 @@ export type IssueResult = {
   status: ApiKeyStatus;
   keyVersion: number;
   correlationId: string;
+  acceptedStatus: "accepted";
 };
 
-/** Issue a brand-new API key. Synchronous: the secret is usable immediately. */
+/** Issue: mint secret in-process, publish hash to queue, return 202 + plaintext once. */
 export async function issueApiKey(ctx: RequestContext, body: IssueApiKeyBody): Promise<IssueResult> {
   try { assertValidScopes(body.scopes); } catch (err) { mapDomainError(err); }
 
   const id = randomUUID();
   const { keyPrefix, fullKey, secretHash } = generateSecret();
-  const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+  const expiresAt = body.expiresAt ? new Date(body.expiresAt).toISOString() : null;
 
-  await db.transaction(async (tx) => {
-    await repo.insert(tx, {
+  await queue.publish(COMMANDS.apiKeyIssue, {
+    messageId: id,
+    type: COMMANDS.apiKeyIssue,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
       id, tenantId: ctx.tenantId, name: body.name, keyPrefix, secretHash,
-      scopes: body.scopes, status: "active", keyVersion: 1,
-      expiresAt, createdBy: ctx.actorId, updatedBy: ctx.actorId, version: 1,
-    });
-    await repo.audit(tx, ctx.tenantId, id, "issue", ctx.actorId, `scopes=${body.scopes.join(",")}`);
-    await repo.emitAudit(tx, {
-      eventType: "identity.apikey.issued", tenantId: ctx.tenantId, actorId: ctx.actorId,
-      correlationId: ctx.correlationId, action: "issue", resourceId: id, severity: "high",
-      payload: { apiKeyId: id, keyPrefix, scopes: body.scopes },
-    });
+      scopes: body.scopes, expiresAt,
+    },
   });
 
-  return { id, keyPrefix, key: fullKey, scopes: body.scopes, status: "active", keyVersion: 1, correlationId: ctx.correlationId };
+  return {
+    id, keyPrefix, key: fullKey, scopes: body.scopes, status: "active",
+    keyVersion: 1, correlationId: ctx.correlationId, acceptedStatus: "accepted",
+  };
 }
 
-/**
- * Rotate: issue a NEW secret for the SAME key id, bump key_version, and
- * invalidate the previous secret immediately (the old hash is overwritten).
- * Serialized via row lock + optimistic version so two concurrent rotations
- * cannot both win.
- */
 export async function rotateApiKey(ctx: RequestContext, id: string, reason?: string): Promise<IssueResult> {
   const { keyPrefix, fullKey, secretHash } = generateSecret();
-
-  const out = await db.transaction(async (tx) => {
-    const row = await repo.findByIdForUpdate(tx, ctx.tenantId, id);
-    if (!row) throw new HttpError(404, "NOT_FOUND", "api key not found");
-    try { assertTransition(row.status as ApiKeyStatus, "rotated"); } catch (err) { mapDomainError(err); }
-
-    const newVersion = row.keyVersion + 1;
-    const n = await repo.updateLifecycle(tx, ctx.tenantId, id, row.version, {
-      keyPrefix, secretHash, keyVersion: newVersion, status: "active", updatedBy: ctx.actorId,
-    });
-    if (n === 0) throw new HttpError(409, "CONFLICT", "concurrent modification; retry");
-
-    await repo.audit(tx, ctx.tenantId, id, "rotate", ctx.actorId, reason ?? null);
-    await repo.emitAudit(tx, {
-      eventType: "identity.apikey.rotated", tenantId: ctx.tenantId, actorId: ctx.actorId,
-      correlationId: ctx.correlationId, action: "rotate", resourceId: id, severity: "high",
-      payload: { apiKeyId: id, keyPrefix, keyVersion: newVersion, ...(reason ? { reason } : {}) },
-    });
-    return { keyPrefix, keyVersion: newVersion, scopes: row.scopes ?? [] };
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.apiKeyRotate, {
+    messageId,
+    type: COMMANDS.apiKeyRotate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, keyPrefix, secretHash, reason: reason ?? null },
   });
-
-  return { id, keyPrefix: out.keyPrefix, key: fullKey, scopes: out.scopes, status: "active", keyVersion: out.keyVersion, correlationId: ctx.correlationId };
+  return {
+    id, keyPrefix, key: fullKey, scopes: [], status: "active",
+    keyVersion: 0, correlationId: ctx.correlationId, acceptedStatus: "accepted",
+  };
 }
 
-/** Revoke: terminal. Idempotent — revoking an already-revoked key is a no-op success. */
-export async function revokeApiKey(ctx: RequestContext, id: string, reason?: string): Promise<{ id: string; status: ApiKeyStatus; correlationId: string }> {
-  const status = await db.transaction(async (tx) => {
-    const row = await repo.findByIdForUpdate(tx, ctx.tenantId, id);
-    if (!row) throw new HttpError(404, "NOT_FOUND", "api key not found");
-    if (row.status === "revoked") return "revoked" as ApiKeyStatus; // idempotent
-
-    const n = await repo.updateLifecycle(tx, ctx.tenantId, id, row.version, {
-      status: "revoked", revokedAt: new Date(), updatedBy: ctx.actorId,
-    });
-    if (n === 0) throw new HttpError(409, "CONFLICT", "concurrent modification; retry");
-
-    await repo.audit(tx, ctx.tenantId, id, "revoke", ctx.actorId, reason ?? null);
-    await repo.emitAudit(tx, {
-      eventType: "identity.apikey.revoked", tenantId: ctx.tenantId, actorId: ctx.actorId,
-      correlationId: ctx.correlationId, action: "revoke", resourceId: id, severity: "high",
-      payload: { apiKeyId: id, ...(reason ? { reason } : {}) },
-    });
-    return "revoked" as ApiKeyStatus;
+export async function revokeApiKey(
+  ctx: RequestContext, id: string, reason?: string,
+): Promise<{ id: string; status: "accepted"; correlationId: string }> {
+  await queue.publish(COMMANDS.apiKeyRevoke, {
+    messageId: randomUUID(),
+    type: COMMANDS.apiKeyRevoke,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: reason ?? null },
   });
-  return { id, status, correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export type VerifyResult = {
@@ -118,14 +101,8 @@ export type VerifyResult = {
   reason?: string;
 };
 
-/**
- * Verify a presented key, optionally enforcing a required scope. Constant-ish:
- * we hash the presented value and look it up. A miss / unusable key / out-of-scope
- * all return valid:false with a reason (and audit the denial) rather than leaking
- * which condition failed via differing status semantics at the boundary.
- */
+/** Verify remains synchronous (introspection). lastUsed touch is best-effort. */
 export async function verifyApiKey(presented: string, requiredScope?: string): Promise<VerifyResult> {
-  const { sha256Hex } = await import("./domain.js");
   const hash = sha256Hex(presented);
 
   return db.transaction(async (tx) => {
