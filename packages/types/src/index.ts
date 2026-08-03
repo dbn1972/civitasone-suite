@@ -140,14 +140,47 @@ export interface CRMDealSummary {
  * union so a new status added by ai-agent-service does not fail validation and
  * blank the screen.
  */
+/** Why a chat conversation was escalated from the bot to a person. */
+export type ChatHandoffReason =
+  | "requested"
+  | "low_confidence"
+  | "guardrail"
+  | "agent_initiated";
+
+/**
+ * Transcript snapshot handed to the receiving human agent. Guardrail-sanitised
+ * text only — raw personal data is never persisted (DPDP Act 2023).
+ */
+export interface ChatHandoffContext {
+  conversationId: string;
+  language: string;
+  reasonCode: ChatHandoffReason;
+  note: string | null;
+  summary: {
+    messageCount: number;
+    userMessages: number;
+    assistantMessages: number;
+    systemMessages: number;
+    totalTokens: number;
+    lastRole: string | null;
+  };
+  recentTurns: { role: string; content: string }[];
+}
+
 export interface ChatConversation {
   id: string;
   channelId: string;
   profileId: string | null;
+  /** active | handed_off | ended */
   status: string;
   language: string;
   startedAt: string;
   endedAt: string | null;
+  handedOffAt: string | null;
+  handoffReason: string | null;
+  handoffNote: string | null;
+  handoffQueue: string | null;
+  handoffContext: ChatHandoffContext | null;
   version: number;
 }
 

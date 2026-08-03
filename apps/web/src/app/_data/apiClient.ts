@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import type { ZodType } from "zod";
+import type { ZodType, ZodTypeDef } from "zod";
 import { COOKIE } from "@/lib/auth/config";
 import { recordLoaderFallback, type LoaderFallbackReason } from "./loaderTelemetry";
 
@@ -10,7 +10,13 @@ interface FetchJsonOptions<TApi, TOutput> {
   revalidateSeconds?: number;
   telemetryKey: string;
   mapResponse: (payload: TApi) => TOutput | null;
-  responseSchema?: ZodType<TApi>;
+  /**
+   * Parses the raw JSON body, so its input side is `unknown` rather than TApi.
+   * Pinning both sides to TApi would reject any schema that fills in a missing
+   * field — which is how a loader stays readable against a service that has
+   * not yet been rolled out.
+   */
+  responseSchema?: ZodType<TApi, ZodTypeDef, unknown>;
 }
 
 function getGatewayBaseUrl(): string | null {

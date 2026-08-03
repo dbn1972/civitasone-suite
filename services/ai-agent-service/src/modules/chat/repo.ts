@@ -23,6 +23,11 @@ export function toView(r: ConversationRow) {
     language: r.language,
     startedAt: r.startedAt.toISOString(),
     endedAt: r.endedAt ? r.endedAt.toISOString() : null,
+    handedOffAt: r.handedOffAt ? r.handedOffAt.toISOString() : null,
+    handoffReason: r.handoffReason,
+    handoffNote: r.handoffNote,
+    handoffQueue: r.handoffQueue,
+    handoffContext: r.handoffContext ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     version: r.version,
@@ -106,6 +111,44 @@ export async function update(
       eq(conversations.id, id),
       eq(conversations.tenantId, tenantId),
       eq(conversations.version, currentVersion),
+    ))
+    .returning({ id: conversations.id });
+  return result.length > 0;
+}
+
+/**
+ * Move a conversation to `handed_off`, guarded on it still being `active`
+ * rather than on a version. The auto-handoff path runs inside the same
+ * transaction as the turn that triggered it, where the caller has no fresh
+ * version to compare; guarding on the source state keeps the write idempotent
+ * and stops a late escalation from re-opening an already-ended conversation.
+ * Returns false when the conversation had already moved on.
+ */
+export async function markHandedOff(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  patch: {
+    handoffReason: string;
+    handoffNote: string | null;
+    handoffQueue: string | null;
+    handoffContext: unknown;
+    updatedBy: string;
+  },
+): Promise<boolean> {
+  const result = await tx
+    .update(conversations)
+    .set({
+      status: "handed_off",
+      handedOffAt: new Date(),
+      ...patch,
+      updatedAt: new Date(),
+      version: sql`${conversations.version} + 1`,
+    })
+    .where(and(
+      eq(conversations.id, id),
+      eq(conversations.tenantId, tenantId),
+      eq(conversations.status, "active"),
     ))
     .returning({ id: conversations.id });
   return result.length > 0;

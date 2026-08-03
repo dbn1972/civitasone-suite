@@ -17,6 +17,14 @@ export async function sendMessage(
     sanitizedInput: string;
     tokens: number;
     violationCount: number;
+    /** Set when the turn also escalates the conversation to a human. The
+     *  consumer applies it in the same transaction as the message. */
+    handoff?: {
+      reasonCode: string;
+      note: string | null;
+      queue: string | null;
+      context: unknown;
+    } | null;
   },
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.sendMessage, payload.messageId, payload);
@@ -31,6 +39,23 @@ export async function endConversation(
     conversationId,
     version: payload.version,
     reason: payload.reason,
+  });
+}
+
+export async function handOffConversation(
+  ctx: RequestContext,
+  conversationId: string,
+  payload: {
+    version: number;
+    reasonCode: string;
+    note: string | null;
+    queue: string | null;
+    context: unknown;
+  },
+): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.handOffConversation, conversationId, {
+    conversationId,
+    ...payload,
   });
 }
 

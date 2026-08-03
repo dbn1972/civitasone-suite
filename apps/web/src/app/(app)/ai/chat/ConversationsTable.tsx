@@ -1,12 +1,13 @@
 "use client";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { ChatConversation } from "@civitasone/types";
-import { conversationDurationMinutes } from "./chat";
+import { conversationDurationMinutes, handoffReasonLabel, statusLabel } from "./chat";
 
 type ConversationRow = {
   id: string;
   status: string;
   language: string;
+  handoff: string;
   duration: string;
   startedAt: string;
   endedAt: string;
@@ -29,8 +30,9 @@ export function ConversationsTable({ conversations }: { conversations: ChatConve
     const minutes = conversationDurationMinutes(conversation);
     return {
       id: conversation.id,
-      status: conversation.status === "active" ? "Active" : "Ended",
+      status: statusLabel(conversation.status),
       language: conversation.language.toUpperCase(),
+      handoff: handoffReasonLabel(conversation.handoffReason) ?? "—",
       duration: minutes === null ? "In progress" : `${minutes.toLocaleString("en-IN")} min`,
       startedAt: formatDateTime(conversation.startedAt),
       endedAt: formatDateTime(conversation.endedAt),
@@ -43,6 +45,7 @@ export function ConversationsTable({ conversations }: { conversations: ChatConve
         { key: "id", label: "Conversation" },
         { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
         { key: "language", label: "Language" },
+        { key: "handoff", label: "Handoff reason" },
         { key: "duration", label: "Duration", align: "right" },
         { key: "startedAt", label: "Started" },
         { key: "endedAt", label: "Ended" },

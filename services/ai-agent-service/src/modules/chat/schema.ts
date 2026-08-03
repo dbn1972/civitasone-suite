@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, text, jsonb } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("ai_agent");
 
@@ -7,10 +7,21 @@ export const conversations = domainSchema.table("conversations", {
   tenantId: uuid("tenant_id").notNull(),
   channelId: uuid("channel_id").notNull(),
   profileId: uuid("profile_id").notNull(),
+  /** active → handed_off → ended. See chat/domain.ts#TRANSITIONS. */
   status: varchar("status", { length: 24 }).notNull().default("active"),
   language: varchar("language", { length: 8 }).notNull().default("en"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
+  handedOffAt: timestamp("handed_off_at", { withTimezone: true }),
+  handoffReason: varchar("handoff_reason", { length: 32 }),
+  handoffNote: text("handoff_note"),
+  /** Opaque queue/skill identifier the conversation was routed to. */
+  handoffQueue: varchar("handoff_queue", { length: 64 }),
+  /**
+   * Transcript snapshot handed to the human agent. Guardrail-sanitised text
+   * only (DPDP Act 2023) — see chat/domain.ts#buildHandoffContext.
+   */
+  handoffContext: jsonb("handoff_context"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
