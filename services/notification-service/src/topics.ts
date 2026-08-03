@@ -101,6 +101,16 @@ export const EVENTS = {
    * Fires: once per refused send. The recipient address is NEVER in the payload.
    */
   consentBlocked:         "notification.consent.blocked",
+  /**
+   * P1-6 — a recipient withdrew consent through an INBOUND message (an SMS /
+   * WhatsApp "STOP" that matched a keyword rule carrying an opt-out action).
+   * Payload: `{ ruleId: string; channel: string; reason: "unsubscribe";
+   *            source: "inbound"; recipientHash: string }`
+   * Fires: once per inbound message that recorded a suppression. The recipient
+   * address is NEVER in the payload — `recipientHash` is the non-reversible
+   * blind index, which is what downstream consumers can correlate on.
+   */
+  consentOptedOut:        "notification.consent.opted_out",
   // I18N
   localeVariantCreated:   "notification.i18n.variant_created",
   localeVariantStale:     "notification.i18n.variant_stale",
