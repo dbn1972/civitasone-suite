@@ -7,8 +7,10 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
+import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
 import { encryptedText } from "../../shared/pii-crypto.js";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
@@ -51,13 +53,24 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const body = createBankBody.parse(req.body);
     const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.insert(bankAccounts).values({
-        id, tenantId: ctx.tenantId, ...body,
-        branchName: body.branchName ?? null, purpose: body.purpose ?? null,
-        createdBy: ctx.actorId,
-      });
+    await queue.publish(COMMANDS.bankAccountCreate, {
+      messageId: id,
+      type: COMMANDS.bankAccountCreate,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        id,
+        tenantId: ctx.tenantId,
+        bankName: body.bankName,
+        branchName: body.branchName ?? null,
+        accountNo: body.accountNo,
+        ifsc: body.ifsc,
+        accountType: body.accountType,
+        purpose: body.purpose ?? null,
+      },
     });
-    return reply.code(201).send({ id, status: "created" });
+    return reply.code(202).send({ id, status: "accepted" });
   });
 }
