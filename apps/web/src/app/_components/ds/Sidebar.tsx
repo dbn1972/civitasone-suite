@@ -81,6 +81,18 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    group: "CITIZEN EXPERIENCE",
+    items: [
+      { icon: "🤖", label: "AI & Copilot", href: "/ai", moduleKey: "ai-agent" },
+      { icon: "🚐", label: "Field Ops", href: "/field", moduleKey: "field" },
+      { icon: "🎁", label: "Loyalty", href: "/loyalty", moduleKey: "loyalty" },
+      { icon: "📦", label: "Catalogue", href: "/catalogue", moduleKey: "catalogue" },
+      { icon: "🧬", label: "CDP", href: "/cdp", moduleKey: "cdp" },
+      { icon: "🧭", label: "Journeys", href: "/journeys", moduleKey: "journey" },
+      { icon: "✨", label: "Recommendations", href: "/recommendations", moduleKey: "recommendation" },
+    ],
+  },
+  {
     group: "PLATFORM",
     items: [
       { icon: "📈", label: "Reports", href: "/reports", moduleKey: "reports" },
@@ -89,6 +101,7 @@ const NAV: NavGroup[] = [
       { icon: "❔", label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
       { icon: "🤖", label: "Assistant", href: "/knowledge/assistant", moduleKey: "knowledge" },
       { icon: "🔔", label: "Notifications", href: "/notifications", moduleKey: null },
+      { icon: "🪪", label: "Identity", href: "/identity", moduleKey: "identity" },
       { icon: "🏢", label: "Tenant", href: "/tenant", moduleKey: "tenant" },
       { icon: "🛡️", label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
       { icon: "🔧", label: "Change & Release", href: "/change", moduleKey: null },

@@ -10,7 +10,17 @@ export default async function GatewaysPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Communication Gateways" subtitle="SMS, email, WhatsApp and push notification gateway status." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
+      <PageHeader
+        title="Communication Gateways"
+        subtitle="SMS, email, WhatsApp and push notification gateway status."
+        back="/admin"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
+      <p className="back" style={{ marginTop: 8 }}>
+        <a href="/admin/gateway-config">Edge config</a>
+        {" · "}
+        <a href="/admin/gateway-routes">API route catalogue</a>
+      </p>
       <StatGrid>
         <StatCard icon="📡" iconBg="#eef2ff" label="Total Gateways" value={gateways.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />

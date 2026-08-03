@@ -1,36 +1,18 @@
-import { PageShell } from "../../_components/PageShell";
-import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { Card, StatGrid, StatCard } from "@/app/_components/ds";
-import { getThemeTokens } from "../../_data/loaders";
-import { ThemeActions } from "./ThemeActions";
-import { ThemeTokenTable } from "./ThemeTokenTable";
+import { ModuleHub } from "../../_components/ModuleHub";
 
-const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-export default async function Page() {
-	const { data: themeTokens, source } = await getThemeTokens();
-
-	const total = themeTokens.length;
-	const colourTokens = themeTokens.filter((t) => HEX.test(String(t.value ?? "").trim())).length;
-	const scalarTokens = total - colourTokens;
-
-	return (
-		<PageShell title="Themes" description="Tenant branding and token preview workspace.">
-			{source === "error" ? <DataSourceBadge source={source} /> : null}
-
-			<StatGrid>
-				<StatCard icon="🎨" label="Theme tokens" value={total} />
-				<StatCard icon="🌈" iconBg="#fef3c7" label="Colour tokens" value={colourTokens} />
-				<StatCard icon="⚙️" iconBg="#e0e7ff" label="Scalar tokens" value={scalarTokens} />
-			</StatGrid>
-
-			<ThemeActions />
-
-			<Card title="Token palette">
-				<div className="pad">
-					<ThemeTokenTable tokens={themeTokens} />
-				</div>
-			</Card>
-		</PageShell>
-	);
+export default function Page() {
+  return (
+    <ModuleHub
+      title="Themes"
+      description="Design tokens, templates and branding for tenant editions."
+      help="themes"
+      links={[
+        { href: "/themes/tokens", label: "Tokens", note: "Colour and scalar design tokens" },
+        { href: "/themes/templates", label: "Templates", note: "Theme templates" },
+        { href: "/themes/branding", label: "Branding", note: "Branding packs and logos" },
+        { href: "/themes/brand", label: "Brand preset", note: "Active brand and presets" },
+        { href: "/settings/branding", label: "Settings branding", note: "Tenant settings branding editor" },
+      ]}
+    />
+  );
 }
