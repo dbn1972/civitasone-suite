@@ -388,6 +388,14 @@ jobs:
         env:
           QUEUE_DRIVER: memory
 
+      # R5 — CRM contract / link integrity. BLOCKING. Fails on any /crm link
+      # that points at a non-existent Next.js route (dead navigation tile) or
+      # any CRM API path the web app calls that crm-service does not register.
+      - name: Run CRM link-integrity contract test (Vitest)
+        run: pnpm exec vitest run tests/contract/crm-link-integrity.contract.test.ts
+        env:
+          QUEUE_DRIVER: memory
+
   # ─────────────────────────────────────────────
   # Job 6: Screen verification gate
   # Static analysis: every screen must be WIRED (gateway + route + migration).
