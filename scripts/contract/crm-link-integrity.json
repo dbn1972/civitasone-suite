@@ -1,0 +1,959 @@
+{
+  "gatewayPrefix": "/api/v1/crm",
+  "counts": {
+    "crmApiRoutes": 89,
+    "crmNextRoutes": 12,
+    "webNextRoutes": 641,
+    "crmLinks": 33,
+    "deadLinks": 0,
+    "crmApiRefs": 24,
+    "unknownApiRefs": 0
+  },
+  "crmApiRoutes": [
+    {
+      "method": "GET",
+      "path": "/v1/crm/account-plans",
+      "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/account-plans",
+      "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/account-plans/:id",
+      "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts/:id/ancestors",
+      "source": "services/crm-service/src/modules/accounts/hierarchy-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts/:id/children",
+      "source": "services/crm-service/src/modules/accounts/hierarchy-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/accounts/:id/parent",
+      "source": "services/crm-service/src/modules/accounts/hierarchy-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts/:id/plans",
+      "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts/:id/plans/:planId/activate",
+      "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/activities",
+      "source": "services/crm-service/src/modules/activities/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/activities",
+      "source": "services/crm-service/src/modules/activities/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/activities/:id",
+      "source": "services/crm-service/src/modules/activities/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/activities/capture",
+      "source": "services/crm-service/src/modules/activities/capture-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/activities/capture",
+      "source": "services/crm-service/src/modules/activities/capture-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/activities/capture/:id/match",
+      "source": "services/crm-service/src/modules/activities/capture-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/activities/capture/health",
+      "source": "services/crm-service/src/modules/activities/capture-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/campaigns/:id/performance",
+      "source": "services/crm-service/src/modules/dashboard/campaign-roi-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/campaigns/:id/roi",
+      "source": "services/crm-service/src/modules/dashboard/campaign-roi-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/campaigns/roi-summary",
+      "source": "services/crm-service/src/modules/dashboard/campaign-roi-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/contacts/:id",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/contacts/:id",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id/detail",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id/roles",
+      "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/:id/roles",
+      "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/contacts/:id/roles/:roleId",
+      "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/:id/transfer",
+      "source": "services/crm-service/src/modules/teams/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/bulk/import",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/dedup",
+      "source": "services/crm-service/src/modules/contacts/identity-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/export",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/merge",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/resolve",
+      "source": "services/crm-service/src/modules/contacts/identity-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/custom-fields",
+      "source": "services/crm-service/src/modules/custom-fields/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/custom-fields/:entityType",
+      "source": "services/crm-service/src/modules/custom-fields/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/custom-fields/:id",
+      "source": "services/crm-service/src/modules/custom-fields/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/custom-fields/:id",
+      "source": "services/crm-service/src/modules/custom-fields/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/custom-fields/definition/:id",
+      "source": "services/crm-service/src/modules/custom-fields/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard",
+      "source": "services/crm-service/src/modules/dashboard/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/deals",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/deals/:id",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/:id",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/deals/:id",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/deals/:id/close",
+      "source": "services/crm-service/src/modules/deals/close-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/deals/:id/stage",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/:id/stakeholders",
+      "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/forecast",
+      "source": "services/crm-service/src/modules/deals/forecast-route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/leads/:id/completeness",
+      "source": "services/crm-service/src/modules/leads/completeness-route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/:id/convert",
+      "source": "services/crm-service/src/modules/contacts/conversion-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/leads/:id/score",
+      "source": "services/crm-service/src/modules/leads/score-route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/:id/transition",
+      "source": "services/crm-service/src/modules/leads/lifecycle-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/inbound",
+      "source": "services/crm-service/src/modules/leads/inbound-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/next-actions",
+      "source": "services/crm-service/src/modules/activities/next-action-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/next-actions",
+      "source": "services/crm-service/src/modules/activities/next-action-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/next-actions/:id/complete",
+      "source": "services/crm-service/src/modules/activities/next-action-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/next-actions/compliance",
+      "source": "services/crm-service/src/modules/activities/next-action-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/pipelines",
+      "source": "services/crm-service/src/modules/pipelines/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/pipelines",
+      "source": "services/crm-service/src/modules/pipelines/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/pipelines/:id",
+      "source": "services/crm-service/src/modules/pipelines/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/pipelines/:id",
+      "source": "services/crm-service/src/modules/pipelines/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/pipelines/:id",
+      "source": "services/crm-service/src/modules/pipelines/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/qbr",
+      "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/qbr",
+      "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/qbr/:id/cancel",
+      "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/qbr/:id/complete",
+      "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/qbr/upcoming",
+      "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/quotations",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/accept",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/new-version",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/reject",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/send",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/recurring-tasks",
+      "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/recurring-tasks",
+      "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/recurring-tasks/:id",
+      "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/recurring-tasks/:id/run",
+      "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/recurring-tasks/due",
+      "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/teams",
+      "source": "services/crm-service/src/modules/teams/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/teams",
+      "source": "services/crm-service/src/modules/teams/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/teams/agents",
+      "source": "services/crm-service/src/modules/teams/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/teams/agents/:agentId/capacity",
+      "source": "services/crm-service/src/modules/teams/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/tenders",
+      "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/tenders",
+      "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/tenders/:id",
+      "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/tenders/:id/stage",
+      "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/tenders/upcoming",
+      "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    }
+  ],
+  "crmNextRoutes": [
+    "/crm",
+    "/crm/activities",
+    "/crm/contacts",
+    "/crm/contacts/[id]",
+    "/crm/contacts/[id]/edit",
+    "/crm/contacts/import",
+    "/crm/contacts/new",
+    "/crm/dashboard",
+    "/crm/deals",
+    "/crm/deals/[id]",
+    "/crm/deals/new",
+    "/crm/pipeline"
+  ],
+  "links": [
+    {
+      "file": "apps/web/src/app/_components/ds/Sidebar.tsx",
+      "line": 58,
+      "kind": "href",
+      "target": "/crm",
+      "resolved": "/crm",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/analytics/ml-insights/leads/page.tsx",
+      "line": 16,
+      "kind": "rowLinkPrefix",
+      "target": "/crm/contacts/",
+      "resolved": "/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
+      "line": 59,
+      "kind": "href",
+      "target": "/crm/contacts/${contactId}/edit",
+      "resolved": "/crm/contacts/__param__/edit",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
+      "line": 74,
+      "kind": "navigate",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
+      "line": 60,
+      "kind": "navigate",
+      "target": "/crm/contacts/${params.id}",
+      "resolved": "/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
+      "line": 70,
+      "kind": "href",
+      "target": "/crm/contacts/${params.id}",
+      "resolved": "/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/page.tsx",
+      "line": 63,
+      "kind": "rowLinkPrefix",
+      "target": "/crm/deals/",
+      "resolved": "/crm/deals/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
+      "line": 17,
+      "kind": "navigate",
+      "target": "/crm/contacts?${params.toString()}",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
+      "line": 57,
+      "kind": "href",
+      "target": "/crm/contacts/new",
+      "resolved": "/crm/contacts/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
+      "line": 59,
+      "kind": "href",
+      "target": "/crm/contacts/import",
+      "resolved": "/crm/contacts/import",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
+      "line": 60,
+      "kind": "navigate",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
+      "line": 70,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
+      "line": 43,
+      "kind": "navigate",
+      "target": "/crm/contacts/${body.id}",
+      "resolved": "/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
+      "line": 53,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 17,
+      "kind": "href",
+      "target": "/crm/contacts/new",
+      "resolved": "/crm/contacts/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 18,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 31,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 32,
+      "kind": "href",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 33,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
+      "line": 79,
+      "kind": "navigate",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
+      "line": 89,
+      "kind": "href",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/page.tsx",
+      "line": 21,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 6,
+      "kind": "href",
+      "target": "/crm/dashboard",
+      "resolved": "/crm/dashboard",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 7,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 8,
+      "kind": "href",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 9,
+      "kind": "href",
+      "target": "/crm/pipeline",
+      "resolved": "/crm/pipeline",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 10,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/pipeline/_components/DealCard.tsx",
+      "line": 59,
+      "kind": "href",
+      "target": "/crm/deals/${deal.id}",
+      "resolved": "/crm/deals/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx",
+      "line": 191,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/pipeline/page.tsx",
+      "line": 28,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/dashboard/page.tsx",
+      "line": 18,
+      "kind": "href",
+      "target": "/crm",
+      "resolved": "/crm",
+      "ok": true
+    },
+    {
+      "file": "services/gateway-service/src/screen-manifest.ts",
+      "line": 54,
+      "kind": "nav",
+      "target": "/crm",
+      "resolved": "/crm",
+      "ok": true
+    },
+    {
+      "file": "services/gateway-service/src/screen-manifest.ts",
+      "line": 65,
+      "kind": "nav",
+      "target": "/crm",
+      "resolved": "/crm",
+      "ok": true
+    }
+  ],
+  "apiRefs": [
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1147,
+      "ref": "/api/v1/crm/contacts",
+      "gatewayPath": "/api/v1/crm/contacts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1147,
+      "ref": "/api/v1/crm/contacts?${qs}",
+      "gatewayPath": "/api/v1/crm/contacts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1157,
+      "ref": "/api/v1/crm/deals",
+      "gatewayPath": "/api/v1/crm/deals",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1165,
+      "ref": "/api/v1/crm/activities",
+      "gatewayPath": "/api/v1/crm/activities",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2132,
+      "ref": "/api/v1/crm/dashboard",
+      "gatewayPath": "/api/v1/crm/dashboard",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/dashboard",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2171,
+      "ref": "/api/v1/crm/deals",
+      "gatewayPath": "/api/v1/crm/deals",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2179,
+      "ref": "/api/v1/crm/deals/${id}",
+      "gatewayPath": "/api/v1/crm/deals/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2254,
+      "ref": "/api/v1/crm/pipelines",
+      "gatewayPath": "/api/v1/crm/pipelines",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/pipelines",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2294,
+      "ref": "/api/v1/crm/deals?limit=200",
+      "gatewayPath": "/api/v1/crm/deals",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2302,
+      "ref": "/api/v1/crm/contacts/${id}/detail",
+      "gatewayPath": "/api/v1/crm/contacts/__param__/detail",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts/__param__/detail",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2341,
+      "ref": "/api/v1/crm/activities",
+      "gatewayPath": "/api/v1/crm/activities",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx",
+      "line": 25,
+      "ref": "/api/proxy/v1/crm/contacts",
+      "gatewayPath": "/api/v1/crm/contacts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx",
+      "line": 49,
+      "ref": "/api/proxy/v1/crm/activities",
+      "gatewayPath": "/api/v1/crm/activities",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
+      "line": 26,
+      "ref": "/api/proxy/v1/crm/activities",
+      "gatewayPath": "/api/v1/crm/activities",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
+      "line": 50,
+      "ref": "/api/proxy/v1/crm/contacts/${contactId}",
+      "gatewayPath": "/api/v1/crm/contacts/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
+      "line": 44,
+      "ref": "/api/proxy/v1/crm/contacts/${params.id}",
+      "gatewayPath": "/api/v1/crm/contacts/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
+      "line": 24,
+      "ref": "/api/proxy/v1/crm/contacts/export",
+      "gatewayPath": "/api/v1/crm/contacts/export",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts/export",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
+      "line": 53,
+      "ref": "/api/proxy/v1/crm/contacts/bulk/import",
+      "gatewayPath": "/api/v1/crm/contacts/bulk/import",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts/bulk/import",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
+      "line": 25,
+      "ref": "/api/proxy/v1/crm/contacts",
+      "gatewayPath": "/api/v1/crm/contacts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx",
+      "line": 25,
+      "ref": "/api/proxy/v1/crm/deals/${dealId}/stage",
+      "gatewayPath": "/api/v1/crm/deals/__param__/stage",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals/__param__/stage",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx",
+      "line": 39,
+      "ref": "/api/proxy/v1/crm/activities",
+      "gatewayPath": "/api/v1/crm/activities",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
+      "line": 38,
+      "ref": "/api/proxy/v1/crm/contacts",
+      "gatewayPath": "/api/v1/crm/contacts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
+      "line": 64,
+      "ref": "/api/proxy/v1/crm/deals",
+      "gatewayPath": "/api/v1/crm/deals",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx",
+      "line": 102,
+      "ref": "/api/proxy/v1/crm/deals/${deal.id}/stage",
+      "gatewayPath": "/api/v1/crm/deals/__param__/stage",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/deals/__param__/stage",
+      "ok": true
+    }
+  ],
+  "deadLinks": [],
+  "unknownApiRefs": []
+}

@@ -11,7 +11,9 @@ export default async function LeadsInsightsPage() {
       domain="leads"
       evaluation={evaluation}
       source={source}
-      rowLinkPrefix="/crm/pipeline/"
+      // A CRM lead is a row in crm.contacts (crm.lead.created carries contactId),
+      // so lead predictions drill through to the contact record.
+      rowLinkPrefix="/crm/contacts/"
       statLabels={{
         predictions: "Leads Scored",
         accuracy: "AUC-ROC",
