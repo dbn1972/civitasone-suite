@@ -83,7 +83,14 @@ export interface ActionCandidate {
 export interface EligibilityContext {
   channel?: string | undefined;
   segment?: string | undefined;
-  hasConsent?: boolean | undefined;
+  /**
+   * Marketing-consent verdict RESOLVED BY THE SERVER (P2-1). It must come from
+   * the CRM system of record via consent-resolution.ts and never from the
+   * request body, or a caller could assert its own consent and collect
+   * consent-gated actions. Named `consentGranted`, not `hasConsent`, so the old
+   * body-supplied field cannot flow back in unnoticed.
+   */
+  consentGranted?: boolean | undefined;
   healthScore?: number | undefined;
 }
 
@@ -234,7 +241,7 @@ export function applyEligibility(
 
     if (rules.suppressed === true) return false;
 
-    if (rules.requiresConsent === true && context.hasConsent !== true) return false;
+    if (rules.requiresConsent === true && context.consentGranted !== true) return false;
 
     if (rules.channels !== undefined && rules.channels.length > 0) {
       if (context.channel === undefined || !rules.channels.includes(context.channel)) return false;

@@ -271,7 +271,7 @@ describe("applyEligibility", () => {
   const context: EligibilityContext = {
     channel: "web",
     segment: "sme",
-    hasConsent: true,
+    consentGranted: true,
     healthScore: 60,
   };
 
@@ -295,7 +295,7 @@ describe("applyEligibility", () => {
 
   it("drops a consent-required candidate without consent", () => {
     const c = candidate({ id: "consent", eligibility: { requiresConsent: true } });
-    expect(applyEligibility([c], { ...context, hasConsent: false })).toEqual([]);
+    expect(applyEligibility([c], { ...context, consentGranted: false })).toEqual([]);
   });
 
   it("drops a consent-required candidate when consent is unknown", () => {
