@@ -69,8 +69,9 @@ import { HttpError } from "../../shared/context.js";
 import { DetailedHttpError, registerStandardErrorHandler } from "../../shared/api-errors.js";
 import { withTenant, type Tx } from "../../shared/scope.js";
 import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
+import { ANONYMOUS_ACTOR_ID, COMMANDS } from "../../topics.js";
 import { fieldDefinitions, layoutDefinitions } from "../entities/schema.js";
+import { formPublicEndpoints, formVersions } from "./schema.js";
 import { applyVisibility, resolveCascadeOptions, validateFormSubmission } from "./domain.js";
 import type { FieldDef } from "../rules/domain.js";
 import {
