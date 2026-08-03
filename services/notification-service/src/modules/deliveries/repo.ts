@@ -110,6 +110,27 @@ export async function updateDeliveryStatus(
   }).where(eq(notificationDeliveries.id, id));
 }
 
+/**
+ * Park a delivery that the consent gate deferred for a DND window.
+ *
+ * Status goes back to `queued` (it is not refused, only postponed) and
+ * `next_retry_at` is explicitly CLEARED: leaving a stale retry timestamp on a
+ * `queued` row would make the durable retry sweeper republish the send in
+ * parallel with the DND release sweeper, sending it twice.
+ */
+export async function deferDeliveryForDnd(
+  tx: Writer, id: string, actorId: string, holdUntil: Date,
+): Promise<void> {
+  const rows = await tx.select().from(notificationDeliveries).where(eq(notificationDeliveries.id, id)).limit(1);
+  const current = rows[0];
+  if (!current) return;
+  await tx.update(notificationDeliveries).set({
+    status: "queued", nextRetryAt: null,
+    errorDetail: `held for DND until ${holdUntil.toISOString()}`,
+    updatedBy: actorId, updatedAt: new Date(), version: current.version + 1,
+  }).where(eq(notificationDeliveries.id, id));
+}
+
 export async function scheduleDeliveryRetry(
   tx: Writer, id: string, retryCount: number, nextRetryAt: Date, actorId: string, errorDetail: string,
 ): Promise<void> {
