@@ -4,6 +4,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { queue as rawQueue } from "../../shared/infra.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
@@ -19,7 +20,11 @@ const FIXED_ASSET_CODE = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
 const IMPAIRMENT_CODE = process.env.ASSET_IMPAIRMENT_CODE ?? "5200";
 const REVAL_RESERVE_CODE = process.env.ASSET_REVAL_RESERVE_CODE ?? "3100";
 
-export function registerF3EnterpriseConsumers(queue: Queue): void {
+export function registerF3EnterpriseConsumers(rawQ: Queue): void {
+  // Mirror other asset consumers: tenantScoped so NOBYPASSRLS + FORCE RLS
+  // accepts writes when the queue is a bare MemoryQueue (tests). createQueue()
+  // already wraps withTenantConsumer — double-wrap is idempotent.
+  const queue = tenantScoped(rawQ);
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, unknown>;
     const op = String(p.op ?? "");
