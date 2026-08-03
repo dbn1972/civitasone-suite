@@ -3,10 +3,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
+import { COMMANDS } from "../../topics.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import * as commands from "./roles-commands.js";
@@ -29,7 +30,7 @@ export async function rolesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id: contactId } = idParam.parse(req.params);
     const body = createRoleBody.parse(req.body);
-    const roleId = randomUUID();
+    const roleId = commandId(ctx, `${COMMANDS.createContactRole}:${contactId}`);
     return sendAccepted(
       reply,
       acceptedResponseSchema,

@@ -9,11 +9,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { publishCrmCommand } from "../../shared/residual-publish.js";
@@ -179,7 +179,7 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
 
     const costMinor = BigInt(body.costMinor).toString();
     const revenueMinor = BigInt(body.revenueMinor).toString();
-    const rowId = randomUUID();
+    const rowId = commandId(ctx, `${COMMANDS.upsertCampaignPerformance}:${id}`);
     return sendAccepted(
       reply,
       acceptedResponseSchema,

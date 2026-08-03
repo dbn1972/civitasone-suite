@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreatePipelineBody, UpdatePipelineBody } from "./validators.js";
 import type { PipelineView } from "./schema.js";
@@ -10,7 +10,7 @@ const RESOURCE = "pipeline";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createPipeline(ctx: RequestContext, body: CreatePipelineBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createPipeline);
   const projected: PipelineView = {
     id,
     tenantId: ctx.tenantId,
@@ -37,7 +37,7 @@ export async function createPipeline(ctx: RequestContext, body: CreatePipelineBo
 }
 
 export async function updatePipeline(ctx: RequestContext, id: string, body: UpdatePipelineBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.updatePipeline}:${id}`);
   await queue.publish(COMMANDS.updatePipeline, {
     messageId: msgId,
     type: COMMANDS.updatePipeline,
@@ -53,7 +53,7 @@ export async function updatePipeline(ctx: RequestContext, id: string, body: Upda
 }
 
 export async function deletePipeline(ctx: RequestContext, id: string): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.deletePipeline}:${id}`);
   await queue.publish(COMMANDS.deletePipeline, {
     messageId: msgId,
     type: COMMANDS.deletePipeline,

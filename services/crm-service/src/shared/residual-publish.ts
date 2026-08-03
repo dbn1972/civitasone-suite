@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "./infra.js";
+import { commandId } from "./idempotency.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -11,7 +11,7 @@ export async function publishCrmCommand(
   payload: Record<string, unknown>,
 ): Promise<Accepted> {
   await queue.publish(type, {
-    messageId: randomUUID(),
+    messageId: commandId(ctx, `${type}:${id}`),
     type,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

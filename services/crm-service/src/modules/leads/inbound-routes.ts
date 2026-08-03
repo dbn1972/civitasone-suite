@@ -7,8 +7,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -38,10 +38,10 @@ export async function inboundLeadRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, INBOUND_ROLES);
 
     const body = inboundLeadBody.parse(req.body);
-    const messageId = randomUUID();
+    const messageId = commandId(ctx, COMMANDS.inboundCapture);
     // Allocated here so a redelivered capture command updates the same contact
     // row rather than inserting a duplicate lead.
-    const contactId = randomUUID();
+    const contactId = commandId(ctx, `${COMMANDS.inboundCapture}:contact`);
 
     await queue.publish(COMMANDS.inboundCapture, {
       messageId,

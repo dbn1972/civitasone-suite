@@ -8,8 +8,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
@@ -87,7 +87,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const messageId = randomUUID();
+    const messageId = commandId(ctx, `${COMMANDS.leadTransition}:${params.id}`);
 
     await queue.publish(COMMANDS.leadTransition, {
       messageId,

@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateCustomFieldBody, UpdateCustomFieldBody } from "./validators.js";
 
@@ -8,7 +8,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 const RESOURCE = "custom_field";
 
 export async function createCustomField(ctx: RequestContext, body: CreateCustomFieldBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createCustomField);
   await queue.publish(COMMANDS.createCustomField, {
     messageId: id,
     type: COMMANDS.createCustomField,
@@ -37,7 +37,7 @@ export async function updateCustomField(
   id: string,
   body: UpdateCustomFieldBody,
 ): Promise<Accepted> {
-  const messageId = randomUUID();
+  const messageId = commandId(ctx, `${COMMANDS.updateCustomField}:${id}`);
   await queue.publish(COMMANDS.updateCustomField, {
     messageId,
     type: COMMANDS.updateCustomField,
@@ -52,7 +52,7 @@ export async function updateCustomField(
 }
 
 export async function deleteCustomField(ctx: RequestContext, id: string): Promise<Accepted> {
-  const messageId = randomUUID();
+  const messageId = commandId(ctx, `${COMMANDS.deleteCustomField}:${id}`);
   await queue.publish(COMMANDS.deleteCustomField, {
     messageId,
     type: COMMANDS.deleteCustomField,

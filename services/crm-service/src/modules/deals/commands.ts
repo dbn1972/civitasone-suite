@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateDealBody, UpdateDealStageBody, UpdateDealBody } from "./validators.js";
 import type { DealView } from "./schema.js";
@@ -17,7 +17,7 @@ function formatValue(minor: bigint, currency: string): string {
 }
 
 export async function createDeal(ctx: RequestContext, body: CreateDealBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createDeal);
   const valueMinor = BigInt(body.valueMinor);
   const projected: DealView = {
     id,
@@ -52,7 +52,7 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
 }
 
 export async function updateDealStage(ctx: RequestContext, id: string, body: UpdateDealStageBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.updateDealStage}:${id}`);
   await queue.publish(COMMANDS.updateDealStage, {
     messageId: msgId, type: COMMANDS.updateDealStage,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -72,7 +72,7 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
 
 // P1-1: edit deal fields.
 export async function updateDeal(ctx: RequestContext, id: string, body: UpdateDealBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.updateDeal}:${id}`);
   await queue.publish(COMMANDS.updateDeal, {
     messageId: msgId, type: COMMANDS.updateDeal,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -85,7 +85,7 @@ export async function updateDeal(ctx: RequestContext, id: string, body: UpdateDe
 
 // P1-1: soft-delete a deal.
 export async function deleteDeal(ctx: RequestContext, id: string): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.deleteDeal}:${id}`);
   await queue.publish(COMMANDS.deleteDeal, {
     messageId: msgId, type: COMMANDS.deleteDeal,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

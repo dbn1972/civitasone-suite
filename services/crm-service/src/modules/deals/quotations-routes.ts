@@ -7,11 +7,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { commandId } from "../../shared/idempotency.js";
+import { COMMANDS } from "../../topics.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import {
@@ -151,7 +152,7 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "QUOTE_EXISTS", "a quotation with this reference already exists");
     }
 
-    const quotationId = randomUUID();
+    const quotationId = commandId(ctx, COMMANDS.createQuotation);
     const totalMinor = resolveTotal(body.lineItems, body.totalMinor, "0");
     return sendAccepted(
       reply,
@@ -187,7 +188,7 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
 
     const clonedLineItems = body.lineItems ?? (source.lineItems as z.infer<typeof lineItem>[]);
     const totalMinor = resolveTotal(body.lineItems, body.totalMinor, source.totalMinor);
-    const newId = randomUUID();
+    const newId = commandId(ctx, `${COMMANDS.versionQuotation}:${id}`);
 
     return sendAccepted(
       reply,

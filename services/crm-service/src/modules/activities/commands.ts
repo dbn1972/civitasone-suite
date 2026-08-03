@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateActivityBody, UpdateActivityBody } from "./validators.js";
 import type { ActivityView } from "./schema.js";
@@ -10,7 +10,7 @@ const RESOURCE = "activity";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createActivity(ctx: RequestContext, body: CreateActivityBody): Promise<Accepted> {
-  const id = randomUUID();
+  const id = commandId(ctx, COMMANDS.createActivity);
   const createdAt = new Date().toISOString();
   const projected: ActivityView = {
     id,
@@ -39,7 +39,7 @@ export async function createActivity(ctx: RequestContext, body: CreateActivityBo
 
 // P1-3: update activity status/completion.
 export async function updateActivity(ctx: RequestContext, id: string, body: UpdateActivityBody): Promise<Accepted> {
-  const msgId = randomUUID();
+  const msgId = commandId(ctx, `${COMMANDS.updateActivity}:${id}`);
   await queue.publish(COMMANDS.updateActivity, {
     messageId: msgId, type: COMMANDS.updateActivity,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
