@@ -263,14 +263,48 @@
     },
     {
       "module": "ai",
+      "screen": "/ai/chat/[id]",
+      "loaders": [
+        "getChatConversation"
+      ],
+      "apiPaths": [
+        "/api/v1/ai/chat"
+      ],
+      "upstream": "ai → /v1/ai/chat",
+      "routeHandler": "/v1/ai/chat",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai/chat/[id]",
+      "loaders": [
+        "getChatTranscript"
+      ],
+      "apiPaths": [
+        "/api/v1/ai/chat/:param/history"
+      ],
+      "upstream": "ai → /v1/ai/chat/:param/history",
+      "routeHandler": "/v1/ai/chat/:conversationId/history",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "ai",
       "screen": "/ai/chat",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getChatConversations"
+      ],
+      "apiPaths": [
+        "/api/v1/ai/chat"
+      ],
+      "upstream": "ai → /v1/ai/chat",
+      "routeHandler": "/v1/ai/chat",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "ai",
@@ -7999,9 +8033,9 @@
     }
   ],
   "counts": {
-    "wired": 209,
+    "wired": 212,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 442
+    "noLoader": 441
   }
 }

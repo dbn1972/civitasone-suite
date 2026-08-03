@@ -93,7 +93,6 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
-export const getAiChat = moduleLoader("/api/v1/ai/chat", "ai.chat");
 export const getAiAgents = moduleLoader("/api/v1/ai/agents", "ai.agents");
 export const getAiGuardrails = moduleLoader("/api/v1/ai/guardrails/rules", "ai.guardrails");
 

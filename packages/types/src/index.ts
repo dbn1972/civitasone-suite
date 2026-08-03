@@ -135,6 +135,32 @@ export interface CRMDealSummary {
   valueDisplay: string;
 }
 
+/**
+ * One assistant chat conversation. `status` is left as a string rather than a
+ * union so a new status added by ai-agent-service does not fail validation and
+ * blank the screen.
+ */
+export interface ChatConversation {
+  id: string;
+  channelId: string;
+  profileId: string | null;
+  status: string;
+  language: string;
+  startedAt: string;
+  endedAt: string | null;
+  version: number;
+}
+
+/** One message in a chat transcript. */
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  role: string;
+  content: string;
+  tokens: number | null;
+  createdAt: string;
+}
+
 /** A retrieved document cited by a copilot answer. */
 export interface CopilotCitation {
   id: string;
