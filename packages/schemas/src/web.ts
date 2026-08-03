@@ -190,6 +190,23 @@ export const crmAccountHierarchyNodeSchema = z.object({
   name: z.string(),
 });
 
+export const crmForecastStageApiSchema = z.object({
+  stageId: z.string().min(1),
+  stageName: z.string(),
+  probability: z.number(),
+  /** bigint paise serialised as a string */
+  weightedTotal: z.string(),
+});
+
+export const crmForecastSchema = z.object({
+  data: z.object({
+    /** bigint paise serialised as a string */
+    totalForecast: z.string(),
+    dealCount: z.number().int(),
+    stages: z.array(crmForecastStageApiSchema),
+  }),
+});
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });

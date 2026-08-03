@@ -135,6 +135,24 @@ export interface CRMDealSummary {
   valueDisplay: string;
 }
 
+/** One stage's contribution to the weighted revenue forecast. */
+export interface CRMForecastStage {
+  stageId: string;
+  stageName: string;
+  /** Win probability for the stage, 0–100. */
+  probability: number;
+  /** Weighted value in bigint minor units (paise), as a string. */
+  weightedTotalMinor: string;
+}
+
+/** Weighted revenue forecast computed from active deals in a pipeline. */
+export interface CRMForecast {
+  /** Total weighted value in bigint minor units (paise), as a string. */
+  totalForecastMinor: string;
+  dealCount: number;
+  stages: CRMForecastStage[];
+}
+
 export interface CRMContactSummary {
   id?: string;
   name: string;

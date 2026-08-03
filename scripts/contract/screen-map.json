@@ -1806,6 +1806,36 @@
     },
     {
       "module": "crm",
+      "screen": "/crm/forecast",
+      "loaders": [
+        "getCrmForecast"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/forecast"
+      ],
+      "upstream": "crm → /v1/crm/forecast",
+      "routeHandler": "/v1/crm/forecast",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/forecast",
+      "loaders": [
+        "getPipelines"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/pipelines"
+      ],
+      "upstream": "crm → /v1/crm/pipelines",
+      "routeHandler": "/v1/crm/pipelines",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
       "screen": "/crm",
       "loaders": [],
       "apiPaths": [],
@@ -7905,7 +7935,7 @@
     }
   ],
   "counts": {
-    "wired": 202,
+    "wired": 204,
     "missing": 0,
     "mismatch": 0,
     "noLoader": 443
