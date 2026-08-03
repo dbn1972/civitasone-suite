@@ -5,9 +5,13 @@
  * mandatory reason enforcement, auth/authz) and the lifecycle consumer.
  */
 import { describe, it, expect, afterAll, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { COMMANDS } from "../src/topics.js";
+import { captureHandlers, envelope } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000003";
@@ -38,6 +42,13 @@ async function seedContact(id: string, leadStatus: string): Promise<void> {
       ON CONFLICT (id) DO UPDATE SET lead_status = ${leadStatus}, version = crm.contacts.version + 1
     `;
   });
+}
+
+function scoped<T>(fn: (tx: Parameters<Parameters<typeof sqlClient.begin>[0]>[0]) => Promise<T>): Promise<T> {
+  return sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    return fn(tx);
+  }) as Promise<T>;
 }
 
 async function cleanupContact(id: string): Promise<void> {
@@ -417,5 +428,80 @@ describe("lifecycle consumer (unit)", () => {
 
     registerLifecycleConsumer(mockQueue as never);
     expect(subscriptions).toContain(COMMANDS.leadTransition);
+  });
+});
+
+/**
+ * Driven through the captured handler rather than the bus: the route tests above
+ * delete their contact as soon as they get their 202, so a shared registration
+ * would race them. Until the worker registered this consumer, none of the state
+ * asserted here was ever written.
+ */
+describe("crm.lead.transition consumer applies the transition", () => {
+  const TRANSITION_LEAD_ID = "eeeeeeee-5555-4000-8000-000000000011";
+
+  afterAll(async () => { await cleanupContact(TRANSITION_LEAD_ID); });
+
+  async function runTransition(
+    payload: { fromStatus: string; targetStatus: string; reason: string; notes: string | null },
+    messageId?: string,
+  ): Promise<void> {
+    const { handlerFor } = captureHandlers();
+    const handler = handlerFor(COMMANDS.leadTransition);
+    const msg = envelope(COMMANDS.leadTransition, { contactId: TRANSITION_LEAD_ID, ...payload }, {
+      tenantId: TENANT,
+      actorId: ACTOR,
+      ...(messageId !== undefined ? { messageId } : {}),
+    });
+    await runWithTenant(TENANT, () => handler(msg));
+  }
+
+  it("updates lead_status and writes the lead_transitions audit row", async () => {
+    await cleanupContact(TRANSITION_LEAD_ID);
+    await seedContact(TRANSITION_LEAD_ID, "new");
+
+    await runTransition({
+      fromStatus: "new",
+      targetStatus: "nurture",
+      reason: "Budget deferred to the next financial year",
+      notes: "Revisit in Q3",
+    });
+
+    const contacts = await scoped((tx) => tx<Array<{ leadStatus: string; version: number }>>`
+      SELECT lead_status AS "leadStatus", version FROM crm.contacts
+      WHERE id = ${TRANSITION_LEAD_ID} AND tenant_id = ${TENANT}
+    `);
+    expect(contacts[0]!.leadStatus).toBe("nurture");
+
+    const transitions = await scoped((tx) => tx<Array<{
+      fromStatus: string; toStatus: string; reason: string; notes: string | null;
+    }>>`
+      SELECT from_status AS "fromStatus", to_status AS "toStatus", reason, notes
+      FROM crm.lead_transitions
+      WHERE contact_id = ${TRANSITION_LEAD_ID} AND tenant_id = ${TENANT}
+    `);
+    expect(transitions).toHaveLength(1);
+    expect(transitions[0]!.fromStatus).toBe("new");
+    expect(transitions[0]!.toStatus).toBe("nurture");
+    expect(transitions[0]!.reason).toBe("Budget deferred to the next financial year");
+    expect(transitions[0]!.notes).toBe("Revisit in Q3");
+  });
+
+  it("is idempotent — a redelivered transition writes one audit row", async () => {
+    await cleanupContact(TRANSITION_LEAD_ID);
+    await seedContact(TRANSITION_LEAD_ID, "new");
+    const messageId = randomUUID();
+
+    const payload = {
+      fromStatus: "new", targetStatus: "qualified", reason: "Verified requirement", notes: null,
+    };
+    await runTransition(payload, messageId);
+    await runTransition(payload, messageId);
+
+    const transitions = await scoped((tx) => tx<Array<{ count: string }>>`
+      SELECT count(*) AS count FROM crm.lead_transitions
+      WHERE contact_id = ${TRANSITION_LEAD_ID} AND tenant_id = ${TENANT}
+    `);
+    expect(transitions[0]!.count).toBe("1");
   });
 });

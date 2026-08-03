@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, char, timestamp, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, char, timestamp, date, text } from "drizzle-orm/pg-core";
 
 export const crmSchema = pgSchema("crm");
 
@@ -15,6 +15,8 @@ export const deals = crmSchema.table("deals", {
   ownerId: uuid("owner_id"),
   closeDate: date("close_date"),
   closedAt: timestamp("closed_at", { withTimezone: true }),
+  closeReason: text("close_reason"),
+  closedValueMinor: bigint("closed_value_minor", { mode: "bigint" }),
   probability: integer("probability").notNull().default(0),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -42,6 +44,9 @@ export type DealView = {
   ownerId: string | null;
   closeDate: string | null;
   closedAt: string | null;
+  closeReason: string | null;
+  /** Realised amount in minor units, set when the deal is closed (OP-006). */
+  closedValueMinor: string | null;
   probability: number;
   status: string;
   version: number;
