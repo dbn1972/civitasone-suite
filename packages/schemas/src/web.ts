@@ -190,6 +190,41 @@ export const crmAccountHierarchyNodeSchema = z.object({
   name: z.string(),
 });
 
+/**
+ * Citation fields are all optional: the column is jsonb and older rows were
+ * written by earlier retrievers, so a strict shape would blank the whole screen
+ * over one legacy row.
+ */
+const copilotCitationApiSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  url: z.string().optional(),
+  score: z.number().optional(),
+});
+
+const copilotTurnApiSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().nullable(),
+  prompt: z.string(),
+  response: z.string().nullable(),
+  sourceCitations: z.array(copilotCitationApiSchema).nullable(),
+  model: z.string().nullable(),
+  tokens: z.number().nullable(),
+  latencyMs: z.number().nullable(),
+  createdAt: z.string(),
+  version: z.number().int(),
+});
+
+export const copilotTurnsListSchema = z.object({
+  data: z.array(copilotTurnApiSchema),
+});
+
+export const copilotTurnDetailSchema = z.object({
+  data: copilotTurnApiSchema.extend({
+    latencyBucket: z.enum(["fast", "normal", "slow"]).nullable().optional(),
+  }),
+});
+
 const healthBandSchema = z.enum(["critical", "at_risk", "healthy", "thriving"]);
 
 export const accountHealthEntryApiSchema = z.object({
