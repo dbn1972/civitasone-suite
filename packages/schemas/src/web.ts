@@ -190,6 +190,32 @@ export const crmAccountHierarchyNodeSchema = z.object({
   name: z.string(),
 });
 
+const chatConversationApiSchema = z.object({
+  id: z.string().uuid(),
+  channelId: z.string(),
+  profileId: z.string().nullable(),
+  status: z.string(),
+  language: z.string(),
+  startedAt: z.string(),
+  endedAt: z.string().nullable(),
+  version: z.number().int(),
+});
+
+export const chatConversationsListSchema = z.object({
+  data: z.array(chatConversationApiSchema),
+});
+
+export const chatTranscriptSchema = z.object({
+  data: z.array(z.object({
+    id: z.string().uuid(),
+    conversationId: z.string().uuid(),
+    role: z.string(),
+    content: z.string(),
+    tokens: z.number().nullable(),
+    createdAt: z.string(),
+  })),
+});
+
 /**
  * Citation fields are all optional: the column is jsonb and older rows were
  * written by earlier retrievers, so a strict shape would blank the whole screen

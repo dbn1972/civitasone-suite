@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-08-03T20:03:36.381Z
+Generated: 2026-08-03T20:12:05.836Z
 
-**Summary:** 209 WIRED | 0 MISSING | 0 MISMATCH | 442 NO_LOADER
+**Summary:** 212 WIRED | 0 MISSING | 0 MISMATCH | 441 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -29,7 +29,9 @@ Generated: 2026-08-03T20:03:36.381Z
 | admin | /admin/tenants/[id] | getAdminTenantModules | /api/v1/admin/tenants/:param/config | admin → /v1/admin/tenants/:param/config | ✓ `/v1/admin/tenants/:id/config` | ✓ | ✅ WIRED |
 | admin | /admin/tenants | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/agents | — | — | — | — | — | — NO_LOADER |
-| ai | /ai/chat | — | — | — | — | — | — NO_LOADER |
+| ai | /ai/chat/[id] | getChatConversation | /api/v1/ai/chat | ai → /v1/ai/chat | ✓ `/v1/ai/chat` | ✓ | ✅ WIRED |
+| ai | /ai/chat/[id] | getChatTranscript | /api/v1/ai/chat/:param/history | ai → /v1/ai/chat/:param/history | ✓ `/v1/ai/chat/:conversationId/history` | ✓ | ✅ WIRED |
+| ai | /ai/chat | getChatConversations | /api/v1/ai/chat | ai → /v1/ai/chat | ✓ `/v1/ai/chat` | ✓ | ✅ WIRED |
 | ai | /ai/copilot/[id] | getCopilotTurn | /api/v1/ai/copilot/turns/:param | ai → /v1/ai/copilot/turns/:param | ✓ `/v1/ai/copilot/turns/:id` | ✓ | ✅ WIRED |
 | ai | /ai/copilot | getCopilotTurns | /api/v1/ai/copilot/turns | ai → /v1/ai/copilot/turns | ✓ `/v1/ai/copilot/turns` | ✓ | ✅ WIRED |
 | ai | /ai/governance | — | — | — | — | — | — NO_LOADER |

@@ -17,6 +17,8 @@ import type {
   AccountHealthEntry,
   AccountHealthBreakdown,
   CopilotTurn,
+  ChatConversation,
+  ChatMessage,
   DealSummary,
   ContactDetail,
   CRMActivityEntry,
@@ -182,6 +184,8 @@ import {
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
   copilotTurnDetailSchema,
+  chatConversationsListSchema,
+  chatTranscriptSchema,
   FinanceDashboardSchema,
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
@@ -2340,6 +2344,49 @@ export async function getPipelineDeals(): Promise<LoaderResult<PipelineDealCard[
     revalidateSeconds: 30,
     telemetryKey: "crm.pipeline.deals",
     mapResponse: mapPipelineDeals,
+  });
+}
+
+const CHAT_LIST_OPTIONS = {
+  revalidateSeconds: 0,
+  telemetryKey: "ai.chat.conversations",
+  responseSchema: chatConversationsListSchema,
+  mapResponse: (payload: { data: ChatConversation[] }) => payload.data,
+};
+
+/** Assistant chat conversations, optionally narrowed to one status. */
+export async function getChatConversations(
+  status?: "active" | "ended",
+): Promise<LoaderResult<ChatConversation[]>> {
+  if (status) {
+    return fetchJson(`/api/v1/ai/chat?limit=100&status=${status}`, [] as ChatConversation[], CHAT_LIST_OPTIONS);
+  }
+  return fetchJson("/api/v1/ai/chat?limit=100", [] as ChatConversation[], CHAT_LIST_OPTIONS);
+}
+
+/**
+ * A single conversation.
+ *
+ * ai-agent-service has no single-conversation read — only the list and the
+ * transcript — so this selects from the list. Worth replacing with a dedicated
+ * endpoint if the conversation count per tenant grows past a page.
+ */
+export async function getChatConversation(id: string): Promise<LoaderResult<ChatConversation | null>> {
+  return fetchJson("/api/v1/ai/chat?limit=200", null as ChatConversation | null, {
+    revalidateSeconds: 0,
+    telemetryKey: "ai.chat.conversation",
+    responseSchema: chatConversationsListSchema,
+    mapResponse: (payload) => payload.data.find((c) => c.id === id) ?? null,
+  });
+}
+
+/** Full transcript for one conversation, as returned by the service. */
+export async function getChatTranscript(id: string): Promise<LoaderResult<ChatMessage[]>> {
+  return fetchJson(`/api/v1/ai/chat/${id}/history?limit=200`, [] as ChatMessage[], {
+    revalidateSeconds: 0,
+    telemetryKey: "ai.chat.transcript",
+    responseSchema: chatTranscriptSchema,
+    mapResponse: (payload) => payload.data,
   });
 }
 
