@@ -7,6 +7,19 @@ PGPORT="${PGPORT:-5435}"
 PGUSER="${PGUSER:-civitas}"
 export PGPASSWORD="${PGPASSWORD:-civitas_test}"
 
+# The two cluster-level bootstrap files below create roles and databases, so
+# they need a maintenance database to connect to. Neither passed -d, and psql
+# defaults dbname to the username — "civitas" — which no image creates. CI sets
+# POSTGRES_DB=civitas_test, dev creates none of them, so the very first
+# statement died with `FATAL: database "civitas" does not exist` and the script
+# exited 2 before applying a single migration. That took the whole Tests job
+# down with it, which is why no service suite has run in CI.
+#
+# `postgres` is the portable target: initdb creates it in both CI images
+# (postgis/postgis:16-3.4 and postgres:16-alpine) and it is present on the dev
+# cluster, independent of whatever POSTGRES_DB is set to.
+PGDATABASE="${PGDATABASE:-postgres}"
+
 echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
 for i in $(seq 1 30); do
   if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" >/dev/null 2>&1; then
@@ -21,7 +34,7 @@ done
 
 run_bootstrap() {
   echo "→ $1"
-  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -v ON_ERROR_STOP=1 -f "$1"
+  psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$1"
 }
 
 # MUST be first. No bootstrap file created civitas_admin, yet
@@ -33,7 +46,7 @@ run_bootstrap() {
 # because the role was created there by hand, outside version control.
 ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}"
 echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
-psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -v ON_ERROR_STOP=1 \
+psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
      -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
