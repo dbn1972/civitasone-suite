@@ -6,6 +6,8 @@ import { ContactDetailActions } from "./ContactDetailActions";
 import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
 import { ScoreHistoryView } from "../../../../_components/crm/ScoreHistoryView";
 import { LeadTransitionControl } from "../../../../_components/crm/LeadTransitionControl";
+import { LeadAssignmentControl } from "../../../../_components/crm/LeadAssignmentControl";
+import { AssignmentLogView } from "../../../../_components/crm/AssignmentLogView";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: contact, source } = await getContactById(params.id);
@@ -94,6 +96,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <LeadTransitionControl leadId={contact.id} currentStatus={contact.leadStatus ?? "new"} />
+          <LeadAssignmentControl leadId={contact.id} />
+          <AssignmentLogView leadId={contact.id} />
           <ScoreHistoryView leadId={contact.id} />
           {contact.tags.length > 0 && (
             <div className="card">

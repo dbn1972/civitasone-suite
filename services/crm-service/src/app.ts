@@ -42,6 +42,7 @@ import { recurringTaskRoutes } from "./modules/activities/recurring-routes.js";
 import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
 import { sentimentRoutes } from "./modules/sentiment/routes.js";
+import { assignmentRoutes } from "./modules/assignment/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -102,6 +103,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(onboardingRoutes);
   // P2-6: Voice-of-Customer reporting over scored interactions.
   await app.register(sentimentRoutes);
+  await app.register(assignmentRoutes);
 
   return app;
 }

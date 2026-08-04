@@ -9,12 +9,15 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerAllConsumers } from "./consumers.js";
+import { startEscalationScheduler } from "./modules/assignment/scheduler.js";
 
 const log = pino({ name: "crm-worker" });
 
 registerAllConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
+// AS-004: escalate unaccepted/unattended leads on a fixed interval (overlap-guarded).
+const escalation = startEscalationScheduler(Number(process.env.CRM_ESCALATION_INTERVAL_MS ?? 60000));
 // G7: scheduled outbox purge — remove published messages older than 7 days.
 const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
@@ -26,6 +29,7 @@ log.info("crm-service worker: consumers + outbox relay running");
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
+  clearInterval(escalation);
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();

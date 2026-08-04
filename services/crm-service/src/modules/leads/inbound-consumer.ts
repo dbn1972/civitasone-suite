@@ -12,6 +12,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as contactRepo from "../contacts/repo.js";
+import { autoAssign } from "../assignment/consumer.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "contact";
@@ -81,6 +82,10 @@ export function registerInboundCaptureConsumer(queue: Queue): void {
             metadata: payload.metadata,
           },
         });
+
+        // AS-001: route the freshly captured lead through the tenant assignment
+        // rules (sets owner_id + assigned_at and writes crm.lead_assignment_log).
+        await autoAssign(tx, { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId }, contactId, "auto");
       }
 
       // Audit trail — a skipped duplicate is still an audited capture attempt.

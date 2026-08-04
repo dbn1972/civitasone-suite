@@ -17,6 +17,10 @@ const crmTiles: NavTile[] = [
 	{ title: "Lead Scoring", href: "/crm/lead-scoring" },
 	{ title: "Qualification Frameworks", href: "/crm/qualification-frameworks" },
 	{ title: "Lead Stage Reasons", href: "/crm/lead-reason-codes" },
+	{ title: "Assignment Rules", href: "/crm/assignment-rules" },
+	{ title: "Assignment Directory", href: "/crm/assignment-directory" },
+	{ title: "Agent Workload", href: "/crm/agent-workload" },
+	{ title: "Escalation Rules", href: "/crm/escalation-rules" },
 ];
 
 export default function Page() {
