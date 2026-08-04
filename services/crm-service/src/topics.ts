@@ -44,6 +44,17 @@ export const COMMANDS = {
    * NOTE: carries no message body and no participant addresses (DPDP).
    */
   captureActivity: "crm.activity.capture",
+  /**
+   * Configure which lead fields are mandatory / how they score (LM-001).
+   * Payload: { tenantId, fieldName, required, weight, enabled, actorId }.
+   * Fires when an admin PUTs a lead field rule. Upserts on (tenantId, fieldName).
+   */
+  upsertLeadFieldRule: "crm.lead_field_rule.upsert",
+  /**
+   * Remove a lead field rule so the field reverts to built-in behaviour (LM-001).
+   * Payload: { tenantId, fieldName }.
+   */
+  deleteLeadFieldRule: "crm.lead_field_rule.delete",
   createCustomField: "crm.custom_field.create",
   updateCustomField: "crm.custom_field.update",
   deleteCustomField: "crm.custom_field.delete",
@@ -110,6 +121,15 @@ export const EVENTS = {
   dealClosed: "crm.deal.closed",
   /** Contact ownership transferred (AS-002). */
   ownershipTransferred: "crm.contact.ownership_transferred",
+  /**
+   * A tenant's mandatory-field configuration changed (LM-001).
+   * Payload: { fieldName, required, weight, enabled } — configuration only, no lead data.
+   * MUST stay distinct from COMMANDS.upsertLeadFieldRule: the consumer of that command
+   * emits this, and sharing the string would make it re-consume its own event.
+   */
+  leadFieldRuleUpserted: "crm.lead_field_rule.upserted",
+  /** A lead field rule was removed; the field reverts to built-in behaviour (LM-001). */
+  leadFieldRuleDeleted: "crm.lead_field_rule.deleted",
   customFieldCreated: "crm.custom_field.created",
   customFieldUpdated: "crm.custom_field.updated",
   customFieldDeleted: "crm.custom_field.deleted",
