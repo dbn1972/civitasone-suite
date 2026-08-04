@@ -84,6 +84,35 @@ export const createBranchBody = z.object({
 });
 export type CreateBranchBody = z.infer<typeof createBranchBody>;
 
+// Partial update bodies (PUT /:id). At least one field required. A provided field
+// overwrites; an omitted field is kept (the consumer COALESCEs), so these editors
+// cannot clear a value to null — a deliberate limitation, delete + recreate to reset.
+const nonEmpty = <T extends z.ZodRawShape>(shape: T) =>
+  z.object(shape).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+
+export const updateQueueBody = nonEmpty({
+  name: z.string().min(1).max(200).optional(),
+  teamId: z.string().uuid().optional(),
+  description: z.string().max(1000).optional(),
+  enabled: z.boolean().optional(),
+});
+export const updateTerritoryBody = nonEmpty({
+  name: z.string().min(1).max(200).optional(),
+  code: z.string().min(1).max(64).optional(),
+  region: z.string().max(64).optional(),
+  ownerId: z.string().uuid().optional(),
+});
+export const updatePartnerBody = nonEmpty({
+  name: z.string().min(1).max(200).optional(),
+  partnerType: z.string().max(64).optional(),
+  ownerId: z.string().uuid().optional(),
+});
+export const updateBranchBody = nonEmpty({
+  name: z.string().min(1).max(200).optional(),
+  code: z.string().max(64).optional(),
+  territoryId: z.string().uuid().optional(),
+});
+
 // ── AS-004 escalation ────────────────────────────────────────────────────────
 
 export const escalationTrigger = z.enum(["unaccepted", "unattended"]);

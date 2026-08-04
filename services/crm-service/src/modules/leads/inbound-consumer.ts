@@ -7,6 +7,7 @@
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -30,6 +31,7 @@ interface InboundPayload {
     designation?: string;
     city?: string;
     leadSource?: string;
+    language?: string;
     [key: string]: unknown;
   };
   metadata: Record<string, unknown>;
@@ -82,6 +84,15 @@ export function registerInboundCaptureConsumer(queue: Queue): void {
             metadata: payload.metadata,
           },
         });
+
+        // Persist language (not a bulkInsertRow column) BEFORE routing so a
+        // language assignment rule can match on it. Only when a channel supplies it.
+        if (typeof attrs.language === "string" && attrs.language.trim() !== "") {
+          await tx.execute(sql`
+            UPDATE crm.contacts SET language = ${attrs.language.trim()}
+            WHERE id = ${contactId} AND tenant_id = ${msg.tenantId}
+          `);
+        }
 
         // AS-001: route the freshly captured lead through the tenant assignment
         // rules (sets owner_id + assigned_at and writes crm.lead_assignment_log).

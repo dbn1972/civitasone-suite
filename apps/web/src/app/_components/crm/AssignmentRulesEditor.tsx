@@ -193,8 +193,10 @@ export function AssignmentRulesEditor() {
             {rows
               .slice()
               .sort((a, b) => a.ordinal - b.ordinal)
-              .map((row) => {
-                const n = rows.indexOf(row) + 1;
+              .map((row, i) => {
+                // n follows the visible (ordinal-sorted) row position so sr-only
+                // labels match what the user sees, not the unsorted source order.
+                const n = i + 1;
                 const criteriaOk = parseCriteria(row.criteriaText) !== null;
                 const busy = busyKey === row.key;
                 return (

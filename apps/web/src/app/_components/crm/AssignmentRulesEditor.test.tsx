@@ -77,4 +77,15 @@ describe("AssignmentRulesEditor (AS-001 admin)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /delete rule/i }));
     await waitFor(() => expect(as.deleteAssignmentRule).toHaveBeenCalledWith("r1"));
   });
+
+  it("surfaces a failed update and does not claim the rule was saved", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateAssignmentRule).mockRejectedValue(new Error("CONFLICT: stale"));
+    render(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("West reps")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "West team" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/conflict/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
 });

@@ -130,6 +130,7 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
                 onChange={(e) => setAssignOwner(e.target.value)}
                 placeholder="owner id"
                 aria-required="true"
+                aria-invalid={assignOwner.trim() ? undefined : true}
                 style={inputStyle}
               />
             </div>
@@ -168,6 +169,8 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
               value={transferOwner}
               onChange={(e) => setTransferOwner(e.target.value)}
               placeholder="owner id"
+              aria-required="true"
+              aria-invalid={transferOwner.trim() ? undefined : true}
               style={inputStyle}
             />
           </div>

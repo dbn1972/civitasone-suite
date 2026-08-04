@@ -69,4 +69,15 @@ describe("OwnershipDirectoryEditor (AS-002 admin)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(as.deleteResource).toHaveBeenCalledWith("assignment-queues", "q1"));
   });
+
+  it("surfaces a failed update and does not claim success", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({ data: [{ id: "q1", name: "Inbound", description: "", enabled: true }], source: "api" });
+    vi.mocked(as.updateResource).mockRejectedValue(new Error("CONFLICT: renamed"));
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Inbound")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for entry 1/i), { target: { value: "Inbound web" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/conflict/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
 });

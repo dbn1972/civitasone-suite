@@ -68,6 +68,24 @@ export async function listRulesTx(tx: Tx, tenantId: string): Promise<AssignmentR
 }
 
 /**
+ * Assign-path read that LOCKS the tenant's rule rows (`FOR UPDATE`), so concurrent
+ * assignments serialize and the round-robin cursor advances exactly one step per
+ * lead. Two simultaneous inbound leads otherwise read the same rr_cursor and both
+ * land on the same agent. The lock is released when the assign transaction commits.
+ */
+export async function listRulesForUpdate(tx: Tx, tenantId: string): Promise<AssignmentRuleView[]> {
+  const rows = (await tx.execute(sql`
+    SELECT id, name, type AS "ruleType", criteria, ordinal, enabled,
+           fallback_owner_id AS "fallbackOwnerId", rr_cursor AS "rrCursor"
+    FROM crm.assignment_rules
+    WHERE tenant_id = ${tenantId}
+    ORDER BY ordinal ASC, created_at ASC
+    FOR UPDATE
+  `)) as unknown as Row[];
+  return mapRuleRows(rows);
+}
+
+/**
  * Map a stored rule row to the engine's AssignmentRule. round_robin/capacity
  * criteria carry a `roster`; round_robin also needs the persisted cursor folded
  * into `currentIndex` so cycling resumes where it left off.
@@ -137,7 +155,7 @@ export interface LeadFacts {
 export async function leadFacts(tx: Tx, tenantId: string, leadId: string): Promise<LeadFacts | null> {
   const rows = (await tx.execute(sql`
     SELECT id, region AS "territory", score, product, segment,
-           NULL::text AS language, owner_id AS "ownerId"
+           language, owner_id AS "ownerId"
     FROM crm.contacts
     WHERE id = ${leadId} AND tenant_id = ${tenantId} AND status = 'active'
   `)) as unknown as Row[];
@@ -174,15 +192,19 @@ export async function insertAssignmentLog(
   `);
 }
 
-/** Apply a new owner + reset accept/escalation state (owner just changed). */
+/**
+ * Apply a new owner + reset accept/escalation state (owner just changed).
+ * Returns the number of rows affected so callers can distinguish a real
+ * assignment from a no-op on a missing / inactive / other-tenant lead.
+ */
 export async function applyOwner(
   tx: Tx,
   tenantId: string,
   leadId: string,
   ownerId: string,
   actorId: string,
-): Promise<void> {
-  await tx.execute(sql`
+): Promise<number> {
+  const rows = (await tx.execute(sql`
     UPDATE crm.contacts
     SET owner_id = ${ownerId},
         assigned_at = now(),
@@ -192,7 +214,9 @@ export async function applyOwner(
         updated_by = ${actorId},
         version = version + 1
     WHERE id = ${leadId} AND tenant_id = ${tenantId} AND status = 'active'
-  `);
+    RETURNING id
+  `)) as unknown as Row[];
+  return rows.length;
 }
 
 export async function persistRoundRobinCursor(

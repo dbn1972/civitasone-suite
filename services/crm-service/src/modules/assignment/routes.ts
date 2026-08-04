@@ -9,11 +9,11 @@
  *   POST               /v1/crm/leads/:id/assign        { ownerId? | runRules:true }
  *   POST               /v1/crm/leads/:id/accept
  *   GET                /v1/crm/leads/:id/assignment-log  (AS-002 unified history)
- *   GET/POST/DELETE    /v1/crm/assignment-queues[/:id]
- *   GET/POST/DELETE    /v1/crm/territories[/:id]
- *   GET/POST/DELETE    /v1/crm/partners[/:id]
- *   GET/POST/DELETE    /v1/crm/branches[/:id]
- *   GET/POST/DELETE    /v1/crm/escalation-rules[/:id]
+ *   GET/POST/PUT/DELETE /v1/crm/assignment-queues[/:id]
+ *   GET/POST/PUT/DELETE /v1/crm/territories[/:id]
+ *   GET/POST/PUT/DELETE /v1/crm/partners[/:id]
+ *   GET/POST/PUT/DELETE /v1/crm/branches[/:id]
+ *   GET/POST/PUT/DELETE /v1/crm/escalation-rules[/:id]
  */
 import type { FastifyInstance } from "fastify";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -92,6 +92,12 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const body = v.createQueueBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTarget(ctx, COMMANDS.createAssignmentQueue, body));
   });
+  app.put("/v1/crm/assignment-queues/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+    const { id } = v.idParam.parse(req.params);
+    const body = v.updateQueueBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTarget(ctx, COMMANDS.updateAssignmentQueue, id, body));
+  });
   app.delete("/v1/crm/assignment-queues/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
@@ -106,6 +112,12 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const body = v.createTerritoryBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTarget(ctx, COMMANDS.createTerritory, body));
+  });
+  app.put("/v1/crm/territories/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+    const { id } = v.idParam.parse(req.params);
+    const body = v.updateTerritoryBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTarget(ctx, COMMANDS.updateTerritory, id, body));
   });
   app.delete("/v1/crm/territories/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
@@ -122,6 +134,12 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const body = v.createPartnerBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTarget(ctx, COMMANDS.createPartner, body));
   });
+  app.put("/v1/crm/partners/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+    const { id } = v.idParam.parse(req.params);
+    const body = v.updatePartnerBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTarget(ctx, COMMANDS.updatePartner, id, body));
+  });
   app.delete("/v1/crm/partners/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
@@ -136,6 +154,12 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const body = v.createBranchBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createTarget(ctx, COMMANDS.createBranch, body));
+  });
+  app.put("/v1/crm/branches/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+    const { id } = v.idParam.parse(req.params);
+    const body = v.updateBranchBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateTarget(ctx, COMMANDS.updateBranch, id, body));
   });
   app.delete("/v1/crm/branches/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
@@ -153,6 +177,12 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const body = v.upsertEscalationRuleBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertEscalationRule(ctx, body));
+  });
+  app.put("/v1/crm/escalation-rules/:id", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+    const { id } = v.idParam.parse(req.params);
+    const body = v.upsertEscalationRuleBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateEscalationRule(ctx, id, body));
   });
   app.delete("/v1/crm/escalation-rules/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);

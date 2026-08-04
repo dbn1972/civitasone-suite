@@ -67,6 +67,9 @@ export function AgentWorkloadEditor() {
         available: agent.available,
         onLeave: agent.onLeave,
       });
+      // Reload from the server so the row reflects server truth (e.g. a field
+      // the backend normalised or ignored), never optimistic local state.
+      await load();
       setMessage(`${agent.name}'s capacity saved.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the capacity.");

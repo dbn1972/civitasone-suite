@@ -20,6 +20,12 @@ const log = pino({ name: "crm-assignment-consumer" });
 const AUDIT = "audit.event.record";
 const RESOURCE = "assignment_rule";
 
+/** Postgres unique-violation SQLSTATE. */
+const UNIQUE_VIOLATION = "23505";
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === UNIQUE_VIOLATION;
+}
+
 export interface AssignCtx {
   tenantId: string;
   actorId: string;
@@ -38,7 +44,10 @@ export async function autoAssign(
   leadId: string,
   method: "auto" | "manual" = "auto",
 ): Promise<string | null> {
-  const ruleViews = await repo.listRulesTx(tx, ctx.tenantId);
+  // FOR UPDATE: locking the rule rows serializes concurrent assignments for the
+  // tenant so the round-robin cursor advances one step per lead — without the lock,
+  // two simultaneous inbound leads read the same rr_cursor and land on one agent.
+  const ruleViews = await repo.listRulesForUpdate(tx, ctx.tenantId);
   if (ruleViews.length === 0) return null; // nothing configured ⇒ leave as captured
 
   const facts = await repo.leadFacts(tx, ctx.tenantId, leadId);
@@ -113,18 +122,47 @@ export function registerAssignmentConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // A missing ordinal is defaulted to the next free slot server-side. Two rules
+        // both defaulting to 0 would otherwise collide on the partial-unique index
+        // (tenant_id, ordinal) WHERE enabled, so the INSERT would throw and roll back
+        // markProcessed — a permanent poison-retry after the route already 202'd.
         await tx.execute(sql`
           INSERT INTO crm.assignment_rules
             (id, tenant_id, name, type, criteria, ordinal, enabled, fallback_owner_id, created_by, updated_by)
           VALUES (${p.id}, ${p.tenantId}, ${p.name}, ${p.ruleType}, ${jsonb(p.criteria)}::jsonb,
-                  ${p.ordinal ?? 0}, ${p.enabled ?? true}, ${p.fallbackOwnerId ?? null},
+                  COALESCE(${p.ordinal ?? null}::int,
+                           (SELECT COALESCE(MAX(ordinal) + 1, 0) FROM crm.assignment_rules WHERE tenant_id = ${p.tenantId})),
+                  ${p.enabled ?? true}, ${p.fallbackOwnerId ?? null},
                   ${msg.actorId}, ${msg.actorId})
           ON CONFLICT (id) DO NOTHING
         `);
         await auditEvent(tx, msg, EVENTS.assignmentRuleCreated, "assignment_rule_create", RESOURCE, p.id);
       });
       await cache.invalidateResource(p.tenantId, RESOURCE);
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "createAssignmentRule failed"); throw err; }
+    } catch (err) {
+      // A genuine duplicate ordinal (explicit, or two concurrent auto-defaults that
+      // raced) still violates the partial-unique index. Consume the message rather
+      // than looping forever: mark it processed and audit a clear failure in a fresh
+      // transaction (the failed one is aborted and cannot write).
+      if (isUniqueViolation(err)) {
+        log.warn({ messageId: msg.messageId, ruleId: p.id }, "createAssignmentRule rejected: duplicate ordinal");
+        try {
+          await db.transaction(async (tx) => {
+            await markProcessed(tx, msg.messageId);
+            await enqueue(tx, {
+              topic: AUDIT, eventType: AUDIT, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "crm", action: "assignment_rule_create", resourceType: RESOURCE, resourceId: p.id, outcome: "rejected_duplicate_ordinal" },
+            });
+          });
+        } catch (auditErr) {
+          log.error({ err: auditErr, messageId: msg.messageId }, "failed to audit duplicate-ordinal rejection");
+          throw auditErr;
+        }
+        return;
+      }
+      log.error({ err, messageId: msg.messageId }, "createAssignmentRule failed");
+      throw err;
+    }
   });
 
   queue.subscribe(COMMANDS.updateAssignmentRule, async (msg) => {
@@ -174,20 +212,30 @@ export function registerAssignmentConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const ctx = { tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
         if (p.ownerId) {
-          await repo.applyOwner(tx, p.tenantId, p.leadId, p.ownerId, msg.actorId);
-          await repo.insertAssignmentLog(tx, {
-            tenantId: p.tenantId, leadId: p.leadId, ownerId: p.ownerId,
-            ruleId: null, method: "manual", assignedBy: msg.actorId,
-          });
-          await enqueue(tx, {
-            topic: EVENTS.leadAssigned, eventType: EVENTS.leadAssigned, tenantId: p.tenantId,
-            actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { leadId: p.leadId, ownerId: p.ownerId, ruleId: null, method: "manual", reason: "manual_pick" },
-          });
-          await enqueue(tx, {
-            topic: AUDIT, eventType: AUDIT, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            payload: { service: "crm", action: "lead_assigned", resourceType: "contact", resourceId: p.leadId, outcome: "success", metadata: { ownerId: p.ownerId, method: "manual" } },
-          });
+          // Row-count guard (mirrors acceptLead): assigning a nonexistent / inactive /
+          // other-tenant lead affects 0 rows, so it must NOT write a "success" log or
+          // emit an assigned event — audit a not-found outcome instead.
+          const n = await repo.applyOwner(tx, p.tenantId, p.leadId, p.ownerId, msg.actorId);
+          if (n === 0) {
+            await enqueue(tx, {
+              topic: AUDIT, eventType: AUDIT, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "crm", action: "lead_assigned", resourceType: "contact", resourceId: p.leadId, outcome: "rejected_not_found", metadata: { ownerId: p.ownerId, method: "manual" } },
+            });
+          } else {
+            await repo.insertAssignmentLog(tx, {
+              tenantId: p.tenantId, leadId: p.leadId, ownerId: p.ownerId,
+              ruleId: null, method: "manual", assignedBy: msg.actorId,
+            });
+            await enqueue(tx, {
+              topic: EVENTS.leadAssigned, eventType: EVENTS.leadAssigned, tenantId: p.tenantId,
+              actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { leadId: p.leadId, ownerId: p.ownerId, ruleId: null, method: "manual", reason: "manual_pick" },
+            });
+            await enqueue(tx, {
+              topic: AUDIT, eventType: AUDIT, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { service: "crm", action: "lead_assigned", resourceType: "contact", resourceId: p.leadId, outcome: "success", metadata: { ownerId: p.ownerId, method: "manual" } },
+            });
+          }
         } else if (p.runRules) {
           await autoAssign(tx, ctx, p.leadId, "auto");
         }
@@ -269,6 +317,17 @@ function registerTargetConsumers(queue: Queue): void {
       VALUES (${p.id}, ${p.tenantId}, ${p.name}, ${p.teamId ?? null}, ${p.description ?? null}, ${p.enabled ?? true}, ${msg.actorId})
       ON CONFLICT (id) DO NOTHING`, "assignment_queue", p.id, "assignment_queue_create");
   });
+  queue.subscribe(COMMANDS.updateAssignmentQueue, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name?: string; teamId?: string; description?: string; enabled?: boolean };
+    await simpleInsert(msg, () => sql`
+      UPDATE crm.assignment_queues SET
+        name = COALESCE(${p.name ?? null}, name),
+        team_id = COALESCE(${p.teamId ?? null}::uuid, team_id),
+        description = COALESCE(${p.description ?? null}, description),
+        enabled = COALESCE(${p.enabled ?? null}, enabled),
+        version = version + 1
+      WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "assignment_queue", p.id, "assignment_queue_update");
+  });
   queue.subscribe(COMMANDS.deleteAssignmentQueue, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await simpleInsert(msg, () => sql`DELETE FROM crm.assignment_queues WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "assignment_queue", p.id, "assignment_queue_delete");
@@ -280,6 +339,17 @@ function registerTargetConsumers(queue: Queue): void {
       INSERT INTO crm.territories (id, tenant_id, name, code, region, owner_id, created_by)
       VALUES (${p.id}, ${p.tenantId}, ${p.name}, ${p.code}, ${p.region ?? null}, ${p.ownerId ?? null}, ${msg.actorId})
       ON CONFLICT (id) DO NOTHING`, "territory", p.id, "territory_create");
+  });
+  queue.subscribe(COMMANDS.updateTerritory, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name?: string; code?: string; region?: string; ownerId?: string };
+    await simpleInsert(msg, () => sql`
+      UPDATE crm.territories SET
+        name = COALESCE(${p.name ?? null}, name),
+        code = COALESCE(${p.code ?? null}, code),
+        region = COALESCE(${p.region ?? null}, region),
+        owner_id = COALESCE(${p.ownerId ?? null}::uuid, owner_id),
+        version = version + 1
+      WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "territory", p.id, "territory_update");
   });
   queue.subscribe(COMMANDS.deleteTerritory, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
@@ -293,6 +363,16 @@ function registerTargetConsumers(queue: Queue): void {
       VALUES (${p.id}, ${p.tenantId}, ${p.name}, ${p.partnerType ?? null}, ${p.ownerId ?? null}, ${msg.actorId})
       ON CONFLICT (id) DO NOTHING`, "partner", p.id, "partner_create");
   });
+  queue.subscribe(COMMANDS.updatePartner, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name?: string; partnerType?: string; ownerId?: string };
+    await simpleInsert(msg, () => sql`
+      UPDATE crm.partners SET
+        name = COALESCE(${p.name ?? null}, name),
+        partner_type = COALESCE(${p.partnerType ?? null}, partner_type),
+        owner_id = COALESCE(${p.ownerId ?? null}::uuid, owner_id),
+        version = version + 1
+      WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "partner", p.id, "partner_update");
+  });
   queue.subscribe(COMMANDS.deletePartner, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await simpleInsert(msg, () => sql`DELETE FROM crm.partners WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "partner", p.id, "partner_delete");
@@ -304,6 +384,16 @@ function registerTargetConsumers(queue: Queue): void {
       INSERT INTO crm.branches (id, tenant_id, name, code, territory_id, created_by)
       VALUES (${p.id}, ${p.tenantId}, ${p.name}, ${p.code ?? null}, ${p.territoryId ?? null}, ${msg.actorId})
       ON CONFLICT (id) DO NOTHING`, "branch", p.id, "branch_create");
+  });
+  queue.subscribe(COMMANDS.updateBranch, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name?: string; code?: string; territoryId?: string };
+    await simpleInsert(msg, () => sql`
+      UPDATE crm.branches SET
+        name = COALESCE(${p.name ?? null}, name),
+        code = COALESCE(${p.code ?? null}, code),
+        territory_id = COALESCE(${p.territoryId ?? null}::uuid, territory_id),
+        version = version + 1
+      WHERE id = ${p.id} AND tenant_id = ${p.tenantId}`, "branch", p.id, "branch_update");
   });
   queue.subscribe(COMMANDS.deleteBranch, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };

@@ -78,6 +78,12 @@ AS $fn$
   SELECT DISTINCT er.tenant_id FROM crm.escalation_rules er WHERE er.enabled = true;
 $fn$;
 
+-- A SECURITY DEFINER function is granted to PUBLIC by default. Since it runs with
+-- the (superuser) owner's rights and bypasses RLS, it must NOT be callable by every
+-- role — only the crm-service role needs it. REVOKE first (idempotent), then GRANT
+-- narrowly, so re-running this migration always converges to exactly crm_svc.
+REVOKE ALL ON FUNCTION crm.list_escalation_tenants() FROM PUBLIC;
+
 DO $g$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'crm_svc') THEN

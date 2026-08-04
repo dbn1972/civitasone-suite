@@ -23,5 +23,5 @@ export const createTeam = (
 export const updateAgentCapacity = (
   ctx: RequestContext,
   agentId: string,
-  body: { maxLeads?: number | undefined; available?: boolean | undefined },
+  body: { maxLeads?: number | undefined; available?: boolean | undefined; onLeave?: boolean | undefined },
 ) => pub(ctx, COMMANDS.updateAgentCapacity, agentId, { agentId, ...body });

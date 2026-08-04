@@ -38,6 +38,7 @@ const inboundLeadBody = z.object({
     designation: z.string().optional(),
     city: z.string().optional(),
     leadSource: z.string().optional(),
+    language: z.string().max(24).optional(),
   }).passthrough(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).superRefine((body, ctx) => {

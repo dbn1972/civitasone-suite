@@ -71,6 +71,15 @@ export function createTarget(
   return pub(ctx, type, id, id, body);
 }
 
+export function updateTarget(
+  ctx: RequestContext,
+  type: string,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<Accepted> {
+  return pub(ctx, type, id, id, body);
+}
+
 export function deleteTarget(ctx: RequestContext, type: string, id: string): Promise<Accepted> {
   return pub(ctx, type, id, id, {});
 }
@@ -79,7 +88,12 @@ export function deleteTarget(ctx: RequestContext, type: string, id: string): Pro
 
 export function upsertEscalationRule(ctx: RequestContext, body: Record<string, unknown>): Promise<Accepted> {
   const id = (body.id as string) ?? randomUUID();
-  return pub(ctx, COMMANDS.upsertEscalationRule, id, id, body);
+  return pub(ctx, COMMANDS.upsertEscalationRule, id, id, { ...body, id });
+}
+
+/** PUT /:id — same upsert command, but the id comes from the path. */
+export function updateEscalationRule(ctx: RequestContext, id: string, body: Record<string, unknown>): Promise<Accepted> {
+  return pub(ctx, COMMANDS.upsertEscalationRule, id, id, { ...body, id });
 }
 
 export function deleteEscalationRule(ctx: RequestContext, id: string): Promise<Accepted> {

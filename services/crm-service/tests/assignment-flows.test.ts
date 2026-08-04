@@ -32,7 +32,7 @@ function headers(roles: string[] = ["crm_admin"], tenantId: string = TENANT): Re
 }
 
 async function call(
-  method: "GET" | "PUT" | "POST" | "DELETE",
+  method: "GET" | "PUT" | "POST" | "DELETE" | "PATCH",
   url: string,
   opts: { headers?: Record<string, string>; payload?: unknown } = {},
 ) {
@@ -75,9 +75,17 @@ async function cleanup(): Promise<void> {
       await tx`DELETE FROM crm.territories WHERE tenant_id = ${t}`;
       await tx`DELETE FROM crm.partners WHERE tenant_id = ${t}`;
       await tx`DELETE FROM crm.branches WHERE tenant_id = ${t}`;
+      await tx`DELETE FROM crm.agent_workload WHERE tenant_id = ${t}`;
       await tx`DELETE FROM crm.contacts WHERE tenant_id = ${t}`;
     });
   }
+}
+
+async function seedAgent(tenantId: string, agentId: string, over: Record<string, unknown> = {}): Promise<void> {
+  await scoped(tenantId, (tx) => tx`
+    INSERT INTO crm.agent_workload (tenant_id, agent_id, max_leads, available, on_leave)
+    VALUES (${tenantId}, ${agentId}, ${(over.maxLeads as number) ?? 50}, ${(over.available as boolean) ?? true}, ${(over.onLeave as boolean) ?? false})
+  `);
 }
 
 beforeAll(async () => {
@@ -287,5 +295,128 @@ describe("transfer of a non-existent contact is audited, not logged", () => {
     expect(res.statusCode).toBe(202);
     const logs = await scoped(TENANT, (tx) => tx`SELECT 1 FROM crm.lead_assignment_log WHERE lead_id = ${ghost}`);
     expect(logs).toHaveLength(0);
+  });
+});
+
+// ── Review fix 1: duplicate ordinal is not a poison-loop ──────────────────────
+describe("assignment-rule ordinal handling (review fix 1)", () => {
+  it("two POSTs without ordinal both persist with distinct ordinals", async () => {
+    await cleanup();
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "a", ruleType: "score_threshold", criteria: { threshold: 10, ownerId: randomUUID() } } });
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "b", ruleType: "score_threshold", criteria: { threshold: 20, ownerId: randomUUID() } } });
+    const rows = await scoped(TENANT, (tx) => tx`SELECT ordinal FROM crm.assignment_rules WHERE tenant_id = ${TENANT} ORDER BY ordinal`);
+    const ordinals = (rows as unknown as Array<{ ordinal: number }>).map((r) => Number(r.ordinal));
+    expect(ordinals).toHaveLength(2);
+    expect(new Set(ordinals).size).toBe(2); // distinct, no collision
+  });
+
+  it("a genuine duplicate ordinal is rejected+audited, not retried forever", async () => {
+    await cleanup();
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "first", ruleType: "score_threshold", criteria: { threshold: 10, ownerId: randomUUID() }, ordinal: 5 } });
+    // Same explicit ordinal on an enabled rule → violates the partial-unique index.
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "dup", ruleType: "score_threshold", criteria: { threshold: 20, ownerId: randomUUID() }, ordinal: 5 } });
+    // Only the first rule persisted; the consumer consumed the dup (no infinite loop).
+    const rows = await scoped(TENANT, (tx) => tx`SELECT name FROM crm.assignment_rules WHERE tenant_id = ${TENANT}`);
+    expect(rows).toHaveLength(1);
+    expect((rows as unknown as Array<{ name: string }>)[0]!.name).toBe("first");
+    // The message must be marked processed so redelivery is a no-op (no poison loop).
+    const dlq = ((queue as unknown as { dlq?: unknown[] }).dlq ?? []).length;
+    expect(dlq).toBe(0);
+  });
+});
+
+// ── Review fix 3: serialized round-robin cursor advance ──────────────────────
+describe("round-robin cursor advances one step per lead (review fix 3)", () => {
+  it("sequential inbound leads rotate across the roster", async () => {
+    await cleanup();
+    const a = randomUUID(), b = randomUUID();
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "rr", ruleType: "round_robin", criteria: { roster: [a, b] } } });
+    const owners: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const cap = await call("POST", "/v1/crm/leads/inbound", { payload: { channel: "chatbot", source: "web", attributes: { name: `L${i}`, phone: "+919876543210" } } });
+      const cid = JSON.parse(cap.body).contactId as string;
+      const c = await scoped(TENANT, (tx) => tx`SELECT owner_id AS "ownerId" FROM crm.contacts WHERE id = ${cid}`);
+      owners.push((c as unknown as Array<{ ownerId: string }>)[0]!.ownerId);
+    }
+    expect(owners).toEqual([a, b, a, b]); // strict rotation, cursor advanced each time
+  });
+});
+
+// ── Review fix 4: manual assign of a missing lead writes no success log ───────
+describe("manual assign guard (review fix 4)", () => {
+  it("assigning a nonexistent lead writes no assignment log", async () => {
+    await cleanup();
+    const ghost = randomUUID();
+    const res = await call("POST", `/v1/crm/leads/${ghost}/assign`, { payload: { ownerId: randomUUID() } });
+    expect(res.statusCode).toBe(202);
+    const logs = await scoped(TENANT, (tx) => tx`SELECT 1 FROM crm.lead_assignment_log WHERE lead_id = ${ghost}`);
+    expect(logs).toHaveLength(0);
+  });
+});
+
+// ── Review fix 5: PUT catalogues + escalation ────────────────────────────────
+describe("catalogue + escalation PUT (review fix 5)", () => {
+  it("PUT updates a territory in place", async () => {
+    await cleanup();
+    const created = await call("POST", "/v1/crm/territories", { payload: { name: "West", code: "W1" } });
+    // fetch its id from the DB (POST returns command id, not row id)
+    const idRow = await scoped(TENANT, (tx) => tx`SELECT id FROM crm.territories WHERE tenant_id = ${TENANT} LIMIT 1`);
+    const id = (idRow as unknown as Array<{ id: string }>)[0]!.id;
+    expect(created.statusCode).toBe(202);
+    const put = await call("PUT", `/v1/crm/territories/${id}`, { payload: { name: "West-Renamed", region: "west" } });
+    expect(put.statusCode).toBe(202);
+    const row = await scoped(TENANT, (tx) => tx`SELECT name, region, code FROM crm.territories WHERE id = ${id}`);
+    expect((row as unknown as Array<{ name: string; region: string; code: string }>)[0]).toMatchObject({ name: "West-Renamed", region: "west", code: "W1" });
+  });
+
+  it("PUT updates an escalation rule in place", async () => {
+    await cleanup();
+    await call("POST", "/v1/crm/escalation-rules", { payload: { name: "esc", trigger: "unaccepted", thresholdMinutes: 30 } });
+    const idRow = await scoped(TENANT, (tx) => tx`SELECT id FROM crm.escalation_rules WHERE tenant_id = ${TENANT} LIMIT 1`);
+    const id = (idRow as unknown as Array<{ id: string }>)[0]!.id;
+    const put = await call("PUT", `/v1/crm/escalation-rules/${id}`, { payload: { name: "esc", trigger: "unattended", thresholdMinutes: 90 } });
+    expect(put.statusCode).toBe(202);
+    const row = await scoped(TENANT, (tx) => tx`SELECT trigger, threshold_minutes AS "t" FROM crm.escalation_rules WHERE id = ${id}`);
+    expect((row as unknown as Array<{ trigger: string; t: number }>)[0]).toMatchObject({ trigger: "unattended" });
+    expect(Number((row as unknown as Array<{ t: number }>)[0]!.t)).toBe(90);
+  });
+});
+
+// ── Review fix 6: onLeave settable + excludes from assignment ─────────────────
+describe("agent on_leave (review fix 6)", () => {
+  it("PATCH {onLeave:true} sets the column", async () => {
+    await cleanup();
+    const agent = randomUUID();
+    await seedAgent(TENANT, agent);
+    const res = await call("PATCH", `/v1/crm/teams/agents/${agent}/capacity`, { payload: { onLeave: true } });
+    expect(res.statusCode).toBe(202);
+    const row = await scoped(TENANT, (tx) => tx`SELECT on_leave AS "onLeave" FROM crm.agent_workload WHERE agent_id = ${agent}`);
+    expect((row as unknown as Array<{ onLeave: boolean }>)[0]!.onLeave).toBe(true);
+  });
+
+  it("an on-leave agent is excluded from round-robin assignment", async () => {
+    await cleanup();
+    const busy = randomUUID(), free = randomUUID();
+    await seedAgent(TENANT, busy, { onLeave: true });
+    await seedAgent(TENANT, free);
+    // roster order [busy, free]; cursor -1 → first candidate busy, but on leave ⇒ free
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "rr", ruleType: "round_robin", criteria: { roster: [busy, free] } } });
+    const cap = await call("POST", "/v1/crm/leads/inbound", { payload: { channel: "chatbot", source: "web", attributes: { name: "L", phone: "+919876543210" } } });
+    const cid = JSON.parse(cap.body).contactId as string;
+    const c = await scoped(TENANT, (tx) => tx`SELECT owner_id AS "ownerId" FROM crm.contacts WHERE id = ${cid}`);
+    expect((c as unknown as Array<{ ownerId: string }>)[0]!.ownerId).toBe(free);
+  });
+});
+
+// ── Review fix 7: language rule matches on inbound ───────────────────────────
+describe("language rule (review fix 7)", () => {
+  it("routes an inbound lead by its language attribute", async () => {
+    await cleanup();
+    const hiOwner = randomUUID();
+    await call("POST", "/v1/crm/assignment-rules", { payload: { name: "hi", ruleType: "language", criteria: { value: "hi", ownerId: hiOwner } } });
+    const cap = await call("POST", "/v1/crm/leads/inbound", { payload: { channel: "chatbot", source: "web", attributes: { name: "L", phone: "+919876543210", language: "hi" } } });
+    const cid = JSON.parse(cap.body).contactId as string;
+    const row = await scoped(TENANT, (tx) => tx`SELECT owner_id AS "ownerId", language FROM crm.contacts WHERE id = ${cid}`);
+    expect((row as unknown as Array<{ ownerId: string; language: string }>)[0]).toMatchObject({ ownerId: hiOwner, language: "hi" });
   });
 });

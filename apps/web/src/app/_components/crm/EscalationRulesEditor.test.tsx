@@ -65,4 +65,15 @@ describe("EscalationRulesEditor (AS-004 admin)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /delete rule/i }));
     await waitFor(() => expect(as.deleteEscalationRule).toHaveBeenCalledWith("e1"));
   });
+
+  it("surfaces a failed update and does not claim success", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockRejectedValue(new Error("BAD_RECIPIENT: no"));
+    render(<EscalationRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("sales_manager")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/recipient role for rule 1/i), { target: { value: "ops_desk" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/bad_recipient/i)).toBeInTheDocument();
+    expect(screen.queryByText(/escalation rule saved/i)).not.toBeInTheDocument();
+  });
 });
