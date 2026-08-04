@@ -257,7 +257,7 @@ export function registerResidualF3Consumers(queue: Queue): void {
           )
         `);
         await emitWithAudit(tx, ctxOf(msg) as never, {
-          eventType: EVENTS.recurringTaskRun, action: "run", resourceType: "recurring_task", resourceId: p.id,
+          eventType: EVENTS.recurringTaskRan, action: "run", resourceType: "recurring_task", resourceId: p.id,
           payload: {
             taskId: p.id, materialisedActionId: p.actionId, dueAt: p.dueAt, nextRunAt: p.nextRunAt,
           },
