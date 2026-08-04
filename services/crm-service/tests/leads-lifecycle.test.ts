@@ -97,6 +97,7 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         headers: headers(),
         payload: {
           targetStatus: "nurture",
+          reasonCode: "not_ready",
           reason: "Not ready to purchase yet, needs more education on the product",
         },
       });
@@ -117,6 +118,7 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         headers: headers(),
         payload: {
           targetStatus: "disqualified",
+          reasonCode: "duplicate",
           reason: "Duplicate entry — already exists as another contact",
         },
       });
@@ -137,6 +139,7 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         headers: headers(),
         payload: {
           targetStatus: "recycled",
+          reasonCode: "budget_not_approved",
           reason: "Budget was not approved, returning to the pool for re-engagement later",
         },
       });
@@ -208,6 +211,7 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         headers: headers(),
         payload: {
           targetStatus: "nurture",
+          reasonCode: "needs_nurturing",
           reason: "Lead showing renewed interest after recent webinar attendance",
         },
       });
@@ -297,8 +301,8 @@ describe("POST /v1/crm/leads/:id/transition", () => {
     });
   });
 
-  describe("mandatory reason validation (400)", () => {
-    it("nurture target with missing reason → 400", async () => {
+  describe("mandatory reason code validation (400)", () => {
+    it("nurture target with missing reasonCode → 400", async () => {
       const app = await buildApp();
       await seedContact(LEAD_ID_1, "new");
 
@@ -306,7 +310,7 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         method: "POST",
         url: `/v1/crm/leads/${LEAD_ID_1}/transition`,
         headers: headers(),
-        payload: { targetStatus: "nurture", reason: "" },
+        payload: { targetStatus: "nurture" },
       });
 
       await cleanupContact(LEAD_ID_1);
@@ -314,10 +318,10 @@ describe("POST /v1/crm/leads/:id/transition", () => {
 
       expect(res.statusCode).toBe(400);
       const body = res.json();
-      expect(body.code).toBe("REASON_REQUIRED");
+      expect(body.code).toBe("REASON_CODE_REQUIRED");
     });
 
-    it("disqualified target with short reason (< 10 chars) → 400", async () => {
+    it("disqualified target with a free-text reason but no reasonCode → 400", async () => {
       const app = await buildApp();
       await seedContact(LEAD_ID_1, "new");
 
@@ -325,17 +329,17 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         method: "POST",
         url: `/v1/crm/leads/${LEAD_ID_1}/transition`,
         headers: headers(),
-        payload: { targetStatus: "disqualified", reason: "short" },
+        payload: { targetStatus: "disqualified", reason: "a free-text note is not enough" },
       });
 
       await cleanupContact(LEAD_ID_1);
       await app.close();
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().code).toBe("REASON_REQUIRED");
+      expect(res.json().code).toBe("REASON_CODE_REQUIRED");
     });
 
-    it("recycled target with whitespace-only reason → 400", async () => {
+    it("recycled target with a blank reasonCode → 400", async () => {
       const app = await buildApp();
       await seedContact(LEAD_ID_1, "qualified");
 
@@ -343,13 +347,31 @@ describe("POST /v1/crm/leads/:id/transition", () => {
         method: "POST",
         url: `/v1/crm/leads/${LEAD_ID_1}/transition`,
         headers: headers(),
-        payload: { targetStatus: "recycled", reason: "         " },
+        payload: { targetStatus: "recycled", reasonCode: "   " },
       });
 
       await cleanupContact(LEAD_ID_1);
       await app.close();
 
       expect(res.statusCode).toBe(400);
+    });
+
+    it("disqualified target with an unknown reasonCode → 422", async () => {
+      const app = await buildApp();
+      await seedContact(LEAD_ID_1, "new");
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/crm/leads/${LEAD_ID_1}/transition`,
+        headers: headers(),
+        payload: { targetStatus: "disqualified", reasonCode: "totally_made_up" },
+      });
+
+      await cleanupContact(LEAD_ID_1);
+      await app.close();
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe("INVALID_REASON_CODE");
     });
 
     it("qualified target without reason is fine", async () => {

@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { rupeesToMinorString } from "@/lib/money";
+import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
+import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 
 type Initial = {
   name: string;
@@ -12,12 +15,35 @@ type Initial = {
   city?: string;
   leadStatus?: string;
   marketingConsent?: boolean;
+  temperature?: string;
+  priority?: string;
+  segment?: string;
+  product?: string;
+  region?: string;
+  expectedValueMinor?: string;
 };
 
 type Props = { params: { id: string }; initial: Initial };
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+
+/** Paise integer string → rupees decimal string for the money input prefill. */
+function minorToRupees(minor?: string): string {
+  if (!minor) return "";
+  if (!/^\d+$/.test(minor)) return "";
+  const n = BigInt(minor);
+  const rupees = n / 100n;
+  const paise = n % 100n;
+  return paise === 0n ? rupees.toString() : `${rupees}.${paise.toString().padStart(2, "0")}`;
+}
+
+function isTemperature(v: string): v is Temperature {
+  return v === "hot" || v === "warm" || v === "cold";
+}
+function isPriority(v: string): v is Priority {
+  return v === "high" || v === "medium" || v === "low";
+}
 
 export default function EditContactForm({ params, initial }: Props) {
   const router = useRouter();
@@ -31,15 +57,63 @@ export default function EditContactForm({ params, initial }: Props) {
     leadStatus: initial.leadStatus ?? "new",
     marketingConsent: initial.marketingConsent ?? false,
   });
+  const [classification, setClassification] = useState<ClassificationFormValue>({
+    temperature: initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "",
+    priority: initial.priority && isPriority(initial.priority) ? initial.priority : "",
+    segment: initial.segment ?? "",
+    product: initial.product ?? "",
+    region: initial.region ?? "",
+    expectedValueRupees: minorToRupees(initial.expectedValueMinor),
+  });
+  const [evError, setEvError] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  function updateClassification(patch: Partial<ClassificationFormValue>) {
+    setClassification((c) => ({ ...c, ...patch }));
+    if ("expectedValueRupees" in patch) setEvError("");
+  }
+
+  /**
+   * Build the classification PATCH body, converting rupees→paise. An empty
+   * selection/field is sent as explicit `null` so picking "—" (or clearing a
+   * text field) clears the stored value — the classify consumer treats null as
+   * "clear", whereas omitting the key would leave the old value in place.
+   * Returns the sentinel `INVALID` when the expected value is present but not a
+   * valid amount, so the caller can surface an inline error.
+   */
+  function buildClassificationPatch(): ClassificationPatch | "INVALID" {
+    const ev = classification.expectedValueRupees.trim();
+    let expectedValueMinor: string | null = null;
+    if (ev) {
+      const minor = rupeesToMinorString(ev);
+      if (!minor) return "INVALID";
+      expectedValueMinor = minor;
+    }
+    return {
+      temperature: classification.temperature || null,
+      priority: classification.priority || null,
+      segment: classification.segment.trim() || null,
+      product: classification.product.trim() || null,
+      region: classification.region.trim() || null,
+      expectedValueMinor,
+    };
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
+    setEvError("");
+
+    const classificationPatch = buildClassificationPatch();
+    if (classificationPatch === "INVALID") {
+      setEvError("Enter expected value as a positive amount in rupees (up to 2 decimals).");
+      return;
+    }
+
+    setBusy(true);
     try {
       const res = await fetch(`/api/proxy/v1/crm/contacts/${params.id}`, {
         method: "PATCH",
@@ -56,6 +130,8 @@ export default function EditContactForm({ params, initial }: Props) {
         }),
       });
       if (!res.ok) throw new Error(await res.text());
+      // LQ-003: persist classification on its dedicated endpoint.
+      await saveClassification(params.id, classificationPatch);
       setMessage("Contact updated.");
       setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
     } catch (e) {
@@ -76,7 +152,7 @@ export default function EditContactForm({ params, initial }: Props) {
         <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
       ) : null}
       <div className="card">
-        <form onSubmit={submit} className="pad" style={{ display: "grid", gap: 14, maxWidth: 560 }}>
+        <form onSubmit={submit} className="pad" style={{ display: "grid", gap: 14, maxWidth: 720 }}>
           <div>
             <label htmlFor="edit-name" style={labelStyle}>Full name</label>
             <input id="edit-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
@@ -104,13 +180,14 @@ export default function EditContactForm({ params, initial }: Props) {
           <div>
             <label htmlFor="edit-leadStatus" style={labelStyle}>Lead status</label>
             <select id="edit-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="qualified">Qualified</option>
-              <option value="unqualified">Unqualified</option>
-              <option value="customer">Customer</option>
+              {LEAD_STATUSES.map((s) => (
+                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
             </select>
           </div>
+
+          <ClassificationFields value={classification} onChange={updateClassification} expectedValueError={evError} />
+
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
             Marketing consent (DPDP)

@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
   listContactsQuery, createAccountBody, idParam, contactsListSchema, accountsListSchema,
+  classificationBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -49,6 +50,15 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       ...(q.search ? { search: q.search } : {}),
       ...(q.leadStatus ? { leadStatus: q.leadStatus } : {}),
       ...(q.ownerId ? { ownerId: q.ownerId } : {}),
+      ...(q.temperature ? { temperature: q.temperature } : {}),
+      ...(q.priority ? { priority: q.priority } : {}),
+      ...(q.segmentName ? { segmentName: q.segmentName } : {}),
+      ...(q.product ? { product: q.product } : {}),
+      ...(q.region ? { region: q.region } : {}),
+      ...(q.source ? { leadSource: q.source } : {}),
+      ...(q.status ? { contactStatus: q.status } : {}),
+      ...(q.expectedValueMin !== undefined ? { expectedValueMin: String(q.expectedValueMin) } : {}),
+      ...(q.expectedValueMax !== undefined ? { expectedValueMax: String(q.expectedValueMax) } : {}),
       segment: q.segment,
       actorId: ctx.actorId,
     }, isAdmin(ctx.roles)));
@@ -122,6 +132,26 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteContact(ctx, id));
+  });
+
+  // LQ-003: classify a lead (temperature/priority/segment/product/region/expected value).
+  // Async CQRS like every other contact mutation.
+  app.patch("/v1/crm/contacts/:id/classification", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = classificationBody.parse(req.body);
+    // Ownership authz mirrors PATCH /:id: a non-admin may only classify contacts they own.
+    if (!isAdmin(ctx.roles)) {
+      const existing = await queries.getContact(id, ctx.tenantId, true);
+      if (!existing || existing.status === "inactive") {
+        throw new HttpError(404, "NOT_FOUND", "contact not found");
+      }
+      if (existing.ownerId && existing.ownerId !== ctx.actorId) {
+        throw new HttpError(403, "FORBIDDEN", "only the owner or an admin may classify this contact");
+      }
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.classifyContact(ctx, id, body));
   });
 
   app.get("/v1/crm/accounts", async (req, reply) => {

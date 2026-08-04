@@ -20,6 +20,9 @@ import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
 import { completenessRoutes } from "./modules/leads/completeness-route.js";
 import { lifecycleRoutes } from "./modules/leads/lifecycle-routes.js";
 import { leadFieldRuleRoutes } from "./modules/leads/field-rules-routes.js";
+import { qualificationRoutes } from "./modules/leads/qualification-routes.js";
+import { leadScoreRuleRoutes } from "./modules/leads/score-rules-routes.js";
+import { leadReasonCodeRoutes } from "./modules/leads/reason-codes-routes.js";
 import { hierarchyRoutes } from "./modules/accounts/hierarchy-routes.js";
 import { rolesRoutes } from "./modules/contacts/roles-routes.js";
 import { identityRoutes } from "./modules/contacts/identity-routes.js";
@@ -70,6 +73,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lifecycleRoutes);
   // LM-001: per-tenant mandatory/weighted lead fields, enforced on manual capture.
   await app.register(leadFieldRuleRoutes);
+  // LQ-001/002/004: qualification frameworks, configurable scoring + history,
+  // lifecycle reason-code catalog.
+  await app.register(qualificationRoutes);
+  await app.register(leadScoreRuleRoutes);
+  await app.register(leadReasonCodeRoutes);
   await app.register(hierarchyRoutes);
   await app.register(rolesRoutes);
   await app.register(identityRoutes);

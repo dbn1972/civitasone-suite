@@ -23,6 +23,12 @@ function buildView(id: string, ctx: RequestContext, body: CreateContactBody, ver
     gstin: body.gstin ?? null,
     pan: body.pan ?? null,
     pincode: body.pincode ?? null,
+    temperature: null,
+    priority: null,
+    segment: null,
+    product: null,
+    region: null,
+    expectedValueMinor: null,
     leadStatus: body.leadStatus ?? "new",
     leadSource: body.leadSource ?? null,
     ownerId: body.ownerId ?? ctx.actorId,
@@ -117,6 +123,37 @@ export async function createAccount(ctx: RequestContext, body: CreateAccountBody
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, name: body.name, industry: body.industry ?? null, website: body.website || null, gstin: body.gstin ?? null, pan: body.pan ?? null },
   });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export type ClassificationPatch = {
+  temperature?: string | null | undefined;
+  priority?: string | null | undefined;
+  segment?: string | null | undefined;
+  product?: string | null | undefined;
+  region?: string | null | undefined;
+  expectedValueMinor?: number | null | undefined;
+};
+
+/**
+ * LQ-003: set lead classification fields (async CQRS like every other contact
+ * mutation). The route validates + publishes; classification-consumer persists and
+ * audits. Idempotency key is scoped per contact so a reused client key across two
+ * contacts does not collapse into one write.
+ */
+export async function classifyContact(
+  ctx: RequestContext,
+  id: string,
+  patch: ClassificationPatch,
+): Promise<Accepted> {
+  const msgId = commandId(ctx, `${COMMANDS.classifyContact}:${id}`);
+  await queue.publish(COMMANDS.classifyContact, {
+    messageId: msgId, type: COMMANDS.classifyContact,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...patch },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
