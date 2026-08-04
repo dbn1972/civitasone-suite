@@ -145,8 +145,21 @@ export const EVENTS = {
   recurringTaskCreated: "crm.recurring_task.created",
   /** Recurring task definition amended (AC-005). */
   recurringTaskUpdated: "crm.recurring_task.updated",
-  /** Recurring task materialised its next occurrence (AC-005). */
-  recurringTaskRun: "crm.recurring_task.run",
+  /**
+   * Recurring task materialised its next occurrence (AC-005).
+   *
+   * MUST NOT reuse `COMMANDS.runRecurringTask` ("crm.recurring_task.run").
+   * The consumer of that command emits this event, so sharing the string made
+   * the consumer re-consume its own completion event as a fresh command. The
+   * event payload ({ taskId, materialisedActionId }) has none of the fields
+   * the command handler reads ({ id, tenantId, version }), so the guarded
+   * UPDATE rendered `WHERE id =  AND tenant_id = ...` and failed with
+   * SQLSTATE 42601. That rolled back `markProcessed`, so the message was
+   * redelivered forever and every genuine run fed the loop again.
+   *
+   * Payload: { taskId, materialisedActionId, dueAt, nextRunAt }.
+   */
+  recurringTaskRan: "crm.recurring_task.ran",
   /** Quotation created from a template (QP-003). Payload includes totalMinor as a STRING. */
   quotationCreated: "crm.quotation.created",
   /** New quotation revision cloned from an existing one (QP-003). */
