@@ -32,8 +32,12 @@ const transferBody = z.object({
 const updateCapacityBody = z.object({
   maxLeads: z.number().int().min(1).max(1000).optional(),
   available: z.boolean().optional(),
-}).refine((b) => b.maxLeads !== undefined || b.available !== undefined, {
-  message: "at least one of maxLeads or available is required",
+  // AS-003: on_leave excludes the agent from assignment independently of the
+  // manual `available` switch (e.g. HRMS-driven leave). Engine exclusion already
+  // reads the column; this makes it settable.
+  onLeave: z.boolean().optional(),
+}).refine((b) => b.maxLeads !== undefined || b.available !== undefined || b.onLeave !== undefined, {
+  message: "at least one of maxLeads, available or onLeave is required",
 });
 
 export async function teamRoutes(app: FastifyInstance): Promise<void> {

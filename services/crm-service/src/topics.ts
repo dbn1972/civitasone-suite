@@ -134,6 +134,26 @@ export const COMMANDS = {
   classifyContact: "crm.contact.classify",
   /** Submit a qualification framework's answers for a lead -> compute outcome+score (LQ-001). */
   qualifyLead: "crm.lead.qualify",
+  // ── Lead assignment & escalation (AS-001..004) ──
+  createAssignmentRule: "crm.assignment_rule.create",
+  updateAssignmentRule: "crm.assignment_rule.update",
+  deleteAssignmentRule: "crm.assignment_rule.delete",
+  assignLeadManual: "crm.lead.assign",
+  acceptLead: "crm.lead.accept",
+  createAssignmentQueue: "crm.assignment_queue.create",
+  updateAssignmentQueue: "crm.assignment_queue.update",
+  deleteAssignmentQueue: "crm.assignment_queue.delete",
+  createTerritory: "crm.territory.create",
+  updateTerritory: "crm.territory.update",
+  deleteTerritory: "crm.territory.delete",
+  createPartner: "crm.partner.create",
+  updatePartner: "crm.partner.update",
+  deletePartner: "crm.partner.delete",
+  createBranch: "crm.branch.create",
+  updateBranch: "crm.branch.update",
+  deleteBranch: "crm.branch.delete",
+  upsertEscalationRule: "crm.escalation_rule.upsert",
+  deleteEscalationRule: "crm.escalation_rule.delete",
 } as const;
 
 export const EVENTS = {
@@ -291,6 +311,15 @@ export const EVENTS = {
   contactClassified: "crm.contact.classified",
   /** A lead was qualified against a framework (LQ-001). Payload: { leadId, frameworkId, outcome, score }. */
   leadQualified: "crm.lead.qualified",
+  // ── Lead assignment & escalation (AS-001..004) ──
+  assignmentRuleCreated: "crm.assignment_rule.created",
+  assignmentRuleUpdated: "crm.assignment_rule.updated",
+  assignmentRuleDeleted: "crm.assignment_rule.deleted",
+  leadAssigned: "crm.lead.assigned",
+  leadAccepted: "crm.lead.accepted",
+  leadEscalated: "crm.lead.escalated",
+  escalationRuleUpserted: "crm.escalation_rule.upserted",
+  escalationRuleDeleted: "crm.escalation_rule.deleted",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

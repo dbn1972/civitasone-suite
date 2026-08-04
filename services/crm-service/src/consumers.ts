@@ -32,6 +32,7 @@ import { registerTeamConsumers } from "./modules/teams/consumer.js";
 import { registerResidualF3Consumers } from "./modules/residual-f3/consumer.js";
 import { registerOnboardingConsumers } from "./modules/onboarding/consumer.js";
 import { registerSentimentConsumers } from "./modules/sentiment/consumer.js";
+import { registerAssignmentConsumers } from "./modules/assignment/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -60,4 +61,5 @@ export function registerAllConsumers(queue: Queue): void {
   registerResidualF3Consumers(queue);
   registerOnboardingConsumers(queue);
   registerSentimentConsumers(queue);
+  registerAssignmentConsumers(queue);
 }

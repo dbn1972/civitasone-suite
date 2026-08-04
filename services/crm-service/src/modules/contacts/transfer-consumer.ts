@@ -66,6 +66,14 @@ export function registerTransferConsumer(queue: Queue): void {
           WHERE id = ${p.contactId} AND tenant_id = ${msg.tenantId} AND status = 'active'
         `);
 
+        // AS-002: unify ownership history into crm.lead_assignment_log so a
+        // transfer sits alongside the auto/manual assignments for the same lead
+        // — one query returns the whole ownership trail.
+        await tx.execute(sql`
+          INSERT INTO crm.lead_assignment_log (tenant_id, lead_id, owner_id, rule_id, method, assigned_by)
+          VALUES (${msg.tenantId}, ${p.contactId}, ${p.toOwnerId}, NULL, 'transfer', ${msg.actorId})
+        `);
+
         await enqueue(tx, {
           topic: EVENTS.ownershipTransferred,
           eventType: EVENTS.ownershipTransferred,

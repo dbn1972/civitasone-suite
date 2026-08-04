@@ -30,15 +30,17 @@ export function registerTeamConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.updateAgentCapacity, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; agentId: string; maxLeads?: number; available?: boolean };
+    const p = msg.payload as { id: string; tenantId: string; agentId: string; maxLeads?: number; available?: boolean; onLeave?: boolean };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const setClause = p.maxLeads !== undefined && p.available !== undefined
-          ? sql`max_leads = ${p.maxLeads}, available = ${p.available}`
-          : p.maxLeads !== undefined
-            ? sql`max_leads = ${p.maxLeads}`
-            : sql`available = ${p.available!}`;
+        // Build the SET clause from whichever fields were supplied (route guarantees
+        // at least one), so maxLeads / available / on_leave can be set independently.
+        const parts = [];
+        if (p.maxLeads !== undefined) parts.push(sql`max_leads = ${p.maxLeads}`);
+        if (p.available !== undefined) parts.push(sql`available = ${p.available}`);
+        if (p.onLeave !== undefined) parts.push(sql`on_leave = ${p.onLeave}`);
+        const setClause = sql.join(parts, sql`, `);
         // The workload row can disappear between the route's existence check and
         // this apply, so the audit records what actually happened rather than
         // assuming the update landed.
