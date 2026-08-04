@@ -20,6 +20,7 @@ import { registerNotificationDeliveryConsumer } from "./modules/activities/notif
 import { registerLeadScoringConsumers } from "./modules/leads/consumer.js";
 import { registerInboundCaptureConsumer } from "./modules/leads/inbound-consumer.js";
 import { registerLifecycleConsumer } from "./modules/leads/lifecycle-consumer.js";
+import { registerLeadFieldRuleConsumers } from "./modules/leads/field-rules-consumer.js";
 import { registerPipelineConsumers } from "./modules/pipelines/consumer.js";
 import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.js";
 import { registerTeamConsumers } from "./modules/teams/consumer.js";
@@ -40,6 +41,7 @@ export function registerAllConsumers(queue: Queue): void {
   registerLeadScoringConsumers(queue);
   registerInboundCaptureConsumer(queue);
   registerLifecycleConsumer(queue);
+  registerLeadFieldRuleConsumers(queue);
   registerPipelineConsumers(queue);
   registerCustomFieldConsumers(queue);
   registerTeamConsumers(queue);

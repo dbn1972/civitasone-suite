@@ -11,6 +11,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { contacts } from "../contacts/schema.js";
 import { computeCompleteness } from "./completeness.js";
+import * as fieldRules from "./field-rules-repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 
@@ -33,6 +34,10 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
         company: contacts.company,
         designation: contacts.designation,
         city: contacts.city,
+        // LM-001: country and ownerId are configurable scoring fields, so they must
+        // be read even though the default weight map does not mention them.
+        country: contacts.country,
+        ownerId: contacts.ownerId,
         leadSource: contacts.leadSource,
       })
         .from(contacts)
@@ -56,10 +61,14 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
       company: row.company,
       designation: row.designation,
       city: row.city,
+      country: row.country,
+      ownerId: row.ownerId,
       leadSource: row.leadSource,
     };
 
-    const result = computeCompleteness(attributes);
+    // Per-tenant weights when configured; the pure scorer falls back to defaults.
+    const rules = await fieldRules.listRules(ctx.tenantId);
+    const result = computeCompleteness(attributes, rules);
     return reply.send({ data: result });
   });
 }

@@ -70,6 +70,8 @@ tags:
     description: Agent definitions, chat conversations, copilot turns, guardrails, AI governance
   - name: Notification
     description: Email deliverability — sending domains, DKIM/SPF/DMARC authentication health
+  - name: CRM
+    description: Contacts and leads, configurable lead field rules, lead completeness scoring
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -14714,6 +14716,240 @@ paths:
       security:
         - bearerAuth: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CRM Service — Contacts / leads (LM-001 configurable field rules)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/crm/contacts:
+    post:
+      operationId: createCrmContact
+      tags: [CRM]
+      summary: Create a contact (lead) via manual capture
+      description: |
+        Validates the payload, then checks it against the tenant's configured
+        mandatory lead fields (`/v1/crm/lead-field-rules`) before publishing the
+        create command. Two distinct failure modes:
+
+        - 400 `VALIDATION_FAILED` — the payload is malformed (bad email, missing
+          `name`, unknown `leadStatus`).
+        - 422 `MANDATORY_FIELDS_MISSING` — the payload is well formed but omits a
+          field this tenant has declared required. Only enabled rules are enforced,
+          so a tenant can suspend enforcement during a data-cleanup window.
+
+        Enforcement is deliberately limited to this route. Bulk import
+        (`POST /v1/crm/contacts/bulk/import`) and `PATCH /v1/crm/contacts/{id}`
+        must stay able to land partial records.
+
+        Roles: crm_user, crm_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCrmContactRequest"
+      responses:
+        "202":
+          description: Create command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Schema validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "422":
+          description: |
+            `MANDATORY_FIELDS_MISSING` — one or more tenant-mandatory fields were
+            absent. The message lists the field names, comma separated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/lead-field-rules:
+    get:
+      operationId: listLeadFieldRules
+      tags: [CRM]
+      summary: List the tenant's lead field rules
+      description: |
+        Returns every configured rule for the caller's tenant. Readable by any CRM
+        user because the guided lead form needs to know which fields to mark
+        mandatory. A tenant with no configuration gets an empty list, and the
+        platform-wide defaults apply.
+
+        Roles: crm_user, crm_admin, super_admin.
+      responses:
+        "200":
+          description: Configured rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeadFieldRule"
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    put:
+      operationId: upsertLeadFieldRule
+      tags: [CRM]
+      summary: Declare a lead field mandatory and/or weighted
+      description: |
+        Upserts the rule identified by (tenant, `fieldName`) — PUT rather than POST
+        because re-declaring a field is an update of the same resource, not a
+        second rule. `weight` feeds the completeness score; `enabled: false` keeps
+        the weight but stops the field blocking a save.
+
+        `fieldName` is constrained to the governable set, matching the CHECK
+        constraint in migration `0037_lead_field_rules.sql`.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertLeadFieldRuleRequest"
+      responses:
+        "202":
+          description: Upsert command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            Validation error — unknown `fieldName`, non-boolean `required`, or
+            `weight` outside 0–100.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/crm/lead-field-rules/{fieldName}:
+    delete:
+      operationId: deleteLeadFieldRule
+      tags: [CRM]
+      summary: Revert a lead field to built-in behaviour
+      description: |
+        Removes the tenant's rule for one field. The field then falls back to the
+        platform default — no longer mandatory, and scored with the default weight
+        map.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: fieldName
+          in: path
+          required: true
+          description: The governed field whose rule should be removed
+          schema:
+            type: string
+            enum: [name, email, phone, company, designation, city, country, leadSource, ownerId]
+      responses:
+        "202":
+          description: Delete command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — `fieldName` is outside the governable set"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no rule for that field in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/leads/{id}/completeness:
+    get:
+      operationId: getLeadCompleteness
+      tags: [CRM]
+      summary: Per-record data quality completeness score
+      description: |
+        Scores one active lead 0–100 against the tenant's configured field weights,
+        falling back to the built-in default map when the tenant has configured
+        none. Only enabled rules with a weight above zero are scored, and the score
+        is normalised, so weights need not sum to 100.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Lead (contact) id
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Completeness breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LeadCompleteness"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a UUID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no active lead with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -21319,3 +21555,136 @@ components:
           description: Most recent checks, newest first
           items:
             $ref: "#/components/schemas/DomainAuthCheck"
+
+    # ─── CRM ───────────────────────────────────────────────────────────────────
+
+    CreateCrmContactRequest:
+      type: object
+      description: |
+        Mirrors `createContactBody` in
+        `services/crm-service/src/modules/contacts/validators.ts`. Only `name` is
+        required platform-wide; a tenant may make any of the other governable
+        fields mandatory via `/v1/crm/lead-field-rules`, which is enforced with 422
+        rather than 400.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        phone:
+          type: string
+          minLength: 3
+          maxLength: 32
+        company:
+          type: string
+          minLength: 1
+          maxLength: 200
+        designation:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 100
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          minLength: 2
+          maxLength: 2
+        leadStatus:
+          type: string
+          enum: [new, contacted, qualified, unqualified, customer]
+          default: new
+        leadSource:
+          type: string
+          maxLength: 64
+        ownerId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        marketingConsent:
+          type: boolean
+
+    UpsertLeadFieldRuleRequest:
+      type: object
+      required: [fieldName, required]
+      properties:
+        fieldName:
+          type: string
+          description: The governable field this rule applies to
+          enum: [name, email, phone, company, designation, city, country, leadSource, ownerId]
+        required:
+          type: boolean
+          description: |
+            When true (and `enabled`), manual contact creation is rejected with 422
+            `MANDATORY_FIELDS_MISSING` if the field is absent or blank.
+        weight:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            Contribution to the completeness score. Omitted or 0 means the field is
+            not scored — declaring a field mandatory says nothing about scoring.
+        enabled:
+          type: boolean
+          description: |
+            Defaults to true. Set false to suspend enforcement while keeping the
+            configured weight — used during data-cleanup windows.
+
+    LeadFieldRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        fieldName:
+          type: string
+        required:
+          type: boolean
+        weight:
+          type: integer
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          description: Optimistic-lock version
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LeadCompleteness:
+      type: object
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Normalised percentage of configured weight that is populated
+        missingFields:
+          type: array
+          items:
+            type: string
+        filledFields:
+          type: array
+          items:
+            type: string
+        totalFields:
+          type: integer
+          description: Number of scored fields (configured, or the default map)
