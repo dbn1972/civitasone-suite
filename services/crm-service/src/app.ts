@@ -23,6 +23,9 @@ import { leadFieldRuleRoutes } from "./modules/leads/field-rules-routes.js";
 import { hierarchyRoutes } from "./modules/accounts/hierarchy-routes.js";
 import { rolesRoutes } from "./modules/contacts/roles-routes.js";
 import { identityRoutes } from "./modules/contacts/identity-routes.js";
+import { dedupRoutes } from "./modules/contacts/dedup-routes.js";
+import { mergeRoutes } from "./modules/contacts/merge-routes.js";
+import { dataQualityRoutes } from "./modules/dashboard/data-quality-routes.js";
 import { conversionRoutes } from "./modules/contacts/conversion-routes.js";
 import { closeRoutes } from "./modules/deals/close-routes.js";
 import { teamRoutes } from "./modules/teams/routes.js";
@@ -70,6 +73,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hierarchyRoutes);
   await app.register(rolesRoutes);
   await app.register(identityRoutes);
+  // DQ-001/002/004: dedup config + duplicate-check, lead/account merge, DQ dashboard.
+  await app.register(dedupRoutes);
+  await app.register(mergeRoutes);
+  await app.register(dataQualityRoutes);
   await app.register(conversionRoutes);
   await app.register(closeRoutes);
   await app.register(teamRoutes);

@@ -1,5 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { MergeButton } from "../../../_components/crm/MergeButton";
+import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getCrmContacts } from "../../../_data/loaders";
 import { ContactToolbar } from "./ContactToolbar";
 import { ContactsTable } from "./ContactsTable";
@@ -10,6 +12,19 @@ export default async function Page({ searchParams }: { searchParams?: { search?:
     segment: searchParams?.segment,
   });
 
+  const mergeOptions: MergeOption[] = contacts
+    .filter((c): c is typeof c & { id: string } => Boolean(c.id))
+    .map((c) => ({
+      id: c.id,
+      label: c.email ? `${c.name} · ${c.email}` : c.name,
+      fields: {
+        Name: c.name,
+        Email: c.email,
+        Phone: c.phone,
+        Organisation: c.account,
+      },
+    }));
+
   return (
     <>
       <PageHeader
@@ -19,6 +34,7 @@ export default async function Page({ searchParams }: { searchParams?: { search?:
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <ContactToolbar />
+      {mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
       <StatGrid>
         <StatCard icon="👤" iconBg="#eef2ff" label="Total Contacts" value={contacts.length.toLocaleString("en-IN")} />
         <StatCard icon="🏢" iconBg="#eef2ff" label="With Organisation" value={contacts.filter(c => c.account && c.account !== "—").length.toLocaleString("en-IN")} />

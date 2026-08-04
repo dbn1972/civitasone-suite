@@ -8,19 +8,28 @@ interface SegmentedProps {
 
 export function Segmented({ options, value, onChange }: SegmentedProps) {
   return (
-    <div className="seg">
-      {options.map((opt) => (
-        <span
-          key={opt}
-          className={opt === value ? "on" : undefined}
-          onClick={() => onChange(opt)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && onChange(opt)}
-        >
-          {opt}
-        </span>
-      ))}
+    <div className="seg" role="tablist">
+      {options.map((opt) => {
+        const selected = opt === value;
+        return (
+          <span
+            key={opt}
+            className={selected ? "on" : undefined}
+            onClick={() => onChange(opt)}
+            role="tab"
+            aria-selected={selected}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onChange(opt);
+              }
+            }}
+          >
+            {opt}
+          </span>
+        );
+      })}
     </div>
   );
 }

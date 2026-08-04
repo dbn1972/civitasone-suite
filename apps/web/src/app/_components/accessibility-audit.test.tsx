@@ -99,10 +99,10 @@ describe("Accessibility Audit: WCAG 2.2 AA", () => {
   });
 
   describe("Tabs — keyboard accessibility", () => {
-    it("each tab has role=button", () => {
+    it("each tab has role=tab", () => {
       render(<Tabs tabs={["All", "Active"]} active="All" onChange={vi.fn()} />);
-      expect(screen.getByText("All")).toHaveAttribute("role", "button");
-      expect(screen.getByText("Active")).toHaveAttribute("role", "button");
+      expect(screen.getByText("All")).toHaveAttribute("role", "tab");
+      expect(screen.getByText("Active")).toHaveAttribute("role", "tab");
     });
 
     it("each tab has tabIndex=0 for keyboard focus", () => {

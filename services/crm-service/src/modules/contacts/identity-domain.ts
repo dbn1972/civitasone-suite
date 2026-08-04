@@ -41,6 +41,20 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
+ * Normalize a GSTIN for exact matching: trim + uppercase. GSTINs are business
+ * identifiers (not PII), so unlike email/phone they are stored in cleartext and
+ * carry a per-tenant normalized index for exact-match dedup (DQ-001).
+ */
+export function normalizeGstin(gstin: string): string {
+  return gstin.trim().toUpperCase();
+}
+
+/** Normalize a PAN for exact matching: trim + uppercase. */
+export function normalizePan(pan: string): string {
+  return pan.trim().toUpperCase();
+}
+
+/**
  * Compute a match score (0-100) between two names using simple token overlap.
  * Used for fuzzy matching when email/phone don't match exactly.
  */
@@ -60,4 +74,22 @@ export function matchScore(nameA: string, nameB: string): number {
 
   const maxPossible = Math.max(setA.size, setB.size);
   return Math.round((matches / maxPossible) * 100);
+}
+
+/**
+ * Do two records match exactly on a business identifier (GSTIN or PAN)?
+ * A convenience for the identity-resolution path (DQ-001): a shared GSTIN/PAN is
+ * an unambiguous duplicate signal for organisations.
+ */
+export function businessIdMatches(
+  a: { gstin?: string | null; pan?: string | null },
+  b: { gstin?: string | null; pan?: string | null },
+): "gstin" | "pan" | null {
+  if (a.gstin && b.gstin && normalizeGstin(a.gstin) === normalizeGstin(b.gstin)) {
+    return "gstin";
+  }
+  if (a.pan && b.pan && normalizePan(a.pan) === normalizePan(b.pan)) {
+    return "pan";
+  }
+  return null;
 }

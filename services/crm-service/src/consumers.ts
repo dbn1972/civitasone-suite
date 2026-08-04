@@ -11,6 +11,7 @@ import type { Queue } from "@civitasone/queue";
 import { registerContactConsumers } from "./modules/contacts/consumer.js";
 import { registerContactRoleConsumers } from "./modules/contacts/roles-consumer.js";
 import { registerConversionConsumer } from "./modules/contacts/conversion-consumer.js";
+import { registerMergeConsumers } from "./modules/contacts/merge-consumer.js";
 import { registerTransferConsumer } from "./modules/contacts/transfer-consumer.js";
 import { registerDealConsumers } from "./modules/deals/consumer.js";
 import { registerDealCloseConsumer } from "./modules/deals/close-consumer.js";
@@ -32,6 +33,7 @@ export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
   registerContactRoleConsumers(queue);
   registerConversionConsumer(queue);
+  registerMergeConsumers(queue);
   registerTransferConsumer(queue);
   registerDealConsumers(queue);
   registerDealCloseConsumer(queue);

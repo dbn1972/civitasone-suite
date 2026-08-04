@@ -5,17 +5,20 @@ import { Segmented } from "./Segmented";
 describe("Segmented", () => {
   const options = ["Day", "Week", "Month"];
 
-  it("renders all options", () => {
+  it("renders all options inside a tablist", () => {
     render(<Segmented options={options} value="Day" onChange={vi.fn()} />);
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.getByText("Day")).toBeInTheDocument();
     expect(screen.getByText("Week")).toBeInTheDocument();
     expect(screen.getByText("Month")).toBeInTheDocument();
   });
 
-  it("marks selected option with 'on' class", () => {
+  it("marks selected option with 'on' class and aria-selected", () => {
     render(<Segmented options={options} value="Week" onChange={vi.fn()} />);
     expect(screen.getByText("Week")).toHaveClass("on");
+    expect(screen.getByText("Week")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Day")).not.toHaveClass("on");
+    expect(screen.getByText("Day")).toHaveAttribute("aria-selected", "false");
   });
 
   it("calls onChange on click", () => {
@@ -32,10 +35,24 @@ describe("Segmented", () => {
     expect(onChange).toHaveBeenCalledWith("Week");
   });
 
-  it("each option is keyboard accessible (role=button, tabIndex=0)", () => {
+  it("calls onChange on Space keydown", () => {
+    const onChange = vi.fn();
+    render(<Segmented options={options} value="Day" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("Month"), { key: " " });
+    expect(onChange).toHaveBeenCalledWith("Month");
+  });
+
+  it("does not call onChange on other keys", () => {
+    const onChange = vi.fn();
+    render(<Segmented options={options} value="Day" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("Week"), { key: "Tab" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("each option is keyboard accessible (role=tab, tabIndex=0)", () => {
     render(<Segmented options={options} value="Day" onChange={vi.fn()} />);
     const el = screen.getByText("Week");
-    expect(el).toHaveAttribute("role", "button");
+    expect(el).toHaveAttribute("role", "tab");
     expect(el).toHaveAttribute("tabindex", "0");
   });
 });
