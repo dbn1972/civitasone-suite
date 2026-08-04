@@ -275,9 +275,50 @@ export function buildSqsAgents(maxSockets: number = resolveMaxSockets()): {
   };
 }
 
-/** SQS request handler with an explicit connection ceiling. */
+/**
+ * Fail-fast timeouts for the SQS client.
+ *
+ * Without these the SDK waits indefinitely: a SendMessage that can never acquire
+ * a socket (or a half-open connection) hangs forever, is never logged, and
+ * silently stalls the outbox relay. connectionTimeout fails a connect that
+ * cannot be established; requestTimeout bounds the whole request so a genuine
+ * hang surfaces as an observable, isolated `outbox_relay_failed` instead of a
+ * silent stall.
+ *
+ * requestTimeout MUST stay above the long-poll ReceiveMessage wait
+ * (`WaitTimeSeconds: 20`), or every legitimate poll would abort each cycle —
+ * hence the enforced floor. A healthy SendMessage completes in well under a
+ * second, so the ceiling only ever trips a real hang.
+ */
+export const DEFAULT_SQS_CONNECTION_TIMEOUT_MS = 6_000;
+export const DEFAULT_SQS_REQUEST_TIMEOUT_MS = 30_000;
+const LONG_POLL_WAIT_MS = 20_000;
+
+export function resolveConnectionTimeout(
+  raw: string | undefined = process.env.SQS_CONNECTION_TIMEOUT_MS,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_CONNECTION_TIMEOUT_MS;
+  return Math.floor(parsed);
+}
+
+export function resolveRequestTimeout(
+  raw: string | undefined = process.env.SQS_REQUEST_TIMEOUT_MS,
+): number {
+  const parsed = Number(raw);
+  const fallback = DEFAULT_SQS_REQUEST_TIMEOUT_MS;
+  const value = !Number.isFinite(parsed) || parsed < 1 ? fallback : Math.floor(parsed);
+  // A request timeout at or below the long-poll wait would abort every receive.
+  return Math.max(value, LONG_POLL_WAIT_MS + 5_000);
+}
+
+/** SQS request handler with an explicit connection ceiling and fail-fast timeouts. */
 export function buildRequestHandler(maxSockets: number = resolveMaxSockets()): NodeHttpHandler {
-  return new NodeHttpHandler(buildSqsAgents(maxSockets));
+  return new NodeHttpHandler({
+    ...buildSqsAgents(maxSockets),
+    connectionTimeout: resolveConnectionTimeout(),
+    requestTimeout: resolveRequestTimeout(),
+  });
 }
 
 export class SqsQueue implements Queue {

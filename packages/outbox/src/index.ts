@@ -97,11 +97,23 @@ export async function relayOnce(db: DrizzleTx, queue: Queue, batch = 100, servic
  * an uncaught exception that could kill the relay).
  */
 export function startRelay(db: DrizzleTx, queue: Queue, intervalMs = 500, service = process.env.SERVICE_NAME ?? "service"): NodeJS.Timeout {
+  // Backpressure: only one cycle runs at a time. Without this guard the fixed
+  // interval fires a fresh relayOnce even while the previous one is still waiting
+  // on slow or stuck publishes, stacking concurrent batches that each grab 100
+  // rows and pile more in-flight SendMessage calls onto an already-saturated
+  // socket pool — the runaway that exhausted the pool under load.
+  let running = false;
   return setInterval(() => {
-    relayOnce(db, queue, 100, service).catch((err) => {
-      incrementOutboxRelayFailure(service);
-      captureError(err, { service, event: "outbox_relay_cycle_failed" });
-    });
+    if (running) return;
+    running = true;
+    relayOnce(db, queue, 100, service)
+      .catch((err) => {
+        incrementOutboxRelayFailure(service);
+        captureError(err, { service, event: "outbox_relay_cycle_failed" });
+      })
+      .finally(() => {
+        running = false;
+      });
   }, intervalMs);
 }
 
