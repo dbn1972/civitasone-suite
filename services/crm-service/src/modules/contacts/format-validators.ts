@@ -10,9 +10,13 @@
  * field is never flagged as an invalid format).
  */
 
-/** True for null | undefined | "" — i.e. "nothing to validate". */
+/** True for null | undefined | empty/whitespace-only — i.e. "nothing to validate".
+ *  A whitespace-only value is treated as absent (not malformed): emptiness is the
+ *  concern of required-field enforcement, not format validation. */
 function absent(value: unknown): boolean {
-  return value === null || value === undefined || value === "";
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string" && value.trim() === "") return true;
+  return false;
 }
 
 /**

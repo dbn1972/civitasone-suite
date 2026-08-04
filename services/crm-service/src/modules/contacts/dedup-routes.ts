@@ -50,7 +50,7 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putRulesBody.parse(req.body);
-    const rules = await dedupRepo.upsertRules(ctx.tenantId, body.rules, ctx.actorId);
+    const rules = await dedupRepo.upsertRules(ctx.tenantId, body.rules, ctx.actorId, ctx.correlationId);
     return reply.send({ data: rules });
   });
 

@@ -13,6 +13,7 @@ import { schema as pipelinesModule } from "../modules/pipelines/schema.js";
 import { schema as customFieldsModule } from "../modules/custom-fields/schema.js";
 import { schema as onboardingModule } from "../modules/onboarding/schema.js";
 import { schema as sentimentModule } from "../modules/sentiment/schema.js";
+import { schema as leadFieldRulesModule } from "../modules/leads/field-rules-schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -24,6 +25,7 @@ const SCHEMA = {
   ...customFieldsModule,
   ...onboardingModule,
   ...sentimentModule,
+  ...leadFieldRulesModule,
   ...outboxSchema,
 };
 

@@ -13,8 +13,19 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { isValidMobile, isValidPincode, FORMAT_ERROR_CODES } from "../contacts/format-validators.js";
 
-/** Roles that may push inbound leads — includes integration_bot for automated pipelines */
-const INBOUND_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin", "integration_bot"];
+/**
+ * Roles that may push inbound leads. Machine/integration path only: `integration_bot`
+ * for the automated pipelines (email, telephony, chatbot, whatsapp, partner_api) plus
+ * the admins who operate them.
+ *
+ * `crm_user` was removed deliberately. This route creates a contact with no
+ * mandatory-field enforcement at all, so leaving the human data-entry role here made
+ * LM-001 bypassable by the very role it governs: a crm_user blocked at
+ * POST /v1/crm/contacts with 422 could post the identical lead here and get it saved.
+ * A human creating a lead by hand must go through POST /v1/crm/contacts, where the
+ * tenant's configured mandatory fields are checked.
+ */
+const INBOUND_ROLES = ["crm_admin", "super_admin", "tenant_admin", "integration_bot"];
 
 const inboundLeadBody = z.object({
   channel: z.enum(["email", "telephony", "chatbot", "whatsapp", "partner_api"]),

@@ -9,6 +9,8 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as leadFieldRules from "../leads/field-rules-repo.js";
+import { validateRequiredFields } from "../leads/field-rules-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
@@ -22,6 +24,20 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createContactBody.parse(req.body);
+    // LM-001: the zod schema only knows the platform-wide minimum (name). Which
+    // fields a *tenant* insists on is configuration, so it is checked here rather
+    // than baked into the validator. 422 not 400: the payload is well formed, it
+    // just breaks a tenant business rule. Deliberately only on manual capture —
+    // bulk import and PATCH must stay able to land partial records.
+    const rules = await leadFieldRules.listRules(ctx.tenantId);
+    const missing = validateRequiredFields(body as Record<string, unknown>, rules);
+    if (missing.length > 0) {
+      throw new HttpError(
+        422,
+        "MANDATORY_FIELDS_MISSING",
+        `missing mandatory field(s): ${missing.join(", ")}`,
+      );
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createContact(ctx, body));
   });
 

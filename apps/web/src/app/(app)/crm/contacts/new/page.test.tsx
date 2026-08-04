@@ -24,13 +24,16 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
     vi.mocked(dq.duplicateCheck).mockResolvedValue([cand]);
 
     render(<NewContactPage />);
+    // `name` is a mandatory field (LM-001) — fill it so the form passes native
+    // constraint validation and the submit handler (which runs the DQ-001 check) fires.
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     const email = screen.getByLabelText("Email");
     fireEvent.change(email, { target: { value: "asha@x.in" } });
 
     // First submit surfaces the duplicate and blocks the create (fetch not called).
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     expect(await screen.findByText(/potential duplicates found/i)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything());
 
     // Acknowledge → button flips to "Create anyway".
     fireEvent.click(screen.getByRole("button", { name: /continue anyway/i }));
@@ -46,7 +49,7 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^create contact$/i }));
     await waitFor(() => expect(dq.duplicateCheck).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/potential duplicates found/i)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything());
   });
 
   it("ignores a stale in-flight check so a newer blur wins (finding 2)", async () => {
@@ -57,7 +60,7 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
       .mockResolvedValueOnce([]);         // second blur (phone) — resolves first, empty
 
     render(<NewContactPage />);
-    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@x.in" } });
     fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: "9900000000" } });
 
@@ -77,12 +80,14 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "new-1" }) });
 
     render(<NewContactPage />);
+    // Mandatory field (LM-001) so the form submits on click.
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@x.in" } });
     fireEvent.blur(screen.getByLabelText("Email"));
     expect(await screen.findByText(/duplicate check unavailable/i)).toBeInTheDocument();
 
     // Submit still proceeds to create despite the failed check.
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/crm/contacts", expect.anything()));
   });
 });

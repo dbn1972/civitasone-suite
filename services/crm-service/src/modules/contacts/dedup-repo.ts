@@ -3,9 +3,12 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { dedupRules, type DedupRuleRow } from "./dedup-schema.js";
 import { contacts } from "./schema.js";
 import { DEFAULT_DEDUP_RULES, type DedupRule, type DedupCandidate, type DedupField } from "./dedup-domain.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 /** Map a DB row to the pure-domain rule shape. */
 function toRule(r: DedupRuleRow): DedupRule {
@@ -69,6 +72,7 @@ export async function upsertRules(
   tenantId: string,
   rules: RuleUpsert[],
   actorId: string,
+  correlationId: string,
 ): Promise<DedupRule[]> {
   await db.transaction(async (tx) => {
     for (const r of rules) {
@@ -97,6 +101,23 @@ export async function upsertRules(
           },
         });
     }
+    // Governance-sensitive config change: record an audit event transactionally
+    // (commits with the rule write) so a change to matching rules is traceable.
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: AUDIT_TOPIC,
+      eventType: AUDIT_TOPIC,
+      tenantId,
+      actorId,
+      correlationId,
+      payload: {
+        service: "crm",
+        action: "dedup_rules_update",
+        resourceType: "dedup_rule",
+        resourceId: tenantId,
+        outcome: "success",
+        metadata: { ruleCount: rules.length, fields: rules.map((r) => r.field) },
+      },
+    });
   });
   return getRules(tenantId, actorId);
 }

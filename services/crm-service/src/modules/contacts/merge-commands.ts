@@ -6,6 +6,10 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
+
+/** Cache namespace for account reads — kept distinct from RESOURCE ("contact")
+ * so an account merge invalidates the account list, not the contact list. */
+const ACCOUNT_RESOURCE = "account";
 import type { Accepted } from "./commands.js";
 
 export interface MergeBody {
@@ -31,6 +35,6 @@ export async function mergeAccounts(ctx: RequestContext, body: MergeBody): Promi
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, tenantId: ctx.tenantId },
   });
-  await cache.invalidateResource(ctx.tenantId, RESOURCE);
+  await cache.invalidateResource(ctx.tenantId, ACCOUNT_RESOURCE);
   return { id: body.primaryId, status: "accepted", correlationId: ctx.correlationId };
 }

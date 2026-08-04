@@ -11,6 +11,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { contacts } from "../contacts/schema.js";
 import { computeCompleteness } from "./completeness.js";
+import * as fieldRules from "./field-rules-repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 
@@ -33,6 +34,11 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
         company: contacts.company,
         designation: contacts.designation,
         city: contacts.city,
+        // LM-001: exactly the governable set (field-rules-validators.LEAD_FIELD_NAMES),
+        // which is also a superset of DEFAULT_FIELD_WEIGHTS. `country` and `ownerId`
+        // used to be read here for scoring; they are server-defaulted and no longer
+        // governable, so they can never appear in a weight list — selecting them would
+        // only widen the row for nothing.
         leadSource: contacts.leadSource,
       })
         .from(contacts)
@@ -59,7 +65,9 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
       leadSource: row.leadSource,
     };
 
-    const result = computeCompleteness(attributes);
+    // Per-tenant weights when configured; the pure scorer falls back to defaults.
+    const rules = await fieldRules.listRules(ctx.tenantId);
+    const result = computeCompleteness(attributes, rules);
     return reply.send({ data: result });
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
 import {
   duplicateCheck,
@@ -15,6 +15,9 @@ const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marg
 const errStyle = { fontSize: 12, color: "#b42318", marginTop: 4 } as const;
 
 type FieldErrors = Partial<Record<ValidatedField, string>>;
+
+/** A row of GET /v1/crm/lead-field-rules — only what this form needs (LM-001). */
+type LeadFieldRule = { fieldName?: string; required?: boolean; enabled?: boolean };
 
 export default function NewContactPage() {
   const router = useRouter();
@@ -33,6 +36,46 @@ export default function NewContactPage() {
   const [ackDuplicates, setAckDuplicates] = useState(false);
   // Monotonic id so a slower earlier duplicate-check can't clobber a newer one.
   const checkSeq = useRef(0);
+
+  // Which fields this tenant has declared mandatory. The server enforces them with
+  // 422; without asking for the configuration the form would let the user type a
+  // whole lead before finding out. `name` is always required by the API schema.
+  const [required, setRequired] = useState<ReadonlySet<string>>(new Set(["name"]));
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/crm/lead-field-rules");
+        if (!res.ok) return;
+        const body = await res.json() as { data?: LeadFieldRule[] };
+        if (!live) return;
+        const names = (body.data ?? [])
+          .filter((r) => r.required === true && r.enabled !== false)
+          .map((r) => r.fieldName)
+          .filter((n): n is string => typeof n === "string" && n.length > 0);
+        setRequired(new Set(["name", ...names]));
+      } catch {
+        // Configuration is an enhancement, never a gate: if this read fails the form
+        // still submits and the server still enforces. Falling back to "name only"
+        // keeps the page usable offline instead of blocking lead capture.
+      }
+    })();
+    return () => { live = false; };
+  }, []);
+
+  /** Label text carries the asterisk so screen readers announce it, not just sighted
+   *  users — the visual star must never be the only signal (WCAG 2.2 AA, 1.3.1). */
+  function labelFor(field: string, text: string): string {
+    return required.has(field) ? `${text} *` : text;
+  }
+
+  /** `required` + `aria-required` together: native validation plus an explicit
+   *  programmatic signal, since some screen readers do not surface `required`. */
+  function requiredProps(field: string): { required: boolean; "aria-required": "true" | "false" } {
+    const isRequired = required.has(field);
+    return { required: isRequired, "aria-required": isRequired ? "true" : "false" };
+  }
 
   /**
    * Update a field that feeds duplicate detection. Any prior "continue anyway"
@@ -109,6 +152,9 @@ export default function NewContactPage() {
           marketingConsent: form.marketingConsent,
         }),
       });
+      // Read the body exactly ONCE. A DQ-003 format error is surfaced against its
+      // field; anything else (including the LM-001 422 "missing mandatory field(s)"
+      // message) falls through to the page-level error banner.
       const body = (await res.json().catch(() => null)) as { id?: string; code?: string; message?: string } | null;
       if (!res.ok) {
         const fe = parseFieldError({ code: body?.code, message: body?.message });
@@ -155,19 +201,25 @@ export default function NewContactPage() {
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad">
+          {/* Explains the asterisk convention in text, so the marker is never the
+              only way to know a field is mandatory. */}
+          <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
+            Fields marked * are required by your organisation.
+          </p>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             <div>
-              <label htmlFor="new-name" style={labelStyle}>Full name</label>
-              <input id="new-name" aria-required="true" value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. Asha Rao" style={inputStyle} />
+              <label htmlFor="new-name" style={labelStyle}>{labelFor("name", "Full name")}</label>
+              <input id="new-name" {...requiredProps("name")} value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. Asha Rao" style={inputStyle} />
             </div>
             <div>
-              <label htmlFor="new-email" style={labelStyle}>Email</label>
-              <input id="new-email" type="email" value={form.email} onChange={(e) => setDedupField({ email: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="name@example.com" style={inputStyle} />
+              <label htmlFor="new-email" style={labelStyle}>{labelFor("email", "Email")}</label>
+              <input id="new-email" type="email" {...requiredProps("email")} value={form.email} onChange={(e) => setDedupField({ email: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="name@example.com" style={inputStyle} />
             </div>
             <div>
-              <label htmlFor="new-phone" style={labelStyle}>Phone (mobile)</label>
+              <label htmlFor="new-phone" style={labelStyle}>{labelFor("phone", "Phone (mobile)")}</label>
               <input
                 id="new-phone"
+                {...requiredProps("phone")}
                 value={form.phone}
                 onChange={(e) => setDedupField({ phone: e.target.value })}
                 onBlur={() => void runDuplicateCheck()}
@@ -179,8 +231,8 @@ export default function NewContactPage() {
               {fieldErrors.phone ? <p id={phoneErrId} role="alert" style={errStyle}>{fieldErrors.phone}</p> : null}
             </div>
             <div>
-              <label htmlFor="new-company" style={labelStyle}>Organisation</label>
-              <input id="new-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Acme Corp" style={inputStyle} />
+              <label htmlFor="new-company" style={labelStyle}>{labelFor("company", "Organisation")}</label>
+              <input id="new-company" {...requiredProps("company")} value={form.company} onChange={(e) => setDedupField({ company: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="Acme Corp" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-gstin" style={labelStyle}>GSTIN</label>
@@ -210,8 +262,8 @@ export default function NewContactPage() {
               {fieldErrors.pan ? <p id={panErrId} role="alert" style={errStyle}>{fieldErrors.pan}</p> : null}
             </div>
             <div>
-              <label htmlFor="new-city" style={labelStyle}>City</label>
-              <input id="new-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Bengaluru" style={inputStyle} />
+              <label htmlFor="new-city" style={labelStyle}>{labelFor("city", "City")}</label>
+              <input id="new-city" {...requiredProps("city")} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Bengaluru" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-pincode" style={labelStyle}>PIN code</label>
@@ -228,8 +280,8 @@ export default function NewContactPage() {
               {fieldErrors.pincode ? <p id={pincodeErrId} role="alert" style={errStyle}>{fieldErrors.pincode}</p> : null}
             </div>
             <div>
-              <label htmlFor="new-designation" style={labelStyle}>Designation</label>
-              <input id="new-designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="Director" style={inputStyle} />
+              <label htmlFor="new-designation" style={labelStyle}>{labelFor("designation", "Designation")}</label>
+              <input id="new-designation" {...requiredProps("designation")} value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="Director" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-leadStatus" style={labelStyle}>Lead status</label>
@@ -242,8 +294,8 @@ export default function NewContactPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="new-leadSource" style={labelStyle}>Lead source</label>
-              <input id="new-leadSource" value={form.leadSource} onChange={(e) => setForm({ ...form, leadSource: e.target.value })} placeholder="Website, referral…" style={inputStyle} />
+              <label htmlFor="new-leadSource" style={labelStyle}>{labelFor("leadSource", "Lead source")}</label>
+              <input id="new-leadSource" {...requiredProps("leadSource")} value={form.leadSource} onChange={(e) => setForm({ ...form, leadSource: e.target.value })} placeholder="Website, referral…" style={inputStyle} />
             </div>
           </div>
 

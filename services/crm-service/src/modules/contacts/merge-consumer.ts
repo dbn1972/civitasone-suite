@@ -12,6 +12,9 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
+
+/** Cache namespace for account reads (per-entity invalidation on account merge). */
+const ACCOUNT_RESOURCE = "account";
 import * as repo from "./repo.js";
 import * as mergeRepo from "./merge-repo.js";
 import { invalidateDashboard } from "../dashboard/queries.js";
@@ -101,7 +104,7 @@ export function registerMergeConsumers(queue: Queue): void {
         "merge", "account", p.primaryId,
       );
     });
-    await cache.invalidateResource(msg.tenantId, RESOURCE);
+    await cache.invalidateResource(msg.tenantId, ACCOUNT_RESOURCE);
     await invalidateDashboard(msg.tenantId);
   });
 }
