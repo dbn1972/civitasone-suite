@@ -21,6 +21,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { verifyJwt, type CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 import { configValue } from "./runtime-config.js";
+import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
 
 const log = pino({ name: "gateway-jwt-edge" });
 
@@ -44,10 +45,30 @@ export async function jwtEdgeVerify(
   req: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
+  /**
+   * Canonicalise FIRST — before the mode check, and before the public-prefix test.
+   *
+   * This hook's `isPublic` and proxyHandler's are two independent computations over the
+   * same idea, which is how `POST /api/v1/crm/public/%2e%2e/contacts` came to skip both
+   * the bearer check and this verification while `fetch` collapsed the `%2e%2e` into a
+   * real `..` and landed on an authenticated CRM route. The header above already says
+   * these two must stay in step; sharing `canonicalisePath` is what actually makes that
+   * true rather than aspirational.
+   *
+   * Ahead of the `mode === "off"` early return on purpose: the guard is not part of JWT
+   * verification, it is a statement about the request being well-formed at all, and a
+   * deployment running with edge verification disabled must not lose it.
+   */
+  const canonical = canonicalisePath(req.url);
+  if (!canonical.ok) {
+    log.warn({ correlationId: req.id, reason: canonical.reason }, "rejected malformed request path");
+    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+  }
+  const pathname = canonical.pathname;
+
   const mode = configValue("jwtEdgeVerify");
   if (mode === "off") return;
 
-  const pathname = req.url.split("?")[0] ?? "/";
   const isPublic = PUBLIC_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );

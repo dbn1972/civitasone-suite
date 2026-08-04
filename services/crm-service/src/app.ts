@@ -43,6 +43,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+    /**
+     * Fastify's default is 100. That interacted badly with the PUBLIC lead-capture route
+     * (LM-002): a `:formKey` longer than 100 characters did not MATCH the route at all, so
+     * it fell to the not-found path and `authPlugin` — which cannot see `config.public` for
+     * an unmatched route — answered 401 instead of the uniform 404 that route promises for
+     * every malformed key. Raising the cap lets the route own the decision, and its own
+     * anchored 64-hex `FORM_KEY_PATTERN` (and zod on every other route's params) is what
+     * actually rejects an over-long value. Still bounded, so an absurd URL is cheap to
+     * refuse.
+     */
+    maxParamLength: 512,
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });

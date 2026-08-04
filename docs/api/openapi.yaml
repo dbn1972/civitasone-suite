@@ -15230,10 +15230,18 @@ paths:
         redirect the write. The body is strict: any unknown field (including `tenantId`,
         `ownerId`, `leadStatus` or `consentDate`) is a 400.
 
-        **Create-or-update.** A submission carrying an email that already exists in the
-        tenant updates that lead and refreshes its attribution instead of creating a
+        **Create-or-update, but only over leads this endpoint itself created.** A
+        submission carrying an email that already belongs to a lead captured through a
+        public form updates that lead and refreshes its attribution instead of creating a
         duplicate. Identity fields are only overwritten when supplied, `leadStatus` is
         never downgraded, and consent is never revoked by a later submission.
+
+        A submission whose email belongs to a contact created by the authenticated UI, by
+        bulk import or by deal conversion — or to a soft-deleted lead — still answers 202
+        but writes **nothing**. The form key is embedded in a public web page, so allowing
+        an anonymous caller to update an arbitrary contact would let a stranger rewrite
+        that person's record and assert DPDP marketing consent on their behalf. Merging a
+        genuine prospect into an existing CRM contact is an authenticated action.
 
         **Consent.** When the form sets `requireConsent`, a submission without
         `consent: true` is refused 422 `CONSENT_REQUIRED` and nothing is written.
@@ -15341,6 +15349,15 @@ paths:
             60s window is spent, OR the rate limiter itself is unavailable and the
             endpoint failed closed. The message distinguishes the two for an operator
             without telling a caller which budget it hit.
+          headers:
+            Retry-After:
+              description: |
+                Seconds to wait before retrying. Always `60`: the limiter uses a fixed
+                60s window with the minute bucket baked into its counter key, so one
+                window is always sufficient.
+              schema:
+                type: integer
+                example: 60
           content:
             application/json:
               schema:
@@ -22265,7 +22282,12 @@ components:
         campaignId:
           type: string
           format: uuid
-          description: Takes precedence over the form's own `campaignId`
+          description: |
+            Honoured ONLY when the form is not already tied to a campaign. The form's own
+            `campaignId` always wins: this value arrives from an anonymous caller and can
+            only be validated as "a uuid", never checked against the tenant's campaigns,
+            so letting it override a server-side setting would let anyone attach junk
+            leads to a real campaign and corrupt its ROI reporting.
         utm:
           type: object
           additionalProperties: false

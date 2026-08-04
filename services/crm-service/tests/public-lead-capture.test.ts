@@ -417,6 +417,301 @@ describe("create-or-update on the tenant's email index", () => {
   });
 });
 
+// ── The update target an anonymous caller may reach ────────────────────────────
+
+/**
+ * Seed a contact the way the AUTHENTICATED side of the service does — no
+ * `capture_form_id` — so it is a CRM contact rather than a captured lead.
+ *
+ * `email` is written as a placeholder rather than real ciphertext: nothing under test
+ * decrypts it, and `email_idx` (the blind index) is the column the dedupe actually
+ * matches on.
+ */
+async function seedCrmContact(opts: {
+  email: string;
+  tenantId?: string;
+  captureFormId?: string | null;
+  status?: string;
+  marketingConsent?: boolean;
+  name?: string;
+}): Promise<string> {
+  const tenantId = opts.tenantId ?? TENANT;
+  const id = randomUUID();
+  await scoped(
+    tenantId,
+    (tx) => tx`
+      INSERT INTO crm.contacts
+        (id, tenant_id, name, email, email_idx, phone, company, city, designation,
+         lead_status, lead_source, marketing_consent, consent_date, capture_form_id,
+         status, created_by, updated_by, version)
+      VALUES (
+        ${id}, ${tenantId}, ${opts.name ?? "Victim Contact"},
+        ${"enc:v2:placeholder"}, ${blindIndex(opts.email)},
+        ${"enc:v2:placeholder"}, ${"Victim Ltd"}, ${"Delhi"}, ${"CFO"},
+        ${"qualified"}, ${"sales_call"}, ${opts.marketingConsent ?? false}, ${null},
+        ${opts.captureFormId ?? null}, ${opts.status ?? "active"}, ${ACTOR}, ${ACTOR}, 1
+      )
+    `,
+  );
+  return id;
+}
+
+interface ContactSnapshot {
+  name: string;
+  company: string | null;
+  city: string | null;
+  designation: string | null;
+  leadStatus: string;
+  leadSource: string | null;
+  marketingConsent: boolean;
+  consentDate: string | null;
+  utmSource: string | null;
+  campaignId: string | null;
+  captureFormId: string | null;
+  status: string;
+  version: number;
+}
+
+async function contactById(id: string, tenantId: string = TENANT): Promise<ContactSnapshot | null> {
+  const rows = (await scoped(
+    tenantId,
+    (tx) => tx`
+      SELECT name, company, city, designation,
+             lead_status       AS "leadStatus",
+             lead_source       AS "leadSource",
+             marketing_consent AS "marketingConsent",
+             consent_date::text AS "consentDate",
+             utm_source        AS "utmSource",
+             campaign_id       AS "campaignId",
+             capture_form_id   AS "captureFormId",
+             status, version
+      FROM crm.contacts WHERE id = ${id} AND tenant_id = ${tenantId}
+    `,
+  )) as unknown as ContactSnapshot[];
+  return rows[0] ?? null;
+}
+
+/** Did the capture consumer emit its domain event for this form? */
+async function captureEventCount(formId: string, tenantId: string = TENANT): Promise<number> {
+  const rows = (await scoped(
+    tenantId,
+    (tx) => tx`
+      SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${tenantId} AND payload->>'formId' = ${formId}
+    `,
+  )) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
+describe("an anonymous submission may only ever update a row THIS path created", () => {
+  /**
+   * The form key lives in the tenant's public web page, so treat it as public. The lookup
+   * used to be `findIdByEmail`, which matches ANY row with that address. Key + a victim's
+   * email was therefore enough to rewrite that victim's record — and because the capture
+   * path only ever ASSERTS consent, to stamp `marketing_consent = true` with a
+   * server-generated date on someone who never consented. That is DPDP consent forgery.
+   */
+  it("does NOT touch a contact created by the authenticated side of the service", async () => {
+    const form = await seedForm();
+    const email = `victim-${randomUUID()}@example.gov.in`;
+    const victimId = await seedCrmContact({ email });
+    const before = await contactById(victimId);
+
+    const res = await submit(form.formKey, {
+      name: "Attacker Rewrite",
+      email,
+      company: "Attacker Inc",
+      city: "Nowhere",
+      designation: "Owner",
+      consent: true,
+      utm: { source: "attack", campaign: "takeover" },
+    });
+
+    // The endpoint still answers 202 — it must not become an oracle for "is this address
+    // already a contact in some tenant?".
+    expect(res.statusCode).toBe(202);
+
+    const after = await contactById(victimId);
+    expect(after).toEqual(before);
+    // Nothing at all was written: no update, and no second row either (an insert would
+    // have aborted the transaction on the unique email index).
+    expect(await leadsForForm(form.id)).toHaveLength(0);
+  });
+
+  it("cannot forge marketing consent on a contact who never gave it", async () => {
+    const form = await seedForm();
+    const email = `noconsent-${randomUUID()}@example.gov.in`;
+    const victimId = await seedCrmContact({ email, marketingConsent: false });
+
+    await submit(form.formKey, { name: "Consent Forger", email, consent: true });
+
+    const after = await contactById(victimId);
+    // The one assertion this whole guard exists for.
+    expect(after?.marketingConsent).toBe(false);
+    expect(after?.consentDate).toBeNull();
+  });
+
+  it("emits NO domain event when it declines to write", async () => {
+    const form = await seedForm();
+    const email = `noevent-${randomUUID()}@example.gov.in`;
+    await seedCrmContact({ email });
+
+    await submit(form.formKey, { name: "Silent Drop", email, consent: true });
+
+    // A downstream consumer (analytics campaign ROI, notifications) must not see a capture
+    // that did not happen.
+    expect(await captureEventCount(form.id)).toBe(0);
+  });
+
+  it("does not resurrect or rewrite a SOFT-DELETED lead this path had created", async () => {
+    const form = await seedForm();
+    const email = `deleted-${randomUUID()}@example.gov.in`;
+    // Form-originated, but withdrawn by the tenant. Un-deleting is an authenticated,
+    // audited decision — never a side effect of an anonymous form post.
+    const deletedId = await seedCrmContact({
+      email,
+      captureFormId: form.id,
+      status: "inactive",
+      marketingConsent: false,
+    });
+    const before = await contactById(deletedId);
+
+    const res = await submit(form.formKey, {
+      name: "Back From The Dead",
+      email,
+      consent: true,
+      utm: { source: "resurrect" },
+    });
+
+    expect(res.statusCode).toBe(202);
+    const after = await contactById(deletedId);
+    expect(after).toEqual(before);
+    expect(after?.status).toBe("inactive");
+    expect(after?.marketingConsent).toBe(false);
+  });
+
+  it("still updates a lead this path created in the FIRST place", async () => {
+    // The guard must not break the acceptance criterion it sits in front of.
+    const form = await seedForm();
+    const email = `mine-${randomUUID()}@example.gov.in`;
+    await submit(form.formKey, { name: "Own Lead", email, utm: { source: "first" } });
+    await submit(form.formKey, { name: "Own Lead", email, consent: true, utm: { source: "second" } });
+
+    const rows = await leadsForForm(form.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.utmSource).toBe("second");
+    // Consent may be asserted here, because this row is one the form path created.
+    expect(rows[0]?.marketingConsent).toBe(true);
+  });
+
+  it("does not reach a lead captured through a DIFFERENT form of the same tenant", async () => {
+    // Both are form-originated, so this is genuinely one prospect for the tenant and the
+    // update is legitimate — the guard is about origin, not about which form.
+    const formA = await seedForm();
+    const formB = await seedForm();
+    const email = `crossform-${randomUUID()}@example.gov.in`;
+
+    await submit(formA.formKey, { name: "Cross Form", email, utm: { source: "a" } });
+    await submit(formB.formKey, { name: "Cross Form", email, utm: { source: "b" } });
+
+    // One row, now attributed to form B.
+    expect(await leadsForForm(formA.id)).toHaveLength(0);
+    const onB = await leadsForForm(formB.id);
+    expect(onB).toHaveLength(1);
+    expect(onB[0]?.utmSource).toBe("b");
+  });
+
+  it("drops a phone-only submission whose deterministic id is an inactive row", async () => {
+    // The fallback path: no email means no blind index to match, so convergence relies on
+    // the deterministic primary key. That key must get the same origin+liveness guard, and
+    // when it points at a row we may not update, an insert would abort on the PK.
+    const form = await seedForm();
+    const phone = "+91 90000 55555";
+    await submit(form.formKey, { name: "Phone Lead", phone, utm: { source: "print" } });
+    const created = await leadsForForm(form.id);
+    expect(created).toHaveLength(1);
+    const id = created[0]!.id;
+
+    await scoped(TENANT, (tx) => tx`UPDATE crm.contacts SET status = 'inactive' WHERE id = ${id}`);
+    const before = await contactById(id);
+
+    const res = await submit(form.formKey, { name: "Phone Lead", phone, consent: true, utm: { source: "retry" } });
+    expect(res.statusCode).toBe(202);
+    // Untouched, and no duplicate — and critically the consumer did not dead-letter.
+    expect(await contactById(id)).toEqual(before);
+    expect(dlqErrors()).toEqual([]);
+  });
+});
+
+// ── Consumer payload validation at the queue boundary ──────────────────────────
+
+describe("public capture consumer parses its payload instead of trusting it", () => {
+  it("dead-letters a malformed payload rather than writing partial data", async () => {
+    const form = await seedForm();
+    const { handlerFor } = captureHandlers();
+    const handler = handlerFor(COMMANDS.publicLeadCapture);
+
+    // `name` over the varchar(200) column width. Reaching Postgres it would raise 22001
+    // INSIDE the write transaction, rolling back markProcessed too — an endless
+    // redelivery loop. Caught at the boundary it fails once, having written nothing.
+    const msg = envelope(
+      COMMANDS.publicLeadCapture,
+      {
+        contactId: randomUUID(),
+        formId: form.id,
+        tenantId: TENANT,
+        name: "x".repeat(400),
+        email: `oversize-${randomUUID()}@example.gov.in`,
+        consent: true,
+        consentDate: "2026-05-01",
+        leadSource: "public_form",
+        utm: {},
+      },
+      { tenantId: TENANT, actorId: "00000000-0000-0000-0000-000000000000", messageId: randomUUID() },
+    );
+
+    await expect(runWithTenant(TENANT, () => handler(msg))).rejects.toThrow();
+    expect(await leadsForForm(form.id)).toHaveLength(0);
+  });
+
+  it("rejects a payload whose ids are not ids", async () => {
+    const { handlerFor } = captureHandlers();
+    const handler = handlerFor(COMMANDS.publicLeadCapture);
+    const msg = envelope(
+      COMMANDS.publicLeadCapture,
+      { contactId: "not-a-uuid", formId: "nope", tenantId: TENANT, name: "X", consent: false, consentDate: "2026-05-01", leadSource: "public_form", utm: {} },
+      { tenantId: TENANT, actorId: "00000000-0000-0000-0000-000000000000", messageId: randomUUID() },
+    );
+    await expect(runWithTenant(TENANT, () => handler(msg))).rejects.toThrow();
+  });
+
+  it("drops unknown payload keys instead of dead-lettering — rollout compatibility", async () => {
+    // Adding a field to the command must not make in-flight messages fail, and an unknown
+    // key must never reach the row either.
+    const form = await seedForm();
+    const { handlerFor } = captureHandlers();
+    const handler = handlerFor(COMMANDS.publicLeadCapture);
+    const msg = envelope(
+      COMMANDS.publicLeadCapture,
+      {
+        contactId: randomUUID(),
+        formId: form.id,
+        tenantId: TENANT,
+        name: "Forward Compatible",
+        email: `fwd-${randomUUID()}@example.gov.in`,
+        consent: false,
+        consentDate: "2026-05-01",
+        leadSource: "public_form",
+        utm: { source: "x", futureUtm: "ignored" },
+        somethingNew: "ignored",
+      },
+      { tenantId: TENANT, actorId: "00000000-0000-0000-0000-000000000000", messageId: randomUUID() },
+    );
+    await runWithTenant(TENANT, () => handler(msg));
+    expect(await leadsForForm(form.id)).toHaveLength(1);
+  });
+});
+
 // ── Consent ────────────────────────────────────────────────────────────────────
 
 describe("consent enforcement (DPDP Act 2023)", () => {
@@ -532,7 +827,10 @@ describe("rate limiting", () => {
 
   it("fails CLOSED when the limiter backend is unavailable", async () => {
     const form = await seedForm({ maxPerMinute: 10 });
-    const broken = vi.spyOn(cache, "getOrLoad").mockRejectedValue(new Error("redis unavailable"));
+    // Same assertion as before; the limiter now counts through `cache.incr` (atomic)
+    // rather than getOrLoad+put, so that is the call that has to be broken to simulate
+    // Redis being down.
+    const broken = vi.spyOn(cache, "incr").mockRejectedValue(new Error("redis unavailable"));
     try {
       const res = await submit(form.formKey, { name: "Redis down", email: `rd-${randomUUID()}@x.in` });
       // An unauthenticated write must not degrade OPEN: a cache outage would otherwise
@@ -543,6 +841,45 @@ describe("rate limiting", () => {
       broken.mockRestore();
     }
     expect(await leadsForForm(form.id)).toHaveLength(0);
+  });
+
+  it("holds the budget under CONCURRENT submissions, not just sequential ones", async () => {
+    /**
+     * The limiter used to be `getOrLoad` → compare → `put(used + 1)`. Two problems, and
+     * the second is the fatal one: `cache.getOrLoad` COALESCES concurrent cold-key callers
+     * onto a single shared promise, so N parallel submissions against a fresh window key
+     * all received `used = 0` and every one of them passed. A flood is concurrent by
+     * definition, so the limiter did not constrain the only traffic shape it existed for.
+     *
+     * Sequential tests cannot catch that — this one fires the burst with Promise.all.
+     */
+    await clearRateLimits();
+    const form = await seedForm({ maxPerMinute: 2 });
+    const N = 12;
+
+    const responses = await Promise.all(
+      Array.from({ length: N }, (_, i) =>
+        submit(form.formKey, { name: `Parallel ${i}`, email: `par${i}-${randomUUID()}@x.in` }),
+      ),
+    );
+
+    const accepted = responses.filter((r) => r.statusCode === 202);
+    const refused = responses.filter((r) => r.statusCode === 429);
+    expect(accepted.length).toBeLessThanOrEqual(2);
+    expect(accepted.length + refused.length).toBe(N);
+    // And the rows agree with the decisions — a limiter that answers 429 after the write
+    // has already been queued would leave the budget notional.
+    expect((await leadsForForm(form.id)).length).toBeLessThanOrEqual(2);
+  });
+
+  it("sends Retry-After on a 429 so a client knows when the window rolls over", async () => {
+    await clearRateLimits();
+    const form = await seedForm({ maxPerMinute: 1 });
+    await submit(form.formKey, { name: "First", email: `ra1-${randomUUID()}@x.in` });
+    const blocked = await submit(form.formKey, { name: "Second", email: `ra2-${randomUUID()}@x.in` });
+    expect(blocked.statusCode).toBe(429);
+    // Fixed 60s window, so one window is always enough.
+    expect(blocked.headers["retry-after"]).toBe("60");
   });
 
   it("counts within a fixed window that rolls over rather than being extended", async () => {
@@ -586,9 +923,40 @@ describe("resolveClientIp", () => {
     expect(resolveClientIp(req("1.2.3.4, 203.0.113.5, 10.1.1.1"))).toBe("203.0.113.5");
   });
 
-  it("clamps when fewer hops are present than configured", () => {
+  /**
+   * REPLACES an assertion that locked in a fail-OPEN bug. The old test read:
+   *
+   *   it("clamps when fewer hops are present than configured", () => {
+   *     process.env.TRUSTED_PROXY_HOPS = "5";
+   *     expect(resolveClientIp(req("203.0.113.5"))).toBe("203.0.113.5");
+   *   });
+   *
+   * With hops=5 and one entry, the old `Math.max(0, list.length - hops)` clamp read
+   * `list[0]` — the entry a CLIENT fully controls. So it asserted that the limiter would
+   * happily key its counter on an attacker-supplied string. Reachable in any deployment
+   * where the service is hit without the gateway in front (misrouted ingress, debug port,
+   * internal caller) with TRUSTED_PROXY_HOPS=1: one header per request mints unlimited
+   * distinct counter keys and the per-IP budget stops existing.
+   */
+  it("falls back to the socket peer when fewer hops are present than configured", () => {
     process.env.TRUSTED_PROXY_HOPS = "5";
-    expect(resolveClientIp(req("203.0.113.5"))).toBe("203.0.113.5");
+    // Too few entries means the trusted chain did NOT write this header, so no position in
+    // it is trustworthy — least of all list[0].
+    expect(resolveClientIp(req("203.0.113.5"))).toBe("10.0.0.1");
+  });
+
+  it("does not honour a single self-declared entry at any hop count above one", () => {
+    for (const hops of ["2", "3", "10"]) {
+      process.env.TRUSTED_PROXY_HOPS = hops;
+      expect(resolveClientIp(req("1.2.3.4"))).toBe("10.0.0.1");
+    }
+  });
+
+  it("still reads the trusted entry when the chain is exactly as long as configured", () => {
+    process.env.TRUSTED_PROXY_HOPS = "2";
+    // A correctly configured deployment always has at least `hops` entries, so failing
+    // closed above costs it nothing.
+    expect(resolveClientIp(req("1.2.3.4, 203.0.113.5, 10.1.1.1"))).toBe("203.0.113.5");
   });
 
   it("falls back to the socket peer when the header is absent or empty", () => {
@@ -678,6 +1046,16 @@ describe("no tenant enumeration", () => {
       shape(await submit(deleted.formKey, payload)), // existed, removed
       shape(await submit("not-a-form-key", payload)), // malformed
       shape(await submit("A".repeat(64), payload)), // right length, wrong alphabet
+      /**
+       * 65 hex chars — one over the column width. This used to be a 400 carrying
+       * `fieldErrors`, because the route parsed the param with `z.string().min(1).max(64)`
+       * BEFORE resolveForm. That is a hole in the uniform-404 promise: it told a scanner
+       * that this param is validated, how long a key is, and that it had otherwise got the
+       * alphabet right. Every malformed key must come out of the one notFound() path.
+       */
+      shape(await submit("a".repeat(65), payload)),
+      shape(await submit("a".repeat(200), payload)), // far too long
+      shape(await submit("a".repeat(63), payload)), // one short
     ];
 
     // Byte-identical: status, code and message. A scanner learns nothing about which
@@ -686,6 +1064,25 @@ describe("no tenant enumeration", () => {
       expect(r).toEqual({ statusCode: 404, code: "NOT_FOUND", message: "form not found" });
     }
     expect(await leadsForForm(disabled.id)).toHaveLength(0);
+  });
+
+  it("gives an over-long key the same 404 BODY SHAPE — no fieldErrors, no 400", async () => {
+    /**
+     * The route parsed `:formKey` with `z.string().min(1).max(64)` BEFORE resolveForm, so a
+     * 65-char key came back as
+     *   400 { code: "VALIDATION_FAILED", ..., fieldErrors: [{ field: "formKey", ... }] }
+     * instead of the promised uniform 404. That distinguishes "too long" from "unknown",
+     * confirms the param is validated, and hands a scanner the key length for free.
+     */
+    const payload = { name: "Probe", email: `ol-${randomUUID()}@x.in` };
+    const unknown = await submit(formsRepo.generateFormKey(), payload);
+    const overLong = await submit("a".repeat(65), payload);
+
+    expect(overLong.statusCode).toBe(404);
+    expect(Object.keys(overLong.json()).sort()).toEqual(Object.keys(unknown.json()).sort());
+    expect(overLong.json()).not.toHaveProperty("fieldErrors");
+    expect(overLong.json().code).toBe(unknown.json().code);
+    expect(overLong.json().message).toBe(unknown.json().message);
   });
 
   it("does not reveal that a key belongs to another tenant", async () => {
@@ -793,6 +1190,92 @@ describe("bots and input bounds", () => {
       ["code", "correlationId", "fieldErrors", "message", "retryable"].sort(),
     );
     expect(JSON.stringify(body)).not.toMatch(/at .*\(.*:\d+:\d+\)|pg_|SQLSTATE|postgres/i);
+  });
+});
+
+// ── Correlation id is not client-controlled on this path ───────────────────────
+
+describe("correlation id", () => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  it("does not lose the lead when the client sends an over-long x-correlation-id", async () => {
+    /**
+     * `req.id` is seeded from the client's `x-correlation-id` and was used verbatim.
+     * `_outbox.messages.correlation_id` is varchar(64) NOT NULL, so a 65+ char value
+     * raised Postgres 22001 INSIDE the consumer transaction — rolling back markProcessed
+     * AND the contact write, AFTER the route had already answered 202. Silent, total lead
+     * loss for every submission carrying that header, plus a free remote DLQ flood.
+     */
+    const form = await seedForm();
+    const res = await submit(
+      form.formKey,
+      { name: "Long Correlation", email: `lc-${randomUUID()}@x.in` },
+      { headers: { "x-correlation-id": "z".repeat(300) } },
+    );
+
+    expect(res.statusCode).toBe(202);
+    expect(
+      await leadsForForm(form.id),
+      `the 202 must not be a lie; dlq=${JSON.stringify(dlqErrors())}`,
+    ).toHaveLength(1);
+    expect(dlqErrors()).toEqual([]);
+    // Replaced, not truncated: a truncated id correlates to nothing.
+    expect(res.json().correlationId).toMatch(UUID_RE);
+  });
+
+  it("preserves a well-formed UUID so cross-service tracing still works", async () => {
+    const form = await seedForm();
+    const supplied = randomUUID();
+    const res = await submit(
+      form.formKey,
+      { name: "Traced", email: `tr-${randomUUID()}@x.in` },
+      { headers: { "x-correlation-id": supplied } },
+    );
+    expect(res.json().correlationId).toBe(supplied);
+  });
+
+  it("replaces a short but non-UUID correlation id", async () => {
+    const form = await seedForm();
+    const res = await submit(
+      form.formKey,
+      { name: "Odd Id", email: `oi-${randomUUID()}@x.in` },
+      { headers: { "x-correlation-id": "../../etc/passwd" } },
+    );
+    expect(res.json().correlationId).toMatch(UUID_RE);
+  });
+});
+
+// ── campaign attribution cannot be poisoned from the body ──────────────────────
+
+describe("campaign attribution", () => {
+  it("prefers the FORM's campaign over one named in the anonymous body", async () => {
+    /**
+     * `campaignId` is validated only as "a uuid" and cannot be checked against the
+     * tenant's campaigns, because the caller is not authenticated. With the body winning,
+     * anyone holding the (public) form key could attach junk leads to a real campaign and
+     * corrupt its ROI numbers, overriding the tenant operator's own configuration.
+     */
+    const formCampaign = randomUUID();
+    const attackerCampaign = randomUUID();
+    const form = await seedForm({ campaignId: formCampaign });
+
+    await submit(form.formKey, {
+      name: "Poisoner",
+      email: `po-${randomUUID()}@x.in`,
+      campaignId: attackerCampaign,
+    });
+
+    const lead = (await leadsForForm(form.id))[0]!;
+    expect(lead.campaignId).toBe(formCampaign);
+    expect(lead.campaignId).not.toBe(attackerCampaign);
+  });
+
+  it("still honours the body's campaign when the form is not tied to one", async () => {
+    // One generic form serving several campaign landing pages stays supported.
+    const bodyCampaign = randomUUID();
+    const form = await seedForm({ campaignId: null });
+    await submit(form.formKey, { name: "Generic", email: `ge-${randomUUID()}@x.in`, campaignId: bodyCampaign });
+    expect((await leadsForForm(form.id))[0]?.campaignId).toBe(bodyCampaign);
   });
 });
 

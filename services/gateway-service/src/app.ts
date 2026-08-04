@@ -16,6 +16,7 @@ import { registerScreenManifestRoute } from "./screen-manifest.js";
 import { registerSearchRoute } from "./search-route.js";
 import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
+import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
 import { getConfig, applyConfig, ConfigError, type GatewayRuntimeConfig } from "./runtime-config.js";
 
 // x-internal is intentionally absent: external clients must never inject it.
@@ -65,7 +66,20 @@ function verifyInternalSecret(req: FastifyRequest): boolean {
 }
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const pathname = req.url.split("?")[0] ?? "/";
+  /**
+   * Canonicalise BEFORE any decision, and use the single result for BOTH the public-prefix
+   * check and the upstream lookup. Deriving the path twice, or deciding on the raw string
+   * and forwarding something the URL parser reads differently, is what made
+   * `POST /api/v1/crm/public/%2e%2e/contacts` skip the bearer check and land on
+   * `/v1/crm/contacts`. See path-guard.ts for the full write-up.
+   */
+  const canonical = canonicalisePath(req.url);
+  if (!canonical.ok) {
+    req.log.warn({ correlationId: req.id, reason: canonical.reason }, "rejected malformed request path");
+    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+  }
+  const pathname = canonical.pathname;
+
   const resolved = resolveRoute(pathname);
   if (!resolved) {
     return reply.code(404).send({ code: "NOT_FOUND", message: "no upstream for path" });
@@ -80,7 +94,9 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     }
   }
 
-  const { route, remainder: rawRemainder } = resolved;
+  // Only the route is taken from the lookup; the remainder is re-derived below from the
+  // RAW path so upstreams receive the client's own bytes.
+  const { route } = resolved;
 
   // V-01: Module-guard enforcement — reject requests for disabled modules before proxying.
   const moduleAllowed = await checkModuleEnabled(req, reply, route.name);
@@ -91,6 +107,25 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   if (!policyAllowed) return; // reply already sent with 403
 
   const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+
+  /**
+   * Forward the RAW path bytes, not the decoded ones. The guard has already established
+   * that decoding cannot change the segment structure, so the route and prefix decisions
+   * above hold for either form — but an upstream should still receive exactly what the
+   * client sent (a `%23` decoded here would be read as a fragment by `fetch` and silently
+   * truncate the path).
+   *
+   * The matched prefix is plain ASCII, so a raw path that does NOT start with it means the
+   * client percent-encoded a character inside the prefix itself. That is the same
+   * raw-vs-canonical divergence this guard exists to remove, so it is refused rather than
+   * papered over by falling back to the decoded remainder.
+   */
+  const rawPathname = req.url.split("?")[0] ?? "/";
+  if (!rawPathname.startsWith(route.prefix)) {
+    req.log.warn({ correlationId: req.id, reason: "encoded_prefix" }, "rejected malformed request path");
+    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+  }
+  const rawRemainder = rawPathname.slice(route.prefix.length) || "/";
   const remainder = rawRemainder === "/" ? "" : rawRemainder;
   const basePath = route.upstreamPath ?? route.prefix.replace(/^\/api/, "");
   const targetUrl = `${route.upstream}${basePath}${remainder}${query}`;

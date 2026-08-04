@@ -100,7 +100,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./capture-forms-repo.js";
 import type { ResolvedCaptureForm } from "./capture-forms-schema.js";
-import { checkCaptureRateLimit, resolveClientIp } from "./public-capture-rate-limit.js";
+import { checkCaptureRateLimit, resolveClientIp, WINDOW_SECONDS } from "./public-capture-rate-limit.js";
 import {
   publicLeadBody,
   publicAcceptedSchema,
@@ -120,7 +120,22 @@ function notFound(): never {
   throw new HttpError(404, "NOT_FOUND", "form not found");
 }
 
-const formKeyParam = z.object({ formKey: z.string().min(1).max(64) });
+/**
+ * NO length cap here, deliberately. A `.max(64)` made an over-long key a 400 carrying
+ * `fieldErrors`, which broke the uniform-404 promise of threat model §2: a scanner could
+ * tell "malformed" from "unknown" and, worse, tell that the service parses this param at
+ * all. Every malformed key must reach `resolveForm` and come back out of the single
+ * `notFound()` path. `FORM_KEY_PATTERN` there is anchored 64-hex, so an over-long key is
+ * rejected just as firmly — it just answers the same 404 as everything else.
+ */
+const formKeyParam = z.object({ formKey: z.string() });
+
+/**
+ * Canonical UUID shape. Used to decide whether the client's correlation id is safe to
+ * reuse — see the `correlationId` derivation in the handler.
+ */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Normalise the submitted identity into the string the deterministic ids are derived
@@ -215,6 +230,10 @@ export async function publicLeadCaptureRoutes(app: FastifyInstance): Promise<voi
         maxPerMinute: form.maxPerMinute,
       });
       if (!decision.allowed) {
+        // Fixed 60s window, so the caller can always retry after at most one window.
+        // Set on the reply before throwing: the shared error handler only calls
+        // code().send(), so headers already staged here survive into the 429.
+        reply.header("retry-after", String(WINDOW_SECONDS));
         throw new HttpError(
           429,
           "RATE_LIMITED",
@@ -229,7 +248,29 @@ export async function publicLeadCaptureRoutes(app: FastifyInstance): Promise<voi
       }
 
       const body = publicLeadBody.parse(req.body);
-      const correlationId = req.id;
+
+      /**
+       * ── Why `req.id` is NOT used verbatim on this path ────────────────────────────
+       *
+       * `req.id` is seeded from the client's `x-correlation-id` (the gateway forwards it
+       * unchanged) and nothing length-caps it. `_outbox.messages.correlation_id` is
+       * `varchar(64) NOT NULL`, so a 65+ character value raises Postgres 22001 INSIDE the
+       * consumer's transaction — rolling back `markProcessed` AND the contact write,
+       * AFTER this route has already answered 202. The prospect is told "accepted", the
+       * row never appears, and every submission carrying that header is lost silently.
+       * It is also a cheap remote DLQ flood: one header, unbounded failed messages.
+       *
+       * So on this ANONYMOUS path the correlation id is server-generated unless the
+       * client's value is already a canonical UUID — which is bounded at 36 characters,
+       * fits the column, and preserves genuine cross-service trace continuity from the
+       * gateway. Anything else is replaced rather than truncated: a truncated id
+       * correlates to nothing, so it is worse than a fresh one.
+       *
+       * The shared `enqueue` is deliberately left alone. Every other caller is
+       * authenticated and its correlation id has already been through the gateway's own
+       * handling; the boundary that needs hardening is this one.
+       */
+      const correlationId = UUID_PATTERN.test(req.id) ? req.id : randomUUID();
 
       // Honeypot: answer exactly as a real submission would and write nothing.
       if (body._hp !== undefined && body._hp.trim() !== "") {
@@ -336,12 +377,24 @@ export async function publicLeadCaptureRoutes(app: FastifyInstance): Promise<voi
             ...(body.utm?.term !== undefined ? { term: body.utm.term } : {}),
             ...(body.utm?.content !== undefined ? { content: body.utm.content } : {}),
           },
-          // Body first so a single form can serve several campaigns via its URL,
-          // falling back to the campaign the form is permanently tied to.
-          ...(body.campaignId !== undefined
-            ? { campaignId: body.campaignId }
-            : form.campaignId !== null
-              ? { campaignId: form.campaignId }
+          /**
+           * FORM FIRST, body only as a fallback. This used to be the other way round,
+           * and that was an attribution-poisoning hole: `campaignId` arrives from an
+           * ANONYMOUS caller and is validated only as "a uuid" — it is never checked
+           * against the tenant's campaigns and cannot be, since the caller is not
+           * authenticated. So anyone holding the (public) form key could attach junk
+           * leads to a real campaign of their choosing and corrupt its ROI numbers,
+           * overriding what the tenant's own operator configured on the form.
+           *
+           * A form that IS tied to a campaign therefore always wins. The body's value is
+           * honoured only when the form declares none, which keeps the legitimate
+           * "one generic form, several campaign landing pages" case working while
+           * removing the ability to override a deliberate server-side setting.
+           */
+          ...(form.campaignId !== null
+            ? { campaignId: form.campaignId }
+            : body.campaignId !== undefined
+              ? { campaignId: body.campaignId }
               : {}),
         },
       });

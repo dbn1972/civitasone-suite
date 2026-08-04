@@ -11,14 +11,29 @@
  * campaign, and (because `uq_contacts_tenant_email_idx` is a real unique index) actually
  * fail rather than duplicate. So the handler resolves an existing lead first:
  *
- *   1. by email blind index — the tenant's dedupe key (`blindIndex()` trims/lowercases,
- *      so "Jane@X.com " and "jane@x.com" are one prospect);
+ *   1. by email blind index, restricted to rows THIS path created — see the
+ *      consent-forgery note below;
  *   2. failing that, by the deterministic contact id the route derived from the form key
- *      plus the normalised identity. That is what makes a PHONE-ONLY prospect converge:
- *      there is no blind index over phone, so step 1 cannot see them, but the id the
- *      route derives is stable across submissions.
+ *      plus the normalised identity, restricted the same way. That is what makes a
+ *      PHONE-ONLY prospect converge: there is no blind index over phone, so step 1
+ *      cannot see them, but the id the route derives is stable across submissions.
  *
  * Only when neither resolves anything is a row inserted.
+ *
+ * ── The update target is NEVER an arbitrary contact (consent forgery) ────────────
+ * The form key lives in the tenant's public web page, so it is public knowledge, and the
+ * submitted email is entirely attacker-chosen. If the lookup matched ANY contact with
+ * that address, a stranger holding the key plus a victim's email could rewrite the
+ * victim's identity fields and all of their attribution — and because `attributionOf`
+ * only ever ASSERTS consent, could stamp `marketing_consent = true` with a
+ * server-generated date on someone who never consented or explicitly declined. That is
+ * DPDP consent forgery, not deduplication.
+ *
+ * So both lookups go through `findCaptureFormLeadIdByEmail` /
+ * `captureFormLeadIdExistsInTx`, which require `capture_form_id IS NOT NULL` AND
+ * `status = 'active'`. Consent may only ever be asserted on a row this form path itself
+ * created. When the address belongs to some other contact the submission is DROPPED (no
+ * update, no insert, no event) — see `handleCollision` below for why.
  *
  * ── What an update does and does NOT touch ──────────────────────────────────────
  * Attribution is always rewritten: the newest submission is the newest attribution, and
@@ -39,6 +54,7 @@
  */
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -53,33 +69,56 @@ const log = pino({ name: "crm-public-lead-capture-consumer" });
 /** Cache resource segment for contacts — the same one contacts/routes reads through. */
 const RESOURCE = "contact";
 
-export interface PublicLeadCaptureUtm {
-  source?: string;
-  medium?: string;
-  campaign?: string;
-  term?: string;
-  content?: string;
-}
+/**
+ * ── The QUEUE is a trust boundary, and on this topic doubly so ───────────────────
+ *
+ * Every other consumer in the service receives payloads that an AUTHENTICATED route
+ * already zod-parsed. This one does not: the values here started life in an anonymous
+ * web form. Casting `msg.payload` would mean the only validation between a stranger's
+ * keystrokes and a DB write lived in a different process — one queue-driver change, one
+ * replayed DLQ message, or one hand-crafted admin replay away from writing unvalidated
+ * data.
+ *
+ * The caps are the DB column widths, deliberately. A value one byte too long for
+ * `varchar(n)` raises Postgres 22001 INSIDE the write transaction, which rolls back
+ * `markProcessed` too and turns a single bad message into an endless redelivery loop.
+ * Catching it in the parser instead means the message dead-letters once, with nothing
+ * partially written.
+ */
+const utmPayload = z
+  .object({
+    source: z.string().max(128).optional(),
+    medium: z.string().max(128).optional(),
+    campaign: z.string().max(128).optional(),
+    term: z.string().max(128).optional(),
+    content: z.string().max(128).optional(),
+  })
+  // Default `strip`, not `.strict()`: an unknown key must not dead-letter a message
+  // during a rollout that adds one. Unknown keys are dropped and never reach the row.
+  .default({});
 
-export interface PublicLeadCapturePayload {
+export const publicLeadCapturePayloadSchema = z.object({
   /** Deterministic on (tenant, form, identity); used as the PK only when inserting. */
-  contactId: string;
-  formId: string;
-  tenantId: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  city?: string;
-  designation?: string;
+  contactId: z.string().uuid(),
+  formId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  email: z.string().max(320).optional(),
+  phone: z.string().max(32).optional(),
+  company: z.string().max(200).optional(),
+  city: z.string().max(100).optional(),
+  designation: z.string().max(120).optional(),
   /** As submitted. `false` means consent was not given, never "unknown". */
-  consent: boolean;
+  consent: z.boolean(),
   /** Server-stamped at submission time by the route (YYYY-MM-DD, UTC). */
-  consentDate: string;
-  leadSource: string;
-  utm: PublicLeadCaptureUtm;
-  campaignId?: string;
-}
+  consentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  leadSource: z.string().min(1).max(64),
+  utm: utmPayload,
+  campaignId: z.string().uuid().optional(),
+});
+
+export type PublicLeadCapturePayload = z.infer<typeof publicLeadCapturePayloadSchema>;
+export type PublicLeadCaptureUtm = PublicLeadCapturePayload["utm"];
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }): RequestContext {
   return {
@@ -127,10 +166,26 @@ function identityOf(p: PublicLeadCapturePayload): Partial<ContactInsert> {
 }
 
 export function registerPublicLeadCaptureConsumer(queue: Queue): void {
-  queue.subscribe<PublicLeadCapturePayload>(COMMANDS.publicLeadCapture, async (msg) => {
-    const p = msg.payload;
+  queue.subscribe<unknown>(COMMANDS.publicLeadCapture, async (msg) => {
+    // Parse BEFORE anything else. On failure: log (ids only) and throw, so the message
+    // dead-letters with nothing written, rather than a cast letting a malformed payload
+    // reach `contactRepo` and fail halfway through the transaction.
+    const parsed = publicLeadCapturePayloadSchema.safeParse(msg.payload);
+    if (!parsed.success) {
+      log.error(
+        {
+          messageId: msg.messageId,
+          // Field paths and zod codes only. `issue.message` can quote the offending
+          // value, and the offending value here is a prospect's PII.
+          issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), code: i.code })),
+        },
+        "publicLeadCapture payload rejected at the queue boundary — dead-lettering",
+      );
+      throw new Error("publicLeadCapture payload failed validation");
+    }
+    const p: PublicLeadCapturePayload = parsed.data;
     try {
-      let outcome: "created" | "updated" = "created";
+      let outcome: "created" | "updated" | "skipped_conflict" = "created";
       let contactId = p.contactId;
       /** False when `markProcessed` short-circuited, so the log line says so rather
        *  than claiming a write that did not happen. */
@@ -142,13 +197,62 @@ export function registerPublicLeadCaptureConsumer(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         applied = true;
 
+        // Form-originated + active ONLY. See the header: an anonymous caller must never
+        // be able to steer this at a contact created by the authenticated UI, by bulk
+        // import, or by deal conversion, nor resurrect a soft-deleted one.
         const byEmail = p.email !== undefined
-          ? await contactRepo.findIdByEmail(tx, p.tenantId, p.email)
+          ? await contactRepo.findCaptureFormLeadIdByEmail(tx, p.tenantId, p.email)
           : null;
         // Fall back to the deterministic id so a phone-only (or name-only-with-stable-id)
-        // resubmission updates its own row instead of colliding on the primary key.
+        // resubmission updates its own row instead of colliding on the primary key. Same
+        // form-origin + active guard: the id is derived from the (public) form key plus a
+        // guessable identity, so it is no more trustworthy than the email.
         const existingId = byEmail
-          ?? ((await contactRepo.idExistsInTx(tx, p.tenantId, p.contactId)) ? p.contactId : null);
+          ?? ((await contactRepo.captureFormLeadIdExistsInTx(tx, p.tenantId, p.contactId))
+            ? p.contactId
+            : null);
+
+        /**
+         * ── Collision with a contact the anonymous path may not touch ──────────────
+         *
+         * The address resolved nothing we are allowed to update, but SOME row in this
+         * tenant already holds it (an authenticated-UI contact, an imported one, a
+         * converted deal, or a soft-deleted lead). Three options, two of them wrong:
+         *
+         *   * UPDATE it — the consent-forgery vector this guard exists to close. A
+         *     stranger with the public form key and a victim's address could rewrite
+         *     their identity and assert DPDP marketing consent on their behalf.
+         *   * INSERT anyway — aborts the transaction on `uq_contacts_tenant_email_idx`
+         *     (or, for a phone-only prospect, on the primary key, since the id the route
+         *     derives is deterministic). That rolls `markProcessed` back too, so the
+         *     message redelivers forever and eventually dead-letters for a reason that
+         *     looks like a DB fault rather than a policy decision.
+         *   * DROP the submission. That is this branch.
+         *
+         * A GENUINE prospect whose address already exists as a CRM contact therefore
+         * needs an AUTHENTICATED merge by someone in the tenant who can see both rows
+         * and take responsibility for the consent record. There is no safe way for an
+         * anonymous request to make that call, and silently updating the existing row is
+         * exactly the consent-forgery vector. So: nothing written, NO domain event
+         * emitted (a downstream consumer must not see a capture that did not happen),
+         * and an INFO line carrying ids only — no address, no name, no form key.
+         */
+        // Both unique constraints an insert could trip are checked, because both can be
+        // occupied by a row we are not allowed to update: the email index, and the primary
+        // key (the deterministic contact id, which is what makes a phone-only prospect
+        // converge — and which therefore also collides with its own soft-deleted row).
+        const occupiedByIneligible = existingId === null && (
+          (p.email !== undefined && await contactRepo.emailExistsInTx(tx, p.tenantId, p.email))
+          || await contactRepo.idExistsInTx(tx, p.tenantId, p.contactId)
+        );
+        if (occupiedByIneligible) {
+          outcome = "skipped_conflict";
+          log.info(
+            { messageId: msg.messageId, tenantId: p.tenantId, formId: p.formId },
+            "public lead capture skipped — email belongs to a contact this path may not update; needs an authenticated merge",
+          );
+          return;
+        }
 
         if (existingId !== null) {
           outcome = "updated";

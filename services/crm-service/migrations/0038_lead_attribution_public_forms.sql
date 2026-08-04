@@ -157,7 +157,8 @@ BEGIN
     --   * The table holds NO PII and no customer data: a form name, a key, and
     --     policy flags.
     --   * The only caller is publicCaptureRepo.findByFormKey(), which filters on an
-    --     equality match against a 48-hex-char server-generated key, so "all rows are
+    --     equality match against a 64-hex-char server-generated key (256 bits of
+    --     crypto randomness, matching form_key varchar(64)), so "all rows are
     --     visible" is worthless without already knowing a key.
     --   * The tenant_id it yields is then used to scope everything downstream — the
     --     command envelope and the consumer's write both run tenant-scoped.

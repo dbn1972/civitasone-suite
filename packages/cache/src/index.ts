@@ -60,6 +60,23 @@ export interface CacheStore {
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
   del(key: string): Promise<void>;
   delByPrefix(prefix: string): Promise<void>;
+  /**
+   * ATOMIC increment-and-return, for counters that must be correct under concurrency
+   * (rate limiters, quotas). Returns the value AFTER this increment.
+   *
+   * This exists because `getOrLoad` + `put` cannot be used to count: it is a
+   * read-modify-write, AND `getOrLoad` deliberately coalesces concurrent cold-key
+   * callers onto one shared promise, so N parallel callers all observe the same
+   * pre-increment value and all pass a threshold check. A flood is concurrent by
+   * definition, which made that pattern bypassable by exactly the traffic it was meant
+   * to stop.
+   *
+   * TTL semantics: the expiry is applied ONLY when this call created the key (return
+   * value 1). Re-applying it on every increment would slide the window forward under
+   * sustained traffic, so a counter could never expire and a caller could be locked out
+   * permanently.
+   */
+  incr(key: string, ttlSeconds: number): Promise<number>;
 }
 
 /** Real Redis-backed store (Sentinel on-prem / ElastiCache on AWS via REDIS_URL). */
@@ -74,11 +91,28 @@ export class RedisCache implements CacheStore {
       if ((keys as string[]).length) await this.redis.del(...(keys as string[]));
     }
   }
+  /**
+   * Redis INCR is atomic server-side, so concurrent callers get distinct values with no
+   * coordination here. EXPIRE is issued only on the 1 → the call that created the key —
+   * so the TTL is anchored to the start of the window, never extended by later hits.
+   *
+   * A crash between INCR and EXPIRE would leave a counter with no TTL. Acceptable and
+   * self-limiting for the intended use: limiter keys carry the time bucket in the key
+   * name, so a stranded counter stops being addressed when the window rolls over. It
+   * costs a few bytes, it cannot lock anyone out.
+   */
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    const value = await this.redis.incr(key);
+    if (value === 1) await this.redis.expire(key, ttlSeconds);
+    return value;
+  }
 }
 
 /** In-memory store for dev/tests (no Redis required). */
 export class MemoryCache implements CacheStore {
   private m = new Map<string, { v: string; exp: number }>();
+  /** Counters live apart from cached values: a counter is not a serialised entity. */
+  private counters = new Map<string, { n: number; exp: number }>();
   async get(key: string) {
     const e = this.m.get(key);
     if (!e) return null;
@@ -88,9 +122,25 @@ export class MemoryCache implements CacheStore {
   async set(key: string, value: string, ttlSeconds: number) {
     this.m.set(key, { v: value, exp: Date.now() + ttlSeconds * 1000 });
   }
-  async del(key: string) { this.m.delete(key); }
+  async del(key: string) { this.m.delete(key); this.counters.delete(key); }
   async delByPrefix(prefix: string) {
     for (const k of this.m.keys()) if (k.startsWith(prefix)) this.m.delete(k);
+    for (const k of this.counters.keys()) if (k.startsWith(prefix)) this.counters.delete(k);
+  }
+  /**
+   * Atomic by construction: Node runs this synchronously between awaits, so two
+   * concurrent callers cannot interleave the read and the write. Same TTL rule as Redis
+   * — set on creation only, never extended.
+   */
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    const now = Date.now();
+    const existing = this.counters.get(key);
+    if (existing !== undefined && existing.exp > now) {
+      existing.n += 1;
+      return existing.n;
+    }
+    this.counters.set(key, { n: 1, exp: now + ttlSeconds * 1000 });
+    return 1;
   }
 }
 
@@ -194,6 +244,23 @@ export class Cache {
   /** Prime the cache (used by the command handler for read-your-writes). */
   async put<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     await this.store.set(key, serialize(value), this.resolveTtl(ttlSeconds));
+  }
+
+  /**
+   * ATOMIC counter increment. Returns the count AFTER this call, so a caller enforcing a
+   * budget compares the RETURN VALUE to its limit — it never reads, decides, then writes.
+   *
+   * Use this, not `getOrLoad` + `put`, for anything that has to be correct when requests
+   * arrive at the same time. `getOrLoad` coalesces concurrent cold-key callers onto one
+   * shared promise by design (stampede protection), which for a counter means every
+   * racing caller sees the same stale value and every one of them passes the check.
+   *
+   * TTL is applied only when this call created the key, so a fixed window is never
+   * extended by traffic inside it. Not read-through and not serialised through
+   * `serialize()`: a counter is an integer in the store, not a cached entity.
+   */
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    return this.store.incr(key, clampTtl(ttlSeconds));
   }
 
   /**

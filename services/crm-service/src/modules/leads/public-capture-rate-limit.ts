@@ -40,15 +40,30 @@
  * traffic, so an attacker could lock a form out permanently. With the bucket in the key
  * the counter simply stops being addressed when the minute rolls over.
  *
- * ── Atomicity ───────────────────────────────────────────────────────────────────
- * @civitasone/cache does not expose Redis INCR, and this service must not open a second
- * Redis client (one cache singleton, per the architecture rules). So the increment is a
- * read-modify-write through the cache. Under genuine concurrency that can undercount and
- * admit a few extra requests inside one window. Accepted: this is a coarse abuse control,
- * not a correctness boundary — nothing downstream depends on the count being exact, and
- * the create-or-update on the tenant's email index means duplicate submissions converge
- * on one row anyway. If exactness is ever needed, add an `incr()` to @civitasone/cache
- * rather than a second client here.
+ * ── Atomicity — the limit is enforced on an ATOMIC increment, not a read-then-write ──
+ *
+ * This used to be `getOrLoad` → compare → `put(used + 1)`, documented as "can undercount
+ * by a few under concurrency; accepted, it is a coarse abuse control". That was wrong,
+ * and not marginally so:
+ *
+ *   * A read-modify-write between two awaits is a lost-update race by construction. N
+ *     racing requests all read the same `used` and all write `used + 1`.
+ *   * Worse, `cache.getOrLoad` COALESCES concurrent cold-key callers onto one shared
+ *     promise (its documented stampede protection). On a fresh window key that means N
+ *     parallel submissions receive the identical `used = 0` and every single one passes.
+ *
+ * So the bypass was not "a few extra": with the requests issued in parallel the limiter
+ * admitted the whole burst regardless of `max_per_minute`. A flood is concurrent by
+ * definition — the one traffic shape this module exists to stop was the shape it did not
+ * stop.
+ *
+ * It now calls `cache.incr(key, ttl)` — Redis INCR (atomic server-side), with EXPIRE
+ * applied only when the counter was created so the fixed window is never slid forward.
+ * The count is charged FIRST and the RETURNED value is compared to the limit, so there is
+ * no window between deciding and recording. Charging before deciding means a refused
+ * request still increments its own counter; that is deliberate for an abuse control (it
+ * makes a sustained flood strictly self-defeating), and the per-IP/per-tenant split below
+ * is what keeps it from becoming a DoS lever.
  */
 import type { FastifyRequest } from "fastify";
 import { pino } from "pino";
@@ -139,10 +154,24 @@ export function resolveClientIp(req: Pick<FastifyRequest, "ip" | "headers">): st
 
   const list = joined.split(",").map((v) => v.trim()).filter((v) => v !== "");
   if (list.length === 0) return req.ip;
-  // Clamp: fewer hops present than configured means the header was not written by the
-  // full trusted chain, so fall back to the earliest entry we have rather than reading
-  // past the start of the array (noUncheckedIndexedAccess makes that a type error too).
-  const index = Math.max(0, list.length - hops);
+
+  /**
+   * FAIL CLOSED when the header is shorter than the configured chain.
+   *
+   * This used to clamp with `Math.max(0, list.length - hops)`, which reads `list[0]`
+   * whenever fewer entries are present than hops — and `list[0]` is the one entry a
+   * client fully controls. With TRUSTED_PROXY_HOPS=1 and the service reachable without
+   * the gateway in front (a misrouted ingress, a debug port, an internal caller), a
+   * single-entry `x-forwarded-for: <random>` per request minted an unlimited supply of
+   * distinct counter keys and removed the per-IP budget entirely.
+   *
+   * Too few entries means the trusted chain did NOT write this header, so nothing in it
+   * can be trusted at any position. Fall back to the socket peer, which no caller can
+   * forge. Behind a correctly configured proxy the chain is always at least `hops` long,
+   * so this costs a well-formed deployment nothing.
+   */
+  if (list.length < hops) return req.ip;
+  const index = list.length - hops;
   return list[index] ?? req.ip;
 }
 
@@ -157,13 +186,14 @@ async function charge(
 ): Promise<{ allowed: boolean; limiterUnavailable: boolean }> {
   const key = windowKey(discriminator, nowMs);
   try {
-    // getOrLoad with a null-returning loader is a read-only peek: a miss caches nothing.
-    const current = await cache.getOrLoad<number>(key, async () => null);
-    const used = typeof current === "number" && Number.isFinite(current) ? current : 0;
-    if (used >= limit) return { allowed: false, limiterUnavailable: false };
-    // TTL slightly over the window so the key cannot outlive its bucket by more than
-    // one window even if the clock drifts.
-    await cache.put(key, used + 1, WINDOW_SECONDS + 5);
+    // INCREMENT FIRST, then compare the returned count. One atomic operation, so there is
+    // no read-then-write window for concurrent submissions to slip through — see the
+    // "Atomicity" section in the file header for what this replaced and why it mattered.
+    // TTL slightly over the window so the key cannot outlive its bucket by more than one
+    // window even if the clock drifts; `incr` only applies it on creation, so sustained
+    // traffic cannot pin the window open.
+    const used = await cache.incr(key, WINDOW_SECONDS + 5);
+    if (used > limit) return { allowed: false, limiterUnavailable: false };
     return { allowed: true, limiterUnavailable: false };
   } catch (err) {
     // No client IP, no form key in the log line: the form key is a bearer secret, so it
