@@ -1115,7 +1115,13 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
     const lastActivity = toText(row.lastActivityAt)?.slice(0, 10) ?? undefined;
     const tags = Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [];
     if (!name) continue;
-    mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity });
+    const temperature = toText(row.temperature) ?? undefined;
+    const priority = toText(row.priority) ?? undefined;
+    const segment = toText(row.segment) ?? undefined;
+    const product = toText(row.product) ?? undefined;
+    const region = toText(row.region) ?? undefined;
+    const expectedValueDisplay = toText(row.expectedValueDisplay) ?? undefined;
+    mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity, temperature, priority, segment, product, region, expectedValueDisplay });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -1162,10 +1168,28 @@ function mapCrmActivities(payload: unknown): ActivitySummary[] | null {
   return mapped.length > 0 ? mapped : null;
 }
 
-export async function getCrmContacts(opts?: { search?: string; segment?: string }): Promise<LoaderResult<CRMContactSummary[]>> {
+export interface CrmContactsQuery {
+  search?: string;
+  segment?: string;
+  temperature?: string;
+  priority?: string;
+  product?: string;
+  region?: string;
+  status?: string;
+  source?: string;
+}
+
+export async function getCrmContacts(opts?: CrmContactsQuery): Promise<LoaderResult<CRMContactSummary[]>> {
   const qs = new URLSearchParams();
   if (opts?.search) qs.set("search", opts.search);
   if (opts?.segment && opts.segment !== "all") qs.set("segment", opts.segment);
+  // LQ-003 classification / segmentation filters, forwarded to the list API.
+  if (opts?.temperature) qs.set("temperature", opts.temperature);
+  if (opts?.priority) qs.set("priority", opts.priority);
+  if (opts?.product) qs.set("product", opts.product);
+  if (opts?.region) qs.set("region", opts.region);
+  if (opts?.status) qs.set("status", opts.status);
+  if (opts?.source) qs.set("source", opts.source);
   const path = qs.toString() ? `/api/v1/crm/contacts?${qs}` : "/api/v1/crm/contacts";
   return fetchJson(path, [] as CRMContactSummary[], {
     revalidateSeconds: 30,

@@ -19,6 +19,12 @@ function toView(r: ContactRow): ContactView {
     gstin: r.gstin,
     pan: r.pan,
     pincode: r.pincode,
+    temperature: r.temperature,
+    priority: r.priority,
+    segment: r.segment,
+    product: r.product,
+    region: r.region,
+    expectedValueMinor: r.expectedValueMinor === null || r.expectedValueMinor === undefined ? null : String(r.expectedValueMinor),
     leadStatus: r.leadStatus,
     leadSource: r.leadSource,
     ownerId: r.ownerId,
@@ -83,6 +89,15 @@ export type ListFilters = {
   search?: string;
   leadStatus?: string;
   ownerId?: string;
+  temperature?: string;
+  priority?: string;
+  segmentName?: string;
+  product?: string;
+  region?: string;
+  leadSource?: string;
+  contactStatus?: string;
+  expectedValueMin?: string;
+  expectedValueMax?: string;
   segment?: "all" | "mine" | "recent";
   actorId?: string;
 };
@@ -93,7 +108,7 @@ export async function listByTenant(
   offset: number,
   filters: ListFilters = {},
 ): Promise<ContactView[]> {
-  const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`];
+  const conditions: SQL[] = [eq(contacts.tenantId, tenantId), sql`${contacts.status} = ${filters.contactStatus ?? 'active'}`];
   if (filters.search) {
     const q = `%${filters.search}%`;
     // email/phone are AES-GCM ciphertext at rest and cannot be ILIKE-matched;
@@ -104,6 +119,14 @@ export async function listByTenant(
     )!);
   }
   if (filters.leadStatus) conditions.push(eq(contacts.leadStatus, filters.leadStatus));
+  if (filters.leadSource) conditions.push(eq(contacts.leadSource, filters.leadSource));
+  if (filters.temperature) conditions.push(eq(contacts.temperature, filters.temperature));
+  if (filters.priority) conditions.push(eq(contacts.priority, filters.priority));
+  if (filters.segmentName) conditions.push(eq(contacts.segment, filters.segmentName));
+  if (filters.product) conditions.push(eq(contacts.product, filters.product));
+  if (filters.region) conditions.push(eq(contacts.region, filters.region));
+  if (filters.expectedValueMin) conditions.push(sql`${contacts.expectedValueMinor} >= ${filters.expectedValueMin}::bigint`);
+  if (filters.expectedValueMax) conditions.push(sql`${contacts.expectedValueMinor} <= ${filters.expectedValueMax}::bigint`);
   if (filters.ownerId) conditions.push(eq(contacts.ownerId, filters.ownerId));
   if (filters.segment === "mine" && filters.actorId) conditions.push(eq(contacts.ownerId, filters.actorId));
   if (filters.segment === "recent") {

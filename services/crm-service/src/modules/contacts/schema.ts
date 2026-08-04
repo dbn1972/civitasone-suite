@@ -1,7 +1,7 @@
 /**
  * contacts module — Drizzle schema. Lives in its OWN Postgres schema `crm`.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, boolean, date, jsonb, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, boolean, date, jsonb, text } from "drizzle-orm/pg-core";
 import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const crmSchema = pgSchema("crm");
@@ -42,6 +42,14 @@ export const contacts = crmSchema.table("contacts", {
   pincode: varchar("pincode", { length: 6 }),
   // Lead score (0-100), maintained by the scoring consumer.
   score: integer("score"),
+  // LQ-003 lead classification (all nullable, opt-in).
+  temperature: varchar("temperature", { length: 8 }),
+  priority: varchar("priority", { length: 8 }),
+  segment: varchar("segment", { length: 64 }),
+  product: varchar("product", { length: 120 }),
+  region: varchar("region", { length: 64 }),
+  // Expected deal value in paise; bigint like every other money column.
+  expectedValueMinor: bigint("expected_value_minor", { mode: "bigint" }),
   company: varchar("company", { length: 200 }),
   designation: varchar("designation", { length: 120 }),
   city: varchar("city", { length: 100 }),
@@ -80,6 +88,12 @@ export type ContactView = {
   gstin: string | null;
   pan: string | null;
   pincode: string | null;
+  temperature: string | null;
+  priority: string | null;
+  segment: string | null;
+  product: string | null;
+  region: string | null;
+  expectedValueMinor: string | null;
   leadStatus: string;
   leadSource: string | null;
   ownerId: string | null;

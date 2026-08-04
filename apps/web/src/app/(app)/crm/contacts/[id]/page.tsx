@@ -3,6 +3,9 @@ import { PageHeader, EmptyState, DataTable } from "../../../../_components/ds";
 import { getContactById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { ContactDetailActions } from "./ContactDetailActions";
+import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
+import { ScoreHistoryView } from "../../../../_components/crm/ScoreHistoryView";
+import { LeadTransitionControl } from "../../../../_components/crm/LeadTransitionControl";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: contact, source } = await getContactById(params.id);
@@ -16,6 +19,14 @@ export default async function Page({ params }: { params: { id: string } }) {
       </>
     );
   }
+
+  const classificationTags: Array<{ label: string; value: string }> = [
+    ...(contact.temperature ? [{ label: "Temperature", value: contact.temperature }] : []),
+    ...(contact.priority ? [{ label: "Priority", value: contact.priority }] : []),
+    ...(contact.segment ? [{ label: "Segment", value: contact.segment }] : []),
+    ...(contact.product ? [{ label: "Product", value: contact.product }] : []),
+    ...(contact.region ? [{ label: "Region", value: contact.region }] : []),
+  ];
 
   return (
     <>
@@ -38,12 +49,28 @@ export default async function Page({ params }: { params: { id: string } }) {
               {contact.phone && <div className="fld"><div className="l">Phone</div><div className="v">{contact.phone}</div></div>}
               {contact.email && <div className="fld"><div className="l">Email</div><div className="v">{contact.email}</div></div>}
               {contact.city && <div className="fld"><div className="l">City</div><div className="v">{contact.city}</div></div>}
+              {contact.leadStatus && <div className="fld"><div className="l">Lead Status</div><div className="v">{contact.leadStatus}</div></div>}
+              {contact.expectedValueDisplay && <div className="fld"><div className="l">Expected Value</div><div className="v">{contact.expectedValueDisplay}</div></div>}
               {contact.lastActivityDate && <div className="fld"><div className="l">Last Activity</div><div className="v">{formatIndianDate(contact.lastActivityDate)}</div></div>}
               {contact.marketingConsent !== undefined && (
                 <div className="fld"><div className="l">Marketing Consent</div><div className="v">{contact.marketingConsent ? "Yes" : "No"}</div></div>
               )}
             </div>
           </div>
+
+          {classificationTags.length > 0 && (
+            <div className="card">
+              <div className="card-h"><h3>Classification &amp; segmentation</h3></div>
+              <div className="pad" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {classificationTags.map((t) => (
+                  <span key={t.label} className="pill info">{t.label}: {t.value}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <QualifyPanel leadId={contact.id} />
+
           {contact.deals.length > 0 && (
             <div className="card">
               <div className="card-h"><h3>Related Deals</h3></div>
@@ -66,6 +93,8 @@ export default async function Page({ params }: { params: { id: string } }) {
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <LeadTransitionControl leadId={contact.id} currentStatus={contact.leadStatus ?? "new"} />
+          <ScoreHistoryView leadId={contact.id} />
           {contact.tags.length > 0 && (
             <div className="card">
               <div className="card-h"><h3>Tags</h3></div>

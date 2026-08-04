@@ -92,6 +92,10 @@ export const COMMANDS = {
    * customer's words are not broadcast to every consumer of activity events (DPDP).
    */
   analyseSentiment: "crm.sentiment.analyse",
+  /** Set lead classification (temperature/priority/segment/product/region/expected value) (LQ-003). */
+  classifyContact: "crm.contact.classify",
+  /** Submit a qualification framework's answers for a lead -> compute outcome+score (LQ-001). */
+  qualifyLead: "crm.lead.qualify",
 } as const;
 
 export const EVENTS = {
@@ -223,6 +227,11 @@ export const EVENTS = {
    * Payload: { activityId, polarity, score, themes, model } — never the text.
    */
   sentimentScored: "crm.interaction.sentiment_scored",
+
+  /** Lead classification fields changed (LQ-003). Payload: { contactId, fields }. */
+  contactClassified: "crm.contact.classified",
+  /** A lead was qualified against a framework (LQ-001). Payload: { leadId, frameworkId, outcome, score }. */
+  leadQualified: "crm.lead.qualified",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

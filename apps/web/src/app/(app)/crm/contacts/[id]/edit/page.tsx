@@ -24,6 +24,12 @@ export default async function Page({ params }: { params: { id: string } }) {
         city: contact.city,
         ...(contact.leadStatus ? { leadStatus: contact.leadStatus } : {}),
         ...(contact.marketingConsent !== undefined ? { marketingConsent: contact.marketingConsent } : {}),
+        ...(contact.temperature ? { temperature: contact.temperature } : {}),
+        ...(contact.priority ? { priority: contact.priority } : {}),
+        ...(contact.segment ? { segment: contact.segment } : {}),
+        ...(contact.product ? { product: contact.product } : {}),
+        ...(contact.region ? { region: contact.region } : {}),
+        ...(contact.expectedValueMinor ? { expectedValueMinor: contact.expectedValueMinor } : {}),
       }}
     />
   );

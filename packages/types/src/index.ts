@@ -304,6 +304,14 @@ export interface CRMContactSummary {
   leadStatus?: string;
   tags?: string[];
   lastActivity?: string;
+  /** LQ-003 classification / segmentation. */
+  temperature?: string;
+  priority?: string;
+  segment?: string;
+  product?: string;
+  region?: string;
+  /** Pre-formatted expected value for display (e.g. "₹1,50,000"). */
+  expectedValueDisplay?: string;
 }
 
 /** CRM account (organisation) row for the accounts list + hierarchy screens. */
@@ -917,6 +925,14 @@ export type ContactDetail = {
   leadStatus?: string;
   marketingConsent?: boolean;
   lastActivityDate?: string;
+  /** LQ-003 classification / segmentation. */
+  temperature?: string;
+  priority?: string;
+  segment?: string;
+  product?: string;
+  region?: string;
+  expectedValueMinor?: string;
+  expectedValueDisplay?: string;
   tags: string[];
   deals: Array<{ id: string; dealName: string; stage: string; amount: number }>;
   activityTimeline: Array<{

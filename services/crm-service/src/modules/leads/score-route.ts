@@ -71,6 +71,7 @@ export async function leadScoreRoutes(app: FastifyInstance): Promise<void> {
         c.lead_source,
         c.last_activity_at,
         c.company,
+        c.score AS current_score,
         (
           SELECT lt.created_at FROM crm.lead_transitions lt
           WHERE lt.contact_id = c.id AND lt.tenant_id = c.tenant_id
@@ -123,6 +124,25 @@ export async function leadScoreRoutes(app: FastifyInstance): Promise<void> {
       authToken,
       correlationId,
     );
+
+    // LQ-002: record every score read in crm.lead_score_history. Wrapped in
+    // withRawTenantGuc for the same reason the read above is — crm.lead_score_history
+    // is FORCE RLS and this module talks to sqlClient directly. Best-effort: a
+    // history-write failure must not fail the score response.
+    const previousScore = row.current_score == null ? null : Number(row.current_score);
+    try {
+      await withRawTenantGuc(sqlClient, ctx.tenantId, (tx) => tx`
+        INSERT INTO crm.lead_score_history
+          (tenant_id, lead_id, score, previous_score, factors, source, reason)
+        VALUES (
+          ${ctx.tenantId}, ${params.id}, ${result.score}, ${previousScore},
+          ${JSON.stringify(result.factors ?? [])}::jsonb,
+          ${result.isFallback ? "rule" : "ml"}, ${"score_read"}
+        )
+      `);
+    } catch (err) {
+      req.log.warn({ err, leadId: params.id }, "failed to write lead score history");
+    }
 
     return reply.send({ data: result });
   });

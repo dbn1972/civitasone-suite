@@ -19,8 +19,10 @@ interface TransitionPayload {
   contactId: string;
   fromStatus: string;
   targetStatus: string;
+  reasonCode?: string | null;
   reason: string;
   notes: string | null;
+  reopen?: boolean;
 }
 
 export function registerLifecycleConsumer(queue: Queue): void {
@@ -47,13 +49,14 @@ export function registerLifecycleConsumer(queue: Queue): void {
       await tx.execute(sql`
         INSERT INTO crm.lead_transitions (
           id, tenant_id, contact_id, from_status, to_status,
-          reason, notes, created_at, created_by, version
+          reason_code, reason, notes, created_at, created_by, version
         ) VALUES (
           gen_random_uuid(),
           ${msg.tenantId},
           ${payload.contactId},
           ${payload.fromStatus},
           ${payload.targetStatus},
+          ${payload.reasonCode ?? null},
           ${payload.reason},
           ${payload.notes},
           now(),
@@ -73,8 +76,10 @@ export function registerLifecycleConsumer(queue: Queue): void {
           contactId: payload.contactId,
           fromStatus: payload.fromStatus,
           toStatus: payload.targetStatus,
+          reasonCode: payload.reasonCode ?? null,
           reason: payload.reason,
           notes: payload.notes,
+          reopen: payload.reopen ?? false,
         },
       });
 
@@ -94,7 +99,9 @@ export function registerLifecycleConsumer(queue: Queue): void {
           metadata: {
             fromStatus: payload.fromStatus,
             toStatus: payload.targetStatus,
+            reasonCode: payload.reasonCode ?? null,
             reason: payload.reason,
+            reopen: payload.reopen ?? false,
           },
         },
       });

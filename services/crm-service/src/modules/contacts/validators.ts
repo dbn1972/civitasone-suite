@@ -68,8 +68,33 @@ export const listContactsQuery = z.object({
   search: z.string().max(100).optional(),
   leadStatus: z.string().optional(),
   ownerId: z.string().uuid().optional(),
+  // "segment" is the pre-existing saved-view mode (all/mine/recent). The LQ-003
+  // classification "segment" column is filtered via "segmentName" to avoid
+  // overloading this param.
   segment: z.enum(["all", "mine", "recent"]).default("all"),
+  // LQ-003 classification filters (report/filter using all classification fields).
+  temperature: z.enum(["hot", "warm", "cold"]).optional(),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  segmentName: z.string().max(64).optional(),
+  product: z.string().max(120).optional(),
+  region: z.string().max(64).optional(),
+  source: z.string().max(64).optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+  expectedValueMin: z.coerce.number().int().nonnegative().optional(),
+  expectedValueMax: z.coerce.number().int().nonnegative().optional(),
 });
+
+// LQ-003: PATCH /v1/crm/contacts/:id/classification body. All fields optional so a
+// caller can set just one; expected_value is a non-negative integer of paise.
+export const classificationBody = z.object({
+  temperature: z.enum(["hot", "warm", "cold"]).nullable().optional(),
+  priority: z.enum(["high", "medium", "low"]).nullable().optional(),
+  segment: z.string().max(64).nullable().optional(),
+  product: z.string().max(120).nullable().optional(),
+  region: z.string().max(64).nullable().optional(),
+  expectedValueMinor: z.coerce.number().int().nonnegative().nullable().optional(),
+}).refine((b) => Object.keys(b).length > 0, { message: "at least one classification field is required" });
+export type ClassificationBody = z.infer<typeof classificationBody>;
 
 const createAccountObject = z.object({
   name: z.string().min(1).max(200),
@@ -108,6 +133,12 @@ export const contactViewSchema = z.object({
   gstin: z.string().nullable(),
   pan: z.string().nullable(),
   pincode: z.string().nullable(),
+  temperature: z.string().nullable(),
+  priority: z.string().nullable(),
+  segment: z.string().nullable(),
+  product: z.string().nullable(),
+  region: z.string().nullable(),
+  expectedValueMinor: z.string().nullable(),
   leadStatus: z.string(),
   leadSource: z.string().nullable(),
   ownerId: z.string().uuid().nullable(),

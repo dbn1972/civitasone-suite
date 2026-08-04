@@ -160,6 +160,14 @@ export const crmContactApiSchema = z.object({
   phone: z.string().nullable(),
   company: z.string().nullable(),
   status: z.string(),
+  // LQ-003 classification / segmentation (optional; older services omit them).
+  leadStatus: z.string().nullish(),
+  temperature: z.string().nullish(),
+  priority: z.string().nullish(),
+  segment: z.string().nullish(),
+  product: z.string().nullish(),
+  region: z.string().nullish(),
+  expectedValueDisplay: z.string().nullish(),
 });
 
 export const crmDealApiSchema = z.object({
@@ -841,6 +849,13 @@ export const ContactDetailSchema = z.object({
   lastActivityDate: z.string().optional(),
   leadStatus: z.string().optional(),
   marketingConsent: z.boolean().optional(),
+  temperature: z.string().optional(),
+  priority: z.string().optional(),
+  segment: z.string().optional(),
+  product: z.string().optional(),
+  region: z.string().optional(),
+  expectedValueMinor: z.string().optional(),
+  expectedValueDisplay: z.string().optional(),
   tags: z.array(z.string()).default([]),
   deals: z.array(z.object({
     id: z.string(),
