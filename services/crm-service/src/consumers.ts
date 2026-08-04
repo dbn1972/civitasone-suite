@@ -16,6 +16,7 @@ import { registerDealConsumers } from "./modules/deals/consumer.js";
 import { registerDealCloseConsumer } from "./modules/deals/close-consumer.js";
 import { registerQuotationConsumers } from "./modules/deals/quotation-consumer.js";
 import { registerActivityConsumers } from "./modules/activities/consumer.js";
+import { registerNotificationDeliveryConsumer } from "./modules/activities/notification-delivery-consumer.js";
 import { registerLeadScoringConsumers } from "./modules/leads/consumer.js";
 import { registerInboundCaptureConsumer } from "./modules/leads/inbound-consumer.js";
 import { registerLifecycleConsumer } from "./modules/leads/lifecycle-consumer.js";
@@ -35,6 +36,7 @@ export function registerAllConsumers(queue: Queue): void {
   registerDealCloseConsumer(queue);
   registerQuotationConsumers(queue);
   registerActivityConsumers(queue);
+  registerNotificationDeliveryConsumer(queue);
   registerLeadScoringConsumers(queue);
   registerInboundCaptureConsumer(queue);
   registerLifecycleConsumer(queue);

@@ -38,6 +38,7 @@ import {
   type HandoffState,
 } from "./handoff-domain.js";
 import * as repo from "./keyword-repo.js";
+import * as correlationRepo from "./correlation-repo.js";
 /**
  * P1-6: the opt-out is recorded on `bounces.suppression_list` because that is the
  * ONE consent signal the send gate reads by recipient ADDRESS. `templates.prefs`
@@ -74,6 +75,10 @@ type InboundPayload = {
 type HandoffPayload = {
   id: string; tenantId: string; conversationId: string; action: HandoffAction;
   agentId?: string; reason?: string; expectedFromState: string;
+};
+
+type CorrelatePayload = {
+  id: string; tenantId: string; conversationId: string; ticketId: string;
 };
 
 export function registerInboxConsumers(q: Queue): void {
@@ -364,6 +369,57 @@ export function registerInboxConsumers(q: Queue): void {
       throw new NonRetryableError(`INVALID_TRANSITION: ${rejection}`);
     }
     await cache.invalidate(cache.makeKey(p.tenantId, "handoff", p.conversationId));
+  });
+
+  /**
+   * INT-04: `notification.inbox.correlate` was published by
+   * correlation-routes.ts with nothing subscribed to it — the POST always
+   * returned 202, but the ticketId was never persisted, so the GET on the
+   * same route file could never find a row. Consumed here (inbox owns the
+   * conversation) by writing to notification.inbox_correlations, the exact
+   * table the GET already reads from (migration 0025).
+   *
+   * Idempotent two ways: `markProcessed` on the message id short-circuits a
+   * redelivery of the same command, and `upsertCorrelation` conflicts on
+   * (tenant_id, conversation_id) — the unique index from migration 0025 — so
+   * a second correlate call for the same conversation updates the linked
+   * ticket instead of erroring or duplicating a row.
+   */
+  q.subscribe<CorrelatePayload>(COMMANDS.correlateInbox, async (msg) => {
+    const p = msg.payload;
+    if (typeof p.conversationId !== "string" || typeof p.ticketId !== "string") {
+      throw new NonRetryableError("INVALID_CORRELATE_PAYLOAD: conversationId and ticketId are required");
+    }
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await correlationRepo.upsertCorrelation(tx, {
+        id: p.id,
+        tenantId: p.tenantId,
+        conversationId: p.conversationId,
+        ticketId: p.ticketId,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.inboxCorrelated,
+        eventType: EVENTS.inboxCorrelated,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { conversationId: p.conversationId, ticketId: p.ticketId },
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "correlate_inbox", resourceType: "inbox_correlation",
+          resourceId: p.conversationId, outcome: "success", ticketId: p.ticketId,
+        },
+      });
+    });
+    // Same cache key format the GET route in correlation-routes.ts reads/writes.
+    await cache.invalidate(`notification:${p.tenantId}:correlation:${p.conversationId}`);
   });
 }
 

@@ -95,6 +95,8 @@ export const CONSUMES = {
   mlBreachRiskHigh: "ml.prediction.breach_risk_high",
   /** citizen-service request creates a linked helpdesk ticket for department handling. */
   citizenRequestCreated: "citizen.request.created",
+  /** notification-service inbox "convert to ticket" action opens a linked helpdesk ticket. */
+  notificationInboxConvertToTicket: "notification.inbox.convert_to_ticket",
 } as const;
 
 /** source tag stamped on tickets auto-opened from a foreign event. */
@@ -104,6 +106,8 @@ export const SOURCE = {
   // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
   assistant: "knowledge_assistant",
   citizen: "citizen",
+  // notification-service inbox conversation converted to a ticket.
+  emailInbox: "email/inbox",
 } as const;
 
 export const SERVICE = "helpdesk";
