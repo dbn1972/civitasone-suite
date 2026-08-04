@@ -11,6 +11,8 @@ import type {
   CRMAccountNode,
   CRMAccountSummary,
   CRMContactSummary,
+  CRMLeadFieldName,
+  CRMLeadFieldRuleRow,
   CRMDealSummary,
   CRMDashboard,
   CRMForecast,
@@ -178,6 +180,8 @@ import {
   crmAccountHierarchyListSchema,
   crmAccountsListSchema,
   crmContactsListSchema,
+  crmLeadFieldRulesListSchema,
+  CRM_LEAD_FIELD_NAMES,
   crmDealsListSchema,
   crmActivitiesListSchema,
   crmForecastSchema,
@@ -1172,6 +1176,70 @@ export async function getCrmContacts(opts?: { search?: string; segment?: string 
     telemetryKey: "crm.contacts",
     responseSchema: crmContactsListSchema,
     mapResponse: mapCrmContacts,
+  });
+}
+
+/**
+ * A row per governable lead field with no rule configured — the built-in fallback
+ * state. Also the loader's `empty` value, so a failed read still renders the whole
+ * governable surface (badged as an error) instead of an empty screen that would read
+ * as "this tenant governs nothing".
+ */
+function unconfiguredLeadFieldRules(): CRMLeadFieldRuleRow[] {
+  return CRM_LEAD_FIELD_NAMES.map((fieldName) => ({
+    fieldName,
+    configured: false,
+    required: false,
+    weight: 0,
+    enabled: false,
+    version: null,
+    updatedAt: null,
+  }));
+}
+
+/**
+ * Merges the tenant's configured rules over the seven governable fields (LM-001).
+ * Never returns null: an empty configuration is a legitimate state, and mapping it
+ * to null would make fetchJson report a data error for a perfectly healthy tenant.
+ * Rules for names the service no longer governs are dropped rather than shown, since
+ * the admin screen could not save them back.
+ */
+function mapCrmLeadFieldRules(
+  payload: z.infer<typeof crmLeadFieldRulesListSchema>,
+): CRMLeadFieldRuleRow[] {
+  type ApiRule = z.infer<typeof crmLeadFieldRulesListSchema>["data"][number];
+  const governable = new Set<string>(CRM_LEAD_FIELD_NAMES);
+  const byName = new Map<string, ApiRule>();
+  for (const rule of payload.data) {
+    if (governable.has(rule.fieldName)) byName.set(rule.fieldName, rule);
+  }
+  return CRM_LEAD_FIELD_NAMES.map((fieldName: CRMLeadFieldName) => {
+    const rule = byName.get(fieldName);
+    if (!rule) {
+      return { fieldName, configured: false, required: false, weight: 0, enabled: false, version: null, updatedAt: null };
+    }
+    return {
+      fieldName,
+      configured: true,
+      required: rule.required,
+      weight: rule.weight,
+      enabled: rule.enabled,
+      version: rule.version ?? null,
+      updatedAt: rule.updatedAt ?? null,
+    };
+  });
+}
+
+/**
+ * The tenant's lead field governance (LM-001), one row per governable field.
+ * Deliberately uncached (`no-store`): an admin who just saved a rule must not be
+ * shown the pre-save snapshot on the redirect back.
+ */
+export async function getCrmLeadFieldRules(): Promise<LoaderResult<CRMLeadFieldRuleRow[]>> {
+  return fetchJson("/api/v1/crm/lead-field-rules", unconfiguredLeadFieldRules(), {
+    telemetryKey: "crm.lead_field_rules",
+    responseSchema: crmLeadFieldRulesListSchema,
+    mapResponse: mapCrmLeadFieldRules,
   });
 }
 

@@ -295,6 +295,37 @@ export interface CRMVocSummary {
   truncated: boolean;
 }
 
+/** LM-001 — the seven lead fields a tenant may govern. */
+export type CRMLeadFieldName =
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'company'
+  | 'designation'
+  | 'city'
+  | 'leadSource';
+
+/**
+ * One row of the lead field governance screen (LM-001).
+ *
+ * Every governable field gets a row whether or not the tenant has configured it:
+ * `configured: false` means no rule exists and the built-in completeness behaviour
+ * applies. An admin has to see the whole governable surface, not only the rows that
+ * happen to exist, otherwise the unconfigured fields look ungovernable.
+ */
+export interface CRMLeadFieldRuleRow {
+  fieldName: CRMLeadFieldName;
+  /** False when no rule row exists for this field — built-in behaviour applies. */
+  configured: boolean;
+  required: boolean;
+  /** 0–100. Relative importance *within* the enabled set, not a percentage. */
+  weight: number;
+  /** Membership of the scored set is decided by this flag alone. */
+  enabled: boolean;
+  version: number | null;
+  updatedAt: string | null;
+}
+
 export interface CRMContactSummary {
   id?: string;
   name: string;

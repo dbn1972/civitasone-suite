@@ -347,6 +347,40 @@ export const crmVocSummarySchema = z.object({
   }),
 });
 
+/**
+ * LM-001 — the lead fields a tenant may govern. Kept in lockstep with
+ * LEAD_FIELD_NAMES in services/crm-service/src/modules/leads/field-rules-validators.ts
+ * (and the CHECK constraint behind it): a name outside this set is rejected by the
+ * service, so the admin screen must not offer one.
+ */
+export const CRM_LEAD_FIELD_NAMES = [
+  "name",
+  "email",
+  "phone",
+  "company",
+  "designation",
+  "city",
+  "leadSource",
+] as const;
+
+/**
+ * One configured lead field rule as returned by GET /v1/crm/lead-field-rules.
+ * `version` and `updatedAt` are nullish-tolerant so a service that predates them
+ * still reads, rather than failing the whole response.
+ */
+export const crmLeadFieldRuleApiSchema = z.object({
+  fieldName: z.string().min(1),
+  required: z.boolean(),
+  weight: z.number().int(),
+  enabled: z.boolean(),
+  version: z.number().int().nullish(),
+  updatedAt: z.string().nullish(),
+});
+
+export const crmLeadFieldRulesListSchema = z.object({
+  data: z.array(crmLeadFieldRuleApiSchema),
+});
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });
