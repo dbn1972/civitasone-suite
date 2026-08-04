@@ -4,6 +4,10 @@ export const COMMANDS = {
   updateContact: "crm.contact.update",
   deleteContact: "crm.contact.delete",
   mergeContacts: "crm.contact.merge",
+  /** Merge two lead (contact) records, reassigning children to the primary (DQ-002). */
+  mergeLeads: "crm.lead.merge",
+  /** Merge two account records, reassigning children to the primary (DQ-002). */
+  mergeAccounts: "crm.account.merge",
   bulkImportContacts: "crm.contact.bulk_import",
   createDeal: "crm.deal.create",
   updateDealStage: "crm.deal.update_stage",
@@ -126,12 +130,20 @@ export const COMMANDS = {
    * customer's words are not broadcast to every consumer of activity events (DPDP).
    */
   analyseSentiment: "crm.sentiment.analyse",
+  /** Set lead classification (temperature/priority/segment/product/region/expected value) (LQ-003). */
+  classifyContact: "crm.contact.classify",
+  /** Submit a qualification framework's answers for a lead -> compute outcome+score (LQ-001). */
+  qualifyLead: "crm.lead.qualify",
 } as const;
 
 export const EVENTS = {
   contactCreated: "crm.contact.created",
   contactUpdated: "crm.contact.updated",
   contactDeleted: "crm.contact.deleted",
+  /** Two leads merged; payload { leadId, mergedFrom } (DQ-002). */
+  leadMerged: "crm.lead.merged",
+  /** Two accounts merged; payload { accountId, mergedFrom } (DQ-002). */
+  accountMerged: "crm.account.merged",
   dealCreated: "crm.deal.created",
   dealStageUpdated: "crm.deal.stage_updated",
   dealUpdated: "crm.deal.updated",
@@ -274,6 +286,11 @@ export const EVENTS = {
    * Payload: { activityId, polarity, score, themes, model } — never the text.
    */
   sentimentScored: "crm.interaction.sentiment_scored",
+
+  /** Lead classification fields changed (LQ-003). Payload: { contactId, fields }. */
+  contactClassified: "crm.contact.classified",
+  /** A lead was qualified against a framework (LQ-001). Payload: { leadId, frameworkId, outcome, score }. */
+  leadQualified: "crm.lead.qualified",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

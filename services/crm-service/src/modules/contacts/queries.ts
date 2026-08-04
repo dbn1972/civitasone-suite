@@ -33,7 +33,8 @@ export async function listContacts(
   filters: ListFilters = {},
   isAdmin = false,
 ): Promise<{ data: ContactView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  const cacheKey = `list:${limit}:${offset}:${filters.search ?? ""}:${filters.leadStatus ?? ""}:${filters.segment ?? "all"}:${filters.ownerId ?? ""}`;
+  const cacheKey = `list:${limit}:${offset}:${filters.search ?? ""}:${filters.leadStatus ?? ""}:${filters.segment ?? "all"}:${filters.ownerId ?? ""}` +
+    `:${filters.temperature ?? ""}:${filters.priority ?? ""}:${filters.segmentName ?? ""}:${filters.product ?? ""}:${filters.region ?? ""}:${filters.leadSource ?? ""}:${filters.contactStatus ?? ""}:${filters.expectedValueMin ?? ""}:${filters.expectedValueMax ?? ""}`;
   // Cache holds CLEARTEXT; masking is applied per-response by role so the
   // same cached page serves both admin (clear) and non-admin (masked) callers.
   const result = await cache.listOrLoad(tenantId, RESOURCE, cacheKey, async () => {

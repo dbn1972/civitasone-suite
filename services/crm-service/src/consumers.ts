@@ -11,7 +11,9 @@ import type { Queue } from "@civitasone/queue";
 import { registerContactConsumers } from "./modules/contacts/consumer.js";
 import { registerContactRoleConsumers } from "./modules/contacts/roles-consumer.js";
 import { registerConversionConsumer } from "./modules/contacts/conversion-consumer.js";
+import { registerMergeConsumers } from "./modules/contacts/merge-consumer.js";
 import { registerTransferConsumer } from "./modules/contacts/transfer-consumer.js";
+import { registerClassificationConsumer } from "./modules/contacts/classification-consumer.js";
 import { registerDealConsumers } from "./modules/deals/consumer.js";
 import { registerDealCloseConsumer } from "./modules/deals/close-consumer.js";
 import { registerQuotationConsumers } from "./modules/deals/quotation-consumer.js";
@@ -23,6 +25,7 @@ import { registerLifecycleConsumer } from "./modules/leads/lifecycle-consumer.js
 import { registerLeadFieldRuleConsumers } from "./modules/leads/field-rules-consumer.js";
 import { registerLeadCaptureFormConsumers } from "./modules/leads/capture-forms-consumer.js";
 import { registerPublicLeadCaptureConsumer } from "./modules/leads/public-capture-consumer.js";
+import { registerQualificationConsumer } from "./modules/leads/qualification-consumer.js";
 import { registerPipelineConsumers } from "./modules/pipelines/consumer.js";
 import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.js";
 import { registerTeamConsumers } from "./modules/teams/consumer.js";
@@ -34,7 +37,9 @@ export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
   registerContactRoleConsumers(queue);
   registerConversionConsumer(queue);
+  registerMergeConsumers(queue);
   registerTransferConsumer(queue);
+  registerClassificationConsumer(queue);
   registerDealConsumers(queue);
   registerDealCloseConsumer(queue);
   registerQuotationConsumers(queue);
@@ -48,6 +53,7 @@ export function registerAllConsumers(queue: Queue): void {
   // Without the latter the public endpoint would answer 202 and write nothing.
   registerLeadCaptureFormConsumers(queue);
   registerPublicLeadCaptureConsumer(queue);
+  registerQualificationConsumer(queue);
   registerPipelineConsumers(queue);
   registerCustomFieldConsumers(queue);
   registerTeamConsumers(queue);

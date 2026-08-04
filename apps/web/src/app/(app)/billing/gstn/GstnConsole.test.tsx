@@ -103,7 +103,7 @@ describe("GstnConsole", () => {
 
     render(<GstnConsole />);
     // Only the tab strip has this name before the panel switches — unambiguous here.
-    fireEvent.click(screen.getByRole("button", { name: "Verify GSTIN" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Verify GSTIN" }));
     fireEvent.change(screen.getByLabelText(/^GSTIN/), { target: { value: "07AAAAA0000A1Z5" } });
     fireEvent.click(lastButtonNamed("Verify GSTIN"));
 
@@ -114,7 +114,7 @@ describe("GstnConsole", () => {
 
   it("rejects a malformed 15-character GSTIN on the Verify GSTIN tab", () => {
     render(<GstnConsole />);
-    fireEvent.click(screen.getByRole("button", { name: "Verify GSTIN" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Verify GSTIN" }));
     // Right length, wrong structure — must not reach the external GSTN API.
     fireEvent.change(screen.getByLabelText(/^GSTIN/), { target: { value: "123456789012345" } });
     fireEvent.click(lastButtonNamed("Verify GSTIN"));

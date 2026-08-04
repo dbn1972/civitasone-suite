@@ -11,6 +11,7 @@ import { resolveContext, requireRole } from "../../shared/context.js";
 import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { isValidMobile, isValidPincode, FORMAT_ERROR_CODES } from "../contacts/format-validators.js";
 
 /**
  * Roles that may push inbound leads. Machine/integration path only: `integration_bot`
@@ -39,6 +40,15 @@ const inboundLeadBody = z.object({
     leadSource: z.string().optional(),
   }).passthrough(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((body, ctx) => {
+  // DQ-003: reject malformed inbound mobile / PIN before the lead is created.
+  const attrs = body.attributes as Record<string, unknown>;
+  if (!isValidMobile(attrs.phone)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: FORMAT_ERROR_CODES.mobile, path: ["attributes", "phone"] });
+  }
+  if (!isValidPincode(attrs.pincode)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: FORMAT_ERROR_CODES.pincode, path: ["attributes", "pincode"] });
+  }
 });
 
 export type InboundLeadBody = z.infer<typeof inboundLeadBody>;
