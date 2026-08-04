@@ -607,6 +607,9 @@ describe("an anonymous submission may only ever update a row THIS path created",
   it("does not reach a lead captured through a DIFFERENT form of the same tenant", async () => {
     // Both are form-originated, so this is genuinely one prospect for the tenant and the
     // update is legitimate — the guard is about origin, not about which form.
+    // LM-006: capture_form_id is now a protected system field: once set it cannot be
+    // changed. The row stays attributed to form A, but UTM/attribution updates still
+    // apply (they come through the update path without touching capture_form_id).
     const formA = await seedForm();
     const formB = await seedForm();
     const email = `crossform-${randomUUID()}@example.gov.in`;
@@ -614,11 +617,12 @@ describe("an anonymous submission may only ever update a row THIS path created",
     await submit(formA.formKey, { name: "Cross Form", email, utm: { source: "a" } });
     await submit(formB.formKey, { name: "Cross Form", email, utm: { source: "b" } });
 
-    // One row, now attributed to form B.
-    expect(await leadsForForm(formA.id)).toHaveLength(0);
-    const onB = await leadsForForm(formB.id);
-    expect(onB).toHaveLength(1);
-    expect(onB[0]?.utmSource).toBe("b");
+    // The row retains its original capture_form_id (form A) because the trigger
+    // prevents changing the system field. UTM attribution is updated to "b".
+    const onA = await leadsForForm(formA.id);
+    expect(onA).toHaveLength(1);
+    expect(onA[0]?.utmSource).toBe("b");
+    expect(await leadsForForm(formB.id)).toHaveLength(0);
   });
 
   it("drops a phone-only submission whose deterministic id is an inactive row", async () => {
