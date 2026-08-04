@@ -59,6 +59,44 @@ export const COMMANDS = {
    * Payload: { tenantId, fieldName }.
    */
   deleteLeadFieldRule: "crm.lead_field_rule.delete",
+  /**
+   * Register a public lead-capture web form (LM-002).
+   * Payload: { id, tenantId, formKey, name, enabled, requireConsent, allowedOrigins,
+   * defaultLeadSource?, campaignId?, maxPerMinute, actorId }.
+   * Fires when an admin POSTs a capture form. `formKey` is always server-generated.
+   */
+  createLeadCaptureForm: "crm.lead_capture_form.create",
+  /**
+   * Amend a public lead-capture form (LM-002).
+   * Payload: { id, tenantId, changed: {...}, actorId }. `formKey` is NOT amendable —
+   * rotating it is a create + delete so the old URL stops working deliberately.
+   */
+  updateLeadCaptureForm: "crm.lead_capture_form.update",
+  /** Remove a public lead-capture form so its URL 404s (LM-002). Payload: { id, tenantId }. */
+  deleteLeadCaptureForm: "crm.lead_capture_form.delete",
+  /**
+   * A submission from a PUBLIC, UNAUTHENTICATED web form (LM-002).
+   *
+   * Payload: { contactId, formId, tenantId, name, email?, phone?, company?, city?,
+   * designation?, consent, consentDate, leadSource, utm: {...}, campaignId? }.
+   *
+   * Deliberately NO formKey: the key is a bearer secret in a URL, and the consumer has
+   * `formId` for everything it needs. Keeping it off the envelope keeps it out of queue
+   * storage and out of every consumer's logs.
+   *
+   * This is the ONLY crm command whose producer is an anonymous caller, and the only
+   * one carrying PII straight off the wire — its consumer is therefore the only place
+   * allowed to trust it, and only after zod has already parsed it at the route.
+   *
+   * `contactId` is derived deterministically from the tenant + form key + normalised
+   * email/phone, so a phone-only prospect (who has no email blind index to match on)
+   * still converges on one row. `messageId` is RANDOM per submission on purpose: a
+   * deterministic one made the endpoint permanently idempotent for that prospect, so a
+   * return visit through a new campaign was swallowed by `markProcessed` and its
+   * attribution silently lost. Convergence is the consumer's create-or-update, not
+   * message deduplication.
+   */
+  publicLeadCapture: "crm.lead.public_capture",
   createCustomField: "crm.custom_field.create",
   updateCustomField: "crm.custom_field.update",
   deleteCustomField: "crm.custom_field.delete",
@@ -142,6 +180,27 @@ export const EVENTS = {
   leadFieldRuleUpserted: "crm.lead_field_rule.upserted",
   /** A lead field rule was removed; the field reverts to built-in behaviour (LM-001). */
   leadFieldRuleDeleted: "crm.lead_field_rule.deleted",
+  /**
+   * A public lead-capture form was registered (LM-002).
+   * Payload: { formId, name, enabled, requireConsent, maxPerMinute } — NEVER the
+   * formKey. The key is a bearer secret in a URL; broadcasting it to every downstream
+   * consumer (and into their logs) would defeat the point of generating it server-side.
+   * MUST stay distinct from COMMANDS.createLeadCaptureForm or the consumer would
+   * re-consume its own event as a fresh command.
+   */
+  leadCaptureFormCreated: "crm.lead_capture_form.created",
+  /** A public lead-capture form was amended (LM-002). Payload: { formId, changed }. */
+  leadCaptureFormUpdated: "crm.lead_capture_form.updated",
+  /** A public lead-capture form was removed; its URL now 404s (LM-002). */
+  leadCaptureFormDeleted: "crm.lead_capture_form.deleted",
+  /**
+   * A lead was created or updated from a public web form, with attribution (LM-002).
+   *
+   * Payload: { contactId, formId, outcome: 'created'|'updated', leadSource, consent,
+   * utm: {...}, campaignId? } — attribution identifiers only, NEVER the submitted
+   * name/email/phone. Consumed by analytics-service for campaign ROI.
+   */
+  publicLeadCaptured: "crm.lead.public_captured",
   customFieldCreated: "crm.custom_field.created",
   customFieldUpdated: "crm.custom_field.updated",
   customFieldDeleted: "crm.custom_field.deleted",

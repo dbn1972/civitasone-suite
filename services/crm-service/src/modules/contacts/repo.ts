@@ -179,6 +179,117 @@ export async function bulkInsertRow(tx: Writer, row: ContactInsert): Promise<"in
   return res.length > 0 ? "inserted" : "skipped";
 }
 
+/**
+ * Resolve an existing contact by email, INSIDE the caller's transaction.
+ *
+ * Used by the public lead-capture consumer (LM-002) to decide create vs update. It takes
+ * the tx rather than using `scopedRead` on purpose: the lookup and the write that follows
+ * must see one snapshot under one RLS scope, otherwise the consumer could resolve a row
+ * in a separate transaction and then fail to update it.
+ *
+ * Matches on the blind index, not the ciphertext — `email` is AES-GCM with a random IV
+ * per row, so two encryptions of the same address never compare equal. `blindIndex()`
+ * trims + lowercases before the HMAC, so casing and stray whitespace still dedupe.
+ */
+export async function findIdByEmail(tx: Writer, tenantId: string, email: string): Promise<string | null> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.emailIdx, blindIndex(email))))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Resolve an existing CAPTURE-FORM-ORIGINATED, ACTIVE contact by email, inside the
+ * caller's transaction. This is the ONLY lookup the ANONYMOUS public lead-capture path
+ * (LM-002) may use to pick an update target.
+ *
+ * `findIdByEmail` above is deliberately left alone — authenticated callers (merge,
+ * dedupe, import) legitimately need to find ANY row with an address. But the form key
+ * lives in the tenant's public web page, so on the public path it must be treated as
+ * public knowledge. With `findIdByEmail` there, a stranger holding the key plus a
+ * victim's email could rewrite that victim's name/phone/company/city/designation and
+ * all of their attribution — and, because the capture consumer only ever asserts
+ * marketing consent, could stamp `marketing_consent = true` with a server-generated
+ * date on a person who never gave consent or explicitly declined. That is consent
+ * forgery under the DPDP Act, not a dedupe convenience.
+ *
+ * The two extra predicates are what close it:
+ *   * `capture_form_id IS NOT NULL` — the row must itself have arrived through a public
+ *     form. Contacts created by the authenticated UI, bulk import or deal conversion are
+ *     out of reach of the anonymous path entirely.
+ *   * `status = 'active'` — a soft-deleted contact must not be resurrected and rewritten
+ *     by an anonymous caller. Un-deleting is an authenticated, audited decision.
+ *
+ * Matching is on the blind index for the same reason as `findIdByEmail`: `email` is
+ * AES-GCM with a per-row IV, so ciphertext never compares equal.
+ */
+export async function findCaptureFormLeadIdByEmail(
+  tx: Writer,
+  tenantId: string,
+  email: string,
+): Promise<string | null> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(
+      eq(contacts.tenantId, tenantId),
+      eq(contacts.emailIdx, blindIndex(email)),
+      sql`${contacts.captureFormId} IS NOT NULL`,
+      sql`${contacts.status} = 'active'`,
+    ))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/** Tenant-scoped existence check on the caller's transaction (see findIdByEmail). */
+export async function idExistsInTx(tx: Writer, tenantId: string, id: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, id)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Narrow variant of {@link idExistsInTx} for the ANONYMOUS public capture path: the id
+ * must exist AND belong to an active, form-originated row.
+ *
+ * A separate function rather than extra params on `idExistsInTx`, because widening the
+ * existing one would silently change every authenticated caller's semantics. The
+ * deterministic contact id the public route derives is guessable by anyone who knows the
+ * form key and the prospect's identity, so this fallback needs exactly the same
+ * form-origin and liveness guard as the email lookup — otherwise it is a second door
+ * into the same consent-forgery vector.
+ */
+export async function captureFormLeadIdExistsInTx(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(
+      eq(contacts.tenantId, tenantId),
+      eq(contacts.id, id),
+      sql`${contacts.captureFormId} IS NOT NULL`,
+      sql`${contacts.status} = 'active'`,
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Does ANY row in this tenant hold this email — regardless of origin or status?
+ *
+ * The public capture consumer needs this to tell "brand new prospect" from "collides
+ * with a contact the anonymous path may not touch". In the latter case it must neither
+ * update (consent forgery) nor insert (the partial unique index over
+ * (tenant_id, email_idx) would abort the transaction), so it needs to know before it
+ * writes. Returns a boolean only — no id, nothing that could become an oracle.
+ */
+export async function emailExistsInTx(tx: Writer, tenantId: string, email: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.emailIdx, blindIndex(email))))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function update(tx: Writer, id: string, tenantId: string, patch: Partial<ContactInsert>, actorId: string): Promise<void> {
   await (tx as typeof db).update(contacts)
     .set({ ...withEmailIdx(patch), updatedAt: new Date(), updatedBy: actorId, version: sql`${contacts.version} + 1` })
