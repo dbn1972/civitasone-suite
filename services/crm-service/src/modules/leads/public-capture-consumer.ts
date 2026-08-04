@@ -60,6 +60,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
+import { allocateLeadNo } from "../../shared/numbering.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as contactRepo from "../contacts/repo.js";
 import type { ContactInsert } from "../contacts/schema.js";
@@ -140,7 +141,10 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 function attributionOf(p: PublicLeadCapturePayload): Partial<ContactInsert> {
   return {
     leadSource: p.leadSource,
-    captureFormId: p.formId,
+    // captureFormId is deliberately NOT included here — it is set only on INSERT.
+    // The system-field protection trigger (LM-006) prevents changing it once set,
+    // and the business rule is that the FIRST form that created the lead is its
+    // origin. Subsequent forms update attribution (UTM, campaign) but not origin.
     ...(p.campaignId !== undefined ? { campaignId: p.campaignId } : {}),
     ...(p.utm.source !== undefined ? { utmSource: p.utm.source } : {}),
     ...(p.utm.medium !== undefined ? { utmMedium: p.utm.medium } : {}),
@@ -271,18 +275,23 @@ export function registerPublicLeadCaptureConsumer(queue: Queue): void {
             msg.actorId,
           );
         } else {
+          // LM-006: allocate gapless lead reference number inside the create transaction.
+          const leadNo = await allocateLeadNo(tx, p.tenantId);
           await contactRepo.insert(tx, {
             id: p.contactId,
             tenantId: p.tenantId,
             name: p.name,
             ...identityOf(p),
             ...attributionOf(p),
+            // captureFormId set only on INSERT — the trigger protects it from change.
+            captureFormId: p.formId,
             // A web-form lead starts at the top of the funnel. Only set on INSERT.
             leadStatus: "new",
             status: "active",
             createdBy: msg.actorId,
             updatedBy: msg.actorId,
             version: 1,
+            leadNo,
           });
         }
 

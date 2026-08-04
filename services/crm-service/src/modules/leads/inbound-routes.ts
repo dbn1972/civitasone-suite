@@ -28,7 +28,7 @@ import { isValidMobile, isValidPincode, FORMAT_ERROR_CODES } from "../contacts/f
 const INBOUND_ROLES = ["crm_admin", "super_admin", "tenant_admin", "integration_bot"];
 
 const inboundLeadBody = z.object({
-  channel: z.enum(["email", "telephony", "chatbot", "whatsapp", "partner_api"]),
+  channel: z.enum(["email", "telephony", "chatbot", "whatsapp", "partner_api", "campaign"]),
   source: z.string().min(1, "source is required"),
   attributes: z.object({
     name: z.string().optional(),

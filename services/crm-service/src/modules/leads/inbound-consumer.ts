@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { allocateLeadNo } from "../../shared/numbering.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as contactRepo from "../contacts/repo.js";
 import { autoAssign } from "../assignment/consumer.js";
@@ -66,6 +67,11 @@ export function registerInboundCaptureConsumer(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
+        // LM-005: persist the capture channel and metadata
+        captureChannel: payload.channel,
+        captureMetadata: payload.metadata,
+        // LM-006: allocate gapless lead reference number
+        leadNo: await allocateLeadNo(tx, msg.tenantId),
       });
 
       if (outcome === "inserted") {
