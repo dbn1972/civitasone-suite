@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
+import { allocateLeadNo } from "../../shared/numbering.js";
 import * as repo from "./repo.js";
 import { invalidateDashboard } from "../dashboard/queries.js";
 import { buildView } from "./commands.js";
@@ -27,6 +28,8 @@ export function registerContactConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
         return;
       }
+      // LM-006: allocate gapless lead reference number inside the same transaction.
+      const leadNo = await allocateLeadNo(tx, p.tenantId);
       await repo.insert(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         email: p.email, phone: p.phone, company: p.company,
@@ -37,9 +40,10 @@ export function registerContactConsumers(queue: Queue): void {
         tags: p.tags, marketingConsent: p.marketingConsent,
         consentDate: p.consentDate, lastActivityAt: p.lastActivityAt ? new Date(p.lastActivityAt) : null,
         status: p.status, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+        leadNo,
       });
-      await emit(tx, msg, EVENTS.contactCreated, { contactId: p.id, name: p.name }, "create", p.id);
-      await emit(tx, msg, EVENTS.leadCreated, { contactId: p.id, name: p.name, leadSource: p.leadSource, leadStatus: p.leadStatus }, "lead_create", p.id);
+      await emit(tx, msg, EVENTS.contactCreated, { contactId: p.id, name: p.name, leadNo }, "create", p.id);
+      await emit(tx, msg, EVENTS.leadCreated, { contactId: p.id, name: p.name, leadSource: p.leadSource, leadStatus: p.leadStatus, leadNo }, "lead_create", p.id);
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
@@ -169,6 +173,8 @@ export function registerContactConsumers(queue: Queue): void {
         const c = p.contacts[i]!;
         const id = randomUUID();
         const view = buildView(id, ctx, c);
+        // LM-006: allocate inside the per-row savepoint so a failed row does not
+        // consume a number. Each successful insert gets its own gapless lead_no.
         const row = {
           id, tenantId: p.tenantId, name: view.name,
           email: view.email, phone: view.phone, company: view.company,
@@ -179,12 +185,17 @@ export function registerContactConsumers(queue: Queue): void {
           tags: view.tags, marketingConsent: view.marketingConsent,
           consentDate: view.consentDate, lastActivityAt: null,
           status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+          leadNo: undefined as string | undefined,
         };
         try {
           // Savepoint per row so an unexpected error rolls back only this row,
           // not the whole batch. onConflictDoNothing handles the dup case
           // without raising, so the common path needs no rollback.
-          const outcome = await tx.transaction((sp) => repo.bulkInsertRow(sp, row));
+          const outcome = await tx.transaction(async (sp) => {
+            const leadNo = await allocateLeadNo(sp, p.tenantId);
+            row.leadNo = leadNo;
+            return repo.bulkInsertRow(sp, { ...row, leadNo });
+          });
           if (outcome === "inserted") inserted++;
           else {
             skipped++;

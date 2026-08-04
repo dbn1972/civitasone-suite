@@ -14782,8 +14782,8 @@ paths:
       summary: Capture a lead from an automated channel
       description: |
         Machine/integration entry point (LM-005). Queues a lead captured by email,
-        telephony, chatbot, whatsapp or a partner API and answers 202 with the
-        `contactId` the consumer will write.
+        telephony, chatbot, whatsapp, a partner API, or a campaign channel and answers
+        202 with the `contactId` the consumer will write.
 
         This path applies NO mandatory-field enforcement — an automated channel cannot
         be asked to fill in fields the caller never sent. That is why it is restricted
@@ -14803,7 +14803,7 @@ paths:
               properties:
                 channel:
                   type: string
-                  enum: [email, telephony, chatbot, whatsapp, partner_api]
+                  enum: [email, telephony, chatbot, whatsapp, partner_api, campaign]
                 source:
                   type: string
                   minLength: 1

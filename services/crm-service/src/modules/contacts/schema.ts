@@ -72,6 +72,12 @@ export const contacts = crmSchema.table("contacts", {
   campaignId: uuid("campaign_id"),
   /** The crm.lead_capture_forms row this lead arrived through, when it was a web form. */
   captureFormId: uuid("capture_form_id"),
+  /** LM-005: channel the lead was captured through (email, telephony, chatbot, whatsapp, partner_api, campaign). */
+  captureChannel: varchar("capture_channel", { length: 24 }),
+  /** LM-005: arbitrary metadata from the capture channel (campaign ids, UTM overrides, etc.). */
+  captureMetadata: jsonb("capture_metadata").$type<Record<string, unknown>>(),
+  /** LM-006: unique gapless lead reference number, e.g. LEAD/2026-27/000001. */
+  leadNo: varchar("lead_no", { length: 32 }),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
