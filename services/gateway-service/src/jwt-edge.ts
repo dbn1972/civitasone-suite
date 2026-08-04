@@ -24,8 +24,17 @@ import { configValue } from "./runtime-config.js";
 
 const log = pino({ name: "gateway-jwt-edge" });
 
-/** Routes that skip JWT edge verification (login, refresh, public install). */
-const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install", "/api/v1/careers"];
+/**
+ * Routes that skip JWT edge verification (login, refresh, public install, careers apply,
+ * LM-002 public lead capture). Must stay in step with PUBLIC_PREFIXES in app.ts —
+ * a path public there but not here would be 401'd by this hook instead.
+ */
+const PUBLIC_PREFIXES = [
+  "/api/identity",
+  "/api/v1/install",
+  "/api/v1/careers",
+  "/api/v1/crm/public",
+];
 
 /**
  * Fastify preHandler — verifies the JWT signature at the gateway edge.

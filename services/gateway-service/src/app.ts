@@ -40,8 +40,20 @@ const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "
  * SEC-3: sync/devices were REMOVED from this list — they carry tenant data and
  * must be authenticated at the edge. Only auth-bootstrap (identity login/refresh)
  * and the first-run installer remain public.
+ *
+ * `/api/v1/crm/public` is LM-002 public lead capture: a prospect filling in a web form
+ * has no token by definition. Kept as narrow as the requirement allows — it is the
+ * `public` sub-tree of the CRM prefix, NOT `/api/v1/crm`, so no authenticated CRM route
+ * loses its edge check. The upstream still resolves the tenant from a 64-hex form key,
+ * rate-limits per IP and per tenant, and enforces consent; see
+ * crm-service/src/modules/leads/public-routes.ts for the threat model.
  */
-const PUBLIC_PREFIXES = ["/api/identity", "/api/v1/install", "/api/v1/careers"];
+const PUBLIC_PREFIXES = [
+  "/api/identity",
+  "/api/v1/install",
+  "/api/v1/careers",
+  "/api/v1/crm/public",
+];
 
 /** Verify the internal service-to-service secret (timing-safe). */
 function verifyInternalSecret(req: FastifyRequest): boolean {
@@ -89,6 +101,21 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     if (typeof v === "string") headers[h] = v;
   }
   if (!headers["x-correlation-id"]) headers["x-correlation-id"] = req.id;
+
+  /**
+   * Client IP, for upstreams that must rate-limit an UNAUTHENTICATED caller (crm-service's
+   * public lead-capture endpoint, LM-002). Without this every anonymous submission looks
+   * to the upstream like it came from the gateway, so a per-IP budget degrades into one
+   * shared counter — and a shared counter is a denial-of-service weapon: one attacker
+   * burns the whole tenant's budget.
+   *
+   * SET, not appended. `x-forwarded-for` is deliberately absent from FORWARD_HEADERS, so
+   * whatever a client sent is already discarded; writing exactly one entry means the
+   * header an upstream reads contains only the address the gateway itself observed and
+   * nothing a caller can influence. Upstreams that consult it must trust exactly one hop
+   * (TRUSTED_PROXY_HOPS=1) and read the LAST entry.
+   */
+  headers["x-forwarded-for"] = req.ip;
 
   // Defense-in-depth: ensure bypass headers never reach upstream regardless of FORWARD_HEADERS.
   for (const h of STRIP_HEADERS) {

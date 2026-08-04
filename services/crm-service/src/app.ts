@@ -20,6 +20,8 @@ import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
 import { completenessRoutes } from "./modules/leads/completeness-route.js";
 import { lifecycleRoutes } from "./modules/leads/lifecycle-routes.js";
 import { leadFieldRuleRoutes } from "./modules/leads/field-rules-routes.js";
+import { leadCaptureFormRoutes } from "./modules/leads/capture-forms-routes.js";
+import { publicLeadCaptureRoutes } from "./modules/leads/public-routes.js";
 import { hierarchyRoutes } from "./modules/accounts/hierarchy-routes.js";
 import { rolesRoutes } from "./modules/contacts/roles-routes.js";
 import { identityRoutes } from "./modules/contacts/identity-routes.js";
@@ -67,6 +69,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lifecycleRoutes);
   // LM-001: per-tenant mandatory/weighted lead fields, enforced on manual capture.
   await app.register(leadFieldRuleRoutes);
+  // LM-002: admin CRUD over the public form registry (crm_admin / tenant_admin / super_admin).
+  await app.register(leadCaptureFormRoutes);
+  // LM-002: the ONE unauthenticated write in this service. Registered last among the
+  // lead routes and kept in its own file so the whole anonymous surface is auditable in
+  // one place — see public-routes.ts for the threat model.
+  await app.register(publicLeadCaptureRoutes);
   await app.register(hierarchyRoutes);
   await app.register(rolesRoutes);
   await app.register(identityRoutes);

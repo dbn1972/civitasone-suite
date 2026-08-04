@@ -15029,6 +15029,324 @@ paths:
       security:
         - bearerAuth: []
 
+  /v1/crm/lead-capture-forms:
+    get:
+      operationId: listLeadCaptureForms
+      tags: [CRM]
+      summary: List the tenant's public lead-capture forms
+      description: |
+        Returns every capture form for the caller's tenant, INCLUDING each `formKey` —
+        an admin cannot embed a form without it.
+
+        Admin-only, unlike `/v1/crm/lead-field-rules` which any CRM user may read. Every
+        row here is a live credential for an unauthenticated write endpoint plus the
+        policy governing it, so a reader could hand the key to anyone.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      responses:
+        "200":
+          description: The tenant's capture forms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeadCaptureForm"
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createLeadCaptureForm
+      tags: [CRM]
+      summary: Register a public lead-capture form (LM-002)
+      description: |
+        Queues creation of a capture form and returns the server-generated `formKey`
+        once, alongside the standard Accepted envelope. The public submission URL is
+        `POST /v1/crm/public/leads/{formKey}`.
+
+        `formKey` is NOT accepted in the request body — a client-chosen key would be
+        guessable, and the key is the only credential the public endpoint has, so a
+        guessable key means anyone can post leads into any tenant. Sending one is a 400.
+
+        Defaults are the safe ones: `enabled: true`, `requireConsent: true` (DPDP Act
+        2023), `allowedOrigins: []`, `maxPerMinute: 10`.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadCaptureFormRequest"
+      responses:
+        "202":
+          description: Create command queued; the minted form key is returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadCaptureFormAccepted"
+        "400":
+          description: |
+            Validation error — missing `name`, an unknown field (including a supplied
+            `formKey` or `tenantId`), a bare-hostname or wildcard origin, `maxPerMinute`
+            outside 1–600, or a non-uuid `campaignId`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/crm/lead-capture-forms/{id}:
+    patch:
+      operationId: updateLeadCaptureForm
+      tags: [CRM]
+      summary: Amend a public lead-capture form
+      description: |
+        Partial update — only the fields supplied are changed. An empty body is a 400,
+        not a no-op 202.
+
+        `formKey` is not amendable. Rotating a key is a create + delete, so the old URL
+        stops working deliberately rather than a live form silently changing address.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadCaptureFormRequest"
+      responses:
+        "202":
+          description: Update command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error — empty patch, unknown field, or non-uuid `id`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: |
+            `NOT_FOUND` — no such form in THIS tenant. Another tenant's form id is a 404,
+            never a 202.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+    delete:
+      operationId: deleteLeadCaptureForm
+      tags: [CRM]
+      summary: Remove a public lead-capture form
+      description: |
+        Hard delete, which is the one place this service diverges from
+        "DELETE = soft-delete". A capture form is not user data; it is a live credential
+        on a public endpoint. A `deleted_at` row would keep the URL resolvable unless
+        every read remembered to filter it, and the failure mode of forgetting is an
+        endpoint an admin believes is closed but which still accepts leads. Leads already
+        captured through the form are untouched.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Delete command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a UUID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no such form in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/public/leads/{formKey}:
+    post:
+      operationId: submitPublicLead
+      tags: [CRM]
+      summary: Submit a lead from a public web form (LM-002, UNAUTHENTICATED)
+      description: |
+        The only unauthenticated write in crm-service. A prospect's browser (or a
+        tenant's server-side form handler) posts here; the lead is created or updated
+        asynchronously and its attribution recorded.
+
+        **No bearer token.** The 64-hex `formKey` in the path is the only credential, and
+        it is also what resolves the tenant — so there is no header or body field that can
+        redirect the write. The body is strict: any unknown field (including `tenantId`,
+        `ownerId`, `leadStatus` or `consentDate`) is a 400.
+
+        **Create-or-update.** A submission carrying an email that already exists in the
+        tenant updates that lead and refreshes its attribution instead of creating a
+        duplicate. Identity fields are only overwritten when supplied, `leadStatus` is
+        never downgraded, and consent is never revoked by a later submission.
+
+        **Consent.** When the form sets `requireConsent`, a submission without
+        `consent: true` is refused 422 `CONSENT_REQUIRED` and nothing is written.
+        `consent_date` is stamped server-side; there is no client-supplied consent date.
+
+        **Enumeration.** Unknown, malformed, disabled and deleted form keys all answer
+        one identical 404 `NOT_FOUND` / "form not found", so the endpoint cannot be used
+        to discover which keys — or which tenants — exist.
+
+        **Rate limiting.** Two fixed 60s windows: per (form, client IP), bounded by the
+        form's `maxPerMinute`, and a per-tenant ceiling a distributed flood cannot dodge
+        by rotating IPs. Exceeding either is 429 `RATE_LIMITED`. The limiter FAILS CLOSED:
+        if it cannot answer, the submission is refused rather than admitted.
+
+        **Response.** `{ status, correlationId }` and nothing else — no contact id, no
+        tenant id, no echo of the submitted values, so the endpoint cannot be used as an
+        oracle for whether an address is already a lead.
+      parameters:
+        - name: formKey
+          in: path
+          required: true
+          description: |
+            Server-generated form key, 64 lowercase hex characters. Never client-chosen.
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{64}$"
+        - name: Origin
+          in: header
+          required: false
+          description: |
+            Sent by browsers on cross-origin posts. When the form configures
+            `allowedOrigins`, an exact match is required and a request with no Origin is
+            refused. An empty allowlist accepts any origin, because a server-side post
+            carries no Origin header at all.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Max 16 KiB; larger payloads are rejected 413 before being buffered.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicLeadSubmission"
+      responses:
+        "202":
+          description: |
+            Submission accepted. Also returned for a submission caught by the honeypot,
+            which is silently discarded — a distinct rejection would teach a bot to omit
+            the field.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, correlationId]
+                properties:
+                  status:
+                    type: string
+                    enum: [accepted]
+                  correlationId:
+                    type: string
+        "400":
+          description: |
+            `VALIDATION_FAILED` — a malformed or over-long value, or any unknown field.
+            String bounds: `name` 1–200, `email` ≤320, `phone` 4–32, `company` ≤200,
+            `city` ≤100, `designation` ≤120, `source` ≤64, each `utm.*` ≤128.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "403":
+          description: |
+            `ORIGIN_NOT_ALLOWED` — the `Origin` header is absent from, or not present in,
+            the form's `allowedOrigins`. Distinct from the 404 on purpose: it is only
+            reachable by a caller who already holds a valid key, so it leaks nothing,
+            and a 404 would send a tenant's own web developer hunting for a missing form
+            instead of a misconfigured origin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: |
+            `NOT_FOUND` / "form not found" — one neutral response for an unknown key, a
+            malformed key, a disabled form and a deleted form. Deliberately
+            indistinguishable; see the description.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Request body exceeded the 16 KiB cap
+        "422":
+          description: |
+            `CONSENT_REQUIRED` — the form requires explicit marketing consent (DPDP Act
+            2023) and the submission did not carry `consent: true`. 422 rather than 400
+            because the payload is well formed; it is the lawful basis for processing
+            that is missing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: |
+            `RATE_LIMITED` — the per-(form, IP) budget or the per-tenant ceiling for this
+            60s window is spent, OR the rate limiter itself is unavailable and the
+            endpoint failed closed. The message distinguishes the two for an operator
+            without telling a caller which budget it hit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -21753,6 +22071,231 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    CreateLeadCaptureFormRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      description: |
+        Note the absence of `formKey` and `tenantId`. Both are server-derived; supplying
+        either is a 400, not a silently ignored field.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Admin-facing label, e.g. "Contact us — homepage"
+        enabled:
+          type: boolean
+          description: Defaults true. When false the public URL answers the neutral 404.
+        requireConsent:
+          type: boolean
+          description: |
+            Defaults TRUE (DPDP Act 2023) so a form created without a view on consent is
+            the safe one. When true, a submission without `consent: true` is refused 422.
+        allowedOrigins:
+          type: array
+          maxItems: 50
+          description: |
+            Exact scheme+host origins, as a browser sends them. Empty means "any origin",
+            because a server-side form post carries no Origin header at all. A bare
+            hostname or `*` is rejected.
+          items:
+            type: string
+            maxLength: 255
+            pattern: "^https?://[^/\\s]+$"
+        defaultLeadSource:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Fallback `leadSource` when a submission does not declare one
+        campaignId:
+          type: string
+          format: uuid
+          description: |
+            Campaign this form is permanently tied to. A submission's own `campaignId`
+            takes precedence, so one form can serve several campaigns via its URL.
+        maxPerMinute:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: |
+            Per (form, client IP) budget in a 60s fixed window. Defaults to 10. Bounds
+            mirror the DB CHECK: a form cannot be configured into an unlimited open
+            relay, nor to zero (which would 429 every genuine prospect while looking
+            like a working form).
+
+    UpdateLeadCaptureFormRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: |
+        Every field optional, at least one required. Same fields as
+        `CreateLeadCaptureFormRequest`; `formKey` remains unamendable.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        enabled:
+          type: boolean
+        requireConsent:
+          type: boolean
+        allowedOrigins:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 255
+        defaultLeadSource:
+          type: string
+          maxLength: 64
+        campaignId:
+          type: string
+          format: uuid
+        maxPerMinute:
+          type: integer
+          minimum: 1
+          maximum: 600
+
+    LeadCaptureForm:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        formKey:
+          type: string
+          description: |
+            The public submission credential, 64 lowercase hex characters. Returned to
+            admins because they need it to embed the form; deliberately NOT carried on
+            any emitted domain event, and never logged.
+        name:
+          type: string
+        enabled:
+          type: boolean
+        requireConsent:
+          type: boolean
+        allowedOrigins:
+          type: array
+          items:
+            type: string
+        defaultLeadSource:
+          type: string
+          nullable: true
+        campaignId:
+          type: string
+          format: uuid
+          nullable: true
+        maxPerMinute:
+          type: integer
+        version:
+          type: integer
+          description: Optimistic-lock version
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LeadCaptureFormAccepted:
+      allOf:
+        - $ref: "#/components/schemas/AcceptedResponse"
+        - type: object
+          required: [formKey]
+          properties:
+            formKey:
+              type: string
+              pattern: "^[0-9a-f]{64}$"
+              description: |
+                Returned ONCE, here. The public URL is
+                `/v1/crm/public/leads/{formKey}`.
+
+    PublicLeadSubmission:
+      type: object
+      required: [name]
+      additionalProperties: false
+      description: |
+        Body of an UNAUTHENTICATED submission. `additionalProperties: false` is
+        load-bearing, not tidiness: it is what makes `{"tenantId": "..."}` a 400 rather
+        than a silently ignored — or honoured — override. There is no `consentDate`
+        field, because the server stamps it.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: |
+            Stored AES-256-GCM encrypted with a keyed blind index, which is also the
+            tenant's dedupe key for create-or-update.
+        phone:
+          type: string
+          minLength: 4
+          maxLength: 32
+          description: Stored AES-256-GCM encrypted. Matched on digits only.
+        company:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          maxLength: 100
+        designation:
+          type: string
+          maxLength: 120
+        consent:
+          type: boolean
+          description: |
+            Explicit marketing consent (DPDP Act 2023). Never defaulted to true. Optional
+            in the schema only so a form that requires it can answer 422
+            `CONSENT_REQUIRED` rather than a generic 400.
+        source:
+          type: string
+          maxLength: 64
+          description: |
+            Channel label. Precedence: this value, then the form's `defaultLeadSource`,
+            then `public_form` — so every captured lead can be attributed to a channel.
+        campaignId:
+          type: string
+          format: uuid
+          description: Takes precedence over the form's own `campaignId`
+        utm:
+          type: object
+          additionalProperties: false
+          description: |
+            Standard UTM parameters, stored verbatim as varchar(128). Opaque ad-platform
+            identifiers, so they are not parsed or normalised; the length cap is what
+            stops an anonymous caller using them as free storage. Bound as query
+            parameters, never concatenated into SQL.
+          properties:
+            source:
+              type: string
+              maxLength: 128
+            medium:
+              type: string
+              maxLength: 128
+            campaign:
+              type: string
+              maxLength: 128
+            term:
+              type: string
+              maxLength: 128
+            content:
+              type: string
+              maxLength: 128
+        _hp:
+          type: string
+          maxLength: 200
+          description: |
+            Honeypot. A field no human sees and no real form fills in. Filling it yields
+            the normal 202 and the submission is discarded.
 
     LeadCompleteness:
       type: object

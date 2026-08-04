@@ -21,6 +21,8 @@ import { registerLeadScoringConsumers } from "./modules/leads/consumer.js";
 import { registerInboundCaptureConsumer } from "./modules/leads/inbound-consumer.js";
 import { registerLifecycleConsumer } from "./modules/leads/lifecycle-consumer.js";
 import { registerLeadFieldRuleConsumers } from "./modules/leads/field-rules-consumer.js";
+import { registerLeadCaptureFormConsumers } from "./modules/leads/capture-forms-consumer.js";
+import { registerPublicLeadCaptureConsumer } from "./modules/leads/public-capture-consumer.js";
 import { registerPipelineConsumers } from "./modules/pipelines/consumer.js";
 import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.js";
 import { registerTeamConsumers } from "./modules/teams/consumer.js";
@@ -42,6 +44,10 @@ export function registerAllConsumers(queue: Queue): void {
   registerInboundCaptureConsumer(queue);
   registerLifecycleConsumer(queue);
   registerLeadFieldRuleConsumers(queue);
+  // LM-002 — registry CRUD, and the one subscriber that applies a public submission.
+  // Without the latter the public endpoint would answer 202 and write nothing.
+  registerLeadCaptureFormConsumers(queue);
+  registerPublicLeadCaptureConsumer(queue);
   registerPipelineConsumers(queue);
   registerCustomFieldConsumers(queue);
   registerTeamConsumers(queue);

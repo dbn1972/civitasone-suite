@@ -153,6 +153,33 @@ export async function bulkInsertRow(tx: Writer, row: ContactInsert): Promise<"in
   return res.length > 0 ? "inserted" : "skipped";
 }
 
+/**
+ * Resolve an existing contact by email, INSIDE the caller's transaction.
+ *
+ * Used by the public lead-capture consumer (LM-002) to decide create vs update. It takes
+ * the tx rather than using `scopedRead` on purpose: the lookup and the write that follows
+ * must see one snapshot under one RLS scope, otherwise the consumer could resolve a row
+ * in a separate transaction and then fail to update it.
+ *
+ * Matches on the blind index, not the ciphertext — `email` is AES-GCM with a random IV
+ * per row, so two encryptions of the same address never compare equal. `blindIndex()`
+ * trims + lowercases before the HMAC, so casing and stray whitespace still dedupe.
+ */
+export async function findIdByEmail(tx: Writer, tenantId: string, email: string): Promise<string | null> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.emailIdx, blindIndex(email))))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/** Tenant-scoped existence check on the caller's transaction (see findIdByEmail). */
+export async function idExistsInTx(tx: Writer, tenantId: string, id: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: contacts.id }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, id)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function update(tx: Writer, id: string, tenantId: string, patch: Partial<ContactInsert>, actorId: string): Promise<void> {
   await (tx as typeof db).update(contacts)
     .set({ ...withEmailIdx(patch), updatedAt: new Date(), updatedBy: actorId, version: sql`${contacts.version} + 1` })

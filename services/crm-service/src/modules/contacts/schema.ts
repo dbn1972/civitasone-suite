@@ -43,6 +43,17 @@ export const contacts = crmSchema.table("contacts", {
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
   marketingConsent: boolean("marketing_consent").notNull().default(false),
   consentDate: date("consent_date"),
+  // LM-002 attribution (migration 0038). All nullable: a lead captured before
+  // LM-002, or one that arrived by phone, genuinely has no campaign attribution and
+  // inventing a placeholder would corrupt campaign ROI reporting.
+  utmSource: varchar("utm_source", { length: 128 }),
+  utmMedium: varchar("utm_medium", { length: 128 }),
+  utmCampaign: varchar("utm_campaign", { length: 128 }),
+  utmTerm: varchar("utm_term", { length: 128 }),
+  utmContent: varchar("utm_content", { length: 128 }),
+  campaignId: uuid("campaign_id"),
+  /** The crm.lead_capture_forms row this lead arrived through, when it was a web form. */
+  captureFormId: uuid("capture_form_id"),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
