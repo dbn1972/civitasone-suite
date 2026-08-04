@@ -154,6 +154,25 @@ export const COMMANDS = {
   deleteBranch: "crm.branch.delete",
   upsertEscalationRule: "crm.escalation_rule.upsert",
   deleteEscalationRule: "crm.escalation_rule.delete",
+  // ── ACM: Activity/Follow-up + Account/Contact management ──
+  /** AC-003 log a structured communication (inbound/outbound) on a subject's timeline. */
+  createCommunication: "crm.communication.create",
+  /** CM-001 create a postal address for a contact/account. */
+  createAddress: "crm.address.create",
+  /** CM-001 amend an address. */
+  updateAddress: "crm.address.update",
+  /** CM-001 remove an address. */
+  deleteAddress: "crm.address.delete",
+  /** CM-002 create a typed account-to-account relationship (group/branch/partner). */
+  createAccountRelationship: "crm.account_relationship.create",
+  /** CM-002 remove an account relationship edge. */
+  deleteAccountRelationship: "crm.account_relationship.delete",
+  /** AC-004 record a user's mailbox/calendar provider connection intent (status=pending). */
+  connectLinkedAccount: "crm.linked_account.connect",
+  /** AC-004 disconnect a linked mailbox/calendar. */
+  disconnectLinkedAccount: "crm.linked_account.disconnect",
+  /** AC-004 link an externally-synced email/meeting to a CRM record. */
+  linkSyncedItem: "crm.synced_item.link",
 } as const;
 
 export const EVENTS = {
@@ -320,6 +339,23 @@ export const EVENTS = {
   leadEscalated: "crm.lead.escalated",
   escalationRuleUpserted: "crm.escalation_rule.upserted",
   escalationRuleDeleted: "crm.escalation_rule.deleted",
+  // ── ACM events ──
+  /** AC-003 a communication was logged. Payload: { communicationId, subjectType, subjectId, direction, channel }. */
+  communicationLogged: "crm.communication.logged",
+  /** CM-001 address created/updated/deleted. Payload: { addressId, ownerType, ownerId }. */
+  addressCreated: "crm.address.created",
+  addressUpdated: "crm.address.updated",
+  addressDeleted: "crm.address.deleted",
+  /** CM-002 account relationship created/deleted. Payload: { relationshipId, fromAccountId, toAccountId, relType }. */
+  accountRelationshipCreated: "crm.account_relationship.created",
+  accountRelationshipDeleted: "crm.account_relationship.deleted",
+  /** AC-004 linked account connected/disconnected. Payload: { linkedAccountId, provider, status }. */
+  linkedAccountConnected: "crm.linked_account.connected",
+  linkedAccountDisconnected: "crm.linked_account.disconnected",
+  /** AC-004 an external email/meeting was linked to a record. Payload: { syncedItemId, subjectType, subjectId, kind }. */
+  syncedItemLinked: "crm.synced_item.linked",
+  /** AC-005 an overdue task/next-action was escalated to a manager. Payload: { subjectType, subjectId, taskKind, ruleId, ageingMinutes, overdueMinutes, recipientRole, recipientId }. */
+  taskEscalated: "crm.task.escalated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

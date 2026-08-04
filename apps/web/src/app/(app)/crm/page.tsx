@@ -21,6 +21,8 @@ const crmTiles: NavTile[] = [
 	{ title: "Assignment Directory", href: "/crm/assignment-directory" },
 	{ title: "Agent Workload", href: "/crm/agent-workload" },
 	{ title: "Escalation Rules", href: "/crm/escalation-rules" },
+	{ title: "Task Escalation", href: "/crm/task-escalation" },
+	{ title: "Connected Accounts", href: "/crm/linked-accounts" },
 ];
 
 export default function Page() {

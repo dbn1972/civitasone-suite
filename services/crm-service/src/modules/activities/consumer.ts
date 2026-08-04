@@ -26,11 +26,17 @@ export function registerActivityConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_deal");
         return;
       }
+      if (p.accountId && !(await contactRepo.accountExists(p.tenantId, p.accountId))) {
+        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        return;
+      }
       await repo.insert(tx, {
         id: p.id, tenantId: p.tenantId, actorName: p.actorName, text: p.text,
-        contactId: p.contactId, dealId: p.dealId,
+        contactId: p.contactId, dealId: p.dealId, accountId: p.accountId,
         type: p.type, subject: p.subject, status: p.status,
         dueDate: p.dueDate,
+        remindAt: p.remindAt ? new Date(p.remindAt) : null,
+        location: p.location,
         completedAt: p.completedAt ? new Date(p.completedAt) : null,
         createdBy: msg.actorId,
       });

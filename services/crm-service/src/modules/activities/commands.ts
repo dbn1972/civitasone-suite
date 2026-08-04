@@ -19,10 +19,13 @@ export async function createActivity(ctx: RequestContext, body: CreateActivityBo
     text: body.text,
     contactId: body.contactId ?? null,
     dealId: body.dealId ?? null,
+    accountId: body.accountId ?? null,
     type: body.type ?? "note",
     subject: body.subject ?? body.text.slice(0, 80),
     status: body.status ?? "open",
     dueDate: body.dueDate ?? null,
+    remindAt: body.remindAt ?? null,
+    location: body.location ?? null,
     completedAt: body.status === "completed" ? createdAt : null,
     createdAt,
   };

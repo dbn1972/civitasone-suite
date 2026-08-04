@@ -17,7 +17,7 @@ const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const roleIdParam = z.object({ id: z.string().uuid(), roleId: z.string().uuid() });
 
-const VALID_ROLES = ["decision_maker", "influencer", "champion", "end_user", "approver", "technical"] as const;
+const VALID_ROLES = ["decision_maker", "influencer", "champion", "end_user", "approver", "technical", "beneficiary", "partner", "billing_contact"] as const;
 
 const createRoleBody = z.object({
   dealId: z.string().uuid(),

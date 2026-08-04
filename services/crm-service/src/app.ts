@@ -45,6 +45,12 @@ import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
 import { sentimentRoutes } from "./modules/sentiment/routes.js";
 import { assignmentRoutes } from "./modules/assignment/routes.js";
+import { communicationRoutes } from "./modules/communications/routes.js";
+import { addressRoutes } from "./modules/addresses/routes.js";
+import { accountRelationshipRoutes } from "./modules/accounts/relationships-routes.js";
+import { integrationRoutes } from "./modules/integrations/routes.js";
+import { threeSixtyRoutes } from "./modules/contacts/three-sixty-routes.js";
+import { taskEscalationRuleRoutes } from "./modules/activities/task-escalation-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -123,6 +129,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   // P2-6: Voice-of-Customer reporting over scored interactions.
   await app.register(sentimentRoutes);
   await app.register(assignmentRoutes);
+  // ── ACM: Activity/Follow-up + Account/Contact management ──
+  await app.register(communicationRoutes);
+  await app.register(addressRoutes);
+  await app.register(accountRelationshipRoutes);
+  await app.register(integrationRoutes);
+  await app.register(threeSixtyRoutes);
+  await app.register(taskEscalationRuleRoutes);
 
   return app;
 }
