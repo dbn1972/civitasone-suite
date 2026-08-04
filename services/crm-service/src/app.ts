@@ -20,6 +20,8 @@ import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
 import { completenessRoutes } from "./modules/leads/completeness-route.js";
 import { lifecycleRoutes } from "./modules/leads/lifecycle-routes.js";
 import { leadFieldRuleRoutes } from "./modules/leads/field-rules-routes.js";
+import { leadCaptureFormRoutes } from "./modules/leads/capture-forms-routes.js";
+import { publicLeadCaptureRoutes } from "./modules/leads/public-routes.js";
 import { qualificationRoutes } from "./modules/leads/qualification-routes.js";
 import { leadScoreRuleRoutes } from "./modules/leads/score-rules-routes.js";
 import { leadReasonCodeRoutes } from "./modules/leads/reason-codes-routes.js";
@@ -48,6 +50,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+    /**
+     * Fastify's default is 100. That interacted badly with the PUBLIC lead-capture route
+     * (LM-002): a `:formKey` longer than 100 characters did not MATCH the route at all, so
+     * it fell to the not-found path and `authPlugin` — which cannot see `config.public` for
+     * an unmatched route — answered 401 instead of the uniform 404 that route promises for
+     * every malformed key. Raising the cap lets the route own the decision, and its own
+     * anchored 64-hex `FORM_KEY_PATTERN` (and zod on every other route's params) is what
+     * actually rejects an over-long value. Still bounded, so an absurd URL is cheap to
+     * refuse.
+     */
+    maxParamLength: 512,
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
@@ -74,6 +87,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lifecycleRoutes);
   // LM-001: per-tenant mandatory/weighted lead fields, enforced on manual capture.
   await app.register(leadFieldRuleRoutes);
+  // LM-002: admin CRUD over the public form registry (crm_admin / tenant_admin / super_admin).
+  await app.register(leadCaptureFormRoutes);
+  // LM-002: the ONE unauthenticated write in this service. Registered last among the
+  // lead routes and kept in its own file so the whole anonymous surface is auditable in
+  // one place — see public-routes.ts for the threat model.
+  await app.register(publicLeadCaptureRoutes);
   // LQ-001/002/004: qualification frameworks, configurable scoring + history,
   // lifecycle reason-code catalog.
   await app.register(qualificationRoutes);

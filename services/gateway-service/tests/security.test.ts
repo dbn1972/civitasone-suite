@@ -131,3 +131,54 @@ describe("FIX-00: auth rate limit", () => {
     expect([200, 401, 404, 502]).toContain(res.statusCode);
   });
 });
+
+describe("LM-002: public lead capture is reachable without a token", () => {
+  const FORM_KEY = "a".repeat(64);
+
+  it("does not 401 an anonymous POST to /api/v1/crm/public/leads/:formKey", async () => {
+    // A prospect filling in a public web form has no bearer token by definition. Before
+    // this prefix was allow-listed the gateway refused the request at the edge, so the
+    // endpoint existed but was unreachable in every real deployment.
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/crm/public/leads/${FORM_KEY}`,
+      payload: { name: "Jane Prospect", consent: true },
+    });
+    expect(res.statusCode).not.toBe(401);
+  });
+
+  it("still requires a token for the authenticated CRM routes", async () => {
+    // The allow-list is the `public` sub-tree only — /api/v1/crm itself must not open up.
+    const app = await buildApp();
+    for (const url of ["/api/v1/crm/contacts", "/api/v1/crm/lead-capture-forms"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(401);
+    }
+  });
+
+  it("forwards the observed client IP so an upstream can rate-limit per IP", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/crm/public/leads/${FORM_KEY}`,
+      payload: { name: "Jane Prospect", consent: true },
+    });
+    // Without this the upstream sees only the gateway's address, so a per-IP budget
+    // collapses into one shared counter for the whole tenant — a DoS weapon.
+    expect(lastUpstreamHeaders["x-forwarded-for"]).toBeDefined();
+  });
+
+  it("overwrites a client-supplied x-forwarded-for rather than trusting it", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/crm/public/leads/${FORM_KEY}`,
+      headers: { "x-forwarded-for": "1.2.3.4" },
+      payload: { name: "Spoofer", consent: true },
+    });
+    // A caller that could inject its own hop would mint a fresh "IP" per request and
+    // walk straight past the limiter.
+    expect(lastUpstreamHeaders["x-forwarded-for"]).not.toContain("1.2.3.4");
+  });
+});
