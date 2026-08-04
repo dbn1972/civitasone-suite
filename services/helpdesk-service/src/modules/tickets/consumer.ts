@@ -57,6 +57,27 @@ type CrmCaseOpenedPayload = {
   dealId?: string | null;
 };
 
+/** notification.inbox.convert_to_ticket command payload (foreign producer — notification-service inbox). */
+type ConvertInboxToTicketPayload = {
+  id: string;
+  tenantId: string;
+  conversationId: string;
+  subject: string;
+  priority?: "low" | "medium" | "high" | "urgent";
+  category?: string;
+};
+
+/** notification-service's "low|medium|high|urgent" onto helpdesk's "Low|Medium|High|Critical". */
+function mapInboxPriority(priority: ConvertInboxToTicketPayload["priority"]): string {
+  switch (priority) {
+    case "low": return "Low";
+    case "medium": return "Medium";
+    case "high": return "High";
+    case "urgent": return "Critical";
+    default: return "Medium";
+  }
+}
+
 /** TKT-04 — helpdesk.ticket.add_note payload. */
 type AddNotePayload = {
   id: string;
@@ -434,6 +455,49 @@ export function registerTicketConsumers(rawQueue: Queue): void {
       openedId = id;
       if (created) {
         await emit(tx, msg, EVENTS.ticketCreated, { ticketId: id, subject, source: SOURCE.crm, sourceRef: caseId }, "create", id);
+      }
+    });
+    if (openedId) {
+      const row = await repo.findById(openedId, msg.tenantId);
+      if (row) await cache.put(keyFor(msg.tenantId, openedId), row);
+      await cache.invalidateResource(msg.tenantId, RESOURCE);
+    }
+  });
+
+  // ---- notification.inbox.convert_to_ticket: inbox conversation -> ticket --
+  // notification-service's inbox "convert to ticket" action published this
+  // command with NOTHING consuming it — the POST on
+  // /v1/notification/inbox/:conversationId/convert-to-ticket always returned
+  // 202 but no ticket was ever created. Consumed here (helpdesk owns tickets),
+  // mirroring the same idempotent linked-insert path used for the
+  // telephony/crm/citizen inbound hops above: keyed on
+  // (tenant, source="email/inbox", source_ref=conversationId), so a redelivery
+  // of the same convert command yields exactly one ticket. category has no
+  // dedicated column on helpdesk.tickets, so it is preserved in typeFields.
+  queue.subscribe<ConvertInboxToTicketPayload>(CONSUMES.notificationInboxConvertToTicket, async (msg) => {
+    const p = msg.payload;
+    if (!p.conversationId || !p.subject) return; // malformed payload — nothing to convert
+    let openedId: string | null = null;
+    let created = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const res = await repo.insertLinkedIdempotent(tx, {
+        tenantId: msg.tenantId,
+        subject: p.subject,
+        description: `Converted from inbox conversation ${p.conversationId}.`,
+        priority: mapInboxPriority(p.priority),
+        status: "open",
+        source: SOURCE.emailInbox,
+        sourceRef: p.conversationId,
+        typeFields: p.category ? { category: p.category } : null,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+        version: 1,
+      });
+      openedId = res.id;
+      created = res.created;
+      if (created) {
+        await emit(tx, msg, EVENTS.ticketCreated, { ticketId: res.id, subject: p.subject, source: SOURCE.emailInbox, sourceRef: p.conversationId }, "create", res.id);
       }
     });
     if (openedId) {
