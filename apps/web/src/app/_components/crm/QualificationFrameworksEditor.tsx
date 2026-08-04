@@ -40,14 +40,19 @@ export function QualificationFrameworksEditor() {
   const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getFrameworks();
+    if (!isLive()) return;
     setFrameworks(data);
     setSource(s);
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
+  }, []);
 
   function update(idx: number, patch: Partial<QualificationFramework>) {
     setFrameworks((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));

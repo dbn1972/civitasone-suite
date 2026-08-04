@@ -14,6 +14,17 @@ export interface LoaderResult<T> {
   source: LqSource;
 }
 
+/** Canonical lead lifecycle statuses (single source of truth for LQ-003/004). */
+export const LEAD_STATUSES = [
+  "new",
+  "contacted",
+  "qualified",
+  "unqualified",
+  "disqualified",
+  "customer",
+] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
 /* ---------------------------------------------------------------- LQ-003 --- */
 
 export type Temperature = "hot" | "warm" | "cold";
@@ -22,15 +33,19 @@ export type Priority = "high" | "medium" | "low";
 export const TEMPERATURES: Temperature[] = ["hot", "warm", "cold"];
 export const PRIORITIES: Priority[] = ["high", "medium", "low"];
 
-/** Classification patch body for PATCH /v1/crm/contacts/:id/classification. */
+/**
+ * Classification patch body for PATCH /v1/crm/contacts/:id/classification.
+ * An explicit `null` means "clear this field" — the classify consumer treats
+ * null as a clear, whereas an omitted key leaves the stored value untouched.
+ */
 export interface ClassificationPatch {
-  temperature?: Temperature;
-  priority?: Priority;
-  segment?: string;
-  product?: string;
-  region?: string;
+  temperature?: Temperature | null;
+  priority?: Priority | null;
+  segment?: string | null;
+  product?: string | null;
+  region?: string | null;
   /** Minor units (paise) — already converted from rupees by the caller. */
-  expectedValueMinor?: string;
+  expectedValueMinor?: string | null;
 }
 
 export async function saveClassification(
@@ -328,13 +343,25 @@ export function reasonCodesForStatus(codes: LeadReasonCode[], targetStatus: stri
   );
 }
 
+export interface TransitionResult {
+  /** True when the backend accepted the change asynchronously (HTTP 202). */
+  accepted: boolean;
+}
+
+/**
+ * Transition a lead. `reasonCode` is omitted entirely for a governed status
+ * that has no configured reason codes (the caller supplies free-text `reason`
+ * instead) — never send a sentinel code the backend would 422-reject.
+ * Returns whether the change was accepted async (202) vs applied synchronously.
+ */
 export async function transitionLead(
   leadId: string,
-  body: { targetStatus: string; reasonCode: string; reason?: string },
-): Promise<void> {
+  body: { targetStatus: string; reasonCode?: string; reason?: string },
+): Promise<TransitionResult> {
   const res = await browserFetch(`v1/crm/leads/${leadId}/transition`, {
     method: "POST",
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  return { accepted: res.status === 202 };
 }

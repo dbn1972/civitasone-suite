@@ -11,11 +11,13 @@ import { EmptyState } from "../ds";
 import {
   getReasonCodes,
   saveReasonCodes,
+  LEAD_STATUSES,
   type LeadReasonCode,
   type LqSource,
 } from "@/lib/crm/leadQualification";
 
-const STATUS_OPTIONS = ["", "new", "contacted", "qualified", "unqualified", "disqualified", "customer"];
+// "" = applies to any status; the rest come from the shared LEAD_STATUSES list.
+const STATUS_OPTIONS = ["", ...LEAD_STATUSES];
 const cellInput = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
 export function ReasonCodesEditor() {
@@ -26,14 +28,19 @@ export function ReasonCodesEditor() {
   const [error, setError] = useState("");
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getReasonCodes();
+    if (!isLive()) return;
     setCodes(data);
     setSource(s);
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
+  }, []);
 
   function update(idx: number, patch: Partial<LeadReasonCode>) {
     setCodes((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));

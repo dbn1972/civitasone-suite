@@ -77,6 +77,7 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
           columns={[
             { key: "name", label: "Name" },
             { key: "account", label: "Organisation" },
+            { key: "phone", label: "Phone" },
             { key: "leadStatus", label: "Lead Status" },
             { key: "temperature", label: "Temperature" },
             { key: "priority", label: "Priority" },
@@ -84,6 +85,7 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
             { key: "expectedValue", label: "Expected Value", align: "right" },
             { key: "email", label: "Email" },
             { key: "lastActivity", label: "Last Activity" },
+            { key: "tags", label: "Tags" },
           ]}
           rows={tableRows}
           rowHref={(row) => (row.id ? `/crm/contacts/${row.id}` : "")}

@@ -24,9 +24,9 @@ beforeEach(() => {
 });
 
 describe("LeadTransitionControl (LQ-004)", () => {
-  it("requires a reason code, then transitions after ConfirmDialog confirmation", async () => {
+  it("requires a reason code, then transitions after ConfirmDialog confirmation (200)", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: codes, source: "api" });
-    vi.mocked(lq.transitionLead).mockResolvedValue(undefined);
+    vi.mocked(lq.transitionLead).mockResolvedValue({ accepted: false });
     render(<LeadTransitionControl leadId="l1" currentStatus="new" />);
     await waitFor(() => expect(screen.getByLabelText(/move to/i)).toBeInTheDocument());
 
@@ -37,7 +37,7 @@ describe("LeadTransitionControl (LQ-004)", () => {
     expect(lq.transitionLead).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText(/reason code/i), { target: { value: "NO_BUDGET" } });
-    fireEvent.change(screen.getByLabelText(/note/i), { target: { value: "budget cut" } });
+    fireEvent.change(screen.getByLabelText(/^note/i), { target: { value: "budget cut" } });
     fireEvent.click(screen.getByRole("button", { name: /apply status change/i }));
 
     const dialog = await screen.findByRole("alertdialog");
@@ -47,12 +47,54 @@ describe("LeadTransitionControl (LQ-004)", () => {
         targetStatus: "disqualified", reasonCode: "NO_BUDGET", reason: "budget cut",
       }),
     );
+    // 200 (sync) → concrete confirmation, not the async wording.
+    expect(await screen.findByText(/lead moved to "disqualified"/i)).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("requires a free-text note (and sends NO reasonCode) for a governed target with no configured codes", async () => {
+    vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: codes, source: "api" });
+    vi.mocked(lq.transitionLead).mockResolvedValue({ accepted: false });
+    render(<LeadTransitionControl leadId="l1" currentStatus="new" />);
+    await waitFor(() => expect(screen.getByLabelText(/move to/i)).toBeInTheDocument());
+
+    // "contacted" has no matching reason codes → note becomes required.
+    fireEvent.change(screen.getByLabelText(/move to/i), { target: { value: "contacted" } });
+    expect(screen.getByLabelText(/note \(required\)/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /apply status change/i }));
+    expect(await screen.findByText(/add a note explaining this change/i)).toBeInTheDocument();
+    expect(lq.transitionLead).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/note \(required\)/i), { target: { value: "left a voicemail" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply status change/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /confirm change/i }));
+    await waitFor(() =>
+      expect(lq.transitionLead).toHaveBeenCalledWith("l1", { targetStatus: "contacted", reason: "left a voicemail" }),
+    );
+    // Crucially, NO sentinel reasonCode was sent.
+    expect(vi.mocked(lq.transitionLead).mock.calls[0][1]).not.toHaveProperty("reasonCode");
+  });
+
+  it("shows async wording (not 'moved to') when the backend accepts with 202", async () => {
+    vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: codes, source: "api" });
+    vi.mocked(lq.transitionLead).mockResolvedValue({ accepted: true });
+    render(<LeadTransitionControl leadId="l1" currentStatus="new" />);
+    await waitFor(() => expect(screen.getByLabelText(/move to/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/move to/i), { target: { value: "disqualified" } });
+    fireEvent.change(screen.getByLabelText(/reason code/i), { target: { value: "NO_BUDGET" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply status change/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /confirm change/i }));
+    expect(await screen.findByText(/submitted — it may take a moment/i)).toBeInTheDocument();
+    expect(screen.queryByText(/lead moved to/i)).not.toBeInTheDocument();
     expect(refresh).toHaveBeenCalled();
   });
 
   it("offers a Re-open action for disqualified leads (→ new/qualified)", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: codes, source: "api" });
-    vi.mocked(lq.transitionLead).mockResolvedValue(undefined);
+    vi.mocked(lq.transitionLead).mockResolvedValue({ accepted: false });
     render(<LeadTransitionControl leadId="l1" currentStatus="disqualified" />);
     await waitFor(() => expect(screen.getByRole("heading", { name: /re-open lead/i })).toBeInTheDocument());
     const select = screen.getByLabelText(/re-open to/i);

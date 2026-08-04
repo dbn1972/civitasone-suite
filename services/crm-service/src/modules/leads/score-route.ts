@@ -125,19 +125,34 @@ export async function leadScoreRoutes(app: FastifyInstance): Promise<void> {
       correlationId,
     );
 
-    // LQ-002: record every score read in crm.lead_score_history. Wrapped in
-    // withRawTenantGuc for the same reason the read above is — crm.lead_score_history
-    // is FORCE RLS and this module talks to sqlClient directly. Best-effort: a
-    // history-write failure must not fail the score response.
+    // LQ-002: record a score read in crm.lead_score_history — but ONLY when the score
+    // actually CHANGES vs the latest recorded value. GET /score is a read and may be
+    // polled; inserting on every read would grow the table unboundedly for a score
+    // that never moves. The INSERT...SELECT...WHERE score IS DISTINCT FROM (latest)
+    // makes the skip atomic (no read-then-write race). previous_score is the last
+    // recorded score, falling back to the contact's stored score for the first read.
+    // Wrapped in withRawTenantGuc because crm.lead_score_history is FORCE RLS and this
+    // module talks to sqlClient directly. Best-effort: a write failure must not fail
+    // the score response.
     const previousScore = row.current_score == null ? null : Number(row.current_score);
     try {
       await withRawTenantGuc(sqlClient, ctx.tenantId, (tx) => tx`
         INSERT INTO crm.lead_score_history
           (tenant_id, lead_id, score, previous_score, factors, source, reason)
-        VALUES (
-          ${ctx.tenantId}, ${params.id}, ${result.score}, ${previousScore},
+        SELECT
+          ${ctx.tenantId}, ${params.id}, ${result.score},
+          COALESCE(
+            (SELECT h.score FROM crm.lead_score_history h
+             WHERE h.tenant_id = ${ctx.tenantId} AND h.lead_id = ${params.id}
+             ORDER BY h.scored_at DESC LIMIT 1),
+            ${previousScore}
+          ),
           ${JSON.stringify(result.factors ?? [])}::jsonb,
           ${result.isFallback ? "rule" : "ml"}, ${"score_read"}
+        WHERE ${result.score} IS DISTINCT FROM (
+          SELECT h2.score FROM crm.lead_score_history h2
+          WHERE h2.tenant_id = ${ctx.tenantId} AND h2.lead_id = ${params.id}
+          ORDER BY h2.scored_at DESC LIMIT 1
         )
       `);
     } catch (err) {

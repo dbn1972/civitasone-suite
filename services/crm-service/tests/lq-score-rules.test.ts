@@ -150,6 +150,21 @@ describe("GET /v1/crm/leads/:id/score-history", () => {
     expect(hist.statusCode).toBe(200);
   });
 
+  it("does not append history on a repeated read that yields the same score (LQ-002 LOW)", async () => {
+    const leadId = await createLead("Poll Lead", { email: "poll@example.com", company: "Poll Co", leadSource: "referral" });
+    // First read records a row (score changed from nothing to a value).
+    await call("GET", `/v1/crm/leads/${leadId}/score`);
+    const countRow = () =>
+      scoped(TENANT, (tx) => tx`SELECT count(*)::int AS n FROM crm.lead_score_history WHERE lead_id = ${leadId} AND tenant_id = ${TENANT}`) as unknown as Promise<Array<{ n: number }>>;
+    const after1 = (await countRow())[0]!.n;
+    expect(after1).toBeGreaterThanOrEqual(1);
+    // Two more identical reads (same features → same score) must NOT append.
+    await call("GET", `/v1/crm/leads/${leadId}/score`);
+    await call("GET", `/v1/crm/leads/${leadId}/score`);
+    const after3 = (await countRow())[0]!.n;
+    expect(after3, "identical-score reads must not grow the history table").toBe(after1);
+  });
+
   it("recalculates on a crm.contact.updated event", async () => {
     const leadId = await createLead("Updated Event Lead", { email: "ue@example.com", leadSource: "referral" });
     const { handlerFor } = captureHandlers();

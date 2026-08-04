@@ -1170,7 +1170,10 @@ function mapCrmActivities(payload: unknown): ActivitySummary[] | null {
 
 export interface CrmContactsQuery {
   search?: string;
+  /** Toolbar view-mode (mine/recent). Distinct from the classification segment. */
   segment?: string;
+  /** LQ-003 classification segment filter (sent as `segmentName`). */
+  segmentName?: string;
   temperature?: string;
   priority?: string;
   product?: string;
@@ -1184,6 +1187,9 @@ export async function getCrmContacts(opts?: CrmContactsQuery): Promise<LoaderRes
   if (opts?.search) qs.set("search", opts.search);
   if (opts?.segment && opts.segment !== "all") qs.set("segment", opts.segment);
   // LQ-003 classification / segmentation filters, forwarded to the list API.
+  // The classification segment goes as `segmentName` (the backend reads that key;
+  // `segment` above is the separate view-mode param).
+  if (opts?.segmentName) qs.set("segmentName", opts.segmentName);
   if (opts?.temperature) qs.set("temperature", opts.temperature);
   if (opts?.priority) qs.set("priority", opts.priority);
   if (opts?.product) qs.set("product", opts.product);

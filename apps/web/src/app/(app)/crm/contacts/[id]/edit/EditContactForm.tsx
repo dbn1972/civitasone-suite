@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { rupeesToMinorString } from "@/lib/money";
-import { saveClassification, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
+import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 
 type Initial = {
@@ -75,22 +75,30 @@ export default function EditContactForm({ params, initial }: Props) {
     if ("expectedValueRupees" in patch) setEvError("");
   }
 
-  /** Build the classification PATCH body, converting rupees→paise. Returns
-   *  null when the expected value is present but not a valid amount. */
-  function buildClassificationPatch(): ClassificationPatch | null {
-    const patch: ClassificationPatch = {};
-    if (classification.temperature) patch.temperature = classification.temperature;
-    if (classification.priority) patch.priority = classification.priority;
-    patch.segment = classification.segment.trim();
-    patch.product = classification.product.trim();
-    patch.region = classification.region.trim();
+  /**
+   * Build the classification PATCH body, converting rupees→paise. An empty
+   * selection/field is sent as explicit `null` so picking "—" (or clearing a
+   * text field) clears the stored value — the classify consumer treats null as
+   * "clear", whereas omitting the key would leave the old value in place.
+   * Returns the sentinel `INVALID` when the expected value is present but not a
+   * valid amount, so the caller can surface an inline error.
+   */
+  function buildClassificationPatch(): ClassificationPatch | "INVALID" {
     const ev = classification.expectedValueRupees.trim();
+    let expectedValueMinor: string | null = null;
     if (ev) {
       const minor = rupeesToMinorString(ev);
-      if (!minor) return null;
-      patch.expectedValueMinor = minor;
+      if (!minor) return "INVALID";
+      expectedValueMinor = minor;
     }
-    return patch;
+    return {
+      temperature: classification.temperature || null,
+      priority: classification.priority || null,
+      segment: classification.segment.trim() || null,
+      product: classification.product.trim() || null,
+      region: classification.region.trim() || null,
+      expectedValueMinor,
+    };
   }
 
   async function submit(e: React.FormEvent) {
@@ -100,7 +108,7 @@ export default function EditContactForm({ params, initial }: Props) {
     setEvError("");
 
     const classificationPatch = buildClassificationPatch();
-    if (classificationPatch === null) {
+    if (classificationPatch === "INVALID") {
       setEvError("Enter expected value as a positive amount in rupees (up to 2 decimals).");
       return;
     }
@@ -172,12 +180,9 @@ export default function EditContactForm({ params, initial }: Props) {
           <div>
             <label htmlFor="edit-leadStatus" style={labelStyle}>Lead status</label>
             <select id="edit-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="qualified">Qualified</option>
-              <option value="unqualified">Unqualified</option>
-              <option value="disqualified">Disqualified</option>
-              <option value="customer">Customer</option>
+              {LEAD_STATUSES.map((s) => (
+                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
             </select>
           </div>
 

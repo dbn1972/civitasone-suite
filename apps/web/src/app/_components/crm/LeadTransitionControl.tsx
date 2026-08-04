@@ -68,11 +68,20 @@ export function LeadTransitionControl({ leadId, currentStatus }: { leadId: strin
     [codes, target],
   );
 
+  // A governed target with no configured reason codes must still capture *why*:
+  // require the free-text note instead of sending a bogus reason code.
+  const noteRequired = !!target && availableReasons.length === 0;
+
   function beginTransition() {
     setError("");
     setMessage("");
     if (!target) { setError("Choose a status to move this lead to."); return; }
-    if (availableReasons.length > 0 && !reasonCode) { setError("Choose a reason code for this change."); return; }
+    if (availableReasons.length > 0) {
+      if (!reasonCode) { setError("Choose a reason code for this change."); return; }
+    } else if (!note.trim()) {
+      setError("Add a note explaining this change — no reason codes are configured for this status.");
+      return;
+    }
     setConfirmOpen(true);
   }
 
@@ -80,12 +89,20 @@ export function LeadTransitionControl({ leadId, currentStatus }: { leadId: strin
     setBusy(true);
     setError("");
     try {
-      await transitionLead(leadId, {
+      // Only send reasonCode when a real one was selected; otherwise omit it and
+      // rely on the free-text reason (never a sentinel the backend would reject).
+      const result = await transitionLead(leadId, {
         targetStatus: target,
-        reasonCode: reasonCode || "OTHER",
+        ...(reasonCode ? { reasonCode } : {}),
         ...(note.trim() ? { reason: note.trim() } : {}),
       });
-      setMessage(isDisqualified ? `Lead re-opened to "${target}".` : `Lead moved to "${target}".`);
+      setMessage(
+        result.accepted
+          ? "Status change submitted — it may take a moment to take effect."
+          : isDisqualified
+            ? `Lead re-opened to "${target}".`
+            : `Lead moved to "${target}".`,
+      );
       setConfirmOpen(false);
       setTarget("");
       setReasonCode("");
@@ -139,16 +156,24 @@ export function LeadTransitionControl({ leadId, currentStatus }: { leadId: strin
                 <option value="">{availableReasons.length === 0 ? "No reason codes configured" : "Select reason…"}</option>
                 {availableReasons.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
-              {target && availableReasons.length === 0 ? (
+              {noteRequired ? (
                 <p id={`${headingId}-noreason`} style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-                  No reason codes are configured for “{target}”. You can still add a note below.
+                  No reason codes are configured for “{target}”. Record the reason in the note below.
                 </p>
               ) : null}
             </div>
 
             <div>
-              <label htmlFor={`${headingId}-note`} style={labelStyle}>Note (optional)</label>
-              <textarea id={`${headingId}-note`} value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...inputStyle, minHeight: undefined }} placeholder="Add context for the audit trail" />
+              <label htmlFor={`${headingId}-note`} style={labelStyle}>{noteRequired ? "Note (required)" : "Note (optional)"}</label>
+              <textarea
+                id={`${headingId}-note`}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                style={{ ...inputStyle, minHeight: undefined }}
+                placeholder="Add context for the audit trail"
+                aria-required={noteRequired ? "true" : "false"}
+              />
             </div>
 
             <div>

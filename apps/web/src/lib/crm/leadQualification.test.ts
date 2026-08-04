@@ -119,6 +119,27 @@ describe("leadQualification client calls", () => {
     expect(JSON.parse(init.body)).toMatchObject({ temperature: "hot", expectedValueMinor: "15000" });
   });
 
+  it("saveClassification forwards explicit null to clear a field", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    await saveClassification("c1", { temperature: null, priority: null, segment: null, expectedValueMinor: null });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // JSON.stringify keeps null keys (unlike undefined), so the backend clears them.
+    expect(body).toEqual({ temperature: null, priority: null, segment: null, expectedValueMinor: null });
+  });
+
+  it("transitionLead returns accepted=true on a 202 and accepted=false on a 200", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 202, json: async () => ({}) });
+    expect(await transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).toEqual({ accepted: true });
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+    expect(await transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).toEqual({ accepted: false });
+  });
+
+  it("transitionLead omits reasonCode when none is supplied (free-text-only path)", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    await transitionLead("l1", { targetStatus: "contacted", reason: "voicemail" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ targetStatus: "contacted", reason: "voicemail" });
+  });
+
   it("qualifyLead posts and normalises the outcome", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ outcome: "qualified", score: 88 }) });
     const out = await qualifyLead("l1", { frameworkId: "f1", answers: { q1: "y" } });

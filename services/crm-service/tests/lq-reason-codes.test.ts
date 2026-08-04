@@ -74,6 +74,21 @@ describe("GET/PUT /v1/crm/lead-reason-codes", () => {
     expect(codes.some((c) => c.appliesToStatus === "nurture")).toBe(true);
   });
 
+  it("seeds at least one active default code for every governed target status (LQ-004)", async () => {
+    // Fresh tenant so seeding is exercised from empty.
+    const t = randomUUID();
+    const res = await call("GET", "/v1/crm/lead-reason-codes", { headers: headers(["crm_admin"], t) });
+    expect(res.statusCode).toBe(200);
+    const codes = (res.json() as { data: Array<{ appliesToStatus: string; active: boolean }> }).data;
+    for (const status of ["nurture", "recycled", "disqualified", "new", "qualified"]) {
+      expect(
+        codes.some((c) => c.appliesToStatus === status && c.active),
+        `governed status '${status}' must have >=1 active default code so the picker is never empty`,
+      ).toBe(true);
+    }
+    await scoped(t, (tx) => tx`DELETE FROM crm.lead_reason_codes WHERE tenant_id = ${t}`);
+  });
+
   it("upserts a custom code and reflects it on read (durable)", async () => {
     const put = await call("PUT", "/v1/crm/lead-reason-codes", {
       payload: { codes: [{ code: "lost_to_competitor", label: "Lost to competitor", appliesToStatus: "disqualified", active: true }] },

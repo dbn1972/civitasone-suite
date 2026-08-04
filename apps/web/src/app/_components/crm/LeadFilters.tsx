@@ -7,19 +7,19 @@
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { TEMPERATURES, PRIORITIES } from "@/lib/crm/leadQualification";
+import { TEMPERATURES, PRIORITIES, LEAD_STATUSES } from "@/lib/crm/leadQualification";
 
 export interface LeadFilterValues {
   temperature: string;
   priority: string;
-  segment: string;
+  /** Classification segment. Sent as the `segmentName` query param — distinct
+   *  from the toolbar's `segment` view-mode (mine/recent) param. */
+  segmentName: string;
   product: string;
   region: string;
   status: string;
   source: string;
 }
-
-const STATUS_OPTIONS = ["new", "contacted", "qualified", "unqualified", "disqualified", "customer"];
 
 const selStyle = { padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const inputStyle = { padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)", minWidth: 140 } as const;
@@ -30,7 +30,7 @@ export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> })
   const [v, setV] = useState<LeadFilterValues>({
     temperature: initial.temperature ?? "",
     priority: initial.priority ?? "",
-    segment: initial.segment ?? "",
+    segmentName: initial.segmentName ?? "",
     product: initial.product ?? "",
     region: initial.region ?? "",
     status: initial.status ?? "",
@@ -51,7 +51,7 @@ export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> })
   }
 
   function clear() {
-    setV({ temperature: "", priority: "", segment: "", product: "", region: "", status: "", source: "" });
+    setV({ temperature: "", priority: "", segmentName: "", product: "", region: "", status: "", source: "" });
     router.push("/crm/contacts");
   }
 
@@ -77,12 +77,12 @@ export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> })
           <label htmlFor="lf-status" style={labelStyle}>Status</label>
           <select id="lf-status" value={v.status} onChange={(e) => set({ status: e.target.value })} style={selStyle}>
             <option value="">Any</option>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+            {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
           <label htmlFor="lf-segment" style={labelStyle}>Segment</label>
-          <input id="lf-segment" value={v.segment} onChange={(e) => set({ segment: e.target.value })} placeholder="Any segment" style={inputStyle} />
+          <input id="lf-segment" value={v.segmentName} onChange={(e) => set({ segmentName: e.target.value })} placeholder="Any segment" style={inputStyle} />
         </div>
         <div>
           <label htmlFor="lf-product" style={labelStyle}>Product</label>

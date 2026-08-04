@@ -20,14 +20,17 @@ describe("LeadFilters (LQ-003)", () => {
     const url = push.mock.calls[0][0] as string;
     expect(url).toContain("temperature=hot");
     expect(url).toContain("priority=high");
-    expect(url).toContain("segment=Enterprise");
+    // The classification segment goes as segmentName (not the view-mode `segment`).
+    expect(url).toContain("segmentName=Enterprise");
+    expect(url).not.toMatch(/[?&]segment=/);
     expect(url).toContain("status=qualified");
   });
 
-  it("seeds from initial values", () => {
-    render(<LeadFilters initial={{ region: "South", source: "website" }} />);
+  it("seeds from initial values (incl. segmentName)", () => {
+    render(<LeadFilters initial={{ region: "South", source: "website", segmentName: "Enterprise" }} />);
     expect(screen.getByLabelText("Region")).toHaveValue("South");
     expect(screen.getByLabelText("Source")).toHaveValue("website");
+    expect(screen.getByLabelText("Segment")).toHaveValue("Enterprise");
   });
 
   it("clear resets to the unfiltered list", () => {

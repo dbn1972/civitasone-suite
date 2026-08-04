@@ -61,14 +61,19 @@ export function LeadScoreRulesEditor() {
   const [error, setError] = useState("");
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getScoreRules();
+    if (!isLive()) return;
     setRows(data.map(toRow));
     setSource(s);
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
+  }, []);
 
   function update(idx: number, patch: Partial<RuleRow>) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));

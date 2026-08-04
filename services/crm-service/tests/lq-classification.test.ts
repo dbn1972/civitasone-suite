@@ -102,6 +102,29 @@ describe("PATCH /v1/crm/contacts/:id/classification", () => {
     expect(rows[0]!.priority).toBe("high");   // updated
   });
 
+  it("clears a field when the key is explicitly null, leaving other set fields intact (LQ-003 null-clear)", async () => {
+    const id = await createLead("Null Clear");
+    await call("PATCH", `/v1/crm/contacts/${id}/classification`, { payload: { temperature: "hot", priority: "high" } });
+    // Explicit null clears temperature; priority (absent) is left unchanged.
+    await call("PATCH", `/v1/crm/contacts/${id}/classification`, { payload: { temperature: null } });
+    const rows = (await scoped(TENANT, (tx) => tx`
+      SELECT temperature, priority FROM crm.contacts WHERE id = ${id} AND tenant_id = ${TENANT}
+    `)) as unknown as Array<Record<string, unknown>>;
+    expect(rows[0]!.temperature).toBeNull();
+    expect(rows[0]!.priority).toBe("high");
+  });
+
+  it("an absent key leaves that field unchanged (only present keys are written)", async () => {
+    const id = await createLead("Absent Key");
+    await call("PATCH", `/v1/crm/contacts/${id}/classification`, { payload: { temperature: "warm", segment: "smb" } });
+    await call("PATCH", `/v1/crm/contacts/${id}/classification`, { payload: { segment: "enterprise" } });
+    const rows = (await scoped(TENANT, (tx) => tx`
+      SELECT temperature, segment FROM crm.contacts WHERE id = ${id} AND tenant_id = ${TENANT}
+    `)) as unknown as Array<Record<string, unknown>>;
+    expect(rows[0]!.temperature).toBe("warm"); // absent from 2nd PATCH → unchanged
+    expect(rows[0]!.segment).toBe("enterprise");
+  });
+
   it("rejects an invalid temperature with 400", async () => {
     const id = await createLead("Bad Temp");
     const res = await call("PATCH", `/v1/crm/contacts/${id}/classification`, { payload: { temperature: "boiling" } });

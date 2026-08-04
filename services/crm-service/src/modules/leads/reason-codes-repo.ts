@@ -9,8 +9,6 @@ import { leadReasonCodes, type LeadReasonCodeRow } from "./reason-codes-schema.j
 
 const AUDIT_TOPIC = "audit.event.record";
 
-/** Target statuses that require a reason code (LQ-004). Includes the re-open targets. */
-export const REASON_CODE_STATUSES = ["nurture", "recycled", "disqualified", "new", "qualified"] as const;
 
 export interface ReasonCodeSeed {
   code: string;
