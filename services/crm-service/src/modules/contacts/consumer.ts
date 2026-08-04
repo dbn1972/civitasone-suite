@@ -31,6 +31,7 @@ export function registerContactConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, name: p.name,
         email: p.email, phone: p.phone, company: p.company,
         designation: p.designation, city: p.city, country: p.country ?? "IN",
+        gstin: p.gstin, pan: p.pan, pincode: p.pincode,
         leadStatus: p.leadStatus, leadSource: p.leadSource,
         ownerId: p.ownerId, accountId: p.accountId,
         tags: p.tags, marketingConsent: p.marketingConsent,
@@ -62,6 +63,9 @@ export function registerContactConsumers(queue: Queue): void {
       if (p.designation !== undefined) patch.designation = p.designation;
       if (p.city !== undefined) patch.city = p.city;
       if (p.country !== undefined) patch.country = p.country;
+      if (p.gstin !== undefined) patch.gstin = p.gstin;
+      if (p.pan !== undefined) patch.pan = p.pan;
+      if (p.pincode !== undefined) patch.pincode = p.pincode;
       if (p.leadStatus !== undefined) patch.leadStatus = p.leadStatus;
       if (p.leadSource !== undefined) patch.leadSource = p.leadSource;
       if (p.ownerId !== undefined) patch.ownerId = p.ownerId;
@@ -169,6 +173,7 @@ export function registerContactConsumers(queue: Queue): void {
           id, tenantId: p.tenantId, name: view.name,
           email: view.email, phone: view.phone, company: view.company,
           designation: view.designation, city: view.city, country: view.country,
+          gstin: view.gstin, pan: view.pan, pincode: view.pincode,
           leadStatus: view.leadStatus, leadSource: view.leadSource,
           ownerId: view.ownerId, accountId: view.accountId,
           tags: view.tags, marketingConsent: view.marketingConsent,
@@ -204,12 +209,13 @@ export function registerContactConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.createAccount, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; name: string; industry: string | null; website: string | null };
+    const p = msg.payload as { id: string; tenantId: string; name: string; industry: string | null; website: string | null; gstin: string | null; pan: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertAccount(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         industry: p.industry, website: p.website,
+        gstin: p.gstin, pan: p.pan,
         status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
       await emit(tx, msg, EVENTS.accountCreated, { accountId: p.id, name: p.name }, "create_account", p.id);

@@ -12,6 +12,9 @@ export const accounts = crmSchema.table("accounts", {
   name: varchar("name", { length: 200 }).notNull(),
   industry: varchar("industry", { length: 64 }),
   website: varchar("website", { length: 320 }),
+  // Business identifiers (DQ-001/003) — cleartext (not PII), normalized-indexed.
+  gstin: varchar("gstin", { length: 15 }),
+  pan: varchar("pan", { length: 10 }),
   status: varchar("status", { length: 24 }).notNull().default("active"),
   // Self-referencing org hierarchy (migration 0020). Null = root account.
   parentId: uuid("parent_id"),
@@ -32,6 +35,13 @@ export const contacts = crmSchema.table("contacts", {
   // Deterministic blind index over normalized email — backs the per-tenant
   // unique constraint + bulk-import de-dup while email itself is ciphertext.
   emailIdx: text("email_idx"),
+  // Business identifiers + PIN (DQ-001/003). GSTIN/PAN are NOT PII — cleartext,
+  // with a per-tenant normalized index for exact-match dedup.
+  gstin: varchar("gstin", { length: 15 }),
+  pan: varchar("pan", { length: 10 }),
+  pincode: varchar("pincode", { length: 6 }),
+  // Lead score (0-100), maintained by the scoring consumer.
+  score: integer("score"),
   company: varchar("company", { length: 200 }),
   designation: varchar("designation", { length: 120 }),
   city: varchar("city", { length: 100 }),
@@ -67,6 +77,9 @@ export type ContactView = {
   designation: string | null;
   city: string | null;
   country: string | null;
+  gstin: string | null;
+  pan: string | null;
+  pincode: string | null;
   leadStatus: string;
   leadSource: string | null;
   ownerId: string | null;

@@ -4,6 +4,10 @@ export const COMMANDS = {
   updateContact: "crm.contact.update",
   deleteContact: "crm.contact.delete",
   mergeContacts: "crm.contact.merge",
+  /** Merge two lead (contact) records, reassigning children to the primary (DQ-002). */
+  mergeLeads: "crm.lead.merge",
+  /** Merge two account records, reassigning children to the primary (DQ-002). */
+  mergeAccounts: "crm.account.merge",
   bulkImportContacts: "crm.contact.bulk_import",
   createDeal: "crm.deal.create",
   updateDealStage: "crm.deal.update_stage",
@@ -83,6 +87,10 @@ export const EVENTS = {
   contactCreated: "crm.contact.created",
   contactUpdated: "crm.contact.updated",
   contactDeleted: "crm.contact.deleted",
+  /** Two leads merged; payload { leadId, mergedFrom } (DQ-002). */
+  leadMerged: "crm.lead.merged",
+  /** Two accounts merged; payload { accountId, mergedFrom } (DQ-002). */
+  accountMerged: "crm.account.merged",
   dealCreated: "crm.deal.created",
   dealStageUpdated: "crm.deal.stage_updated",
   dealUpdated: "crm.deal.updated",

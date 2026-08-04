@@ -6,6 +6,7 @@
  */
 import { createTenantDb } from "@civitasone/db";
 import { schema as contactsModule } from "../modules/contacts/schema.js";
+import { schema as dedupModule } from "../modules/contacts/dedup-schema.js";
 import { schema as dealsModule } from "../modules/deals/schema.js";
 import { schema as activitiesModule } from "../modules/activities/schema.js";
 import { schema as pipelinesModule } from "../modules/pipelines/schema.js";
@@ -16,6 +17,7 @@ import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
   ...contactsModule,
+  ...dedupModule,
   ...dealsModule,
   ...activitiesModule,
   ...pipelinesModule,

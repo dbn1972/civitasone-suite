@@ -1,5 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { MergeButton } from "../../../_components/crm/MergeButton";
+import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getCrmAccounts } from "../../../_data/loaders";
 import { AccountsTable } from "./AccountsTable";
 import { AccountHierarchy } from "./AccountHierarchy";
@@ -12,6 +14,17 @@ export default async function Page() {
   const totalContacts = accounts.reduce((sum, a) => sum + a.contactCount, 0);
   const subsidiaries = countSubsidiaries(accounts);
 
+  const mergeOptions: MergeOption[] = accounts.map((a) => ({
+    id: a.id,
+    label: a.industry ? `${a.name} · ${a.industry}` : a.name,
+    fields: {
+      Name: a.name,
+      Industry: a.industry,
+      Website: a.website,
+      Contacts: String(a.contactCount),
+    },
+  }));
+
   return (
     <>
       <PageHeader
@@ -22,6 +35,7 @@ export default async function Page() {
         actions={<NewAccountForm accounts={accounts} />}
       />
       {source === "error" && <DataSourceBadge source={source} />}
+      {mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
       <StatGrid>
         <StatCard icon="🏢" iconBg="#eef2ff" label="Total Accounts" value={accounts.length.toLocaleString("en-IN")} />
         <StatCard icon="🌳" iconBg="#eef2ff" label="Subsidiary Accounts" value={subsidiaries.toLocaleString("en-IN")} />

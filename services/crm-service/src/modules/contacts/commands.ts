@@ -20,6 +20,9 @@ function buildView(id: string, ctx: RequestContext, body: CreateContactBody, ver
     designation: body.designation ?? null,
     city: body.city ?? null,
     country: body.country ?? "IN",
+    gstin: body.gstin ?? null,
+    pan: body.pan ?? null,
+    pincode: body.pincode ?? null,
     leadStatus: body.leadStatus ?? "new",
     leadSource: body.leadSource ?? null,
     ownerId: body.ownerId ?? ctx.actorId,
@@ -112,7 +115,7 @@ export async function createAccount(ctx: RequestContext, body: CreateAccountBody
   await queue.publish(COMMANDS.createAccount, {
     messageId: id, type: COMMANDS.createAccount,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, name: body.name, industry: body.industry ?? null, website: body.website || null },
+    payload: { id, tenantId: ctx.tenantId, name: body.name, industry: body.industry ?? null, website: body.website || null, gstin: body.gstin ?? null, pan: body.pan ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
