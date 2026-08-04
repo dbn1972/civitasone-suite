@@ -13,14 +13,15 @@
  * cannot see each other's configuration. messageIds are never hardcoded, so nothing
  * here poisons `_inbox.processed`.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { queue } from "../src/shared/infra.js";
+import { queue, cache } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
+import * as rulesRepo from "../src/modules/leads/field-rules-repo.js";
 import { validateRequiredFields, isMissing } from "../src/modules/leads/field-rules-domain.js";
 import {
   computeCompleteness,
@@ -114,12 +115,23 @@ async function configure(
   return call("PUT", "/v1/crm/lead-field-rules", { headers: hdrs, payload: body });
 }
 
+/**
+ * Rules are read through the cache (they are consulted on every lead creation), so a
+ * test that deletes rows behind the service's back must also invalidate — exactly what
+ * the consumer does after a real write. Without this, a rule removed by SQL would keep
+ * enforcing until the TTL expired and later cases would see phantom 422s.
+ */
+async function clearRules(tenantId: string): Promise<void> {
+  await scoped(
+    tenantId,
+    (tx) => tx`DELETE FROM crm.lead_field_rules WHERE tenant_id = ${tenantId}`,
+  );
+  await cache.invalidateResource(tenantId, rulesRepo.RESOURCE);
+}
+
 async function cleanup(): Promise<void> {
   for (const tenantId of [TENANT, OTHER_TENANT]) {
-    await scoped(
-      tenantId,
-      (tx) => tx`DELETE FROM crm.lead_field_rules WHERE tenant_id = ${tenantId}`,
-    );
+    await clearRules(tenantId);
     await scoped(
       tenantId,
       (tx) => tx`DELETE FROM crm.contacts WHERE tenant_id = ${tenantId}`,
@@ -228,13 +240,63 @@ describe("completeness weights come from configuration (LM-001)", () => {
     expect(computeCompleteness({ name: "Jane", email: "j@x.com" }).score).toBe(40);
   });
 
-  it("ignores disabled and zero-weight rules, so a bare mandatory flag does not skew scoring", () => {
+  // These four replace a single case that asserted the defect found in review
+  // ("ignores disabled and zero-weight rules, so a bare mandatory flag does not skew
+  // scoring", which expected resolveWeights to return DEFAULT_FIELD_WEIGHTS for
+  // [phone w0 enabled, city w40 disabled]). weight defaults to 0 in the DB, so that
+  // rule made enforcement and scoring govern different fields: a tenant requiring
+  // name/phone/company without weights had creation enforce all three while scoring
+  // fell back to the seven built-ins.
+  it("weights all-zero enabled rules equally over exactly those fields, not the defaults", () => {
     expect(
       resolveWeights([
         { fieldName: "phone", weight: 0, enabled: true },
+        { fieldName: "company", weight: 0, enabled: true },
+      ]),
+    ).toEqual([
+      { field: "phone", weight: 1 },
+      { field: "company", weight: 1 },
+    ]);
+  });
+
+  it("falls back to the defaults only when nothing is governed — every rule disabled", () => {
+    expect(
+      resolveWeights([
+        { fieldName: "phone", weight: 0, enabled: false },
         { fieldName: "city", weight: 40, enabled: false },
       ]),
     ).toEqual(DEFAULT_FIELD_WEIGHTS);
+  });
+
+  it("uses the given weights when any rule carries one, and drops disabled rules", () => {
+    expect(
+      resolveWeights([
+        { fieldName: "name", weight: 70, enabled: true },
+        { fieldName: "phone", weight: 30, enabled: true },
+        { fieldName: "city", weight: 40, enabled: false },
+      ]),
+    ).toEqual([
+      { field: "name", weight: 70 },
+      { field: "phone", weight: 30 },
+    ]);
+  });
+
+  it("scores a lead satisfying every configured rule at 100, with no weights set", () => {
+    // The regression the review found: this used to score 50 out of the seven default
+    // fields and report designation/city/leadSource/email as missing — fields the
+    // tenant never governs.
+    const rules = [
+      { fieldName: "name", weight: 0, enabled: true },
+      { fieldName: "phone", weight: 0, enabled: true },
+      { fieldName: "company", weight: 0, enabled: true },
+    ];
+    const result = computeCompleteness(
+      { name: "Jane", phone: "+919876543210", company: "Acme" },
+      rules,
+    );
+    expect(result.score).toBe(100);
+    expect(result.missingFields).toEqual([]);
+    expect(result.totalFields).toBe(3);
   });
 
   it("scores against the configured weights when present", () => {
@@ -322,8 +384,8 @@ describe("PUT /v1/crm/lead-field-rules", () => {
   });
 
   it("defaults weight to 0 and enabled to true when omitted", async () => {
-    await configure({ fieldName: "country", required: true });
-    const stored = (await rulesInDb()).find((r) => r.fieldName === "country");
+    await configure({ fieldName: "name", required: true });
+    const stored = (await rulesInDb()).find((r) => r.fieldName === "name");
     expect(stored?.weight).toBe(0);
     expect(stored?.enabled).toBe(true);
   });
@@ -331,6 +393,16 @@ describe("PUT /v1/crm/lead-field-rules", () => {
   it("returns 400 for a field outside the configurable set", async () => {
     const res = await configure({ fieldName: "aadhaar", required: true });
     expect(res.statusCode).toBe(400);
+  });
+
+  // Both are server-defaulted on create (country := "IN", ownerId := actor) and the
+  // guided form never collects them, so a rule on either would 422 every UI lead
+  // forever. Rejected at the boundary rather than accepted and left to fail on the
+  // CHECK constraint after the route had already answered 202.
+  it.each(["country", "ownerId"])("returns 400 for the server-defaulted field %s", async (field) => {
+    const res = await configure({ fieldName: field, required: true });
+    expect(res.statusCode).toBe(400);
+    expect((await rulesInDb()).some((r) => r.fieldName === field)).toBe(false);
   });
 
   it("returns 400 when required is missing", async () => {
@@ -391,6 +463,44 @@ describe("DELETE /v1/crm/lead-field-rules/:fieldName", () => {
   });
 });
 
+// ── Hot-path caching ───────────────────────────────────────────────────────────
+
+describe("rule reads are cached (LM-001 is on the lead-creation hot path)", () => {
+  const key = (): string => cache.makeKey(TENANT, rulesRepo.RESOURCE, "all");
+  /** Read-only peek: getOrLoad with a null loader returns a hit and caches nothing on
+   *  a miss, so this observes the cache without populating it. */
+  const peek = (): Promise<unknown> => cache.getOrLoad<unknown>(key(), async () => null);
+
+  it("populates a key that the wired invalidation actually clears", async () => {
+    await clearRules(TENANT);
+    expect(await peek()).toBeNull();
+
+    await configure({ fieldName: "phone", required: true, weight: 30 });
+    const res = await call("GET", "/v1/crm/lead-field-rules");
+    expect(res.statusCode).toBe(200);
+    expect(
+      await peek(),
+      "uncached, every lead creation would do BEGIN + set_config + SELECT + COMMIT",
+    ).not.toBeNull();
+
+    // The prefix field-rules-commands/-consumer already invalidate must cover that key,
+    // otherwise the cache would be populated but never cleared on a configuration change.
+    await cache.invalidateResource(TENANT, rulesRepo.RESOURCE);
+    expect(await peek()).toBeNull();
+  });
+
+  it("falls through to Postgres when the cache is unavailable, rather than 500ing", async () => {
+    await configure({ fieldName: "city", required: true, weight: 15 });
+    const broken = vi.spyOn(cache, "getOrLoad").mockRejectedValue(new Error("redis unavailable"));
+    try {
+      const rules = await rulesRepo.listRules(TENANT);
+      expect(rules.some((r) => r.fieldName === "city")).toBe(true);
+    } finally {
+      broken.mockRestore();
+    }
+  });
+});
+
 // ── Enforcement on manual lead capture ─────────────────────────────────────────
 
 describe("POST /v1/crm/contacts honours the tenant's mandatory fields", () => {
@@ -398,10 +508,7 @@ describe("POST /v1/crm/contacts honours the tenant's mandatory fields", () => {
   // by an earlier case cannot turn an expected 202 into a 422 (or hide a real one).
   beforeEach(async () => {
     for (const tenantId of [TENANT, OTHER_TENANT]) {
-      await scoped(
-        tenantId,
-        (tx) => tx`DELETE FROM crm.lead_field_rules WHERE tenant_id = ${tenantId}`,
-      );
+      await clearRules(tenantId);
     }
   });
 

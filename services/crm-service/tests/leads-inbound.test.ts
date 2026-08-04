@@ -20,7 +20,12 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";
 const ACTOR = "cccccccc-3333-4000-8000-000000000001";
 
-function token(roles = ["crm_user"], tenantId = TENANT) {
+/**
+ * Default role is `integration_bot`, not `crm_user`. Inbound capture is the
+ * machine/integration path and applies no mandatory-field enforcement, so a human
+ * data-entry role must not be able to use it — see the 403 case below.
+ */
+function token(roles = ["integration_bot"], tenantId = TENANT) {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-inbound" }, SECRET);
 }
 
@@ -103,6 +108,19 @@ describe("POST /v1/crm/leads/inbound", () => {
         method: "POST",
         url: "/v1/crm/leads/inbound",
         headers: { authorization: `Bearer ${token(["integration_bot"])}` },
+        payload: validPayload,
+      });
+      await app.close();
+
+      expect(res.statusCode).toBe(202);
+    });
+
+    it("allows crm_admin role", async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/crm/leads/inbound",
+        headers: { authorization: `Bearer ${token(["crm_admin"])}` },
         payload: validPayload,
       });
       await app.close();
@@ -219,6 +237,26 @@ describe("POST /v1/crm/leads/inbound", () => {
   });
 
   describe("authorization (403)", () => {
+    /**
+     * Replaces the old assumption that a plain crm_user could post inbound leads
+     * (`token()` used to default to `["crm_user"]`, and the happy paths relied on it).
+     * That made LM-001 bypassable by the exact role it governs: a crm_user refused at
+     * POST /v1/crm/contacts with 422 for missing mandatory fields could post the same
+     * lead here, where nothing is enforced, and have it saved.
+     */
+    it("returns 403 for crm_user — manual capture must go through POST /v1/crm/contacts", async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/crm/leads/inbound",
+        headers: { authorization: `Bearer ${token(["crm_user"])}` },
+        payload: validPayload,
+      });
+      await app.close();
+
+      expect(res.statusCode).toBe(403);
+    });
+
     it("returns 403 for citizen role", async () => {
       const app = await buildApp();
       const res = await app.inject({

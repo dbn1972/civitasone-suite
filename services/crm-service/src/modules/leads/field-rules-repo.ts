@@ -1,12 +1,24 @@
 /** Reads + transactional writes for configurable lead field rules (LM-001). */
 import { eq, and, sql } from "drizzle-orm";
+import { pino } from "pino";
 import { db, scopedRead } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import {
   leadFieldRules,
   type LeadFieldRuleRow,
   type LeadFieldRuleInsert,
   type LeadFieldRuleView,
 } from "./field-rules-schema.js";
+
+const log = pino({ name: "crm-lead-field-rules-repo" });
+
+/**
+ * Cache resource segment. Exported and imported by the command publisher and the
+ * consumer so the key this module writes and the prefix they invalidate cannot drift:
+ * `cache.makeKey(t, RESOURCE, "all")` is `crm:{t}:lead_field_rule:all`, and
+ * `cache.invalidateResource(t, RESOURCE)` deletes `crm:{t}:lead_field_rule*`.
+ */
+export const RESOURCE = "lead_field_rule";
 
 export function toView(r: LeadFieldRuleRow): LeadFieldRuleView {
   return {
@@ -22,13 +34,54 @@ export function toView(r: LeadFieldRuleRow): LeadFieldRuleView {
   };
 }
 
-export async function listRules(tenantId: string): Promise<LeadFieldRuleView[]> {
+async function loadRules(tenantId: string): Promise<LeadFieldRuleView[]> {
   const rows = await scopedRead((tx) =>
     tx.select().from(leadFieldRules)
       .where(eq(leadFieldRules.tenantId, tenantId))
       .orderBy(leadFieldRules.fieldName),
   );
   return rows.map(toView);
+}
+
+/**
+ * The tenant's whole rule set, read through Redis.
+ *
+ * This is on the hot write path: POST /v1/crm/contacts consults it on every single
+ * lead creation, and uncached that is BEGIN + set_config + SELECT + COMMIT per lead
+ * for at most seven rows of near-static configuration. The invalidation was already
+ * wired (field-rules-commands + field-rules-consumer both call
+ * `cache.invalidateResource(tenantId, RESOURCE)`), so the only thing missing was a
+ * populated key — hence RESOURCE is shared rather than restated, so the key written
+ * here always sits under the prefix they clear.
+ *
+ * Whole-set granularity, not per-field: every caller wants all of them, and one key
+ * means one invalidation cannot leave half a configuration behind.
+ */
+export async function listRules(tenantId: string): Promise<LeadFieldRuleView[]> {
+  // Redis being down must never fail lead creation (graceful degradation), and
+  // getOrLoad propagates store errors, so a cache-layer failure falls through to
+  // Postgres and logs WARN. A *database* failure is re-thrown untouched — retrying it
+  // here would only double the load on an already unhealthy DB and hide the cause.
+  let dbFailed = false;
+  const loader = async (): Promise<LeadFieldRuleView[]> => {
+    try {
+      return await loadRules(tenantId);
+    } catch (err) {
+      dbFailed = true;
+      throw err;
+    }
+  };
+  try {
+    return (await cache.getOrLoad<LeadFieldRuleView[]>(
+      cache.makeKey(tenantId, RESOURCE, "all"),
+      loader,
+    )) ?? [];
+  } catch (err) {
+    if (dbFailed) throw err;
+    // tenantId only — a rule set carries no PII, but nothing is logged from it anyway.
+    log.warn({ err, tenantId }, "lead field rules cache unavailable; read through to Postgres");
+    return loadRules(tenantId);
+  }
 }
 
 export async function findByFieldName(

@@ -34,10 +34,11 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
         company: contacts.company,
         designation: contacts.designation,
         city: contacts.city,
-        // LM-001: country and ownerId are configurable scoring fields, so they must
-        // be read even though the default weight map does not mention them.
-        country: contacts.country,
-        ownerId: contacts.ownerId,
+        // LM-001: exactly the governable set (field-rules-validators.LEAD_FIELD_NAMES),
+        // which is also a superset of DEFAULT_FIELD_WEIGHTS. `country` and `ownerId`
+        // used to be read here for scoring; they are server-defaulted and no longer
+        // governable, so they can never appear in a weight list — selecting them would
+        // only widen the row for nothing.
         leadSource: contacts.leadSource,
       })
         .from(contacts)
@@ -61,8 +62,6 @@ export async function completenessRoutes(app: FastifyInstance): Promise<void> {
       company: row.company,
       designation: row.designation,
       city: row.city,
-      country: row.country,
-      ownerId: row.ownerId,
       leadSource: row.leadSource,
     };
 

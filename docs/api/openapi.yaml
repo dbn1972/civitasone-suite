@@ -14775,6 +14775,83 @@ paths:
       security:
         - bearerAuth: []
 
+  /v1/crm/leads/inbound:
+    post:
+      operationId: captureInboundLead
+      tags: [CRM]
+      summary: Capture a lead from an automated channel
+      description: |
+        Machine/integration entry point (LM-005). Queues a lead captured by email,
+        telephony, chatbot, whatsapp or a partner API and answers 202 with the
+        `contactId` the consumer will write.
+
+        This path applies NO mandatory-field enforcement — an automated channel cannot
+        be asked to fill in fields the caller never sent. That is why it is restricted
+        to machine and administrator roles: a human creating a lead by hand must use
+        `POST /v1/crm/contacts`, where the tenant's `/v1/crm/lead-field-rules`
+        configuration is enforced with 422. `crm_user` is deliberately excluded, since
+        allowing it here let the role governed by LM-001 bypass LM-001.
+
+        Roles: integration_bot, crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, source, attributes]
+              properties:
+                channel:
+                  type: string
+                  enum: [email, telephony, chatbot, whatsapp, partner_api]
+                source:
+                  type: string
+                  minLength: 1
+                  description: Campaign, queue or partner identifier the lead came from
+                attributes:
+                  type: object
+                  description: Captured lead fields; unknown keys are passed through
+                  properties:
+                    name: { type: string }
+                    email: { type: string, format: email }
+                    phone: { type: string }
+                    company: { type: string }
+                    designation: { type: string }
+                    city: { type: string }
+                    leadSource: { type: string }
+                metadata:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "202":
+          description: Capture command queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string }
+                  correlationId: { type: string }
+                  contactId:
+                    type: string
+                    format: uuid
+                    description: Id the captured lead will be written under
+        "400":
+          description: Validation error — unknown channel, empty source, bad email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: |
+            Insufficient role. Includes `crm_user`: manual lead capture must go through
+            `POST /v1/crm/contacts` so tenant mandatory fields are enforced.
+      security:
+        - bearerAuth: []
+
   /v1/crm/lead-field-rules:
     get:
       operationId: listLeadFieldRules
@@ -14821,8 +14898,9 @@ paths:
       description: |
         Upserts the rule identified by (tenant, `fieldName`) — PUT rather than POST
         because re-declaring a field is an update of the same resource, not a
-        second rule. `weight` feeds the completeness score; `enabled: false` keeps
-        the weight but stops the field blocking a save.
+        second rule. `weight` sets relative importance in the completeness score;
+        `enabled: false` suspends the rule entirely — it neither blocks a save nor
+        counts towards the score — while keeping the configured weight for later.
 
         `fieldName` is constrained to the governable set, matching the CHECK
         constraint in migration `0037_lead_field_rules.sql`.
@@ -14874,7 +14952,7 @@ paths:
           description: The governed field whose rule should be removed
           schema:
             type: string
-            enum: [name, email, phone, company, designation, city, country, leadSource, ownerId]
+            enum: [name, email, phone, company, designation, city, leadSource]
       responses:
         "202":
           description: Delete command queued
@@ -14907,10 +14985,11 @@ paths:
       tags: [CRM]
       summary: Per-record data quality completeness score
       description: |
-        Scores one active lead 0–100 against the tenant's configured field weights,
-        falling back to the built-in default map when the tenant has configured
-        none. Only enabled rules with a weight above zero are scored, and the score
-        is normalised, so weights need not sum to 100.
+        Scores one active lead 0–100 against the tenant's configured field weights.
+        Every enabled rule is scored — weights only set relative importance, and a
+        tenant that configures none gets its enabled fields weighted equally. The
+        built-in default map applies only when nothing is governed (no rules, or all
+        of them disabled). The score is normalised, so weights need not sum to 100.
 
         Roles: crm_user, crm_admin, tenant_admin, super_admin.
       parameters:
@@ -21622,8 +21701,12 @@ components:
       properties:
         fieldName:
           type: string
-          description: The governable field this rule applies to
-          enum: [name, email, phone, company, designation, city, country, leadSource, ownerId]
+          description: |
+            The governable field this rule applies to. `country` and `ownerId` are
+            excluded on purpose: the server defaults them on create
+            (`country: "IN"`, `ownerId`: the caller) and the guided lead form does not
+            collect them, so a rule on either would reject every UI lead with 422.
+          enum: [name, email, phone, company, designation, city, leadSource]
         required:
           type: boolean
           description: |
@@ -21634,8 +21717,10 @@ components:
           minimum: 0
           maximum: 100
           description: |
-            Contribution to the completeness score. Omitted or 0 means the field is
-            not scored — declaring a field mandatory says nothing about scoring.
+            Relative contribution to the completeness score. Weights decide importance
+            within the governed set, not membership of it: if a tenant leaves every
+            weight at 0, its enabled rules are scored equally, so a field declared
+            mandatory is always visible to the data-quality score.
         enabled:
           type: boolean
           description: |

@@ -4,9 +4,12 @@ import { queue, cache } from "../../shared/infra.js";
 import { commandId } from "../../shared/idempotency.js";
 import { COMMANDS } from "../../topics.js";
 import type { UpsertLeadFieldRuleBody } from "./field-rules-validators.js";
+import * as repo from "./field-rules-repo.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
-const RESOURCE = "lead_field_rule";
+/** Same constant the read path builds its cache key from, so the invalidation below
+ *  cannot drift from the key listRules writes. */
+const RESOURCE = repo.RESOURCE;
 
 export async function upsertLeadFieldRule(
   ctx: RequestContext,

@@ -17,7 +17,9 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./field-rules-repo.js";
 
 const log = pino({ name: "crm-lead-field-rules-consumer" });
-const RESOURCE = "lead_field_rule";
+/** The read path builds its cache key from this same constant, so invalidating this
+ *  resource prefix always clears exactly what listRules cached. */
+const RESOURCE = repo.RESOURCE;
 
 export interface UpsertLeadFieldRulePayload {
   id: string;

@@ -39,19 +39,29 @@ export interface CompletenessResult {
 /**
  * Turn configured rules into the weighted field list used for scoring.
  *
- * Disabled rules and zero-weight rules are ignored: weight 0 is the column
- * default, so a tenant marking a field mandatory without setting a weight is
- * saying nothing about scoring, and treating that as "counts for nothing" would
- * silently drag every score down. If nothing survives filtering we fall back to
- * the defaults rather than scoring every record 0 out of 0 fields.
+ * The set of scored fields is decided by `enabled`, and only by `enabled`. Weight
+ * decides relative importance *within* that set, never membership of it.
+ *
+ * This used to filter on `enabled && weight > 0` and fall back to the defaults when
+ * nothing survived, which contradicted enforcement: `weight` defaults to 0 in the DB,
+ * so a tenant that declared name/phone/company required without ever touching weights
+ * got creation enforcing all three while scoring ignored all three and silently scored
+ * against the seven built-ins instead. A lead satisfying every rule the tenant had
+ * configured scored 50 and the DQ-004 dashboard reported fields the tenant does not
+ * govern as missing.
+ *
+ * So: no weights configured at all means "these fields matter equally" (weight 1 each),
+ * not "nothing matters". The only fallback to the built-ins is when nothing is governed
+ * — zero rules, or every rule disabled — because scoring 0 out of 0 fields is not a
+ * number anybody can act on.
  */
 export function resolveWeights(
   rules: ReadonlyArray<CompletenessRule> = [],
 ): ReadonlyArray<{ field: string; weight: number }> {
-  const configured = rules
-    .filter((r) => r.enabled && r.weight > 0)
-    .map((r) => ({ field: r.fieldName, weight: r.weight }));
-  return configured.length > 0 ? configured : DEFAULT_FIELD_WEIGHTS;
+  const enabled = rules.filter((r) => r.enabled);
+  if (enabled.length === 0) return DEFAULT_FIELD_WEIGHTS;
+  const anyPositive = enabled.some((r) => r.weight > 0);
+  return enabled.map((r) => ({ field: r.fieldName, weight: anyPositive ? r.weight : 1 }));
 }
 
 /**

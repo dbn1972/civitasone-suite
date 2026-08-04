@@ -5,6 +5,14 @@ import { z } from "zod";
  * The fields a tenant may govern. Kept in lockstep with the CHECK constraint in
  * migration 0037 — a name outside this set would be rejected by Postgres after the
  * route had already answered 202, i.e. a silent configuration failure.
+ *
+ * `country` and `ownerId` are deliberately NOT governable even though contacts carry
+ * both: the guided lead form (apps/web .../crm/contacts/new) never collects them and
+ * POST /v1/crm/contacts fills them in itself (`country := "IN"`,
+ * `ownerId := ctx.actorId` in contacts/commands.ts). Marking either mandatory would
+ * therefore fail every UI lead creation with 422 forever — the route rejecting a lead
+ * for omitting a value it was about to supply. Make them collectable in the form
+ * first, then widen this list and the CHECK together.
  */
 export const LEAD_FIELD_NAMES = [
   "name",
@@ -13,9 +21,7 @@ export const LEAD_FIELD_NAMES = [
   "company",
   "designation",
   "city",
-  "country",
   "leadSource",
-  "ownerId",
 ] as const;
 
 export const leadFieldName = z.enum(LEAD_FIELD_NAMES);
