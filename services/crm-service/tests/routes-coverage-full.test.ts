@@ -825,7 +825,7 @@ describe("POST /v1/crm/activities", () => {
 describe("GET /v1/crm/activities", () => {
   it("returns 200 with paginated list", async () => {
     const res = await app.inject({
-      method: "GET", url: "/v1/crm/activities",
+      method: "GET", url: "/v1/crm/activities?subjectType=contact&subjectId=" + VALID_UUID,
       headers: authHeader(["crm_user"]),
     });
     expect(res.statusCode).toBe(200);
@@ -836,7 +836,7 @@ describe("GET /v1/crm/activities", () => {
 
   it("returns 200 with limit and offset", async () => {
     const res = await app.inject({
-      method: "GET", url: "/v1/crm/activities?limit=20&offset=5",
+      method: "GET", url: "/v1/crm/activities?subjectType=contact&subjectId=" + VALID_UUID + "&limit=20&offset=5",
       headers: authHeader(["crm_user"]),
     });
     expect(res.statusCode).toBe(200);

@@ -10,7 +10,7 @@ function rule(o: Partial<TaskEscalationRuleLike> & Pick<TaskEscalationRuleLike, 
   return { appliesTo: "both", enabled: true, recipientRole: "manager", recipientId: null, ...o };
 }
 function task(o: Partial<OverdueTaskLike> & Pick<OverdueTaskLike, "taskId" | "kind" | "dueAt">): OverdueTaskLike {
-  return { subjectType: "contact", subjectId: "s1", ownerId: "o1", ...o };
+  return { subjectType: "contact", subjectId: "s1", ...o };
 }
 
 describe("evaluateTask", () => {

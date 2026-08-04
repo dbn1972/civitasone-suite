@@ -44,13 +44,15 @@ describe("normalisers", () => {
     const out = normaliseActivities({
       activities: [
         { id: "a1", type: "call", subject: "old", createdAt: "2026-01-01T00:00:00Z", dueDate: "2026-02-02" },
-        { id: "a2", type: "meeting", subject: "new", createdAt: "2026-05-01T00:00:00Z", dueAt: "2026-05-02T10:00:00Z", location: "HQ" },
+        { id: "a2", type: "meeting", subject: "new", createdAt: "2026-05-01T00:00:00Z", dueAt: "2026-05-02T10:00:00Z", location: "HQ", subjectType: "contact", subjectId: "c9" },
         { type: "note" }, // dropped: no id
         "junk",
       ],
     });
     expect(out.map((a) => a.id)).toEqual(["a2", "a1"]);
     expect(out[0].location).toBe("HQ");
+    expect(out[0].subjectType).toBe("contact");
+    expect(out[0].subjectId).toBe("c9");
     expect(out[1].dueAt).toBe("2026-02-02");
   });
 
@@ -168,6 +170,9 @@ describe("loaders + mutations", () => {
   it("getActivities returns api on ok, error on failure", async () => {
     fetchMock.mockResolvedValueOnce(res({ data: [{ id: "a1", createdAt: "2026-01-01T00:00:00Z" }] }));
     expect((await getActivities("contact", "c1")).source).toBe("api");
+    // AC-001: the GET is scoped to the record (subjectType + subjectId) — lock the contract.
+    expect(fetchMock.mock.calls[0][0]).toContain("subjectType=contact");
+    expect(fetchMock.mock.calls[0][0]).toContain("subjectId=c1");
     fetchMock.mockResolvedValueOnce(res({}, 500));
     expect((await getActivities("contact", "c1")).source).toBe("error");
     fetchMock.mockRejectedValueOnce(new Error("network"));

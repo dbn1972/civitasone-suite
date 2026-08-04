@@ -52,7 +52,6 @@ export function ContactRolesEditor({ contactId }: { contactId: string }) {
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   async function add(e: React.FormEvent) {
@@ -145,7 +144,7 @@ export function ContactRolesEditor({ contactId }: { contactId: string }) {
                     <td>{r.dealId ? <a href={`/crm/deals/${r.dealId}`}>{r.dealId.slice(0, 8)}…</a> : "—"}</td>
                     <td style={{ fontSize: 13 }}>{r.createdAt ? formatIndianDate(r.createdAt) : "—"}</td>
                     <td style={{ textAlign: "right" }}>
-                      <button type="button" className="btn danger" aria-label={`Remove ${CONTACT_ROLE_LABELS[r.role as ContactRoleType] ?? r.role} role`} disabled={busy} onClick={() => r.id && setConfirmId(r.id)} style={{ minHeight: 36 }}>
+                      <button type="button" className="btn danger" aria-label={`Remove ${CONTACT_ROLE_LABELS[r.role as ContactRoleType] ?? r.role} role${r.dealId ? ` for deal ${r.dealId.slice(0, 8)}` : ""}`} disabled={busy} onClick={() => r.id && setConfirmId(r.id)} style={{ minHeight: 36 }}>
                         Remove
                       </button>
                     </td>

@@ -65,7 +65,6 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
   async function add(e: React.FormEvent) {

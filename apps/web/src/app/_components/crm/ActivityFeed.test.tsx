@@ -21,6 +21,18 @@ describe("ActivityFeed (AC-001)", () => {
     expect(screen.getByText(/timeline unavailable/i)).toBeInTheDocument();
   });
 
+  it("loads the timeline scoped to the record (subjectType + subjectId) and renders the scoped response", async () => {
+    vi.mocked(aa.getActivities).mockResolvedValue({
+      data: [
+        { id: "a1", type: "task", subject: "Scoped task", text: "scoped", status: "open", occurredAt: "2026-05-01T00:00:00Z", createdAt: "2026-05-01T00:00:00Z", subjectType: "contact", subjectId: "c1" },
+      ],
+      source: "api",
+    });
+    render(<ActivityFeed subjectType="contact" subjectId="c1" />);
+    await waitFor(() => expect(aa.getActivities).toHaveBeenCalledWith("contact", "c1"));
+    expect(await screen.findByText("Scoped task")).toBeInTheDocument();
+  });
+
   it("renders the timeline newest-first from the loader", async () => {
     vi.mocked(aa.getActivities).mockResolvedValue({
       data: [

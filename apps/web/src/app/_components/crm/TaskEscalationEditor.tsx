@@ -153,11 +153,11 @@ export function TaskEscalationEditor() {
                 </div>
                 <div>
                   <label htmlFor={`${row.key}-mr`} style={labelStyle}>Manager role</label>
-                  <input id={`${row.key}-mr`} aria-label={`Manager role for rule ${i + 1}`} value={row.managerRole} onChange={(e) => update(row.key, { managerRole: e.target.value })} placeholder="e.g. sales_manager" style={inputStyle} />
+                  <input id={`${row.key}-mr`} aria-label={`Manager role for rule ${i + 1}`} value={row.managerRole} onChange={(e) => update(row.key, { managerRole: e.target.value })} placeholder="e.g. sales_manager" aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true} style={inputStyle} />
                 </div>
                 <div>
                   <label htmlFor={`${row.key}-mi`} style={labelStyle}>Manager user</label>
-                  <input id={`${row.key}-mi`} aria-label={`Manager user for rule ${i + 1}`} value={row.managerId} onChange={(e) => update(row.key, { managerId: e.target.value })} placeholder="user id (optional)" style={inputStyle} />
+                  <input id={`${row.key}-mi`} aria-label={`Manager user for rule ${i + 1}`} value={row.managerId} onChange={(e) => update(row.key, { managerId: e.target.value })} placeholder="user id (optional)" aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true} style={inputStyle} />
                 </div>
               </div>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>

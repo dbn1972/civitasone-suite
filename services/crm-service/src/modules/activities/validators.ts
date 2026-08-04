@@ -18,6 +18,7 @@ export const createActivityBody = z.object({
   text: z.string().min(1).max(2000),
   contactId: z.string().uuid().optional(),
   dealId: z.string().uuid().optional(),
+  accountId: z.string().uuid().optional(),
   type: z.enum(ACTIVITY_TYPES).default("note"),
   subject: z.string().max(200).optional(),
   status: z.enum(["open", "completed", "cancelled"]).default("open"),
@@ -28,6 +29,22 @@ export const createActivityBody = z.object({
   location: z.string().max(500).optional(),
 });
 export type CreateActivityBody = z.infer<typeof createActivityBody>;
+
+/**
+ * The per-record activity timeline is REQUIRED to be scoped to one subject.
+ * GET /v1/crm/activities without subjectType+subjectId used to return the whole
+ * tenant's activities, which the FE embeds on every contact/account page — a
+ * same-tenant leak of unrelated notes/PII. subjectType maps to a column:
+ * contact->contact_id, deal->deal_id, account->account_id.
+ */
+export const ACTIVITY_SUBJECT_TYPES = ["contact", "deal", "account"] as const;
+export const listActivitiesQuery = z.object({
+  subjectType: z.enum(ACTIVITY_SUBJECT_TYPES),
+  subjectId: z.string().uuid(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type ListActivitiesQuery = z.infer<typeof listActivitiesQuery>;
 
 // P1-3 activity completion: status (and optional explicit completedAt).
 export const updateActivityBody = z.object({
@@ -47,6 +64,7 @@ export const activityViewSchema = z.object({
   text: z.string(),
   contactId: z.string().uuid().nullable().optional(),
   dealId: z.string().uuid().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
   type: z.string(),
   subject: z.string().nullable().optional(),
   status: z.string(),

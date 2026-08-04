@@ -75,7 +75,6 @@ export function ActivityFeed({ subjectType, subjectId }: Props) {
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectType, subjectId]);
 
   const showDue = ACTIVITY_TYPES_WITH_DUE.includes(type);

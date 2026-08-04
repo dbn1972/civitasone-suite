@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { activities, type ActivityRow, type ActivityInsert, type ActivityView } from "./schema.js";
 
@@ -10,6 +10,7 @@ export function toView(r: ActivityRow): ActivityView {
     text: r.text,
     contactId: r.contactId,
     dealId: r.dealId,
+    accountId: r.accountId,
     type: r.type,
     subject: r.subject,
     status: r.status,
@@ -21,12 +22,30 @@ export function toView(r: ActivityRow): ActivityView {
   };
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number, contactId?: string): Promise<ActivityView[]> {
-  const conditions = contactId
-    ? and(eq(activities.tenantId, tenantId), eq(activities.contactId, contactId))
-    : eq(activities.tenantId, tenantId);
+export type ActivitySubjectType = "contact" | "deal" | "account";
+
+/**
+ * The per-record timeline: activities for exactly one subject, tenant-scoped.
+ * subjectType picks the column so a contact page never sees a deal's or another
+ * contact's activities (same-tenant isolation), and RLS scopes the tenant.
+ */
+export async function listBySubject(
+  tenantId: string,
+  subjectType: ActivitySubjectType,
+  subjectId: string,
+  limit: number,
+  offset: number,
+): Promise<ActivityView[]> {
+  const subjectCol =
+    subjectType === "contact" ? activities.contactId
+    : subjectType === "deal" ? activities.dealId
+    : activities.accountId;
+  const where: SQL = and(
+    eq(activities.tenantId, tenantId),
+    eq(subjectCol, subjectId),
+  ) as SQL;
   const rows = await scopedRead((tx) => tx.select().from(activities)
-    .where(conditions)
+    .where(where)
     .orderBy(desc(activities.createdAt))
     .limit(limit)
     .offset(offset));

@@ -27,7 +27,6 @@ export interface OverdueTaskLike {
   kind: TaskKind;
   subjectType: string | null;
   subjectId: string | null;
-  ownerId: string | null;
   dueAt: Date | string | null;
 }
 
@@ -36,7 +35,6 @@ export interface EscalatedTask {
   kind: TaskKind;
   subjectType: string | null;
   subjectId: string | null;
-  ownerId: string | null;
   ruleId: string;
   /** Minutes overdue beyond the configured threshold. */
   overdueMinutes: number;
@@ -79,7 +77,6 @@ export function evaluateTask(
     kind: task.kind,
     subjectType: task.subjectType,
     subjectId: task.subjectId,
-    ownerId: task.ownerId,
     ruleId: rule.id,
     ageingMinutes,
     overdueMinutes: ageingMinutes - rule.thresholdMinutes,

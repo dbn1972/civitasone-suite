@@ -9,6 +9,8 @@ export const activities = crmSchema.table("activities", {
   text: text("text").notNull(),
   contactId: uuid("contact_id"),
   dealId: uuid("deal_id"),
+  // CM-004: an activity may hang off an account subject (account-page timeline).
+  accountId: uuid("account_id"),
   type: varchar("type", { length: 16 }).notNull().default("note"),
   subject: varchar("subject", { length: 200 }),
   status: varchar("status", { length: 24 }).notNull().default("open"),
@@ -34,6 +36,7 @@ export type ActivityView = {
   text: string;
   contactId: string | null;
   dealId: string | null;
+  accountId: string | null;
   type: string;
   subject: string | null;
   status: string;

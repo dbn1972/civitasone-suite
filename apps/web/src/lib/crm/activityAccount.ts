@@ -105,6 +105,9 @@ export interface ActivityEntry {
   dueAt?: string;
   remindAt?: string;
   location?: string;
+  /** The record this activity hangs off, when the payload carries it (AC-001 scoped GET). */
+  subjectType?: string;
+  subjectId?: string;
   /** Best-effort chronological anchor: createdAt, else dueAt. */
   occurredAt: string;
   createdAt: string;
@@ -127,6 +130,8 @@ export function normaliseActivity(raw: unknown): ActivityEntry | null {
     ...(dueAt ? { dueAt } : {}),
     ...(optStr(r.remindAt) ? { remindAt: str(r.remindAt) } : {}),
     ...(optStr(r.location) ? { location: str(r.location) } : {}),
+    ...(optStr(r.subjectType) ? { subjectType: str(r.subjectType) } : {}),
+    ...(optStr(r.subjectId) ? { subjectId: str(r.subjectId) } : {}),
     occurredAt: createdAt || dueAt || "",
     createdAt,
     ...(optStr(r.actorName) ? { actorName: str(r.actorName) } : {}),

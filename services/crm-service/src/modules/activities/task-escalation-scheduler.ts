@@ -64,7 +64,6 @@ async function overdueCandidates(tx: Tx, tenantId: string): Promise<OverdueTaskL
       taskId: r.id as string, kind: "next_action",
       subjectType: (r.subjectType ?? null) as string | null,
       subjectId: (r.subjectId ?? null) as string | null,
-      ownerId: null,
       dueAt: (r.dueAt ?? null) as string | null,
     });
   }
@@ -76,7 +75,6 @@ async function overdueCandidates(tx: Tx, tenantId: string): Promise<OverdueTaskL
       taskId: r.id as string, kind: "task",
       subjectType: r.contactId ? "contact" : r.dealId ? "deal" : null,
       subjectId: (r.contactId ?? r.dealId ?? null) as string | null,
-      ownerId: null,
       dueAt: dd,
     });
   }
@@ -96,7 +94,7 @@ export async function runTenantTaskEscalation(tenantId: string, now: Date = new 
       for (const t of overdue) {
         await enqueue(tx, {
           topic: EVENTS.taskEscalated, eventType: EVENTS.taskEscalated,
-          tenantId, actorId: t.ownerId ?? tenantId, correlationId: randomUUID(),
+          tenantId, actorId: tenantId, correlationId: randomUUID(),
           payload: {
             taskId: t.taskId, taskKind: t.kind, subjectType: t.subjectType, subjectId: t.subjectId,
             ruleId: t.ruleId, ageingMinutes: t.ageingMinutes, overdueMinutes: t.overdueMinutes,
@@ -105,7 +103,7 @@ export async function runTenantTaskEscalation(tenantId: string, now: Date = new 
         });
         await enqueue(tx, {
           topic: AUDIT, eventType: AUDIT,
-          tenantId, actorId: t.ownerId ?? tenantId, correlationId: randomUUID(),
+          tenantId, actorId: tenantId, correlationId: randomUUID(),
           payload: {
             service: "crm", action: "task_escalated", resourceType: t.kind, resourceId: t.taskId, outcome: "success",
             metadata: { ageingMinutes: t.ageingMinutes, overdueMinutes: t.overdueMinutes, recipientRole: t.recipientRole, recipientId: t.recipientId },

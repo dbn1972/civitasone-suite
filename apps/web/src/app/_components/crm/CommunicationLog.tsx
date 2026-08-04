@@ -72,7 +72,6 @@ export function CommunicationLog({ subjectType, subjectId }: Props) {
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectType, subjectId]);
 
   async function submit(e: React.FormEvent) {

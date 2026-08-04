@@ -68,7 +68,6 @@ export function AddressesEditor({ ownerType, ownerId }: Props) {
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerType, ownerId]);
 
   function update(key: string, patch: Partial<Row>) {
