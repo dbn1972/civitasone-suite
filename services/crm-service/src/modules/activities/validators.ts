@@ -1,15 +1,31 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
 
+/**
+ * AC-001 typed activities. The six BRD activity types plus the two legacy types
+ * this service already emits internally:
+ *  - 'email' / 'complaint' remain creatable (complaint drives the CRM->helpdesk
+ *    case-open chain in the consumer; removing it would break that flow).
+ *  - 'comm_delivery' is written ONLY by the notification-delivery consumer, so it
+ *    is intentionally NOT in the user-facing create enum.
+ */
+export const ACTIVITY_TYPES = [
+  "task", "call", "meeting", "appointment", "note", "reminder", "email", "complaint",
+] as const;
+
 export const createActivityBody = z.object({
   actorName: z.string().min(1).max(200).optional(),
   text: z.string().min(1).max(2000),
   contactId: z.string().uuid().optional(),
   dealId: z.string().uuid().optional(),
-  type: z.enum(["call", "meeting", "email", "task", "note", "complaint"]).default("note"),
+  type: z.enum(ACTIVITY_TYPES).default("note"),
   subject: z.string().max(200).optional(),
   status: z.enum(["open", "completed", "cancelled"]).default("open"),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // AC-001: reminder fire time (any type may carry one; primary for type='reminder').
+  remindAt: z.string().datetime().optional(),
+  // AC-001: venue for meetings/appointments.
+  location: z.string().max(500).optional(),
 });
 export type CreateActivityBody = z.infer<typeof createActivityBody>;
 
@@ -35,6 +51,8 @@ export const activityViewSchema = z.object({
   subject: z.string().nullable().optional(),
   status: z.string(),
   dueDate: z.string().nullable().optional(),
+  remindAt: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
   createdAt: z.string(),
 });

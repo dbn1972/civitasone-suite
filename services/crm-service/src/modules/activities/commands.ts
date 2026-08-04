@@ -23,6 +23,8 @@ export async function createActivity(ctx: RequestContext, body: CreateActivityBo
     subject: body.subject ?? body.text.slice(0, 80),
     status: body.status ?? "open",
     dueDate: body.dueDate ?? null,
+    remindAt: body.remindAt ?? null,
+    location: body.location ?? null,
     completedAt: body.status === "completed" ? createdAt : null,
     createdAt,
   };

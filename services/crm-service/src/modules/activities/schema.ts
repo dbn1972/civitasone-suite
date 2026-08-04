@@ -13,6 +13,9 @@ export const activities = crmSchema.table("activities", {
   subject: varchar("subject", { length: 200 }),
   status: varchar("status", { length: 24 }).notNull().default("open"),
   dueDate: date("due_date"),
+  // AC-001: when a reminder-type activity should fire, and where a meeting/appointment is held.
+  remindAt: timestamp("remind_at", { withTimezone: true }),
+  location: text("location"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -35,6 +38,8 @@ export type ActivityView = {
   subject: string | null;
   status: string;
   dueDate: string | null;
+  remindAt: string | null;
+  location: string | null;
   completedAt: string | null;
   createdAt: string;
 };

@@ -31,6 +31,8 @@ export function registerActivityConsumers(queue: Queue): void {
         contactId: p.contactId, dealId: p.dealId,
         type: p.type, subject: p.subject, status: p.status,
         dueDate: p.dueDate,
+        remindAt: p.remindAt ? new Date(p.remindAt) : null,
+        location: p.location,
         completedAt: p.completedAt ? new Date(p.completedAt) : null,
         createdBy: msg.actorId,
       });

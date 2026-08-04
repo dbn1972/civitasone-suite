@@ -2,6 +2,11 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, EmptyState, DataTable } from "../../../../_components/ds";
 import { getCrmAccountAncestors, getCrmAccountChildren, getCrmAccounts } from "../../../../_data/loaders";
 import { AccountParentForm } from "./AccountParentForm";
+import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
+import { AccountRelationshipsEditor } from "../../../../_components/crm/AccountRelationshipsEditor";
+import { ActivityFeed } from "../../../../_components/crm/ActivityFeed";
+import { CommunicationLog } from "../../../../_components/crm/CommunicationLog";
+import { AddressesEditor } from "../../../../_components/crm/AddressesEditor";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const [{ data: accounts, source }, { data: ancestors }, { data: children }] = await Promise.all([
@@ -117,6 +122,13 @@ export default async function Page({ params }: { params: { id: string } }) {
             </div>
           </div>
         </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 18 }}>
+        <Customer360Panel subjectType="account" subjectId={account.id} />
+        <AccountRelationshipsEditor accountId={account.id} accountOptions={accounts.map((a) => ({ id: a.id, name: a.name }))} />
+        <ActivityFeed subjectType="account" subjectId={account.id} />
+        <CommunicationLog subjectType="account" subjectId={account.id} />
+        <AddressesEditor ownerType="account" ownerId={account.id} />
       </div>
     </>
   );

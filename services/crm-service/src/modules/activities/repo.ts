@@ -14,6 +14,8 @@ export function toView(r: ActivityRow): ActivityView {
     subject: r.subject,
     status: r.status,
     dueDate: r.dueDate ?? null,
+    remindAt: r.remindAt?.toISOString() ?? null,
+    location: r.location ?? null,
     completedAt: r.completedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
   };

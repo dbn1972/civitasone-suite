@@ -8,6 +8,11 @@ import { ScoreHistoryView } from "../../../../_components/crm/ScoreHistoryView";
 import { LeadTransitionControl } from "../../../../_components/crm/LeadTransitionControl";
 import { LeadAssignmentControl } from "../../../../_components/crm/LeadAssignmentControl";
 import { AssignmentLogView } from "../../../../_components/crm/AssignmentLogView";
+import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
+import { ActivityFeed } from "../../../../_components/crm/ActivityFeed";
+import { CommunicationLog } from "../../../../_components/crm/CommunicationLog";
+import { AddressesEditor } from "../../../../_components/crm/AddressesEditor";
+import { ContactRolesEditor } from "../../../../_components/crm/ContactRolesEditor";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: contact, source } = await getContactById(params.id);
@@ -72,6 +77,12 @@ export default async function Page({ params }: { params: { id: string } }) {
           )}
 
           <QualifyPanel leadId={contact.id} />
+
+          <Customer360Panel subjectType="contact" subjectId={contact.id} />
+          <ActivityFeed subjectType="contact" subjectId={contact.id} />
+          <CommunicationLog subjectType="contact" subjectId={contact.id} />
+          <AddressesEditor ownerType="contact" ownerId={contact.id} />
+          <ContactRolesEditor contactId={contact.id} />
 
           {contact.deals.length > 0 && (
             <div className="card">
