@@ -39,4 +39,16 @@ describe("DuplicateCheckPanel (DQ-001)", () => {
     render(<DuplicateCheckPanel candidates={cands} mergeHrefBase="/crm/contacts/" />);
     expect(screen.getByRole("link", { name: "Asha Rao" })).toHaveAttribute("href", "/crm/contacts/1");
   });
+
+  it("shows a source=error affordance when the check itself failed (finding 5)", () => {
+    render(<DuplicateCheckPanel candidates={[]} error />);
+    expect(screen.getByText(/duplicate check unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/showing saved information/i)).toBeInTheDocument();
+  });
+
+  it("prefers the checking message over the error affordance while a check is in flight", () => {
+    render(<DuplicateCheckPanel candidates={[]} error checking />);
+    expect(screen.getByText(/checking for possible duplicates/i)).toBeInTheDocument();
+    expect(screen.queryByText(/duplicate check unavailable/i)).not.toBeInTheDocument();
+  });
 });

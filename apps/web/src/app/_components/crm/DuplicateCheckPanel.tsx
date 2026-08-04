@@ -5,16 +5,20 @@
  * continue anyway. Pure presentational: the parent owns the fetch + choice.
  */
 import type { DuplicateCandidate } from "@/lib/crm/dataQuality";
+import { DataSourceBadge } from "../DataSourceBadge";
 
 export function DuplicateCheckPanel({
   candidates,
   checking,
+  error,
   onMerge,
   onContinueAnyway,
   mergeHrefBase,
 }: {
   candidates: DuplicateCandidate[];
   checking?: boolean;
+  /** The duplicate-check call itself failed — show a saved-info affordance, never block save. */
+  error?: boolean;
   /** Called when the clerk picks a candidate to merge into instead of creating. */
   onMerge?: (candidate: DuplicateCandidate) => void;
   /** Called when the clerk acknowledges the warning and wants to create anyway. */
@@ -26,6 +30,17 @@ export function DuplicateCheckPanel({
     return (
       <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0" }}>
         Checking for possible duplicates…
+      </p>
+    );
+  }
+  if (error) {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--muted)", margin: "8px 0" }}
+      >
+        Duplicate check unavailable right now — you can still save this record. <DataSourceBadge source="error" />
       </p>
     );
   }

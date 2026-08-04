@@ -50,4 +50,31 @@ describe("DedupRulesEditor (DQ-001 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/BAD: nope/i)).toBeInTheDocument();
   });
+
+  it("blocks save and shows an inline error when a rule has a non-finite number (finding 4)", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({
+      data: [{ ...rule, weight: Number.NaN }],
+      source: "api",
+    });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/must be valid numbers/i)).toBeInTheDocument();
+    expect(dq.saveDedupRules).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes a non-numeric weight entry to 0 instead of NaN (finding 4)", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(dq.saveDedupRules).mockResolvedValue(undefined);
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const weight = screen.getByLabelText(/weight for rule 1/i);
+    // A partial/invalid entry ("-") coerces to a safe 0, never NaN.
+    fireEvent.change(weight, { target: { value: "-" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalled());
+    const saved = vi.mocked(dq.saveDedupRules).mock.calls[0][0];
+    expect(Number.isFinite(saved[0].weight)).toBe(true);
+    expect(saved[0].weight).toBe(0);
+  });
 });

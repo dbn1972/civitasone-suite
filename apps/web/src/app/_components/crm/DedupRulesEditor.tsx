@@ -20,6 +20,27 @@ import {
 const FIELD_OPTIONS: DedupField[] = ["email", "phone", "gstin", "pan", "name", "company"];
 const MATCH_OPTIONS: DedupMatchType[] = ["exact", "fuzzy"];
 
+/**
+ * Coerce a numeric-input string to a finite, non-negative number so a partial
+ * or invalid entry ("", "-", "abc") never lands NaN in state and gets PUT.
+ */
+function sanitizeNumber(raw: string, opts: { max?: number } = {}): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  if (opts.max !== undefined && n > opts.max) return opts.max;
+  return n;
+}
+
+/** True when a rule's weight/threshold are safe to persist. */
+function ruleNumbersValid(rule: DedupRule): boolean {
+  return (
+    Number.isFinite(rule.weight) &&
+    rule.weight >= 0 &&
+    Number.isFinite(rule.threshold) &&
+    rule.threshold >= 0
+  );
+}
+
 export function DedupRulesEditor() {
   const [rules, setRules] = useState<DedupRule[]>([]);
   const [source, setSource] = useState<DqSource | "loading">("loading");
@@ -55,9 +76,13 @@ export function DedupRulesEditor() {
   }
 
   async function save() {
-    setBusy(true);
     setMessage("");
     setError("");
+    if (!rules.every(ruleNumbersValid)) {
+      setError("Weight and threshold must be valid numbers (0 or more). Fix the highlighted rules before saving.");
+      return;
+    }
+    setBusy(true);
     try {
       await saveDedupRules(rules);
       setMessage("Matching rules saved.");
@@ -137,8 +162,9 @@ export function DedupRulesEditor() {
                   <input
                     id={`${headingId}-weight-${idx}`}
                     type="number" min={0} step={0.1}
-                    value={rule.weight}
-                    onChange={(e) => update(idx, { weight: Number(e.target.value) })}
+                    value={Number.isFinite(rule.weight) ? rule.weight : ""}
+                    aria-invalid={Number.isFinite(rule.weight) ? undefined : true}
+                    onChange={(e) => update(idx, { weight: sanitizeNumber(e.target.value) })}
                     style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
                   />
                 </td>
@@ -147,8 +173,9 @@ export function DedupRulesEditor() {
                   <input
                     id={`${headingId}-threshold-${idx}`}
                     type="number" min={0} max={1} step={0.05}
-                    value={rule.threshold}
-                    onChange={(e) => update(idx, { threshold: Number(e.target.value) })}
+                    value={Number.isFinite(rule.threshold) ? rule.threshold : ""}
+                    aria-invalid={Number.isFinite(rule.threshold) ? undefined : true}
+                    onChange={(e) => update(idx, { threshold: sanitizeNumber(e.target.value, { max: 1 }) })}
                     style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
                   />
                 </td>

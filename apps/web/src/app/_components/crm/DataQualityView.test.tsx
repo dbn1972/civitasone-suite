@@ -45,7 +45,7 @@ describe("DataQualityView (DQ-004)", () => {
     await waitFor(() => expect(dq.getDataQuality).toHaveBeenCalledWith("contacts", "missing"));
     fireEvent.click(screen.getByText("Accounts"));
     await waitFor(() => expect(dq.getDataQuality).toHaveBeenCalledWith("accounts", "missing"));
-    fireEvent.click(screen.getByRole("button", { name: "Stale records" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Stale records" }));
     await waitFor(() => expect(dq.getDataQuality).toHaveBeenCalledWith("accounts", "stale"));
   });
 });

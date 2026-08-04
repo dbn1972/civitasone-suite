@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
 import {
   duplicateCheck,
@@ -29,7 +29,22 @@ export default function NewContactPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [candidates, setCandidates] = useState<DuplicateCandidate[]>([]);
   const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState(false);
   const [ackDuplicates, setAckDuplicates] = useState(false);
+  // Monotonic id so a slower earlier duplicate-check can't clobber a newer one.
+  const checkSeq = useRef(0);
+
+  /**
+   * Update a field that feeds duplicate detection. Any prior "continue anyway"
+   * acknowledgement and any stale candidate list are invalidated, so a later
+   * edit re-triggers the DQ-001 check instead of silently skipping it.
+   */
+  function setDedupField(patch: Partial<typeof form>) {
+    setForm((f) => ({ ...f, ...patch }));
+    setAckDuplicates(false);
+    setCandidates([]);
+    setCheckError(false);
+  }
 
   // Stable, useId-linked error ids for aria-describedby (DQ-003).
   const phoneErrId = useId();
@@ -42,7 +57,9 @@ export default function NewContactPage() {
 
   async function runDuplicateCheck(): Promise<DuplicateCandidate[]> {
     if (!form.name && !form.email && !form.phone && !form.gstin && !form.pan) return [];
+    const seq = ++checkSeq.current;
     setChecking(true);
+    setCheckError(false);
     try {
       const found = await duplicateCheck({
         name: form.name || undefined,
@@ -52,14 +69,19 @@ export default function NewContactPage() {
         gstin: form.gstin || undefined,
         pan: form.pan || undefined,
       });
-      setCandidates(found);
+      // Ignore a stale response: a later field's check already superseded this.
+      if (seq === checkSeq.current) setCandidates(found);
       return found;
     } catch {
-      // A failed duplicate check must never block a legitimate create.
-      setCandidates([]);
+      // A failed duplicate check must never block a legitimate create — surface a
+      // source="error" affordance instead of silently swallowing (DQ, finding 5).
+      if (seq === checkSeq.current) {
+        setCandidates([]);
+        setCheckError(true);
+      }
       return [];
     } finally {
-      setChecking(false);
+      if (seq === checkSeq.current) setChecking(false);
     }
   }
 
@@ -136,18 +158,18 @@ export default function NewContactPage() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
             <div>
               <label htmlFor="new-name" style={labelStyle}>Full name</label>
-              <input id="new-name" aria-required="true" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Asha Rao" style={inputStyle} />
+              <input id="new-name" aria-required="true" value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. Asha Rao" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-email" style={labelStyle}>Email</label>
-              <input id="new-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="name@example.com" style={inputStyle} />
+              <input id="new-email" type="email" value={form.email} onChange={(e) => setDedupField({ email: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="name@example.com" style={inputStyle} />
             </div>
             <div>
               <label htmlFor="new-phone" style={labelStyle}>Phone (mobile)</label>
               <input
                 id="new-phone"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setDedupField({ phone: e.target.value })}
                 onBlur={() => void runDuplicateCheck()}
                 placeholder="9900000000"
                 style={inputStyle}
@@ -165,7 +187,7 @@ export default function NewContactPage() {
               <input
                 id="new-gstin"
                 value={form.gstin}
-                onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+                onChange={(e) => setDedupField({ gstin: e.target.value.toUpperCase() })}
                 onBlur={() => void runDuplicateCheck()}
                 placeholder="29ABCDE1234F1Z5"
                 style={inputStyle}
@@ -179,7 +201,7 @@ export default function NewContactPage() {
               <input
                 id="new-pan"
                 value={form.pan}
-                onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })}
+                onChange={(e) => setDedupField({ pan: e.target.value.toUpperCase() })}
                 placeholder="ABCDE1234F"
                 style={inputStyle}
                 aria-invalid={fieldErrors.pan ? true : undefined}
@@ -228,6 +250,7 @@ export default function NewContactPage() {
           <DuplicateCheckPanel
             candidates={candidates}
             checking={checking}
+            error={checkError}
             mergeHrefBase="/crm/contacts/"
             onMerge={(c) => router.push(`/crm/contacts/${c.id}`)}
             onContinueAnyway={() => {
