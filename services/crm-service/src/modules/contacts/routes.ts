@@ -7,6 +7,7 @@ import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
   listContactsQuery, createAccountBody, idParam, contactsListSchema, accountsListSchema,
   classificationBody,
+  internalBulkImportBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -79,6 +80,25 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = bulkImportBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.bulkImportContacts(ctx, body));
+  });
+
+  // External-Lead SFTP ingestion (BRD §9 #12 / LM-005): service-to-service bulk
+  // lead-create seam. Gated by x-service-secret (INTERNAL_SERVICE_SECRET) via the
+  // internal-call path, NOT a user JWT — a normal user token is rejected here so
+  // this can never be used to bypass the ADMIN_ROLES gate on /bulk/import. Reuses
+  // commands.bulkImportContacts so DQ-001 dedup + all import logic still applies.
+  // MK-002: leadSource = source is stamped onto every contact for attribution.
+  app.post("/v1/crm/contacts/bulk/import/internal", async (req, reply) => {
+    if (req.headers["x-internal"] !== "1") {
+      throw new HttpError(401, "UNAUTHENTICATED", "internal route requires service authentication");
+    }
+    const ctx = resolveContext(req); // validates x-service-secret vs INTERNAL_SERVICE_SECRET
+    const body = internalBulkImportBody.parse(req.body);
+    if (body.tenantId !== ctx.tenantId) {
+      throw new HttpError(400, "TENANT_MISMATCH", "body tenantId must match x-tenant-id");
+    }
+    const contacts = body.contacts.map((c) => ({ ...c, leadSource: body.source }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.bulkImportContacts(ctx, { contacts }));
   });
 
   app.post("/v1/crm/contacts/merge", async (req, reply) => {

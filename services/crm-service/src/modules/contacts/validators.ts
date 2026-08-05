@@ -62,6 +62,17 @@ export const bulkImportBody = z.object({
 });
 export type BulkImportBody = z.infer<typeof bulkImportBody>;
 
+// External-Lead SFTP ingestion (BRD §9 #12 / LM-005): the service-to-service
+// bulk lead-create seam. Same contact shape + limits as bulkImportBody, plus the
+// caller tenant + connector source (MK-002 attribution). Auth is x-service-secret
+// (INTERNAL_SERVICE_SECRET), NOT a user JWT — enforced at the route.
+export const internalBulkImportBody = z.object({
+  tenantId: z.string().uuid(),
+  source: z.string().min(1).max(64),
+  contacts: z.array(createContactBody).min(1).max(500),
+});
+export type InternalBulkImportBody = z.infer<typeof internalBulkImportBody>;
+
 export const listContactsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),

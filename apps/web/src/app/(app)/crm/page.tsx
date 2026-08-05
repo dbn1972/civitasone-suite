@@ -7,6 +7,7 @@ const crmTiles: NavTile[] = [
 	{ title: "Accounts", href: "/crm/accounts" },
 	{ title: "Contacts", href: "/crm/contacts" },
 	{ title: "Deals", href: "/crm/deals" },
+	{ title: "Customer Onboarding", href: "/crm/onboarding" },
 	{ title: "Pipeline Board", href: "/crm/pipeline" },
 	{ title: "Sales Pipelines", href: "/crm/pipelines" },
 	{ title: "Opportunities", href: "/crm/opportunities" },
@@ -21,6 +22,7 @@ const crmTiles: NavTile[] = [
 	{ title: "Data Quality", href: "/crm/data-quality" },
 	{ title: "Documents", href: "/crm/documents" },
 	{ title: "Document Types", href: "/crm/document-types" },
+	{ title: "Custom Fields", href: "/crm/custom-fields" },
 
 	{ title: "Matching Rules", href: "/crm/dedup-rules" },
 	{ title: "Lead Scoring", href: "/crm/lead-scoring" },

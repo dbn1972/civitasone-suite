@@ -281,6 +281,15 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       port: port.default(22),
       username: z.string().min(1),
       privateKey: z.string().min(10),
+      // ── lead-ingestion (BRD §9 #12 / LM-005): OPTIONAL, NON-SECRET. Absent =
+      //    a plain SFTP connector (unchanged behaviour). privateKey stays the
+      //    ONLY secret field. ─────────────────────────────────────────────────
+      inboundPath: z.string().min(1).default("/inbound"),
+      filePattern: z.string().min(1).default("*.csv"),
+      archivePath: z.string().min(1).optional(),
+      leadSource: z.boolean().default(false),
+      leadSourceLabel: z.string().min(1).max(64).optional(),
+      columnMapping: z.record(z.enum(["name", "email", "mobile", "company", "city"])).default({}),
     }),
     secretFields: ["privateKey"],
     primarySecret: "privateKey",

@@ -36,6 +36,7 @@ import { pushRoutes } from "./modules/push/routes.js";
 import { bounceRoutes } from "./modules/bounces/routes.js";
 import { dltRoutes } from "./modules/dlt/routes.js";
 import { quotaRoutes } from "./modules/channels/quota-routes.js";
+import { conversationRoutes } from "./modules/conversations/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -101,6 +102,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dltRoutes);
   // G7: Channel quota management
   await app.register(quotaRoutes);
+  // G5 conversation thread model (omnichannel)
+  await app.register(conversationRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

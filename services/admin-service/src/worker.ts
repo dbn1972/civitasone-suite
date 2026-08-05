@@ -62,6 +62,11 @@ registerF3_support_Consumers(tenantScoped(queue));
 registerIntegrationOpsConsumers(tenantScoped(queue));
 await queue.start();
 const relay = startRelay(db, queue);
+
+// BRD §9 #12 / LM-005: periodic SFTP lead-ingestion sweep across every tenant
+// with an enabled sftp lead-source connector (overlap-guarded).
+import { startSftpLeadIngestionScheduler } from "./modules/lead-ingestion/scheduler.js";
+const sftpLeadIngest = startSftpLeadIngestionScheduler();
 // G7: scheduled outbox purge — remove published messages older than 7 days.
 const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
@@ -85,6 +90,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(purge);
   clearInterval(relay);
   clearInterval(breakGlassSweeper);
+  clearInterval(sftpLeadIngest);
   await queue.stop();
   await sqlClient.end();
   process.exit(0);
