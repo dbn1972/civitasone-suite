@@ -16,7 +16,7 @@
  */
 import { pgSchema, uuid, varchar, jsonb, timestamp } from "drizzle-orm/pg-core";
 import type { PgDatabase } from "drizzle-orm/pg-core";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
@@ -61,34 +61,101 @@ export async function enqueue(
 }
 
 /**
+ * Default bound on how many outbox rows the relay publishes concurrently in a
+ * single cycle. The old relay published strictly sequentially - each publish
+ * paid a full SQS round-trip before the next started - so a batch of 100 rows
+ * took 100 serial round-trips and drained far slower than events arrived,
+ * growing the backlog without bound. Publishing with bounded concurrency
+ * collapses those round-trips into waves while still capping the in-flight
+ * SendMessage count (so the SQS socket pool is never overrun the way an
+ * unbounded fan-out of all 100 would).
+ */
+export const DEFAULT_OUTBOX_RELAY_CONCURRENCY = 20;
+
+/**
+ * Resolve the per-cycle publish concurrency from OUTBOX_RELAY_CONCURRENCY.
+ * A malformed or non-positive override falls back to the safe default rather
+ * than silently reintroducing the sequential (concurrency-1) stall.
+ */
+export function resolveRelayConcurrency(
+  raw: string | undefined = process.env.OUTBOX_RELAY_CONCURRENCY,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_OUTBOX_RELAY_CONCURRENCY;
+  return Math.floor(parsed);
+}
+
+/**
  * Publish unsent outbox rows and mark them published. Per-row isolation: a
  * publish failure on one row is logged + counted and skipped (left unpublished
  * for the next cycle) instead of aborting the whole batch. Returns the number
  * of rows successfully published.
+ *
+ * Rows are published with BOUNDED CONCURRENCY (`concurrency`, default
+ * OUTBOX_RELAY_CONCURRENCY / 20) rather than strictly sequentially: each wave
+ * fires up to `concurrency` publishes at once via Promise.allSettled, so one
+ * slow SQS round-trip no longer blocks the next row. The cap is preserved so a
+ * cycle never fans out all `batch` publishes unbounded onto the SQS socket pool.
+ * Only rows whose publish SUCCEEDED are marked published, in a single batched
+ * UPDATE.
+ *
+ * ORDERING: parallelising means rows within a batch may publish out of
+ * created_at order. That is acceptable here - consumers are idempotent
+ * (markProcessed) and order-tolerant, and this function does not pass
+ * PublishOptions, so it neither sets nor depends on FIFO MessageGroupId
+ * ordering. FIFO topics still dedup via the bus default
+ * MessageDeduplicationId = messageId = row.id.
  */
-export async function relayOnce(db: DrizzleTx, queue: Queue, batch = 100, service = process.env.SERVICE_NAME ?? "service"): Promise<number> {
+export async function relayOnce(
+  db: DrizzleTx,
+  queue: Queue,
+  batch = 100,
+  service = process.env.SERVICE_NAME ?? "service",
+  concurrency = resolveRelayConcurrency(),
+): Promise<number> {
   const rows = await db.select().from(outboxMessages).where(isNull(outboxMessages.publishedAt)).limit(batch);
-  let published = 0;
-  for (const row of rows) {
-    try {
-      await queue.publish(row.topic, {
-        // SEC C1: forward the stable outbox row id as the messageId so a relay
-        // re-publish (after a crash between publish and mark-published) reuses the
-        // same id and the consumer dedupes it via markProcessed, instead of the bus
-        // minting a fresh random id every cycle (which defeated idempotency).
-        messageId: row.id,
-        type: row.eventType, tenantId: row.tenantId, actorId: row.actorId,
-        correlationId: row.correlationId, schemaVersion: "1.0", payload: row.payload,
-      });
-      await db.update(outboxMessages).set({ publishedAt: new Date() }).where(eq(outboxMessages.id, row.id));
-      published++;
-    } catch (err) {
-      // OPS-1: a relay publish failure is now observable and isolated.
-      incrementOutboxRelayFailure(service);
-      captureError(err, { service, topic: row.topic, correlationId: row.correlationId, event: "outbox_relay_failed", outboxId: row.id });
+  if (rows.length === 0) return 0;
+
+  const succeededIds: string[] = [];
+  // Never below 1; the wave size is the in-flight ceiling for this cycle.
+  const wave = Math.max(1, Math.floor(concurrency));
+
+  for (let start = 0; start < rows.length; start += wave) {
+    const chunk = rows.slice(start, start + wave);
+    const results = await Promise.allSettled(
+      chunk.map(async (row) => {
+        try {
+          await queue.publish(row.topic, {
+            // SEC C1: forward the stable outbox row id as the messageId so a relay
+            // re-publish (after a crash between publish and mark-published) reuses
+            // the same id and the consumer dedupes it via markProcessed, instead of
+            // the bus minting a fresh random id every cycle (which defeated
+            // idempotency).
+            messageId: row.id,
+            type: row.eventType, tenantId: row.tenantId, actorId: row.actorId,
+            correlationId: row.correlationId, schemaVersion: "1.0", payload: row.payload,
+          });
+          return row.id;
+        } catch (err) {
+          // OPS-1: a relay publish failure is observable and isolated - one row's
+          // failure never aborts the batch or blocks its peers.
+          incrementOutboxRelayFailure(service);
+          captureError(err, { service, topic: row.topic, correlationId: row.correlationId, event: "outbox_relay_failed", outboxId: row.id });
+          throw err;
+        }
+      }),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") succeededIds.push(r.value);
     }
   }
-  return published;
+
+  // Mark-published: a row is marked published IFF its publish succeeded. One
+  // batched UPDATE (id = ANY(succeeded)) instead of N per-row round-trips.
+  if (succeededIds.length > 0) {
+    await db.update(outboxMessages).set({ publishedAt: new Date() }).where(inArray(outboxMessages.id, succeededIds));
+  }
+  return succeededIds.length;
 }
 
 /**
@@ -133,7 +200,6 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
  * Returns the total number of deleted rows. Safe to call from any service worker.
  */
 export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 1000): Promise<number> {
-  const { sql } = await import("drizzle-orm");
   const cutoff = sql`now() - interval '${sql.raw(String(retentionDays))} days'`;
 
   // Delete published outbox messages older than retention in batches
@@ -195,7 +261,6 @@ export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): 
         const deleted = await purgeOutbox(db, retentionDays, batchSize);
         if (deleted === 0 && logger) {
           // Check if outbox has >10K entries — indicates stuck/stale situation
-          const { sql } = await import("drizzle-orm");
           const countResult = await db.execute(
             sql`SELECT count(*)::int AS cnt FROM _outbox.messages`
           );
@@ -216,4 +281,4 @@ export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): 
   return timer;
 }
 
-export { and, eq, isNull };
+export { and, eq, isNull, inArray };
