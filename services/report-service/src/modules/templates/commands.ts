@@ -7,7 +7,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateTemplateBody, UpdateTemplateBody, ExecuteTemplateBody } from "./validators.js";
 import type { TemplateView } from "./schema.js";
-import type { TemplateFilter, TemplateGroup, TemplateAggregation, TemplateParameter } from "./schema.js";
+import type { TemplateFilter, TemplateGroup, TemplateAggregation, TemplateParameter, TemplateFormula, TemplateChartConfig } from "./schema.js";
 import { validateTemplate, validateTemplateCount } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
@@ -46,6 +46,8 @@ export async function createTemplate(ctx: RequestContext, body: CreateTemplateBo
     groups: body.groups as unknown as TemplateGroup[],
     aggregations: body.aggregations as unknown as TemplateAggregation[],
     parameters: body.parameters as unknown as TemplateParameter[],
+    formulas: (body.formulas ?? []) as unknown as TemplateFormula[],
+    chartConfig: (body.chartConfig as TemplateChartConfig | undefined) ?? null,
     outputFormat: body.outputFormat,
     status: "draft",
     watermark: body.watermark ?? null,

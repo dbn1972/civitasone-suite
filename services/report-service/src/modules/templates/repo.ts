@@ -4,7 +4,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
 import { reportTemplates, type TemplateRow, type TemplateInsert, type TemplateView } from "./schema.js";
-import type { TemplateFilter, TemplateGroup, TemplateAggregation, TemplateParameter } from "./schema.js";
+import type { TemplateFilter, TemplateGroup, TemplateAggregation, TemplateParameter, TemplateFormula, TemplateChartConfig } from "./schema.js";
 
 function toView(r: TemplateRow): TemplateView {
   return {
@@ -17,6 +17,8 @@ function toView(r: TemplateRow): TemplateView {
     groups: (r.groups ?? []) as TemplateGroup[],
     aggregations: (r.aggregations ?? []) as TemplateAggregation[],
     parameters: (r.parameters ?? []) as TemplateParameter[],
+    formulas: (r.formulas ?? []) as TemplateFormula[],
+    chartConfig: (r.chartConfig ?? null) as TemplateChartConfig | null,
     outputFormat: r.outputFormat,
     status: r.status,
     watermark: r.watermark ?? null,

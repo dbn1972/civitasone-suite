@@ -27,6 +27,21 @@ export const templateParameterSchema = z.object({
   options: z.array(z.string().max(256)).max(100).optional(),
 });
 
+export const templateFormulaSchema = z.object({
+  name: z.string().min(1).max(64),
+  expression: z.string().min(1).max(500),
+  type: z.enum(["number", "percentage", "currency"]),
+});
+
+export const chartConfigSchema = z.object({
+  type: z.enum(["bar", "line", "pie", "area", "scatter", "funnel", "table"]),
+  xAxis: z.string().max(128).optional(),
+  yAxis: z.string().max(128).optional(),
+  series: z.array(z.string().max(128)).max(20).optional(),
+  colorScheme: z.string().max(64).optional(),
+  stacked: z.boolean().optional(),
+});
+
 export const createTemplateBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
@@ -35,6 +50,8 @@ export const createTemplateBody = z.object({
   groups: z.array(templateGroupSchema).max(4).default([]),
   aggregations: z.array(templateAggregationSchema).default([]),
   parameters: z.array(templateParameterSchema).max(20).default([]),
+  formulas: z.array(templateFormulaSchema).max(20).default([]),
+  chartConfig: chartConfigSchema.optional(),
   outputFormat: z.enum(["pdf", "xlsx", "csv"]).default("pdf"),
   watermark: z.string().max(200).optional(),
   piiColumns: z.array(z.string().min(1).max(128)).max(50).optional(),
@@ -49,6 +66,8 @@ export const updateTemplateBody = z.object({
   groups: z.array(templateGroupSchema).max(4).optional(),
   aggregations: z.array(templateAggregationSchema).optional(),
   parameters: z.array(templateParameterSchema).max(20).optional(),
+  formulas: z.array(templateFormulaSchema).max(20).optional(),
+  chartConfig: chartConfigSchema.nullable().optional(),
   outputFormat: z.enum(["pdf", "xlsx", "csv"]).optional(),
   status: z.enum(["active", "draft", "archived"]).optional(),
   watermark: z.string().max(200).nullable().optional(),
