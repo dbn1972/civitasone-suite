@@ -36,6 +36,8 @@ export const createTemplateBody = z.object({
   aggregations: z.array(templateAggregationSchema).default([]),
   parameters: z.array(templateParameterSchema).max(20).default([]),
   outputFormat: z.enum(["pdf", "xlsx", "csv"]).default("pdf"),
+  watermark: z.string().max(200).optional(),
+  piiColumns: z.array(z.string().min(1).max(128)).max(50).optional(),
 });
 export type CreateTemplateBody = z.infer<typeof createTemplateBody>;
 
@@ -49,6 +51,8 @@ export const updateTemplateBody = z.object({
   parameters: z.array(templateParameterSchema).max(20).optional(),
   outputFormat: z.enum(["pdf", "xlsx", "csv"]).optional(),
   status: z.enum(["active", "draft", "archived"]).optional(),
+  watermark: z.string().max(200).nullable().optional(),
+  piiColumns: z.array(z.string().min(1).max(128)).max(50).nullable().optional(),
   version: z.number().int().min(1),
 });
 export type UpdateTemplateBody = z.infer<typeof updateTemplateBody>;

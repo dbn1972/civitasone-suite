@@ -2,6 +2,8 @@
  * Render consumer — processes report.job.render commands.
  * Calls @civitasone/render for real PDF/XLSX, uploads via @civitasone/storage,
  * updates job status + downloadUrl.
+ *
+ * Applies watermark and PII masking when configured on the template.
  */
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -15,6 +17,8 @@ import { renderXlsx, renderCsv } from "@civitasone/render/xlsx";
 import { putObject, presignedGetUrl } from "@civitasone/storage";
 import { pino } from "pino";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { applyPdfWatermark, applyCsvWatermark } from "../../shared/watermark.js";
+import { maskPiiColumns } from "../../shared/mask.js";
 
 const log = pino({ name: "render-consumer" });
 
@@ -26,6 +30,14 @@ interface RenderPayload {
   columns?: Array<{ header: string; key: string; width?: number }>;
   rows?: Record<string, unknown>[];
   title?: string;
+  /** Watermark text to overlay on the export */
+  watermark?: string;
+  /** Column keys containing PII to mask */
+  piiColumns?: string[];
+  /** Roles allowed to see unmasked PII */
+  piiAllowedRoles?: string[];
+  /** The executing user's role */
+  actorRole?: string;
 }
 
 export function registerRenderConsumers(queue: Queue): void {
@@ -43,6 +55,17 @@ export function registerRenderConsumers(queue: Queue): void {
           .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId)));
       });
 
+      // Apply PII masking before rendering if configured
+      let rows = p.rows ?? [];
+      if (p.piiColumns && p.piiColumns.length > 0 && p.actorRole) {
+        rows = maskPiiColumns(
+          rows,
+          p.piiColumns,
+          p.actorRole,
+          p.piiAllowedRoles ?? ["super_admin"],
+        );
+      }
+
       let buffer: Buffer;
       let contentType: string;
       let ext: string;
@@ -50,16 +73,21 @@ export function registerRenderConsumers(queue: Queue): void {
       switch (p.format) {
         case "pdf": {
           const result = await renderPdf({ html: p.templateHtml });
-          buffer = result.buffer;
+          buffer = p.watermark
+            ? applyPdfWatermark(result.buffer, { text: p.watermark })
+            : result.buffer;
           contentType = "application/pdf";
           ext = "pdf";
           break;
         }
         case "xlsx": {
+          const xlsxTitle = p.watermark
+            ? `${p.watermark}\n${p.title ?? ""}`
+            : p.title;
           const result = await renderXlsx({
             columns: (p.columns ?? []).map((c) => ({ header: c.header, key: c.key, width: c.width })),
-            rows: p.rows ?? [],
-            title: p.title,
+            rows,
+            title: xlsxTitle,
             generatedAt: new Date().toISOString(),
           });
           buffer = result.buffer;
@@ -70,9 +98,10 @@ export function registerRenderConsumers(queue: Queue): void {
         case "csv": {
           const csv = renderCsv(
             (p.columns ?? []).map((c) => ({ header: c.header, key: c.key })),
-            p.rows ?? [],
+            rows,
           );
-          buffer = Buffer.from(csv, "utf-8");
+          const csvContent = p.watermark ? applyCsvWatermark(csv, p.watermark) : csv;
+          buffer = Buffer.from(csvContent, "utf-8");
           contentType = "text/csv";
           ext = "csv";
           break;

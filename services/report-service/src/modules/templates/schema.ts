@@ -22,6 +22,10 @@ export const reportTemplates = domainSchema.table("report_templates", {
   parameters: jsonb("parameters").notNull().default([]),
   outputFormat: varchar("output_format", { length: 8 }).notNull().default("pdf"),
   status: varchar("status", { length: 16 }).notNull().default("draft"),
+  /** Optional watermark text overlaid on exports */
+  watermark: varchar("watermark", { length: 200 }),
+  /** JSON array of column keys containing PII to mask for non-privileged roles */
+  piiColumns: jsonb("pii_columns"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -73,6 +77,8 @@ export interface TemplateView {
   parameters: TemplateParameter[];
   outputFormat: string;
   status: string;
+  watermark: string | null;
+  piiColumns: string[] | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;

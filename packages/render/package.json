@@ -7,7 +7,9 @@
   "exports": {
     ".": "./dist/index.js",
     "./pdf": "./dist/pdf.js",
-    "./xlsx": "./dist/xlsx.js"
+    "./xlsx": "./dist/xlsx.js",
+    "./watermark": "./dist/watermark.js",
+    "./mask": "./dist/mask.js"
   },
   "scripts": {
     "build": "tsc",

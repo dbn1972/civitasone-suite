@@ -10,6 +10,11 @@ export type CreateJobBody = z.infer<typeof createJobBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/** Query params for the download endpoint (watermark support for ad-hoc exports) */
+export const downloadQuerySchema = z.object({
+  watermarkText: z.string().max(200).optional(),
+});
+
 export const jobViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

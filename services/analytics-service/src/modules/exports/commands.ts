@@ -15,6 +15,8 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export interface CreateExportBody {
   queryRunId: string;
   format: ExportFormat;
+  watermark?: string;
+  piiColumns?: string[];
 }
 
 /**
@@ -34,6 +36,8 @@ export async function createExport(ctx: RequestContext, body: CreateExportBody):
       id,
       queryRunId: body.queryRunId,
       format: body.format,
+      watermark: body.watermark,
+      piiColumns: body.piiColumns,
     },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

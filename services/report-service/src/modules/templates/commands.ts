@@ -48,6 +48,8 @@ export async function createTemplate(ctx: RequestContext, body: CreateTemplateBo
     parameters: body.parameters as unknown as TemplateParameter[],
     outputFormat: body.outputFormat,
     status: "draft",
+    watermark: body.watermark ?? null,
+    piiColumns: body.piiColumns ?? null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
