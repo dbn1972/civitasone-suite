@@ -1413,6 +1413,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/numbering':
+        specifier: workspace:*
+        version: link:../../packages/numbering
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -1428,6 +1431,9 @@ importers:
       '@civitasone/search':
         specifier: workspace:*
         version: link:../../packages/search
+      '@civitasone/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -1854,6 +1860,9 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/numbering':
+        specifier: workspace:*
+        version: link:../../packages/numbering
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
