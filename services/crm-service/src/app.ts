@@ -66,6 +66,14 @@ import { priceBookRoutes } from "./modules/price-books/routes.js";
 import { quotationApprovalRoutes } from "./modules/deals/quotation-approval-routes.js";
 import { documentRoutes } from "./modules/documents/routes.js";
 import { documentTypeRoutes } from "./modules/documents/types-routes.js";
+// Generic CRM gaps
+import { commissionRoutes } from "./modules/commissions/routes.js";
+import { referralRoutes } from "./modules/referrals/routes.js";
+import { appointmentRoutes } from "./modules/appointments/routes.js";
+import { flagRoutes } from "./modules/contacts/flags-routes.js";
+import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
+import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
+import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -178,6 +186,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ── DM: Document & Attachment Management (BRD §7.12) ──
   await app.register(documentRoutes);
   await app.register(documentTypeRoutes);
+  // ── Generic CRM gaps ──
+  await app.register(commissionRoutes);
+  await app.register(referralRoutes);
+  await app.register(appointmentRoutes);
+  await app.register(flagRoutes);
+  await app.register(subscriptionRoutes);
+  await app.register(volumeVsActualRoutes);
+  await app.register(sponsorRoutes);
 
   return app;
 }

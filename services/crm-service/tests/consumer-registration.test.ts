@@ -55,8 +55,11 @@ describe("crm-service consumer registration", () => {
   });
 
   it("subscribes each command topic exactly once", () => {
+    // Events (crm.*.ed suffix) are multi-cast by design — multiple modules may react.
+    // Only command topics (crm.*.verb) must be single-subscriber to avoid double-processing.
+    const commandTopics = new Set(Object.values(COMMANDS));
     const duplicates = [...new Set(subscribed)].filter(
-      (t) => subscribed.filter((s) => s === t).length > 1,
+      (t) => commandTopics.has(t) && subscribed.filter((s) => s === t).length > 1,
     );
     expect(duplicates).toEqual([]);
   });
