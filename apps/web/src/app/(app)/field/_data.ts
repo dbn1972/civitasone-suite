@@ -92,8 +92,6 @@ export const getFieldAgents = moduleLoader("/api/v1/field/tasks", "field.agents"
 export const getFieldSync = moduleLoader("/api/v1/field/sync/pull?since=1970-01-01T00:00:00.000Z", "field.sync");
 
 
-import { fetchJson, type LoaderResult as LR } from "@/app/_data/apiClient";
-
 export type FieldVisitRow = {
   id: string;
   taskId: string;
@@ -110,7 +108,7 @@ export type FieldVisitRow = {
 };
 
 /** Typed visits list for the P1-10 GPS / outcome screen. */
-export async function getFieldVisitsDetailed(): Promise<LR<FieldVisitRow[]>> {
+export async function getFieldVisitsDetailed(): Promise<LoaderResult<FieldVisitRow[]>> {
   return fetchJson("/api/v1/field/visits?limit=100", [] as FieldVisitRow[], {
     revalidateSeconds: 30,
     telemetryKey: "field.visits.detailed",
