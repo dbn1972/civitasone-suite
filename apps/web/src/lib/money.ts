@@ -42,3 +42,36 @@ export function rupeesToMinorString(input: string): string | null {
   if (minor <= 0n) return null;
   return minor.toString();
 }
+
+/**
+ * Convert a clerk-entered percentage string (e.g. a tax or discount rate) into
+ * a basis-points integer (1% = 100 bps), without floating-point rounding error.
+ *
+ * Mirrors rupeesToMinorString: it parses the string directly rather than doing
+ * `Number(pct) * 100` (which mis-rounds values like 5.55). A percentage carries
+ * at most 2 decimal places to land on a whole basis point — anything finer
+ * (e.g. "5.555" → 555.5 bps) is rejected instead of silently rounded, so a
+ * fabricated rate never reaches the persisted total.
+ *
+ * Zero is allowed (a 0% tax line is valid); negatives and non-numeric input are
+ * rejected. Callers that need a strictly-positive rate (e.g. a discount) check
+ * `>0` themselves.
+ *
+ *   percentToBps("18")    -> 1800
+ *   percentToBps("12.5")  -> 1250
+ *   percentToBps("5.55")  -> 555
+ *   percentToBps("0")     -> 0
+ *   percentToBps("5.555") -> null   (more than 2 decimal places)
+ *   percentToBps("-1")    -> null
+ *   percentToBps("abc")   -> null
+ */
+export function percentToBps(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const [, wholePart, fracPart = ""] = match;
+  const paddedFrac = fracPart.padEnd(2, "0");
+  const bps = Number(`${wholePart}${paddedFrac}`);
+  return Number.isFinite(bps) ? bps : null;
+}

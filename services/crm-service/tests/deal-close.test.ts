@@ -95,7 +95,8 @@ async function reopenDeal(id: string): Promise<void> {
     await tx`
       UPDATE crm.deals
       SET stage = 'Negotiation', status = 'active', probability = 0,
-          closed_at = NULL, close_reason = NULL, closed_value_minor = NULL
+          closed_at = NULL, close_reason = NULL, closed_value_minor = NULL,
+          close_outcome = NULL, close_competitor = NULL
       WHERE id = ${id} AND tenant_id = ${TENANT}
     `;
   });

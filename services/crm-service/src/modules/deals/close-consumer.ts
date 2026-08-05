@@ -1,10 +1,14 @@
 /**
- * Deal close consumer (OP-006) — applies `crm.deal.close`.
+ * Deal close consumer (OP-006) — applies `crm.deal.close` and `crm.deal_close_policy.set`.
  *
- * Mirrors the stage-transition convention in repo.ts: stage Won/Lost pins
- * status to won/lost, probability to 100/0, and stamps closed_at. The mandatory
- * loss reason and the realised value are persisted alongside so a closed deal
- * can be reported on without replaying the event log.
+ * won/lost pin stage Won/Lost, status won/lost, probability 100/0 and stamp closed_at.
+ * cancelled/on_hold do NOT move the stage — they record the closure via close_outcome so
+ * a parked/cancelled opportunity is distinguishable in reporting without pretending it
+ * was won or lost. The mandatory reason and (for losses) the competitor are persisted.
+ *
+ * The write is the authority on "already closed": the guard requires close_outcome IS
+ * NULL and stage NOT IN (Won,Lost), so a duplicate or racing close leaves the first
+ * outcome intact.
  */
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -22,35 +26,74 @@ const RESOURCE = "deal";
 
 interface ClosePayload {
   dealId: string;
-  outcome: "won" | "lost";
+  outcome: "won" | "lost" | "cancelled" | "on_hold";
   reason: string;
   closedValue: string | null;
+  competitor: string[] | null;
 }
 
 export function registerDealCloseConsumer(queue: Queue): void {
+  queue.subscribe(COMMANDS.setDealClosePolicy, async (msg) => {
+    const p = msg.payload as { tenantId: string; competitorRequiredOnLoss: boolean };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await tx.execute(sql`
+          INSERT INTO crm.deal_close_policy (tenant_id, competitor_required_on_loss, updated_by)
+          VALUES (${p.tenantId}, ${p.competitorRequiredOnLoss}, ${msg.actorId})
+          ON CONFLICT (tenant_id) DO UPDATE
+            SET competitor_required_on_loss = EXCLUDED.competitor_required_on_loss,
+                updated_at = now(), updated_by = EXCLUDED.updated_by
+        `);
+        await emitWithAudit(tx, ctxOf(msg), {
+          eventType: EVENTS.dealClosePolicySet,
+          action: "set_close_policy",
+          resourceType: "deal_close_policy",
+          resourceId: p.tenantId,
+          payload: { competitorRequiredOnLoss: p.competitorRequiredOnLoss },
+        });
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "setDealClosePolicy failed");
+      throw err;
+    }
+  });
+
   queue.subscribe(COMMANDS.closeDeal, async (msg) => {
     const p = msg.payload as ClosePayload;
-    const stage = p.outcome === "won" ? "Won" : "Lost";
+    const isWonLost = p.outcome === "won" || p.outcome === "lost";
+    const stage = p.outcome === "won" ? "Won" : p.outcome === "lost" ? "Lost" : null;
+    // won/lost/on_hold map straight to status. A 'cancelled' CLOSURE must NOT reuse the
+    // soft-delete marker ('cancelled'), or every read-path filter (NOT IN
+    // ('deleted','cancelled')) would hide a legitimately cancelled-and-reportable deal.
+    // It is stored as status='closed' with close_outcome='cancelled' so it stays visible
+    // in GET/list/funnel while genuine soft-deletes remain hidden.
+    const status = p.outcome === "cancelled" ? "closed" : p.outcome;
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        // `stage NOT IN ('Won','Lost')` makes the write the authority on
-        // "already closed": a duplicate or racing close leaves the first
-        // outcome intact instead of overwriting it.
+        const stageSet = stage !== null ? sql`stage = ${stage},` : sql``;
+        const probSet = p.outcome === "won" ? sql`probability = 100,` : p.outcome === "lost" ? sql`probability = 0,` : sql``;
+        const closedAtSet = isWonLost ? sql`closed_at = now(),` : sql``;
+        const competitorJson = p.competitor == null ? null : JSON.stringify(p.competitor);
+
         const rows = (await tx.execute(sql`
           UPDATE crm.deals
-          SET stage = ${stage},
-              status = ${p.outcome},
-              probability = ${p.outcome === "won" ? 100 : 0},
-              closed_at = now(),
+          SET ${stageSet}
+              status = ${status},
+              ${probSet}
+              ${closedAtSet}
+              close_outcome = ${p.outcome},
               close_reason = ${p.reason === "" ? null : p.reason},
+              close_competitor = ${competitorJson}::jsonb,
               closed_value_minor = COALESCE(${p.closedValue}::bigint, value_minor),
               updated_at = now(),
               updated_by = ${msg.actorId},
               version = version + 1
           WHERE id = ${p.dealId}
             AND tenant_id = ${msg.tenantId}
+            AND close_outcome IS NULL
             AND stage NOT IN ('Won', 'Lost')
             AND status NOT IN ('deleted', 'cancelled')
           RETURNING closed_value_minor AS "closedValueMinor"
@@ -69,9 +112,7 @@ export function registerDealCloseConsumer(queue: Queue): void {
           return;
         }
 
-        // Stamped on the event so a won deal can open a customer onboarding without
-        // the onboarding module ever reading a deal or contact row (P1-9).
-        const accountId = await repo.findAccountId(tx, p.dealId, msg.tenantId);
+        const accountId = p.outcome === "won" ? await repo.findAccountId(tx, p.dealId, msg.tenantId) : null;
 
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.dealClosed,

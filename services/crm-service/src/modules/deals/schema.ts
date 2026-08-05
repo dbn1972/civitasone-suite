@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, char, timestamp, date, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, char, timestamp, date, text, jsonb } from "drizzle-orm/pg-core";
 
 export const crmSchema = pgSchema("crm");
 
@@ -19,6 +19,17 @@ export const deals = crmSchema.table("deals", {
   closedValueMinor: bigint("closed_value_minor", { mode: "bigint" }),
   probability: integer("probability").notNull().default(0),
   status: varchar("status", { length: 24 }).notNull().default("active"),
+  // ── OP-003: opportunity attributes gating stage progression ──
+  product: varchar("product", { length: 160 }),
+  quantity: integer("quantity"),
+  competitors: jsonb("competitors").$type<string[]>().notNull().default([]),
+  nextStep: text("next_step"),
+  expectedCloseDate: date("expected_close_date"),
+  // ── OP-005: stage-ageing tracking ──
+  stageEnteredAt: timestamp("stage_entered_at", { withTimezone: true }),
+  // ── OP-006: extended closure ──
+  closeOutcome: varchar("close_outcome", { length: 16 }),
+  closeCompetitor: jsonb("close_competitor").$type<string[] | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -49,6 +60,14 @@ export type DealView = {
   closedValueMinor: string | null;
   probability: number;
   status: string;
+  product: string | null;
+  quantity: number | null;
+  competitors: string[];
+  nextStep: string | null;
+  expectedCloseDate: string | null;
+  stageEnteredAt: string | null;
+  closeOutcome: string | null;
+  closeCompetitor: string[] | null;
   version: number;
 };
 

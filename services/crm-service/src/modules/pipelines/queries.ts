@@ -15,9 +15,11 @@ export async function listPipelines(
   tenantId: string,
   limit: number,
   offset: number,
+  scope: repo.PipelineScopeFilter = {},
 ): Promise<{ data: PipelineView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  const scopeKey = `${scope.product ?? ""}:${scope.region ?? ""}:${scope.businessUnit ?? ""}`;
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${scopeKey}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, scope);
     return {
       data: rows,
       pagination: {
