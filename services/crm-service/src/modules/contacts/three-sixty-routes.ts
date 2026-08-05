@@ -2,10 +2,12 @@
  * CM-004 — 360-degree view. One authorised, tenant-scoped view aggregating every
  * CRM-LOCAL record related to a contact or account.
  *
- * Cross-service data (helpdesk cases, knowledge documents) is DELIBERATELY not
- * fetched here — this worktree owns only the crm schema. Those appear as honest
- * reference stubs { count: null, source: "external" } so the FE renders a link /
- * placeholder rather than a fabricated 0.
+ * Cross-service data: communications and calls are fetched from notification-service
+ * and telephony-service respectively. Helpdesk cases and knowledge documents remain
+ * as honest stubs since those services are not yet integrated.
+ *
+ * All cross-service calls use a 10s AbortController timeout and degrade gracefully
+ * — a downstream failure NEVER causes this endpoint to 500.
  */
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
@@ -16,11 +18,169 @@ import { scopedRead } from "../../shared/db.js";
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 
-/** Honest placeholders for data owned by other services (not called from here). */
+/** Honest placeholders for data owned by services not yet integrated. */
 const EXTERNAL_STUBS = {
   helpdeskCases: { count: null as number | null, source: "external" as const },
   knowledgeDocuments: { count: null as number | null, source: "external" as const },
 };
+
+// ── Cross-service configuration ──
+const NOTIFICATION_BASE = process.env.NOTIFICATION_SERVICE_URL ?? "http://localhost:3006";
+const TELEPHONY_BASE = process.env.TELEPHONY_SERVICE_URL ?? "http://localhost:3026";
+const FETCH_TIMEOUT_MS = 10_000;
+
+/** Represents a cross-service section in the 360 response. */
+interface CrossServiceSection<T> {
+  items: T[];
+  total: number;
+  available: boolean;
+  error?: string;
+}
+
+interface CommunicationItem {
+  id: string;
+  channel: string;
+  direction: string;
+  status: string;
+  templateId?: string;
+  subject?: string;
+  sentAt: string;
+  deliveryStatus?: string;
+}
+
+interface CallItem {
+  id: string;
+  direction: string;
+  status: string;
+  duration?: number;
+  startedAt: string;
+  recordingAvailable?: boolean;
+}
+
+interface ConversationItem {
+  id: string;
+  channel: string;
+  lastMessageAt: string;
+  messageCount: number;
+  status: string;
+}
+
+/**
+ * Fetch from an external service with a 10s timeout + auth header forwarding.
+ * Returns parsed array on success, null on any failure (timeout, 5xx, network).
+ */
+async function fetchCrossService(
+  url: string,
+  headers: Record<string, string>,
+): Promise<unknown[] | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const res = await fetch(url, { headers, signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    if (Array.isArray(body)) return body;
+    if (body && typeof body === "object" && "data" in body && Array.isArray((body as Record<string, unknown>).data)) {
+      return (body as Record<string, unknown>).data as unknown[];
+    }
+    return [];
+  } catch {
+    return null;
+  }
+}
+
+/** Map notification-service delivery records to CommunicationItems. */
+function mapCommunications(raw: unknown[]): CommunicationItem[] {
+  return raw.map((r) => {
+    const d = r as Record<string, unknown>;
+    const item: CommunicationItem = {
+      id: String(d.id ?? ""),
+      channel: String(d.channel ?? "unknown"),
+      direction: String(d.direction ?? "outbound"),
+      status: String(d.status ?? "sent"),
+      sentAt: String(d.sentAt ?? d.createdAt ?? ""),
+    };
+    if (d.templateId) item.templateId = String(d.templateId);
+    if (d.subject) item.subject = String(d.subject);
+    if (d.deliveryStatus) item.deliveryStatus = String(d.deliveryStatus);
+    return item;
+  });
+}
+
+/** Map telephony-service call records to CallItems. */
+function mapCalls(raw: unknown[]): CallItem[] {
+  return raw.map((r) => {
+    const c = r as Record<string, unknown>;
+    const item: CallItem = {
+      id: String(c.id ?? ""),
+      direction: String(c.direction ?? "outbound"),
+      status: String(c.status ?? "completed"),
+      startedAt: String(c.startedAt ?? c.createdAt ?? ""),
+    };
+    if (typeof c.duration === "number") item.duration = c.duration;
+    if (typeof c.recordingAvailable === "boolean") item.recordingAvailable = c.recordingAvailable;
+    return item;
+  });
+}
+
+/** Map notification-service inbox records to ConversationItems. */
+function mapConversations(raw: unknown[]): ConversationItem[] {
+  return raw.map((r) => {
+    const cv = r as Record<string, unknown>;
+    return {
+      id: String(cv.id ?? ""),
+      channel: String(cv.channel ?? "unknown"),
+      lastMessageAt: String(cv.lastMessageAt ?? cv.updatedAt ?? ""),
+      messageCount: typeof cv.messageCount === "number" ? cv.messageCount : 0,
+      status: String(cv.status ?? "open"),
+    };
+  });
+}
+
+/**
+ * Fetch all cross-service data for a contact: communications, calls, conversations.
+ * Each section degrades independently — a single failure doesn't block the others.
+ */
+async function fetchCrossServiceData(
+  contactId: string,
+  downstreamHeaders: Record<string, string>,
+): Promise<{
+  communications: CrossServiceSection<CommunicationItem>;
+  calls: CrossServiceSection<CallItem>;
+  conversations: CrossServiceSection<ConversationItem>;
+}> {
+  const [deliveriesRaw, callsRaw, conversationsRaw] = await Promise.allSettled([
+    fetchCrossService(
+      `${NOTIFICATION_BASE}/notifications/deliveries?recipientId=${contactId}&limit=20`,
+      downstreamHeaders,
+    ),
+    fetchCrossService(
+      `${TELEPHONY_BASE}/v1/telephony/calls?contactId=${contactId}&limit=20`,
+      downstreamHeaders,
+    ),
+    fetchCrossService(
+      `${NOTIFICATION_BASE}/v1/notification/inbox?contactId=${contactId}&limit=10`,
+      downstreamHeaders,
+    ),
+  ]);
+
+  const deliveries = deliveriesRaw.status === "fulfilled" ? deliveriesRaw.value : null;
+  const calls = callsRaw.status === "fulfilled" ? callsRaw.value : null;
+  const conversations = conversationsRaw.status === "fulfilled" ? conversationsRaw.value : null;
+
+  return {
+    communications: deliveries
+      ? { items: mapCommunications(deliveries), total: deliveries.length, available: true }
+      : { items: [], total: 0, available: false, error: "service_unavailable" },
+    calls: calls
+      ? { items: mapCalls(calls), total: calls.length, available: true }
+      : { items: [], total: 0, available: false, error: "service_unavailable" },
+    conversations: conversations
+      ? { items: mapConversations(conversations), total: conversations.length, available: true }
+      : { items: [], total: 0, available: false, error: "not_implemented" },
+  };
+}
 
 type Rows = Array<Record<string, unknown>>;
 
@@ -47,7 +207,7 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY created_at DESC LIMIT 20
       `)) as unknown as Rows;
 
-      const communications = (await tx.execute(sql`
+      const localCommunications = (await tx.execute(sql`
         SELECT id, direction, channel, outcome, disposition, summary, occurred_at AS "occurredAt"
         FROM crm.communications WHERE tenant_id = ${t} AND subject_type = 'contact' AND subject_id = ${id}
         ORDER BY occurred_at DESC LIMIT 20
@@ -92,19 +252,36 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
 
       const b = base[0]!;
       return {
-        subjectType: "contact",
+        subjectType: "contact" as const,
         contact: {
           id: b.id, name: b.name, leadStatus: b.leadStatus, ownerId: b.ownerId, accountId: b.accountId,
           score: b.score, lastActivityAt: b.lastActivityAt,
         },
         consent: { marketingConsent: b.marketingConsent, consentDate: b.consentDate },
-        activities, communications, nextActions, contactRoles: roles, deals, quotations, addresses, syncedItems,
-        external: EXTERNAL_STUBS,
+        activities, localCommunications, nextActions, contactRoles: roles, deals, quotations, addresses, syncedItems,
       };
     });
 
     if (!view) throw new HttpError(404, "NOT_FOUND", "contact not found");
-    return reply.send({ data: view });
+
+    // Fetch cross-service data (communications, calls, conversations)
+    const downstreamHeaders: Record<string, string> = {
+      authorization: req.headers.authorization ?? "",
+      "x-tenant-id": ctx.tenantId,
+      "x-correlation-id": (req.headers["x-correlation-id"] as string) ?? req.id,
+    };
+
+    const crossService = await fetchCrossServiceData(id, downstreamHeaders);
+
+    return reply.send({
+      data: {
+        ...view,
+        communications: crossService.communications,
+        calls: crossService.calls,
+        conversations: crossService.conversations,
+        external: EXTERNAL_STUBS,
+      },
+    });
   });
 
   app.get("/v1/crm/accounts/:id/360", async (req, reply) => {
