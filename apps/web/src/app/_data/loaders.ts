@@ -16,6 +16,7 @@ import type {
   CRMCampaignRoi,
   CRMCampaignRoiSummaryRow,
   CRMLeadCaptureForm,
+  CRMControlTower,
   CRMForecast,
   CRMVocSummary,
   AccountHealthEntry,
@@ -188,6 +189,7 @@ import {
   crmCampaignRoiSchema,
   crmCampaignRoiSummarySchema,
   crmLeadCaptureFormSchema,
+  crmControlTowerSchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
@@ -2573,6 +2575,17 @@ export async function getCrmSentimentSummary(
  */
 
 /** Public website lead-capture form registry (P1-7). */
+
+/** Executive control tower (P2-8). */
+export async function getCrmControlTower(): Promise<LoaderResult<CRMControlTower | null>> {
+  return fetchJson("/api/v1/crm/dashboard/control-tower", null as CRMControlTower | null, {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.control_tower",
+    responseSchema: crmControlTowerSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
 export async function getCrmLeadCaptureForms(): Promise<LoaderResult<CRMLeadCaptureForm[]>> {
   return fetchJson("/api/v1/crm/lead-capture-forms", [] as CRMLeadCaptureForm[], {
     revalidateSeconds: 30,

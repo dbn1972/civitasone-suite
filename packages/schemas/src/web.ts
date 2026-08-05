@@ -457,6 +457,30 @@ export const crmLeadCaptureFormSchema = z.object({
   })),
 });
 
+export const crmControlTowerSchema = z.object({
+  data: z.object({
+    regions: z.array(z.object({
+      region: z.string(),
+      dealCount: z.number().int(),
+      pipelineMinor: z.string(),
+    })),
+    exceptions: z.array(z.object({
+      id: z.string(),
+      kind: z.enum(["overdue_follow_up", "dormant_account", "aged_lead"]),
+      label: z.string(),
+      severity: z.enum(["high", "medium"]),
+      href: z.string(),
+      count: z.number().int(),
+    })),
+    drillDown: z.object({
+      regionReport: z.string(),
+      ageingReport: z.string(),
+      accounts: z.string(),
+    }),
+  }),
+});
+
+
 
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
