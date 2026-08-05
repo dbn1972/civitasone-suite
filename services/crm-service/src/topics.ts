@@ -439,6 +439,8 @@ export const EVENTS = {
   documentScanned: "crm.document.scanned",
   /** DM-002 mandatory-missing / expiring alert. Payload: { alertType, subjectType, subjectId?, documentId?, docTypeCode?, daysUntilExpiry? }. */
   documentAlert: "crm.document.alert",
+  /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
+  contactFlagged: "crm.contact.flagged",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
@@ -448,6 +450,10 @@ export const CONSUMED_EVENTS = {
   /** notification-service emits delivery status (delivered/failed). CO-001 feedback loop. */
   notificationDelivered: "notification.delivered",
   notificationFailed: "notification.failed",
+  /** Gap 6: external payment-due event from billing/payment system. */
+  externalPaymentDue: "external.payment.due",
+  /** Gap 6: external balance alert event from billing/payment system. */
+  externalBalanceAlert: "external.balance.alert",
 } as const;
 
 export const SERVICE = "crm";
