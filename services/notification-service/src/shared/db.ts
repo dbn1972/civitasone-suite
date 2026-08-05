@@ -27,6 +27,8 @@ import { bouncesModuleSchema } from "../modules/bounces/schema.js";
 import { dltModuleSchema } from "../modules/dlt/schema.js";
 import { quotaModuleSchema } from "../modules/channels/quota-schema.js";
 import { conversationsModuleSchema } from "../modules/conversations/schema.js";
+import { reviewQueueModuleSchema } from "../modules/inbox/review-queue-schema.js";
+import { attachmentsModuleSchema } from "../modules/attachments/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -52,6 +54,8 @@ const SCHEMA = {
   ...dltModuleSchema,
   ...quotaModuleSchema,
   ...conversationsModuleSchema,
+  ...reviewQueueModuleSchema,
+  ...attachmentsModuleSchema,
   ...outboxSchema,
 };
 
