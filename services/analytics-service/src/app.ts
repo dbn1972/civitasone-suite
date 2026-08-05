@@ -15,6 +15,7 @@ import { activationRoutes } from "./modules/activation/routes.js";
 import { kpiRoutes } from "./modules/kpi/routes.js";
 import { exportRoutes } from "./modules/exports/routes.js";
 import { analyticsQueryRoutes } from "./modules/analytics-query/routes.js";
+import { streamRoutes } from "./modules/stream/routes.js";
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
@@ -33,6 +34,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(kpiRoutes);
   await app.register(exportRoutes);
   await app.register(analyticsQueryRoutes);
+  await app.register(streamRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }
