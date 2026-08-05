@@ -27,6 +27,7 @@ const createBody = z.object({
     source: z.string(),
     sourceId: z.string(),
     timestamp: z.string().datetime(),
+    attributes: z.array(z.string().min(1).max(64)).max(100).optional(),
   })).default([]),
 });
 
@@ -37,6 +38,7 @@ const updateBody = z.object({
     source: z.string(),
     sourceId: z.string(),
     timestamp: z.string().datetime(),
+    attributes: z.array(z.string().min(1).max(64)).max(100).optional(),
   })).optional(),
   version: z.number().int().min(1),
 });

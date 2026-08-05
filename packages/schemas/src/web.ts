@@ -394,6 +394,49 @@ export const crmCampaignRoiSchema = z.object({
   }),
 });
 
+ * CDP golden profile (P1-14). `attributes` is an open bag by design — a tenant
+ * decides what it stores on a profile — so it is passed through unvalidated
+ * rather than pinned to a shape the service does not enforce either.
+ */
+const cdpProfileLineageEntrySchema = z.object({
+  source: z.string(),
+  sourceId: z.string(),
+  timestamp: z.string(),
+  attributes: z.array(z.string()).optional(),
+});
+
+const cdpProfileApiSchema = z.object({
+  id: z.string(),
+  profileType: z.string(),
+  attributes: z.record(z.unknown()).default({}),
+  sourceLineage: z.array(cdpProfileLineageEntrySchema).default([]),
+  mergedFromIds: z.array(z.string()).default([]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number().int(),
+});
+
+export const cdpProfileSchema = z.object({ data: cdpProfileApiSchema });
+export const cdpProfileListSchema = z.object({ data: z.array(cdpProfileApiSchema) });
+
+export const cdpIdentityLinkListSchema = z.object({
+  data: z.array(z.object({
+    id: z.string(),
+    profileId: z.string(),
+    identifierType: z.string(),
+    confidence: z.number(),
+    createdAt: z.string(),
+  })),
+});
+
+export const cdpProfileEventListSchema = z.object({
+  data: z.array(z.object({
+    id: z.string(),
+    profileId: z.string(),
+    eventType: z.string(),
+    occurredAt: z.string(),
+  })),
+});
 
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
