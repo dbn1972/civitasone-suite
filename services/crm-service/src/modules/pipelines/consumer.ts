@@ -23,6 +23,9 @@ export function registerPipelineConsumers(queue: Queue): void {
         tenantId: p.tenantId,
         name: p.name,
         stages: p.stages,
+        product: p.product,
+        region: p.region,
+        businessUnit: p.businessUnit,
         status: p.status,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
@@ -37,17 +40,23 @@ export function registerPipelineConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.updatePipeline, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name?: string;
-      stages?: PipelineStage[]; version: number;
+      stages?: PipelineStage[]; product?: string | null; region?: string | null; businessUnit?: string | null;
+      version: number;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const updated = await repo.updateWithVersion(
         tx, p.id, p.tenantId, p.version,
-        { ...(p.name !== undefined ? { name: p.name } : {}), ...(p.stages !== undefined ? { stages: p.stages } : {}) },
+        {
+          ...(p.name !== undefined ? { name: p.name } : {}),
+          ...(p.stages !== undefined ? { stages: p.stages } : {}),
+          ...(p.product !== undefined ? { product: p.product } : {}),
+          ...(p.region !== undefined ? { region: p.region } : {}),
+          ...(p.businessUnit !== undefined ? { businessUnit: p.businessUnit } : {}),
+        },
         msg.actorId,
       );
       if (!updated) {
-        // Version conflict — emit audit and skip.
         await emitAudit(tx, msg, "update", p.id, "version_conflict");
         return;
       }

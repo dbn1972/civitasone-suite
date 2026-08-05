@@ -51,6 +51,10 @@ import { accountRelationshipRoutes } from "./modules/accounts/relationships-rout
 import { integrationRoutes } from "./modules/integrations/routes.js";
 import { threeSixtyRoutes } from "./modules/contacts/three-sixty-routes.js";
 import { taskEscalationRuleRoutes } from "./modules/activities/task-escalation-routes.js";
+import { stageLimitRoutes } from "./modules/deals/stage-limits-routes.js";
+import { productRoutes } from "./modules/products/routes.js";
+import { priceBookRoutes } from "./modules/price-books/routes.js";
+import { quotationApprovalRoutes } from "./modules/deals/quotation-approval-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -136,6 +140,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(integrationRoutes);
   await app.register(threeSixtyRoutes);
   await app.register(taskEscalationRuleRoutes);
+  // ── OP/QP: opportunity + product/pricing/quotation surfaces ──
+  await app.register(stageLimitRoutes);
+  await app.register(productRoutes);
+  await app.register(priceBookRoutes);
+  await app.register(quotationApprovalRoutes);
 
   return app;
 }

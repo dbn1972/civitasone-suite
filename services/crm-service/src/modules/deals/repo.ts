@@ -9,7 +9,6 @@ function rupeesFromPaise(minor: bigint): string {
   const abs = neg ? -minor : minor;
   const rupees = abs / 100n;
   const paise = abs % 100n;
-  // Indian digit grouping on the integer rupee part.
   const digits = rupees.toString();
   let grouped: string;
   if (digits.length <= 3) {
@@ -30,12 +29,10 @@ function rupeesFromPaise(minor: bigint): string {
 }
 
 function formatValue(minor: bigint, currency: string): string {
-  // Thresholds in paise to keep comparisons exact (no float).
-  const CR = 1_00_00_000_00n; // 1 crore rupees in paise
-  const L = 1_00_000_00n;     // 1 lakh rupees in paise
+  const CR = 1_00_00_000_00n;
+  const L = 1_00_000_00n;
   const abs = minor < 0n ? -minor : minor;
   if (abs >= CR) {
-    // one decimal place of crores, computed in integer paise
     const tenths = (minor * 10n) / CR;
     return `Rs ${(Number(tenths) / 10).toFixed(1)} Cr`;
   }
@@ -66,6 +63,14 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
     closedValueMinor: r.closedValueMinor?.toString() ?? null,
     probability: r.probability,
     status: r.status,
+    product: r.product ?? null,
+    quantity: r.quantity ?? null,
+    competitors: r.competitors ?? [],
+    nextStep: r.nextStep ?? null,
+    expectedCloseDate: r.expectedCloseDate ?? null,
+    stageEnteredAt: r.stageEnteredAt?.toISOString() ?? null,
+    closeOutcome: r.closeOutcome ?? null,
+    closeCompetitor: r.closeCompetitor ?? null,
     version: r.version,
   };
 }
@@ -100,13 +105,12 @@ export async function insert(tx: Writer, row: DealInsert): Promise<void> {
 
 export async function updateStage(tx: Writer, id: string, tenantId: string, stage: string, actorId: string, probability?: number): Promise<void> {
   const status = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
-  // P1-2: persist probability. Won pins to 100, Lost to 0; otherwise honour an
-  // explicit value when supplied, else leave the existing probability intact.
   const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
-  // Bump version on every stage transition, consistent with updateDeal/softDelete,
-  // so optimistic-concurrency consumers observe the change (was previously omitted).
   const patch: Record<string, unknown> = {
-    stage, status, updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1`,
+    stage, status, updatedAt: new Date(), updatedBy: actorId,
+    // OP-005: reset the ageing clock whenever the stage changes.
+    stageEnteredAt: new Date(),
+    version: sql`${deals.version} + 1`,
   };
   if (prob !== undefined) patch.probability = prob;
   await (tx as typeof db).update(deals)
@@ -114,12 +118,6 @@ export async function updateStage(tx: Writer, id: string, tenantId: string, stag
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
 }
 
-/**
- * Stage transition with optimistic locking (version check).
- * Returns true if updated, false if version conflict (for 409 response).
- * Records transition timestamp (closedAt for Won/Lost stages).
- * Accepts optional stageId and pipelineId for pipeline-aware transitions.
- */
 export async function updateStageWithVersion(
   tx: Writer,
   id: string,
@@ -130,7 +128,6 @@ export async function updateStageWithVersion(
   actorId: string,
   probability?: number,
 ): Promise<{ updated: boolean; previousStage?: string }> {
-  // Fetch current deal for previous stage (for audit event)
   const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version })
     .from(deals)
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
@@ -147,11 +144,13 @@ export async function updateStageWithVersion(
     status: dealStatus,
     updatedAt: now,
     updatedBy: actorId,
+    // OP-005: stamp entry into the new stage (only meaningful when it actually moves,
+    // but re-stamping on a same-stage patch is harmless and keeps the write simple).
+    stageEnteredAt: now,
     version: sql`${deals.version} + 1`,
   };
   if (stageId !== undefined) patch.stageId = stageId;
   if (prob !== undefined) patch.probability = prob;
-  // Record closedAt timestamp for Won/Lost transitions
   if (stage === "Won" || stage === "Lost") patch.closedAt = now;
 
   const result = await (tx as typeof db).update(deals)
@@ -167,12 +166,6 @@ export async function updateStageWithVersion(
   return { updated: result.length > 0, previousStage };
 }
 
-/**
- * Account the deal rolls up to, via its contact. Resolved here (inside the deals
- * module, which already owns the contact join) so the deal-won event can carry the
- * account as an opaque id and downstream modules never have to look one up.
- * Null when the deal has no contact, or the contact is not attached to an account.
- */
 export async function findAccountId(tx: Writer, dealId: string, tenantId: string): Promise<string | null> {
   const rows = await (tx as typeof db).select({ accountId: contacts.accountId })
     .from(deals)
@@ -182,7 +175,6 @@ export async function findAccountId(tx: Writer, dealId: string, tenantId: string
   return rows[0]?.accountId ?? null;
 }
 
-/** Tenant-scoped existence check for a deal (cross-tenant FK guard). */
 export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(deals)
     .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
@@ -190,7 +182,6 @@ export async function dealExists(tenantId: string, dealId: string): Promise<bool
   return rows.length > 0;
 }
 
-/** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
@@ -198,12 +189,24 @@ export async function contactExists(tenantId: string, contactId: string): Promis
   return rows.length > 0;
 }
 
-/** P1-1: patch editable deal fields (value/owner/closeDate/contactId). */
+/** OP-003 opportunity fields editable alongside the P1-1 base fields. */
+export interface DealPatch {
+  valueMinor?: bigint;
+  ownerId?: string | null;
+  closeDate?: string | null;
+  contactId?: string | null;
+  product?: string | null;
+  quantity?: number | null;
+  competitors?: string[];
+  nextStep?: string | null;
+  expectedCloseDate?: string | null;
+}
+
 export async function updateDeal(
   tx: Writer,
   id: string,
   tenantId: string,
-  fields: { valueMinor?: bigint; ownerId?: string | null; closeDate?: string | null; contactId?: string | null },
+  fields: DealPatch,
   actorId: string,
 ): Promise<void> {
   const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` };
@@ -211,14 +214,174 @@ export async function updateDeal(
   if (fields.ownerId !== undefined) patch.ownerId = fields.ownerId;
   if (fields.closeDate !== undefined) patch.closeDate = fields.closeDate;
   if (fields.contactId !== undefined) patch.contactId = fields.contactId;
+  if (fields.product !== undefined) patch.product = fields.product;
+  if (fields.quantity !== undefined) patch.quantity = fields.quantity;
+  if (fields.competitors !== undefined) patch.competitors = fields.competitors;
+  if (fields.nextStep !== undefined) patch.nextStep = fields.nextStep;
+  if (fields.expectedCloseDate !== undefined) patch.expectedCloseDate = fields.expectedCloseDate;
   await (tx as typeof db).update(deals)
     .set(patch)
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`));
 }
 
-/** P1-1: soft-delete a deal (status='cancelled'); excluded from find/list. */
 export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
   await (tx as typeof db).update(deals)
     .set({ status: "cancelled", updatedAt: new Date(), updatedBy: actorId, version: sql`${deals.version} + 1` })
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
+}
+
+/**
+ * OP-003: gate-relevant snapshot of a deal for synchronous stage-progression checks.
+ * Returns the deal's current field values (so the route can test mandatory fields),
+ * its pipeline, current stage and version. Null when the deal is missing/closed.
+ */
+export interface GateSnapshot {
+  id: string;
+  pipelineId: string | null;
+  stageId: string | null;
+  stage: string;
+  status: string;
+  version: number;
+  product: string | null;
+  quantity: number | null;
+  competitors: string[];
+  nextStep: string | null;
+  expectedCloseDate: string | null;
+  closeDate: string | null;
+  valueMinor: string;
+  contactId: string | null;
+  ownerId: string | null;
+  name: string;
+  currency: string;
+}
+
+export async function gateSnapshot(id: string, tenantId: string): Promise<GateSnapshot | null> {
+  const rows = await scopedRead((tx) => tx.select({
+    id: deals.id,
+    pipelineId: deals.pipelineId,
+    stageId: deals.stageId,
+    stage: deals.stage,
+    status: deals.status,
+    version: deals.version,
+    product: deals.product,
+    quantity: deals.quantity,
+    competitors: deals.competitors,
+    nextStep: deals.nextStep,
+    expectedCloseDate: deals.expectedCloseDate,
+    closeDate: deals.closeDate,
+    valueMinor: deals.valueMinor,
+    contactId: deals.contactId,
+    ownerId: deals.ownerId,
+    name: deals.name,
+    currency: deals.currency,
+  }).from(deals)
+    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
+    .limit(1));
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    pipelineId: r.pipelineId,
+    stageId: r.stageId,
+    stage: r.stage,
+    status: r.status,
+    version: r.version,
+    product: r.product ?? null,
+    quantity: r.quantity ?? null,
+    competitors: r.competitors ?? [],
+    nextStep: r.nextStep ?? null,
+    expectedCloseDate: r.expectedCloseDate ?? null,
+    closeDate: r.closeDate ?? null,
+    valueMinor: r.valueMinor.toString(),
+    contactId: r.contactId,
+    ownerId: r.ownerId,
+    name: r.name,
+    currency: r.currency,
+  };
+}
+
+/** OP-005: open deals whose days-in-stage exceeds their configured stage limit. */
+export interface StageAgeingRow {
+  id: string;
+  name: string;
+  stage: string;
+  pipelineId: string | null;
+  ownerId: string | null;
+  valueMinor: string;
+  stageEnteredAt: string | null;
+  maxDays: number;
+  daysInStage: number;
+  daysOverLimit: number;
+}
+
+export async function stageAgeingExceeding(tenantId: string, pipelineId?: string): Promise<StageAgeingRow[]> {
+  const pipeFilter = pipelineId ? sql`AND d.pipeline_id = ${pipelineId}` : sql``;
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT d.id, d.name, d.stage, d.pipeline_id AS "pipelineId", d.owner_id AS "ownerId",
+           d.value_minor::text AS "valueMinor",
+           d.stage_entered_at AS "stageEnteredAt",
+           sl.max_days AS "maxDays",
+           FLOOR(EXTRACT(EPOCH FROM (now() - d.stage_entered_at)) / 86400)::int AS "daysInStage",
+           (FLOOR(EXTRACT(EPOCH FROM (now() - d.stage_entered_at)) / 86400)::int - sl.max_days) AS "daysOverLimit"
+    FROM crm.deals d
+    JOIN crm.stage_limits sl
+      ON sl.tenant_id = d.tenant_id
+     AND sl.stage = d.stage
+     AND sl.enabled = true
+     AND (sl.pipeline_id = d.pipeline_id OR sl.pipeline_id IS NULL)
+    WHERE d.tenant_id = ${tenantId}
+      AND d.status NOT IN ('deleted','cancelled','won','lost','on_hold')
+      AND d.stage NOT IN ('Won','Lost')
+      AND d.stage_entered_at IS NOT NULL
+      AND FLOOR(EXTRACT(EPOCH FROM (now() - d.stage_entered_at)) / 86400)::int > sl.max_days
+      ${pipeFilter}
+    ORDER BY "daysOverLimit" DESC
+  `)) as unknown as StageAgeingRow[];
+  return rows;
+}
+
+/** OP-004: deals grouped for a kanban board — one bucket per stage. */
+export interface KanbanCard {
+  id: string;
+  name: string;
+  stage: string;
+  ownerId: string | null;
+  valueMinor: string;
+  probability: number;
+  contactId: string | null;
+}
+
+export async function kanbanCards(tenantId: string, pipelineId?: string): Promise<KanbanCard[]> {
+  const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT id, name, stage, owner_id AS "ownerId", value_minor::text AS "valueMinor",
+           probability, contact_id AS "contactId"
+    FROM crm.deals
+    WHERE tenant_id = ${tenantId}
+      AND status NOT IN ('deleted','cancelled')
+      ${pipeFilter}
+    ORDER BY stage, updated_at DESC
+  `)) as unknown as KanbanCard[];
+  return rows;
+}
+
+/** OP-004: count + summed value per stage for a funnel chart. */
+export interface FunnelBucket {
+  stage: string;
+  count: number;
+  totalValueMinor: string;
+}
+
+export async function funnelBuckets(tenantId: string, pipelineId?: string): Promise<FunnelBucket[]> {
+  const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT stage, count(*)::int AS count, COALESCE(SUM(value_minor),0)::text AS "totalValueMinor"
+    FROM crm.deals
+    WHERE tenant_id = ${tenantId}
+      AND status NOT IN ('deleted','cancelled')
+      ${pipeFilter}
+    GROUP BY stage
+    ORDER BY stage
+  `)) as unknown as FunnelBucket[];
+  return rows;
 }

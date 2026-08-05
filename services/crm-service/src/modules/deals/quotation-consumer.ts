@@ -15,11 +15,47 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
 }
 
+interface LineItemPayload {
+  productId?: string | null;
+  description: string;
+  quantity: number;
+  unitPriceMinor: string;
+  taxRateBps?: number;
+}
+
+/**
+ * QP-003: persist a quotation'\''s line items relationally in crm.quotation_line_items.
+ * line_total_minor is computed with BigInt (unit price paise * quantity) — no float.
+ * Rows for the quotation are replaced wholesale so a re-applied write is idempotent.
+ */
+async function persistLineItems(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tenantId: string,
+  quotationId: string,
+  actorId: string,
+  items: LineItemPayload[],
+): Promise<void> {
+  await tx.execute(sql`
+    DELETE FROM crm.quotation_line_items WHERE tenant_id = ${tenantId} AND quotation_id = ${quotationId}
+  `);
+  let ordinal = 0;
+  for (const item of items) {
+    const lineTotal = (BigInt(item.unitPriceMinor) * BigInt(item.quantity)).toString();
+    await tx.execute(sql`
+      INSERT INTO crm.quotation_line_items
+        (tenant_id, quotation_id, product_id, description, quantity, unit_price_minor, tax_rate_bps, line_total_minor, ordinal, created_by)
+      VALUES (${tenantId}, ${quotationId}, ${item.productId ?? null}, ${item.description}, ${item.quantity},
+              ${item.unitPriceMinor}::bigint, ${item.taxRateBps ?? 0}, ${lineTotal}::bigint, ${ordinal}, ${actorId})
+    `);
+    ordinal += 1;
+  }
+}
+
 export function registerQuotationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.createQuotation, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; dealId?: string | null; quoteRef: string; templateRef: string;
-      totalMinor: string; currency: string; validUntil?: string | null; lineItems: unknown[];
+      totalMinor: string; currency: string; validUntil?: string | null; lineItems: LineItemPayload[];
     };
     try {
       await db.transaction(async (tx) => {
@@ -35,6 +71,7 @@ export function registerQuotationConsumers(queue: Queue): void {
             ${JSON.stringify(p.lineItems)}::jsonb, ${msg.actorId}, ${msg.actorId}
           )
         `);
+        await persistLineItems(tx, p.tenantId, p.id, msg.actorId, p.lineItems ?? []);
         await emitWithAudit(tx, ctxOf(msg) as never, {
           eventType: EVENTS.quotationCreated,
           action: "create",
@@ -55,7 +92,7 @@ export function registerQuotationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.versionQuotation, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; sourceId: string; nextVersionNumber: number;
-      totalMinor: string; validUntil?: string | null; lineItems: unknown[];
+      totalMinor: string; validUntil?: string | null; lineItems: LineItemPayload[];
       quoteRef: string;
     };
     try {
@@ -72,6 +109,7 @@ export function registerQuotationConsumers(queue: Queue): void {
           FROM crm.quotations
           WHERE id = ${p.sourceId} AND tenant_id = ${p.tenantId}
         `);
+        await persistLineItems(tx, p.tenantId, p.id, msg.actorId, p.lineItems ?? []);
         await emitWithAudit(tx, ctxOf(msg) as never, {
           eventType: EVENTS.quotationVersioned,
           action: "new_version",

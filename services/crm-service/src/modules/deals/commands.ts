@@ -19,6 +19,7 @@ function formatValue(minor: bigint, currency: string): string {
 export async function createDeal(ctx: RequestContext, body: CreateDealBody): Promise<Accepted> {
   const id = commandId(ctx, COMMANDS.createDeal);
   const valueMinor = BigInt(body.valueMinor);
+  const nowIso = new Date().toISOString();
   const projected: DealView = {
     id,
     tenantId: ctx.tenantId,
@@ -38,6 +39,14 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     closedValueMinor: null,
     probability: body.probability ?? 0,
     status: "active",
+    product: body.product ?? null,
+    quantity: body.quantity ?? null,
+    competitors: body.competitors ?? [],
+    nextStep: body.nextStep ?? null,
+    expectedCloseDate: body.expectedCloseDate ?? null,
+    stageEnteredAt: nowIso,
+    closeOutcome: null,
+    closeCompetitor: null,
     version: 1,
   };
 
@@ -70,7 +79,6 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-// P1-1: edit deal fields.
 export async function updateDeal(ctx: RequestContext, id: string, body: UpdateDealBody): Promise<Accepted> {
   const msgId = commandId(ctx, `${COMMANDS.updateDeal}:${id}`);
   await queue.publish(COMMANDS.updateDeal, {
@@ -83,7 +91,6 @@ export async function updateDeal(ctx: RequestContext, id: string, body: UpdateDe
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-// P1-1: soft-delete a deal.
 export async function deleteDeal(ctx: RequestContext, id: string): Promise<Accepted> {
   const msgId = commandId(ctx, `${COMMANDS.deleteDeal}:${id}`);
   await queue.publish(COMMANDS.deleteDeal, {

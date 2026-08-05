@@ -173,6 +173,30 @@ export const COMMANDS = {
   disconnectLinkedAccount: "crm.linked_account.disconnect",
   /** AC-004 link an externally-synced email/meeting to a CRM record. */
   linkSyncedItem: "crm.synced_item.link",
+  // -- Opportunity / Pipeline (OP-005/OP-006) --
+  /** Upsert a per-tenant (optionally per-pipeline) stage day-limit (OP-005). */
+  upsertStageLimit: "crm.stage_limit.upsert",
+  /** Remove a stage day-limit (OP-005). */
+  deleteStageLimit: "crm.stage_limit.delete",
+  /** Set a tenant close policy, e.g. competitor-required-on-loss (OP-006). */
+  setDealClosePolicy: "crm.deal_close_policy.set",
+  // -- Product / Pricing / Quotation (QP-001..005) --
+  createProduct: "crm.product.create",
+  updateProduct: "crm.product.update",
+  deleteProduct: "crm.product.delete",
+  createPriceBook: "crm.price_book.create",
+  updatePriceBook: "crm.price_book.update",
+  deletePriceBook: "crm.price_book.delete",
+  upsertPriceBookItem: "crm.price_book_item.upsert",
+  deletePriceBookItem: "crm.price_book_item.delete",
+  /** Upsert an approval threshold policy (QP-004). */
+  upsertApprovalThreshold: "crm.approval_threshold.upsert",
+  /** Request an approval for a quotation exception (QP-004). */
+  requestQuotationApproval: "crm.quotation_approval.request",
+  /** Approve/reject a quotation approval (QP-004). */
+  decideQuotationApproval: "crm.quotation_approval.decide",
+  /** Convert an accepted quotation into an order (QP-005). */
+  convertQuotationToOrder: "crm.quotation.convert_to_order",
 } as const;
 
 export const EVENTS = {
@@ -356,6 +380,24 @@ export const EVENTS = {
   syncedItemLinked: "crm.synced_item.linked",
   /** AC-005 an overdue task/next-action was escalated to a manager. Payload: { subjectType, subjectId, taskKind, ruleId, ageingMinutes, overdueMinutes, recipientRole, recipientId }. */
   taskEscalated: "crm.task.escalated",
+  // -- Opportunity / Pipeline (OP-005/OP-006) --
+  stageLimitUpserted: "crm.stage_limit.upserted",
+  stageLimitDeleted: "crm.stage_limit.deleted",
+  dealClosePolicySet: "crm.deal_close_policy.set_done",
+  // -- Product / Pricing / Quotation (QP-001..005) --
+  productCreated: "crm.product.created",
+  productUpdated: "crm.product.updated",
+  productDeleted: "crm.product.deleted",
+  priceBookCreated: "crm.price_book.created",
+  priceBookUpdated: "crm.price_book.updated",
+  priceBookDeleted: "crm.price_book.deleted",
+  priceBookItemUpserted: "crm.price_book_item.upserted",
+  priceBookItemDeleted: "crm.price_book_item.deleted",
+  approvalThresholdUpserted: "crm.approval_threshold.upserted",
+  quotationApprovalRequested: "crm.quotation_approval.requested",
+  quotationApprovalDecided: "crm.quotation_approval.decided",
+  /** An accepted quotation was converted to an order (QP-005). Money as STRING. */
+  orderCreated: "crm.order.created",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

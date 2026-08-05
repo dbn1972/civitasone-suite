@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createPipelineBody, updatePipelineBody, idParam, pipelinesListSchema } from "./validators.js";
+import { createPipelineBody, updatePipelineBody, idParam, pipelineListQuery, pipelinesListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -19,8 +19,13 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/pipelines", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, pipelinesListSchema, await queries.listPipelines(ctx.tenantId, q.limit, q.offset));
+    const q = pipelineListQuery.parse(req.query ?? {});
+    const scope = {
+      ...(q.product !== undefined ? { product: q.product } : {}),
+      ...(q.region !== undefined ? { region: q.region } : {}),
+      ...(q.businessUnit !== undefined ? { businessUnit: q.businessUnit } : {}),
+    };
+    sendValidated(reply, pipelinesListSchema, await queries.listPipelines(ctx.tenantId, q.limit, q.offset, scope));
   });
 
   app.get("/v1/crm/pipelines/:id", async (req, reply) => {

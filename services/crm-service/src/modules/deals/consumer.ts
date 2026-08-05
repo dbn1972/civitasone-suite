@@ -20,7 +20,6 @@ export function registerDealConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
-      // P0-1 cross-tenant FK guard: a referenced contact must live in this tenant.
       if (p.contactId && !(await repo.contactExists(p.tenantId, p.contactId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_contact");
         return;
@@ -31,7 +30,12 @@ export function registerDealConsumers(queue: Queue): void {
         valueMinor: BigInt(p.valueMinor), currency: p.currency,
         contactId: p.contactId, ownerId: p.ownerId,
         closeDate: p.closeDate, probability: p.probability,
-        status: p.status, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
+        status: p.status,
+        product: p.product, quantity: p.quantity,
+        competitors: p.competitors ?? [], nextStep: p.nextStep,
+        expectedCloseDate: p.expectedCloseDate,
+        stageEnteredAt: p.stageEnteredAt ? new Date(p.stageEnteredAt) : new Date(),
+        createdBy: msg.actorId, updatedBy: msg.actorId, version: 1,
       });
       if (p.contactId) await contactRepo.touchLastActivity(tx, p.contactId, p.tenantId);
       await emit(tx, msg, EVENTS.dealCreated, { dealId: p.id, name: p.name, contactId: p.contactId }, "create", p.id);
@@ -49,14 +53,10 @@ export function registerDealConsumers(queue: Queue): void {
         tx, p.id, p.tenantId, p.stage, p.stageId, p.version, msg.actorId, p.probability,
       );
       if (!result.updated) {
-        // Version conflict — emit audit indicating conflict
         await emitAudit(tx, msg, "update_stage", p.id, "version_conflict");
         return;
       }
-      // A Won stage move opens a customer onboarding (P1-9). The account is resolved
-      // here and stamped on the event so the onboarding module never reads a deal.
       const accountId = p.stage === "Won" ? await repo.findAccountId(tx, p.id, p.tenantId) : null;
-      // Emit stage transition audit event with prev/new stage
       await emit(tx, msg, EVENTS.dealStageUpdated, {
         dealId: p.id,
         previousStage: result.previousStage,
@@ -74,19 +74,25 @@ export function registerDealConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string;
       valueMinor?: number; ownerId?: string | null; closeDate?: string | null; contactId?: string | null;
+      product?: string | null; quantity?: number | null; competitors?: string[];
+      nextStep?: string | null; expectedCloseDate?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // P0-1: a (re)assigned contact must belong to this tenant.
       if (p.contactId && !(await repo.contactExists(p.tenantId, p.contactId))) {
         await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_contact");
         return;
       }
-      const fields: Parameters<typeof repo.updateDeal>[3] = {};
+      const fields: repo.DealPatch = {};
       if (p.valueMinor !== undefined) fields.valueMinor = BigInt(p.valueMinor);
       if (p.ownerId !== undefined) fields.ownerId = p.ownerId;
       if (p.closeDate !== undefined) fields.closeDate = p.closeDate;
       if (p.contactId !== undefined) fields.contactId = p.contactId;
+      if (p.product !== undefined) fields.product = p.product;
+      if (p.quantity !== undefined) fields.quantity = p.quantity;
+      if (p.competitors !== undefined) fields.competitors = p.competitors;
+      if (p.nextStep !== undefined) fields.nextStep = p.nextStep;
+      if (p.expectedCloseDate !== undefined) fields.expectedCloseDate = p.expectedCloseDate;
       await repo.updateDeal(tx, p.id, p.tenantId, fields, msg.actorId);
       await emit(tx, msg, EVENTS.dealUpdated, { dealId: p.id }, "update", p.id);
     });
@@ -129,7 +135,6 @@ async function emit(
   });
 }
 
-/** Audit-only emit (no domain event) — used for rejected/validation outcomes. */
 async function emitAudit(
   tx: unknown,
   msg: CommandEnvelope,

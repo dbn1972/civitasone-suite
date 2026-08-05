@@ -37,6 +37,11 @@ import { registerCommunicationConsumers } from "./modules/communications/consume
 import { registerAddressConsumers } from "./modules/addresses/consumer.js";
 import { registerAccountRelationshipConsumers } from "./modules/accounts/relationships-consumer.js";
 import { registerIntegrationConsumers } from "./modules/integrations/consumer.js";
+import { registerStageLimitConsumers } from "./modules/deals/stage-limits-consumer.js";
+import { registerProductConsumers } from "./modules/products/consumer.js";
+import { registerPriceBookConsumers } from "./modules/price-books/consumer.js";
+import { registerQuotationApprovalConsumers } from "./modules/deals/quotation-approval-consumer.js";
+import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -71,4 +76,10 @@ export function registerAllConsumers(queue: Queue): void {
   registerAddressConsumers(queue);
   registerAccountRelationshipConsumers(queue);
   registerIntegrationConsumers(queue);
+  // ── OP/QP: opportunity stage-limits, close policy, products, price books, quotation approvals, orders ──
+  registerStageLimitConsumers(queue);
+  registerProductConsumers(queue);
+  registerPriceBookConsumers(queue);
+  registerQuotationApprovalConsumers(queue);
+  registerOrderConsumers(queue);
 }
