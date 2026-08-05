@@ -316,6 +316,50 @@ export interface CRMCampaignRoi extends CRMCampaignRoiFigures {
   periods: CRMCampaignRoiPeriod[];
 }
 
+/**
+ * One entry in a golden profile's append-only provenance trail (P1-14).
+ * `attributes` is optional: a trail written before attribute-level provenance
+ * existed names no keys, and the Customer 360 view reads those as unattributed
+ * rather than crediting them to the most recent contributor.
+ */
+export interface CDPProfileLineageEntry {
+  source: string;
+  sourceId: string;
+  /** ISO 8601, stamped by the service. */
+  timestamp: string;
+  attributes?: string[];
+}
+
+/** A CDP golden profile as returned by cdp-service. */
+export interface CDPProfile {
+  id: string;
+  profileType: string;
+  attributes: Record<string, unknown>;
+  sourceLineage: CDPProfileLineageEntry[];
+  mergedFromIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+/** A resolved identifier linked to a golden profile. Values are stored hashed. */
+export interface CDPIdentityLink {
+  id: string;
+  profileId: string;
+  identifierType: string;
+  /** Match confidence, 0-100. */
+  confidence: number;
+  createdAt: string;
+}
+
+/** One interaction event on a profile's timeline. */
+export interface CDPProfileEvent {
+  id: string;
+  profileId: string;
+  eventType: string;
+  occurredAt: string;
+}
+
 
 /** A recurring subject in customer interactions, with how often it turned sour. */
 export interface CRMVocTheme {

@@ -2,8 +2,19 @@
  * cdp route-group server loaders — SCORE_LOCK F1 child pages.
  * Calls cdp-service through the gateway via cookie-aware fetchJson.
  */
+import {
+  cdpIdentityLinkListSchema,
+  cdpProfileEventListSchema,
+  cdpProfileListSchema,
+  cdpProfileSchema,
+} from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import type { ModuleRowSummary } from "@civitasone/types";
+import type {
+  CDPIdentityLink,
+  CDPProfile,
+  CDPProfileEvent,
+  ModuleRowSummary,
+} from "@civitasone/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -90,3 +101,53 @@ export const getCdpIdentity = moduleLoader("/api/v1/cdp/identity/anonymous-visit
 export const getCdpSegments = moduleLoader("/api/v1/cdp/segments", "cdp.segments");
 export const getCdpEvents = moduleLoader("/api/v1/cdp/events/taxonomy", "cdp.events");
 export const getCdpSteward = moduleLoader("/api/v1/cdp/steward/queue", "cdp.steward");
+
+/**
+ * Golden profiles, typed rather than flattened to generic rows, so the list can
+ * show attribute and source counts and link into the Customer 360 view.
+ */
+export async function getCdpProfileList(): Promise<LoaderResult<CDPProfile[]>> {
+  return fetchJson("/api/v1/cdp/profiles?limit=200", [] as CDPProfile[], {
+    revalidateSeconds: 30,
+    telemetryKey: "cdp.profile_list",
+    responseSchema: cdpProfileListSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
+/**
+ * One golden profile. Returns null on 404 — a merged or absent profile is an
+ * expected state the screen renders as "not found", not a loader failure.
+ */
+export async function getCdpProfile(id: string): Promise<LoaderResult<CDPProfile | null>> {
+  return fetchJson(`/api/v1/cdp/profiles/${encodeURIComponent(id)}`, null as CDPProfile | null, {
+    revalidateSeconds: 30,
+    telemetryKey: "cdp.profile",
+    responseSchema: cdpProfileSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
+/** Identifiers resolved onto a profile. Identifier values stay hashed server-side. */
+export async function getCdpProfileIdentity(id: string): Promise<LoaderResult<CDPIdentityLink[]>> {
+  return fetchJson(`/api/v1/cdp/identity/${encodeURIComponent(id)}`, [] as CDPIdentityLink[], {
+    revalidateSeconds: 30,
+    telemetryKey: "cdp.profile_identity",
+    responseSchema: cdpIdentityLinkListSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
+/** Most recent interaction events for a profile, newest first from the service. */
+export async function getCdpProfileTimeline(id: string): Promise<LoaderResult<CDPProfileEvent[]>> {
+  return fetchJson(
+    `/api/v1/cdp/profiles/${encodeURIComponent(id)}/timeline?limit=25`,
+    [] as CDPProfileEvent[],
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "cdp.profile_timeline",
+      responseSchema: cdpProfileEventListSchema,
+      mapResponse: (payload) => payload.data,
+    },
+  );
+}

@@ -24,6 +24,11 @@ const lineageEntry = z.object({
   source: z.string().min(1).max(64),
   sourceId: z.string().min(1).max(200),
   timestamp: z.string().datetime().optional(),
+  /**
+   * Attribute keys this source supplied. Bounded because the trail is append-only:
+   * an unbounded array on every ingest grows the profile row without limit.
+   */
+  attributes: z.array(z.string().min(1).max(64)).max(100).optional(),
 });
 
 const appendBody = z.object({
@@ -74,6 +79,11 @@ export async function profileLineageRoutes(app: FastifyInstance): Promise<void> 
       // The server stamps a missing timestamp: an ingest client's clock is not a
       // trustworthy provenance record.
       timestamp: body.entry.timestamp ?? new Date().toISOString(),
+      // Deduplicated so a caller repeating a key cannot inflate the trail; omitted
+      // entirely when absent so an older entry stays byte-identical to before.
+      ...(body.entry.attributes?.length
+        ? { attributes: [...new Set(body.entry.attributes)] }
+        : {}),
     };
 
     const sourceLineage = [...existing.sourceLineage, entry];

@@ -10,7 +10,13 @@ export const profiles = cdpSchema.table("profiles", {
   tenantId: uuid("tenant_id").notNull(),
   profileType: varchar("profile_type", { length: 32 }).notNull().default("individual"),
   attributes: jsonb("attributes").$type<Record<string, unknown>>().notNull().default({}),
-  sourceLineage: jsonb("source_lineage").$type<Array<{ source: string; sourceId: string; timestamp: string }>>().notNull().default([]),
+  /**
+   * Append-only provenance trail. `attributes` names the attribute keys that
+   * source supplied, which is what lets a Customer 360 view attribute a value to
+   * a system of record. It is optional: entries written before attribute-level
+   * provenance existed stay valid and simply read as unattributed.
+   */
+  sourceLineage: jsonb("source_lineage").$type<Array<{ source: string; sourceId: string; timestamp: string; attributes?: string[] }>>().notNull().default([]),
   mergedFromIds: jsonb("merged_from_ids").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

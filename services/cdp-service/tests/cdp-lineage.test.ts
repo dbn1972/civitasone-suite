@@ -181,6 +181,72 @@ describe("POST /v1/cdp/profiles/:id/lineage", () => {
     await app.close();
   });
 
+  it("202 — carries attribute-level provenance through to the command payload", async () => {
+    H.profileFindByIdMock.mockResolvedValue(makeProfile());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/lineage`, headers: auth(),
+      payload: {
+        entry: { source: "umang", sourceId: "u-42", timestamp: "2025-06-01T00:00:00.000Z", attributes: ["email", "phone"] },
+        version: 3,
+      },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.entry.attributes).toEqual(["email", "phone"]);
+    expect(H.publishMock).toHaveBeenCalledWith(
+      "cdp.f3.route_write",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          sourceLineage: [
+            ...LINEAGE,
+            { source: "umang", sourceId: "u-42", timestamp: "2025-06-01T00:00:00.000Z", attributes: ["email", "phone"] },
+          ],
+        }),
+      }),
+    );
+    await app.close();
+  });
+
+  it("202 — deduplicates repeated attribute keys so the trail cannot be inflated", async () => {
+    H.profileFindByIdMock.mockResolvedValue(makeProfile());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/lineage`, headers: auth(),
+      payload: {
+        entry: { source: "umang", sourceId: "u-42", attributes: ["email", "email", "phone"] },
+        version: 3,
+      },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().data.entry.attributes).toEqual(["email", "phone"]);
+    await app.close();
+  });
+
+  it("202 — an entry with no attributes stays byte-identical to the pre-provenance shape", async () => {
+    H.profileFindByIdMock.mockResolvedValue(makeProfile());
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/lineage`, headers: auth(),
+      payload: { entry: { source: "umang", sourceId: "u-42", timestamp: "2025-06-01T00:00:00.000Z" }, version: 3 },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(Object.keys(r.json().data.entry).sort()).toEqual(["source", "sourceId", "timestamp"]);
+    await app.close();
+  });
+
+  it("400 — rejects an attribute list beyond the bound", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/cdp/profiles/${PROFILE_ID}/lineage`, headers: auth(),
+      payload: {
+        entry: { source: "umang", sourceId: "u-42", attributes: Array.from({ length: 101 }, (_, i) => `k${i}`) },
+        version: 3,
+      },
+    });
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("400 — missing source", async () => {
     const app = await buildApp();
     const r = await app.inject({
