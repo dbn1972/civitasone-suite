@@ -10,7 +10,7 @@
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState } from "../ds";
-import { rupeesToMinorString } from "@/lib/money";
+import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import { formatMoney, formatBps } from "@/lib/formatters";
 import {
   getProducts,
@@ -48,14 +48,19 @@ export function ProductCatalogueEditor() {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getProducts();
+    if (!isLive()) return;
     setRows(data.map(toRow));
     setSource(s);
   }
   useEffect(() => {
-    void load();
+    let live = true;
+    void load(() => live);
+    return () => {
+      live = false;
+    };
   }, []);
 
   function update(key: string, patch: Partial<Row>) {
@@ -71,10 +76,7 @@ export function ProductCatalogueEditor() {
   }
   function taxBpsOf(row: Row): number | null {
     if (row.taxPercent.trim() === "") return 0;
-    const pct = Number(row.taxPercent);
-    if (!Number.isFinite(pct) || pct < 0) return null;
-    const bps = Math.round(pct * 100);
-    return bps;
+    return percentToBps(row.taxPercent.trim());
   }
   function rowValid(row: Row): boolean {
     return row.name.trim().length > 0 && row.code.trim().length > 0 && priceMinorOf(row) !== null && taxBpsOf(row) !== null;

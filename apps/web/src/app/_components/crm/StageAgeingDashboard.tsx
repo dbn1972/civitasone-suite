@@ -41,22 +41,28 @@ export function StageAgeingDashboard() {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const headingId = useId();
 
-  async function loadAgeing() {
+  async function loadAgeing(isLive: () => boolean = () => true) {
     setAgeingSource("loading");
     const { data, source } = await getStageAgeing();
+    if (!isLive()) return;
     setRows(data);
     setAgeingSource(source);
   }
-  async function loadLimits() {
+  async function loadLimits(isLive: () => boolean = () => true) {
     setLimitSource("loading");
     const { data, source } = await getStageLimits();
+    if (!isLive()) return;
     setLimits(data.map(toRow));
     setLimitSource(source);
   }
 
   useEffect(() => {
-    void loadAgeing();
-    void loadLimits();
+    let live = true;
+    void loadAgeing(() => live);
+    void loadLimits(() => live);
+    return () => {
+      live = false;
+    };
   }, []);
 
   function update(key: string, patch: Partial<LimitRow>) {

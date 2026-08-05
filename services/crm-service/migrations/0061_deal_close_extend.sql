@@ -43,4 +43,4 @@ END $g$;
 -- that already exclude it.
 ALTER TABLE crm.deals DROP CONSTRAINT IF EXISTS deals_status_check;
 ALTER TABLE crm.deals ADD CONSTRAINT deals_status_check
-  CHECK (status IN ('active','won','lost','cancelled','on_hold','deleted'));
+  CHECK (status IN ('active','won','lost','cancelled','on_hold','closed','deleted'));

@@ -93,6 +93,37 @@ describe("OP-003 stage-gate enforcement", () => {
     expect(move.json().code).toBe("MANDATORY_STAGE_FIELDS_MISSING");
   });
 
+  it("blocks CREATE directly into a gated stage with mandatory fields unset (422)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/deals", headers: headers(),
+      payload: { name: "Born Gated", pipelineId: PIPE_ID, stage: "Negotiation", stageId: STAGE_NEG, valueMinor: 100000 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("MANDATORY_STAGE_FIELDS_MISSING");
+  });
+
+  it("allows CREATE into a gated stage once the mandatory fields are supplied (202)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/deals", headers: headers(),
+      payload: { name: "Born Complete", pipelineId: PIPE_ID, stage: "Negotiation", stageId: STAGE_NEG, valueMinor: 100000, product: "CloudSuite", nextStep: "Kickoff" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("allows CREATE into the entry stage without mandatory fields (202)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/deals", headers: headers(),
+      payload: { name: "Entry OK", pipelineId: PIPE_ID, stage: "Lead", stageId: STAGE_LEAD, valueMinor: 100000 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+  });
+
   it("allows progression once the mandatory fields are populated (202) and stamps stage_entered_at", async () => {
     const app = await buildApp();
     const create = await app.inject({
@@ -196,17 +227,41 @@ describe("OP-006 extended closure", () => {
     expect(res.json().code).toBe("REASON_REQUIRED");
   });
 
-  it("closes as cancelled with a reason and records close_outcome without moving to Won/Lost", async () => {
+  it("closes as cancelled (status='closed', outcome='cancelled') and STAYS visible in GET + funnel", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: `/v1/crm/deals/${OPEN1}/close`, headers: headers(), payload: { outcome: "cancelled", reason: "Procurement withdrawn by department" } });
-    await app.close();
     expect(res.statusCode).toBe(202);
     await drainQueue();
     const rows = await scoped((tx) => tx<Array<{ stage: string; status: string; closeOutcome: string | null; closeReason: string | null }>>`
       SELECT stage, status, close_outcome AS "closeOutcome", close_reason AS "closeReason" FROM crm.deals WHERE id = ${OPEN1} AND tenant_id = ${TENANT}`);
+    // A cancelled CLOSURE must not collide with the soft-delete marker ('cancelled').
     expect(rows[0]!.closeOutcome).toBe("cancelled");
-    expect(rows[0]!.status).toBe("cancelled");
+    expect(rows[0]!.status).toBe("closed");
     expect(rows[0]!.stage).toBe("Negotiation");
+
+    // Reporting visibility: the cancelled-closed deal is still returned by GET and funnel.
+    const get = await app.inject({ method: "GET", url: `/v1/crm/deals/${OPEN1}`, headers: headers(["crm_user"]) });
+    expect(get.statusCode).toBe(200);
+    expect(get.json().closeOutcome).toBe("cancelled");
+    const funnel = await app.inject({ method: "GET", url: `/v1/crm/deals/funnel`, headers: headers(["crm_user"]) });
+    await app.close();
+    const stages = (funnel.json().data as Array<{ stage: string }>).map((b) => b.stage);
+    expect(stages).toContain("Negotiation"); // OPEN1 still counted
+  });
+
+  it("a genuine soft-delete (DELETE) stays hidden from GET", async () => {
+    const DEL_ID = "ffffffff-2222-4000-8000-00000000000d";
+    await scoped((tx) => tx`
+      INSERT INTO crm.deals (id, tenant_id, name, stage, value_minor, currency, status, stage_entered_at, created_by, updated_by, version)
+      VALUES (${DEL_ID}, ${TENANT}, 'Delete Me', 'Negotiation', 100000, 'INR', 'active', now(), ${ACTOR}, ${ACTOR}, 1)
+      ON CONFLICT (id) DO NOTHING`.then(() => 0));
+    const app = await buildApp();
+    const del = await app.inject({ method: "DELETE", url: `/v1/crm/deals/${DEL_ID}`, headers: headers() });
+    expect(del.statusCode).toBe(202);
+    await drainQueue();
+    const get = await app.inject({ method: "GET", url: `/v1/crm/deals/${DEL_ID}`, headers: headers(["crm_user"]) });
+    await app.close();
+    expect(get.statusCode).toBe(404);
   });
 
   it("closes as on_hold and keeps the deal visible with close_outcome on_hold", async () => {

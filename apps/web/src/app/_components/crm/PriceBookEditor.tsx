@@ -27,8 +27,14 @@ import {
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 interface EntryRow {
+  /** Stable per-row key (never the array index) so removing a row reconciles correctly. */
+  key: string;
   productId: string;
   priceRupees: string;
+}
+let ENTRY_SEQ = 0;
+function newEntry(productId = "", priceRupees = ""): EntryRow {
+  return { key: `entry-${ENTRY_SEQ++}`, productId, priceRupees };
 }
 function blankBook(): PriceBook {
   return { name: "", segment: "", currency: "INR", geography: "", channel: "", entries: [], enabled: true };
@@ -54,16 +60,22 @@ export function PriceBookEditor() {
   const [resolveSource, setResolveSource] = useState<QpSource | "idle" | "loading">("idle");
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getPriceBooks();
+    if (!isLive()) return;
     setBooks(data);
     setSource(s);
     const prod = await getProducts();
+    if (!isLive()) return;
     setProducts(prod.data);
   }
   useEffect(() => {
-    void load();
+    let live = true;
+    void load(() => live);
+    return () => {
+      live = false;
+    };
   }, []);
 
   function startNew() {
@@ -75,10 +87,12 @@ export function PriceBookEditor() {
   function edit(b: PriceBook) {
     setDraft({ ...b });
     setEntries(
-      b.entries.map((e) => ({
-        productId: e.productId,
-        priceRupees: (BigInt(e.priceMinor || "0") / 100n).toString() + "." + (BigInt(e.priceMinor || "0") % 100n).toString().padStart(2, "0"),
-      })),
+      b.entries.map((e) =>
+        newEntry(
+          e.productId,
+          (BigInt(e.priceMinor || "0") / 100n).toString() + "." + (BigInt(e.priceMinor || "0") % 100n).toString().padStart(2, "0"),
+        ),
+      ),
     );
     setMessage("");
     setError("");
@@ -242,7 +256,7 @@ export function PriceBookEditor() {
               <div style={{ fontSize: 13, fontWeight: 600, margin: "8px 0 4px" }}>Prices</div>
               <div style={{ display: "grid", gap: 6 }}>
                 {entries.map((e, idx) => (
-                  <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 140px 40px", gap: 6 }}>
+                  <div key={e.key} style={{ display: "grid", gridTemplateColumns: "1fr 140px 40px", gap: 6 }}>
                     <label className="sr-only" htmlFor={`${headingId}-ent-prod-${idx}`}>Product for entry {idx + 1}</label>
                     <select
                       id={`${headingId}-ent-prod-${idx}`}
@@ -273,7 +287,7 @@ export function PriceBookEditor() {
                 ))}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button type="button" className="btn ghost sm" onClick={() => setEntries((prev) => [...prev, { productId: "", priceRupees: "" }])}>
+                <button type="button" className="btn ghost sm" onClick={() => setEntries((prev) => [...prev, newEntry()])}>
                   + Add price
                 </button>
                 <span style={{ flex: 1 }} />

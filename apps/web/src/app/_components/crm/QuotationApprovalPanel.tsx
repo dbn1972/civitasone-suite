@@ -10,6 +10,7 @@ import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState } from "../ds";
 import { formatBps } from "@/lib/formatters";
+import { percentToBps } from "@/lib/money";
 import {
   getApprovals,
   requestApproval,
@@ -44,17 +45,23 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
   const [error, setError] = useState("");
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getApprovals(quotationId);
+    if (!isLive()) return;
     setApprovals(data);
     setSource(s);
     onBlockingChange?.(data.some((a) => !isApproved(a)));
   }
+  // Reload whenever the quotation changes. onBlockingChange is a stable setState
+  // reference from the parent, so it is safe to include in the dependency list.
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quotationId]);
+    let live = true;
+    void load(() => live);
+    return () => {
+      live = false;
+    };
+  }, [quotationId, onBlockingChange]);
 
   async function submitRequest() {
     setMessage("");
@@ -65,12 +72,12 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
     }
     let amountBps: number | undefined;
     if (type === "discount") {
-      const pct = Number(percent);
-      if (percent.trim() === "" || !Number.isFinite(pct) || pct <= 0) {
-        setError("Enter the discount as a positive percentage.");
+      const bps = percentToBps(percent);
+      if (bps === null || bps <= 0) {
+        setError("Enter the discount as a positive percentage (max 2 decimals).");
         return;
       }
-      amountBps = Math.round(pct * 100);
+      amountBps = bps;
     }
     setBusy(true);
     try {
@@ -173,6 +180,10 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
 
       <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, margin: 12 }}>
         <legend style={{ fontSize: 13, fontWeight: 600 }}>Request an approval</legend>
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
+          The actual discount is server-computed from the line prices at send time; the figure below is advisory
+          context for the approver. The send block is enforced by the backend.
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "160px 140px 1fr auto", gap: 8, alignItems: "end" }}>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
             Type
@@ -185,7 +196,7 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
             </select>
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
-            Discount %
+            Discount % (advisory)
             <input aria-label="Discount percent" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} style={inputStyle} disabled={type !== "discount"} placeholder={type === "discount" ? "10" : "n/a"} />
           </label>
           <label style={{ fontSize: 13, display: "grid", gap: 4 }}>

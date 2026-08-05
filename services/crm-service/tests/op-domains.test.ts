@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { isPresent, missingMandatoryFields, findStage } from "../src/modules/deals/stage-gate.js";
 import { daysInStage, evaluateAgeing } from "../src/modules/deals/stage-ageing.js";
-import { breachesThreshold, initialStatus, breachSnapshot } from "../src/modules/deals/quotation-approval-domain.js";
+import { breachesThreshold, initialStatus, breachSnapshot, effectiveDiscountBps } from "../src/modules/deals/quotation-approval-domain.js";
 
 describe("stage-gate.isPresent", () => {
   it("treats null/undefined/empty-string/empty-array/zero as absent", () => {
@@ -102,10 +102,33 @@ describe("quotation-approval-domain", () => {
     expect(initialStatus(1, null)).toBe("pending");
     expect(initialStatus(1, { maxDiscountBps: 1000, enabled: false })).toBe("pending");
   });
-  it("breachSnapshot records discount vs limit", () => {
+  it("breachSnapshot records discount vs limit (+ advisory requested)", () => {
     expect(breachSnapshot("discount", 2500, { maxDiscountBps: 1000 })).toEqual({
       approvalType: "discount", discountBps: 2500, maxDiscountBps: 1000,
     });
+    expect(breachSnapshot("discount", 2500, { maxDiscountBps: 1000 }, 500).requestedDiscountBps).toBe(500);
     expect(breachSnapshot("deviation", 100, null).maxDiscountBps).toBe(0);
+  });
+
+  describe("effectiveDiscountBps (server-derived, paise, no float)", () => {
+    it("derives discount vs reference across lines", () => {
+      // 10 units @ 700000 quoted vs 1000000 reference => 30% => 3000 bps.
+      expect(effectiveDiscountBps([{ refUnitMinor: "1000000", unitPriceMinor: "700000", quantity: 10 }])).toBe(3000);
+    });
+    it("ignores lines with no reference price", () => {
+      expect(effectiveDiscountBps([{ refUnitMinor: null, unitPriceMinor: "1", quantity: 100 }])).toBe(0);
+    });
+    it("returns 0 when quote is at or above reference (a premium)", () => {
+      expect(effectiveDiscountBps([{ refUnitMinor: "1000", unitPriceMinor: "1200", quantity: 5 }])).toBe(0);
+      expect(effectiveDiscountBps([])).toBe(0);
+    });
+    it("aggregates a blended discount across mixed lines", () => {
+      // line A: ref 100000*1=100000, quoted 100000 (no disc); line B: ref 100000*1, quoted 50000 (50% off B)
+      // total ref 200000, discount 50000 => 2500 bps.
+      expect(effectiveDiscountBps([
+        { refUnitMinor: "100000", unitPriceMinor: "100000", quantity: 1 },
+        { refUnitMinor: "100000", unitPriceMinor: "50000", quantity: 1 },
+      ])).toBe(2500);
+    });
   });
 });

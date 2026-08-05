@@ -330,7 +330,8 @@ export async function stageAgeingExceeding(tenantId: string, pipelineId?: string
      AND sl.enabled = true
      AND (sl.pipeline_id = d.pipeline_id OR sl.pipeline_id IS NULL)
     WHERE d.tenant_id = ${tenantId}
-      AND d.status NOT IN ('deleted','cancelled','won','lost','on_hold')
+      AND d.status NOT IN ('deleted','cancelled')
+      AND d.close_outcome IS NULL
       AND d.stage NOT IN ('Won','Lost')
       AND d.stage_entered_at IS NOT NULL
       AND FLOOR(EXTRACT(EPOCH FROM (now() - d.stage_entered_at)) / 86400)::int > sl.max_days

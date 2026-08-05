@@ -11,7 +11,7 @@
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState } from "../ds";
-import { rupeesToMinorString } from "@/lib/money";
+import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { QuotationApprovalPanel } from "./QuotationApprovalPanel";
 import {
@@ -42,6 +42,8 @@ import {
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
 interface LineDraft {
+  /** Stable per-row key (never the array index) so React reconciles removals correctly. */
+  key: string;
   productId: string;
   productName: string;
   quantity: string;
@@ -51,18 +53,40 @@ interface LineDraft {
 
 const TEMPLATES = ["standard", "government-tender", "annual-contract"] as const;
 
+let LINE_SEQ = 0;
+function newLine(patch: Partial<Omit<LineDraft, "key">> = {}): LineDraft {
+  return { key: `line-${LINE_SEQ++}`, productId: "", productName: "", quantity: "1", unitPriceRupees: "", taxPercent: "0", ...patch };
+}
+
 function toRupees(minor: string): string {
   const m = BigInt(minor || "0");
   return (m / 100n).toString() + "." + (m % 100n).toString().padStart(2, "0");
 }
 
-function toLine(l: LineDraft): QuotationLine {
+/** Unit price in paise for a row, or null when empty/invalid (blocks save, shows "—"). */
+function linePriceMinor(l: LineDraft): string | null {
+  return l.unitPriceRupees.trim() === "" ? null : rupeesToMinorString(l.unitPriceRupees.trim());
+}
+/** Tax basis points for a row: empty → 0, otherwise a validated bps or null on bad input. */
+function lineTaxBps(l: LineDraft): number | null {
+  return l.taxPercent.trim() === "" ? 0 : percentToBps(l.taxPercent.trim());
+}
+
+/**
+ * A fully-valid QuotationLine for a row, or null when the price or tax is
+ * invalid. Never fabricates a price (no "0.01" placeholder) or a 0% tax from bad
+ * input — the caller renders "—" and Save stays blocked until the row is valid.
+ */
+function toLine(l: LineDraft): QuotationLine | null {
+  const unitPriceMinor = linePriceMinor(l);
+  const taxRateBps = lineTaxBps(l);
+  if (unitPriceMinor === null || taxRateBps === null) return null;
   return {
     productId: l.productId,
     productName: l.productName || undefined,
     quantity: Number(l.quantity) || 0,
-    unitPriceMinor: rupeesToMinorString(l.unitPriceRupees.trim() || "0.01") ?? "0",
-    taxRateBps: Math.round((Number(l.taxPercent) || 0) * 100),
+    unitPriceMinor,
+    taxRateBps,
   };
 }
 
@@ -89,16 +113,22 @@ export function QuotationBuilder() {
   const [rSegment, setRSegment] = useState("");
   const headingId = useId();
 
-  async function load() {
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getQuotations();
+    if (!isLive()) return;
     setQuotations(data);
     setSource(s);
     const prod = await getProducts();
+    if (!isLive()) return;
     setProducts(prod.data);
   }
   useEffect(() => {
-    void load();
+    let live = true;
+    void load(() => live);
+    return () => {
+      live = false;
+    };
   }, []);
 
   function openQuote(q: Quotation) {
@@ -106,13 +136,15 @@ export function QuotationBuilder() {
     setIsNew(false);
     setTemplate(q.template || "standard");
     setLines(
-      q.lines.map((l) => ({
-        productId: l.productId,
-        productName: l.productName ?? "",
-        quantity: String(l.quantity),
-        unitPriceRupees: toRupees(l.unitPriceMinor),
-        taxPercent: String(l.taxRateBps / 100),
-      })),
+      q.lines.map((l) =>
+        newLine({
+          productId: l.productId,
+          productName: l.productName ?? "",
+          quantity: String(l.quantity),
+          unitPriceRupees: toRupees(l.unitPriceMinor),
+          taxPercent: String(l.taxRateBps / 100),
+        }),
+      ),
     );
     setMessage("");
     setError("");
@@ -160,7 +192,12 @@ export function QuotationBuilder() {
     );
   }
 
-  const draftLines: QuotationLine[] = lines.filter((l) => l.productId).map(toLine);
+  // Only fully-valid rows contribute to the previewed grand total (invalid price
+  // or tax → the row is excluded and Save is blocked, never coerced to a number).
+  const draftLines: QuotationLine[] = lines
+    .filter((l) => l.productId)
+    .map(toLine)
+    .filter((l): l is QuotationLine => l !== null);
   const grandTotal = quotationTotalMinor(draftLines);
 
   function linesValid(): boolean {
@@ -169,7 +206,8 @@ export function QuotationBuilder() {
       if (!l.productId) return false;
       const qty = Number(l.quantity);
       if (!Number.isInteger(qty) || qty <= 0) return false;
-      if (rupeesToMinorString(l.unitPriceRupees.trim()) === null) return false;
+      if (linePriceMinor(l) === null) return false;
+      if (lineTaxBps(l) === null) return false;
       return true;
     });
   }
@@ -178,7 +216,7 @@ export function QuotationBuilder() {
     setMessage("");
     setError("");
     if (!linesValid()) {
-      setError("Every line needs a product, a whole-number quantity above zero and a valid unit price.");
+      setError("Every line needs a product, a whole-number quantity above zero, a valid unit price and a valid tax %.");
       return;
     }
     const payload: Quotation = {
@@ -359,13 +397,16 @@ export function QuotationBuilder() {
               <tbody>
                 {lines.map((l, idx) => {
                   const n = idx + 1;
+                  // Only a fully-valid row previews numbers; otherwise show "—" so
+                  // an invalid/empty price or tax never renders a fabricated figure.
                   const line = toLine(l);
-                  const net = lineNetMinor(line);
-                  const tax = lineTaxMinor(line);
-                  const total = (BigInt(net) + BigInt(tax)).toString();
-                  const priceOk = rupeesToMinorString(l.unitPriceRupees.trim() || "0.01") !== null;
+                  const net = line ? lineNetMinor(line) : null;
+                  const tax = line ? lineTaxMinor(line) : null;
+                  const total = net !== null && tax !== null ? (BigInt(net) + BigInt(tax)).toString() : null;
+                  const priceOk = l.unitPriceRupees.trim() === "" || linePriceMinor(l) !== null;
+                  const taxOk = lineTaxBps(l) !== null;
                   return (
-                    <tr key={idx}>
+                    <tr key={l.key}>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-prod-${idx}`}>Product for line {n}</label>
                         <select id={`${headingId}-prod-${idx}`} value={l.productId} aria-invalid={l.productId ? undefined : true} onChange={(e) => pickProduct(idx, e.target.value)} style={inputStyle}>
@@ -387,11 +428,11 @@ export function QuotationBuilder() {
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-tax-${idx}`}>Tax percent for line {n}</label>
-                        <input id={`${headingId}-tax-${idx}`} inputMode="decimal" value={l.taxPercent} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, taxPercent: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "right" }} />
+                        <input id={`${headingId}-tax-${idx}`} inputMode="decimal" value={l.taxPercent} aria-invalid={taxOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, taxPercent: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "right" }} />
                       </td>
-                      <td className="num">{formatMoney(net)}</td>
-                      <td className="num">{formatMoney(tax)}</td>
-                      <td className="num">{formatMoney(total)}</td>
+                      <td className="num">{net !== null ? formatMoney(net) : "—"}</td>
+                      <td className="num">{tax !== null ? formatMoney(tax) : "—"}</td>
+                      <td className="num">{total !== null ? formatMoney(total) : "—"}</td>
                       <td>
                         <button type="button" className="btn ghost sm" onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove line ${n}`}>
                           ✕
@@ -425,7 +466,7 @@ export function QuotationBuilder() {
           </div>
 
           <div style={{ display: "flex", gap: 8, padding: 12, flexWrap: "wrap" }}>
-            <button type="button" className="btn ghost sm" onClick={() => setLines((prev) => [...prev, { productId: "", productName: "", quantity: "1", unitPriceRupees: "", taxPercent: "0" }])}>
+            <button type="button" className="btn ghost sm" onClick={() => setLines((prev) => [...prev, newLine()])}>
               + Add line
             </button>
             <span style={{ flex: 1 }} />

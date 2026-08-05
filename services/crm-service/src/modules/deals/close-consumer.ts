@@ -63,9 +63,12 @@ export function registerDealCloseConsumer(queue: Queue): void {
     const p = msg.payload as ClosePayload;
     const isWonLost = p.outcome === "won" || p.outcome === "lost";
     const stage = p.outcome === "won" ? "Won" : p.outcome === "lost" ? "Lost" : null;
-    // won/lost/cancelled/on_hold map straight to status; cancelled reuses the same
-    // 'cancelled' status the soft-delete path uses (both mean "gone from the pipeline").
-    const status = p.outcome;
+    // won/lost/on_hold map straight to status. A 'cancelled' CLOSURE must NOT reuse the
+    // soft-delete marker ('cancelled'), or every read-path filter (NOT IN
+    // ('deleted','cancelled')) would hide a legitimately cancelled-and-reportable deal.
+    // It is stored as status='closed' with close_outcome='cancelled' so it stays visible
+    // in GET/list/funnel while genuine soft-deletes remain hidden.
+    const status = p.outcome === "cancelled" ? "closed" : p.outcome;
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;

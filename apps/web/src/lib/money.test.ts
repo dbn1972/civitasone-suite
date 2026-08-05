@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rupeesToMinorString } from "./money";
+import { rupeesToMinorString, percentToBps } from "./money";
 
 describe("rupeesToMinorString", () => {
   it("converts whole rupees", () => {
@@ -53,5 +53,31 @@ describe("rupeesToMinorString", () => {
   it("rejects thousands separators and other non-plain-decimal formats", () => {
     expect(rupeesToMinorString("1,234.50")).toBeNull();
     expect(rupeesToMinorString("1e5")).toBeNull();
+  });
+});
+
+describe("percentToBps", () => {
+  it("converts whole and fractional percentages to basis points without float drift", () => {
+    expect(percentToBps("18")).toBe(1800);
+    expect(percentToBps("12.5")).toBe(1250);
+    expect(percentToBps("5.55")).toBe(555);
+    expect(percentToBps("0.12")).toBe(12);
+  });
+
+  it("allows zero (a 0% rate is valid)", () => {
+    expect(percentToBps("0")).toBe(0);
+    expect(percentToBps("0.00")).toBe(0);
+  });
+
+  it("rejects more than 2 decimal places rather than silently rounding", () => {
+    expect(percentToBps("5.555")).toBeNull();
+  });
+
+  it("rejects negatives, non-numeric, thousands separators and empty input", () => {
+    expect(percentToBps("-1")).toBeNull();
+    expect(percentToBps("abc")).toBeNull();
+    expect(percentToBps("1,2")).toBeNull();
+    expect(percentToBps("")).toBeNull();
+    expect(percentToBps("   ")).toBeNull();
   });
 });

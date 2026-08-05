@@ -16,7 +16,7 @@ import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
-import { APPROVAL_TYPES, initialStatus, breachSnapshot } from "./quotation-approval-domain.js";
+import { APPROVAL_TYPES, initialStatus, breachSnapshot, effectiveDiscountBps } from "./quotation-approval-domain.js";
 import * as repo from "./quotation-approval-repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -70,9 +70,18 @@ export async function quotationApprovalRoutes(app: FastifyInstance): Promise<voi
     const body = requestBody.parse(req.body);
     if (!(await quotationExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "quotation not found");
 
+    // For a discount, the authoritative level is DERIVED from the quotation'\''s line
+    // prices vs catalogue reference — the client'\''s discountBps is advisory only, so a
+    // rep cannot request `discountBps: 0` to auto-approve a genuinely deep discount.
+    let effective = body.discountBps;
+    if (body.approvalType === "discount") {
+      effective = effectiveDiscountBps(await repo.referenceLines(ctx.tenantId, id));
+    }
     const threshold = await repo.getThreshold(ctx.tenantId, body.approvalType);
-    const status = initialStatus(body.discountBps, threshold);
-    const snapshot = breachSnapshot(body.approvalType, body.discountBps, threshold);
+    const status = initialStatus(effective, threshold);
+    const snapshot = breachSnapshot(body.approvalType, effective, threshold, body.discountBps);
+    // A fresh id per request (commandId is random without an idempotency key) so a new
+    // request supersedes an earlier decision instead of colliding with it (MEDIUM-4).
     const approvalId = commandId(ctx, `${COMMANDS.requestQuotationApproval}:${id}:${body.approvalType}`);
 
     await queue.publish(COMMANDS.requestQuotationApproval, {

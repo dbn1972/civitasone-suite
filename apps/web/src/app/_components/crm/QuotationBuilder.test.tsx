@@ -80,6 +80,29 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     expect(payload.lines[0].quantity).toBe(3);
   });
 
+  it("blocks save on an invalid tax %, shows '—' preview and flags the field, never coercing to 0", async () => {
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    fireEvent.change(screen.getByLabelText(/product for line 1/i), { target: { value: "pr1" } });
+    fireEvent.change(screen.getByLabelText(/quantity for line 1/i), { target: { value: "2" } });
+    // A garbage tax value must NOT silently become 0% — the row shows "—".
+    const taxInput = screen.getByLabelText(/tax percent for line 1/i);
+    fireEvent.change(taxInput, { target: { value: "abc" } });
+    await waitFor(() => expect(taxInput).toHaveAttribute("aria-invalid", "true"));
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /create quotation/i }));
+    expect(await screen.findByText(/valid tax %/i)).toBeInTheDocument();
+    expect(qp.createQuotation).not.toHaveBeenCalled();
+    // Fixing the tax to a valid value clears the block and persists the real bps.
+    fireEvent.change(taxInput, { target: { value: "18" } });
+    vi.mocked(qp.createQuotation).mockResolvedValue(undefined);
+    fireEvent.click(screen.getByRole("button", { name: /create quotation/i }));
+    await waitFor(() => expect(qp.createQuotation).toHaveBeenCalled());
+    expect(vi.mocked(qp.createQuotation).mock.calls[0][0].lines[0].taxRateBps).toBe(1800);
+  });
+
   it("surfaces 422 APPROVAL_REQUIRED honestly and never fakes a send", async () => {
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [quote], source: "api" });
     vi.mocked(qp.sendQuotation).mockRejectedValue(new qp.ApprovalRequiredError("This quotation has an unapproved discount or deviation. Get approval before sending."));

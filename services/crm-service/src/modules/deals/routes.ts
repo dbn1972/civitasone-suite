@@ -19,6 +19,38 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createDealBody.parse(req.body);
+
+    // OP-003: the stage gate is not only for PATCH transitions — a deal must not be
+    // CREATED directly into a gated stage with its mandatory fields unset. When the
+    // requested stage is beyond the pipeline's entry (lowest-ordinal) stage, enforce the
+    // target stage's mandatory fields against the create body, synchronously (422).
+    if (body.pipelineId) {
+      const stages = await pipelineRepo.stagesOf(body.pipelineId, ctx.tenantId);
+      if (stages && stages.length > 0) {
+        const entry = stages.reduce((min, s) => (s.ordinal < min.ordinal ? s : min), stages[0]!);
+        const target = findStage(stages, { ...(body.stageId ? { stageId: body.stageId } : {}), stageName: body.stage });
+        if (target && target.id !== entry.id && target.name !== entry.name) {
+          const snap = {
+            product: body.product ?? null,
+            quantity: body.quantity ?? null,
+            competitors: body.competitors ?? [],
+            nextStep: body.nextStep ?? null,
+            expectedCloseDate: body.expectedCloseDate ?? null,
+            closeDate: body.closeDate ?? null,
+            valueMinor: String(body.valueMinor ?? 0),
+            contactId: body.contactId ?? null,
+            ownerId: body.ownerId ?? null,
+            name: body.name,
+            currency: body.currency,
+          };
+          const missing = missingMandatoryFields(snap, target);
+          if (missing.length > 0) {
+            throw new HttpError(422, "MANDATORY_STAGE_FIELDS_MISSING", `stage '${target.name}' requires: ${missing.join(", ")}`);
+          }
+        }
+      }
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, body));
   });
 

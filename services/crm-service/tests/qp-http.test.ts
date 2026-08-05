@@ -114,37 +114,89 @@ describe("QP-002 price-book resolution", () => {
   });
 });
 
-describe("QP-004 quotation discount-approval send-gate", () => {
-  it("blocks send while an exception is unapproved, allows it once approved", async () => {
+describe("QP-004 quotation discount-approval send-gate (server-derived)", () => {
+  async function discountedQuote(app: Awaited<ReturnType<typeof buildApp>>, quoteRef: string, productCode: string): Promise<string> {
+    // Catalogue price 1,000,000 paise/unit; quote at 700,000 => 30% (3000 bps) discount.
+    await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: productCode, name: productCode, priceMinor: "1000000", enabled: true } });
+    await drainQueue();
+    const prow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = ${productCode} AND tenant_id = ${TENANT}`);
+    const productId = prow[0]!.id;
+    const quote = await app.inject({
+      method: "POST", url: "/v1/crm/quotations", headers: headers(),
+      payload: { quoteRef, templateRef: "T1", currency: "INR", lineItems: [{ productId, description: "seat", quantity: 1, unitPriceMinor: "700000" }] },
+    });
+    await drainQueue();
+    return quote.json().id;
+  }
+
+  it("blocks a deeply-discounted send with NO approval, then allows it once approved", async () => {
     const app = await buildApp();
-    // Threshold: discounts up to 10% (1000 bps) need no approval.
-    const thr = await app.inject({ method: "PUT", url: "/v1/crm/quotation-approvals/thresholds", headers: headers(), payload: { approvalType: "discount", maxDiscountBps: 1000, requiresRole: "crm_admin" } });
-    expect(thr.statusCode).toBe(202);
+    await app.inject({ method: "PUT", url: "/v1/crm/quotation-approvals/thresholds", headers: headers(), payload: { approvalType: "discount", maxDiscountBps: 1000, requiresRole: "crm_admin" } });
     await drainQueue();
 
-    const quote = await app.inject({ method: "POST", url: "/v1/crm/quotations", headers: headers(), payload: { quoteRef: "Q-APPR-1", templateRef: "T1", totalMinor: "1000000", currency: "INR" } });
-    const quotationId = quote.json().id;
-    await drainQueue();
+    const quotationId = await discountedQuote(app, "Q-APPR-1", "APPR-P1");
 
-    // Request a 25% discount => breaches threshold => pending.
-    const req = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers(["crm_user"]), payload: { approvalType: "discount", discountBps: 2500, reason: "Strategic account" } });
-    expect(req.statusCode).toBe(202);
+    // (a) No approval requested at all: server computes 3000 bps > 1000 => blocked.
+    const blockedNoReq = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
+    expect(blockedNoReq.statusCode).toBe(422);
+    expect(blockedNoReq.json().code).toBe("APPROVAL_REQUIRED");
+
+    // (b) Requesting with a bogus discountBps:0 does NOT auto-approve — server derives 3000.
+    const req = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers(["crm_user"]), payload: { approvalType: "discount", discountBps: 0, reason: "Strategic account" } });
     expect(req.json().approvalStatus).toBe("pending");
     await drainQueue();
 
-    // Send is blocked while the exception is pending.
-    const blocked = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
-    expect(blocked.statusCode).toBe(422);
-    expect(blocked.json().code).toBe("APPROVAL_REQUIRED");
+    const blockedPending = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
+    expect(blockedPending.statusCode).toBe(422);
 
-    // Approve it.
+    // Approve, then send goes through.
     const approvals = await app.inject({ method: "GET", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers() });
     const approvalId = approvals.json().data[0].id;
-    const decide = await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${approvalId}/decide`, headers: headers(), payload: { decision: "approve" } });
-    expect(decide.statusCode).toBe(202);
+    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${approvalId}/decide`, headers: headers(), payload: { decision: "approve" } });
     await drainQueue();
 
-    // Now the send goes through.
+    const sent = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
+    await app.close();
+    expect(sent.statusCode).toBe(202);
+  });
+
+  it("MEDIUM-4: a rejected approval is superseded by a later approved one (send unblocks)", async () => {
+    const app = await buildApp();
+    await app.inject({ method: "PUT", url: "/v1/crm/quotation-approvals/thresholds", headers: headers(), payload: { approvalType: "discount", maxDiscountBps: 1000 } });
+    await drainQueue();
+    const quotationId = await discountedQuote(app, "Q-SUP-1", "SUP-P1");
+
+    // First request -> reject.
+    const r1 = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers(["crm_user"]), payload: { approvalType: "discount", discountBps: 3000 } });
+    await drainQueue();
+    const a1 = await app.inject({ method: "GET", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers() });
+    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${a1.json().data[0].id}/decide`, headers: headers(), payload: { decision: "reject", reason: "too aggressive" } });
+    await drainQueue();
+    void r1;
+
+    // A rejected discount that still breaches => send blocked.
+    const blocked = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
+    expect(blocked.statusCode).toBe(422);
+
+    // Re-request and approve -> latest supersedes the rejection.
+    await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers(["crm_user"]), payload: { approvalType: "discount", discountBps: 3000 } });
+    await drainQueue();
+    const a2 = await app.inject({ method: "GET", url: `/v1/crm/quotations/${quotationId}/approvals`, headers: headers() });
+    const pending = (a2.json().data as Array<{ id: string; status: string }>).find((x) => x.status === "pending")!;
+    await app.inject({ method: "POST", url: `/v1/crm/quotation-approvals/${pending.id}/decide`, headers: headers(), payload: { decision: "approve" } });
+    await drainQueue();
+
+    const sent = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
+    await app.close();
+    expect(sent.statusCode).toBe(202);
+  });
+
+  it("allows send when the discount is within threshold (no approval needed)", async () => {
+    const app = await buildApp();
+    await app.inject({ method: "PUT", url: "/v1/crm/quotation-approvals/thresholds", headers: headers(), payload: { approvalType: "discount", maxDiscountBps: 5000 } });
+    await drainQueue();
+    // 30% discount but threshold is 50% => within tolerance => no approval required.
+    const quotationId = await discountedQuote(app, "Q-OK-1", "OK-P1");
     const sent = await app.inject({ method: "POST", url: `/v1/crm/quotations/${quotationId}/send`, headers: headers() });
     await app.close();
     expect(sent.statusCode).toBe(202);

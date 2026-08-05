@@ -28,6 +28,7 @@ import {
 } from "./quotation-domain.js";
 import * as commands from "./quotation-commands.js";
 import * as approvalRepo from "./quotation-approval-repo.js";
+import { effectiveDiscountBps } from "./quotation-approval-domain.js";
 import * as productRepo from "../products/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -246,9 +247,27 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const q = await loadQuotation(ctx.tenantId, id);
     assertTransition(q.status, "sent");
-    // QP-004: an unapproved exception cannot be issued as a final quotation.
-    if (await approvalRepo.hasBlockingApproval(ctx.tenantId, id)) {
-      throw new HttpError(422, "APPROVAL_REQUIRED", "this quotation has a discount/deviation exception that is not approved");
+    // QP-004: an unapproved exception cannot be issued as a final quotation. The effective
+    // discount is DERIVED SERVER-SIDE from the line prices vs catalogue reference — client
+    // input is never trusted — and compared to the configured threshold. A breach requires
+    // an APPROVED discount approval whose recorded level covers the computed discount.
+    const discountThreshold = await approvalRepo.getThreshold(ctx.tenantId, "discount");
+    if (discountThreshold && discountThreshold.enabled) {
+      const computed = effectiveDiscountBps(await approvalRepo.referenceLines(ctx.tenantId, id));
+      if (computed > discountThreshold.maxDiscountBps) {
+        const approvedLevel = await approvalRepo.latestApprovedDiscountBps(ctx.tenantId, id);
+        if (approvedLevel === null || approvedLevel < computed) {
+          throw new HttpError(
+            422,
+            "APPROVAL_REQUIRED",
+            `effective discount of ${computed} bps exceeds the ${discountThreshold.maxDiscountBps} bps threshold and has no covering approval`,
+          );
+        }
+      }
+    }
+    // Any raised exception (of any type) still awaiting a decision also blocks the send.
+    if (await approvalRepo.hasPendingLatest(ctx.tenantId, id)) {
+      throw new HttpError(422, "APPROVAL_REQUIRED", "this quotation has an approval request awaiting a decision");
     }
     return sendAccepted(
       reply,
