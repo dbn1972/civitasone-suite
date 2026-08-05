@@ -7,6 +7,9 @@ import { COMMANDS, EVENTS, CONSUMES, SOURCE, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { randomUUID } from "node:crypto";
 import { tickets } from "./schema.js";
+import { allocateTicketNo } from "../../shared/numbering.js";
+import { slaPolicies } from "../sla/schema.js";
+import { eq, and } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -27,6 +30,9 @@ type CreatePayload = {
   // LOOP 1 — knowledge-service assistant escalate-to-ticket handoff.
   source?: string;
   externalRef?: string;
+  // CS-001 — multi-channel case creation fields.
+  channel?: string | null;
+  categoryId?: string | null;
 };
 
 type AssignPayload = {
@@ -128,6 +134,39 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
+/**
+ * CS-001 — auto-assign SLA policy by matching priority + category.
+ * Returns the first matching policy id, or null if no policy matches.
+ * Priority match is mandatory; category match is optional (null category in
+ * the policy means "any category").
+ */
+async function findMatchingSlaPolicy(
+  tx: Parameters<typeof enqueue>[0],
+  tenantId: string,
+  priority: string,
+  categoryId: string | null | undefined,
+): Promise<string | null> {
+  try {
+    const rows = await (tx as unknown as typeof db).select()
+      .from(slaPolicies)
+      .where(and(
+        eq(slaPolicies.tenantId, tenantId),
+        eq(slaPolicies.priority, priority),
+      ));
+    // First match wins: prefer exact category match, then null-category (wildcard)
+    const exactMatch = categoryId
+      ? rows.find((r) => r.category === categoryId)
+      : null;
+    if (exactMatch) return exactMatch.id;
+    const wildcardMatch = rows.find((r) => r.category === null || r.category === undefined);
+    if (wildcardMatch) return wildcardMatch.id;
+    return null;
+  } catch {
+    // Table may not exist yet or RLS issue — return null gracefully
+    return null;
+  }
+}
+
 export function registerTicketConsumers(rawQueue: Queue): void {
   // #146 regression fix: run every handler inside the message tenant context so
   // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
@@ -176,6 +215,15 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     const ticketId = p.id; // narrowed to string by the guard above
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CS-001: allocate gapless ticket reference number
+      const ticketNo = await allocateTicketNo(tx as unknown as import("@civitasone/numbering").SqlExecutor, msg.tenantId);
+      // CS-001: auto-assign SLA policy based on priority + category
+      const slaPolicyId = await findMatchingSlaPolicy(
+        tx as Parameters<typeof enqueue>[0],
+        msg.tenantId,
+        p.priority ?? "Medium",
+        p.categoryId,
+      );
       await repo.insert(tx, {
         id: ticketId,
         tenantId: p.tenantId ?? msg.tenantId,
@@ -190,8 +238,12 @@ export function registerTicketConsumers(rawQueue: Queue): void {
         typeFields: p.typeFields ?? null,
         assetIds: p.assetIds ?? null,
         assetVerified: p.assetVerified ?? false,
+        channel: p.channel ?? null,
+        categoryId: p.categoryId ?? null,
+        ticketNo,
+        slaPolicyId,
       });
-      await emit(tx, msg, EVENTS.ticketCreated, { ticketId, subject: p.subject, ticketType: p.ticketType ?? null }, "create", ticketId);
+      await emit(tx, msg, EVENTS.ticketCreated, { ticketId, subject: p.subject, ticketType: p.ticketType ?? null, ticketNo, channel: p.channel ?? null }, "create", ticketId);
     });
     const row = await repo.findById(ticketId, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, ticketId), row);

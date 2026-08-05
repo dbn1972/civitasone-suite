@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ticketsListSchema } from "@civitasone/schemas/web";
 
+/** CS-001 — valid intake channels for helpdesk tickets. */
+export const VALID_CHANNELS = ["phone", "email", "portal", "chatbot", "whatsapp", "api", "manual"] as const;
+export type Channel = (typeof VALID_CHANNELS)[number];
+
 export const createTicketBody = z.object({
   subject: z.string().min(1),
   description: z.string().optional(),
@@ -11,6 +15,10 @@ export const createTicketBody = z.object({
   typeFields: z.record(z.unknown()).optional(),
   // CMDB asset linkage — optional list of asset IDs.
   assetIds: z.array(z.string().uuid()).optional(),
+  // CS-001 — intake channel (required for multi-channel case creation).
+  channel: z.enum(VALID_CHANNELS).optional(),
+  // CS-001 — category classification (optional FK to helpdesk.categories).
+  categoryId: z.string().uuid().optional(),
 });
 export type CreateTicketBody = z.infer<typeof createTicketBody>;
 
