@@ -480,6 +480,18 @@ export const crmControlTowerSchema = z.object({
   }),
 });
 
+export const notificationExperimentListSchema = z.object({
+  data: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    status: z.string(),
+    winnerVariantId: z.string().nullable(),
+    winnerMarginPct: z.number().nullable(),
+    concludedAt: z.string().nullable(),
+  })),
+});
+
+
 
 
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);

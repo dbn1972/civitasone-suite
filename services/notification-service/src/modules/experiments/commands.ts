@@ -62,3 +62,26 @@ export async function concludeExperiment(ctx: RequestContext, experimentId: stri
   });
   return { id: experimentId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+
+/** P2-9 step 1 — freeze analysis and mark pending_approval (does not publish winner yet). */
+export async function requestWinnerApproval(ctx: RequestContext, experimentId: string): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.requestWinnerApproval, {
+    messageId, type: COMMANDS.requestWinnerApproval, tenantId: ctx.tenantId,
+    actorId: ctx.actorId, correlationId: ctx.correlationId,
+    payload: { id: experimentId, tenantId: ctx.tenantId },
+  });
+  return { id: experimentId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** P2-9 step 2 — approval-gated promotion of the winner. */
+export async function approveWinner(ctx: RequestContext, experimentId: string): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.concludeExperiment, {
+    messageId, type: COMMANDS.concludeExperiment, tenantId: ctx.tenantId,
+    actorId: ctx.actorId, correlationId: ctx.correlationId,
+    payload: { id: experimentId, tenantId: ctx.tenantId },
+  });
+  return { id: experimentId, status: "accepted", correlationId: ctx.correlationId };
+}

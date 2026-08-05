@@ -140,6 +140,36 @@ export function registerExperimentConsumers(q: Queue): void {
     await cache.invalidate(cache.makeKey(p.tenantId, "experiment_results", p.experimentId));
   });
 
+  q.subscribe<{ id: string; tenantId: string }>(COMMANDS.requestWinnerApproval, async (msg) => {
+    const p = msg.payload;
+    let missing = false;
+    let badStatus: string | null = null;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const experiment = await repo.findExperimentInTx(tx, p.tenantId, p.id);
+      if (!experiment) { missing = true; return; }
+      if (experiment.status !== "running" && experiment.status !== "draft") {
+        badStatus = experiment.status;
+        return;
+      }
+      await repo.setStatus(tx, p.tenantId, p.id, "pending_approval", msg.actorId, experiment.version);
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: p.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "request_winner_approval", resourceType: "experiment",
+          resourceId: p.id, outcome: "success",
+        },
+      });
+    });
+    if (missing) throw new NonRetryableError(`EXPERIMENT_NOT_FOUND: experiment ${p.id} not found`);
+    if (badStatus) throw new NonRetryableError(`INVALID_STATUS: ${badStatus}`);
+    await cache.invalidate(cache.makeKey(p.tenantId, "experiment", p.id));
+  });
+
   q.subscribe<{ id: string; tenantId: string }>(COMMANDS.concludeExperiment, async (msg) => {
     const p = msg.payload;
     let missing = false;
@@ -147,6 +177,11 @@ export function registerExperimentConsumers(q: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const experiment = await repo.findExperimentInTx(tx, p.tenantId, p.id);
       if (!experiment) {
+        missing = true;
+        return;
+      }
+      // P2-9: winner promotion is approval-gated — conclude only after pending_approval.
+      if (experiment.status !== "pending_approval") {
         missing = true;
         return;
       }

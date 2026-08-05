@@ -17,6 +17,7 @@ import type {
   CRMCampaignRoiSummaryRow,
   CRMLeadCaptureForm,
   CRMControlTower,
+  NotificationExperiment,
   CRMForecast,
   CRMVocSummary,
   AccountHealthEntry,
@@ -190,6 +191,7 @@ import {
   crmCampaignRoiSummarySchema,
   crmLeadCaptureFormSchema,
   crmControlTowerSchema,
+  notificationExperimentListSchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
@@ -2577,6 +2579,17 @@ export async function getCrmSentimentSummary(
 /** Public website lead-capture form registry (P1-7). */
 
 /** Executive control tower (P2-8). */
+
+/** A/B-MVT experiments (P2-9). */
+export async function getNotificationExperiments(): Promise<LoaderResult<NotificationExperiment[]>> {
+  return fetchJson("/api/v1/notification/experiments?limit=100&offset=0", [] as NotificationExperiment[], {
+    revalidateSeconds: 30,
+    telemetryKey: "notification.experiments",
+    responseSchema: notificationExperimentListSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
 export async function getCrmControlTower(): Promise<LoaderResult<CRMControlTower | null>> {
   return fetchJson("/api/v1/crm/dashboard/control-tower", null as CRMControlTower | null, {
     revalidateSeconds: 60,

@@ -6,6 +6,7 @@ export default function Page() {
       title="Notifications"
       description="Notification inbox, delivery tracking, templates and sending."
       links={[
+        { href: "/notifications/experiments", label: "A/B Experiments", note: "MVT tests with approval-gated winner promotion" },
         { href: "/notifications/list", label: "Inbox", note: "All notification events" },
         { href: "/notifications/deliveries", label: "Deliveries", note: "Delivery status and failure log" },
         { href: "/notifications/templates", label: "Templates", note: "Message templates and versions" },

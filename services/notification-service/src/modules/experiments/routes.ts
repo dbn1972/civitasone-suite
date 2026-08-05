@@ -20,6 +20,8 @@ import {
   determineWinner,
   buildHeatmap,
   allocateVariant,
+  assertCanRequestConclusion,
+  assertCanApproveWinner,
   type VariantDef,
   type EngagementEvent,
 } from "./domain.js";
@@ -169,10 +171,30 @@ export async function experimentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const experiment = await repo.findExperimentById(ctx.tenantId, id);
     if (!experiment) throw new HttpError(404, "NOT_FOUND", "experiment not found");
-    if (experiment.status === "concluded") {
+    const blocked = assertCanRequestConclusion(experiment.status);
+    if (blocked === "ALREADY_CONCLUDED") {
       throw new HttpError(409, "ALREADY_CONCLUDED", "experiment is already concluded");
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.concludeExperiment(ctx, id));
+    if (blocked === "ALREADY_PENDING_APPROVAL") {
+      throw new HttpError(409, "ALREADY_PENDING_APPROVAL", "winner promotion is awaiting approval");
+    }
+    if (blocked) throw new HttpError(409, blocked, "experiment cannot request conclusion");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.requestWinnerApproval(ctx, id));
+  });
+
+  /** P2-9: approval gate — promotes the proposed winner to concluded. */
+  app.post("/v1/notification/experiments/:id/approve-winner", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const experiment = await repo.findExperimentById(ctx.tenantId, id);
+    if (!experiment) throw new HttpError(404, "NOT_FOUND", "experiment not found");
+    const blocked = assertCanApproveWinner(experiment.status);
+    if (blocked === "ALREADY_CONCLUDED") {
+      throw new HttpError(409, "ALREADY_CONCLUDED", "experiment is already concluded");
+    }
+    if (blocked) throw new HttpError(409, "NOT_PENDING_APPROVAL", "conclude the experiment before approving a winner");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveWinner(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {
