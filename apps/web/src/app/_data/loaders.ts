@@ -15,6 +15,7 @@ import type {
   CRMDashboard,
   CRMCampaignRoi,
   CRMCampaignRoiSummaryRow,
+  CRMLeadCaptureForm,
   CRMForecast,
   CRMVocSummary,
   AccountHealthEntry,
@@ -186,6 +187,7 @@ import {
   crmVocSummarySchema,
   crmCampaignRoiSchema,
   crmCampaignRoiSummarySchema,
+  crmLeadCaptureFormSchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
@@ -2569,6 +2571,17 @@ export async function getCrmSentimentSummary(
 /**
  * Campaign ROI across every campaign with recorded performance (P1-6).
  */
+
+/** Public website lead-capture form registry (P1-7). */
+export async function getCrmLeadCaptureForms(): Promise<LoaderResult<CRMLeadCaptureForm[]>> {
+  return fetchJson("/api/v1/crm/lead-capture-forms", [] as CRMLeadCaptureForm[], {
+    revalidateSeconds: 30,
+    telemetryKey: "crm.lead_capture_forms",
+    responseSchema: crmLeadCaptureFormSchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
 export async function getCrmCampaignRoiSummary(): Promise<LoaderResult<CRMCampaignRoiSummaryRow[]>> {
   return fetchJson("/api/v1/crm/campaigns/roi-summary?limit=200", [] as CRMCampaignRoiSummaryRow[], {
     revalidateSeconds: 60,
