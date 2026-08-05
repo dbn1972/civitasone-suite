@@ -58,6 +58,8 @@ export async function createTicket(ctx: RequestContext, body: CreateTicketBody):
       typeFields: body.typeFields ?? null,
       assetIds: body.assetIds ?? null,
       assetVerified,
+      channel: body.channel ?? null,
+      categoryId: body.categoryId ?? null,
     },
   });
 

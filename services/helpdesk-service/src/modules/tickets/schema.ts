@@ -30,6 +30,14 @@ export const tickets = helpdeskSchema.table("tickets", {
   assetIds: jsonb("asset_ids").$type<string[]>(),
   // CMDB — whether the asset linkage has been verified against asset-service.
   assetVerified: boolean("asset_verified").default(false),
+  // CS-001 — intake channel (phone, email, portal, chatbot, whatsapp, api, manual).
+  channel: varchar("channel", { length: 24 }),
+  // CS-001 — category classification (FK to helpdesk.categories).
+  categoryId: uuid("category_id"),
+  // CS-001 — gapless unique reference number (e.g. CASE/2026-27/000001).
+  ticketNo: varchar("ticket_no", { length: 32 }),
+  // CS-001 — auto-assigned SLA policy at creation time.
+  slaPolicyId: uuid("sla_policy_id"),
 });
 
 export type TicketRow = typeof tickets.$inferSelect;
