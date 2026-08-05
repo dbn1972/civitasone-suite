@@ -32,6 +32,16 @@ const taskIdParam = z.object({ taskId: z.string().uuid() });
 const agentIdParam = z.object({ agentId: z.string().uuid() });
 
 export async function visitRoutes(app: FastifyInstance): Promise<void> {
+  // GET /v1/field/visits — recent visits with GPS check-in/out (P1-10)
+  app.get("/v1/field/visits", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FIELD_ROLES);
+    const q = historyQuery.parse(req.query);
+    const { rows, total } = await repo.listRecent(ctx.tenantId, q.limit, q.offset);
+    const page = Math.floor(q.offset / q.limit) + 1;
+    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
+  });
+
   // POST /v1/field/visits/check-in — record check-in at location
   app.post("/v1/field/visits/check-in", async (req, reply) => {
     const ctx = resolveContext(req);

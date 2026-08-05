@@ -87,6 +87,38 @@ function moduleLoader(path: string, key: string) {
 
 export const getFieldTasks = moduleLoader("/api/v1/field/tasks", "field.tasks");
 export const getFieldRoutes = moduleLoader("/api/v1/field/routes", "field.routes");
-export const getFieldVisits = moduleLoader("/api/v1/field/tasks", "field.visits");
+export const getFieldVisits = moduleLoader("/api/v1/field/visits?limit=100", "field.visits");
 export const getFieldAgents = moduleLoader("/api/v1/field/tasks", "field.agents");
 export const getFieldSync = moduleLoader("/api/v1/field/sync/pull?since=1970-01-01T00:00:00.000Z", "field.sync");
+
+
+import { fetchJson, type LoaderResult as LR } from "@/app/_data/apiClient";
+
+export type FieldVisitRow = {
+  id: string;
+  taskId: string;
+  agentId: string;
+  checkInLatitude: string | null;
+  checkInLongitude: string | null;
+  checkOutLatitude: string | null;
+  checkOutLongitude: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  durationMinutes: number | null;
+  outcome: string | null;
+  notes: string | null;
+};
+
+/** Typed visits list for the P1-10 GPS / outcome screen. */
+export async function getFieldVisitsDetailed(): Promise<LR<FieldVisitRow[]>> {
+  return fetchJson("/api/v1/field/visits?limit=100", [] as FieldVisitRow[], {
+    revalidateSeconds: 30,
+    telemetryKey: "field.visits.detailed",
+    mapResponse: (payload: unknown) => {
+      if (typeof payload === "object" && payload !== null && Array.isArray((payload as { data?: unknown }).data)) {
+        return (payload as { data: FieldVisitRow[] }).data;
+      }
+      return [];
+    },
+  });
+}
