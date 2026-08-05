@@ -51,6 +51,7 @@ import { assignmentRoutes } from "./modules/assignment/routes.js";
 import { communicationRoutes } from "./modules/communications/routes.js";
 import { sendRoutes } from "./modules/communications/send-routes.js";
 import { previewRoutes } from "./modules/communications/preview-routes.js";
+import { templatePreviewRoutes } from "./modules/communications/template-preview-routes.js";
 import { campaignApprovalRoutes } from "./modules/communications/campaign-approval-routes.js";
 import { cannedResponseRoutes } from "./modules/communications/canned-responses/routes.js";
 import { addressRoutes } from "./modules/addresses/routes.js";
@@ -156,6 +157,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(sendRoutes);
   // Gap 1: campaign cost preview
   await app.register(previewRoutes);
+  // CH-04: template variable resolved preview
+  await app.register(templatePreviewRoutes);
   // Gap 2: campaign approval workflow
   await app.register(campaignApprovalRoutes);
   // Gap 5: canned responses / quick-reply for agents

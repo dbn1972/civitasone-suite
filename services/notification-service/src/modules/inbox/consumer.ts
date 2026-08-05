@@ -20,6 +20,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -170,12 +171,64 @@ export function registerInboxConsumers(q: Queue): void {
    * act on the winner. The auto-reply is published as a normal
    * `notification.send` so it goes through the same consent, DND and
    * suppression checks as any other outbound message.
+   *
+   * CH-07: additionally, attempt CRM contact lookup. When unmatched or ambiguous,
+   * insert into `inbound_review_queue` so operators can manually link the sender.
    */
   q.subscribe<InboundPayload>(COMMANDS.inboundReceived, async (msg) => {
     const p = msg.payload;
     if (typeof p.from !== "string" || typeof p.body !== "string") {
       throw new NonRetryableError("INVALID_INBOUND_PAYLOAD: from and body are required");
     }
+
+    // CH-07: CRM contact lookup via HTTP — fail open (no blocking on CRM downtime)
+    let crmMatched = false;
+    try {
+      const CRM_BASE = process.env.CRM_SERVICE_URL ?? "http://localhost:3024";
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5_000);
+      const lookupRes = await fetch(`${CRM_BASE}/v1/crm/contacts?phone=${encodeURIComponent(p.from)}&limit=2`, {
+        signal: controller.signal,
+        headers: { "x-tenant-id": p.tenantId, "x-internal": "true" },
+      });
+      clearTimeout(timeout);
+      if (lookupRes.ok) {
+        const lookupJson = await lookupRes.json() as { data?: Array<{ id: string }> };
+        const matches = lookupJson.data ?? [];
+        if (matches.length === 1) {
+          crmMatched = true;
+        } else {
+          // 0 matches or 2+ (ambiguous) → insert into review queue
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`
+              INSERT INTO notification.inbound_review_queue
+                (id, tenant_id, channel, sender_identifier, message_content, status)
+              VALUES (${randomUUID()}, ${p.tenantId}, ${p.channel}, ${p.from}, ${p.body.substring(0, 500)}, 'pending')
+            `);
+          });
+          // Emit review_needed event
+          await db.transaction(async (tx) => {
+            await enqueue(tx, {
+              topic: EVENTS.contactReviewNeeded,
+              eventType: EVENTS.contactReviewNeeded,
+              tenantId: p.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                channel: p.channel,
+                senderIdentifier: p.from,
+                matchCount: matches.length,
+              },
+            });
+          });
+          log.info({ channel: p.channel, matchCount: matches.length }, "inbound contact unmatched - queued for review");
+        }
+      }
+    } catch {
+      // CRM service unavailable — fail open, proceed with keyword matching
+      log.warn({ channel: p.channel }, "CRM contact lookup failed - proceeding without match");
+    }
+    void crmMatched; // Used for future correlation; presence documents the lookup outcome
 
     let reply: { body: string; ruleId: string } | null = null;
     let optedOut = false;

@@ -37,6 +37,8 @@ import { bounceRoutes } from "./modules/bounces/routes.js";
 import { dltRoutes } from "./modules/dlt/routes.js";
 import { quotaRoutes } from "./modules/channels/quota-routes.js";
 import { conversationRoutes } from "./modules/conversations/routes.js";
+import { reviewQueueRoutes } from "./modules/inbox/review-queue-routes.js";
+import { attachmentRoutes } from "./modules/attachments/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -104,6 +106,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(quotaRoutes);
   // G5 conversation thread model (omnichannel)
   await app.register(conversationRoutes);
+  // CH-07: inbound review queue for unmatched contacts
+  await app.register(reviewQueueRoutes);
+  // CH-19: attachment upload/download with MIME validation + malware scan
+  await app.register(attachmentRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

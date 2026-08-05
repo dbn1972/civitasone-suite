@@ -12,6 +12,7 @@ import { schema as didModule } from "../modules/did/schema.js";
 import { schema as ivrModule } from "../modules/ivr/schema.js";
 import { schema as recordingsModule } from "../modules/recordings/schema.js";
 import { schema as transcriptionModule } from "../modules/transcription/schema.js";
+import { schema as broadcastModule } from "../modules/broadcast/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -22,6 +23,7 @@ const SCHEMA = {
   ...ivrModule,
   ...recordingsModule,
   ...transcriptionModule,
+  ...broadcastModule,
   ...outboxSchema,
 };
 

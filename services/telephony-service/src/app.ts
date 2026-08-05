@@ -17,6 +17,7 @@ import { ivrRoutes } from "./modules/ivr/routes.js";
 import { ivrActionRoutes } from "./modules/ivr/action-routes.js";
 import { recordingRoutes } from "./modules/recordings/routes.js";
 import { transcriptionRoutes } from "./modules/transcription/routes.js";
+import { broadcastRoutes } from "./modules/broadcast/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -43,6 +44,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(ivrActionRoutes);
   await app.register(recordingRoutes);
   await app.register(transcriptionRoutes);
+  // CH-11: Voice broadcast
+  await app.register(broadcastRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;
