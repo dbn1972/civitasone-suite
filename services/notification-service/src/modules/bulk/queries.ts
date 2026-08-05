@@ -25,8 +25,9 @@ export async function recordResponse(
   tenantId: string,
   input: { campaignId: string; subjectType: string; subjectId: string; converted: boolean; revenueMinor: string },
   actorId: string,
+  correlationId: string,
 ): Promise<CampaignResponseView | null> {
-  const result = await repo.upsertCampaignResponse(tenantId, input, actorId);
+  const result = await repo.upsertCampaignResponse(tenantId, input, actorId, correlationId);
   if (result) await cache.invalidate(cache.makeKey(tenantId, RESOURCE.campaign, input.campaignId));
   return result;
 }

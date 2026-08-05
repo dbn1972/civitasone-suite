@@ -59,7 +59,7 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
       subjectId: body.subjectId,
       converted: body.converted ?? false,
       revenueMinor: body.revenueMinor ?? "0",
-    }, ctx.actorId);
+    }, ctx.actorId, ctx.correlationId);
     if (!result) throw new HttpError(404, "NOT_FOUND", "campaign not found");
     return reply.send(result);
   });

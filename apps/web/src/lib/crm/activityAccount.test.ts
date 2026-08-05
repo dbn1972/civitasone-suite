@@ -67,6 +67,13 @@ describe("normalisers", () => {
     expect(out[1].direction).toBe("outbound");
   });
 
+  it("normaliseCommunication: contact cross-service items date off sentAt fallback", () => {
+    // Cross-service `communicationItems` only carry `sentAt` (no occurredAt/createdAt).
+    const out = normaliseCommunications([{ id: "ci1", channel: "email", sentAt: "2026-04-01T09:00:00Z" }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].occurredAt).toBe("2026-04-01T09:00:00Z");
+  });
+
   it("normaliseAddresses: coerces owner/type, defaults country India", () => {
     const out = normaliseAddresses([
       { id: "ad1", ownerType: "account", addressType: "billing", line1: "1 Rd", city: "Pune", pincode: "411001" },
@@ -132,7 +139,11 @@ describe("normalisers", () => {
   it("normalise360: nested collections + honest external null counts", () => {
     const v = normalise360({
       activities: [{ id: "a1", createdAt: "2026-01-01T00:00:00Z" }],
-      communications: [{ id: "c1", occurredAt: "2026-01-01T00:00:00Z" }],
+      // Contact shape: cross-service message items live under `communicationItems`.
+      communicationItems: { items: [{ id: "c1", occurredAt: "2026-01-01T00:00:00Z" }], total: 1, available: true },
+      // NEW real counts blocks (source:'crm'), BRD §9.4.
+      communications: { total: 9, delivered: 7, failed: 2, source: "crm" },
+      campaignActivity: { responses: 4, conversions: 1, revenueMinor: "1234567", source: "crm" },
       deals: [{ id: "d1", name: "Deal", stage: "won", amount: 5000 }],
       quotations: [{ id: "q1", reference: "Q-1", status: "sent", total: 100 }],
       nextActions: [{ id: "n1", title: "call", status: "open", dueDate: "2026-02-02" }],
@@ -140,23 +151,64 @@ describe("normalisers", () => {
       addresses: [{ id: "ad1", addressType: "office", line1: "1", city: "X", pincode: "111111" }],
       consent: { marketing: true, updatedAt: "2026-01-01T00:00:00Z" },
       score: 72,
-      external: { caseCount: null, documentCount: null, source: "external" },
+      // Real backend NESTED external shape; non-null counts must render (not "—").
+      external: {
+        helpdeskCases: { count: 3, source: "external" },
+        knowledgeDocuments: { count: 5, source: "external" },
+      },
     });
     expect(v.deals[0].amount).toBe(5000);
     expect(v.quotations[0].amount).toBe(100);
     expect(v.nextActions[0].dueAt).toBe("2026-02-02");
     expect(v.consent?.marketing).toBe(true);
     expect(v.score).toBe(72);
-    expect(v.external.caseCount).toBeNull();
-    expect(v.external.documentCount).toBeNull();
+    // Nested `.count` is read (guards against the latent flat-field drift).
+    expect(v.external.caseCount).toBe(3);
+    expect(v.external.documentCount).toBe(5);
+    expect(v.external.source).toBe("external");
+    // Renamed contact item list ({ items } wrapper) still parses.
+    expect(v.communicationItems).toHaveLength(1);
+    expect(v.communicationItems[0].id).toBe("c1");
+    // NEW real communication counts block.
+    expect(v.communications).toEqual({ total: 9, delivered: 7, failed: 2, source: "crm" });
+    // NEW real campaign-activity block; revenue stays a paise string.
+    expect(v.campaignActivity).toEqual({ responses: 4, conversions: 1, revenueMinor: "1234567", source: "crm" });
+  });
+
+  it("normalise360: account localCommunications array feeds communicationItems", () => {
+    const v = normalise360({
+      localCommunications: [
+        { id: "lc1", occurredAt: "2026-01-02T00:00:00Z" },
+        { id: "lc2", occurredAt: "2026-01-01T00:00:00Z" },
+      ],
+      communications: { total: 0, delivered: 0, failed: 0, source: "crm" },
+      campaignActivity: { responses: 0, conversions: 0, revenueMinor: "0", source: "crm" },
+    });
+    expect(v.communicationItems).toHaveLength(2);
+    // A source:'crm' block with zeros is a REAL zero, not an error/stub.
+    expect(v.communications.source).toBe("crm");
+    expect(v.communications.total).toBe(0);
+    expect(v.campaignActivity.source).toBe("crm");
+    expect(v.campaignActivity.revenueMinor).toBe("0");
+  });
+
+  it("normalise360: missing/garbled §9.4 blocks collapse to source:'error' + safe 0s", () => {
+    const v = normalise360({ communications: { total: "x" }, campaignActivity: { revenueMinor: "12.3abc" } });
+    expect(v.communications).toEqual({ total: 0, delivered: 0, failed: 0, source: "error" });
+    // A non-integer revenue string is rejected to a real "0" (never NaN/float).
+    expect(v.campaignActivity).toEqual({ responses: 0, conversions: 0, revenueMinor: "0", source: "error" });
   });
 
   it("normalise360: empty input yields safe defaults + external stub", () => {
     const v = normalise360(null);
     expect(v.activities).toEqual([]);
+    expect(v.communicationItems).toEqual([]);
     expect(v.score).toBeNull();
     expect(v.consent).toBeNull();
     expect(v.external.source).toBe("external");
+    // No block present ⇒ source:'error' (the panel gates, never shows a fake 0).
+    expect(v.communications.source).toBe("error");
+    expect(v.campaignActivity.source).toBe("error");
   });
 
   it("constants expose the expanded vocabularies", () => {

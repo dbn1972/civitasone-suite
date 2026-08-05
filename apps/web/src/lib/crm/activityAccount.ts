@@ -352,7 +352,7 @@ export function normaliseCommunication(raw: unknown): CommunicationEntry | null 
     channel: str(r.channel) || "other",
     ...(optStr(r.outcome) ? { outcome: str(r.outcome) } : {}),
     ...(optStr(r.disposition) ? { disposition: str(r.disposition) } : {}),
-    occurredAt: str(r.occurredAt) || str(r.createdAt),
+    occurredAt: str(r.occurredAt) || str(r.createdAt) || str(r.sentAt),
     summary: str(r.summary) || str(r.text),
   };
 }
@@ -652,9 +652,48 @@ export interface External360 {
   source: string;
 }
 
+/** Block source: "crm" = a real, tenant-owned count (a 0 is a REAL zero, not a stub). */
+export type Block360Source = "crm" | "error";
+
+/**
+ * BRD §9.4 — REAL communication counts, aggregated from the
+ * crm.contact_communications projection the Communication Hub feeds. When
+ * source==="crm" these are real tenant-owned numbers; a 0 is a genuine zero,
+ * NOT an unsynced external stub.
+ */
+export interface Communications360 {
+  total: number;
+  delivered: number;
+  failed: number;
+  source: Block360Source;
+}
+
+/**
+ * BRD §9.4 — REAL campaign-activity counts + server-attributed revenue.
+ * `revenueMinor` is a minor-unit (paise) integer string — format via
+ * formatMoney(), never parseFloat (paise-exact, no float drift).
+ */
+export interface CampaignActivity360 {
+  responses: number;
+  conversions: number;
+  revenueMinor: string;
+  source: Block360Source;
+}
+
 export interface Customer360 {
   activities: ActivityEntry[];
-  communications: CommunicationEntry[];
+  /**
+   * Live message / local-log items. On a CONTACT this is the cross-service
+   * `communicationItems` section (notification/telephony, an { items } wrapper);
+   * on an ACCOUNT it is the local `localCommunications` manual-log array. The
+   * backend renamed its old `communications` array to these two names — the NEW
+   * `communications` key is the counts block below (BRD §9.4).
+   */
+  communicationItems: CommunicationEntry[];
+  /** REAL communication counts (source:"crm"), BRD §9.4. */
+  communications: Communications360;
+  /** REAL campaign-activity counts (source:"crm"), BRD §9.4. */
+  campaignActivity: CampaignActivity360;
   deals: Deal360[];
   quotations: Quotation360[];
   nextActions: NextAction360[];
@@ -720,10 +759,60 @@ function normaliseNextActions360(raw: unknown): NextAction360[] {
 
 function normaliseExternal360(raw: unknown): External360 {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // The backend sends the NESTED shape `{ helpdeskCases: { count, source },
+  // knowledgeDocuments: { count, source } }`. Read `.count` off each nested
+  // block; a flat `caseCount`/`documentCount` is tolerated as a legacy fallback
+  // so a non-null count renders the moment either source goes live.
+  const nested = (v: unknown): unknown =>
+    v && typeof v === "object" ? (v as Record<string, unknown>).count : undefined;
+  const helpdesk = r.helpdeskCases;
+  const knowledge = r.knowledgeDocuments;
+  const src =
+    (helpdesk && typeof helpdesk === "object" ? str((helpdesk as Record<string, unknown>).source) : "") ||
+    str(r.source) ||
+    "external";
   return {
-    caseCount: numOrNull(r.caseCount),
-    documentCount: numOrNull(r.documentCount),
-    source: str(r.source) || "external",
+    caseCount: numOrNull(nested(helpdesk) ?? r.caseCount),
+    documentCount: numOrNull(nested(knowledge) ?? r.documentCount),
+    source: src,
+  };
+}
+
+/** A present-but-non-numeric count collapses to a real 0 (never NaN in the UI). */
+function count0(v: unknown): number {
+  return numOrNull(v) ?? 0;
+}
+
+/**
+ * Parse the REAL communications counts block (BRD §9.4). A missing block, or one
+ * whose source isn't "crm", is treated as unavailable (source:"error") — the UI
+ * gates on that rather than showing a fabricated 0.
+ */
+export function normaliseCommunications360(raw: unknown): Communications360 {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    total: count0(r.total),
+    delivered: count0(r.delivered),
+    failed: count0(r.failed),
+    source: r.source === "crm" ? "crm" : "error",
+  };
+}
+
+/** Parse the REAL campaign-activity block (BRD §9.4). revenueMinor stays a paise string. */
+export function normaliseCampaignActivity360(raw: unknown): CampaignActivity360 {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rev =
+    typeof r.revenueMinor === "string"
+      ? r.revenueMinor.trim()
+      : typeof r.revenueMinor === "number"
+        ? String(r.revenueMinor)
+        : "0";
+  return {
+    responses: count0(r.responses),
+    conversions: count0(r.conversions),
+    // Only trust a clean integer paise string; anything else is a real 0.
+    revenueMinor: /^-?\d+$/.test(rev) ? rev : "0",
+    source: r.source === "crm" ? "crm" : "error",
   };
 }
 
@@ -732,7 +821,13 @@ export function normalise360(raw: unknown): Customer360 {
   const consentRaw = r.consent && typeof r.consent === "object" ? (r.consent as Record<string, unknown>) : null;
   return {
     activities: normaliseActivities(r.activities),
-    communications: normaliseCommunications(r.communications),
+    // Backend rename: the message/local-log item list is `communicationItems`
+    // (contact, a cross-service { items } section) or `localCommunications`
+    // (account, a bare array). Both flow through the same item normaliser.
+    communicationItems: normaliseCommunications(r.communicationItems ?? r.localCommunications),
+    // NEW real counts blocks (source:"crm"), BRD §9.4.
+    communications: normaliseCommunications360(r.communications),
+    campaignActivity: normaliseCampaignActivity360(r.campaignActivity),
     deals: normaliseDeals360(r.deals),
     quotations: normaliseQuotations360(r.quotations),
     nextActions: normaliseNextActions360(r.nextActions),
