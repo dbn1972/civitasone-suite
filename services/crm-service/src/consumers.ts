@@ -37,6 +37,7 @@ import { registerCommunicationConsumers } from "./modules/communications/consume
 import { registerSendConsumers } from "./modules/communications/send-consumer.js";
 import { registerCampaignApprovalConsumers } from "./modules/communications/campaign-approval-consumer.js";
 import { registerDeliveryStatusConsumers } from "./modules/communications/delivery-status-consumer.js";
+import { registerContactCommunicationConsumer } from "./modules/communications/contact-activity-consumer.js";
 import { registerAddressConsumers } from "./modules/addresses/consumer.js";
 import { registerAccountRelationshipConsumers } from "./modules/accounts/relationships-consumer.js";
 import { registerIntegrationConsumers } from "./modules/integrations/consumer.js";
@@ -82,6 +83,10 @@ export function registerAllConsumers(queue: Queue): void {
   // Gap 2: campaign approval workflow consumers
   registerCampaignApprovalConsumers(queue);
   registerDeliveryStatusConsumers(queue);
+  // BRD 9.4 - CRM<->Communication identifier mapping: project the hub's
+  // notification.contact_activity.recorded event onto crm.contact_communications
+  // so Customer-360 shows REAL communication/campaign counts instead of stubs.
+  registerContactCommunicationConsumer(queue);
   registerAddressConsumers(queue);
   registerAccountRelationshipConsumers(queue);
   registerIntegrationConsumers(queue);

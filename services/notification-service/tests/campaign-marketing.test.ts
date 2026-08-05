@@ -39,7 +39,7 @@ import {
 } from "../src/modules/deliveries/consumer.js";
 import { emailAdapter } from "../src/adapters/index.js";
 import { computeRoiBps } from "../src/modules/bulk/domain.js";
-import { COMMANDS } from "../src/topics.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET as string;
@@ -159,6 +159,21 @@ async function setActualCost(tenantId: string, id: string, costMinor: string): P
       .set({ actualCostMinor: BigInt(costMinor) })
       .where(eq(notificationCampaigns.id, id));
   }));
+}
+
+
+/**
+ * BRD 9.4: read the notification.contact_activity.recorded outbox rows this
+ * tenant emitted. Read under the tenant GUC (outbox is RLS-scoped).
+ */
+async function contactActivityRows(tenantId: string): Promise<Array<Record<string, unknown>>> {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    const rows = await tx.select().from(outboxMessages)
+      .where(eq(outboxMessages.topic, EVENTS.contactActivityRecorded));
+    return rows
+      .filter((r) => r.tenantId === tenantId)
+      .map((r) => r.payload as Record<string, unknown>);
+  })) as Promise<Array<Record<string, unknown>>>;
 }
 
 let app: FastifyInstance;
@@ -509,3 +524,106 @@ describe("MK integration — GET /notifications/segments gateway alias", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+
+describe("BRD 9.4 CRM identifier mapping - response path emits notification.contact_activity.recorded", () => {
+  it("a recorded (non-converted) response enqueues the event with the exact 9.4 payload", async () => {
+    const id = randomUUID();
+    await createCampaignViaConsumer(TENANT_A, ACTOR_A, {
+      id, tenantId: TENANT_A, templateId: randomUUID(), name: "Comm-map Campaign",
+      recipients: ["a@dept.gov.in"], budgetMinor: "0", currency: "INR",
+    });
+    const subjectId = randomUUID();
+    const res = await app.inject({
+      method: "POST", url: `/notifications/campaigns/${id}/responses`, headers: bearerA(),
+      payload: { subjectType: "lead", subjectId, revenueMinor: "12000" },
+    });
+    expect(res.statusCode).toBe(200);
+    const responseRowId = res.json().id as string;
+
+    const rows = await contactActivityRows(TENANT_A);
+    expect(rows).toHaveLength(1);
+    const p = rows[0];
+    expect(p.tenantId).toBe(TENANT_A);
+    expect(p.externalReferenceId).toBe(subjectId);       // #2 external_reference_id = CRM subject id
+    expect(p.subjectType).toBe("lead");
+    expect(p.kind).toBe("campaign_response");
+    expect(p.campaignId).toBe(id);
+    expect(p.campaignRecipientId).toBe(responseRowId);   // #5 campaign_recipient_id = person-level link
+    expect(p.messageId).toBeNull();                      // #6 not on this path
+    expect(p.providerId).toBeNull();
+    expect(p.status).toBe("responded");
+    expect(p.revenueMinor).toBe("12000");                // bigint paise as string
+    expect(typeof p.occurredAt).toBe("string");
+    expect(p.correlationId).toBeTruthy();
+  });
+
+  it("a converted response emits status converted and the persisted revenue", async () => {
+    const id = randomUUID();
+    await createCampaignViaConsumer(TENANT_A, ACTOR_A, {
+      id, tenantId: TENANT_A, templateId: randomUUID(), name: "Comm-map Converted",
+      recipients: ["a@dept.gov.in"], budgetMinor: "0", currency: "INR",
+    });
+    const subjectId = randomUUID();
+    await app.inject({
+      method: "POST", url: `/notifications/campaigns/${id}/responses`, headers: bearerA(),
+      payload: { subjectType: "contact", subjectId, converted: true, revenueMinor: "99999999999" },
+    });
+    const rows = await contactActivityRows(TENANT_A);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("converted");
+    expect(rows[0].subjectType).toBe("contact");
+    expect(rows[0].revenueMinor).toBe("99999999999");
+  });
+
+  it("upserting the SAME subject emits one event per call, each carrying the same campaignRecipientId (crm dedupe key)", async () => {
+    const id = randomUUID();
+    await createCampaignViaConsumer(TENANT_A, ACTOR_A, {
+      id, tenantId: TENANT_A, templateId: randomUUID(), name: "Comm-map Upsert",
+      recipients: ["a@dept.gov.in"], budgetMinor: "0", currency: "INR",
+    });
+    const subjectId = randomUUID();
+    const first = await app.inject({
+      method: "POST", url: `/notifications/campaigns/${id}/responses`, headers: bearerA(),
+      payload: { subjectType: "lead", subjectId, revenueMinor: "10000" },
+    });
+    const second = await app.inject({
+      method: "POST", url: `/notifications/campaigns/${id}/responses`, headers: bearerA(),
+      payload: { subjectType: "lead", subjectId, converted: true, revenueMinor: "25000" },
+    });
+    const rowId = first.json().id as string;
+    expect(second.json().id).toBe(rowId);
+
+    const rows = await contactActivityRows(TENANT_A);
+    expect(rows).toHaveLength(2);
+    // Both events carry the SAME campaignRecipientId - the crm side dedupes/updates on it.
+    expect(rows.every((r) => r.campaignRecipientId === rowId)).toBe(true);
+    const statuses = rows.map((r) => r.status).sort();
+    expect(statuses).toEqual(["converted", "responded"]);
+  });
+
+  it("a failed attribution (unknown campaign -> 404) emits NO event", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/notifications/campaigns/${randomUUID()}/responses`, headers: bearerA(),
+      payload: { subjectType: "lead", subjectId: randomUUID(), revenueMinor: "5000" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(await contactActivityRows(TENANT_A)).toHaveLength(0);
+  });
+
+  it("tenant B attributing to tenant A campaign (404) emits no event for either tenant", async () => {
+    const id = randomUUID();
+    await createCampaignViaConsumer(TENANT_A, ACTOR_A, {
+      id, tenantId: TENANT_A, templateId: randomUUID(), name: "Comm-map Xtenant",
+      recipients: ["a@dept.gov.in"], budgetMinor: "0", currency: "INR",
+    });
+    const resB = await app.inject({
+      method: "POST", url: `/notifications/campaigns/${id}/responses`, headers: bearerB(),
+      payload: { subjectType: "lead", subjectId: randomUUID(), revenueMinor: "5000" },
+    });
+    expect(resB.statusCode).toBe(404);
+    expect(await contactActivityRows(TENANT_A)).toHaveLength(0);
+    expect(await contactActivityRows(TENANT_B)).toHaveLength(0);
+  });
+});
+

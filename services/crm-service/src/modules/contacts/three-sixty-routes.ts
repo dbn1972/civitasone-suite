@@ -2,9 +2,12 @@
  * CM-004 — 360-degree view. One authorised, tenant-scoped view aggregating every
  * CRM-LOCAL record related to a contact or account.
  *
- * Cross-service data: communications and calls are fetched from notification-service
- * and telephony-service respectively. Helpdesk cases and knowledge documents remain
- * as honest stubs since those services are not yet integrated.
+ * Communication/campaign counts (`communications` + `campaignActivity`, source:'crm')
+ * are REAL, read from the crm.contact_communications projection the Communication
+ * Hub feeds via notification.contact_activity.recorded (BRD §9.4). Live message,
+ * call and conversation items still stream best-effort from notification-service /
+ * telephony-service under `communicationItems`/`calls`/`conversations`. Helpdesk
+ * cases and knowledge documents remain honest external stubs (not yet integrated).
  *
  * All cross-service calls use a 10s AbortController timeout and degrade gracefully
  * — a downstream failure NEVER causes this endpoint to 500.
@@ -13,7 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -184,6 +187,65 @@ async function fetchCrossServiceData(
 
 type Rows = Array<Record<string, unknown>>;
 
+/** The REAL communications + campaign blocks the FE 360 reads (BRD §9.4). */
+interface CommunicationsBlock {
+  total: number;
+  delivered: number;
+  failed: number;
+  source: "crm";
+}
+interface CampaignActivityBlock {
+  responses: number;
+  conversions: number;
+  revenueMinor: string;
+  source: "crm";
+}
+
+/**
+ * Aggregate the crm.contact_communications projection for one subject into the
+ * two 360 panels. Counts come purely from the projected rows — no fabrication;
+ * an absent subject yields real zeros with `source: 'crm'`, not an external stub.
+ *
+ * `subjectTypes` lets the contact/lead route match either flavour (a lead and a
+ * contact share the same crm.contacts id), while the account route passes only
+ * 'account'.
+ */
+async function readCommunicationProjection(
+  tx: ScopedTx,
+  tenantId: string,
+  subjectId: string,
+  subjectTypes: readonly string[],
+): Promise<{ communications: CommunicationsBlock; campaignActivity: CampaignActivityBlock }> {
+  const rows = (await tx.execute(sql`
+    SELECT
+      count(*) FILTER (WHERE kind = 'message_delivered')::int AS "delivered",
+      count(*) FILTER (WHERE kind = 'message_failed')::int AS "failed",
+      count(*) FILTER (WHERE kind IN ('message_delivered', 'message_failed'))::int AS "total",
+      count(*) FILTER (WHERE kind = 'campaign_response')::int AS "responses",
+      count(*) FILTER (WHERE kind = 'campaign_response' AND status = 'converted')::int AS "conversions",
+      COALESCE(sum(revenue_minor) FILTER (WHERE kind = 'campaign_response'), 0)::text AS "revenueMinor"
+    FROM crm.contact_communications
+    WHERE tenant_id = ${tenantId}
+      AND subject_id = ${subjectId}
+      AND subject_type IN (${sql.join(subjectTypes.map((s) => sql`${s}`), sql`, `)})
+  `)) as unknown as Rows;
+  const a = rows[0] ?? {};
+  return {
+    communications: {
+      total: Number(a.total ?? 0),
+      delivered: Number(a.delivered ?? 0),
+      failed: Number(a.failed ?? 0),
+      source: "crm",
+    },
+    campaignActivity: {
+      responses: Number(a.responses ?? 0),
+      conversions: Number(a.conversions ?? 0),
+      revenueMinor: String(a.revenueMinor ?? "0"),
+      source: "crm",
+    },
+  };
+}
+
 export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/contacts/:id/360", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -250,6 +312,11 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY occurred_at DESC LIMIT 20
       `)) as unknown as Rows;
 
+      // BRD §9.4 — REAL communication/campaign counts from the projection the
+      // Communication Hub feeds. A lead and a contact share the crm.contacts id,
+      // so match both subject_types.
+      const projection = await readCommunicationProjection(tx, t, id, ["contact", "lead"]);
+
       const b = base[0]!;
       return {
         subjectType: "contact" as const,
@@ -259,6 +326,9 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
         },
         consent: { marketingConsent: b.marketingConsent, consentDate: b.consentDate },
         activities, localCommunications, nextActions, contactRoles: roles, deals, quotations, addresses, syncedItems,
+        // REAL, tenant-owned counts (source:'crm') — no longer a null·external stub.
+        communications: projection.communications,
+        campaignActivity: projection.campaignActivity,
       };
     });
 
@@ -276,7 +346,10 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       data: {
         ...view,
-        communications: crossService.communications,
+        // `communications` + `campaignActivity` come from `view` (the crm
+        // projection, source:'crm'). Live message/call items still stream from
+        // the source services and degrade independently.
+        communicationItems: crossService.communications,
         calls: crossService.calls,
         conversations: crossService.conversations,
         external: EXTERNAL_STUBS,
@@ -322,11 +395,14 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY created_at DESC
       `)) as unknown as Rows;
 
-      const communications = (await tx.execute(sql`
+      const localCommunications = (await tx.execute(sql`
         SELECT id, direction, channel, outcome, disposition, summary, occurred_at AS "occurredAt"
         FROM crm.communications WHERE tenant_id = ${t} AND subject_type = 'account' AND subject_id = ${id}
         ORDER BY occurred_at DESC LIMIT 20
       `)) as unknown as Rows;
+
+      // BRD §9.4 — REAL communication/campaign counts from the projection.
+      const projection = await readCommunicationProjection(tx, t, id, ["account"]);
 
       const addresses = (await tx.execute(sql`
         SELECT id, address_type AS "addressType", line1, line2, city, state, pincode, country, is_primary AS "isPrimary"
@@ -344,7 +420,10 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
       return {
         subjectType: "account",
         account: { id: b.id, name: b.name, industry: b.industry, website: b.website, status: b.status, parentId: b.parentId },
-        contacts, childAccounts, relationships, deals, communications, addresses, syncedItems,
+        contacts, childAccounts, relationships, deals, localCommunications, addresses, syncedItems,
+        // REAL, tenant-owned counts (source:'crm') — no longer a null·external stub.
+        communications: projection.communications,
+        campaignActivity: projection.campaignActivity,
         external: EXTERNAL_STUBS,
       };
     });

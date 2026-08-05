@@ -285,6 +285,27 @@ export const EVENTS = {
    * Fires: once per successful delivery, after the delivery row is committed.
    */
   channelUsage:            "notification.channel.usage",
+
+  /* ---- BRD 9.4: CRM <-> Communication identifier mapping ---------------- */
+  /**
+   * The Communication Hub recorded an activity attributable to a CRM subject
+   * (contact/lead/account), carrying the section-9.4 cross-service identifiers so
+   * crm-service can project it onto the contact/lead timeline. Consumed by
+   * crm-service, which DEDUPES on campaignRecipientId (campaign-response path)
+   * or messageId (delivery path) - so a redelivered outbox row is safe.
+   * Payload: { tenantId, correlationId, externalReferenceId (uuid - the CRM
+   *   contact/lead id), subjectType: "contact"|"lead"|"account",
+   *   kind: "campaign_response"|"message_delivered"|"message_failed",
+   *   campaignId: uuid|null, campaignRecipientId: uuid|null,
+   *   messageId: string|null, providerId: string|null,
+   *   status: "responded"|"converted"|"delivered"|"failed",
+   *   occurredAt: ISO string, revenueMinor: string paise|null }
+   * Fires: once per recorded campaign response (kind=campaign_response). The
+   * delivery-finalize kinds are reserved for when a delivery carries a
+   * resolvable CRM subject ref; today it does not, so only campaign_response is
+   * emitted. The recipient address is NEVER in the payload.
+   */
+  contactActivityRecorded: "notification.contact_activity.recorded",
 } as const;
 
 /** Events consumed from other services — triggers user notifications. */

@@ -1,5 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, scopedRead, readScoped } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
 import {
   notificationCampaigns,
   notificationCampaignRecipients,
@@ -216,6 +218,7 @@ export async function upsertCampaignResponse(
   tenantId: string,
   input: { campaignId: string; subjectType: string; subjectId: string; converted: boolean; revenueMinor: string },
   actorId: string,
+  correlationId: string,
 ): Promise<CampaignResponseView | null> {
   return readScoped(tenantId, async (tx) => {
     const camp = await tx.select({ id: notificationCampaigns.id }).from(notificationCampaigns)
@@ -244,6 +247,38 @@ export async function upsertCampaignResponse(
         version: sql`${notificationCampaignResponses.version} + 1`,
       },
     }).returning();
-    return rows[0] ? toResponseView(rows[0]) : null;
+    const row = rows[0];
+    if (!row) return null;
+
+    // BRD 9.4 (#2 external_reference_id, #5 campaign_recipient_id): emit the
+    // cross-service identifier-mapping event in the SAME tenant-scoped tx as the
+    // upsert so it rides the transactional outbox atomically (no committed
+    // response without its event, and no event without a committed response).
+    // externalReferenceId = the CRM subject (contact/lead) id; campaignRecipientId
+    // = this campaign_responses row id (the person-level attribution link crm
+    // dedupes on). revenueMinor is the persisted bigint paise, serialised.
+    await enqueue(tx as unknown as Parameters<typeof enqueue>[0], {
+      topic: EVENTS.contactActivityRecorded,
+      eventType: EVENTS.contactActivityRecorded,
+      tenantId,
+      actorId,
+      correlationId,
+      payload: {
+        tenantId,
+        correlationId,
+        externalReferenceId: row.subjectId,
+        subjectType: row.subjectType,
+        kind: "campaign_response",
+        campaignId: row.campaignId,
+        campaignRecipientId: row.id,
+        messageId: null,
+        providerId: null,
+        status: row.converted ? "converted" : "responded",
+        occurredAt: new Date().toISOString(),
+        revenueMinor: money(row.revenueMinor),
+      },
+    });
+
+    return toResponseView(row);
   });
 }

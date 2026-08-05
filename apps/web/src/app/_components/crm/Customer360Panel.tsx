@@ -43,6 +43,33 @@ function money(amount: number | undefined): string {
   }
 }
 
+/** Format a count for the REAL (source:'crm') blocks — a genuine 0 shows "0". */
+function num(n: number | undefined): string {
+  return (n ?? 0).toLocaleString("en-IN");
+}
+
+/** Format attributed revenue held in paise (minor units) — paise-exact, no float. */
+function revenue(minor: string | undefined): string {
+  try {
+    return formatMoney(minor ?? "0");
+  } catch {
+    return "—";
+  }
+}
+
+/** Marker for a REAL, tenant-owned (source:'crm') block — contrast with ExternalTag. */
+function RealTag() {
+  return (
+    <span
+      role="status"
+      className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
+      style={{ border: "1px solid var(--line)", borderRadius: 999, padding: "1px 8px", fontSize: 12, color: "var(--muted)" }}
+    >
+      <span aria-hidden style={{ marginRight: 4 }}>●</span>In CRM · synced
+    </span>
+  );
+}
+
 /** Small honest marker for an external, not-yet-synced source. */
 function ExternalTag() {
   return (
@@ -86,7 +113,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         <StatGrid>
           <StatCard icon="📋" iconBg="#eef2ff" label="Activities" value={count(source, v?.activities.length ?? 0)} />
-          <StatCard icon="💬" iconBg="#fce7ee" label="Communications" value={count(source, v?.communications.length ?? 0)} />
+          <StatCard icon="💬" iconBg="#fce7ee" label="Communications" value={count(source, v?.communications.total ?? 0)} />
           <StatCard icon="💼" iconBg="#ecfdf5" label="Deals" value={count(source, v?.deals.length ?? 0)} />
           <StatCard
             icon="⭐"
@@ -95,6 +122,45 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
             value={source === "loading" ? "…" : isError || v?.score === null || v?.score === undefined ? "—" : String(v.score)}
           />
         </StatGrid>
+
+        {/* BRD §9.4 — REAL communication + campaign counts (source:'crm'). A 0
+            here is a genuine zero, distinct from the external stub further down. */}
+        <section
+          aria-label="Communication and campaign activity"
+          style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <h4 style={{ margin: 0 }}>Communication &amp; campaign activity</h4>
+            {isError ? null : <RealTag />}
+          </div>
+          {isError ? (
+            <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+              — Unavailable. <DataSourceBadge source="error" />
+            </p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className="card" style={{ padding: 12 }}>
+                <div className="lab">Messages</div>
+                <div className="val" style={{ fontSize: 20 }}>{num(v?.communications.total)}</div>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 12, color: "var(--muted)" }}>
+                  <li>Delivered: <strong>{num(v?.communications.delivered)}</strong></li>
+                  <li>Failed: <strong>{num(v?.communications.failed)}</strong></li>
+                </ul>
+              </div>
+              <div className="card" style={{ padding: 12 }}>
+                <div className="lab">Campaign activity</div>
+                <div className="val" style={{ fontSize: 20 }}>
+                  <span>{num(v?.campaignActivity.responses)}</span>{" "}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: "var(--muted)" }}>responses</span>
+                </div>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 12, color: "var(--muted)" }}>
+                  <li>Conversions: <strong>{num(v?.campaignActivity.conversions)}</strong></li>
+                  <li>Attributed revenue: <strong>{revenue(v?.campaignActivity.revenueMinor)}</strong></li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Consent (surfaced honestly; never assumed) */}
         <section aria-label="Consent">
@@ -228,7 +294,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
           </div>
         </section>
 
-        {source !== "loading" && !isError && v && v.activities.length === 0 && v.communications.length === 0 && v.deals.length === 0 ? (
+        {source !== "loading" && !isError && v && v.activities.length === 0 && v.communicationItems.length === 0 && v.communications.total === 0 && v.campaignActivity.responses === 0 && v.deals.length === 0 ? (
           <EmptyState icon="🧭" title="Nothing linked yet" message="Log activity, communications or deals to build this 360° view." />
         ) : null}
       </div>
