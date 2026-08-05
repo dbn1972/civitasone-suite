@@ -25,6 +25,7 @@ import { changeRoutes } from "./modules/change/routes.js";
 import { centralConfigRoutes } from "./modules/central-config/routes.js";
 import { integrationSettingsRoutes } from "./modules/integration-settings/routes.js";
 import { integrationOpsRoutes } from "./modules/integration-ops/routes.js";
+import { leadIngestionRoutes } from "./modules/lead-ingestion/routes.js";
 import { compositionRoutes } from "./modules/composition/routes.js";
 // World-class-gap sprint: WC-010, WC-009, CR-MOB-01, ORG-07, DM-002.
 import { configArtefactRoutes } from "./modules/config/artefact-routes.js";
@@ -79,6 +80,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(centralConfigRoutes);
   await app.register(integrationSettingsRoutes);
   await app.register(integrationOpsRoutes);
+  await app.register(leadIngestionRoutes);
   await app.register(compositionRoutes);
   await app.register(configArtefactRoutes);
   await app.register(sandboxRoutes);

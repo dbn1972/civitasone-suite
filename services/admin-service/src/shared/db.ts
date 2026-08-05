@@ -21,6 +21,7 @@ import { schema as changeModule } from "../modules/change/schema.js";
 import { schema as centralConfigModule } from "../modules/central-config/schema.js";
 import { schema as integrationSettingsModule } from "../modules/integration-settings/schema.js";
 import { schema as integrationOpsModule } from "../modules/integration-ops/schema.js";
+import { schema as leadIngestionModule } from "../modules/lead-ingestion/schema.js";
 import { schema as compositionModule } from "../modules/composition/schema.js";
 // World-class-gap sprint additions (migration 0027 creates these tables).
 import { artefactSchema as configArtefactModule } from "../modules/config/artefact-schema.js";
@@ -52,6 +53,7 @@ const SCHEMA = {
   ...centralConfigModule,
   ...integrationSettingsModule,
   ...integrationOpsModule,
+  ...leadIngestionModule,
   ...compositionModule,
   ...configArtefactModule,
   ...sandboxModule,
