@@ -11,7 +11,17 @@ export async function createCampaign(ctx: RequestContext, body: CreateCampaignBo
   await queue.publish(COMMANDS.createCampaign, {
     messageId: id, type: COMMANDS.createCampaign, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: {
+      id, tenantId: ctx.tenantId,
+      templateId: body.templateId, name: body.name, recipients: body.recipients,
+      scheduledAt: body.scheduledAt,
+      // Marketing fields. Money crosses the queue as a STRING (bigint paise) —
+      // never a Number, so no float and no JSON bigint-serialisation problem.
+      objective: body.objective ?? null,
+      audienceSegmentId: body.audienceSegmentId ?? null,
+      budgetMinor: body.budgetMinor ?? "0",
+      currency: body.currency,
+    },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

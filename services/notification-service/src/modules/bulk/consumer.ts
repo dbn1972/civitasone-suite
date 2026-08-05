@@ -19,20 +19,57 @@ export function registerBulkConsumers(q: Queue): void {
   q.subscribe<{
     id: string; tenantId: string; templateId: string; name: string;
     recipients: string[]; scheduledAt?: string;
+    // MK-001 marketing fields. Money is a STRING (bigint paise) on the wire.
+    objective?: string | null; audienceSegmentId?: string | null;
+    budgetMinor?: string; currency?: string;
   }>(COMMANDS.createCampaign, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+
+      // Harden the money parse. A non-digit or negative budget string would make
+      // BigInt(...) throw (or violate the budget_minor >= 0 CHECK on insert),
+      // and because this runs AFTER markProcessed inside the same transaction,
+      // the throw would roll back markProcessed too — a poison loop, since this
+      // platform has no DLQ on the outbox path. Unreachable via the current
+      // validator, but we fail SAFE: on a malformed budget we record a rejected
+      // audit marker and return, leaving the message MARKED PROCESSED (committed)
+      // so it is never redelivered. No campaign row is created for bad input.
+      let budgetMinor: bigint;
+      try {
+        budgetMinor = BigInt(p.budgetMinor ?? "0");
+        if (budgetMinor < 0n) throw new Error("negative budget_minor");
+      } catch {
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "notification", action: "create_campaign", resourceType: "campaign",
+            resourceId: p.id, outcome: "rejected", reason: "invalid_budget_minor",
+          },
+        });
+        return;
+      }
+
       await repo.insertCampaign(tx, {
         id: p.id, tenantId: p.tenantId, templateId: p.templateId, name: p.name,
         status: p.scheduledAt ? "scheduled" : "draft",
         scheduledAt: p.scheduledAt ? new Date(p.scheduledAt) : null,
+        // Parsed above — integer paise, never Number/float. actualCostMinor keeps
+        // its DB default (0) at creation; it is realised later.
+        objective: p.objective ?? null,
+        audienceSegmentId: p.audienceSegmentId ?? null,
+        budgetMinor,
+        currency: p.currency ?? "INR",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       }, p.recipients);
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.campaignCreated, eventType: EVENTS.campaignCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { campaignId: p.id, recipientCount: p.recipients.length },
+        payload: {
+          campaignId: p.id, recipientCount: p.recipients.length,
+          budgetMinor: p.budgetMinor ?? "0", currency: p.currency ?? "INR",
+        },
       });
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
