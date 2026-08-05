@@ -53,6 +53,18 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: segments, meta: { total: segments.length } });
   });
 
+  // Gateway-reachable alias: the API gateway routes the `/notifications/*`
+  // prefix to this service, but there is no `/v1/segments` gateway entry — so
+  // the browser (e.g. the campaign audience picker) 404s on `/v1/segments`.
+  // This alias exposes the SAME tenant-scoped segment list under the routed
+  // prefix. Same handler/repo call — no duplicated logic. Authed like the other
+  // `/notifications/*` GETs (token context; tenant-scoped by RLS).
+  app.get("/notifications/segments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const segments = await repo.listSegments(ctx.tenantId);
+    return reply.send({ segments, total: segments.length });
+  });
+
   // Get a single segment
   app.get("/v1/segments/:id", async (req, reply) => {
     const ctx = resolveContext(req);

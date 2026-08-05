@@ -24,8 +24,31 @@ import {
 } from "./consent-gate.js";
 import { asUserUuid, loadConsentSignals } from "./consent-gate-io.js";
 import { fetchMarketingConsent, type ConsentLookup } from "./crm-consent-client.js";
+import { syncCampaignRecipientOutcome } from "../bulk/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * MK-004: when a send that was fanned out from a campaign reaches a TERMINAL
+ * outcome, mirror that outcome onto the matching bulk.campaign_recipients row so
+ * the campaign metrics query counts real delivered/failed numbers instead of
+ * frozen zeros. No-op for non-campaign sends (no campaignId) — every existing
+ * producer keeps its exact behaviour. Runs in the caller's tenant-scoped tx.
+ */
+async function mirrorCampaignOutcome(
+  tx: Tx,
+  msg: CommandEnvelope<SendPayload>,
+  recipientId: string | null,
+  status: string,
+  deliveryId: string | null,
+): Promise<void> {
+  const campaignId = msg.payload.campaignId;
+  if (!campaignId || !recipientId) return;
+  await syncCampaignRecipientOutcome(
+    tx as unknown as Parameters<typeof syncCampaignRecipientOutcome>[0],
+    msg.tenantId, campaignId, recipientId, status, deliveryId, msg.actorId,
+  );
+}
 
 type SendPayload = {
   // Standard shape (required): at least one of templateId or body must be present.
@@ -147,6 +170,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
       } else {
         await repo.updateDeliveryStatus(tx, deliveryId, "skipped", msg.actorId, retryCount + 1);
       }
+      await mirrorCampaignOutcome(tx, msg, recipientId, "skipped", deliveryId);
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
         actorId: msg.actorId, correlationId: msg.correlationId,
@@ -234,6 +258,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
       }
 
       await repo.updateDeliveryStatus(tx, deliveryId, "failed", msg.actorId, nextRetry + 1, undefined, sendResult.error, sendResult.error);
+      await mirrorCampaignOutcome(tx, msg, recipientId, "failed", deliveryId);
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.permanentlyFailed, eventType: EVENTS.permanentlyFailed, tenantId: msg.tenantId,
         actorId: msg.actorId, correlationId: msg.correlationId,
@@ -254,6 +279,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     }
 
     await repo.updateDeliveryStatus(tx, deliveryId, "delivered", msg.actorId, retryCount + 2, new Date(), undefined, undefined, sendResult.channel);
+    await mirrorCampaignOutcome(tx, msg, recipientId, "delivered", deliveryId);
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: EVENTS.delivered, eventType: EVENTS.delivered, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
@@ -299,6 +325,7 @@ async function recordGateSkip(
   } else {
     await repo.updateDeliveryStatus(tx, ctx.deliveryId, "skipped", msg.actorId, ctx.retryCount + 1);
   }
+  await mirrorCampaignOutcome(tx, msg, ctx.recipientId, "skipped", ctx.deliveryId);
 
   await enqueue(tx as Parameters<typeof enqueue>[0], {
     topic: EVENTS.consentBlocked, eventType: EVENTS.consentBlocked, tenantId: msg.tenantId,

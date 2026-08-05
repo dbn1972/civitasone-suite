@@ -20,6 +20,11 @@ const STATES: Record<string, StateDef> = {
   bounced:   { icon: "↩", variant: "bad", label: "Bounced" },
   // inbox notifications
   read:      { icon: "○", variant: "mut", label: "Read" },
+  // campaigns (MK-001)
+  draft:     { icon: "○", variant: "mut", label: "Draft" },
+  scheduled: { icon: "◷", variant: "warn", label: "Scheduled" },
+  sending:   { icon: "•", variant: "warn", label: "Sending" },
+  cancelled: { icon: "✗", variant: "bad", label: "Cancelled" },
   // templates
   active:    { icon: "✓", variant: "good", label: "Active" },
   superseded:{ icon: "↪", variant: "mut", label: "Superseded" },
