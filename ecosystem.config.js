@@ -86,6 +86,10 @@ const AWS_ENV = {
   AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION ?? "ap-south-1",
   AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ?? "test",
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
+  // Shared LocalStack: shorter long-poll frees sockets for outbox SendMessage.
+  // Production AWS can override / unset (code default remains 20).
+  SQS_WAIT_TIME_SECONDS: process.env.SQS_WAIT_TIME_SECONDS ?? "5",
+  SQS_MAX_SOCKETS: process.env.SQS_MAX_SOCKETS ?? "512",
 };
 
 // -- PII at-rest encryption key (DPDP) ---------------------------------------

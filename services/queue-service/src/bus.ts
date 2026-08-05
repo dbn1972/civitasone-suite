@@ -246,7 +246,7 @@ function topicQueuePrefix(topic: string): string {
  * concurrent publishes. Sockets are opened on demand, so a high ceiling costs
  * nothing while idle — the only thing a low one buys is the stall above.
  */
-export const DEFAULT_SQS_MAX_SOCKETS = 256;
+export const DEFAULT_SQS_MAX_SOCKETS = 512;
 
 export function resolveMaxSockets(
   raw: string | undefined = process.env.SQS_MAX_SOCKETS,
@@ -292,7 +292,24 @@ export function buildSqsAgents(maxSockets: number = resolveMaxSockets()): {
  */
 export const DEFAULT_SQS_CONNECTION_TIMEOUT_MS = 6_000;
 export const DEFAULT_SQS_REQUEST_TIMEOUT_MS = 30_000;
-const LONG_POLL_WAIT_MS = 20_000;
+export const DEFAULT_SQS_WAIT_TIME_SECONDS = 20;
+const MAX_SQS_WAIT_TIME_SECONDS = 20;
+
+/**
+ * Long-poll wait for ReceiveMessage. Override via SQS_WAIT_TIME_SECONDS (1-20).
+ * On a shared LocalStack host, dozens of workers each holding WaitTimeSeconds=20
+ * sockets starve SendMessage and stall every outbox relay. Lowering the wait
+ * frees sockets between empty polls without changing AWS production defaults.
+ */
+export function resolveWaitTimeSeconds(
+  raw: string | undefined = process.env.SQS_WAIT_TIME_SECONDS,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_WAIT_TIME_SECONDS;
+  return Math.min(MAX_SQS_WAIT_TIME_SECONDS, Math.max(1, Math.floor(parsed)));
+}
+
+const LONG_POLL_WAIT_MS = resolveWaitTimeSeconds() * 1000;
 
 export function resolveConnectionTimeout(
   raw: string | undefined = process.env.SQS_CONNECTION_TIMEOUT_MS,
@@ -521,7 +538,7 @@ export class SqsQueue implements Queue {
         const res = await this.client.send(new ReceiveMessageCommand({
           QueueUrl: url,
           MaxNumberOfMessages: 10,
-          WaitTimeSeconds: 20,
+          WaitTimeSeconds: resolveWaitTimeSeconds(),
           MessageAttributeNames: ["All"],
           MessageSystemAttributeNames: ["ApproximateReceiveCount"],
         }));

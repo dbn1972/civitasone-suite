@@ -23,6 +23,7 @@ function fakeDb(rowFactory: () => Promise<unknown[]>): { db: DrizzleTx; selectCa
   const chain = {
     from() { return chain; },
     where() { return chain; },
+    orderBy() { return chain; },
     limit() { return rowFactory(); },
   };
   const db = {
