@@ -167,6 +167,18 @@ export const COMMANDS = {
   createAccountRelationship: "crm.account_relationship.create",
   /** CM-002 remove an account relationship edge. */
   deleteAccountRelationship: "crm.account_relationship.delete",
+  /**
+   * CO-001 — send a single communication (email/sms/whatsapp) via notification-service.
+   * Payload: { id, tenantId, recipientContactId, templateId, channel, variables?, scheduledAt? }.
+   * The consumer re-checks consent before calling notification-service.
+   */
+  sendCommunication: "crm.communication.send",
+  /**
+   * CO-001 — send a bulk communication to multiple contacts.
+   * Payload: { id, tenantId, contactIds, templateId, channel, variables?, scheduledAt? }.
+   * The consumer fans out one delivery per contact after filtering non-consented.
+   */
+  bulkSendCommunication: "crm.communication.bulk_send",
   /** AC-004 record a user's mailbox/calendar provider connection intent (status=pending). */
   connectLinkedAccount: "crm.linked_account.connect",
   /** AC-004 disconnect a linked mailbox/calendar. */
@@ -366,6 +378,8 @@ export const EVENTS = {
   // ── ACM events ──
   /** AC-003 a communication was logged. Payload: { communicationId, subjectType, subjectId, direction, channel }. */
   communicationLogged: "crm.communication.logged",
+  /** CO-001 a communication was sent (queued for delivery). Payload: { communicationId, contactId, channel, templateId }. */
+  communicationSent: "crm.communication.sent",
   /** CM-001 address created/updated/deleted. Payload: { addressId, ownerType, ownerId }. */
   addressCreated: "crm.address.created",
   addressUpdated: "crm.address.updated",
@@ -404,6 +418,9 @@ export const EVENTS = {
 export const CONSUMED_EVENTS = {
   /** ml-service emits lead scored after computing conversion probability. */
   mlLeadScored: "ml.prediction.lead_scored",
+  /** notification-service emits delivery status (delivered/failed). CO-001 feedback loop. */
+  notificationDelivered: "notification.delivered",
+  notificationFailed: "notification.failed",
 } as const;
 
 export const SERVICE = "crm";
