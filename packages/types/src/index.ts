@@ -314,6 +314,9 @@ export interface CRMCampaignRoi extends CRMCampaignRoiFigures {
   campaignId: string;
   currency: string;
   periods: CRMCampaignRoiPeriod[];
+}
+
+/**
  * One entry in a golden profile's append-only provenance trail (P1-14).
  * `attributes` is optional: a trail written before attribute-level provenance
  * existed names no keys, and the Customer 360 view reads those as unattributed

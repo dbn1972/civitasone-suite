@@ -394,6 +394,7 @@ export const crmCampaignRoiSchema = z.object({
   }),
 });
 
+/**
  * CDP golden profile (P1-14). `attributes` is an open bag by design — a tenant
  * decides what it stores on a profile — so it is passed through unvalidated
  * rather than pinned to a shape the service does not enforce either.
