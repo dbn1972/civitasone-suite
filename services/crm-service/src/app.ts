@@ -44,6 +44,7 @@ import { recurringTaskRoutes } from "./modules/activities/recurring-routes.js";
 import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
 import { analyticsRoutes } from "./modules/dashboard/analytics-routes.js";
 import { section8Routes } from "./modules/dashboard/section8-routes.js";
+import { controlTowerRoutes } from "./modules/dashboard/control-tower-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
 import { sentimentRoutes } from "./modules/sentiment/routes.js";
 import { assignmentRoutes } from "./modules/assignment/routes.js";
@@ -143,6 +144,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Section 8 gap-close: pipeline coverage, forecast breakdown, activity metrics,
   // campaign cost/ROI, inactive users, integration health.
   await app.register(section8Routes);
+  await app.register(controlTowerRoutes);
   // P1-9: customer onboarding raised on a won deal, gated on KYC verification.
   await app.register(onboardingRoutes);
   // P2-6: Voice-of-Customer reporting over scored interactions.

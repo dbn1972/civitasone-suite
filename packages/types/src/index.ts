@@ -377,6 +377,30 @@ export interface CRMLeadCaptureForm {
   updatedAt: string;
 }
 
+/** P2-8 control tower GIS cell. */
+export interface CRMControlTowerRegion {
+  region: string;
+  dealCount: number;
+  pipelineMinor: string;
+}
+
+/** P2-8 control tower exception row with drill-down href. */
+export interface CRMControlTowerException {
+  id: string;
+  kind: "overdue_follow_up" | "dormant_account" | "aged_lead";
+  label: string;
+  severity: "high" | "medium";
+  href: string;
+  count: number;
+}
+
+export interface CRMControlTower {
+  regions: CRMControlTowerRegion[];
+  exceptions: CRMControlTowerException[];
+  drillDown: { regionReport: string; ageingReport: string; accounts: string };
+}
+
+
 
 
 /** A recurring subject in customer interactions, with how often it turned sour. */
