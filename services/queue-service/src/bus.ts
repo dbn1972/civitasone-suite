@@ -355,6 +355,10 @@ export class SqsQueue implements Queue {
   private subUrlCache = new Map<string, { urls: string[]; exp: number }>();
   private polling = false;
   private pollLoops: Promise<void>[] = [];
+  // BOOT-NONBLOCK: the detached warm-up + poll-loop setup launched by
+  // start(); stop() awaits it so a shutdown racing a slow boot cannot miss
+  // poll loops registered after start() returned. Null until start() runs.
+  private startupTask: Promise<void> | null = null;
   private readonly service: string;
   private readonly maxReceiveCount: number;
   private readonly visibilityTimeout: number;
@@ -498,22 +502,50 @@ export class SqsQueue implements Queue {
 
   async start(): Promise<void> {
     this.polling = true;
-    // QUE-FANOUT: pre-create each queue SEQUENTIALLY before starting the poll
-    // loops. Each service now owns a queue per topic, so starting N poll loops
-    // at once fired a burst of ~6*N concurrent SQS calls that could exhaust the
-    // connection pool and leave later queues uncreated. Serial creation is a
-    // one-time boot cost and reliable; pollTopic then hits the cache.
-    for (const topic of this.handlers.keys()) {
-      try { await this.getOrCreateQueue(topic); }
-      catch (err) { this.logHandlerError(topic, null, 0, err); }
-    }
-    for (const topic of this.handlers.keys()) {
-      this.pollLoops.push(this.pollTopic(topic));
-    }
+    // BOOT-NONBLOCK: start() MUST return immediately so the caller reaches
+    // startRelay(db, queue) without blocking on SQS. Against a slow/loaded SQS
+    // the serial warm-up below (54-143 getOrCreateQueue calls at 6-10s each)
+    // took many minutes, so the outbox relay never started and committed writes
+    // were never published ("relay never starts after restart"). The warm-up and
+    // poll-loop setup now run in a DETACHED task we do NOT await here. Readiness
+    // (recordConsumerHeartbeat in pollTopic, checked by consumerHeartbeatCheck)
+    // still keeps /ready at 503 until the poll loops are actually live, so
+    // returning before consumers exist is safe. publish()/the relay use
+    // resolveSubscriberQueues (a ListQueues), independent of this warm-up, so
+    // they can drain while it is still running.
+    this.startupTask = (async () => {
+      // QUE-FANOUT: pre-create each queue SEQUENTIALLY before starting the poll
+      // loops. Each service now owns a queue per topic, so starting N poll loops
+      // at once fired a burst of ~6*N concurrent SQS calls that could exhaust the
+      // connection pool and leave later queues uncreated. Serial creation is a
+      // one-time boot cost and reliable; pollTopic then hits the cache. This loop
+      // MUST stay serial (awaited one topic at a time) to preserve that property.
+      for (const topic of this.handlers.keys()) {
+        try { await this.getOrCreateQueue(topic); }
+        catch (err) { this.logHandlerError(topic, null, 0, err); }
+      }
+      // A stop() racing the warm-up flips polling=false; honour it and create no
+      // poll loops (pollTopic would otherwise spin its retry until it noticed).
+      if (!this.polling) return;
+      for (const topic of this.handlers.keys()) {
+        this.pollLoops.push(this.pollTopic(topic));
+      }
+    })().catch((err) => {
+      // Belt-and-suspenders: the per-topic try/catch already swallows expected
+      // getOrCreateQueue failures; this guards anything unforeseen so a detached
+      // startup can never surface as an unhandled rejection that kills the worker.
+      this.logHandlerError("startup", null, 0, err);
+    });
   }
 
   async stop(): Promise<void> {
+    // Flip polling=false FIRST so both the live poll loops and a still-running
+    // warm-up observe the shutdown. Then await the (possibly still-running)
+    // startup task so it finishes registering pollLoops before we drain them;
+    // otherwise a stop() that races a slow start() would return while poll loops
+    // are still being pushed, leaking orphan work that outlives stop().
     this.polling = false;
+    if (this.startupTask) await this.startupTask;
     await Promise.allSettled(this.pollLoops);
   }
 
