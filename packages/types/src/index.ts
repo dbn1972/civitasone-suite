@@ -400,6 +400,17 @@ export interface CRMControlTower {
   drillDown: { regionReport: string; ageingReport: string; accounts: string };
 }
 
+/** Notification A/B-MVT experiment summary (P2-9). */
+export interface NotificationExperiment {
+  id: string;
+  name: string;
+  status: string;
+  winnerVariantId: string | null;
+  winnerMarginPct: number | null;
+  concludedAt: string | null;
+}
+
+
 
 
 

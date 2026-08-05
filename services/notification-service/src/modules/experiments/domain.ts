@@ -201,3 +201,20 @@ export function buildHeatmap(events: EngagementEvent[], variantId?: string): Hea
       sharePct: total > 0 ? Math.round((clicks / total) * 10_000) / 100 : 0,
     }));
 }
+
+
+/** Winner promotion is approval-gated (P2-9). */
+export type ExperimentLifecycle = "draft" | "running" | "pending_approval" | "concluded";
+
+export function assertCanRequestConclusion(status: string): string | null {
+  if (status === "running" || status === "draft") return null;
+  if (status === "pending_approval") return "ALREADY_PENDING_APPROVAL";
+  if (status === "concluded") return "ALREADY_CONCLUDED";
+  return "INVALID_STATUS";
+}
+
+export function assertCanApproveWinner(status: string): string | null {
+  if (status === "pending_approval") return null;
+  if (status === "concluded") return "ALREADY_CONCLUDED";
+  return "NOT_PENDING_APPROVAL";
+}

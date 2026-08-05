@@ -53,6 +53,7 @@ export const COMMANDS = {
   // CR-MKT-05: A/B experiments + engagement heatmaps
   createExperiment:       "notification.experiment.create",
   recordExperimentEvent:  "notification.experiment.event.record",
+  requestWinnerApproval: "notification.experiment.request_winner_approval",
   concludeExperiment:     "notification.experiment.conclude",
   // CR-MKT-06: Keyword auto-responses on inbound SMS/WhatsApp
   createKeywordRule:      "notification.inbox.keyword_rule.create",

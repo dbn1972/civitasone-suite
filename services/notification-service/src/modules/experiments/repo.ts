@@ -138,3 +138,20 @@ export async function listEvents(
     ))
     .limit(limit));
 }
+
+
+export async function setStatus(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  status: string,
+  actorId: string,
+  version: number,
+): Promise<void> {
+  await tx.update(experiments).set({
+    status,
+    updatedBy: actorId,
+    updatedAt: new Date(),
+    version: version + 1,
+  }).where(and(eq(experiments.id, id), eq(experiments.tenantId, tenantId), eq(experiments.version, version)));
+}
