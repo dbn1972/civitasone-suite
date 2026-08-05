@@ -305,8 +305,17 @@ export function resolveWaitTimeSeconds(
   raw: string | undefined = process.env.SQS_WAIT_TIME_SECONDS,
 ): number {
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_WAIT_TIME_SECONDS;
-  return Math.min(MAX_SQS_WAIT_TIME_SECONDS, Math.max(1, Math.floor(parsed)));
+  if (Number.isFinite(parsed) && parsed >= 1) {
+    return Math.min(MAX_SQS_WAIT_TIME_SECONDS, Math.max(1, Math.floor(parsed)));
+  }
+  // LocalStack / custom endpoints: dozens of workers each holding a 20s long-poll
+  // saturates the broker and starves SendMessage. Prefer a short wait unless the
+  // operator explicitly overrides SQS_WAIT_TIME_SECONDS.
+  const endpoint = process.env.AWS_ENDPOINT_URL ?? process.env.AWS_ENDPOINT ?? "";
+  if (/localhost|127\.0\.0\.1|localstack/i.test(endpoint)) {
+    return 2;
+  }
+  return DEFAULT_SQS_WAIT_TIME_SECONDS;
 }
 
 const LONG_POLL_WAIT_MS = resolveWaitTimeSeconds() * 1000;
