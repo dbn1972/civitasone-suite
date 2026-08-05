@@ -56,6 +56,8 @@ import { stageLimitRoutes } from "./modules/deals/stage-limits-routes.js";
 import { productRoutes } from "./modules/products/routes.js";
 import { priceBookRoutes } from "./modules/price-books/routes.js";
 import { quotationApprovalRoutes } from "./modules/deals/quotation-approval-routes.js";
+import { documentRoutes } from "./modules/documents/routes.js";
+import { documentTypeRoutes } from "./modules/documents/types-routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -148,6 +150,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(productRoutes);
   await app.register(priceBookRoutes);
   await app.register(quotationApprovalRoutes);
+  // ── DM: Document & Attachment Management (BRD §7.12) ──
+  await app.register(documentRoutes);
+  await app.register(documentTypeRoutes);
 
   return app;
 }

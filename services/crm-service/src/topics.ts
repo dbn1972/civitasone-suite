@@ -209,6 +209,15 @@ export const COMMANDS = {
   decideQuotationApproval: "crm.quotation_approval.decide",
   /** Convert an accepted quotation into an order (QP-005). */
   convertQuotationToOrder: "crm.quotation.convert_to_order",
+  // -- DM: Document & Attachment Management (BRD 7.12, DM-001/002) --
+  /** DM-001 confirm an uploaded object -> create document metadata (scan_status pending). */
+  confirmDocument: "crm.document.confirm",
+  /** DM-001 soft-delete a document. */
+  deleteDocument: "crm.document.delete",
+  /** DM-002 record a verification decision (verified|rejected) on a document. */
+  verifyDocument: "crm.document.verify",
+  /** DM-001 internal (service-secret gated) malware scan result -> sets scan_status. */
+  recordDocumentScan: "crm.document.scan_result",
 } as const;
 
 export const EVENTS = {
@@ -412,6 +421,17 @@ export const EVENTS = {
   quotationApprovalDecided: "crm.quotation_approval.decided",
   /** An accepted quotation was converted to an order (QP-005). Money as STRING. */
   orderCreated: "crm.order.created",
+  // -- DM: Document & Attachment Management (BRD 7.12) --
+  /** DM-001 a document version was created. Payload: { documentId, subjectType, subjectId, version }. */
+  documentUploaded: "crm.document.uploaded",
+  /** DM-001 a document was soft-deleted. Payload: { documentId }. */
+  documentDeleted: "crm.document.deleted",
+  /** DM-002 a document verification decision was recorded. Payload: { documentId, status }. */
+  documentVerified: "crm.document.verified",
+  /** DM-001 a malware scan result was recorded. Payload: { documentId, scanStatus }. */
+  documentScanned: "crm.document.scanned",
+  /** DM-002 mandatory-missing / expiring alert. Payload: { alertType, subjectType, subjectId?, documentId?, docTypeCode?, daysUntilExpiry? }. */
+  documentAlert: "crm.document.alert",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

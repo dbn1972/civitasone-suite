@@ -7,6 +7,8 @@ import { AccountRelationshipsEditor } from "../../../../_components/crm/AccountR
 import { ActivityFeed } from "../../../../_components/crm/ActivityFeed";
 import { CommunicationLog } from "../../../../_components/crm/CommunicationLog";
 import { AddressesEditor } from "../../../../_components/crm/AddressesEditor";
+import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
+import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const [{ data: accounts, source }, { data: ancestors }, { data: children }] = await Promise.all([
@@ -129,6 +131,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         <ActivityFeed subjectType="account" subjectId={account.id} />
         <CommunicationLog subjectType="account" subjectId={account.id} />
         <AddressesEditor ownerType="account" ownerId={account.id} />
+        <DocumentAlertsView subjectType="account" subjectId={account.id} />
+        <DocumentsPanel subjectType="account" subjectId={account.id} canVerify />
       </div>
     </>
   );

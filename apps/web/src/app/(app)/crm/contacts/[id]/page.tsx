@@ -13,6 +13,8 @@ import { ActivityFeed } from "../../../../_components/crm/ActivityFeed";
 import { CommunicationLog } from "../../../../_components/crm/CommunicationLog";
 import { AddressesEditor } from "../../../../_components/crm/AddressesEditor";
 import { ContactRolesEditor } from "../../../../_components/crm/ContactRolesEditor";
+import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
+import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: contact, source } = await getContactById(params.id);
@@ -83,6 +85,8 @@ export default async function Page({ params }: { params: { id: string } }) {
           <CommunicationLog subjectType="contact" subjectId={contact.id} />
           <AddressesEditor ownerType="contact" ownerId={contact.id} />
           <ContactRolesEditor contactId={contact.id} />
+          <DocumentAlertsView subjectType="contact" subjectId={contact.id} />
+          <DocumentsPanel subjectType="contact" subjectId={contact.id} canVerify />
 
           {contact.deals.length > 0 && (
             <div className="card">

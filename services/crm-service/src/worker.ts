@@ -11,6 +11,7 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { registerAllConsumers } from "./consumers.js";
 import { startEscalationScheduler } from "./modules/assignment/scheduler.js";
 import { startTaskEscalationScheduler } from "./modules/activities/task-escalation-scheduler.js";
+import { startDocumentAlertScheduler } from "./modules/documents/alert-scheduler.js";
 
 const log = pino({ name: "crm-worker" });
 
@@ -21,6 +22,8 @@ const relay = startRelay(db, queue);
 const escalation = startEscalationScheduler(Number(process.env.CRM_ESCALATION_INTERVAL_MS ?? 60000));
 // AC-005: escalate overdue open tasks/next-actions to their manager on a fixed interval.
 const taskEscalation = startTaskEscalationScheduler(Number(process.env.CRM_TASK_ESCALATION_INTERVAL_MS ?? 60000));
+// DM-002: mandatory-missing + expiring document alerts on a fixed interval (overlap-guarded).
+const documentAlerts = startDocumentAlertScheduler(Number(process.env.CRM_DOCUMENT_ALERT_INTERVAL_MS ?? 3600000));
 // G7: scheduled outbox purge — remove published messages older than 7 days.
 const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPurge>[0], {
   intervalMs: 60 * 60_000,
@@ -34,6 +37,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(purge);
   clearInterval(escalation);
   clearInterval(taskEscalation);
+  clearInterval(documentAlerts);
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();

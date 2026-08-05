@@ -19,6 +19,9 @@ const crmTiles: NavTile[] = [
 	{ title: "Activities", href: "/crm/activities" },
 	{ title: "Voice of Customer", href: "/crm/voice-of-customer" },
 	{ title: "Data Quality", href: "/crm/data-quality" },
+	{ title: "Documents", href: "/crm/documents" },
+	{ title: "Document Types", href: "/crm/document-types" },
+
 	{ title: "Matching Rules", href: "/crm/dedup-rules" },
 	{ title: "Lead Scoring", href: "/crm/lead-scoring" },
 	{ title: "Qualification Frameworks", href: "/crm/qualification-frameworks" },

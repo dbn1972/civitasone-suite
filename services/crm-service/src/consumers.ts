@@ -44,6 +44,7 @@ import { registerProductConsumers } from "./modules/products/consumer.js";
 import { registerPriceBookConsumers } from "./modules/price-books/consumer.js";
 import { registerQuotationApprovalConsumers } from "./modules/deals/quotation-approval-consumer.js";
 import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
+import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -87,4 +88,6 @@ export function registerAllConsumers(queue: Queue): void {
   registerPriceBookConsumers(queue);
   registerQuotationApprovalConsumers(queue);
   registerOrderConsumers(queue);
+  // ── DM: Document & Attachment Management (BRD §7.12) ──
+  registerDocumentConsumers(queue);
 }
