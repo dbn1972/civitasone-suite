@@ -35,6 +35,7 @@ import { registerSentimentConsumers } from "./modules/sentiment/consumer.js";
 import { registerAssignmentConsumers } from "./modules/assignment/consumer.js";
 import { registerCommunicationConsumers } from "./modules/communications/consumer.js";
 import { registerSendConsumers } from "./modules/communications/send-consumer.js";
+import { registerCampaignApprovalConsumers } from "./modules/communications/campaign-approval-consumer.js";
 import { registerDeliveryStatusConsumers } from "./modules/communications/delivery-status-consumer.js";
 import { registerAddressConsumers } from "./modules/addresses/consumer.js";
 import { registerAccountRelationshipConsumers } from "./modules/accounts/relationships-consumer.js";
@@ -78,6 +79,8 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommunicationConsumers(queue);
   // CO-001: send/bulk-send consumers + delivery status feedback
   registerSendConsumers(queue);
+  // Gap 2: campaign approval workflow consumers
+  registerCampaignApprovalConsumers(queue);
   registerDeliveryStatusConsumers(queue);
   registerAddressConsumers(queue);
   registerAccountRelationshipConsumers(queue);

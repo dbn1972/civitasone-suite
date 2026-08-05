@@ -4,9 +4,14 @@
  * Send triggers outbound messages through notification-service, gated on
  * marketing consent at the route level (early reject) and again at the
  * consumer level (late re-check before actual delivery).
+ *
+ * Gap 2: bulk-send now checks recipient count against a configurable approval
+ * threshold. When exceeded, the campaign is submitted for approval (202 with
+ * status "pending_approval") instead of sending immediately.
  */
 import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -15,6 +20,7 @@ import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import * as sendCommands from "./send-commands.js";
 import { sendCommunicationBody, bulkSendCommunicationBody } from "./send-validators.js";
+import { getApprovalThreshold } from "./campaign-approval-routes.js";
 
 const CRM_SEND_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const BULK_SEND_ROLES = ["crm_admin", "super_admin"];
@@ -93,6 +99,29 @@ export async function sendRoutes(app: FastifyInstance): Promise<void> {
         status: "accepted",
         correlationId: ctx.correlationId,
         eligible: 0,
+        excluded: excludedCount,
+      });
+    }
+
+    // Gap 2: approval threshold check
+    const threshold = getApprovalThreshold();
+    if (consentedIds.length > threshold) {
+      // Submit for approval instead of sending immediately
+      const campaignId = randomUUID();
+      await scopedRead(async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO crm.pending_campaigns (id, tenant_id, channel, template_id, contact_ids, variables, scheduled_at, created_by)
+          VALUES (${campaignId}, ${ctx.tenantId}, ${body.channel}, ${body.templateId},
+                  ${JSON.stringify(consentedIds)}::jsonb, ${JSON.stringify(body.variables ?? {})}::jsonb,
+                  ${body.scheduledAt ?? null}, ${ctx.actorId})
+        `);
+      });
+
+      return reply.code(202).send({
+        id: campaignId,
+        status: "pending_approval",
+        correlationId: ctx.correlationId,
+        eligible: consentedIds.length,
         excluded: excludedCount,
       });
     }

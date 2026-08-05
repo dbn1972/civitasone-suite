@@ -14,6 +14,7 @@ import { agentRoutes } from "./modules/agents/routes.js";
 import { webhookRoutes } from "./modules/webhooks/routes.js";
 import { didRoutes } from "./modules/did/routes.js";
 import { ivrRoutes } from "./modules/ivr/routes.js";
+import { ivrActionRoutes } from "./modules/ivr/action-routes.js";
 import { recordingRoutes } from "./modules/recordings/routes.js";
 import { transcriptionRoutes } from "./modules/transcription/routes.js";
 
@@ -38,6 +39,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(webhookRoutes);
   await app.register(didRoutes);
   await app.register(ivrRoutes);
+  // Gap 6 & 7: IVR → create lead, IVR → send SMS
+  await app.register(ivrActionRoutes);
   await app.register(recordingRoutes);
   await app.register(transcriptionRoutes);
   registerSchemaErrorHandler(app, HttpError);

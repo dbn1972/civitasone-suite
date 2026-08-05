@@ -79,6 +79,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { workbasketsRoutes } = await import("./modules/workbaskets/routes.js"); await app.register(workbasketsRoutes);
   const { checklistsRoutes } = await import("./modules/checklists/routes.js"); await app.register(checklistsRoutes);
   const { closureRoutes } = await import("./modules/closure/routes.js"); await app.register(closureRoutes);
+  // Gap 3: nurture workflow template rules
+  const { nurtureRoutes } = await import("./modules/nurture/routes.js"); await app.register(nurtureRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }
