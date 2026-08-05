@@ -69,7 +69,7 @@ export async function requestWinnerApproval(ctx: RequestContext, experimentId: s
   const messageId = randomUUID();
   await queue.publish(COMMANDS.requestWinnerApproval, {
     messageId, type: COMMANDS.requestWinnerApproval, tenantId: ctx.tenantId,
-    actorId: ctx.actorId, correlationId: ctx.correlationId,
+    actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: experimentId, tenantId: ctx.tenantId },
   });
   return { id: experimentId, status: "accepted", correlationId: ctx.correlationId };
@@ -80,7 +80,7 @@ export async function approveWinner(ctx: RequestContext, experimentId: string): 
   const messageId = randomUUID();
   await queue.publish(COMMANDS.concludeExperiment, {
     messageId, type: COMMANDS.concludeExperiment, tenantId: ctx.tenantId,
-    actorId: ctx.actorId, correlationId: ctx.correlationId,
+    actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id: experimentId, tenantId: ctx.tenantId },
   });
   return { id: experimentId, status: "accepted", correlationId: ctx.correlationId };
