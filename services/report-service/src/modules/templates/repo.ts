@@ -19,6 +19,8 @@ function toView(r: TemplateRow): TemplateView {
     parameters: (r.parameters ?? []) as TemplateParameter[],
     outputFormat: r.outputFormat,
     status: r.status,
+    watermark: r.watermark ?? null,
+    piiColumns: (r.piiColumns ?? null) as string[] | null,
     version: r.version,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,

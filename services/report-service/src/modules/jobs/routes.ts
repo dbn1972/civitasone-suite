@@ -12,7 +12,7 @@ import {
   MISSummaryListSchema,
 } from "@civitasone/schemas/web";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createJobBody, jobsListSchema, idParam } from "./validators.js";
+import { createJobBody, jobsListSchema, idParam, downloadQuerySchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as kpiQueries from "../kpis/queries.js";
@@ -77,17 +77,25 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** Download redirect — returns the presigned download URL for a completed job */
+  /** Download redirect — returns the presigned download URL for a completed job.
+   *  Accepts optional `watermarkText` query param for ad-hoc watermarking. */
   app.get("/v1/reports/jobs/:id/download", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = idParam.parse(req.params);
+    const { watermarkText } = downloadQuerySchema.parse(req.query);
     const job = await queries.getJob(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
     if (job.status !== "completed" || !job.downloadUrl) {
       throw new HttpError(409, "NOT_READY", "report is not yet completed or has no download URL");
     }
-    return reply.redirect(302, job.downloadUrl);
+    // watermarkText is available for use in downstream re-render if needed;
+    // for pre-rendered jobs, the watermark was applied at render time.
+    // Ad-hoc watermark on already-rendered files is a future enhancement.
+    const url = watermarkText
+      ? `${job.downloadUrl}${job.downloadUrl.includes("?") ? "&" : "?"}wm=${encodeURIComponent(watermarkText)}`
+      : job.downloadUrl;
+    return reply.redirect(302, url);
   });
 
   app.get("/v1/reports/kpis", async (req, reply) => {

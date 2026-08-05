@@ -13,6 +13,7 @@ import { pino } from "pino";
 import { eq, sql } from "drizzle-orm";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { putObject, presignedGetUrl } from "@civitasone/storage";
+import { maskPiiColumns } from "@civitasone/render";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -36,6 +37,8 @@ interface ExportPayload {
   id: string;
   queryRunId: string;
   format: ExportFormat;
+  watermark?: string;
+  piiColumns?: string[];
 }
 
 async function audit(
@@ -112,18 +115,45 @@ export function registerExportConsumer(queue: Queue): void {
 
       // 2. Generate export content (CSV or JSON) with 50MB enforcement.
       const exportResult = generateExport(run.result, p.format as ExportFormat);
-      fileSizeBytes = BigInt(exportResult.sizeBytes);
+
+      // Apply PII masking if configured
+      let exportContent = exportResult.content;
+      if (p.piiColumns && p.piiColumns.length > 0) {
+        // For CSV/JSON exports, re-generate after masking the rows
+        const rows = extractRowsFromResult(run.result);
+        if (rows.length > 0) {
+          // Mask with default allowed roles (super_admin, analytics_admin)
+          const maskedRows = maskPiiColumns(
+            rows as Record<string, unknown>[],
+            p.piiColumns,
+            "non_privileged", // consumer-side masking always masks
+            [], // no allowed roles — force masking
+          );
+          const maskedResult = generateExport(maskedRows, p.format as ExportFormat);
+          exportContent = maskedResult.content;
+        }
+      }
+
+      // Apply watermark if configured
+      if (p.watermark && (p.format === "csv" || p.format === "json")) {
+        const watermarkComment = p.format === "csv"
+          ? `# ${p.watermark}\n`
+          : `// Watermark: ${p.watermark}\n`;
+        exportContent = Buffer.concat([Buffer.from(watermarkComment, "utf-8"), exportContent]);
+      }
+
+      fileSizeBytes = BigInt(exportContent.byteLength);
 
       // 3. Upload to S3 via @civitasone/storage.
       fileKey = buildFileKey(msg.tenantId, p.id, p.format as ExportFormat);
-      await putObject(fileKey, exportResult.content, exportResult.contentType);
+      await putObject(fileKey, exportContent, exportResult.contentType);
 
       // 4. Generate presigned download URL (24h TTL).
       downloadUrl = await presignedGetUrl({ key: fileKey, expiresIn: PRESIGNED_URL_TTL_SECONDS });
       expiresAt = computeExpiresAt();
 
       log.info(
-        { exportId: p.id, fileKey, sizeBytes: exportResult.sizeBytes, correlationId },
+        { exportId: p.id, fileKey, sizeBytes: Number(fileSizeBytes), correlationId },
         "export: upload complete",
       );
     } catch (e) {
@@ -204,4 +234,18 @@ export function registerExportConsumer(queue: Queue): void {
       "export: done",
     );
   });
+}
+
+/**
+ * Extract rows from a query result object.
+ * Supports: direct array, { rows: [...] }, { data: [...] }.
+ */
+function extractRowsFromResult(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (typeof data === "object" && data !== null) {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.rows)) return obj.rows as Record<string, unknown>[];
+    if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[];
+  }
+  return [];
 }
