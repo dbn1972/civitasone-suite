@@ -42,6 +42,7 @@ import { nextActionRoutes } from "./modules/activities/next-action-routes.js";
 import { captureRoutes } from "./modules/activities/capture-routes.js";
 import { recurringTaskRoutes } from "./modules/activities/recurring-routes.js";
 import { campaignRoiRoutes } from "./modules/dashboard/campaign-roi-routes.js";
+import { analyticsRoutes } from "./modules/dashboard/analytics-routes.js";
 import { onboardingRoutes } from "./modules/onboarding/routes.js";
 import { sentimentRoutes } from "./modules/sentiment/routes.js";
 import { assignmentRoutes } from "./modules/assignment/routes.js";
@@ -131,6 +132,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(captureRoutes);
   await app.register(recurringTaskRoutes);
   await app.register(campaignRoiRoutes);
+  // Gaps 3/4/7/9: lead response, ageing, follow-up, conversion, won/lost,
+  // dormant accounts, cross-sell signals.
+  await app.register(analyticsRoutes);
   // P1-9: customer onboarding raised on a won deal, gated on KYC verification.
   await app.register(onboardingRoutes);
   // P2-6: Voice-of-Customer reporting over scored interactions.
