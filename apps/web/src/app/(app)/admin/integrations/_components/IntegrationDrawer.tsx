@@ -8,6 +8,23 @@ import {
   type IntegrationRow,
   type ChangeRow,
 } from "./providers";
+import { SftpIngestionConfig } from "./SftpIngestionConfig";
+import { IngestionRunsView } from "./IngestionRunsView";
+import {
+  extractIngestionDraft,
+  buildSftpConfigPatch,
+  validateIngestionConfig,
+  type IngestionConfigDraft,
+} from "@/lib/admin/sftpIngestion";
+
+const EMPTY_INGESTION_DRAFT: IngestionConfigDraft = {
+  inboundPath: "",
+  filePattern: "",
+  archivePath: "",
+  leadSource: false,
+  leadSourceLabel: "",
+  mapping: [],
+};
 
 const API = "/api/proxy/v1/admin/integrations";
 
@@ -41,6 +58,8 @@ export function IntegrationDrawer({
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const isSftp = provider.id === "sftp";
+  const [ingestion, setIngestion] = useState<IngestionConfigDraft>(EMPTY_INGESTION_DRAFT);
 
   const load = useCallback(async (scope: EnvScope) => {
     setLoading(true);
@@ -63,6 +82,10 @@ export function IntegrationDrawer({
         }
       }
       setValues(next);
+      // For the sftp connector, hydrate the lead-ingestion draft from config.
+      if (provider.id === "sftp") {
+        setIngestion(extractIngestionDraft(body.data.config));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -94,10 +117,21 @@ export function IntegrationDrawer({
         cfg[f.key] = f.type === "number" ? Number(raw) : raw;
       }
     }
+    // sftp connector also carries the (non-secret) lead-ingestion fields.
+    if (isSftp) Object.assign(cfg, buildSftpConfigPatch(ingestion));
     return cfg;
   }
 
   async function save() {
+    // Block save when the lead-ingestion config is invalid (leadSource on but
+    // missing label / no Email-or-Mobile mapping).
+    if (isSftp) {
+      const ingErrors = validateIngestionConfig(ingestion);
+      if (Object.keys(ingErrors).length > 0) {
+        setError(ingErrors.leadSourceLabel ?? ingErrors.mapping ?? "Fix the lead-ingestion settings before saving.");
+        return;
+      }
+    }
     setBusy(true); setError(null); setSuccess(null);
     try {
       const res = await fetch(`${API}/${provider.id}/${env}`, {
@@ -252,7 +286,13 @@ export function IntegrationDrawer({
                     placeholder="Why is this change being made?"
                     style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, background: "var(--panel)", color: "var(--ink)" }} />
                 </div>
+
+                {isSftp && (
+                  <SftpIngestionConfig draft={ingestion} onChange={setIngestion} />
+                )}
               </div>
+
+              {isSftp && <IngestionRunsView provider={provider.id} env={env} />}
 
               {/* test connection */}
               <div>
