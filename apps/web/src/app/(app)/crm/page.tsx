@@ -18,6 +18,7 @@ const crmTiles: NavTile[] = [
 	{ title: "Revenue Forecast", href: "/crm/forecast" },
 	{ title: "Account Health", href: "/crm/health" },
 	{ title: "Activities", href: "/crm/activities" },
+	{ title: "Campaign Performance", href: "/crm/campaigns" },
 	{ title: "Voice of Customer", href: "/crm/voice-of-customer" },
 	{ title: "Data Quality", href: "/crm/data-quality" },
 	{ title: "Documents", href: "/crm/documents" },

@@ -9,7 +9,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -20,7 +20,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -31,7 +31,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -42,7 +42,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -53,7 +53,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -64,7 +64,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -75,7 +75,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -86,7 +86,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -97,7 +97,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -108,7 +108,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -119,7 +119,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -130,7 +130,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -141,7 +141,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -152,7 +152,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -163,7 +163,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -174,7 +174,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -185,7 +185,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -196,7 +196,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -207,7 +207,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "admin",
@@ -218,7 +218,7 @@
       "apiPaths": [
         "/api/v1/admin/tenants/:param"
       ],
-      "upstream": "admin → /v1/admin/tenants/:param",
+      "upstream": "admin \u2192 /v1/admin/tenants/:param",
       "routeHandler": "/v1/admin/tenants/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -233,7 +233,7 @@
       "apiPaths": [
         "/api/v1/admin/tenants/:param/config"
       ],
-      "upstream": "admin → /v1/admin/tenants/:param/config",
+      "upstream": "admin \u2192 /v1/admin/tenants/:param/config",
       "routeHandler": "/v1/admin/tenants/:id/config",
       "tablesPresent": true,
       "status": "WIRED",
@@ -248,7 +248,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "ai",
@@ -259,7 +259,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "ai",
@@ -270,7 +270,7 @@
       "apiPaths": [
         "/api/v1/ai/chat"
       ],
-      "upstream": "ai → /v1/ai/chat",
+      "upstream": "ai \u2192 /v1/ai/chat",
       "routeHandler": "/v1/ai/chat",
       "tablesPresent": true,
       "status": "WIRED",
@@ -285,7 +285,7 @@
       "apiPaths": [
         "/api/v1/ai/chat/:param/history"
       ],
-      "upstream": "ai → /v1/ai/chat/:param/history",
+      "upstream": "ai \u2192 /v1/ai/chat/:param/history",
       "routeHandler": "/v1/ai/chat/:conversationId/history",
       "tablesPresent": true,
       "status": "WIRED",
@@ -300,7 +300,7 @@
       "apiPaths": [
         "/api/v1/ai/chat"
       ],
-      "upstream": "ai → /v1/ai/chat",
+      "upstream": "ai \u2192 /v1/ai/chat",
       "routeHandler": "/v1/ai/chat",
       "tablesPresent": true,
       "status": "WIRED",
@@ -315,7 +315,7 @@
       "apiPaths": [
         "/api/v1/ai/copilot/turns/:param"
       ],
-      "upstream": "ai → /v1/ai/copilot/turns/:param",
+      "upstream": "ai \u2192 /v1/ai/copilot/turns/:param",
       "routeHandler": "/v1/ai/copilot/turns/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -330,7 +330,7 @@
       "apiPaths": [
         "/api/v1/ai/copilot/turns"
       ],
-      "upstream": "ai → /v1/ai/copilot/turns",
+      "upstream": "ai \u2192 /v1/ai/copilot/turns",
       "routeHandler": "/v1/ai/copilot/turns",
       "tablesPresent": true,
       "status": "WIRED",
@@ -345,7 +345,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "ai",
@@ -356,7 +356,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "ai",
@@ -367,7 +367,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -378,7 +378,7 @@
       "apiPaths": [
         "/api/v1/analytics/ai-insights"
       ],
-      "upstream": "analytics → /v1/analytics/ai-insights",
+      "upstream": "analytics \u2192 /v1/analytics/ai-insights",
       "routeHandler": "/v1/analytics/ai-insights",
       "tablesPresent": true,
       "status": "WIRED",
@@ -393,7 +393,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -404,7 +404,7 @@
       "apiPaths": [
         "/api/v1/analytics/data-warehouse"
       ],
-      "upstream": "analytics → /v1/analytics/data-warehouse",
+      "upstream": "analytics \u2192 /v1/analytics/data-warehouse",
       "routeHandler": "/v1/analytics/data-warehouse",
       "tablesPresent": true,
       "status": "WIRED",
@@ -419,7 +419,7 @@
       "apiPaths": [
         "/api/v1/analytics/kpis"
       ],
-      "upstream": "analytics → /v1/analytics/kpis",
+      "upstream": "analytics \u2192 /v1/analytics/kpis",
       "routeHandler": "/v1/analytics/kpis",
       "tablesPresent": true,
       "status": "WIRED",
@@ -434,7 +434,7 @@
       "apiPaths": [
         "/api/v1/analytics/dashboards"
       ],
-      "upstream": "analytics → /v1/analytics/dashboards",
+      "upstream": "analytics \u2192 /v1/analytics/dashboards",
       "routeHandler": "/v1/analytics/dashboards",
       "tablesPresent": true,
       "status": "WIRED",
@@ -449,7 +449,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -460,7 +460,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -471,7 +471,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -482,7 +482,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -493,7 +493,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -504,7 +504,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -515,7 +515,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -526,7 +526,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "analytics",
@@ -537,7 +537,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "approvals",
@@ -548,7 +548,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -559,7 +559,7 @@
       "apiPaths": [
         "/api/v1/asset/assets/:param"
       ],
-      "upstream": "asset → /v1/assets/assets/:param",
+      "upstream": "asset \u2192 /v1/assets/assets/:param",
       "routeHandler": "/v1/assets/assets/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -574,7 +574,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -585,7 +585,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -596,7 +596,7 @@
       "apiPaths": [
         "/api/v1/asset/dashboard"
       ],
-      "upstream": "asset → /v1/assets/dashboard",
+      "upstream": "asset \u2192 /v1/assets/dashboard",
       "routeHandler": "/v1/assets/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -611,7 +611,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -622,7 +622,7 @@
       "apiPaths": [
         "/api/v1/asset/assets"
       ],
-      "upstream": "asset → /v1/assets/assets",
+      "upstream": "asset \u2192 /v1/assets/assets",
       "routeHandler": "/v1/assets/assets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -637,7 +637,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -648,7 +648,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -659,7 +659,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -670,7 +670,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -681,7 +681,7 @@
       "apiPaths": [
         "/api/v1/asset/assets"
       ],
-      "upstream": "asset → /v1/assets/assets",
+      "upstream": "asset \u2192 /v1/assets/assets",
       "routeHandler": "/v1/assets/assets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -696,7 +696,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -707,7 +707,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -718,7 +718,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -729,7 +729,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -740,7 +740,7 @@
       "apiPaths": [
         "/api/v1/asset/assets"
       ],
-      "upstream": "asset → /v1/assets/assets",
+      "upstream": "asset \u2192 /v1/assets/assets",
       "routeHandler": "/v1/assets/assets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -755,7 +755,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -766,7 +766,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -777,7 +777,7 @@
       "apiPaths": [
         "/api/v1/asset/maintenance"
       ],
-      "upstream": "asset → /v1/assets/maintenance",
+      "upstream": "asset \u2192 /v1/assets/maintenance",
       "routeHandler": "/v1/assets/maintenance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -792,7 +792,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -803,7 +803,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -814,7 +814,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -825,7 +825,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "assets",
@@ -836,7 +836,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "audit",
@@ -847,7 +847,7 @@
       "apiPaths": [
         "/api/v1/audit/paras"
       ],
-      "upstream": "audit → /v1/audit/paras",
+      "upstream": "audit \u2192 /v1/audit/paras",
       "routeHandler": "/v1/audit/paras",
       "tablesPresent": true,
       "status": "WIRED",
@@ -862,7 +862,7 @@
       "apiPaths": [
         "/api/v1/audit/compliance"
       ],
-      "upstream": "audit → /v1/audit/compliance",
+      "upstream": "audit \u2192 /v1/audit/compliance",
       "routeHandler": "/v1/audit/compliance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -877,7 +877,7 @@
       "apiPaths": [
         "/api/v1/audit/dashboard"
       ],
-      "upstream": "audit → /v1/audit/dashboard",
+      "upstream": "audit \u2192 /v1/audit/dashboard",
       "routeHandler": "/v1/audit/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -892,7 +892,7 @@
       "apiPaths": [
         "/api/v1/audit/exports"
       ],
-      "upstream": "audit → /v1/audit/exports",
+      "upstream": "audit \u2192 /v1/audit/exports",
       "routeHandler": "/v1/audit/exports",
       "tablesPresent": true,
       "status": "WIRED",
@@ -907,7 +907,7 @@
       "apiPaths": [
         "/api/v1/audit/investigations"
       ],
-      "upstream": "audit → /v1/audit/investigations",
+      "upstream": "audit \u2192 /v1/audit/investigations",
       "routeHandler": "/v1/audit/investigations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -922,7 +922,7 @@
       "apiPaths": [
         "/api/v1/audit/observations/:param"
       ],
-      "upstream": "audit → /v1/audit/observations/:param",
+      "upstream": "audit \u2192 /v1/audit/observations/:param",
       "routeHandler": "/v1/audit/observations/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -937,7 +937,7 @@
       "apiPaths": [
         "/api/v1/audit/observations"
       ],
-      "upstream": "audit → /v1/audit/observations",
+      "upstream": "audit \u2192 /v1/audit/observations",
       "routeHandler": "/v1/audit/observations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -952,7 +952,7 @@
       "apiPaths": [
         "/api/audit/events"
       ],
-      "upstream": "audit-events → /audit/events",
+      "upstream": "audit-events \u2192 /audit/events",
       "routeHandler": "/audit/events",
       "tablesPresent": true,
       "status": "WIRED",
@@ -967,7 +967,7 @@
       "apiPaths": [
         "/api/v1/audit/plan"
       ],
-      "upstream": "audit → /v1/audit/plan",
+      "upstream": "audit \u2192 /v1/audit/plan",
       "routeHandler": "/v1/audit/plan",
       "tablesPresent": true,
       "status": "WIRED",
@@ -982,7 +982,7 @@
       "apiPaths": [
         "/api/v1/audit/risks"
       ],
-      "upstream": "audit → /v1/audit/risks",
+      "upstream": "audit \u2192 /v1/audit/risks",
       "routeHandler": "/v1/audit/risks",
       "tablesPresent": true,
       "status": "WIRED",
@@ -997,7 +997,7 @@
       "apiPaths": [
         "/api/v1/audit/vigilance"
       ],
-      "upstream": "audit → /v1/audit/vigilance",
+      "upstream": "audit \u2192 /v1/audit/vigilance",
       "routeHandler": "/v1/audit/vigilance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1012,7 +1012,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1023,7 +1023,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1034,7 +1034,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1045,7 +1045,7 @@
       "apiPaths": [
         "/api/v1/billing/plans"
       ],
-      "upstream": "billing → /v1/billing/plans",
+      "upstream": "billing \u2192 /v1/billing/plans",
       "routeHandler": "/v1/billing/plans",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1060,7 +1060,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1071,7 +1071,7 @@
       "apiPaths": [
         "/api/v1/billing/payments"
       ],
-      "upstream": "billing → /v1/billing/payments",
+      "upstream": "billing \u2192 /v1/billing/payments",
       "routeHandler": "/v1/billing/payments",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1086,7 +1086,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1097,7 +1097,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "billing",
@@ -1108,7 +1108,7 @@
       "apiPaths": [
         "/api/v1/billing/plans"
       ],
-      "upstream": "billing → /v1/billing/plans",
+      "upstream": "billing \u2192 /v1/billing/plans",
       "routeHandler": "/v1/billing/plans",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1123,7 +1123,7 @@
       "apiPaths": [
         "/api/v1/billing/subscriptions"
       ],
-      "upstream": "billing → /v1/billing/subscriptions",
+      "upstream": "billing \u2192 /v1/billing/subscriptions",
       "routeHandler": "/v1/billing/subscriptions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1138,7 +1138,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "catalogue",
@@ -1149,7 +1149,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "catalogue",
@@ -1160,7 +1160,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "catalogue",
@@ -1171,7 +1171,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "catalogue",
@@ -1182,7 +1182,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1193,7 +1193,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1204,7 +1204,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1215,7 +1215,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1226,7 +1226,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1237,7 +1237,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "cdp",
@@ -1248,7 +1248,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "change",
@@ -1259,7 +1259,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "change",
@@ -1270,7 +1270,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "change",
@@ -1281,7 +1281,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "change",
@@ -1292,7 +1292,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1303,7 +1303,7 @@
       "apiPaths": [
         "/api/v1/citizen/alerts"
       ],
-      "upstream": "citizen → /v1/citizen/alerts",
+      "upstream": "citizen \u2192 /v1/citizen/alerts",
       "routeHandler": "/v1/citizen/alerts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1318,7 +1318,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1329,7 +1329,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1340,7 +1340,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1351,7 +1351,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1362,7 +1362,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1373,7 +1373,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1384,7 +1384,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1395,7 +1395,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1406,7 +1406,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1417,7 +1417,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1428,7 +1428,7 @@
       "apiPaths": [
         "/api/v1/citizen/notices"
       ],
-      "upstream": "citizen → /v1/citizen/notices",
+      "upstream": "citizen \u2192 /v1/citizen/notices",
       "routeHandler": "/v1/citizen/notices",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1443,7 +1443,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1454,7 +1454,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1465,7 +1465,7 @@
       "apiPaths": [
         "/api/v1/citizen/portal/metrics"
       ],
-      "upstream": "citizen → /v1/citizen/portal/metrics",
+      "upstream": "citizen \u2192 /v1/citizen/portal/metrics",
       "routeHandler": "/v1/citizen/portal/metrics",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1480,7 +1480,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1491,7 +1491,7 @@
       "apiPaths": [
         "/api/v1/citizen/requests"
       ],
-      "upstream": "citizen → /v1/citizen/requests",
+      "upstream": "citizen \u2192 /v1/citizen/requests",
       "routeHandler": "/v1/citizen/requests",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1506,7 +1506,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "citizen",
@@ -1517,7 +1517,7 @@
       "apiPaths": [
         "/api/v1/citizen/rti"
       ],
-      "upstream": "citizen → /v1/citizen/rti",
+      "upstream": "citizen \u2192 /v1/citizen/rti",
       "routeHandler": "/v1/citizen/rti",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1532,7 +1532,7 @@
       "apiPaths": [
         "/api/v1/citizen/surveys"
       ],
-      "upstream": "citizen → /v1/citizen/surveys",
+      "upstream": "citizen \u2192 /v1/citizen/surveys",
       "routeHandler": "/v1/citizen/surveys",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1547,7 +1547,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "contracts",
@@ -1558,7 +1558,7 @@
       "apiPaths": [
         "/api/v1/contract/contracts"
       ],
-      "upstream": "contract → /v1/contract/contracts",
+      "upstream": "contract \u2192 /v1/contract/contracts",
       "routeHandler": "/v1/contract/contracts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1573,7 +1573,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "contracts",
@@ -1584,7 +1584,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1595,7 +1595,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1606,7 +1606,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1617,7 +1617,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1628,7 +1628,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1639,7 +1639,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1650,7 +1650,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "court",
@@ -1661,7 +1661,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1672,7 +1672,7 @@
       "apiPaths": [
         "/api/v1/crm/accounts/:param/ancestors"
       ],
-      "upstream": "crm → /v1/crm/accounts/:param/ancestors",
+      "upstream": "crm \u2192 /v1/crm/accounts/:param/ancestors",
       "routeHandler": "/v1/crm/accounts/:id/ancestors",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1687,7 +1687,7 @@
       "apiPaths": [
         "/api/v1/crm/accounts/:param/children"
       ],
-      "upstream": "crm → /v1/crm/accounts/:param/children",
+      "upstream": "crm \u2192 /v1/crm/accounts/:param/children",
       "routeHandler": "/v1/crm/accounts/:id/children",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1702,7 +1702,7 @@
       "apiPaths": [
         "/api/v1/crm/accounts"
       ],
-      "upstream": "crm → /v1/crm/accounts",
+      "upstream": "crm \u2192 /v1/crm/accounts",
       "routeHandler": "/v1/crm/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1717,7 +1717,7 @@
       "apiPaths": [
         "/api/v1/crm/accounts"
       ],
-      "upstream": "crm → /v1/crm/accounts",
+      "upstream": "crm \u2192 /v1/crm/accounts",
       "routeHandler": "/v1/crm/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1732,8 +1732,38 @@
       "apiPaths": [
         "/api/v1/crm/activities"
       ],
-      "upstream": "crm → /v1/crm/activities",
+      "upstream": "crm \u2192 /v1/crm/activities",
       "routeHandler": "/v1/crm/activities",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/campaigns/[id]",
+      "loaders": [
+        "getCrmCampaignRoi"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/campaigns/:param/roi"
+      ],
+      "upstream": "crm \u2192 /v1/crm/campaigns/:param/roi",
+      "routeHandler": "/v1/crm/campaigns/:id/roi",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/campaigns",
+      "loaders": [
+        "getCrmCampaignRoiSummary"
+      ],
+      "apiPaths": [
+        "/api/v1/crm/campaigns/roi-summary"
+      ],
+      "upstream": "crm \u2192 /v1/crm/campaigns/roi-summary",
+      "routeHandler": "/v1/crm/campaigns/roi-summary",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -1747,7 +1777,7 @@
       "apiPaths": [
         "/api/v1/crm/contacts/:param/detail"
       ],
-      "upstream": "crm → /v1/crm/contacts/:param/detail",
+      "upstream": "crm \u2192 /v1/crm/contacts/:param/detail",
       "routeHandler": "/v1/crm/contacts/:id/detail",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1762,7 +1792,7 @@
       "apiPaths": [
         "/api/v1/crm/contacts/:param/detail"
       ],
-      "upstream": "crm → /v1/crm/contacts/:param/detail",
+      "upstream": "crm \u2192 /v1/crm/contacts/:param/detail",
       "routeHandler": "/v1/crm/contacts/:id/detail",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1777,7 +1807,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1788,7 +1818,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1799,7 +1829,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1810,7 +1840,7 @@
       "apiPaths": [
         "/api/v1/crm/dashboard"
       ],
-      "upstream": "crm → /v1/crm/dashboard",
+      "upstream": "crm \u2192 /v1/crm/dashboard",
       "routeHandler": "/v1/crm/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1825,7 +1855,7 @@
       "apiPaths": [
         "/api/v1/crm/deals/:param"
       ],
-      "upstream": "crm → /v1/crm/deals/:param",
+      "upstream": "crm \u2192 /v1/crm/deals/:param",
       "routeHandler": "/v1/crm/deals/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1840,7 +1870,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1851,7 +1881,7 @@
       "apiPaths": [
         "/api/v1/crm/deals"
       ],
-      "upstream": "crm → /v1/crm/deals",
+      "upstream": "crm \u2192 /v1/crm/deals",
       "routeHandler": "/v1/crm/deals",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1866,7 +1896,7 @@
       "apiPaths": [
         "/api/v1/crm/forecast"
       ],
-      "upstream": "crm → /v1/crm/forecast",
+      "upstream": "crm \u2192 /v1/crm/forecast",
       "routeHandler": "/v1/crm/forecast",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1881,7 +1911,7 @@
       "apiPaths": [
         "/api/v1/crm/pipelines"
       ],
-      "upstream": "crm → /v1/crm/pipelines",
+      "upstream": "crm \u2192 /v1/crm/pipelines",
       "routeHandler": "/v1/crm/pipelines",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1896,7 +1926,7 @@
       "apiPaths": [
         "/api/v1/recommendations/health/:param/breakdown"
       ],
-      "upstream": "recommendations → /v1/recommendations/health/:param/breakdown",
+      "upstream": "recommendations \u2192 /v1/recommendations/health/:param/breakdown",
       "routeHandler": "/v1/recommendations/health/:accountId/breakdown",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1911,7 +1941,7 @@
       "apiPaths": [
         "/api/v1/recommendations/health/at-risk"
       ],
-      "upstream": "recommendations → /v1/recommendations/health/at-risk",
+      "upstream": "recommendations \u2192 /v1/recommendations/health/at-risk",
       "routeHandler": "/v1/recommendations/health/:accountId",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1926,7 +1956,7 @@
       "apiPaths": [
         "/api/v1/crm/accounts"
       ],
-      "upstream": "crm → /v1/crm/accounts",
+      "upstream": "crm \u2192 /v1/crm/accounts",
       "routeHandler": "/v1/crm/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1941,7 +1971,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "crm",
@@ -1952,7 +1982,7 @@
       "apiPaths": [
         "/api/v1/crm/pipelines"
       ],
-      "upstream": "crm → /v1/crm/pipelines",
+      "upstream": "crm \u2192 /v1/crm/pipelines",
       "routeHandler": "/v1/crm/pipelines",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1967,7 +1997,7 @@
       "apiPaths": [
         "/api/v1/crm/deals"
       ],
-      "upstream": "crm → /v1/crm/deals",
+      "upstream": "crm \u2192 /v1/crm/deals",
       "routeHandler": "/v1/crm/deals",
       "tablesPresent": true,
       "status": "WIRED",
@@ -1982,7 +2012,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "developer-portal",
@@ -1993,7 +2023,7 @@
       "apiPaths": [
         "/api/v1/admin/api-keys"
       ],
-      "upstream": "admin → /v1/admin/api-keys",
+      "upstream": "admin \u2192 /v1/admin/api-keys",
       "routeHandler": "/v1/admin/api-keys",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2008,7 +2038,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2019,7 +2049,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2030,7 +2060,7 @@
       "apiPaths": [
         "/api/v1/estab/compliance"
       ],
-      "upstream": "estab → /v1/estab/compliance",
+      "upstream": "estab \u2192 /v1/estab/compliance",
       "routeHandler": "/v1/estab/compliance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2045,7 +2075,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2056,7 +2086,7 @@
       "apiPaths": [
         "/api/v1/estab/dashboard"
       ],
-      "upstream": "estab → /v1/estab/dashboard",
+      "upstream": "estab \u2192 /v1/estab/dashboard",
       "routeHandler": "/v1/estab/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2071,7 +2101,7 @@
       "apiPaths": [
         "/api/v1/estab/files"
       ],
-      "upstream": "estab → /v1/estab/files",
+      "upstream": "estab \u2192 /v1/estab/files",
       "routeHandler": "/v1/estab/files",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2086,7 +2116,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2097,7 +2127,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2108,7 +2138,7 @@
       "apiPaths": [
         "/api/v1/estab/files/:param"
       ],
-      "upstream": "estab → /v1/estab/files/:param",
+      "upstream": "estab \u2192 /v1/estab/files/:param",
       "routeHandler": "/v1/estab/files/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2123,7 +2153,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2134,7 +2164,7 @@
       "apiPaths": [
         "/api/v1/estab/guesthouse-bookings"
       ],
-      "upstream": "estab → /v1/estab/guesthouse-bookings",
+      "upstream": "estab \u2192 /v1/estab/guesthouse-bookings",
       "routeHandler": "/v1/estab/guesthouse-bookings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2149,7 +2179,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2160,7 +2190,7 @@
       "apiPaths": [
         "/api/v1/estab/files"
       ],
-      "upstream": "estab → /v1/estab/files",
+      "upstream": "estab \u2192 /v1/estab/files",
       "routeHandler": "/v1/estab/files",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2175,7 +2205,7 @@
       "apiPaths": [
         "/api/v1/estab/library/books/:param"
       ],
-      "upstream": "estab → /v1/estab/library/books/:param",
+      "upstream": "estab \u2192 /v1/estab/library/books/:param",
       "routeHandler": "/v1/estab/library/books/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2190,7 +2220,7 @@
       "apiPaths": [
         "/api/v1/estab/library/books"
       ],
-      "upstream": "estab → /v1/estab/library/books",
+      "upstream": "estab \u2192 /v1/estab/library/books",
       "routeHandler": "/v1/estab/library/books",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2205,7 +2235,7 @@
       "apiPaths": [
         "/api/v1/estab/library/issues"
       ],
-      "upstream": "estab → /v1/estab/library/issues",
+      "upstream": "estab \u2192 /v1/estab/library/issues",
       "routeHandler": "/v1/estab/library/issues",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2220,7 +2250,7 @@
       "apiPaths": [
         "/api/v1/estab/library/books"
       ],
-      "upstream": "estab → /v1/estab/library/books",
+      "upstream": "estab \u2192 /v1/estab/library/books",
       "routeHandler": "/v1/estab/library/books",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2235,7 +2265,7 @@
       "apiPaths": [
         "/api/v1/estab/files"
       ],
-      "upstream": "estab → /v1/estab/files",
+      "upstream": "estab \u2192 /v1/estab/files",
       "routeHandler": "/v1/estab/files",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2250,7 +2280,7 @@
       "apiPaths": [
         "/api/v1/estab/meetings/:param"
       ],
-      "upstream": "estab → /v1/estab/meetings/:param",
+      "upstream": "estab \u2192 /v1/estab/meetings/:param",
       "routeHandler": "/v1/estab/meetings/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2265,7 +2295,7 @@
       "apiPaths": [
         "/api/v1/estab/meetings"
       ],
-      "upstream": "estab → /v1/estab/meetings",
+      "upstream": "estab \u2192 /v1/estab/meetings",
       "routeHandler": "/v1/estab/meetings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2280,7 +2310,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2291,7 +2321,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2302,7 +2332,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2313,7 +2343,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2324,7 +2354,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2335,7 +2365,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2346,7 +2376,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2357,7 +2387,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "estab",
@@ -2368,7 +2398,7 @@
       "apiPaths": [
         "/api/v1/estab/vehicles"
       ],
-      "upstream": "estab → /v1/estab/vehicles",
+      "upstream": "estab \u2192 /v1/estab/vehicles",
       "routeHandler": "/v1/estab/vehicles",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2383,7 +2413,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "establishment",
@@ -2394,7 +2424,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "establishment",
@@ -2405,7 +2435,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2416,7 +2446,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2427,7 +2457,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2438,7 +2468,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2449,7 +2479,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2460,7 +2490,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "field",
@@ -2471,7 +2501,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2482,7 +2512,7 @@
       "apiPaths": [
         "/api/v1/finance/statements"
       ],
-      "upstream": "finance → /v1/finance/statements",
+      "upstream": "finance \u2192 /v1/finance/statements",
       "routeHandler": "/v1/finance/statements",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2497,7 +2527,7 @@
       "apiPaths": [
         "/api/v1/finance/journals"
       ],
-      "upstream": "finance → /v1/finance/journals",
+      "upstream": "finance \u2192 /v1/finance/journals",
       "routeHandler": "/v1/finance/journals",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2512,7 +2542,7 @@
       "apiPaths": [
         "/api/v1/finance/accounts"
       ],
-      "upstream": "finance → /v1/finance/accounts",
+      "upstream": "finance \u2192 /v1/finance/accounts",
       "routeHandler": "/v1/finance/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2527,7 +2557,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2538,7 +2568,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2549,7 +2579,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2560,7 +2590,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2571,7 +2601,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2582,7 +2612,7 @@
       "apiPaths": [
         "/api/v1/finance/budgets"
       ],
-      "upstream": "finance → /v1/finance/budgets",
+      "upstream": "finance \u2192 /v1/finance/budgets",
       "routeHandler": "/v1/finance/budgets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2597,7 +2627,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2608,7 +2638,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2619,7 +2649,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2630,7 +2660,7 @@
       "apiPaths": [
         "/api/v1/finance/sanctions/:param"
       ],
-      "upstream": "finance → /v1/finance/sanctions/:param",
+      "upstream": "finance \u2192 /v1/finance/sanctions/:param",
       "routeHandler": "/v1/finance/sanctions/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2645,7 +2675,7 @@
       "apiPaths": [
         "/api/v1/finance/sanctions"
       ],
-      "upstream": "finance → /v1/finance/sanctions",
+      "upstream": "finance \u2192 /v1/finance/sanctions",
       "routeHandler": "/v1/finance/sanctions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2660,7 +2690,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2671,7 +2701,7 @@
       "apiPaths": [
         "/api/v1/finance/accounts"
       ],
-      "upstream": "finance → /v1/finance/accounts",
+      "upstream": "finance \u2192 /v1/finance/accounts",
       "routeHandler": "/v1/finance/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2686,7 +2716,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2697,7 +2727,7 @@
       "apiPaths": [
         "/api/v1/finance/dashboard"
       ],
-      "upstream": "finance → /v1/finance/dashboard",
+      "upstream": "finance \u2192 /v1/finance/dashboard",
       "routeHandler": "/v1/finance/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2712,7 +2742,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2723,7 +2753,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2734,7 +2764,7 @@
       "apiPaths": [
         "/api/v1/finance/advances"
       ],
-      "upstream": "finance → /v1/finance/advances",
+      "upstream": "finance \u2192 /v1/finance/advances",
       "routeHandler": "/v1/finance/advances",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2749,7 +2779,7 @@
       "apiPaths": [
         "/api/v1/finance/bills/:param"
       ],
-      "upstream": "finance → /v1/finance/bills/:param",
+      "upstream": "finance \u2192 /v1/finance/bills/:param",
       "routeHandler": "/v1/finance/bills/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2764,7 +2794,7 @@
       "apiPaths": [
         "/api/v1/finance/bills"
       ],
-      "upstream": "finance → /v1/finance/bills",
+      "upstream": "finance \u2192 /v1/finance/bills",
       "routeHandler": "/v1/finance/bills",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2779,7 +2809,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2790,7 +2820,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2801,7 +2831,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2812,7 +2842,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2823,7 +2853,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2834,7 +2864,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2845,7 +2875,7 @@
       "apiPaths": [
         "/api/v1/finance/utilization-certificates"
       ],
-      "upstream": "finance → /v1/finance/utilization-certificates",
+      "upstream": "finance \u2192 /v1/finance/utilization-certificates",
       "routeHandler": "/v1/finance/utilization-certificates",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2860,7 +2890,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2871,7 +2901,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2882,7 +2912,7 @@
       "apiPaths": [
         "/api/v1/finance/accounts"
       ],
-      "upstream": "finance → /v1/finance/accounts",
+      "upstream": "finance \u2192 /v1/finance/accounts",
       "routeHandler": "/v1/finance/accounts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2897,7 +2927,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2908,7 +2938,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2919,7 +2949,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2930,7 +2960,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2941,7 +2971,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2952,7 +2982,7 @@
       "apiPaths": [
         "/api/v1/finance/payments"
       ],
-      "upstream": "finance → /v1/finance/payments",
+      "upstream": "finance \u2192 /v1/finance/payments",
       "routeHandler": "/v1/finance/payments",
       "tablesPresent": true,
       "status": "WIRED",
@@ -2967,7 +2997,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2978,7 +3008,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -2989,7 +3019,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3000,7 +3030,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3011,7 +3041,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3022,7 +3052,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3033,7 +3063,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3044,7 +3074,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3055,7 +3085,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3066,7 +3096,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3077,7 +3107,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3088,7 +3118,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3099,7 +3129,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3110,7 +3140,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3121,7 +3151,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3132,7 +3162,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3143,7 +3173,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3154,7 +3184,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3165,7 +3195,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3176,7 +3206,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3187,7 +3217,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3198,7 +3228,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3209,7 +3239,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "finance",
@@ -3220,7 +3250,7 @@
       "apiPaths": [
         "/api/v1/finance/vendors"
       ],
-      "upstream": "finance → /v1/finance/vendors",
+      "upstream": "finance \u2192 /v1/finance/vendors",
       "routeHandler": "/v1/finance/vendors",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3235,7 +3265,7 @@
       "apiPaths": [
         "/api/v1/grants/grants/:param"
       ],
-      "upstream": "grant → /v1/grants/grants/:param",
+      "upstream": "grant \u2192 /v1/grants/grants/:param",
       "routeHandler": "/v1/grants/grants/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3250,7 +3280,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "grants",
@@ -3261,7 +3291,7 @@
       "apiPaths": [
         "/api/v1/grants/dashboard"
       ],
-      "upstream": "grant → /v1/grants/dashboard",
+      "upstream": "grant \u2192 /v1/grants/dashboard",
       "routeHandler": "/v1/grants/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3276,7 +3306,7 @@
       "apiPaths": [
         "/api/v1/grants/grants"
       ],
-      "upstream": "grant → /v1/grants/grants",
+      "upstream": "grant \u2192 /v1/grants/grants",
       "routeHandler": "/v1/grants/grants",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3291,7 +3321,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "grants",
@@ -3302,7 +3332,7 @@
       "apiPaths": [
         "/api/v1/grants/grantees"
       ],
-      "upstream": "grant → /v1/grants/grantees",
+      "upstream": "grant \u2192 /v1/grants/grantees",
       "routeHandler": "/v1/grants/grantees",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3317,7 +3347,7 @@
       "apiPaths": [
         "/api/v1/grants/installments"
       ],
-      "upstream": "grant → /v1/grants/installments",
+      "upstream": "grant \u2192 /v1/grants/installments",
       "routeHandler": "/v1/grants/installments",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3332,7 +3362,7 @@
       "apiPaths": [
         "/api/v1/grants/grants"
       ],
-      "upstream": "grant → /v1/grants/grants",
+      "upstream": "grant \u2192 /v1/grants/grants",
       "routeHandler": "/v1/grants/grants",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3347,7 +3377,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "grants",
@@ -3358,7 +3388,7 @@
       "apiPaths": [
         "/api/v1/grants/releases"
       ],
-      "upstream": "grant → /v1/grants/releases",
+      "upstream": "grant \u2192 /v1/grants/releases",
       "routeHandler": "/v1/grants/releases",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3373,7 +3403,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "grants",
@@ -3384,7 +3414,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "grants",
@@ -3395,7 +3425,7 @@
       "apiPaths": [
         "/api/v1/grants/utilization-certs"
       ],
-      "upstream": "grant → /v1/grants/utilization-certs",
+      "upstream": "grant \u2192 /v1/grants/utilization-certs",
       "routeHandler": "/v1/grants/utilization-certs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3410,7 +3440,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "help",
@@ -3421,7 +3451,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "helpdesk",
@@ -3432,7 +3462,7 @@
       "apiPaths": [
         "/api/v1/helpdesk/catalogue/offerings/:param"
       ],
-      "upstream": "helpdesk → /v1/helpdesk/catalogue/offerings/:param",
+      "upstream": "helpdesk \u2192 /v1/helpdesk/catalogue/offerings/:param",
       "routeHandler": "/v1/helpdesk/catalogue/offerings/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3447,7 +3477,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "helpdesk",
@@ -3458,7 +3488,7 @@
       "apiPaths": [
         "/api/v1/helpdesk/catalogue/requests"
       ],
-      "upstream": "helpdesk → /v1/helpdesk/catalogue/requests",
+      "upstream": "helpdesk \u2192 /v1/helpdesk/catalogue/requests",
       "routeHandler": "/v1/helpdesk/catalogue/requests",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3473,7 +3503,7 @@
       "apiPaths": [
         "/api/v1/helpdesk/catalogue/offerings"
       ],
-      "upstream": "helpdesk → /v1/helpdesk/catalogue/offerings",
+      "upstream": "helpdesk \u2192 /v1/helpdesk/catalogue/offerings",
       "routeHandler": "/v1/helpdesk/catalogue/offerings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3488,7 +3518,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "helpdesk",
@@ -3499,7 +3529,7 @@
       "apiPaths": [
         "/api/v1/helpdesk/tickets"
       ],
-      "upstream": "helpdesk → /v1/helpdesk/tickets",
+      "upstream": "helpdesk \u2192 /v1/helpdesk/tickets",
       "routeHandler": "/v1/helpdesk/tickets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3514,7 +3544,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "helpdesk",
@@ -3525,7 +3555,7 @@
       "apiPaths": [
         "/api/v1/citizen/tickets/analytics"
       ],
-      "upstream": "citizen → /v1/citizen/tickets/analytics",
+      "upstream": "citizen \u2192 /v1/citizen/tickets/analytics",
       "routeHandler": "/v1/citizen/tickets/analytics",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3540,7 +3570,7 @@
       "apiPaths": [
         "/api/v1/citizen/tickets"
       ],
-      "upstream": "citizen → /v1/citizen/tickets",
+      "upstream": "citizen \u2192 /v1/citizen/tickets",
       "routeHandler": "/v1/citizen/tickets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3555,7 +3585,7 @@
       "apiPaths": [
         "/api/v1/citizen/tickets/:param"
       ],
-      "upstream": "citizen → /v1/citizen/tickets/:param",
+      "upstream": "citizen \u2192 /v1/citizen/tickets/:param",
       "routeHandler": "/v1/citizen/tickets/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3570,7 +3600,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "helpdesk",
@@ -3581,7 +3611,7 @@
       "apiPaths": [
         "/api/v1/citizen/tickets"
       ],
-      "upstream": "citizen → /v1/citizen/tickets",
+      "upstream": "citizen \u2192 /v1/citizen/tickets",
       "routeHandler": "/v1/citizen/tickets",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3596,7 +3626,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3607,7 +3637,7 @@
       "apiPaths": [
         "/api/v1/hrms/employees"
       ],
-      "upstream": "hrms → /v1/hrms/employees",
+      "upstream": "hrms \u2192 /v1/hrms/employees",
       "routeHandler": "/v1/hrms/employees",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3622,7 +3652,7 @@
       "apiPaths": [
         "/api/v1/hrms/appraisals"
       ],
-      "upstream": "hrms → /v1/hrms/appraisals",
+      "upstream": "hrms \u2192 /v1/hrms/appraisals",
       "routeHandler": "/v1/hrms/appraisals",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3637,7 +3667,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3648,7 +3678,7 @@
       "apiPaths": [
         "/api/v1/hrms/attendance"
       ],
-      "upstream": "hrms → /v1/hrms/attendance",
+      "upstream": "hrms \u2192 /v1/hrms/attendance",
       "routeHandler": "/v1/hrms/attendance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3663,7 +3693,7 @@
       "apiPaths": [
         "/api/v1/hrms/attendance/regularisations"
       ],
-      "upstream": "hrms → /v1/hrms/attendance/regularisations",
+      "upstream": "hrms \u2192 /v1/hrms/attendance/regularisations",
       "routeHandler": "/v1/hrms/attendance/regularisations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3678,7 +3708,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3689,7 +3719,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3700,7 +3730,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3711,7 +3741,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3722,7 +3752,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3733,7 +3763,7 @@
       "apiPaths": [
         "/api/v1/hrms/dashboard"
       ],
-      "upstream": "hrms → /v1/hrms/dashboard",
+      "upstream": "hrms \u2192 /v1/hrms/dashboard",
       "routeHandler": "/v1/hrms/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3748,7 +3778,7 @@
       "apiPaths": [
         "/api/v1/hrms/employees"
       ],
-      "upstream": "hrms → /v1/hrms/employees",
+      "upstream": "hrms \u2192 /v1/hrms/employees",
       "routeHandler": "/v1/hrms/employees",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3763,7 +3793,7 @@
       "apiPaths": [
         "/api/v1/hrms/job-openings"
       ],
-      "upstream": "hrms → /v1/hrms/job-openings",
+      "upstream": "hrms \u2192 /v1/hrms/job-openings",
       "routeHandler": "/v1/hrms/job-openings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3778,7 +3808,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3789,7 +3819,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3800,7 +3830,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3811,7 +3841,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3822,7 +3852,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3833,7 +3863,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3844,7 +3874,7 @@
       "apiPaths": [
         "/api/v1/hrms/employees/:param"
       ],
-      "upstream": "hrms → /v1/hrms/employees/:param",
+      "upstream": "hrms \u2192 /v1/hrms/employees/:param",
       "routeHandler": "/v1/hrms/employees/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3859,7 +3889,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3870,7 +3900,7 @@
       "apiPaths": [
         "/api/v1/hrms/employees"
       ],
-      "upstream": "hrms → /v1/hrms/employees",
+      "upstream": "hrms \u2192 /v1/hrms/employees",
       "routeHandler": "/v1/hrms/employees",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3885,7 +3915,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3896,7 +3926,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3907,7 +3937,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3918,7 +3948,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3929,7 +3959,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3940,7 +3970,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3951,7 +3981,7 @@
       "apiPaths": [
         "/api/v1/hrms/employees"
       ],
-      "upstream": "hrms → /v1/hrms/employees",
+      "upstream": "hrms \u2192 /v1/hrms/employees",
       "routeHandler": "/v1/hrms/employees",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3966,7 +3996,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -3977,7 +4007,7 @@
       "apiPaths": [
         "/api/v1/hrms/leave-requests"
       ],
-      "upstream": "hrms → /v1/hrms/leave-requests",
+      "upstream": "hrms \u2192 /v1/hrms/leave-requests",
       "routeHandler": "/v1/hrms/leave-requests",
       "tablesPresent": true,
       "status": "WIRED",
@@ -3992,7 +4022,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4003,7 +4033,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4014,7 +4044,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4025,7 +4055,7 @@
       "apiPaths": [
         "/api/v1/hrms/org-chart"
       ],
-      "upstream": "hrms → /v1/hrms/org-chart",
+      "upstream": "hrms \u2192 /v1/hrms/org-chart",
       "routeHandler": "/v1/hrms/org-chart",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4040,7 +4070,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4051,7 +4081,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4062,7 +4092,7 @@
       "apiPaths": [
         "/api/v1/hrms/pay-matrix"
       ],
-      "upstream": "hrms → /v1/hrms/pay-matrix",
+      "upstream": "hrms \u2192 /v1/hrms/pay-matrix",
       "routeHandler": "/v1/hrms/pay-matrix",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4077,7 +4107,7 @@
       "apiPaths": [
         "/api/v1/payroll/runs/:param"
       ],
-      "upstream": "payroll → /v1/payroll/runs/:param",
+      "upstream": "payroll \u2192 /v1/payroll/runs/:param",
       "routeHandler": "/v1/payroll/runs/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4092,7 +4122,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4103,7 +4133,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4114,7 +4144,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4125,7 +4155,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4136,7 +4166,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4147,7 +4177,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4158,7 +4188,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4169,7 +4199,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4180,7 +4210,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4191,7 +4221,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4202,7 +4232,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4213,7 +4243,7 @@
       "apiPaths": [
         "/api/v1/payroll/statutory/gpf"
       ],
-      "upstream": "payroll → /v1/payroll/statutory/gpf",
+      "upstream": "payroll \u2192 /v1/payroll/statutory/gpf",
       "routeHandler": "/v1/payroll/statutory/gpf",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4228,7 +4258,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4239,7 +4269,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4250,7 +4280,7 @@
       "apiPaths": [
         "/api/v1/payroll/statutory/nps"
       ],
-      "upstream": "payroll → /v1/payroll/statutory/nps",
+      "upstream": "payroll \u2192 /v1/payroll/statutory/nps",
       "routeHandler": "/v1/payroll/statutory/nps",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4265,7 +4295,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4276,7 +4306,7 @@
       "apiPaths": [
         "/api/v1/payroll/runs"
       ],
-      "upstream": "payroll → /v1/payroll/runs",
+      "upstream": "payroll \u2192 /v1/payroll/runs",
       "routeHandler": "/v1/payroll/runs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4291,7 +4321,7 @@
       "apiPaths": [
         "/api/v1/payroll/structures"
       ],
-      "upstream": "payroll → /v1/payroll/structures",
+      "upstream": "payroll \u2192 /v1/payroll/structures",
       "routeHandler": "/v1/payroll/structures",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4306,7 +4336,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4317,7 +4347,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4328,7 +4358,7 @@
       "apiPaths": [
         "/api/v1/payroll/pensioners"
       ],
-      "upstream": "payroll → /v1/payroll/pensioners",
+      "upstream": "payroll \u2192 /v1/payroll/pensioners",
       "routeHandler": "/v1/payroll/pensioners",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4343,7 +4373,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4354,7 +4384,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4365,7 +4395,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4376,7 +4406,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4387,7 +4417,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4398,7 +4428,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4409,7 +4439,7 @@
       "apiPaths": [
         "/api/v1/payroll/salary-slips"
       ],
-      "upstream": "payroll → /v1/payroll/salary-slips",
+      "upstream": "payroll \u2192 /v1/payroll/salary-slips",
       "routeHandler": "/v1/payroll/salary-slips",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4424,7 +4454,7 @@
       "apiPaths": [
         "/api/v1/payroll/slips/:param"
       ],
-      "upstream": "payroll → /v1/payroll/slips/:param",
+      "upstream": "payroll \u2192 /v1/payroll/slips/:param",
       "routeHandler": "/v1/payroll/slips/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4439,7 +4469,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4450,7 +4480,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4461,7 +4491,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4472,7 +4502,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4483,7 +4513,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4494,7 +4524,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4505,7 +4535,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4516,7 +4546,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4527,7 +4557,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4538,7 +4568,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4549,7 +4579,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4560,7 +4590,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4571,7 +4601,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4582,7 +4612,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4593,7 +4623,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4604,7 +4634,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4615,7 +4645,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4626,7 +4656,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4637,7 +4667,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4648,7 +4678,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4659,7 +4689,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4670,7 +4700,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4681,7 +4711,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4692,7 +4722,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4703,7 +4733,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4714,7 +4744,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4725,7 +4755,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4736,7 +4766,7 @@
       "apiPaths": [
         "/api/v1/hrms/training-programs"
       ],
-      "upstream": "hrms → /v1/hrms/training-programs",
+      "upstream": "hrms \u2192 /v1/hrms/training-programs",
       "routeHandler": "/v1/hrms/training-programs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4751,7 +4781,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4762,7 +4792,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4773,7 +4803,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4784,7 +4814,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "hr",
@@ -4795,7 +4825,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4806,7 +4836,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4817,7 +4847,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4828,7 +4858,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4839,7 +4869,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4850,7 +4880,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "identity",
@@ -4861,7 +4891,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inspection",
@@ -4872,7 +4902,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inspection",
@@ -4883,7 +4913,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inspection",
@@ -4894,7 +4924,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inspection",
@@ -4905,7 +4935,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "install",
@@ -4916,7 +4946,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "install",
@@ -4927,7 +4957,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "install",
@@ -4938,7 +4968,7 @@
       "apiPaths": [
         "/api/v1/install/steps"
       ],
-      "upstream": "install → /v1/install/steps",
+      "upstream": "install \u2192 /v1/install/steps",
       "routeHandler": "/v1/install/steps",
       "tablesPresent": true,
       "status": "WIRED",
@@ -4953,7 +4983,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "install",
@@ -4964,7 +4994,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "install",
@@ -4975,7 +5005,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -4986,7 +5016,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -4997,7 +5027,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5008,7 +5038,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5019,7 +5049,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5030,7 +5060,7 @@
       "apiPaths": [
         "/api/v1/stock/items"
       ],
-      "upstream": "stock → /v1/stock/items",
+      "upstream": "stock \u2192 /v1/stock/items",
       "routeHandler": "/v1/stock/items",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5045,7 +5075,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5056,7 +5086,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5067,7 +5097,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5078,7 +5108,7 @@
       "apiPaths": [
         "/api/v1/stock/ledger"
       ],
-      "upstream": "stock → /v1/stock/ledger",
+      "upstream": "stock \u2192 /v1/stock/ledger",
       "routeHandler": "/v1/stock/ledger",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5093,7 +5123,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "inventory",
@@ -5104,7 +5134,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "journeys",
@@ -5115,7 +5145,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "journeys",
@@ -5126,7 +5156,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "journeys",
@@ -5137,7 +5167,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "journeys",
@@ -5148,7 +5178,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "journeys",
@@ -5159,7 +5189,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5170,7 +5200,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5181,7 +5211,7 @@
       "apiPaths": [
         "/api/v1/knowledge/documents"
       ],
-      "upstream": "knowledge → /v1/knowledge/documents",
+      "upstream": "knowledge \u2192 /v1/knowledge/documents",
       "routeHandler": "/v1/knowledge/documents",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5196,7 +5226,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5207,7 +5237,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5218,7 +5248,7 @@
       "apiPaths": [
         "/api/v1/knowledge/documents"
       ],
-      "upstream": "knowledge → /v1/knowledge/documents",
+      "upstream": "knowledge \u2192 /v1/knowledge/documents",
       "routeHandler": "/v1/knowledge/documents",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5233,7 +5263,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5244,7 +5274,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5255,7 +5285,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "knowledge",
@@ -5266,7 +5296,7 @@
       "apiPaths": [
         "/api/v1/knowledge/records"
       ],
-      "upstream": "knowledge → /v1/knowledge/records",
+      "upstream": "knowledge \u2192 /v1/knowledge/records",
       "routeHandler": "/v1/knowledge/records",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5281,7 +5311,7 @@
       "apiPaths": [
         "/api/v1/knowledge/documents"
       ],
-      "upstream": "knowledge → /v1/knowledge/documents",
+      "upstream": "knowledge \u2192 /v1/knowledge/documents",
       "routeHandler": "/v1/knowledge/documents",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5296,7 +5326,7 @@
       "apiPaths": [
         "/api/v1/knowledge/documents"
       ],
-      "upstream": "knowledge → /v1/knowledge/documents",
+      "upstream": "knowledge \u2192 /v1/knowledge/documents",
       "routeHandler": "/v1/knowledge/documents",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5311,7 +5341,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5322,7 +5352,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5333,7 +5363,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5344,7 +5374,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5355,7 +5385,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5366,7 +5396,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "learning",
@@ -5377,7 +5407,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "legal",
@@ -5388,7 +5418,7 @@
       "apiPaths": [
         "/api/v1/legal/cases/:param"
       ],
-      "upstream": "legal → /v1/legal/cases/:param",
+      "upstream": "legal \u2192 /v1/legal/cases/:param",
       "routeHandler": "/v1/legal/cases/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5403,7 +5433,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "legal",
@@ -5414,7 +5444,7 @@
       "apiPaths": [
         "/api/v1/legal/cases"
       ],
-      "upstream": "legal → /v1/legal/cases",
+      "upstream": "legal \u2192 /v1/legal/cases",
       "routeHandler": "/v1/legal/cases",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5429,7 +5459,7 @@
       "apiPaths": [
         "/api/v1/legal/court-orders"
       ],
-      "upstream": "legal → /v1/legal/court-orders",
+      "upstream": "legal \u2192 /v1/legal/court-orders",
       "routeHandler": "/v1/legal/court-orders",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5444,7 +5474,7 @@
       "apiPaths": [
         "/api/v1/legal/dashboard"
       ],
-      "upstream": "legal → /v1/legal/dashboard",
+      "upstream": "legal \u2192 /v1/legal/dashboard",
       "routeHandler": "/v1/legal/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5459,7 +5489,7 @@
       "apiPaths": [
         "/api/v1/legal/hearings"
       ],
-      "upstream": "legal → /v1/legal/hearings",
+      "upstream": "legal \u2192 /v1/legal/hearings",
       "routeHandler": "/v1/legal/hearings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5474,7 +5504,7 @@
       "apiPaths": [
         "/api/v1/legal/cases"
       ],
-      "upstream": "legal → /v1/legal/cases",
+      "upstream": "legal \u2192 /v1/legal/cases",
       "routeHandler": "/v1/legal/cases",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5489,7 +5519,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "legal",
@@ -5500,7 +5530,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "legal",
@@ -5511,7 +5541,7 @@
       "apiPaths": [
         "/api/v1/legal/opinions"
       ],
-      "upstream": "legal → /v1/legal/opinions",
+      "upstream": "legal \u2192 /v1/legal/opinions",
       "routeHandler": "/v1/legal/opinions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5526,7 +5556,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5537,7 +5567,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5548,7 +5578,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5559,7 +5589,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5570,7 +5600,7 @@
       "apiPaths": [
         "/api/v1/locations"
       ],
-      "upstream": "locations → /v1/locations/",
+      "upstream": "locations \u2192 /v1/locations/",
       "routeHandler": "/v1/locations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5585,7 +5615,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5596,7 +5626,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "locations",
@@ -5607,7 +5637,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5618,7 +5648,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5629,7 +5659,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5640,7 +5670,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5651,7 +5681,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5662,7 +5692,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "loyalty",
@@ -5673,7 +5703,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "meeting",
@@ -5684,7 +5714,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "meeting",
@@ -5695,7 +5725,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "meeting",
@@ -5706,7 +5736,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "meeting",
@@ -5717,7 +5747,7 @@
       "apiPaths": [
         "/api/v1/estab/meetings"
       ],
-      "upstream": "estab → /v1/estab/meetings",
+      "upstream": "estab \u2192 /v1/estab/meetings",
       "routeHandler": "/v1/estab/meetings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5732,7 +5762,7 @@
       "apiPaths": [
         "/api/v1/estab/meetings"
       ],
-      "upstream": "estab → /v1/estab/meetings",
+      "upstream": "estab \u2192 /v1/estab/meetings",
       "routeHandler": "/v1/estab/meetings",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5747,7 +5777,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "metadata",
@@ -5758,7 +5788,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "metadata",
@@ -5769,7 +5799,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "metadata",
@@ -5780,7 +5810,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "metadata",
@@ -5791,7 +5821,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "metadata",
@@ -5802,7 +5832,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5813,7 +5843,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5824,7 +5854,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5835,7 +5865,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5846,7 +5876,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5857,7 +5887,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5868,7 +5898,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "notifications",
@@ -5879,7 +5909,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "plugins",
@@ -5890,7 +5920,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "plugins",
@@ -5901,7 +5931,7 @@
       "apiPaths": [
         "/api/v1/plugins/items"
       ],
-      "upstream": "plugin → /v1/plugins/items",
+      "upstream": "plugin \u2192 /v1/plugins/items",
       "routeHandler": "/v1/plugins/items",
       "tablesPresent": true,
       "status": "WIRED",
@@ -5916,7 +5946,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "plugins",
@@ -5927,7 +5957,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "plugins",
@@ -5938,7 +5968,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "policy",
@@ -5949,7 +5979,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "policy",
@@ -5960,7 +5990,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "policy",
@@ -5971,7 +6001,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "policy",
@@ -5982,7 +6012,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "policy",
@@ -5993,7 +6023,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6004,7 +6034,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6015,7 +6045,7 @@
       "apiPaths": [
         "/api/v1/procurement/approvals"
       ],
-      "upstream": "procurement → /v1/procurement/approvals",
+      "upstream": "procurement \u2192 /v1/procurement/approvals",
       "routeHandler": "/v1/procurement/approvals",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6030,7 +6060,7 @@
       "apiPaths": [
         "/api/v1/procurement/bid-evaluations"
       ],
-      "upstream": "procurement → /v1/procurement/bid-evaluations",
+      "upstream": "procurement \u2192 /v1/procurement/bid-evaluations",
       "routeHandler": "/v1/procurement/bid-evaluations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6045,7 +6075,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6056,7 +6086,7 @@
       "apiPaths": [
         "/api/v1/contract/contracts"
       ],
-      "upstream": "contract → /v1/contract/contracts",
+      "upstream": "contract \u2192 /v1/contract/contracts",
       "routeHandler": "/v1/contract/contracts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6071,7 +6101,7 @@
       "apiPaths": [
         "/api/v1/procurement/dashboard"
       ],
-      "upstream": "procurement → /v1/procurement/dashboard",
+      "upstream": "procurement \u2192 /v1/procurement/dashboard",
       "routeHandler": "/v1/procurement/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6086,7 +6116,7 @@
       "apiPaths": [
         "/api/v1/procurement/emd"
       ],
-      "upstream": "procurement → /v1/procurement/emd",
+      "upstream": "procurement \u2192 /v1/procurement/emd",
       "routeHandler": "/v1/procurement/emd",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6101,7 +6131,7 @@
       "apiPaths": [
         "/api/v1/procurement/pbg"
       ],
-      "upstream": "procurement → /v1/procurement/pbg",
+      "upstream": "procurement \u2192 /v1/procurement/pbg",
       "routeHandler": "/v1/procurement/pbg",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6116,7 +6146,7 @@
       "apiPaths": [
         "/api/v1/procurement/empanelment"
       ],
-      "upstream": "procurement → /v1/procurement/empanelment",
+      "upstream": "procurement \u2192 /v1/procurement/empanelment",
       "routeHandler": "/v1/procurement/empanelment",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6131,7 +6161,7 @@
       "apiPaths": [
         "/api/v1/procurement/gem/items"
       ],
-      "upstream": "procurement → /v1/procurement/gem/items",
+      "upstream": "procurement \u2192 /v1/procurement/gem/items",
       "routeHandler": "/v1/procurement/gem/items",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6146,7 +6176,7 @@
       "apiPaths": [
         "/api/v1/procurement/grns/:param"
       ],
-      "upstream": "procurement → /v1/procurement/grns/:param",
+      "upstream": "procurement \u2192 /v1/procurement/grns/:param",
       "routeHandler": "/v1/procurement/grns/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6161,7 +6191,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6172,7 +6202,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6183,7 +6213,7 @@
       "apiPaths": [
         "/api/v1/procurement/indents/:param"
       ],
-      "upstream": "procurement → /v1/procurement/indents/:param",
+      "upstream": "procurement \u2192 /v1/procurement/indents/:param",
       "routeHandler": "/v1/procurement/indents/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6198,7 +6228,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6209,7 +6239,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6220,7 +6250,7 @@
       "apiPaths": [
         "/api/v1/procurement/pos/:param"
       ],
-      "upstream": "procurement → /v1/procurement/pos/:param",
+      "upstream": "procurement \u2192 /v1/procurement/pos/:param",
       "routeHandler": "/v1/procurement/pos/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6235,7 +6265,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6246,7 +6276,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6257,7 +6287,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6268,7 +6298,7 @@
       "apiPaths": [
         "/api/v1/procurement/pre-bid-conferences"
       ],
-      "upstream": "procurement → /v1/procurement/pre-bid-conferences",
+      "upstream": "procurement \u2192 /v1/procurement/pre-bid-conferences",
       "routeHandler": "/v1/procurement/pre-bid-conferences",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6283,7 +6313,7 @@
       "apiPaths": [
         "/api/v1/procurement/reverse-auctions"
       ],
-      "upstream": "procurement → /v1/procurement/reverse-auctions",
+      "upstream": "procurement \u2192 /v1/procurement/reverse-auctions",
       "routeHandler": "/v1/procurement/reverse-auctions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6298,7 +6328,7 @@
       "apiPaths": [
         "/api/v1/procurement/rfqs/:param"
       ],
-      "upstream": "procurement → /v1/procurement/rfqs/:param",
+      "upstream": "procurement \u2192 /v1/procurement/rfqs/:param",
       "routeHandler": "/v1/procurement/rfqs/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6313,7 +6343,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6324,7 +6354,7 @@
       "apiPaths": [
         "/api/v1/procurement/rfqs"
       ],
-      "upstream": "procurement → /v1/procurement/rfqs",
+      "upstream": "procurement \u2192 /v1/procurement/rfqs",
       "routeHandler": "/v1/procurement/rfqs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6339,7 +6369,7 @@
       "apiPaths": [
         "/api/v1/procurement/tenders/:param"
       ],
-      "upstream": "procurement → /v1/procurement/tenders/:param",
+      "upstream": "procurement \u2192 /v1/procurement/tenders/:param",
       "routeHandler": "/v1/procurement/tenders/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6354,7 +6384,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6365,7 +6395,7 @@
       "apiPaths": [
         "/api/v1/procurement/tenders"
       ],
-      "upstream": "procurement → /v1/procurement/tenders",
+      "upstream": "procurement \u2192 /v1/procurement/tenders",
       "routeHandler": "/v1/procurement/tenders",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6380,7 +6410,7 @@
       "apiPaths": [
         "/api/v1/procurement/vendors/:param"
       ],
-      "upstream": "procurement → /v1/procurement/vendors/:param",
+      "upstream": "procurement \u2192 /v1/procurement/vendors/:param",
       "routeHandler": "/v1/procurement/vendors/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6395,7 +6425,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "procurement",
@@ -6406,7 +6436,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "projects",
@@ -6417,7 +6447,7 @@
       "apiPaths": [
         "/api/v1/project/projects/:param"
       ],
-      "upstream": "project → /v1/projects/projects/:param",
+      "upstream": "project \u2192 /v1/projects/projects/:param",
       "routeHandler": "/v1/projects/projects/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6432,7 +6462,7 @@
       "apiPaths": [
         "/api/v1/projects/beneficiaries"
       ],
-      "upstream": "projects → /v1/projects/beneficiaries",
+      "upstream": "projects \u2192 /v1/projects/beneficiaries",
       "routeHandler": "/v1/projects/beneficiaries",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6447,7 +6477,7 @@
       "apiPaths": [
         "/api/v1/project/dashboard"
       ],
-      "upstream": "project → /v1/projects/dashboard",
+      "upstream": "project \u2192 /v1/projects/dashboard",
       "routeHandler": "/v1/projects/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6462,7 +6492,7 @@
       "apiPaths": [
         "/api/v1/project/projects"
       ],
-      "upstream": "project → /v1/projects/projects",
+      "upstream": "project \u2192 /v1/projects/projects",
       "routeHandler": "/v1/projects/projects",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6477,7 +6507,7 @@
       "apiPaths": [
         "/api/v1/project/schemes"
       ],
-      "upstream": "project → /v1/projects/schemes",
+      "upstream": "project \u2192 /v1/projects/schemes",
       "routeHandler": "/v1/projects/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6492,7 +6522,7 @@
       "apiPaths": [
         "/api/v1/projects/delay-analysis"
       ],
-      "upstream": "projects → /v1/projects/delay-analysis",
+      "upstream": "projects \u2192 /v1/projects/delay-analysis",
       "routeHandler": "/v1/projects/delay-analysis",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6507,7 +6537,7 @@
       "apiPaths": [
         "/api/v1/projects/dprs"
       ],
-      "upstream": "projects → /v1/projects/dprs",
+      "upstream": "projects \u2192 /v1/projects/dprs",
       "routeHandler": "/v1/projects/dprs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6522,7 +6552,7 @@
       "apiPaths": [
         "/api/v1/projects/escalations"
       ],
-      "upstream": "projects → /v1/projects/escalations",
+      "upstream": "projects \u2192 /v1/projects/escalations",
       "routeHandler": "/v1/projects/escalations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6537,7 +6567,7 @@
       "apiPaths": [
         "/api/v1/project/fund-releases"
       ],
-      "upstream": "project → /v1/projects/fund-releases",
+      "upstream": "project \u2192 /v1/projects/fund-releases",
       "routeHandler": "/v1/projects/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6552,7 +6582,7 @@
       "apiPaths": [
         "/api/v1/project/projects"
       ],
-      "upstream": "project → /v1/projects/projects",
+      "upstream": "project \u2192 /v1/projects/projects",
       "routeHandler": "/v1/projects/projects",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6567,7 +6597,7 @@
       "apiPaths": [
         "/api/v1/project/milestones"
       ],
-      "upstream": "project → /v1/projects/milestones",
+      "upstream": "project \u2192 /v1/projects/milestones",
       "routeHandler": "/v1/projects/milestones",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6582,7 +6612,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "projects",
@@ -6593,7 +6623,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "projects",
@@ -6604,7 +6634,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "projects",
@@ -6615,7 +6645,7 @@
       "apiPaths": [
         "/api/v1/project/schemes"
       ],
-      "upstream": "project → /v1/projects/schemes",
+      "upstream": "project \u2192 /v1/projects/schemes",
       "routeHandler": "/v1/projects/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6630,7 +6660,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "projects",
@@ -6641,7 +6671,7 @@
       "apiPaths": [
         "/api/v1/projects/wbs"
       ],
-      "upstream": "projects → /v1/projects/wbs",
+      "upstream": "projects \u2192 /v1/projects/wbs",
       "routeHandler": "/v1/projects/wbs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6656,7 +6686,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "recommendations",
@@ -6667,7 +6697,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "recommendations",
@@ -6678,7 +6708,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "recommendations",
@@ -6689,7 +6719,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "recommendations",
@@ -6700,7 +6730,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "reports",
@@ -6711,7 +6741,7 @@
       "apiPaths": [
         "/api/v1/reports/report-jobs/:param"
       ],
-      "upstream": "reports → /v1/reports/report-jobs/:param",
+      "upstream": "reports \u2192 /v1/reports/report-jobs/:param",
       "routeHandler": "/v1/reports/report-jobs/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6726,7 +6756,7 @@
       "apiPaths": [
         "/api/v1/reports/dashboards"
       ],
-      "upstream": "reports → /v1/reports/dashboards",
+      "upstream": "reports \u2192 /v1/reports/dashboards",
       "routeHandler": "/v1/reports/dashboards",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6741,7 +6771,7 @@
       "apiPaths": [
         "/api/v1/reports/kpis"
       ],
-      "upstream": "reports → /v1/reports/kpis",
+      "upstream": "reports \u2192 /v1/reports/kpis",
       "routeHandler": "/v1/reports/kpis",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6756,7 +6786,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "reports",
@@ -6767,7 +6797,7 @@
       "apiPaths": [
         "/api/v1/reports/report-jobs"
       ],
-      "upstream": "reports → /v1/reports/report-jobs",
+      "upstream": "reports \u2192 /v1/reports/report-jobs",
       "routeHandler": "/v1/reports/report-jobs",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6782,7 +6812,7 @@
       "apiPaths": [
         "/api/v1/reports/mis"
       ],
-      "upstream": "reports → /v1/reports/mis",
+      "upstream": "reports \u2192 /v1/reports/mis",
       "routeHandler": "/v1/reports/mis",
       "tablesPresent": true,
       "status": "WIRED",
@@ -6797,7 +6827,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6808,7 +6838,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6819,7 +6849,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6830,7 +6860,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6841,7 +6871,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6852,7 +6882,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6863,7 +6893,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6874,7 +6904,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6885,7 +6915,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6896,7 +6926,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6907,7 +6937,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6918,7 +6948,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6929,7 +6959,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6940,7 +6970,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6951,7 +6981,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6962,7 +6992,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "revenue",
@@ -6973,7 +7003,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "settings",
@@ -6984,7 +7014,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "setup",
@@ -6995,7 +7025,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "stock",
@@ -7006,7 +7036,7 @@
       "apiPaths": [
         "/api/v1/stock/items/:param"
       ],
-      "upstream": "stock → /v1/stock/items/:param",
+      "upstream": "stock \u2192 /v1/stock/items/:param",
       "routeHandler": "/v1/stock/items/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7021,7 +7051,7 @@
       "apiPaths": [
         "/api/v1/stock/dashboard"
       ],
-      "upstream": "stock → /v1/stock/dashboard",
+      "upstream": "stock \u2192 /v1/stock/dashboard",
       "routeHandler": "/v1/stock/dashboard",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7036,7 +7066,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "stock",
@@ -7047,7 +7077,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "stock",
@@ -7058,7 +7088,7 @@
       "apiPaths": [
         "/api/v1/stock/ledger"
       ],
-      "upstream": "stock → /v1/stock/ledger",
+      "upstream": "stock \u2192 /v1/stock/ledger",
       "routeHandler": "/v1/stock/ledger",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7073,7 +7103,7 @@
       "apiPaths": [
         "/api/v1/stock/items"
       ],
-      "upstream": "stock → /v1/stock/items",
+      "upstream": "stock \u2192 /v1/stock/items",
       "routeHandler": "/v1/stock/items",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7088,7 +7118,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "telephony",
@@ -7099,7 +7129,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "telephony",
@@ -7110,7 +7140,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "telephony",
@@ -7121,7 +7151,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "telephony",
@@ -7132,7 +7162,7 @@
       "apiPaths": [
         "/api/v1/telephony/calls"
       ],
-      "upstream": "telephony → /v1/telephony/calls",
+      "upstream": "telephony \u2192 /v1/telephony/calls",
       "routeHandler": "/v1/telephony/calls",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7147,7 +7177,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7158,7 +7188,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7169,7 +7199,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7180,7 +7210,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7191,7 +7221,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7202,7 +7232,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7213,7 +7243,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7224,7 +7254,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7235,7 +7265,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7246,7 +7276,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7257,7 +7287,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7268,7 +7298,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant",
@@ -7279,7 +7309,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7290,7 +7320,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7301,7 +7331,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7312,7 +7342,7 @@
       "apiPaths": [
         "/api/v1/admin/api-keys"
       ],
-      "upstream": "admin → /v1/admin/api-keys",
+      "upstream": "admin \u2192 /v1/admin/api-keys",
       "routeHandler": "/v1/admin/api-keys",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7327,7 +7357,7 @@
       "apiPaths": [
         "/api/v1/audit/events"
       ],
-      "upstream": "audit → /v1/audit/events",
+      "upstream": "audit \u2192 /v1/audit/events",
       "routeHandler": "/v1/audit/events",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7342,7 +7372,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7353,7 +7383,7 @@
       "apiPaths": [
         "/api/v1/admin/breakglass"
       ],
-      "upstream": "admin → /v1/admin/breakglass",
+      "upstream": "admin \u2192 /v1/admin/breakglass",
       "routeHandler": "/v1/admin/breakglass",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7368,7 +7398,7 @@
       "apiPaths": [
         "/api/v1/admin/compliance"
       ],
-      "upstream": "admin → /v1/admin/compliance",
+      "upstream": "admin \u2192 /v1/admin/compliance",
       "routeHandler": "/v1/admin/compliance",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7383,7 +7413,7 @@
       "apiPaths": [
         "/api/v1/admin/data-exports"
       ],
-      "upstream": "admin → /v1/admin/data-exports",
+      "upstream": "admin \u2192 /v1/admin/data-exports",
       "routeHandler": "/v1/admin/data-exports",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7398,7 +7428,7 @@
       "apiPaths": [
         "/api/v1/admin/domains"
       ],
-      "upstream": "admin → /v1/admin/domains",
+      "upstream": "admin \u2192 /v1/admin/domains",
       "routeHandler": "/v1/admin/domains",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7413,7 +7443,7 @@
       "apiPaths": [
         "/api/v1/admin/idp/providers"
       ],
-      "upstream": "admin → /v1/admin/idp/providers",
+      "upstream": "admin \u2192 /v1/admin/idp/providers",
       "routeHandler": "/v1/admin/idp/providers",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7428,7 +7458,7 @@
       "apiPaths": [
         "/api/v1/install/steps"
       ],
-      "upstream": "install → /v1/install/steps",
+      "upstream": "install \u2192 /v1/install/steps",
       "routeHandler": "/v1/install/steps",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7443,7 +7473,7 @@
       "apiPaths": [
         "/api/v1/admin/mfa/users"
       ],
-      "upstream": "admin → /v1/admin/mfa/users",
+      "upstream": "admin \u2192 /v1/admin/mfa/users",
       "routeHandler": "/v1/admin/mfa/users",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7458,7 +7488,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7469,7 +7499,7 @@
       "apiPaths": [
         "/api/notification/preferences"
       ],
-      "upstream": "notification → /notifications/preferences",
+      "upstream": "notification \u2192 /notifications/preferences",
       "routeHandler": "/notifications/preferences",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7484,7 +7514,7 @@
       "apiPaths": [
         "/api/v1/admin/operations"
       ],
-      "upstream": "admin → /v1/admin/operations",
+      "upstream": "admin \u2192 /v1/admin/operations",
       "routeHandler": "/v1/admin/operations",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7499,7 +7529,7 @@
       "apiPaths": [
         "/api/v1/admin/org-hierarchy"
       ],
-      "upstream": "admin → /v1/admin/org-hierarchy",
+      "upstream": "admin \u2192 /v1/admin/org-hierarchy",
       "routeHandler": "/v1/admin/org-hierarchy",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7514,7 +7544,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7525,7 +7555,7 @@
       "apiPaths": [
         "/api/v1/admin/health"
       ],
-      "upstream": "admin → /v1/admin/health",
+      "upstream": "admin \u2192 /v1/admin/health",
       "routeHandler": "/v1/admin/health",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7540,7 +7570,7 @@
       "apiPaths": [
         "/api/v1/billing/plans"
       ],
-      "upstream": "billing → /v1/billing/plans",
+      "upstream": "billing \u2192 /v1/billing/plans",
       "routeHandler": "/v1/billing/plans",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7555,7 +7585,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7566,7 +7596,7 @@
       "apiPaths": [
         "/api/v1/admin/health"
       ],
-      "upstream": "admin → /v1/admin/health",
+      "upstream": "admin \u2192 /v1/admin/health",
       "routeHandler": "/v1/admin/health",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7581,7 +7611,7 @@
       "apiPaths": [
         "/api/policy/roles/:param"
       ],
-      "upstream": "policy → /policy/roles/:param",
+      "upstream": "policy \u2192 /policy/roles/:param",
       "routeHandler": "/policy/roles/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7596,7 +7626,7 @@
       "apiPaths": [
         "/api/policy/roles"
       ],
-      "upstream": "policy → /policy/roles",
+      "upstream": "policy \u2192 /policy/roles",
       "routeHandler": "/policy/roles",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7611,7 +7641,7 @@
       "apiPaths": [
         "/api/v1/admin/security/overview"
       ],
-      "upstream": "admin → /v1/admin/security/overview",
+      "upstream": "admin \u2192 /v1/admin/security/overview",
       "routeHandler": "/v1/admin/security/overview",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7626,7 +7656,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "tenant-admin",
@@ -7637,7 +7667,7 @@
       "apiPaths": [
         "/api/identity/sessions"
       ],
-      "upstream": "identity → /identity/sessions",
+      "upstream": "identity \u2192 /identity/sessions",
       "routeHandler": "/identity/sessions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7652,7 +7682,7 @@
       "apiPaths": [
         "/api/v1/admin/tenant/modules"
       ],
-      "upstream": "admin → /v1/admin/tenant/modules",
+      "upstream": "admin \u2192 /v1/admin/tenant/modules",
       "routeHandler": "/v1/admin/tenant/modules",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7667,7 +7697,7 @@
       "apiPaths": [
         "/api/v1/admin/siem/alerts"
       ],
-      "upstream": "admin → /v1/admin/siem/alerts",
+      "upstream": "admin \u2192 /v1/admin/siem/alerts",
       "routeHandler": "/v1/admin/siem/alerts",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7682,7 +7712,7 @@
       "apiPaths": [
         "/api/v1/admin/sso/providers"
       ],
-      "upstream": "admin → /v1/admin/sso/providers",
+      "upstream": "admin \u2192 /v1/admin/sso/providers",
       "routeHandler": "/v1/admin/sso/providers",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7697,7 +7727,7 @@
       "apiPaths": [
         "/api/v1/billing/subscriptions"
       ],
-      "upstream": "billing → /v1/billing/subscriptions",
+      "upstream": "billing \u2192 /v1/billing/subscriptions",
       "routeHandler": "/v1/billing/subscriptions",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7712,7 +7742,7 @@
       "apiPaths": [
         "/api/v1/admin/usage"
       ],
-      "upstream": "admin → /v1/admin/usage",
+      "upstream": "admin \u2192 /v1/admin/usage",
       "routeHandler": "/v1/admin/usage",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7727,7 +7757,7 @@
       "apiPaths": [
         "/api/identity/users/:param"
       ],
-      "upstream": "identity → /identity/users/:param",
+      "upstream": "identity \u2192 /identity/users/:param",
       "routeHandler": "/identity/users/:id",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7742,7 +7772,7 @@
       "apiPaths": [
         "/api/identity/users"
       ],
-      "upstream": "identity → /identity/users",
+      "upstream": "identity \u2192 /identity/users",
       "routeHandler": "/identity/users",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7757,7 +7787,7 @@
       "apiPaths": [
         "/api/v1/admin/webhooks"
       ],
-      "upstream": "admin → /v1/admin/webhooks",
+      "upstream": "admin \u2192 /v1/admin/webhooks",
       "routeHandler": "/v1/admin/webhooks",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7772,7 +7802,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "themes",
@@ -7783,7 +7813,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "themes",
@@ -7794,7 +7824,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "themes",
@@ -7805,7 +7835,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "themes",
@@ -7816,7 +7846,7 @@
       "apiPaths": [
         "/api/v1/themes/tokens"
       ],
-      "upstream": "theme → /v1/themes/tokens",
+      "upstream": "theme \u2192 /v1/themes/tokens",
       "routeHandler": "/v1/themes/tokens",
       "tablesPresent": true,
       "status": "WIRED",
@@ -7831,7 +7861,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "visitor",
@@ -7842,7 +7872,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "visitor",
@@ -7853,7 +7883,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "visitor",
@@ -7864,7 +7894,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7875,7 +7905,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7886,7 +7916,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7897,7 +7927,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7908,7 +7938,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7919,7 +7949,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7930,7 +7960,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "workflow",
@@ -7941,7 +7971,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -7952,7 +7982,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -7963,7 +7993,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -7974,7 +8004,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -7985,7 +8015,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -7996,7 +8026,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -8007,7 +8037,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -8018,7 +8048,7 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     },
     {
       "module": "works",
@@ -8029,11 +8059,11 @@
       "routeHandler": null,
       "tablesPresent": null,
       "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "detail": "navigation hub \u2014 no data loader"
     }
   ],
   "counts": {
-    "wired": 212,
+    "wired": 214,
     "missing": 0,
     "mismatch": 0,
     "noLoader": 441

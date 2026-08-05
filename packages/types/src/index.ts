@@ -275,6 +275,48 @@ export interface CRMForecast {
   stages: CRMForecastStage[];
 }
 
+/**
+ * Money and return figures for a campaign or one of its reporting periods (P1-6).
+ * Every money field is bigint minor units (paise) carried as a string, and ROI is
+ * an integer basis-point string — never a float, because a percentage double
+ * silently rounds crore-scale paise.
+ */
+export interface CRMCampaignRoiFigures {
+  costMinor: string;
+  revenueMinor: string;
+  /** revenue - cost; negative when the campaign lost money. */
+  netMinor: string;
+  responses: number;
+  /** Basis points (1 bp = 0.01%), or null when no spend was recorded. */
+  roiBasisPoints: string | null;
+  /** Basis points rendered to two decimals, or null when ROI is undefined. */
+  roiPercent: string | null;
+  costPerResponseMinor: string | null;
+}
+
+/** One campaign's aggregated performance across all its reporting periods. */
+export interface CRMCampaignRoiSummaryRow extends CRMCampaignRoiFigures {
+  campaignId: string;
+  currency: string;
+  /** How many reporting periods were folded into these figures. */
+  periods: number;
+}
+
+/** One reporting period's performance within a campaign. */
+export interface CRMCampaignRoiPeriod extends CRMCampaignRoiFigures {
+  periodStart: string | null;
+  /** Null for an open-ended period that is still running. */
+  periodEnd: string | null;
+}
+
+/** A campaign's totals plus its per-period breakdown. */
+export interface CRMCampaignRoi extends CRMCampaignRoiFigures {
+  campaignId: string;
+  currency: string;
+  periods: CRMCampaignRoiPeriod[];
+}
+
+
 /** A recurring subject in customer interactions, with how often it turned sour. */
 export interface CRMVocTheme {
   theme: string;
