@@ -10,6 +10,7 @@ import { schema as automationModule } from "../modules/automation/schema.js";
 import { schema as slaModule } from "../modules/sla/schema.js";
 import { schema as catalogueModule } from "../modules/catalogue/schema.js";
 import { savedViewsSchema } from "../modules/tickets/views-schema.js";
+import { knowledgeSchema } from "../modules/knowledge/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -18,6 +19,7 @@ const SCHEMA = {
   ...slaModule,
   ...catalogueModule,
   ...savedViewsSchema,
+  ...knowledgeSchema,
   ...outboxSchema,
 };
 
