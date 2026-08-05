@@ -24,6 +24,8 @@ import { emailModuleSchema } from "../modules/email/schema.js";
 import { experimentsModuleSchema } from "../modules/experiments/schema.js";
 import { pushModuleSchema } from "../modules/push/schema.js";
 import { bouncesModuleSchema } from "../modules/bounces/schema.js";
+import { dltModuleSchema } from "../modules/dlt/schema.js";
+import { quotaModuleSchema } from "../modules/channels/quota-schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -46,6 +48,8 @@ const SCHEMA = {
   ...experimentsModuleSchema,
   ...pushModuleSchema,
   ...bouncesModuleSchema,
+  ...dltModuleSchema,
+  ...quotaModuleSchema,
   ...outboxSchema,
 };
 

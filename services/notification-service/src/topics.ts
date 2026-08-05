@@ -69,6 +69,8 @@ export const COMMANDS = {
   recordComplaint:        "notification.complaint.record",
   // F.5: Human handoff — AI pause/resume protocol
   transitionHandoff:      "notification.inbox.handoff.transition",
+  // G7: Channel usage metering → billing
+  recordChannelUsage:     "notification.channel.usage",
 } as const;
 
 export const EVENTS = {
@@ -270,6 +272,16 @@ export const EVENTS = {
    * reads to decide whether it may reply.
    */
   handoffStateChanged:     "notification.inbox.handoff.state_changed",
+
+  /* ---- G7: channel usage metering → billing ----------------------------- */
+  /**
+   * A message was successfully delivered on a channel. Consumed by billing-service
+   * to record usage and enforce quotas.
+   * Payload: `{ tenantId: string; channel: string; messageId: string;
+   *            deliveredAt: string; unitCount: number }`
+   * Fires: once per successful delivery, after the delivery row is committed.
+   */
+  channelUsage:            "notification.channel.usage",
 } as const;
 
 /** Events consumed from other services — triggers user notifications. */

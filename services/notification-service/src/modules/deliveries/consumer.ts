@@ -25,6 +25,9 @@ import {
 import { asUserUuid, loadConsentSignals } from "./consent-gate-io.js";
 import { fetchMarketingConsent, type ConsentLookup } from "./crm-consent-client.js";
 import { syncCampaignRecipientOutcome } from "../bulk/repo.js";
+import { requiresDlt, checkDlt } from "../dlt/guard.js";
+import { checkQuota } from "../channels/quota-guard.js";
+import * as quotaRepo from "../channels/quota-repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -232,6 +235,42 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     }
 
     const body = inlineBody ?? template?.body ?? "(no template body)";
+
+    // G8: DLT validation — reject SMS/WhatsApp without a matching registered template
+    const sendChannel = consentedChannels[0] ?? preferred;
+    if (requiresDlt(sendChannel)) {
+      const dltResult = await checkDlt(msg.tenantId, sendChannel, body);
+      if (!dltResult.passed) {
+        await repo.updateDeliveryStatus(tx, deliveryId, "failed", msg.actorId, retryCount + 1, undefined, "DLT_TEMPLATE_NOT_REGISTERED", "DLT_TEMPLATE_NOT_REGISTERED");
+        await mirrorCampaignOutcome(tx, msg, recipientId, "failed", deliveryId);
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
+          actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId,
+            outcome: "rejected", reason: "DLT_TEMPLATE_NOT_REGISTERED", channel: sendChannel,
+          },
+        });
+        return;
+      }
+    }
+
+    // G7: Quota enforcement — reject if tenant's channel quota is exhausted
+    const quotaResult = await checkQuota(msg.tenantId, sendChannel);
+    if (!quotaResult.passed) {
+      await repo.updateDeliveryStatus(tx, deliveryId, "failed", msg.actorId, retryCount + 1, undefined, "CHANNEL_QUOTA_EXHAUSTED", "CHANNEL_QUOTA_EXHAUSTED");
+      await mirrorCampaignOutcome(tx, msg, recipientId, "failed", deliveryId);
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId,
+        actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "send", resourceType: "delivery", resourceId: deliveryId,
+          outcome: "rejected", reason: "CHANNEL_QUOTA_EXHAUSTED", channel: sendChannel,
+        },
+      });
+      return;
+    }
+
     const sendResult = await sendWithFallback(consentedChannels, {
       recipient: effectiveRecipient,
       subject: template?.subject ?? inlineSubject ?? null,
@@ -280,6 +319,24 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
 
     await repo.updateDeliveryStatus(tx, deliveryId, "delivered", msg.actorId, retryCount + 2, new Date(), undefined, undefined, sendResult.channel);
     await mirrorCampaignOutcome(tx, msg, recipientId, "delivered", deliveryId);
+
+    // G7: Increment quota counter on actual delivery (not on dispatch)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    await quotaRepo.incrementUsed(tx, msg.tenantId, sendResult.channel ?? sendChannel, todayStr);
+
+    // G7: Emit usage event → billing-service
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: EVENTS.channelUsage, eventType: EVENTS.channelUsage, tenantId: msg.tenantId,
+      actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: {
+        tenantId: msg.tenantId,
+        channel: sendResult.channel ?? sendChannel,
+        messageId: deliveryId,
+        deliveredAt: new Date().toISOString(),
+        unitCount: 1,
+      },
+    });
+
     await enqueue(tx as Parameters<typeof enqueue>[0], {
       topic: EVENTS.delivered, eventType: EVENTS.delivered, tenantId: msg.tenantId,
       actorId: msg.actorId, correlationId: msg.correlationId,
