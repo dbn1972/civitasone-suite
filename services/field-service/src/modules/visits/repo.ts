@@ -94,3 +94,22 @@ export async function update(
     .returning({ id: visits.id });
   return result.length > 0;
 }
+
+/** Recent visits for the tenant, newest check-in first (P1-10 FE list). */
+export async function listRecent(
+  tenantId: string,
+  limit: number,
+  offset: number,
+): Promise<{ rows: VisitRow[]; total: number }> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(visits)
+      .where(eq(visits.tenantId, tenantId))
+      .orderBy(desc(visits.checkInAt))
+      .limit(limit)
+      .offset(offset),
+  );
+  const counted = await scopedRead((tx) =>
+    tx.select({ total: sql<number>`count(*)::int` }).from(visits).where(eq(visits.tenantId, tenantId)),
+  );
+  return { rows, total: counted[0]?.total ?? 0 };
+}
