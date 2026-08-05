@@ -355,6 +355,46 @@ export const crmVocSummarySchema = z.object({
   }),
 });
 
+/**
+ * Campaign ROI (P1-6). crm-service serialises every money figure as a bigint
+ * paise string and ROI as basis points, so the schema keeps them as strings —
+ * coercing to number here would reintroduce the float rounding the service
+ * deliberately avoids.
+ */
+const crmCampaignRoiFiguresSchema = z.object({
+  costMinor: z.string(),
+  revenueMinor: z.string(),
+  netMinor: z.string(),
+  responses: z.number().int(),
+  roiBasisPoints: z.string().nullable(),
+  roiPercent: z.string().nullable(),
+  costPerResponseMinor: z.string().nullable(),
+});
+
+export const crmCampaignRoiSummarySchema = z.object({
+  data: z.array(
+    crmCampaignRoiFiguresSchema.extend({
+      campaignId: z.string(),
+      currency: z.string(),
+      periods: z.number().int(),
+    }),
+  ),
+});
+
+export const crmCampaignRoiSchema = z.object({
+  data: crmCampaignRoiFiguresSchema.extend({
+    campaignId: z.string(),
+    currency: z.string(),
+    periods: z.array(
+      crmCampaignRoiFiguresSchema.extend({
+        periodStart: z.string().nullable(),
+        periodEnd: z.string().nullable(),
+      }),
+    ),
+  }),
+});
+
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });

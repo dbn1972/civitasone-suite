@@ -13,6 +13,8 @@ import type {
   CRMContactSummary,
   CRMDealSummary,
   CRMDashboard,
+  CRMCampaignRoi,
+  CRMCampaignRoiSummaryRow,
   CRMForecast,
   CRMVocSummary,
   AccountHealthEntry,
@@ -182,6 +184,8 @@ import {
   crmActivitiesListSchema,
   crmForecastSchema,
   crmVocSummarySchema,
+  crmCampaignRoiSchema,
+  crmCampaignRoiSummarySchema,
   accountHealthWatchlistSchema,
   accountHealthBreakdownSchema,
   copilotTurnsListSchema,
@@ -2559,6 +2563,37 @@ export async function getCrmSentimentSummary(
       truncated: payload.data.truncated,
     }),
   });
+}
+
+
+/**
+ * Campaign ROI across every campaign with recorded performance (P1-6).
+ */
+export async function getCrmCampaignRoiSummary(): Promise<LoaderResult<CRMCampaignRoiSummaryRow[]>> {
+  return fetchJson("/api/v1/crm/campaigns/roi-summary?limit=200", [] as CRMCampaignRoiSummaryRow[], {
+    revalidateSeconds: 60,
+    telemetryKey: "crm.campaign.roi_summary",
+    responseSchema: crmCampaignRoiSummarySchema,
+    mapResponse: (payload) => payload.data,
+  });
+}
+
+/**
+ * One campaign's totals and per-period breakdown. Returns null when the campaign
+ * has no performance rows — the service answers 404 there, which is an expected
+ * state for a campaign nobody has costed yet, not a failure.
+ */
+export async function getCrmCampaignRoi(id: string): Promise<LoaderResult<CRMCampaignRoi | null>> {
+  return fetchJson(
+    `/api/v1/crm/campaigns/${encodeURIComponent(id)}/roi`,
+    null as CRMCampaignRoi | null,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "crm.campaign.roi",
+      responseSchema: crmCampaignRoiSchema,
+      mapResponse: (payload) => payload.data,
+    },
+  );
 }
 
 export async function getContactById(id: string): Promise<LoaderResult<ContactDetail | null>> {

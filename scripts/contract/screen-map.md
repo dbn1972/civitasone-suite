@@ -659,3 +659,5 @@ Generated: 2026-08-03T20:12:05.836Z
 | works | /works | — | — | — | — | — | — NO_LOADER |
 | works | /works/proposals | — | — | — | — | — | — NO_LOADER |
 | works | /works/tenders | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/campaigns/[id] | getCrmCampaignRoi | /api/v1/crm/campaigns/:param/roi | crm → /v1/crm/campaigns/:param/roi | ✓ `/v1/crm/campaigns/:id/roi` | ✓ | ✅ WIRED |
+| crm | /crm/campaigns | getCrmCampaignRoiSummary | /api/v1/crm/campaigns/roi-summary | crm → /v1/crm/campaigns/roi-summary | ✓ `/v1/crm/campaigns/roi-summary` | ✓ | ✅ WIRED |
