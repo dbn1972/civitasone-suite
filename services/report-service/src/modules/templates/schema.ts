@@ -20,6 +20,8 @@ export const reportTemplates = domainSchema.table("report_templates", {
   groups: jsonb("groups").notNull().default([]),
   aggregations: jsonb("aggregations").notNull().default([]),
   parameters: jsonb("parameters").notNull().default([]),
+  formulas: jsonb("formulas").notNull().default([]),
+  chartConfig: jsonb("chart_config"),
   outputFormat: varchar("output_format", { length: 8 }).notNull().default("pdf"),
   status: varchar("status", { length: 16 }).notNull().default("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -61,6 +63,23 @@ export interface TemplateParameter {
   options?: string[];
 }
 
+/** Formula (computed column) definition stored in the formulas JSONB column */
+export interface TemplateFormula {
+  name: string;
+  expression: string;
+  type: "number" | "percentage" | "currency";
+}
+
+/** Chart configuration stored in the chart_config JSONB column */
+export interface TemplateChartConfig {
+  type: "bar" | "line" | "pie" | "area" | "scatter" | "funnel" | "table";
+  xAxis?: string;
+  yAxis?: string;
+  series?: string[];
+  colorScheme?: string;
+  stacked?: boolean;
+}
+
 export interface TemplateView {
   id: string;
   tenantId: string;
@@ -71,6 +90,8 @@ export interface TemplateView {
   groups: TemplateGroup[];
   aggregations: TemplateAggregation[];
   parameters: TemplateParameter[];
+  formulas: TemplateFormula[];
+  chartConfig: TemplateChartConfig | null;
   outputFormat: string;
   status: string;
   version: number;
