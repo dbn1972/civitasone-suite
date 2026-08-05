@@ -88,7 +88,7 @@ const AWS_ENV = {
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
   // Shared LocalStack: shorter long-poll frees sockets for outbox SendMessage.
   // Production AWS can override / unset (code default remains 20).
-  SQS_WAIT_TIME_SECONDS: process.env.SQS_WAIT_TIME_SECONDS ?? "5",
+  SQS_WAIT_TIME_SECONDS: process.env.SQS_WAIT_TIME_SECONDS ?? "2",
   SQS_MAX_SOCKETS: process.env.SQS_MAX_SOCKETS ?? "512",
 };
 
