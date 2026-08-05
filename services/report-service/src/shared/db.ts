@@ -8,6 +8,7 @@ import { createTenantDb, runWithTenant } from "@civitasone/db";
 import { schema as jobsModule } from "../modules/jobs/schema.js";
 import { schema as kpisModule } from "../modules/kpis/schema.js";
 import { schema as templatesModule } from "../modules/templates/schema.js";
+import { schema as metricsModule } from "../modules/metrics/schema.js";
 import { scheduledReportsSchema } from "../modules/scheduled/schema.js";
 import { outboxSchema } from "./outbox.js";
 
@@ -15,6 +16,7 @@ const SCHEMA = {
   ...jobsModule,
   ...kpisModule,
   ...templatesModule,
+  ...metricsModule,
   ...scheduledReportsSchema,
   ...outboxSchema,
 };
