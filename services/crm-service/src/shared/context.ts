@@ -4,8 +4,10 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  public details?: unknown;
+  constructor(public status: number, public code: string, message: string, details?: unknown) {
     super(message);
+    if (details !== undefined) this.details = details;
   }
 }
 

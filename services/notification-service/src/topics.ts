@@ -130,6 +130,8 @@ export const EVENTS = {
   deliveryForwardedToCrm: "notification.delivery.forwarded_to_crm",
   // CH-07: Inbound Messages
   inboundLeadCreated:     "notification.inbox.lead_created",
+  /** CH-07: emitted when an inbound message cannot be matched to a CRM contact */
+  contactReviewNeeded:    "notification.contact.review_needed",
   // CH-09: Convert Conversation to Ticket
   convertedToTicket:      "notification.inbox.converted_to_ticket",
   // INT-04: Inbox-Ticket Correlation

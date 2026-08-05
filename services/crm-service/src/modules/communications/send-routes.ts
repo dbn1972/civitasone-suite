@@ -21,6 +21,47 @@ import { COMMANDS } from "../../topics.js";
 import * as sendCommands from "./send-commands.js";
 import { sendCommunicationBody, bulkSendCommunicationBody } from "./send-validators.js";
 import { getApprovalThreshold } from "./campaign-approval-routes.js";
+import { extractVariables } from "./template-preview-routes.js";
+
+const NOTIFICATION_BASE = process.env.NOTIFICATION_SERVICE_URL ?? "http://localhost:3006";
+const HTTP_TIMEOUT_MS = Number(process.env.CROSS_SERVICE_TIMEOUT_MS ?? 10_000);
+
+/**
+ * CH-04: Fetch template body from notification-service and validate that all
+ * mandatory variables are provided in the caller's `variables` field.
+ * Returns missing variable names if validation fails.
+ */
+async function validateTemplateVariables(
+  templateId: string,
+  suppliedVars: Record<string, string> | undefined,
+): Promise<string[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${NOTIFICATION_BASE}/notifications/templates/${templateId}`, {
+      signal: controller.signal,
+      headers: { "content-type": "application/json" },
+    });
+    if (!res.ok) {
+      // Graceful degradation: if notification-service is down, skip validation
+      if (res.status === 404) throw new HttpError(404, "TEMPLATE_NOT_FOUND", "template not found");
+      return [];
+    }
+    const json = await res.json() as { data?: { body?: string }; body?: string };
+    const body = json.data?.body ?? json.body;
+    if (!body) return [];
+
+    const mandatory = extractVariables(body);
+    const provided = new Set(Object.keys(suppliedVars ?? {}));
+    return mandatory.filter((v) => !provided.has(v));
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    // Network failure — fail open so sends aren't blocked when notification-service is unreachable
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 const CRM_SEND_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const BULK_SEND_ROLES = ["crm_admin", "super_admin"];
@@ -72,6 +113,12 @@ export async function sendRoutes(app: FastifyInstance): Promise<void> {
     // Consent check
     if (!contact.marketingConsent) {
       throw new HttpError(422, "CONSENT_REQUIRED", "contact has not granted marketing consent");
+    }
+
+    // CH-04: validate template variables before publishing the send command
+    const missingVars = await validateTemplateVariables(body.templateId, body.variables);
+    if (missingVars.length > 0) {
+      return reply.code(422).send({ code: "MISSING_TEMPLATE_VARIABLES", missingVars });
     }
 
     const id = commandId(ctx, `${COMMANDS.sendCommunication}:${body.recipientContactId}:${body.templateId}`);
