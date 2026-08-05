@@ -16,7 +16,7 @@
  */
 import { pgSchema, uuid, varchar, jsonb, timestamp } from "drizzle-orm/pg-core";
 import type { PgDatabase } from "drizzle-orm/pg-core";
-import { and, eq, isNull, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
@@ -113,7 +113,12 @@ export async function relayOnce(
   service = process.env.SERVICE_NAME ?? "service",
   concurrency = resolveRelayConcurrency(),
 ): Promise<number> {
-  const rows = await db.select().from(outboxMessages).where(isNull(outboxMessages.publishedAt)).limit(batch);
+  const rows = await db
+    .select()
+    .from(outboxMessages)
+    .where(isNull(outboxMessages.publishedAt))
+    .orderBy(asc(outboxMessages.createdAt))
+    .limit(batch);
   if (rows.length === 0) return 0;
 
   const succeededIds: string[] = [];

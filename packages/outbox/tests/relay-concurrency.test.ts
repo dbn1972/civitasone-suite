@@ -75,7 +75,7 @@ function makeDb(rows: Row[]): { db: DrizzleTx; updateCalls: () => number } {
   let updateCalls = 0;
   const db = {
     select() {
-      return { from() { return { where() { return { limit: async () => rows }; } }; } };
+      return { from() { return { where() { return { orderBy() { return { limit: async () => rows }; } }; } }; } };
     },
     update() {
       updateCalls++;
