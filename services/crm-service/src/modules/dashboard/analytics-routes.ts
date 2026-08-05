@@ -38,6 +38,10 @@ const conversionFunnelQuery = z.object({
   period: periodEnum,
   source: z.string().max(64).optional(),
   ownerId: optionalUuid,
+  campaign: z.string().max(128).optional(),
+  product: z.string().max(160).optional(),
+  geography: z.string().max(100).optional(),
+  segment: z.string().max(64).optional(),
 });
 
 // ── Gap 7: Won/lost analysis ──
@@ -203,9 +207,14 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
           count(*)::int AS count
         FROM crm.lead_transitions lt
         INNER JOIN crm.contacts c ON c.id = lt.contact_id AND c.tenant_id = lt.tenant_id
+        LEFT JOIN crm.deals d ON d.contact_id = c.id AND d.tenant_id = c.tenant_id
         WHERE lt.tenant_id = ${ctx.tenantId}
           ${q.source ? sql`AND c.lead_source = ${q.source}` : sql``}
           ${q.ownerId ? sql`AND c.owner_id = ${q.ownerId}` : sql``}
+          ${q.campaign ? sql`AND c.utm_campaign = ${q.campaign}` : sql``}
+          ${q.product ? sql`AND d.product = ${q.product}` : sql``}
+          ${q.geography ? sql`AND c.city = ${q.geography}` : sql``}
+          ${q.segment ? sql`AND c.lead_status = ${q.segment}` : sql``}
         GROUP BY 1, 2, 3
         ORDER BY 1 DESC, count DESC
       `) as unknown as Array<{
@@ -221,10 +230,15 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
           date_trunc(${trunc}, c.created_at)::text AS period,
           count(*)::int AS total
         FROM crm.contacts c
+        LEFT JOIN crm.deals d ON d.contact_id = c.id AND d.tenant_id = c.tenant_id
         WHERE c.tenant_id = ${ctx.tenantId}
           AND c.lead_status IS NOT NULL
           ${q.source ? sql`AND c.lead_source = ${q.source}` : sql``}
           ${q.ownerId ? sql`AND c.owner_id = ${q.ownerId}` : sql``}
+          ${q.campaign ? sql`AND c.utm_campaign = ${q.campaign}` : sql``}
+          ${q.product ? sql`AND d.product = ${q.product}` : sql``}
+          ${q.geography ? sql`AND c.city = ${q.geography}` : sql``}
+          ${q.segment ? sql`AND c.lead_status = ${q.segment}` : sql``}
         GROUP BY 1
       `) as unknown as Array<{ period: string; total: number }>;
 
