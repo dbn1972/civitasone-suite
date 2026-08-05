@@ -439,6 +439,25 @@ export const cdpProfileEventListSchema = z.object({
   })),
 });
 
+export const crmLeadCaptureFormSchema = z.object({
+  data: z.array(z.object({
+    id: z.string(),
+    tenantId: z.string(),
+    formKey: z.string(),
+    name: z.string(),
+    enabled: z.boolean(),
+    requireConsent: z.boolean(),
+    allowedOrigins: z.array(z.string()),
+    defaultLeadSource: z.string().nullable(),
+    campaignId: z.string().nullable(),
+    maxPerMinute: z.number().int(),
+    version: z.number().int(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })),
+});
+
+
 export const crmContactsListSchema = paginatedSchema(crmContactApiSchema);
 export const crmAccountsListSchema = z.object({ data: z.array(crmAccountApiSchema) });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });

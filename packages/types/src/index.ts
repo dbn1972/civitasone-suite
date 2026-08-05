@@ -360,6 +360,24 @@ export interface CDPProfileEvent {
   occurredAt: string;
 }
 
+/** Admin view of a public website lead-capture form (P1-7 / LM-002). */
+export interface CRMLeadCaptureForm {
+  id: string;
+  tenantId: string;
+  formKey: string;
+  name: string;
+  enabled: boolean;
+  requireConsent: boolean;
+  allowedOrigins: string[];
+  defaultLeadSource: string | null;
+  campaignId: string | null;
+  maxPerMinute: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 /** A recurring subject in customer interactions, with how often it turned sour. */
 export interface CRMVocTheme {
