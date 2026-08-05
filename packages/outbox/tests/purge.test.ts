@@ -152,7 +152,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     // Crossing the 60-minute mark triggers exactly one purge cycle
     // (outbox loop + inbox loop = 2 execute calls; deleted !== 0 so no count check).
     await vi.advanceTimersByTimeAsync(1);
-    expect(executeSpy).toHaveBeenCalledTimes(0); // first batch already returns 0 rows on both tables
+    expect(executeSpy).toHaveBeenCalledTimes(2); // outbox delete loop + inbox delete loop; both return 0 rows so each loop stops after one call, and deleted===0 with no logger means no count query
     clearInterval(timer);
   });
 
