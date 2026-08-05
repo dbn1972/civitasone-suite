@@ -75,7 +75,7 @@ describe("CM-004 contact 360", () => {
     expect(d.contact.score).toBe(72);
     expect(d.consent.marketingConsent).toBe(true);
     expect(d.activities.length).toBe(1);
-    expect(d.communications.length).toBe(1);
+    expect(d.localCommunications.length).toBe(1);
     expect(d.deals.length).toBe(1);
     expect(d.addresses.length).toBe(1);
     expect(d.contactRoles.length).toBe(1);

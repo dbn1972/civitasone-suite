@@ -53,6 +53,7 @@ import { addressRoutes } from "./modules/addresses/routes.js";
 import { accountRelationshipRoutes } from "./modules/accounts/relationships-routes.js";
 import { integrationRoutes } from "./modules/integrations/routes.js";
 import { threeSixtyRoutes } from "./modules/contacts/three-sixty-routes.js";
+import { timelineRoutes } from "./modules/contacts/timeline-routes.js";
 import { taskEscalationRuleRoutes } from "./modules/activities/task-escalation-routes.js";
 import { stageLimitRoutes } from "./modules/deals/stage-limits-routes.js";
 import { productRoutes } from "./modules/products/routes.js";
@@ -152,6 +153,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(accountRelationshipRoutes);
   await app.register(integrationRoutes);
   await app.register(threeSixtyRoutes);
+  // G6: Unified customer timeline aggregating CRM-local + cross-service data
+  await app.register(timelineRoutes);
   await app.register(taskEscalationRuleRoutes);
   // ── OP/QP: opportunity + product/pricing/quotation surfaces ──
   await app.register(stageLimitRoutes);
