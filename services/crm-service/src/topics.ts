@@ -218,6 +218,13 @@ export const COMMANDS = {
   verifyDocument: "crm.document.verify",
   /** DM-001 internal (service-secret gated) malware scan result -> sets scan_status. */
   recordDocumentScan: "crm.document.scan_result",
+  // ── Gap 2: Campaign approval workflow ──
+  /** Submit a bulk campaign for approval when it exceeds the threshold. */
+  submitCampaignForApproval: "crm.campaign.submit_for_approval",
+  /** Approve a pending campaign — triggers actual bulk send. */
+  approveCampaign: "crm.campaign.approve",
+  /** Reject a pending campaign with optional reason. */
+  rejectCampaign: "crm.campaign.reject",
 } as const;
 
 export const EVENTS = {
