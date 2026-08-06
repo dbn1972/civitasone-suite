@@ -11,6 +11,19 @@ export async function findApplicationById(id: string, tenantId: string): Promise
   return rows[0] ?? null;
 }
 
+export async function listApplicationsByTenant(
+  tenantId: string,
+  jobOpeningId?: string,
+  limit = 200,
+): Promise<ApplicationRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsApplications)
+    .where(jobOpeningId
+      ? and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.jobOpeningId, jobOpeningId))
+      : eq(hrmsApplications.tenantId, tenantId))
+    .orderBy(desc(hrmsApplications.createdAt))
+    .limit(limit));
+}
+
 export async function insertJobOpening(tx: Writer, row: typeof hrmsJobOpenings.$inferInsert): Promise<void> {
   await tx.insert(hrmsJobOpenings).values(row);
 }

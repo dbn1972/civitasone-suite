@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+/**
+ * /hr/recruitment/[id] — the recruitment list links VACANCY (job-opening) ids
+ * here, so this page is a vacancy-applications view: it lists the vacancy's
+ * applications and offers Hire on selected/offered ones. Deep links that carry
+ * an APPLICATION id still work — when no applications match the id as a
+ * vacancy, the page falls back to the single-application view.
+ */
+
+import { useCallback, useEffect, useId, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Application = {
@@ -13,16 +21,19 @@ type Application = {
   jobOpeningId: string;
 };
 
-export default function ApplicationDetailPage() {
+const HIREABLE_STAGES = new Set(["selected", "offered"]);
+
+export default function RecruitmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [application, setApplication] = useState<Application | null>(null);
+  const [applications, setApplications] = useState<Application[] | null>(null);
+  const [single, setSingle] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Hire dialog state
-  const [showHireDialog, setShowHireDialog] = useState(false);
+  const [hireTarget, setHireTarget] = useState<Application | null>(null);
   const [employeeNo, setEmployeeNo] = useState("");
   const [dateOfJoining, setDateOfJoining] = useState("");
   const [basicMinor, setBasicMinor] = useState(0);
@@ -40,27 +51,56 @@ export default function ApplicationDetailPage() {
   const typeId = useId();
   const statusMsgId = useId();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/proxy/v1/hrms/applications/${id}`);
-        if (!res.ok) {
-          setError(res.status === 404 ? "Application not found." : `Failed to load (${res.status})`);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // The id is normally a vacancy id — list its applications.
+      const listRes = await fetch(`/api/proxy/v1/hrms/applications?jobOpeningId=${encodeURIComponent(id)}`);
+      if (listRes.ok) {
+        const json = (await listRes.json()) as { data?: Application[] };
+        const rows = Array.isArray(json.data) ? json.data : [];
+        if (rows.length > 0) {
+          setApplications(rows);
+          setSingle(null);
           return;
         }
-        const data = await res.json();
-        setApplication(data.payload ?? data);
-      } catch {
-        setError("Network error loading application.");
-      } finally {
-        setLoading(false);
       }
+      // Fallback: a deep link straight to one application.
+      const oneRes = await fetch(`/api/proxy/v1/hrms/applications/${encodeURIComponent(id)}`);
+      if (oneRes.ok) {
+        const data = await oneRes.json();
+        setSingle((data.payload ?? data) as Application);
+        setApplications(null);
+        return;
+      }
+      if (listRes.ok) {
+        // Valid vacancy, no applications yet.
+        setApplications([]);
+        setSingle(null);
+        return;
+      }
+      setError(listRes.status === 404 || oneRes.status === 404 ? "Vacancy or application not found." : `Failed to load (${listRes.status})`);
+    } catch {
+      setError("Network error loading applications.");
+    } finally {
+      setLoading(false);
     }
-    load();
   }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function openHire(app: Application) {
+    setHireTarget(app);
+    setHireStatus("idle");
+    setHireMessage("");
+  }
 
   async function handleHire(e: React.FormEvent) {
     e.preventDefault();
+    if (!hireTarget) return;
     if (!employeeNo.trim() || !dateOfJoining || !departmentId.trim() || !designationId.trim()) {
       setHireStatus("error");
       setHireMessage("All fields are required.");
@@ -71,7 +111,7 @@ export default function ApplicationDetailPage() {
     setHireMessage("");
 
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/applications/${id}/hire`, {
+      const res = await fetch(`/api/proxy/v1/hrms/applications/${hireTarget.id}/hire`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -92,8 +132,9 @@ export default function ApplicationDetailPage() {
       }
 
       setHireStatus("success");
-      setHireMessage("Hire initiated successfully. Employee record is being created.");
-      setShowHireDialog(false);
+      setHireMessage(`Hire initiated for ${hireTarget.applicantName}. Employee record is being created.`);
+      setHireTarget(null);
+      await load();
       router.refresh();
     } catch (err) {
       setHireStatus("error");
@@ -104,12 +145,12 @@ export default function ApplicationDetailPage() {
   if (loading) {
     return (
       <main className="page-main" aria-labelledby="page-heading">
-        <p className="text-center text-slate-500 py-12">Loading application…</p>
+        <p className="text-center text-slate-500 py-12">Loading applications…</p>
       </main>
     );
   }
 
-  if (error || !application) {
+  if (error) {
     return (
       <main className="page-main" aria-labelledby="page-heading">
         <div className="mb-4">
@@ -118,13 +159,13 @@ export default function ApplicationDetailPage() {
           </button>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-center text-slate-400">{error ?? "Application not found."}</p>
+          <p className="text-center text-slate-400">{error}</p>
         </div>
       </main>
     );
   }
 
-  const canHire = application.stage === "selected" || application.stage === "offered";
+  const rows = single ? [single] : applications ?? [];
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -132,46 +173,50 @@ export default function ApplicationDetailPage() {
         <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline">
           ← Back to Recruitment
         </button>
-        {canHire && (
-          <button
-            onClick={() => setShowHireDialog(true)}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-          >
-            Hire
-          </button>
-        )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-3xl">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 id="page-heading" className="text-xl font-bold text-slate-800 mb-4">
-          {application.applicantName}
+          {single ? single.applicantName : "Applications"}
         </h1>
-        <div className="fields">
-          <div className="field">
-            <span className="lbl">Application ID</span>
-            <span className="val font-mono text-sm">{application.id}</span>
-          </div>
-          <div className="field">
-            <span className="lbl">Stage</span>
-            <span className="val capitalize">{application.stage}</span>
-          </div>
-          <div className="field">
-            <span className="lbl">Status</span>
-            <span className="val capitalize">{application.status}</span>
-          </div>
-          {application.email && (
-            <div className="field">
-              <span className="lbl">Email</span>
-              <span className="val">{application.email}</span>
-            </div>
-          )}
-          {application.mobile && (
-            <div className="field">
-              <span className="lbl">Mobile</span>
-              <span className="val">{application.mobile}</span>
-            </div>
-          )}
-        </div>
+
+        {rows.length === 0 ? (
+          <p className="text-center text-slate-400 py-8">
+            No applications received for this vacancy yet.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b border-slate-200">
+                <th className="py-2 pr-4">Applicant</th>
+                <th className="py-2 pr-4">Email</th>
+                <th className="py-2 pr-4">Stage</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2" aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.id} className="border-b border-slate-100">
+                  <td className="py-2 pr-4 font-medium text-slate-800">{a.applicantName}</td>
+                  <td className="py-2 pr-4 text-slate-600">{a.email ?? "—"}</td>
+                  <td className="py-2 pr-4 capitalize">{a.stage}</td>
+                  <td className="py-2 pr-4 capitalize">{a.status}</td>
+                  <td className="py-2 text-right">
+                    {HIREABLE_STAGES.has(a.stage) && (
+                      <button
+                        onClick={() => openHire(a)}
+                        className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                      >
+                        Hire
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {hireStatus === "success" && (
@@ -185,7 +230,7 @@ export default function ApplicationDetailPage() {
       )}
 
       {/* Hire Dialog */}
-      {showHireDialog && (
+      {hireTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           role="dialog"
@@ -194,7 +239,7 @@ export default function ApplicationDetailPage() {
         >
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 mx-4">
             <h2 id="hire-dialog-title" className="text-lg font-bold text-slate-800 mb-4">
-              Hire — {application.applicantName}
+              Hire — {hireTarget.applicantName}
             </h2>
             <form onSubmit={handleHire} className="space-y-4">
               <div>
@@ -299,7 +344,7 @@ export default function ApplicationDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowHireDialog(false)}
+                  onClick={() => setHireTarget(null)}
                   className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   Cancel

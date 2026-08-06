@@ -30,6 +30,47 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createJobOpening(ctx, body));
   });
 
+  // Applications register — the web vacancy page lists a vacancy's applications
+  // (?jobOpeningId=) and the hire dialog reads one application. PII kept
+  // minimal on the list; the detail (role-guarded) includes contact fields.
+  app.get("/v1/hrms/applications", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const jobOpeningId = (req.query as { jobOpeningId?: string }).jobOpeningId;
+    const rows = await repo.listApplicationsByTenant(ctx.tenantId, jobOpeningId, q.limit);
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        jobOpeningId: r.jobOpeningId,
+        applicantName: r.applicantName,
+        email: r.email,
+        stage: r.stage,
+        status: r.status,
+        createdAt: r.createdAt,
+      })),
+      meta: { total: rows.length },
+    });
+  });
+
+  app.get("/v1/hrms/applications/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const row = await repo.findApplicationById(id, ctx.tenantId);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "application not found");
+    return reply.send({
+      id: row.id,
+      jobOpeningId: row.jobOpeningId,
+      applicantName: row.applicantName,
+      email: row.email,
+      mobile: row.mobile,
+      stage: row.stage,
+      status: row.status,
+      createdAt: row.createdAt,
+    });
+  });
+
   app.post("/v1/hrms/applications", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
