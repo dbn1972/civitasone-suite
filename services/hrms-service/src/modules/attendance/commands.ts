@@ -33,6 +33,23 @@ export async function createRegularisation(ctx: RequestContext, body: Regularisa
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+export async function decideRegularisation(
+  ctx: RequestContext,
+  reg: { id: string; employeeId: string; date: string; requestedStatus: string },
+  decision: "approve" | "reject",
+  reason?: string,
+): Promise<AcceptedSingle> {
+  await queue.publish(COMMANDS.regularisationDecide, {
+    messageId: randomUUID(), type: COMMANDS.regularisationDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      id: reg.id, tenantId: ctx.tenantId, decision, reason: reason ?? null,
+      employeeId: reg.employeeId, date: reg.date, requestedStatus: reg.requestedStatus,
+    },
+  });
+  return { id: reg.id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 async function publishLockState(
   ctx: RequestContext, topic: string, body: PeriodLockBody, status: "locked" | "open",
 ): Promise<AcceptedSingle> {

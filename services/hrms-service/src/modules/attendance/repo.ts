@@ -47,6 +47,35 @@ export async function listRegularisationsByTenant(tenantId: string, limit = 100)
     .limit(limit));
 }
 
+export async function findRegularisationById(tenantId: string, id: string): Promise<RegularisationRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAttendanceRegularisations)
+    .where(and(
+      eq(hrmsAttendanceRegularisations.tenantId, tenantId),
+      eq(hrmsAttendanceRegularisations.id, id),
+    ))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+/** Pending-only status flip; returns false when the row was already decided or missing. */
+export async function setRegularisationStatus(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  status: string,
+  actorId: string,
+): Promise<boolean> {
+  const rows = await tx.update(hrmsAttendanceRegularisations)
+    .set({ status, updatedBy: actorId, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsAttendanceRegularisations.tenantId, tenantId),
+      eq(hrmsAttendanceRegularisations.id, id),
+      eq(hrmsAttendanceRegularisations.status, "pending"),
+    ))
+    .returning({ id: hrmsAttendanceRegularisations.id });
+  return rows.length > 0;
+}
+
 export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanceRegularisations.$inferInsert): Promise<void> {
   await tx.insert(hrmsAttendanceRegularisations).values(row);
 }

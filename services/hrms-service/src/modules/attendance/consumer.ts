@@ -90,4 +90,48 @@ export function registerAttendanceConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "attendance_reg", `list:100`));
   });
+
+  queue.subscribe(COMMANDS.regularisationDecide, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; decision: "approve" | "reject"; reason: string | null;
+      employeeId: string; date: string; requestedStatus: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Pending-only flip — a concurrent decision loses here and is audited as such.
+      const updated = await repo.setRegularisationStatus(
+        tx, p.tenantId, p.id, p.decision === "approve" ? "approved" : "rejected", msg.actorId,
+      );
+      if (updated && p.decision === "approve") {
+        // The requested status becomes the attendance of record for that day.
+        // Re-emitting the same hrms.attendance.marked event the mark flow uses
+        // carries the correction into payroll's LOP chain — a wrongly-marked
+        // absence already pushed to payroll is reversed, not left to stand.
+        await repo.upsertAttendance(tx, {
+          id: randomUUID(), tenantId: p.tenantId,
+          employeeId: p.employeeId, attendanceDate: p.date,
+          status: p.requestedStatus, inTime: null, outTime: null,
+          shiftId: null, lateMins: 0, source: "regularisation",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await enqueue(tx, {
+          topic: EVENTS.attendanceMarked, eventType: EVENTS.attendanceMarked,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { employeeId: p.employeeId, attendanceDate: p.date, status: p.requestedStatus },
+        });
+      }
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: `regularisation_${p.decision}`,
+          resourceType: "attendance_regularisation", resourceId: p.id,
+          outcome: updated ? "success" : "not_pending",
+          ...(p.reason ? { reason: p.reason } : {}),
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "attendance_reg", `list:100`));
+    await cache.invalidate(cache.makeKey(msg.tenantId, "attendance_emp_month", `${p.employeeId}:${p.date.slice(0, 7)}`));
+  });
 }

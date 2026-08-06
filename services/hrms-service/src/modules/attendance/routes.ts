@@ -4,7 +4,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
+import { markAttendanceBody, regularisationCreateBody, periodLockBody, regularisationDecisionParam, regularisationDecideBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -96,6 +96,34 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const body = regularisationCreateBody.parse(req.body);
     await assertPeriodsUnlocked(ctx.tenantId, [body.date]);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRegularisation(ctx, body));
+  });
+
+  app.post("/v1/hrms/attendance/regularisations/:id/:decision", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id, decision } = regularisationDecisionParam.parse(req.params);
+    const body = regularisationDecideBody.parse(req.body ?? {});
+    const reg = await repo.findRegularisationById(ctx.tenantId, id);
+    if (!reg) throw new HttpError(404, "NOT_FOUND", "regularisation not found");
+    if (reg.status !== "pending") {
+      throw new HttpError(422, "ALREADY_DECIDED", `regularisation is already ${reg.status}`);
+    }
+    // Separation of duties: the requester cannot decide their own request.
+    if (reg.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "the requester cannot approve or reject their own regularisation");
+    }
+    // Approval rewrites that day's attendance — refuse inside a locked payroll period.
+    if (decision === "approve") await assertPeriodsUnlocked(ctx.tenantId, [reg.date]);
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.decideRegularisation(
+        ctx,
+        { id: reg.id, employeeId: reg.employeeId, date: reg.date, requestedStatus: reg.requestedStatus },
+        decision,
+        body.reason,
+      ),
+    );
   });
 
   app.setErrorHandler(errorHandler);

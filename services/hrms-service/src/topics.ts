@@ -14,6 +14,7 @@ export const COMMANDS = {
   leaveReject:          "hrms.leave.reject",
   attendanceMark:       "hrms.attendance.mark",
   regularisationCreate: "hrms.attendance.regularisation.create",
+  regularisationDecide: "hrms.attendance.regularisation.decide",
   // DEF-AT-001: payroll cut-off / attendance period lock (locks or re-opens a month)
   attendanceLockPeriod:   "hrms.attendance.period.lock",
   attendanceUnlockPeriod: "hrms.attendance.period.unlock",
