@@ -17,6 +17,7 @@ import { ZodError, z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import * as contactRepo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -148,20 +149,28 @@ function mapConversations(raw: unknown[]): ConversationItem[] {
 async function fetchCrossServiceData(
   contactId: string,
   downstreamHeaders: Record<string, string>,
+  contactPhone?: string | null,
 ): Promise<{
   communications: CrossServiceSection<CommunicationItem>;
   calls: CrossServiceSection<CallItem>;
   conversations: CrossServiceSection<ConversationItem>;
 }> {
+  // Calls carry no CRM contact reference — the only real linkage is the
+  // contact's phone number, matched via telephony's blind index. Without a
+  // phone there is nothing to match, so ask for nothing rather than getting
+  // the tenant's most recent calls back (intra-tenant privacy leak).
+  const callsUrl = contactPhone
+    ? `${TELEPHONY_BASE}/v1/telephony/calls?callerNumber=${encodeURIComponent(contactPhone)}&limit=20`
+    : null;
+
   const [deliveriesRaw, callsRaw, conversationsRaw] = await Promise.allSettled([
     fetchCrossService(
       `${NOTIFICATION_BASE}/notifications/deliveries?recipientId=${contactId}&limit=20`,
       downstreamHeaders,
     ),
-    fetchCrossService(
-      `${TELEPHONY_BASE}/v1/telephony/calls?contactId=${contactId}&limit=20`,
-      downstreamHeaders,
-    ),
+    callsUrl
+      ? fetchCrossService(callsUrl, downstreamHeaders)
+      : Promise.resolve([] as unknown[]),
     fetchCrossService(
       `${NOTIFICATION_BASE}/v1/notification/inbox?contactId=${contactId}&limit=10`,
       downstreamHeaders,
@@ -341,7 +350,10 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
       "x-correlation-id": (req.headers["x-correlation-id"] as string) ?? req.id,
     };
 
-    const crossService = await fetchCrossServiceData(id, downstreamHeaders);
+    // Decrypted phone comes only through the drizzle column type — the raw-SQL
+    // projection above would return ciphertext.
+    const contactRow = await contactRepo.findById(id, ctx.tenantId);
+    const crossService = await fetchCrossServiceData(id, downstreamHeaders, contactRow?.phone ?? null);
 
     return reply.send({
       data: {

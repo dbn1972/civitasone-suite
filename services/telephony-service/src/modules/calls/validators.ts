@@ -87,6 +87,10 @@ export const listCallsQuery = z.object({
   agentId: z.string().uuid().optional(),
   // Exact caller-number lookup — matched via the blind index, never decrypted.
   callerNumber: phone.optional(),
+  // Accepted but not yet linkable: calls carry no CRM contact reference. It is
+  // declared here so zod does NOT strip it — a stripped filter silently
+  // returned the tenant's most recent calls to every contact-360 view.
+  contactId: z.string().uuid().optional(),
 });
 export type ListCallsQuery = z.infer<typeof listCallsQuery>;
 

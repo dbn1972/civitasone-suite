@@ -43,6 +43,16 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ROLES);
     const q = listCallsQuery.parse(req.query);
+    // No call↔contact linkage exists yet: a contactId filter that cannot be
+    // applied MUST yield an empty result, never the unfiltered tenant list —
+    // that leaked every contact-360 the tenant's 50 most recent calls.
+    // Contact-scoped lookups should filter by callerNumber (blind index).
+    if (q.contactId) {
+      return sendValidated(reply, callsListSchema, {
+        data: [],
+        pagination: { hasMore: false, pageSize: q.limit },
+      });
+    }
     sendValidated(
       reply,
       callsListSchema,
