@@ -225,6 +225,15 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G14: Agent talking-point script library ──
+  /** Create a versioned agent script (product × language × key). */
+  createAgentScript: "crm.agent_script.create",
+  /** Update a draft agent script (title, body, tags). */
+  updateAgentScript: "crm.agent_script.update",
+  /** Publish a draft script so agents can use it. */
+  publishAgentScript: "crm.agent_script.publish",
+  /** Deprecate a published script (replaced by a newer version). */
+  deprecateAgentScript: "crm.agent_script.deprecate",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +450,15 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G14: Agent talking-point script library ──
+  /** Agent script created. Payload: { scriptId, productCode, language }. */
+  agentScriptCreated: "crm.agent_script.created",
+  /** Agent script updated. Payload: { scriptId }. */
+  agentScriptUpdated: "crm.agent_script.updated",
+  /** Agent script published. Payload: { scriptId, productCode, language }. */
+  agentScriptPublished: "crm.agent_script.published",
+  /** Agent script deprecated. Payload: { scriptId }. */
+  agentScriptDeprecated: "crm.agent_script.deprecated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
