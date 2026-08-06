@@ -15364,6 +15364,259 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Helpdesk Service — Service Recovery
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/helpdesk/recovery-policies:
+    get:
+      operationId: listRecoveryPolicies
+      tags: [Helpdesk]
+      summary: List service recovery policies
+      description: |
+        Returns a paginated list of recovery policies for the current tenant.
+        Policies define per-severity goodwill entitlement rules.
+        Roles: helpdesk_admin, super_admin, admin.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of recovery policies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RecoveryPolicy"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_admin, super_admin, or admin
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createRecoveryPolicy
+      tags: [Helpdesk]
+      summary: Create a service recovery policy
+      description: |
+        Creates a recovery policy that defines goodwill entitlement parameters
+        for a severity level (and optionally a product). CQRS write — returns 202.
+        Roles: helpdesk_admin, super_admin, admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecoveryPolicyRequest"
+      responses:
+        "202":
+          description: Policy creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_admin, super_admin, or admin
+      security:
+        - bearerAuth: []
+
+  /v1/helpdesk/tickets/{ticketId}/recovery-actions:
+    get:
+      operationId: listRecoveryActionsByTicket
+      tags: [Helpdesk]
+      summary: List recovery actions for a ticket
+      description: |
+        Returns a paginated list of recovery actions associated with a ticket.
+        Roles: helpdesk_agent, helpdesk_admin, helpdesk_manager, super_admin, admin.
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of recovery actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RecoveryAction"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_agent or above
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createRecoveryAction
+      tags: [Helpdesk]
+      summary: Create a recovery action for a ticket
+      description: |
+        Proposes a recovery action (goodwill credit, replacement, priority service,
+        or apology communication) against a ticket. If the linked policy requires
+        approval, the action enters `pending_approval` status. CQRS write — returns 202.
+        Roles: helpdesk_agent, helpdesk_admin, helpdesk_manager, super_admin, admin.
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecoveryActionRequest"
+      responses:
+        "202":
+          description: Action creation accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_agent or above
+      security:
+        - bearerAuth: []
+
+  /v1/helpdesk/recovery-actions/{id}/approve:
+    post:
+      operationId: approveRecoveryAction
+      tags: [Helpdesk]
+      summary: Approve a recovery action
+      description: |
+        Approves a pending recovery action so it can be executed. CQRS write — returns 202.
+        Roles: helpdesk_manager, helpdesk_admin, super_admin, admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveRejectBody"
+      responses:
+        "202":
+          description: Approval accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_manager or above
+      security:
+        - bearerAuth: []
+
+  /v1/helpdesk/recovery-actions/{id}/reject:
+    post:
+      operationId: rejectRecoveryAction
+      tags: [Helpdesk]
+      summary: Reject a recovery action
+      description: |
+        Rejects a pending recovery action with an optional reason. CQRS write — returns 202.
+        Roles: helpdesk_manager, helpdesk_admin, super_admin, admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveRejectBody"
+      responses:
+        "202":
+          description: Rejection accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires helpdesk_manager or above
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -22338,3 +22591,193 @@ components:
         totalFields:
           type: integer
           description: Number of scored fields (configured, or the default map)
+
+    # ─── Helpdesk: Service Recovery ──────────────────────────────────────────
+
+    RecoveryPolicy:
+      type: object
+      required: [id, tenantId, severityThreshold, maxGoodwillMinor, currency, requiresApproval, approverRole, active, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        severityThreshold:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Minimum ticket severity at which this policy applies
+        productCode:
+          type: string
+          maxLength: 64
+          nullable: true
+          description: Optional product code to scope the policy (null = all products)
+        maxGoodwillMinor:
+          type: string
+          description: Maximum goodwill amount in minor units (paise). String to avoid JSON bigint precision loss.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 currency code
+          example: INR
+        requiresApproval:
+          type: boolean
+          description: Whether recovery actions under this policy need manager approval
+        approverRole:
+          type: string
+          maxLength: 64
+          description: Role required to approve actions under this policy
+          example: helpdesk_manager
+        active:
+          type: boolean
+          description: Whether this policy is currently in effect
+        version:
+          type: integer
+          description: Optimistic locking counter
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RecoveryAction:
+      type: object
+      required: [id, tenantId, ticketId, policyId, actionType, currency, status, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        ticketId:
+          type: string
+          format: uuid
+        policyId:
+          type: string
+          format: uuid
+        actionType:
+          type: string
+          enum: [goodwill_credit, replacement, priority_service, apology_comm]
+          description: Type of recovery action proposed
+        amountMinor:
+          type: string
+          nullable: true
+          description: Goodwill amount in minor units (paise). String for bigint safety. Null for non-monetary actions.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: INR
+        status:
+          type: string
+          enum: [pending_approval, approved, rejected, executed]
+          description: Current lifecycle status of the recovery action
+        approvedBy:
+          type: string
+          format: uuid
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+          description: Agent's justification for the recovery action, or manager's approval/rejection note
+        version:
+          type: integer
+        createdBy:
+          type: string
+          format: uuid
+        updatedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRecoveryPolicyRequest:
+      type: object
+      required: [severityThreshold, maxGoodwillMinor]
+      properties:
+        severityThreshold:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Minimum ticket severity for the policy
+        productCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          nullable: true
+          description: Optional product code to scope the policy
+        maxGoodwillMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Maximum goodwill amount in minor units (paise)
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: INR
+        requiresApproval:
+          type: boolean
+          default: true
+        approverRole:
+          type: string
+          minLength: 1
+          maxLength: 64
+          default: helpdesk_manager
+        active:
+          type: boolean
+          default: true
+
+    CreateRecoveryActionRequest:
+      type: object
+      required: [policyId, actionType]
+      properties:
+        policyId:
+          type: string
+          format: uuid
+          description: The recovery policy governing this action
+        actionType:
+          type: string
+          enum: [goodwill_credit, replacement, priority_service, apology_comm]
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+          description: Goodwill amount in minor units. Required for goodwill_credit, optional otherwise.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: INR
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Agent's justification for proposing this recovery
+
+    ApproveRejectBody:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Optional note from the approver/rejector

@@ -7,6 +7,7 @@
 import { createTenantDb } from "@civitasone/db";
 import { schema as ticketsModule } from "../modules/tickets/schema.js";
 import { schema as automationModule } from "../modules/automation/schema.js";
+import { schema as recoveryModule } from "../modules/recovery/schema.js";
 import { schema as slaModule } from "../modules/sla/schema.js";
 import { schema as catalogueModule } from "../modules/catalogue/schema.js";
 import { savedViewsSchema } from "../modules/tickets/views-schema.js";
@@ -16,6 +17,7 @@ import { outboxSchema } from "./outbox.js";
 const SCHEMA = {
   ...ticketsModule,
   ...automationModule,
+  ...recoveryModule,
   ...slaModule,
   ...catalogueModule,
   ...savedViewsSchema,

@@ -36,6 +36,11 @@ export const COMMANDS = {
   catalogueRequestApprove: "helpdesk.catalogue.request_approve",
   catalogueRequestAdvance: "helpdesk.catalogue.request_advance",
   catalogueRequestFulfil: "helpdesk.catalogue.request_fulfil",
+  // G8 — Service recovery / goodwill entitlement
+  recoveryPolicyCreate: "helpdesk.recovery.policy_create",
+  recoveryActionCreate: "helpdesk.recovery.action_create",
+  recoveryActionApprove: "helpdesk.recovery.action_approve",
+  recoveryActionReject: "helpdesk.recovery.action_reject",
   // P0 F3 leftover — SLA calendars / pause / extend / CES
   calendarCreate: "helpdesk.sla.calendar_create",
   calendarUpdate: "helpdesk.sla.calendar_update",
