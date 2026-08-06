@@ -31,6 +31,7 @@ import { compositionRoutes } from "./modules/composition/routes.js";
 import { configArtefactRoutes } from "./modules/config/artefact-routes.js";
 import { sandboxRoutes } from "./modules/sandbox/routes.js";
 import { mobileTelemetryRoutes } from "./modules/health/mobile-routes.js";
+import { feedbackRoutes } from "./modules/feedback/routes.js";
 import { departmentTemplateRoutes } from "./modules/dept-templates/routes.js";
 import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
 
@@ -85,6 +86,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(configArtefactRoutes);
   await app.register(sandboxRoutes);
   await app.register(mobileTelemetryRoutes);
+  await app.register(feedbackRoutes);
   await app.register(departmentTemplateRoutes);
   await app.register(documentGovernanceRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");

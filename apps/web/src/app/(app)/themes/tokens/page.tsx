@@ -2,7 +2,6 @@ import { PageShell } from "../../../_components/PageShell";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { getThemeTokens } from "../../../_data/loaders";
-import { ThemeActions } from "../ThemeActions";
 import { ThemeTokenTable } from "../ThemeTokenTable";
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -27,8 +26,9 @@ export default async function Page() {
 				<StatCard icon="⚙️" iconBg="#e0e7ff" label="Scalar tokens" value={scalarTokens} />
 			</StatGrid>
 
-			<ThemeActions />
-
+			{/* "Publish theme revision" removed: theme-service has no revision
+			    model or publish endpoint — a button that 404s misleads. Restore
+			    once a revisions feature ships (product decision). */}
 			<Card title="Token palette">
 				<div className="pad">
 					<ThemeTokenTable tokens={themeTokens} />

@@ -34,15 +34,19 @@ export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleA
     setRequestStatus("submitting");
     setErrorMessage("");
     try {
-      const res = await fetch("/api/proxy/v1/workflow/module-change-requests", {
+      // admin-service owns the change-request lifecycle (create → approve/
+      // reject); the old /v1/workflow/module-change-requests path never existed.
+      const res = await fetch("/api/proxy/v1/admin/change/requests", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          changes: dirtyKeys.map((key) => ({
-            moduleKey: key,
-            requestedState: pendingState[key],
-          })),
-          reason: "Module configuration change requested by tenant admin",
+          title: "Module configuration change",
+          type: "normal",
+          risk: "medium",
+          affectedServices: ["admin-service"],
+          description: `Module configuration change requested by tenant admin: ${dirtyKeys
+            .map((key) => `${key} → ${pendingState[key] ? "enabled" : "disabled"}`)
+            .join(", ")}`,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
