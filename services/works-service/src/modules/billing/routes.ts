@@ -5,12 +5,24 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill } from "./domain.js";
-import { getMb, getBill, listBillsForWork } from "./repo.js";
+import { getMb, getBill, listBillsForWork, listBills } from "./repo.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide bills register — backs the /works/billing list page. Static
+  // segment wins over :workId, so this cannot shadow the per-work route.
+  app.get("/v1/works/billing/bills", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const q = req.query as { page?: string; pageSize?: string };
+    const page = Math.max(1, Number(q.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(q.pageSize) || 100));
+    const data = await listBills(ctx.tenantId, page, pageSize);
+    return reply.send({ data });
+  });
+
   // List bills for a work
   app.get("/v1/works/billing/:workId/bills", async (req, reply) => {
     const ctx = resolveContext(req);

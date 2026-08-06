@@ -13,7 +13,7 @@ type Row = {
 } & Record<string, unknown>;
 
 async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/skills", [], {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/skills/team-heatmap", [], {
     telemetryKey: "hr.skills",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;

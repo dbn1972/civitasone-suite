@@ -45,7 +45,7 @@ export function NewTrainingForm() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/proxy/v1/hrms/training-programs", {
+      const res = await fetch("/api/proxy/v1/hrms/trainings", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
