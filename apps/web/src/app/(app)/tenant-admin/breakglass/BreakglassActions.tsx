@@ -14,8 +14,11 @@ export function BreakglassActions({ id, requester }: { id: string; requester?: s
     setBusy(true);
     setError(undefined);
     try {
-      const res = await fetch(`/api/proxy/identity/break-glass/${id}/close`, {
-        method: "POST",
+      // The list shows admin-service break-glass sessions — close them where
+      // they live. (identity-service has its own break-glass grants with
+      // different ids; posting there always 404ed.)
+      const res = await fetch(`/api/proxy/v1/admin/support/break-glass/${id}/close`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(reason ? { reason } : {}),
       });

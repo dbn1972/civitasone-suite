@@ -44,15 +44,20 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    // POST to /api/v1/admin/data-exports → 202
-    void fetch("/api/proxy/v1/admin/data-exports", {
+    // The real module is /v1/admin/data-export (singular); the plural path is
+    // a read-only stub. Only reflect the row when the backend actually
+    // accepted the request — fetch() resolves on 404 too, and the old code
+    // showed a fabricated "processing" row regardless.
+    void fetch("/api/proxy/v1/admin/data-export", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ type: exportType, moduleFilter: exportType === "module" ? moduleFilter : null, format }),
-    }).then(() => {
+    }).then(async (res) => {
+      if (!res.ok) return;
+      const accepted = (await res.json().catch(() => null)) as { id?: string } | null;
       setExports((prev) => [{
-        id: String(Date.now()),
+        id: accepted?.id ?? String(Date.now()),
         type: exportType,
         moduleFilter: exportType === "module" ? moduleFilter : null,
         format,

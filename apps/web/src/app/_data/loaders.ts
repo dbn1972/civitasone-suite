@@ -4031,7 +4031,7 @@ export type DataExportRequest = {
 };
 
 export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]>> {
-  return fetchJson<unknown, DataExportRequest[]>("/api/v1/admin/data-exports", [], {
+  return fetchJson<unknown, DataExportRequest[]>("/api/v1/admin/data-export", [], {
     revalidateSeconds: 30,
     telemetryKey: "admin.data-exports",
     mapResponse: (p) => getArrayPayload(p) as DataExportRequest[] | null,
@@ -4100,7 +4100,7 @@ export type CustomDomain = {
 };
 
 export async function getCustomDomains(): Promise<LoaderResult<CustomDomain[]>> {
-  return fetchJson<unknown, CustomDomain[]>("/api/v1/admin/domains", [], {
+  return fetchJson<unknown, CustomDomain[]>("/api/v1/admin/custom-domains", [], {
     revalidateSeconds: 120,
     telemetryKey: "admin.domains",
     mapResponse: (p) => getArrayPayload(p) as CustomDomain[] | null,
