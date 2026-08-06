@@ -358,13 +358,37 @@ export async function getQuotation(id: string): Promise<LoaderResult<Quotation |
   }
 }
 
+/** Serialize builder lines into the backend lineItem validator shape. */
+function toQuotationLineItems(lines: QuotationLine[]): Record<string, unknown>[] {
+  return lines.map((l) => ({
+    ...(l.productId ? { productId: l.productId } : {}),
+    description: l.productName || "Product line",
+    quantity: Math.max(1, Math.trunc(l.quantity) || 1),
+    unitPriceMinor: minorStr(l.unitPriceMinor),
+    taxRateBps: Math.max(0, Math.trunc(l.taxRateBps) || 0),
+  }));
+}
+
 export async function createQuotation(q: Quotation): Promise<void> {
-  const res = await browserFetch("v1/crm/quotations", { method: "POST", body: JSON.stringify(q) });
+  // createBody requires a business quote_ref + template_ref; the builder only
+  // captures a template name, so a unique reference is generated client-side.
+  const body = {
+    quoteRef: `Q-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+    templateRef: q.template || "default",
+    lineItems: toQuotationLineItems(q.lines),
+    ...(q.opportunityId ? { dealId: q.opportunityId } : {}),
+  };
+  const res = await browserFetch("v1/crm/quotations", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
 export async function updateQuotation(id: string, q: Quotation): Promise<void> {
-  const res = await browserFetch(`v1/crm/quotations/${id}`, { method: "PUT", body: JSON.stringify(q) });
+  // Quotations are immutable versions — "edit" creates the next version of the
+  // same quote_ref (there is deliberately no PUT on the backend).
+  const res = await browserFetch(`v1/crm/quotations/${id}/new-version`, {
+    method: "POST",
+    body: JSON.stringify({ lineItems: toQuotationLineItems(q.lines) }),
+  });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
@@ -477,9 +501,11 @@ export async function requestApproval(quotationId: string, req: Omit<ApprovalReq
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function approveApproval(quotationId: string, approvalId: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/quotations/${quotationId}/approvals/${approvalId}/approve`, {
+export async function approveApproval(_quotationId: string, approvalId: string): Promise<void> {
+  // Decisions live on the approval itself: POST /v1/crm/quotation-approvals/:id/decide.
+  const res = await browserFetch(`v1/crm/quotation-approvals/${approvalId}/decide`, {
     method: "POST",
+    body: JSON.stringify({ decision: "approve" }),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }

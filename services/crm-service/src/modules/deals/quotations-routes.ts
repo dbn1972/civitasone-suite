@@ -153,6 +153,45 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(listEnvelope(rows, w, total));
   });
 
+  // Single-quotation read for the web builder. Shaped for the web client:
+  // template/version/lines are the names its normaliser expects, dealId is
+  // surfaced as opportunityId.
+  app.get("/v1/crm/quotations/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const header = await loadQuotation(ctx.tenantId, id);
+    return reply.send({
+      quotation: {
+        id: header.id,
+        quoteRef: header.quoteRef,
+        opportunityId: header.dealId,
+        template: header.templateRef,
+        version: header.versionNumber,
+        status: header.status,
+        totalMinor: header.totalMinor,
+        currency: header.currency,
+        lines: header.lineItems ?? [],
+      },
+    });
+  });
+
+  // QP-005: version history — every version sharing this quotation's quote_ref.
+  app.get("/v1/crm/quotations/:id/versions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const source = await loadQuotation(ctx.tenantId, id);
+    const rows = await scopedRead(async (tx) => tx.execute(sql`
+      SELECT version_number AS "version", status, total_minor::text AS "totalMinor",
+             created_at AS "createdAt"
+      FROM crm.quotations
+      WHERE tenant_id = ${ctx.tenantId} AND quote_ref = ${source.quoteRef}
+      ORDER BY version_number DESC
+    `)) as unknown as unknown[];
+    return reply.send({ versions: rows });
+  });
+
   // QP-003: full quotation document — header + relational line items.
   app.get("/v1/crm/quotations/:id/document", async (req, reply) => {
     const ctx = resolveContext(req);
