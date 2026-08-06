@@ -74,6 +74,7 @@ import { flagRoutes } from "./modules/contacts/flags-routes.js";
 import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
+import { contextAttachRoutes } from "./modules/context-attach/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -194,6 +195,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(volumeVsActualRoutes);
   await app.register(sponsorRoutes);
+  // G22: Context-attach rule engine — auto-link inbound events to CRM entities
+  await app.register(contextAttachRoutes);
 
   return app;
 }

@@ -225,6 +225,15 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G22: Context-attach rule engine ──
+  /** Create a context-attach rule (G22). Payload: { name, eventType, matchField, matchTarget, targetField, action, active, priority }. */
+  createContextAttachRule: "crm.context_attach_rule.create",
+  /** Update a context-attach rule (G22). Payload: { id, changed, version }. */
+  updateContextAttachRule: "crm.context_attach_rule.update",
+  /** Delete a context-attach rule (G22). Payload: { id }. */
+  deleteContextAttachRule: "crm.context_attach_rule.delete",
+  /** Process an inbound event for context attachment (G22). Payload: { eventRef, eventType, data }. */
+  processContextAttachEvent: "crm.context_attach.process",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +450,15 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G22: Context-attach rule engine events ──
+  /** A context-attach rule was created (G22). Payload: { ruleId, name, eventType, matchTarget, action }. */
+  contextAttachRuleCreated: "crm.context_attach_rule.created",
+  /** A context-attach rule was updated (G22). Payload: { ruleId, changed }. */
+  contextAttachRuleUpdated: "crm.context_attach_rule.updated",
+  /** A context-attach rule was deleted (G22). Payload: { ruleId }. */
+  contextAttachRuleDeleted: "crm.context_attach_rule.deleted",
+  /** An inbound event was attached to a CRM entity (G22). Payload: { attachmentId, ruleId, eventRef, targetType, targetId, action }. */
+  contextAttached: "crm.context_attach.attached",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
