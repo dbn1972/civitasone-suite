@@ -74,6 +74,7 @@ import { flagRoutes } from "./modules/contacts/flags-routes.js";
 import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
+import { stageSLARoutes } from "./modules/stage-sla/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -194,6 +195,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(volumeVsActualRoutes);
   await app.register(sponsorRoutes);
+  // G3: per-stage SLA configuration
+  await app.register(stageSLARoutes);
 
   return app;
 }

@@ -225,6 +225,13 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G3: Stage SLA policies ──
+  /** Create (or upsert) a per-stage SLA policy for the tenant. */
+  createStageSLAPolicy: "crm.stage_sla_policy.create",
+  /** Update an existing stage SLA policy. */
+  updateStageSLAPolicy: "crm.stage_sla_policy.update",
+  /** Soft-delete a stage SLA policy (sets active=false). */
+  deleteStageSLAPolicy: "crm.stage_sla_policy.delete",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +448,17 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G3: Stage SLA policies ──
+  /** A stage SLA policy was created/upserted. Payload: { stageCode, slaHours, breachAction, active }. */
+  stageSLAPolicyCreated: "crm.stage_sla_policy.created",
+  /** A stage SLA policy was updated. Payload: { id, slaHours?, breachAction?, active? }. */
+  stageSLAPolicyUpdated: "crm.stage_sla_policy.updated",
+  /** A stage SLA policy was soft-deleted (active=false). Payload: { id }. */
+  stageSLAPolicyDeleted: "crm.stage_sla_policy.deleted",
+  /** SLA warning threshold reached for a deal/journey in a stage. Payload: { dealId?, stageCode, elapsedPercent, policyId }. */
+  stageSLAWarning: "crm.stage_sla.warning",
+  /** SLA breached for a deal/journey in a stage. Payload: { dealId?, stageCode, slaHours, policyId, breachAction }. */
+  stageSLABreached: "crm.stage_sla.breached",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
