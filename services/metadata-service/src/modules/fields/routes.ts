@@ -43,6 +43,19 @@ const createFieldSchema = z.object({
 });
 
 export async function fieldRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide flat list — the /metadata/fields overview page shows all
+  // fields across entities; the nested route below stays the per-entity read.
+  app.get("/v1/metadata/fields", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const rows = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(fieldDefinitions)
+        .where(eq(fieldDefinitions.tenantId, ctx.tenantId))
+        .orderBy(asc(fieldDefinitions.sortOrder)),
+    );
+    return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
   app.get("/v1/metadata/entities/:entityId/fields", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);

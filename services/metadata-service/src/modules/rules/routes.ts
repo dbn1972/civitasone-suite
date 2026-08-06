@@ -29,6 +29,18 @@ function assertParses(expression: string): void {
 }
 
 export async function validationRuleRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide flat list for the /metadata/rules overview page.
+  app.get("/v1/metadata/rules", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const rows = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(validationRules)
+        .where(eq(validationRules.tenantId, ctx.tenantId))
+        .orderBy(asc(validationRules.sortOrder)),
+    );
+    return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
   app.get("/v1/metadata/entities/:entityId/validation-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);

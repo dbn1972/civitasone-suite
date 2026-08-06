@@ -45,6 +45,21 @@ async function loadDefs(tx: Tx, tenantId: string, entityId: string): Promise<{ f
 }
 
 export async function recordRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide flat list for the /metadata/records overview page. Bounded —
+  // records can grow unbounded per tenant, unlike definition tables.
+  app.get("/v1/metadata/records", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DATA);
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).parse(req.query ?? {});
+    const rows = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(customRecords)
+        .where(eq(customRecords.tenantId, ctx.tenantId))
+        .orderBy(desc(customRecords.createdAt))
+        .limit(q.limit),
+    );
+    return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
   app.get("/v1/metadata/entities/:entityId/records", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, DATA);

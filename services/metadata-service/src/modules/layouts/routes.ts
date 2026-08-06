@@ -26,6 +26,18 @@ const createLayoutSchema = z.object({
 });
 
 export async function layoutRoutes(app: FastifyInstance): Promise<void> {
+  // Tenant-wide flat list for the /metadata/forms overview page (a "form" is
+  // a published layout definition).
+  app.get("/v1/metadata/forms", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const rows = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(layoutDefinitions)
+        .where(eq(layoutDefinitions.tenantId, ctx.tenantId)),
+    );
+    return reply.send({ data: rows, meta: { total: rows.length } });
+  });
+
   app.get("/v1/metadata/entities/:entityId/layouts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
