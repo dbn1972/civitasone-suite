@@ -51,22 +51,10 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
         });
         if (!res.ok) throw new Error(await res.text());
       }
-      // Emit audit event for module changes
-      try {
-        await fetch("/api/proxy/v1/audit/events", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            service: "admin",
-            action: dirtyKeys.map((k) => `module_${pending[k] ? "enable" : "disable"}_${k}`).join(","),
-            resourceType: "module_config",
-            resourceId: dirtyKeys.join(","),
-            outcome: "success",
-          }),
-        });
-      } catch {
-        // Audit failure should not block the save
-      }
+      // No client-side audit emit: the toggle consumer records module_toggle
+      // on the audit trail server-side (transactional outbox). The old POST
+      // here targeted /v1/audit/events, which has no POST route — the failure
+      // was swallowed, so the "audit" never existed anywhere.
       setStatus(`Saved ${dirtyKeys.length} module${dirtyKeys.length === 1 ? "" : "s"}.`);
       router.refresh();
     } catch (err) {

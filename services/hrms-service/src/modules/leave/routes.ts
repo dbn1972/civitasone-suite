@@ -121,6 +121,16 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
   });
 
+  // Separation of duties: the applicant (whoever RECORDED the application —
+  // self-service or on-behalf) can never decide it themselves.
+  async function assertLeaveSod(ctx: { tenantId: string; actorId: string }, id: string): Promise<void> {
+    const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
+    if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");
+    if (leaveApp.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "the applicant cannot approve or reject their own leave");
+    }
+  }
+
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
@@ -130,6 +140,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
+    await assertLeaveSod(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
   });
 
@@ -139,6 +150,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     const body = rejectLeaveBody.parse(req.body);
+    await assertLeaveSod(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectLeave(ctx, id, body.reason));
   });
 
@@ -146,8 +158,14 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/leave-requests/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
+    // Same workflow gate as the canonical route — the alias must not be a
+    // side door around the workflow queue.
+    if (!ctx.roles.some((r: string) => HR_ROLES.includes(r))) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Direct approval requires HR admin privileges. Use the workflow queue.");
+    }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
+    await assertLeaveSod(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
   });
 
@@ -157,6 +175,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     const body = rejectLeaveBody.parse(req.body);
+    await assertLeaveSod(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectLeave(ctx, id, body.reason));
   });
 

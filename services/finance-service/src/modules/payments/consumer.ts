@@ -155,7 +155,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // C1: register the commitment with a single atomic guarded UPDATE. Two
       // concurrent bills can no longer both pass a stale read — the conditional
       // WHERE serialises them; the loser gets rowcount=0 and is rejected.
-      if (alloc) {
+      // FAIL CLOSED on a missing allocation: `if (alloc)` used to skip the
+      // appropriation check entirely when no allocation row existed — i.e.
+      // expenditure with NO appropriation passed while expenditure exceeding
+      // one was blocked. Government finance rule 1: no appropriation, no bill.
+      if (!alloc) {
+        throw new Error(`NO_APPROPRIATION: no budget allocation exists for head ${p.headId} in ${billFy} — cannot commit expenditure without appropriation`);
+      }
+      {
         const ok = await allocRepo.addCommittedGuarded(tx, alloc.id, netMinor);
         if (!ok) {
           throw new Error(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available appropriation for head ${p.headId} (${billFy})`);
