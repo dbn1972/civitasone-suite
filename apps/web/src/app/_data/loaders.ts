@@ -639,9 +639,9 @@ export async function getSlaRules(): Promise<LoaderResult<SLAQueueSummary[]>> {
   });
 }
 
-/** Citizen-facing tickets (citizen-service). Powers /helpdesk/tickets. */
+/** Helpdesk tickets (helpdesk-service — where NewTicketForm creates them). */
 export async function getHelpdeskTickets(): Promise<LoaderResult<HelpdeskTicketSummary[]>> {
-  return fetchJson("/api/v1/citizen/tickets", [] as HelpdeskTicketSummary[], {
+  return fetchJson("/api/v1/helpdesk/tickets", [] as HelpdeskTicketSummary[], {
     revalidateSeconds: 15,
     telemetryKey: "helpdesk.tickets",
     responseSchema: ticketsListSchema,
@@ -2727,7 +2727,7 @@ function mapTicketDetails(payload: unknown): TicketDetail[] | null {
 }
 
 export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail[]>> {
-  return fetchJson<unknown, TicketDetail[]>("/api/v1/citizen/tickets", [], {
+  return fetchJson<unknown, TicketDetail[]>("/api/v1/helpdesk/tickets", [], {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.tickets.full",
     mapResponse: mapHelpdeskTicketList,
@@ -2735,7 +2735,7 @@ export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail
 }
 
 export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<TicketDetail | null>> {
-  return fetchJson<unknown, TicketDetail | null>(`/api/v1/citizen/tickets/${id}`, null, {
+  return fetchJson<unknown, TicketDetail | null>(`/api/v1/helpdesk/tickets/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "helpdesk.ticket.detail",
     mapResponse: mapHelpdeskTicketDetail,
