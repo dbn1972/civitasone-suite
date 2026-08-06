@@ -15364,6 +15364,491 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security: []
 
+  # ── G5: customer-segment taxonomy ───────────────────────────────────────────
+  /v1/crm/segments:
+    get:
+      operationId: listSegmentDefinitions
+      tags: [CRM]
+      summary: List the tenant's customer-segment taxonomy
+      description: |
+        Returns every live segment definition for the caller's tenant, ordered by
+        `segmentCode`. Readable by any CRM user because the UI's segment picker needs
+        it. Soft-deleted definitions are never returned.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, published, deprecated] }
+        - name: governance
+          in: query
+          schema: { type: string, enum: [canonical, tenant] }
+      responses:
+        "200":
+          description: Segment definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SegmentDefinition" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+        "400":
+          description: "`VALIDATION_FAILED` — bad pagination or an unknown filter value"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createSegmentDefinition
+      tags: [CRM]
+      summary: Create a draft segment definition
+      description: |
+        Creates the segment in `draft`. It becomes usable — for recommendation
+        eligibility and, where enforcement is on, as a classification value — only
+        after `POST /v1/crm/segments/{segmentCode}/publish`.
+
+        `priorityProducts` is ORDERED: index 0 is the highest-priority product.
+        `primaryChannels` values must come from the service's channel vocabulary (the
+        same closed set `POST /v1/crm/leads/inbound` accepts). Neither list may repeat
+        a value, because that would make priority ambiguous.
+
+        `governance` defaults to `tenant`. A deployment's seeding tool may pass
+        `canonical` to install reference data that is then immutable through the API.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [segmentCode, displayName]
+              properties:
+                segmentCode:
+                  type: string
+                  description: Stable machine key, 2–64 chars of `[A-Za-z0-9_-]`, starting alphanumeric
+                  example: SMALL_BUSINESS
+                displayName: { type: string, minLength: 1, maxLength: 200 }
+                description: { type: string, maxLength: 2000, nullable: true }
+                governance: { type: string, enum: [canonical, tenant], default: tenant }
+                priorityProducts:
+                  type: array
+                  maxItems: 50
+                  items: { type: string }
+                  description: Ordered product codes — index 0 is the highest priority
+                primaryChannels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [email, telephony, chatbot, whatsapp, partner_api, campaign]
+      responses:
+        "202":
+          description: Create command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: |
+            `VALIDATION_FAILED` — malformed `segmentCode`, missing `displayName`, a
+            channel outside the vocabulary, or a repeated product/channel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — the taxonomy is governance, so `crm_user` is excluded
+        "409":
+          description: |
+            `SEGMENT_EXISTS` — the code is already in use for this tenant, including by
+            a soft-deleted definition. Codes are stable machine keys, never reused.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+
+  /v1/crm/segments/settings:
+    get:
+      operationId: getSegmentSettings
+      tags: [CRM]
+      summary: Read the tenant's segment-catalogue enforcement switch
+      description: |
+        A tenant with no settings row reads as `enforceSegmentCatalogue: false` — that
+        is the default and the state of every tenant that predates the catalogue.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      responses:
+        "200":
+          description: Current setting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SegmentSettings" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    put:
+      operationId: setSegmentSettings
+      tags: [CRM]
+      summary: Turn segment-catalogue enforcement on or off for the tenant
+      description: |
+        With `false` (the default) `PATCH /v1/crm/contacts/{id}/classification` accepts
+        any free-text `segment`, exactly as it did before the catalogue existed. With
+        `true` it refuses a `segment` that is not a published `segmentCode` with 422
+        `SEGMENT_NOT_IN_CATALOGUE`, whose message lists the valid codes.
+
+        Flip this on only AFTER the catalogue is seeded and published, otherwise the
+        first classification with a legacy value is refused before its replacement code
+        exists. Turning it back off is a complete revert.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enforceSegmentCatalogue]
+              properties:
+                enforceSegmentCatalogue: { type: boolean }
+      responses:
+        "202":
+          description: Settings command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: "`VALIDATION_FAILED` — `enforceSegmentCatalogue` missing or not a boolean"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  /v1/crm/segments/{segmentCode}:
+    parameters:
+      - name: segmentCode
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getSegmentDefinition
+      tags: [CRM]
+      summary: Read one segment definition
+      description: |
+        Returns the definition whatever its status — a draft and a deprecated segment
+        are both readable here; only the eligibility endpoint is published-only.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      responses:
+        "200":
+          description: The definition
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SegmentDefinition" }
+        "400":
+          description: "`VALIDATION_FAILED` — malformed `segmentCode`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`SEGMENT_NOT_FOUND` — unknown or soft-deleted code for this tenant"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: updateSegmentDefinition
+      tags: [CRM]
+      summary: Amend a segment definition
+      description: |
+        Optimistic locking: `version` must be the version the caller last read,
+        otherwise the request is refused with 409 and nothing is written. `segmentCode`
+        and `governance` are not amendable — a code is a stable machine key.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 200 }
+                description: { type: string, maxLength: 2000, nullable: true }
+                priorityProducts:
+                  type: array
+                  items: { type: string }
+                primaryChannels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [email, telephony, chatbot, whatsapp, partner_api, campaign]
+                version: { type: integer, minimum: 1 }
+      responses:
+        "202":
+          description: Update command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: |
+            `VALIDATION_FAILED` — `version` missing, no mutable field supplied, or an
+            invalid channel/product list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`SEGMENT_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: "`SEGMENT_VERSION_CONFLICT` — the definition changed since it was read"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: |
+            `SEGMENT_CANONICAL_IMMUTABLE` — the definition is reference data
+            (`governance: canonical`). Returned regardless of role, including
+            super_admin, so a platform catalogue cannot diverge per tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+    delete:
+      operationId: deleteSegmentDefinition
+      tags: [CRM]
+      summary: Soft-delete a segment definition
+      description: |
+        Sets `deletedAt`; the row survives and the code stays reserved. Contacts already
+        classified with the code keep their stored value — this endpoint never rewrites
+        contact data.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      responses:
+        "202":
+          description: Delete command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: "`VALIDATION_FAILED` — malformed `segmentCode`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`SEGMENT_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: "`SEGMENT_CANONICAL_IMMUTABLE` — reference data cannot be deleted"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+
+  /v1/crm/segments/{segmentCode}/publish:
+    post:
+      operationId: publishSegmentDefinition
+      tags: [CRM]
+      summary: Publish a segment definition
+      description: |
+        `draft` → `published`, or reinstates a `deprecated` segment. Stamps
+        `publishedAt` and bumps `versionNumber` (the taxonomy revision a recommendation
+        consumer can quote). Publishing an already published segment is refused rather
+        than silently inflating the revision.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: segmentCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Publish command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: "`VALIDATION_FAILED` — malformed `segmentCode`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`SEGMENT_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: |
+            `SEGMENT_ALREADY_PUBLISHED` — already published, or
+            `SEGMENT_CANONICAL_IMMUTABLE` — reference data.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+
+  /v1/crm/segments/{segmentCode}/deprecate:
+    post:
+      operationId: deprecateSegmentDefinition
+      tags: [CRM]
+      summary: Retire a published segment definition
+      description: |
+        `published` → `deprecated`. The definition stays readable but stops answering on
+        the eligibility endpoint and stops being an accepted classification value under
+        enforcement. Contacts already carrying the code are untouched.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: segmentCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Deprecate command queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcceptedResponse" }
+        "400":
+          description: "`VALIDATION_FAILED` — malformed `segmentCode`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`SEGMENT_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: |
+            `SEGMENT_NOT_PUBLISHED` (still a draft), `SEGMENT_ALREADY_DEPRECATED`, or
+            `SEGMENT_CANONICAL_IMMUTABLE`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+
+  /v1/crm/segments/{segmentCode}/eligibility:
+    get:
+      operationId: getSegmentEligibility
+      tags: [CRM]
+      summary: Priority products and primary channels for a published segment
+      description: |
+        The stable contract consumed by recommendation-service for recommendation
+        eligibility and channel selection.
+
+        Guarantees:
+        - `priorityProducts` is ordered — index 0 is the highest-priority product.
+        - `primaryChannels` is ordered — index 0 is the channel to try first, and every
+          value is from the service's channel vocabulary.
+        - PUBLISHED ONLY. A draft or deprecated segment answers 404, so a 200 always
+          means "this segment is live".
+        - Additive evolution only: fields are added, never removed or renamed. Consumers
+          must ignore unknown fields.
+        - `versionNumber` identifies the taxonomy revision, so a recommendation can
+          record which revision it scored against.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: segmentCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Eligibility for the segment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/SegmentEligibility" }
+        "400":
+          description: "`VALIDATION_FAILED` — malformed `segmentCode`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: |
+            `SEGMENT_NOT_FOUND` — no PUBLISHED definition for this code: unknown, still
+            draft, deprecated, or soft-deleted. One answer on purpose — from a
+            consumer's point of view "no eligibility is defined" is a single outcome.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+      security:
+        - bearerAuth: []
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -22088,6 +22573,122 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    SegmentDefinition:
+      type: object
+      description: A customer-segment definition (G5). See crm-service modules/segments/README.md.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        segmentCode:
+          type: string
+          description: Stable machine key, unique per tenant and never reused
+        displayName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        governance:
+          type: string
+          enum: [canonical, tenant]
+          description: |
+            `canonical` rows are reference data delivered as seed and are immutable
+            through the API (422 on any mutation, regardless of role).
+        priorityProducts:
+          type: array
+          items:
+            type: string
+          description: Ordered product codes — index 0 is the highest priority
+        primaryChannels:
+          type: array
+          items:
+            type: string
+            enum: [email, telephony, chatbot, whatsapp, partner_api, campaign]
+          description: Ordered channel codes from the service's single channel vocabulary
+        status:
+          type: string
+          enum: [draft, published, deprecated]
+        versionNumber:
+          type: integer
+          description: |
+            Taxonomy revision, bumped on publish. Distinct from `version`, which is the
+            optimistic-lock counter bumped on every write.
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        deprecatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        version:
+          type: integer
+          description: Optimistic-lock version — send it back on PATCH
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SegmentEligibility:
+      type: object
+      description: |
+        The stable eligibility contract consumed by recommendation-service (G5).
+        Additive evolution only: fields are added, never removed or renamed.
+      required: [segmentCode, displayName, status, versionNumber, priorityProducts, primaryChannels]
+      properties:
+        segmentCode:
+          type: string
+        displayName:
+          type: string
+        status:
+          type: string
+          enum: [published]
+          description: Always `published` — the endpoint 404s for anything else
+        versionNumber:
+          type: integer
+          description: Taxonomy revision the recommendation was scored against
+        priorityProducts:
+          type: array
+          items:
+            type: string
+          description: Highest priority first
+        primaryChannels:
+          type: array
+          items:
+            type: string
+            enum: [email, telephony, chatbot, whatsapp, partner_api, campaign]
+          description: Preferred channel first
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SegmentSettings:
+      type: object
+      description: Per-tenant segment-catalogue enforcement switch (G5).
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        enforceSegmentCatalogue:
+          type: boolean
+          description: |
+            false (default, and the value for a tenant with no row) — `contacts.segment`
+            accepts any free-text value, exactly as before the catalogue existed.
+            true — classification refuses a segment that is not a published segmentCode.
+        version:
+          type: integer
+          description: 0 when no row exists yet
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
 
     CreateLeadCaptureFormRequest:
       type: object

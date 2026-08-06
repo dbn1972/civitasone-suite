@@ -12,6 +12,7 @@ import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { isValidMobile, isValidPincode, FORMAT_ERROR_CODES } from "../contacts/format-validators.js";
+import { LEAD_CHANNELS } from "./channels.js";
 
 /**
  * Roles that may push inbound leads. Machine/integration path only: `integration_bot`
@@ -28,7 +29,9 @@ import { isValidMobile, isValidPincode, FORMAT_ERROR_CODES } from "../contacts/f
 const INBOUND_ROLES = ["crm_admin", "super_admin", "tenant_admin", "integration_bot"];
 
 const inboundLeadBody = z.object({
-  channel: z.enum(["email", "telephony", "chatbot", "whatsapp", "partner_api", "campaign"]),
+  // Single source of truth — see channels.ts. Segment definitions (G5) validate
+  // their primary channels against the same list.
+  channel: z.enum(LEAD_CHANNELS),
   source: z.string().min(1, "source is required"),
   attributes: z.object({
     name: z.string().optional(),

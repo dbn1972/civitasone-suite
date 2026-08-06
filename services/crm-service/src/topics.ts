@@ -225,6 +225,51 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G5: customer-segment taxonomy ──
+  /**
+   * Create a DRAFT segment definition (G5).
+   * Payload: { tenantId, segmentCode, displayName, description|null, governance,
+   * priorityProducts: string[], primaryChannels: string[] }.
+   * Fires on POST /v1/crm/segments. `priorityProducts` is ordered — index 0 is the
+   * highest priority. `primaryChannels` values come from the service's single channel
+   * vocabulary (modules/leads/channels.ts). The consumer inserts with
+   * ON CONFLICT (tenant_id, segment_code) DO NOTHING, so a redelivery converges.
+   */
+  createSegmentDefinition: "crm.segment_definition.create",
+  /**
+   * Amend a segment definition (G5).
+   * Payload: { tenantId, segmentCode, displayName?, description?, priorityProducts?,
+   * primaryChannels?, version }. Fires on PATCH /v1/crm/segments/:segmentCode.
+   * `version` is the optimistic lock; the consumer's UPDATE is guarded on it and on
+   * governance <> 'canonical', so a stale or canonical target is an audited no-op.
+   */
+  updateSegmentDefinition: "crm.segment_definition.update",
+  /**
+   * Soft-delete a segment definition (G5). Payload: { tenantId, segmentCode }.
+   * Never a hard delete: contacts already classified with the code keep their value,
+   * and the row is the only record of what the code meant.
+   */
+  deleteSegmentDefinition: "crm.segment_definition.delete",
+  /**
+   * Publish a segment definition so it becomes enforceable and eligible (G5).
+   * Payload: { tenantId, segmentCode }. Fires on
+   * POST /v1/crm/segments/:segmentCode/publish. Bumps `version_number` (the taxonomy
+   * revision a recommendation consumer can quote) and stamps `published_at`.
+   */
+  publishSegmentDefinition: "crm.segment_definition.publish",
+  /**
+   * Retire a published segment definition (G5). Payload: { tenantId, segmentCode }.
+   * A deprecated segment stops being returned by the eligibility endpoint and stops
+   * being an accepted value under catalogue enforcement.
+   */
+  deprecateSegmentDefinition: "crm.segment_definition.deprecate",
+  /**
+   * Set the per-tenant segment-catalogue enforcement switch (G5).
+   * Payload: { tenantId, enforceSegmentCatalogue: boolean }.
+   * Fires on PUT /v1/crm/segments/settings. Defaults to false for every tenant, which
+   * is what keeps free-text `crm.contacts.segment` working unchanged.
+   */
+  setSegmentSettings: "crm.segment_settings.set",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +486,38 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G5: customer-segment taxonomy ──
+  /**
+   * A segment definition was created as a draft (G5).
+   * Payload: { segmentCode, governance, status: 'draft', priorityProducts,
+   * primaryChannels } — taxonomy configuration only, never customer data.
+   * MUST stay distinct from COMMANDS.createSegmentDefinition or the consumer would
+   * re-consume its own event as a fresh command.
+   */
+  segmentDefinitionCreated: "crm.segment_definition.created",
+  /**
+   * A segment definition was amended (G5). Payload: { segmentCode, applied }.
+   * `applied: false` means the guarded UPDATE matched nothing (stale version or a
+   * canonical row) — the audit event carries outcome `version_conflict`.
+   */
+  segmentDefinitionUpdated: "crm.segment_definition.updated",
+  /** A segment definition was soft-deleted (G5). Payload: { segmentCode, applied }. */
+  segmentDefinitionDeleted: "crm.segment_definition.deleted",
+  /**
+   * A segment definition became published (G5). Payload: { segmentCode, applied }.
+   * This is the signal that its priority products / primary channels are now live for
+   * recommendation eligibility, and that its code is now an accepted classification
+   * value for tenants with catalogue enforcement on.
+   */
+  segmentDefinitionPublished: "crm.segment_definition.published",
+  /** A segment definition was retired (G5). Payload: { segmentCode, applied }. */
+  segmentDefinitionDeprecated: "crm.segment_definition.deprecated",
+  /**
+   * The per-tenant segment-catalogue enforcement switch changed (G5).
+   * Payload: { enforceSegmentCatalogue }. Named `.settings_updated` rather than
+   * `.set` so it cannot collide with COMMANDS.setSegmentSettings.
+   */
+  segmentSettingsUpdated: "crm.segment_settings.settings_updated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

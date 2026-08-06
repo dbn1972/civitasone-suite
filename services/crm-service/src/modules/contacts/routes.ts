@@ -13,6 +13,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as leadFieldRules from "../leads/field-rules-repo.js";
 import { validateRequiredFields } from "../leads/field-rules-domain.js";
+import { assertSegmentAllowed } from "../segments/queries.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
@@ -171,6 +172,13 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(403, "FORBIDDEN", "only the owner or an admin may classify this contact");
       }
     }
+    // G5: `segment` stays a free-text column. A tenant may opt in to the segment
+    // catalogue (PUT /v1/crm/segments/settings), and only then is the value checked
+    // against the published segmentCodes — 422, since the payload is well formed and
+    // it is a tenant business rule that refuses it. With the switch off (the default,
+    // and the state of every tenant that predates the catalogue) this returns without
+    // reading the catalogue at all, so behaviour is byte-for-byte what it was.
+    if (body.segment !== undefined) await assertSegmentAllowed(ctx.tenantId, body.segment);
     return sendAccepted(reply, acceptedResponseSchema, await commands.classifyContact(ctx, id, body));
   });
 

@@ -49,6 +49,7 @@ import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
+import { registerSegmentConsumers } from "./modules/segments/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -105,4 +106,7 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommissionConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
+  // G5: customer-segment taxonomy CRUD + publish/deprecate + the per-tenant
+  // catalogue-enforcement switch.
+  registerSegmentConsumers(queue);
 }
