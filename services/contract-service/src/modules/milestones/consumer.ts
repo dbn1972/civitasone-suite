@@ -13,11 +13,21 @@
  *     mou.penalty_applications stops the same OCCURRENCE being charged twice
  *     even under a different messageId (operator double-click, replay, retry
  *     with a fresh id). The database, not the application, is the authority.
+ *
+ * Every duplicate-business-key insert uses onConflictDoNothing + returning()
+ * rather than try/catch on the 23505 error code. Catching a unique violation
+ * cannot work here: postgres.js records the first failed statement in a
+ * transaction and rethrows it after the callback returns (src/index.js
+ * `uncaughtError`), which is the only correct thing it can do — Postgres has
+ * already aborted the transaction, so no later statement in it could commit.
+ * A caught-and-ignored violation therefore still rolls back the inbox row and
+ * dead-letters the message. onConflictDoNothing never raises, so the duplicate
+ * is a genuine clean no-op: nothing written, no event emitted, message acked.
  */
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
@@ -70,11 +80,6 @@ function emit(tx: Tx, msg: MsgLike, topic: string, payload: Record<string, unkno
   });
 }
 
-/** Postgres unique-violation. Signals a duplicate occurrence, not a bug. */
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
-}
-
 function toBigIntOrNull(v: unknown): bigint | null {
   if (v === null || v === undefined) return null;
   // Strings only — a JSON number would already have lost precision above 2^53.
@@ -94,8 +99,12 @@ export function registerMouMilestoneConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      try {
-        await tx.insert(contractMilestones).values({
+      // uq_contract_milestones_code is a PARTIAL unique index (…WHERE
+      // milestone_code IS NOT NULL), so the ON CONFLICT clause has to repeat
+      // that predicate for Postgres to infer the index.
+      const inserted = await tx
+        .insert(contractMilestones)
+        .values({
           id: p.id,
           tenantId: msg.tenantId,
           contractId: p.contractId,
@@ -109,19 +118,22 @@ export function registerMouMilestoneConsumers(q: Queue): void {
           status: "pending",
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          // uq_contract_milestones_code — this milestone_code is already
-          // registered on this contract. Registering it again would create a
-          // second payment milestone for the same deliverable.
-          log.warn(
-            { event: "duplicate_milestone_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
-            "milestone code already registered for this contract — skipping",
-          );
-          return;
-        }
-        throw err;
+        })
+        .onConflictDoNothing({
+          target: [contractMilestones.tenantId, contractMilestones.contractId, contractMilestones.milestoneCode],
+          where: isNotNull(contractMilestones.milestoneCode),
+        })
+        .returning({ id: contractMilestones.id });
+
+      if (inserted.length === 0) {
+        // This milestone_code is already registered on this contract.
+        // Registering it again would create a second payment milestone for the
+        // same deliverable.
+        log.warn(
+          { event: "duplicate_milestone_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
+          "milestone code already registered for this contract — skipping",
+        );
+        return;
       }
 
       await emit(tx, msg, EVENTS.mouMilestoneRegistered, {
@@ -258,8 +270,9 @@ export function registerMouMilestoneConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      try {
-        await tx.insert(penaltyTerms).values({
+      const inserted = await tx
+        .insert(penaltyTerms)
+        .values({
           id: p.id,
           tenantId: msg.tenantId,
           contractId: p.contractId,
@@ -274,16 +287,18 @@ export function registerMouMilestoneConsumers(q: Queue): void {
           currency: p.currency,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          log.warn(
-            { event: "duplicate_term_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
-            "penalty term code already exists for this contract — skipping",
-          );
-          return;
-        }
-        throw err;
+        })
+        .onConflictDoNothing({
+          target: [penaltyTerms.tenantId, penaltyTerms.contractId, penaltyTerms.termCode],
+        })
+        .returning({ id: penaltyTerms.id });
+
+      if (inserted.length === 0) {
+        log.warn(
+          { event: "duplicate_term_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
+          "penalty term code already exists for this contract — skipping",
+        );
+        return;
       }
 
       await emit(tx, msg, EVENTS.mouPenaltyTermCreated, {
@@ -428,8 +443,9 @@ export function registerMouMilestoneConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      try {
-        await tx.insert(reviewSchedules).values({
+      const inserted = await tx
+        .insert(reviewSchedules)
+        .values({
           id: p.id,
           tenantId: msg.tenantId,
           contractId: p.contractId,
@@ -441,16 +457,18 @@ export function registerMouMilestoneConsumers(q: Queue): void {
           notes: p.notes ?? null,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          log.warn(
-            { event: "duplicate_review_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
-            "review code already scheduled for this contract — skipping",
-          );
-          return;
-        }
-        throw err;
+        })
+        .onConflictDoNothing({
+          target: [reviewSchedules.tenantId, reviewSchedules.contractId, reviewSchedules.reviewCode],
+        })
+        .returning({ id: reviewSchedules.id });
+
+      if (inserted.length === 0) {
+        log.warn(
+          { event: "duplicate_review_code", messageId: msg.messageId, tenantId: msg.tenantId, contractId: p.contractId },
+          "review code already scheduled for this contract — skipping",
+        );
+        return;
       }
 
       await emit(tx, msg, EVENTS.mouReviewScheduled, {
