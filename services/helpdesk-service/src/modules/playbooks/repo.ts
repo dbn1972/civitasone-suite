@@ -26,9 +26,30 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select" | "delete">;
 
 // ── Playbooks ───────────────────────────────────────────────────────────────
 
-export async function insertPlaybook(tx: Writer, row: PlaybookInsert): Promise<PlaybookRow> {
-  const res = await (tx as typeof db).insert(playbooks).values(row).returning();
-  return res[0]!;
+/**
+ * Insert a draft playbook version, tolerating the UNIQUE
+ * (tenant_id, playbook_key, version_number) collision. Returns null when that
+ * version already existed, so the caller can audit a rejected duplicate.
+ *
+ * ON CONFLICT DO NOTHING rather than letting the INSERT raise and catching
+ * SQLSTATE 23505: Postgres aborts the ENTIRE transaction on a constraint
+ * violation, so a *caught* 23505 leaves the transaction poisoned — every later
+ * statement, the audit-event enqueue included, fails with 25P02 and the handler
+ * throws anyway. Letting the database swallow the conflict keeps the
+ * transaction usable, and matches insertRunIfAbsent() below.
+ */
+export async function insertPlaybookIfAbsent(
+  tx: Writer,
+  row: PlaybookInsert,
+): Promise<PlaybookRow | null> {
+  const res = await (tx as typeof db)
+    .insert(playbooks)
+    .values(row)
+    .onConflictDoNothing({
+      target: [playbooks.tenantId, playbooks.playbookKey, playbooks.versionNumber],
+    })
+    .returning();
+  return res[0] ?? null;
 }
 
 export async function findPlaybook(id: string, tenantId: string): Promise<PlaybookRow | null> {

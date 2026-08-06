@@ -158,34 +158,32 @@ export async function handlePlaybookCreate(msg: CommandEnvelope<PlaybookCreatePa
   let created = false;
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    try {
-      await repo.insertPlaybook(tx as repo.Writer, {
-        id: p.id,
-        tenantId: p.tenantId,
-        playbookKey: p.playbookKey,
-        name: p.name,
-        description: p.description,
-        versionNumber: p.versionNumber,
-        status: "draft",
-        categoryId: p.categoryId,
-        productCode: p.productCode,
-        ticketType: p.ticketType,
-        priority: p.priority,
-        steps: normaliseSteps(p.steps),
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
+    const inserted = await repo.insertPlaybookIfAbsent(tx as repo.Writer, {
+      id: p.id,
+      tenantId: p.tenantId,
+      playbookKey: p.playbookKey,
+      name: p.name,
+      description: p.description,
+      versionNumber: p.versionNumber,
+      status: "draft",
+      categoryId: p.categoryId,
+      productCode: p.productCode,
+      ticketType: p.ticketType,
+      priority: p.priority,
+      steps: normaliseSteps(p.steps),
+      createdBy: msg.actorId,
+      updatedBy: msg.actorId,
+    });
+    if (inserted) {
       created = true;
       await audit(tx as Tx, msg, "create_playbook", RESOURCE_PLAYBOOK, p.id);
-    } catch (err) {
+    } else {
       // UNIQUE (tenant_id, playbook_key, version_number): a duplicate is a
       // rejected command, not a consumer failure — audit it and move on rather
-      // than retrying into the DLQ.
-      if ((err as { code?: string }).code === "23505") {
-        await audit(tx as Tx, msg, "create_playbook", RESOURCE_PLAYBOOK, p.id, "rejected_duplicate");
-      } else {
-        throw err;
-      }
+      // than retrying into the DLQ. The conflict is absorbed by the database
+      // (see repo.insertPlaybookIfAbsent) precisely so this audit write is
+      // still possible; a caught 23505 would have left the transaction aborted.
+      await audit(tx as Tx, msg, "create_playbook", RESOURCE_PLAYBOOK, p.id, "rejected_duplicate");
     }
   });
   if (created) {
