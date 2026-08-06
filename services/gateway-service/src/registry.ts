@@ -80,6 +80,10 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3048) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
+  // tenant-service registers most admin reads at bare /v1/* (code-lists, positions,
+  // org/*, consent/*, data-governance/*, settings) plus /v1/tenant/* — none of which
+  // the /api/v1/tenants → /v1/tenants rewrite can reach.
+  { name: "tenant-v1",    prefix: "/api/v1/tenant",    upstream: upstream("tenant", 3002), upstreamPath: "/v1" },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },

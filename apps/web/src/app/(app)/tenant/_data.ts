@@ -1,6 +1,6 @@
 /**
  * tenant route-group server loaders. Call tenant-service through the gateway
- * (/api/v1/tenant/*) using the shared cookie-aware fetchJson helper.
+ * (/api/v1/tenant/* → upstream /v1/*) using the shared cookie-aware fetchJson helper.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
@@ -84,12 +84,12 @@ function tenantLoader(path: string, key: string) {
 }
 
 /** Core tenant profile (11th backend module). */
-export const getTenantOverview = tenantLoader("/api/v1/tenant/current", "tenant.overview");
-export const getTenantQuotas = tenantLoader("/api/v1/tenant/usage", "tenant.quotas");
+export const getTenantOverview = tenantLoader("/api/v1/tenant/tenants/current", "tenant.overview");
+export const getTenantQuotas = tenantLoader("/api/v1/tenant/tenant/usage", "tenant.quotas");
 export const getTenantSettings = tenantLoader("/api/v1/tenant/settings", "tenant.settings");
 export const getTenantOrgHierarchy = tenantLoader("/api/v1/tenant/org/hierarchy", "tenant.org-hierarchy");
 export const getTenantSubscriptions = tenantLoader(
-  "/api/v1/tenant/subscription/current",
+  "/api/v1/tenant/subscriptions/current",
   "tenant.subscriptions",
 );
 export const getTenantCodeLists = tenantLoader("/api/v1/tenant/code-lists", "tenant.code-lists");

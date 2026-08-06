@@ -59,8 +59,8 @@ const ROUTE_TO_MODULE: Record<string, string> = {
 // Platform routes (always available, not module-gated)
 const PLATFORM_ROUTES = new Set([
   "identity", "policy", "policy-v1", "audit-events", "audit",
-  "notification", "admin", "admin-users", "install", "plugin",
-  "theme", "tenant", "sync", "devices", "queue", "locations",
+  "notification", "notifications-v1", "admin", "admin-users", "install", "plugin",
+  "theme", "tenant", "tenant-v1", "sync", "devices", "queue", "locations",
 ]);
 
 // In-memory module cache (TTL: 60s) per tenant
