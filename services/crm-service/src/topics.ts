@@ -225,6 +225,13 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── Onboarding health metrics (G19) ──
+  /** Create a health rule defining a milestone deadline expectation. */
+  createOnboardingHealthRule: "crm.onboarding_health_rule.create",
+  /** Update an existing health rule (optimistic lock on version). */
+  updateOnboardingHealthRule: "crm.onboarding_health_rule.update",
+  /** Recompute the health score for an onboarding case against active rules. */
+  recomputeOnboardingHealth: "crm.onboarding_health.recompute",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +448,13 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── Onboarding health metrics (G19) ──
+  /** A health rule was created. Payload: { ruleId, ruleKey, milestoneEvent, expectedWithinDays, weight, active }. */
+  onboardingHealthRuleCreated: "crm.onboarding_health_rule.created",
+  /** A health rule was updated. Payload: { ruleId, changed } or { ruleId, rejected: true }. */
+  onboardingHealthRuleUpdated: "crm.onboarding_health_rule.updated",
+  /** Health score recomputed for an onboarding case. Payload: { caseId, score, milestonesCount }. */
+  onboardingHealthRecomputed: "crm.onboarding_health.recomputed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
