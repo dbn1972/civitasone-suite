@@ -15,6 +15,7 @@ import { schema as onboardingModule } from "../modules/onboarding/schema.js";
 import { schema as sentimentModule } from "../modules/sentiment/schema.js";
 import { schema as leadFieldRulesModule } from "../modules/leads/field-rules-schema.js";
 import { schema as leadCaptureFormsModule } from "../modules/leads/capture-forms-schema.js";
+import { schema as journeysModule } from "../modules/journeys/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -28,6 +29,8 @@ const SCHEMA = {
   ...sentimentModule,
   ...leadFieldRulesModule,
   ...leadCaptureFormsModule,
+  // G1/G2: canonical stage vocabulary + journey templates (spec §25).
+  ...journeysModule,
   ...outboxSchema,
 };
 

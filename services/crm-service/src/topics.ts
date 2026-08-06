@@ -225,6 +225,57 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G1/G2: canonical stage vocabulary + journey templates (spec §25) ──
+  /**
+   * G1 — add a TENANT-governed stage code to the vocabulary.
+   * Payload: { id, tenantId, stageCode, displayName, description, ordinal, required,
+   * governance: 'tenant' }.
+   * Fires when an admin POSTs /v1/crm/stage-vocabulary. `governance` is always 'tenant':
+   * canonical codes arrive only through migration 0082, never through a command, because a
+   * vocabulary a tenant can extend canonically is not a national vocabulary.
+   */
+  createStageCode: "crm.stage_vocabulary.create",
+  /**
+   * G1 — amend a tenant-governed stage code.
+   * Payload: { id, tenantId, displayName?, description?, ordinal?, required?, version }.
+   * The route refuses a canonical row with 422 before publishing, and migration 0081's
+   * trigger refuses it at the table — so this command can only ever carry a tenant row.
+   */
+  updateStageCode: "crm.stage_vocabulary.update",
+  /** G1 — soft-delete a tenant-governed stage code. Payload: { id, tenantId }. */
+  deleteStageCode: "crm.stage_vocabulary.delete",
+  /**
+   * G2 — create a journey template (always as a draft, version 1 of its key).
+   * Payload: { id, tenantId, templateKey, name, description, parentTemplateId,
+   * product, region, businessUnit, steps, versionNumber, status: 'draft' }.
+   * Fires when an admin POSTs /v1/crm/journey-templates, after the override rules have
+   * been checked against the effective stage vocabulary at the route.
+   */
+  createJourneyTemplate: "crm.journey_template.create",
+  /**
+   * G2 — amend a DRAFT journey template.
+   * Payload: { id, tenantId, name?, description?, steps?, product?, region?,
+   * businessUnit?, version }. A published template is never amended in place; the route
+   * answers 422 and the caller publishes a new version instead.
+   */
+  updateJourneyTemplate: "crm.journey_template.update",
+  /** G2 — soft-delete a DRAFT journey template. Payload: { id, tenantId }. */
+  deleteJourneyTemplate: "crm.journey_template.delete",
+  /**
+   * G2 — publish a journey template.
+   * Payload: { id, tenantId, steps: JourneyStep[] | null, newTemplateId: string | null,
+   * versionNumber: number }.
+   * With `steps` null the draft is published in place. With `steps` supplied the consumer
+   * inserts a NEW row (`newTemplateId`, `versionNumber`) and deprecates the row it
+   * supersedes — versioned BY ROW, so historical journey instances keep the definition
+   * they actually ran under.
+   */
+  publishJourneyTemplate: "crm.journey_template.publish",
+  /**
+   * G2 — deprecate a published journey template.
+   * Payload: { id, tenantId, reason: string | null }.
+   */
+  deprecateJourneyTemplate: "crm.journey_template.deprecate",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +492,45 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+
+  // ── G1/G2: canonical stage vocabulary + journey templates (spec §25) ─────────
+  /**
+   * G1 — a tenant-governed stage code was added to the vocabulary.
+   * Payload: { stageId, stageCode, ordinal, required, governance }.
+   * Consumed by analytics/report services so a tenant-specific stage appears in that
+   * tenant's funnel without ever being added to the national aggregation.
+   * MUST stay distinct from COMMANDS.createStageCode — the consumer of that command emits
+   * this, and a shared string would make it re-consume its own event.
+   */
+  stageCodeCreated: "crm.stage_vocabulary.created",
+  /** G1 — a tenant stage code was amended. Payload: { stageId, stageCode, changed }. */
+  stageCodeUpdated: "crm.stage_vocabulary.updated",
+  /** G1 — a tenant stage code was removed. Payload: { stageId, stageCode }. */
+  stageCodeDeleted: "crm.stage_vocabulary.deleted",
+  /**
+   * G2 — a journey template draft was created.
+   * Payload: { templateId, templateKey, versionNumber, parentTemplateId, stepCount }.
+   * Carries no step detail: SLAs and communication template refs are configuration, and
+   * downstream consumers read the resolved template over HTTP when they need it.
+   */
+  journeyTemplateCreated: "crm.journey_template.created",
+  /** G2 — a draft journey template was amended. Payload: { templateId, changed }. */
+  journeyTemplateUpdated: "crm.journey_template.updated",
+  /** G2 — a draft journey template was removed. Payload: { templateId }. */
+  journeyTemplateDeleted: "crm.journey_template.deleted",
+  /**
+   * G2 — a journey template version became the live definition.
+   * Payload: { templateId, templateKey, versionNumber, supersededTemplateId }.
+   * `supersededTemplateId` is the row that was deprecated to make way, or null on a first
+   * publish. Consumed by journey-service to start new instances on the new version while
+   * running instances stay on the row they started under.
+   */
+  journeyTemplatePublished: "crm.journey_template.published",
+  /**
+   * G2 — a published journey template was retired.
+   * Payload: { templateId, templateKey, versionNumber, reason }.
+   */
+  journeyTemplateDeprecated: "crm.journey_template.deprecated",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

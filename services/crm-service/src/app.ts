@@ -74,6 +74,7 @@ import { flagRoutes } from "./modules/contacts/flags-routes.js";
 import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
+import { journeyRoutes } from "./modules/journeys/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -194,6 +195,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(volumeVsActualRoutes);
   await app.register(sponsorRoutes);
+  // ── G1/G2 (spec §25): canonical stage vocabulary + national-template-with-local-override
+  // journey templates. The vocabulary is what makes two tenants' funnels comparable.
+  await app.register(journeyRoutes);
 
   return app;
 }

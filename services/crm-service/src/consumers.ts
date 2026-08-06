@@ -49,6 +49,7 @@ import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
+import { registerJourneyConsumers } from "./modules/journeys/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -105,4 +106,6 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommissionConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
+  // G1/G2: stage vocabulary + journey template CRUD, publish and deprecate.
+  registerJourneyConsumers(queue);
 }
