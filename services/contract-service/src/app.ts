@@ -17,6 +17,7 @@ import { renewalRoutes }    from "./modules/renewals/routes.js";
 import { approvalRoutes }   from "./modules/approvals/routes.js";
 import { esignRoutes }      from "./modules/esign/routes.js";
 import { templateRoutes }   from "./modules/templates/routes.js";
+import { mouMilestoneRoutes } from "./modules/milestones/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -51,6 +52,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(approvalRoutes);
   await app.register(esignRoutes);
   await app.register(templateRoutes);
+  await app.register(mouMilestoneRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

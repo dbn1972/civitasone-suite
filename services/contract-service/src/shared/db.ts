@@ -13,6 +13,8 @@ import { schema as obligationsModule } from "../modules/obligations/schema.js";
 import { schema as renewalsModule }    from "../modules/renewals/schema.js";
 import { schema as approvalsModule }   from "../modules/approvals/schema.js";
 import { schema as esignModule }       from "../modules/esign/schema.js";
+// G15 — MoU milestone governance (penalty terms, penalty ledger, review schedule).
+import { schema as milestonesModule }  from "../modules/milestones/schema.js";
 import { outboxSchema }              from "./outbox.js";
 
 const SCHEMA = {
@@ -24,6 +26,7 @@ const SCHEMA = {
   ...renewalsModule,
   ...approvalsModule,
   ...esignModule,
+  ...milestonesModule,
   ...outboxSchema,
 };
 

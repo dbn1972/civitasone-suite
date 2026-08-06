@@ -22,18 +22,42 @@ export const contractContracts = contractsSchema.table("contract_contracts", {
   version:     integer("version").notNull().default(1),
 });
 
+/**
+ * Contract / MoU milestones.
+ *
+ * Owned by this module. G15 (migration 0018) extended it with the MoU
+ * governance columns — milestoneCode, description, ordinal, completedAt and the
+ * waiver record — rather than introducing a second milestone table. The
+ * MoU-facing routes, state machine and penalty logic live in
+ * src/modules/milestones/, which reads and writes this table through this
+ * definition. See src/modules/milestones/README.md for the decision record.
+ *
+ * `status` carries two vocabularies, both admitted by the widened CHECK
+ * constraint: the procurement one ("completed", "completed_late", "overdue",
+ * "cancelled") used by the contracts consumer, and the MoU one ("met",
+ * "missed", "waived") used by the milestones module. "pending" is shared.
+ */
 export const contractMilestones = contractsSchema.table("contract_milestones", {
   id:           uuid("id").primaryKey().defaultRandom(),
   contractId:   uuid("contract_id").notNull(),
   tenantId:     uuid("tenant_id").notNull(),
+  /** G15 business key: UNIQUE per (tenantId, contractId). Null on pre-G15 rows. */
+  milestoneCode: varchar("milestone_code", { length: 64 }),
   title:        text("title").notNull(),
+  description:  text("description").notNull().default(""),
+  ordinal:      integer("ordinal").notNull().default(1),
   dueDate:      date("due_date").notNull(),
   amountMinor:  bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("pending"),
   achievedDate: date("achieved_date"),
+  completedAt:  timestamp("completed_at", { withTimezone: true }),
   penaltyMinor: bigint("penalty_minor", { mode: "bigint" }).notNull().default(0n),
   netPayableMinor: bigint("net_payable_minor", { mode: "bigint" }),
+  /** Waiver record. All three are set together or none is — enforced by CHECK. */
+  waivedBy:     uuid("waived_by"),
+  waivedAt:     timestamp("waived_at", { withTimezone: true }),
+  waiverReason: text("waiver_reason"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
