@@ -70,6 +70,20 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ removed });
   });
 
+  // Archive is the only lifecycle write the list screen offers; archived
+  // offices stay for history but cannot be selected for new records.
+  app.patch("/v1/locations/:id/archive", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const { id } = idParam.parse(req.params);
+    const existing = await queries.getLocation(id, ctx.tenantId);
+    if (!existing) {
+      throw new HttpError(404, "NOT_FOUND", "location not found");
+    }
+    const body = (req.body ?? {}) as { reason?: string };
+    sendAccepted(reply, acceptedResponseSchema, await commands.archiveLocation(ctx, id, body.reason));
+  });
+
   app.get("/v1/locations/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LOCATION_ROLES);

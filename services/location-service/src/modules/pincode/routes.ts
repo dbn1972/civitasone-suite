@@ -26,7 +26,9 @@ export async function pincodeRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/pincodes/bulk-import", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ["location_admin", "super_admin", "admin"]);
+    // Pincodes are GLOBAL reference data (no tenant column): a tenant-level
+    // admin bulk-importing would rewrite every tenant's lookups. Platform only.
+    requireRole(ctx, ["platform_admin", "super_admin"]);
     const body = bulkImportBody.parse(req.body);
     return reply.code(202).send(await commands.pincodeBulkImport(ctx, body));
   });

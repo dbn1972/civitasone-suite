@@ -40,3 +40,17 @@ export async function createLocation(ctx: RequestContext, body: CreateLocationBo
 
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function archiveLocation(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.archiveLocation, {
+    messageId: randomUUID(),
+    type: COMMANDS.archiveLocation,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, reason: reason ?? null },
+  });
+
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

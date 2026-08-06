@@ -50,6 +50,22 @@ export async function insert(tx: Writer, row: LocationInsert): Promise<void> {
   await tx.insert(locations).values(row);
 }
 
+/** Tenant-scoped status flip; returns false when the row does not exist for this tenant. */
+export async function setStatus(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  status: string,
+  actorId: string,
+): Promise<boolean> {
+  const rows = await tx
+    .update(locations)
+    .set({ status, updatedBy: actorId })
+    .where(and(eq(locations.id, id), eq(locations.tenantId, tenantId)))
+    .returning({ id: locations.id });
+  return rows.length > 0;
+}
+
 /** The example offices a clerk can add to explore (clearly marked as samples). */
 const SAMPLE_OFFICES: Array<Pick<LocationView, "name" | "addressLine" | "city" | "postalCode" | "type">> = [
   { name: "[SAMPLE] Head Office", addressLine: "1 Example Marg", city: "Bhubaneswar", postalCode: "751001", type: "office" },

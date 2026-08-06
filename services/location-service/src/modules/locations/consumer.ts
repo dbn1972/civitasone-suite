@@ -39,6 +39,36 @@ export function registerLocationConsumers(queue: Queue): void {
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
+
+  queue.subscribe<{ id: string; tenantId: string; reason: string | null }>(
+    COMMANDS.archiveLocation,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const p = msg.payload;
+        const updated = await repo.setStatus(tx, msg.tenantId, p.id, "archived", msg.actorId);
+        // Missing row: record the failed outcome in the audit trail rather than
+        // silently swallowing — the API already returned 202.
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            service: "location",
+            action: "archive",
+            resourceType: "location",
+            resourceId: p.id,
+            outcome: updated ? "success" : "not_found",
+            ...(p.reason ? { reason: p.reason } : {}),
+          },
+        });
+      });
+      await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
+      await cache.invalidateResource(msg.tenantId, RESOURCE);
+    },
+  );
 }
 
 async function emit(

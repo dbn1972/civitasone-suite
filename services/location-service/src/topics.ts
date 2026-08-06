@@ -2,6 +2,7 @@
 export const COMMANDS = {
   // locations
   createLocation: "location.location.create",
+  archiveLocation: "location.location.archive",
   // hierarchy
   unitCreate: "location.hierarchy.unit.create",
   unitUpdate: "location.hierarchy.unit.update",

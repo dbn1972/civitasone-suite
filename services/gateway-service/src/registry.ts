@@ -79,6 +79,12 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "ai",              prefix: "/api/v1/ai",              upstream: upstream("ai-agent", 3041) },
   { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3048) },
   { name: "locations",    prefix: "/api/v1/locations", upstream: upstream("location", 4012) },
+  // location-service also owns geofences, jurisdictions, the office hierarchy
+  // and the pincode lookup — previously unreachable through the gateway.
+  { name: "geofences",     prefix: "/api/v1/geofences",     upstream: upstream("location", 4012) },
+  { name: "jurisdictions", prefix: "/api/v1/jurisdictions", upstream: upstream("location", 4012) },
+  { name: "hierarchy",     prefix: "/api/v1/hierarchy",     upstream: upstream("location", 4012) },
+  { name: "pincodes",      prefix: "/api/v1/pincodes",      upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
   // tenant-service registers most admin reads at bare /v1/* (code-lists, positions,
   // org/*, consent/*, data-governance/*, settings) plus /v1/tenant/* — none of which
