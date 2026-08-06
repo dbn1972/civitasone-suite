@@ -36,6 +36,56 @@ export const COMMANDS = {
   catalogueRequestApprove: "helpdesk.catalogue.request_approve",
   catalogueRequestAdvance: "helpdesk.catalogue.request_advance",
   catalogueRequestFulfil: "helpdesk.catalogue.request_fulfil",
+  // ── G13 Resolution playbooks ───────────────────────────────────────────────
+  /**
+   * Create a DRAFT playbook version.
+   * Payload: { tenantId, id, playbookKey, name, description|null, versionNumber,
+   *            categoryId|null, productCode|null, ticketType|null, priority|null,
+   *            steps: PlaybookStep[] }
+   * Fires: POST /v1/helpdesk/playbooks.
+   */
+  playbookCreate: "helpdesk.playbook.create",
+  /**
+   * Patch a DRAFT playbook (published versions are immutable — runs reference
+   * their steps).
+   * Payload: { tenantId, id, expectedVersion, ...partial playbook fields }
+   * Fires: PATCH /v1/helpdesk/playbooks/:id.
+   */
+  playbookUpdate: "helpdesk.playbook.update",
+  /**
+   * Publish a draft playbook so `resolve` can select it.
+   * Payload: { tenantId, id, expectedVersion, publishedAt: ISO string }
+   * Fires: POST /v1/helpdesk/playbooks/:id/publish.
+   */
+  playbookPublish: "helpdesk.playbook.publish",
+  /**
+   * Retire a published playbook. Deprecated playbooks are never resolved but
+   * existing runs keep working.
+   * Payload: { tenantId, id, expectedVersion }
+   * Fires: POST /v1/helpdesk/playbooks/:id/deprecate.
+   */
+  playbookDeprecate: "helpdesk.playbook.deprecate",
+  /**
+   * Start a guided run of a playbook against a ticket.
+   * Payload: { tenantId, runId, playbookId, ticketId, steps: PlaybookStep[] }
+   * Fires: POST /v1/helpdesk/playbook-runs (manual attach). The automatic
+   * attach on ticket creation does NOT use this command — it writes the run
+   * inside the `helpdesk.ticket.created` consumer transaction instead.
+   */
+  playbookRunStart: "helpdesk.playbook.run_start",
+  /**
+   * Mark one guided step of a run complete.
+   * Payload: { tenantId, runId, stepId, note|null }
+   * Fires: POST /v1/helpdesk/playbook-runs/:id/steps/:stepId/complete.
+   */
+  playbookStepComplete: "helpdesk.playbook.step_complete",
+  /**
+   * Close a run. Rejected at the route with 422 while a mandatory step is
+   * outstanding, so the consumer only ever sees completable runs.
+   * Payload: { tenantId, runId, expectedVersion }
+   * Fires: POST /v1/helpdesk/playbook-runs/:id/complete.
+   */
+  playbookRunComplete: "helpdesk.playbook.run_complete",
   // P0 F3 leftover — SLA calendars / pause / extend / CES
   calendarCreate: "helpdesk.sla.calendar_create",
   calendarUpdate: "helpdesk.sla.calendar_update",
@@ -83,6 +133,34 @@ export const EVENTS = {
   requestStageAdvanced: "helpdesk.request.stage_advanced",
   requestFulfilled: "helpdesk.request.fulfilled",
   requestBreachEscalated: "helpdesk.request.breach_escalated",
+  // ── G13 Resolution playbooks ───────────────────────────────────────────────
+  /**
+   * A playbook run was bound to a ticket and its guided steps snapshotted.
+   * Payload: { runId, playbookId, playbookKey, playbookVersionNumber, ticketId,
+   *            stepCount, mandatoryStepCount, autoAttached: boolean }
+   * Fires: once per run — from the manual `helpdesk.playbook.run_start`
+   * command AND from the automatic attach on `helpdesk.ticket.created`.
+   * Guaranteed at most once per (tenantId, ticketId): the run table carries a
+   * UNIQUE (tenant_id, ticket_id) constraint, and the event is only emitted
+   * when the insert actually created the row.
+   */
+  playbookRunStarted: "helpdesk.playbook.run_started",
+  /**
+   * An agent completed one guided step of a run.
+   * Payload: { runId, ticketId, stepId, ordinal, mandatory, progressPct,
+   *            completedBy, completedAt: ISO string }
+   * Fires: only on the transition from incomplete → complete for that step;
+   * re-completing an already-complete step is a no-op and emits nothing.
+   */
+  playbookStepCompleted: "helpdesk.playbook.step_completed",
+  /**
+   * A playbook run was closed with every mandatory step done.
+   * Payload: { runId, playbookId, ticketId, progressPct, completedAt: ISO
+   *            string, completedBy }
+   * Fires: once per run, after the last completable transition. Never fires
+   * while a mandatory step is outstanding (the route rejects with 422).
+   */
+  playbookRunCompleted: "helpdesk.playbook.run_completed",
 } as const;
 
 /** Foreign producer topics this service CONSUMES (HD2 inbound linkage). */
@@ -113,3 +191,7 @@ export const SOURCE = {
 export const SERVICE = "helpdesk";
 export const RESOURCE = "ticket";
 export const RESOURCE_REQUEST = "service_request";
+/** G13 — cache/audit resource tag for resolution playbooks. */
+export const RESOURCE_PLAYBOOK = "playbook";
+/** G13 — cache/audit resource tag for playbook runs. */
+export const RESOURCE_PLAYBOOK_RUN = "playbook_run";

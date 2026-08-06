@@ -13,6 +13,7 @@ import { registerSlaConsumers } from "./modules/sla/consumer.js";
 import { registerCsatConsumer } from "./modules/sla/csat-consumer.js";
 import { registerRoutingConsumers } from "./modules/routing/consumer.js";
 import { registerCatalogueConsumers } from "./modules/catalogue/consumer.js";
+import { registerPlaybookConsumers } from "./modules/playbooks/consumer.js";
 
 const log = pino({ name: "helpdesk-worker" });
 
@@ -25,6 +26,8 @@ registerSlaConsumers(queue);
 registerCsatConsumer(queue);
 registerRoutingConsumers(queue);
 registerCatalogueConsumers(queue);
+// G13 — resolution playbooks: lifecycle commands + auto-attach on ticket creation.
+registerPlaybookConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

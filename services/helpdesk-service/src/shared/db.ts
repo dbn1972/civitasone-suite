@@ -9,6 +9,7 @@ import { schema as ticketsModule } from "../modules/tickets/schema.js";
 import { schema as automationModule } from "../modules/automation/schema.js";
 import { schema as slaModule } from "../modules/sla/schema.js";
 import { schema as catalogueModule } from "../modules/catalogue/schema.js";
+import { schema as playbooksModule } from "../modules/playbooks/schema.js";
 import { savedViewsSchema } from "../modules/tickets/views-schema.js";
 import { knowledgeSchema } from "../modules/knowledge/schema.js";
 import { outboxSchema } from "./outbox.js";
@@ -18,6 +19,7 @@ const SCHEMA = {
   ...automationModule,
   ...slaModule,
   ...catalogueModule,
+  ...playbooksModule,
   ...savedViewsSchema,
   ...knowledgeSchema,
   ...outboxSchema,
