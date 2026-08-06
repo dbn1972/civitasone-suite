@@ -219,6 +219,14 @@ export const COMMANDS = {
   /** DM-001 internal (service-secret gated) malware scan result -> sets scan_status. */
   recordDocumentScan: "crm.document.scan_result",
   // ── Gap 2: Campaign approval workflow ──
+  // ── G10: Account Health Score ──
+  /** Create or upsert a health score signal configuration (G10). */
+  createHealthScoreConfig: "crm.health_score_config.create",
+  /** Update a health score signal configuration (G10). */
+  updateHealthScoreConfig: "crm.health_score_config.update",
+  /** Trigger recomputation of an account's health score (G10). */
+  recomputeHealthScore: "crm.health_score.recompute",
+
   /** Submit a bulk campaign for approval when it exceeds the threshold. */
   submitCampaignForApproval: "crm.campaign.submit_for_approval",
   /** Approve a pending campaign — triggers actual bulk send. */
@@ -441,6 +449,13 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G10: Account Health Score ──
+  /** Health score config created or upserted (G10). Payload: { configId, signalName, source }. */
+  healthScoreConfigCreated: "crm.health_score_config.created",
+  /** Health score config updated (G10). Payload: { configId }. */
+  healthScoreConfigUpdated: "crm.health_score_config.updated",
+  /** Account health score recomputed (G10). Payload: { accountId, score }. */
+  healthScoreComputed: "crm.health_score.computed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

@@ -48,6 +48,7 @@ import { registerQuotationApprovalConsumers } from "./modules/deals/quotation-ap
 import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
+import { registerHealthScoreConsumers } from "./modules/health-score/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
@@ -103,6 +104,8 @@ export function registerAllConsumers(queue: Queue): void {
   // ── Generic CRM gaps ──
   // Gap 1: commission computation on deal closed
   registerCommissionConsumers(queue);
+  // G10: account health score config and recompute
+  registerHealthScoreConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
 }
