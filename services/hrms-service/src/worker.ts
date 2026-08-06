@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -59,6 +60,20 @@ import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 
 const log = pino({ name: "hrms-worker" });
+
+// Wrap queue.subscribe to set tenant context from the message — consumers run
+// db.transaction() and, without app.tenant_id in ALS, the FORCE-RLS posture
+// silently matches zero rows for every async CQRS write AFTER the API already
+// returned 202-Accepted. Same pattern as payroll's worker.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerEmployeeConsumers(queue);
 registerLifecycleMutationConsumers(queue);
