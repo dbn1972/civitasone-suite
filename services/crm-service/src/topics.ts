@@ -225,6 +225,19 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G9: Win-back cadence engine ──
+  /** Create a win-back cadence definition. Payload: { id, name, triggerCriteria, steps, status }. */
+  createWinbackCadence: "crm.winback_cadence.create",
+  /** Update a win-back cadence (name, criteria, steps, status). Payload: { id, ...changes, version }. */
+  updateWinbackCadence: "crm.winback_cadence.update",
+  /** Enroll an account into a win-back cadence. Payload: { id, cadenceId, accountId }. */
+  enrollWinbackAccount: "crm.winback_enrollment.enroll",
+  /** Advance an enrollment to the next cadence step. Payload: { enrollmentId, version }. */
+  advanceWinbackStep: "crm.winback_enrollment.advance",
+  /** Cancel an active enrollment. Payload: { enrollmentId, version }. */
+  cancelWinbackEnrollment: "crm.winback_enrollment.cancel",
+  /** Record the outcome of a win-back enrollment. Payload: { enrollmentId, outcome, version }. */
+  recordWinbackOutcome: "crm.winback_enrollment.record_outcome",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +454,21 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G9: Win-back cadence engine ──
+  /** A win-back cadence definition was created. Payload: { cadenceId, name, status }. */
+  winbackCadenceCreated: "crm.winback_cadence.created",
+  /** A win-back cadence was updated. Payload: { cadenceId, status, version }. */
+  winbackCadenceUpdated: "crm.winback_cadence.updated",
+  /** An account was enrolled in a win-back cadence. Payload: { enrollmentId, cadenceId, accountId }. */
+  winbackAccountEnrolled: "crm.winback_enrollment.enrolled",
+  /** An enrollment advanced to the next step. Payload: { enrollmentId, step, actionType }. */
+  winbackStepAdvanced: "crm.winback_enrollment.step_advanced",
+  /** An enrollment completed all cadence steps. Payload: { enrollmentId, cadenceId }. */
+  winbackEnrollmentCompleted: "crm.winback_enrollment.completed",
+  /** An enrollment was cancelled. Payload: { enrollmentId }. */
+  winbackEnrollmentCancelled: "crm.winback_enrollment.cancelled",
+  /** An outcome was recorded for an enrollment. Payload: { enrollmentId, outcome, newStatus }. */
+  winbackOutcomeRecorded: "crm.winback_enrollment.outcome_recorded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
