@@ -49,6 +49,7 @@ import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
+import { registerProgrammeConsumers } from "./modules/programmes/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -105,4 +106,9 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommissionConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
+  // ── G12: government programmes (Spec §25.7, Journey J6) ──
+  // Registers create / update / status / metric / deal-link. Without this the programme
+  // routes would answer 202 and never write — which is the exact failure this file exists
+  // to make impossible.
+  registerProgrammeConsumers(queue);
 }

@@ -30,6 +30,12 @@ export const deals = crmSchema.table("deals", {
   // ── OP-006: extended closure ──
   closeOutcome: varchar("close_outcome", { length: 16 }),
   closeCompetitor: jsonb("close_competitor").$type<string[] | null>(),
+  /**
+   * G12 (Journey J6): the government programme this opportunity is registered under.
+   * Nullable with no default — every pre-existing deal stays NULL and no deals write path
+   * sets it. Only crm.programme.link_deal populates it.
+   */
+  programmeId: uuid("programme_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -68,6 +74,8 @@ export type DealView = {
   stageEnteredAt: string | null;
   closeOutcome: string | null;
   closeCompetitor: string[] | null;
+  /** G12: programme this deal is registered under, null for every unlinked deal. */
+  programmeId: string | null;
   version: number;
 };
 

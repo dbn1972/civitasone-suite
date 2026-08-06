@@ -71,6 +71,9 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
     stageEnteredAt: r.stageEnteredAt?.toISOString() ?? null,
     closeOutcome: r.closeOutcome ?? null,
     closeCompetitor: r.closeCompetitor ?? null,
+    // G12: additive field. Null on every deal that has not been registered under a
+    // programme, which is all of them until crm.programme.link_deal says otherwise.
+    programmeId: r.programmeId ?? null,
     version: r.version,
   };
 }

@@ -71,7 +71,9 @@ tags:
   - name: Notification
     description: Email deliverability — sending domains, DKIM/SPF/DMARC authentication health
   - name: CRM
-    description: Contacts and leads, configurable lead field rules, lead completeness scoring
+    description: |
+      Contacts and leads, configurable lead field rules, lead completeness scoring,
+      government programmes with per-period metrics and execution-health roll-up
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -15364,6 +15366,561 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security: []
 
+  # ═════════════════════════════════════════════════════════════════════════════
+  # CRM — Government programmes / engagements (G12, Spec §25.7, Journey J6)
+  # ═════════════════════════════════════════════════════════════════════════════
+
+  /v1/crm/programmes:
+    get:
+      operationId: listProgrammes
+      tags: [CRM]
+      summary: List government programmes
+      description: |
+        Returns the caller's tenant's programmes, newest first, in the standard
+        `{ data, meta }` envelope. Readable by any CRM user — a programme is context
+        an agent needs while working an account, not privileged configuration.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/CrmPageParam"
+        - $ref: "#/components/parameters/CrmLimitParam"
+        - name: status
+          in: query
+          description: Filter to one lifecycle status
+          schema:
+            $ref: "#/components/schemas/ProgrammeStatus"
+        - name: accountId
+          in: query
+          description: Filter to programmes registered against one account
+          schema:
+            type: string
+            format: uuid
+        - name: productLine
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        "200":
+          description: Paginated programmes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Programme"
+                  meta:
+                    $ref: "#/components/schemas/ListMeta"
+        "400":
+          description: "`VALIDATION_FAILED` — unknown `status`, non-UUID `accountId`, or `limit` above 200"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createProgramme
+      tags: [CRM]
+      summary: Register a government programme
+      description: |
+        Registers a programme in `draft`. Registration is not activation — metrics are
+        refused until it is moved to `active` (see POST `/status`).
+
+        `programmeCode` is uppercased and trimmed during validation, so `pmay-u` and
+        `PMAY-U` are the same code and cannot both be registered. `coverageScope` lists
+        are trimmed, de-duplicated and sorted before storage so two identical scopes
+        compare equal between periods.
+
+        CQRS write — returns 202; the command is applied asynchronously.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProgrammeRequest"
+      responses:
+        "202":
+          description: Registration command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            `VALIDATION_FAILED` — a malformed `programmeCode`, a non-ISO date, an
+            over-long field, or any unknown field (bodies are strict).
+            `INVALID_DATE_RANGE` — `startDate` is after `endDate`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "409":
+          description: |
+            `DUPLICATE_PROGRAMME_CODE` — that code is already registered in this tenant.
+            Checked at the route so a duplicate is actionable, rather than a 202 whose
+            command the consumer quietly converges away.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/programmes/{id}:
+    get:
+      operationId: getProgramme
+      tags: [CRM]
+      summary: Read one programme
+      description: |
+        A programme belonging to another tenant answers 404, never 403 — whether a
+        programme code exists in another department is not something this API confirms.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+      responses:
+        "200":
+          description: The programme
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Programme"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a UUID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`INVALID_STATE` — the stored status is not one the domain recognises"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: updateProgramme
+      tags: [CRM]
+      summary: Amend programme metadata
+      description: |
+        Partial update with optimistic locking. `version` is REQUIRED: the consumer's
+        UPDATE is guarded on it, so accepting a patch without one would mean answering
+        202 to a write that may be silently dropped. At least one mutable field must be
+        supplied. `programmeCode` and `accountId` are NOT amendable.
+
+        CQRS write — returns 202.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProgrammeRequest"
+      responses:
+        "202":
+          description: Update command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            `VALIDATION_FAILED` — no mutable field supplied, an unknown field, or a
+            malformed value. `INVALID_DATE_RANGE` — the resulting range is inverted
+            (evaluated against the stored dates for any end not being changed).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT` — the programme has moved on since it was read"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            `PROGRAMME_CLOSED` — a closed programme is a historic record; amending its
+            metadata would rewrite what a past engagement said it covered.
+            `INVALID_STATE` — the stored status is unrecognised.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/programmes/{id}/status:
+    post:
+      operationId: changeProgrammeStatus
+      tags: [CRM]
+      summary: Transition a programme's lifecycle status
+      description: |
+        Legal transitions: `draft` → `active` | `closed`; `active` → `suspended` |
+        `closed`; `suspended` → `active` | `closed`. `closed` is TERMINAL — a programme
+        that has ended is superseded by a new one with its own code and metric series,
+        never reopened, because reopening makes the metric history ambiguous about which
+        engagement it describes. `suspended` ⇄ `active` is the only loop: suspension
+        (funds withheld, stay order) is reversible and the programme keeps its identity.
+
+        CQRS write — returns 202.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProgrammeStatusRequest"
+      responses:
+        "202":
+          description: Transition command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — unknown `status`, missing `version`, or an unknown field"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT` — stale `version`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            `INVALID_TRANSITION` — the move is not legal from the current status. The
+            message lists what is allowed, or states that the current status is terminal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/programmes/{id}/metrics:
+    get:
+      operationId: listProgrammeMetrics
+      tags: [CRM]
+      summary: Per-period metric series for a programme
+      description: |
+        Returns the programme's recorded metric periods. A metric read for a programme
+        that is not this tenant's answers 404, so the endpoint cannot be used to probe
+        for programme ids.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+        - $ref: "#/components/parameters/CrmPageParam"
+        - $ref: "#/components/parameters/CrmLimitParam"
+        - name: metricKey
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: periodStartFrom
+          in: query
+          description: Include periods whose `periodStart` is on or after this date
+          schema:
+            type: string
+            format: date
+        - name: periodStartTo
+          in: query
+          description: Include periods whose `periodStart` is on or before this date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Paginated metric periods
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProgrammeMetric"
+                  meta:
+                    $ref: "#/components/schemas/ListMeta"
+        "400":
+          description: "`VALIDATION_FAILED` — a non-ISO date filter or `limit` above 200"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+    post:
+      operationId: recordProgrammeMetric
+      tags: [CRM]
+      summary: Record or correct one period's metric
+      description: |
+        Records a single (metricKey, period) observation. Re-posting the same key and
+        period is a correction, not a duplicate.
+
+        `value` is ALWAYS a string, monetary or not. A JSON number would round a revenue
+        figure above 2^53 minor units and would quietly re-scale a 6-decimal-place ratio.
+        `metricKind` may be omitted, in which case it is inferred from `metricKey`
+        (keys reading as money → `money`; keys containing ratio/rate/percent/coverage →
+        `ratio`; otherwise `count`).
+
+        By kind: `money` requires an integer string of minor units and accepts
+        `currency` (ISO 4217, default `INR`); `ratio` must be a fraction between 0 and 1
+        and must NOT carry a currency; `count` must be non-negative and must NOT carry a
+        currency. Non-monetary values allow at most 6 fractional digits.
+
+        CQRS write — returns 202.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordProgrammeMetricRequest"
+      responses:
+        "202":
+          description: Metric command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            `VALIDATION_FAILED` — `metricKey` is not lower_snake_case, a date is not ISO,
+            or an unknown field was sent. `INVALID_PERIOD` — `periodStart` is after
+            `periodEnd`. `INVALID_MONEY_VALUE` — a monetary metric whose value is not an
+            integer minor-units string. `INVALID_CURRENCY` — `currency` is not a 3-letter
+            ISO 4217 code. `INVALID_NUMERIC_VALUE` — more than 6 fractional digits.
+            `CURRENCY_NOT_APPLICABLE` — `currency` sent for a count or ratio.
+            `RATIO_OUT_OF_RANGE` — a ratio outside 0–1. `NEGATIVE_COUNT` — a negative count.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            `PROGRAMME_NOT_EXECUTING` — the programme is still in `draft` and has no
+            execution to report on; activate it first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/programmes/{id}/execution-health:
+    get:
+      operationId: getProgrammeExecutionHealth
+      tags: [CRM]
+      summary: Programme execution-health roll-up (Journey J6)
+      description: |
+        Rolls the programme's metric periods up into the J6 review view: summed delivery
+        volume, mean coverage / exception / grievance ratios, exact revenue in minor
+        units, and a health band.
+
+        Band rule — worst signal wins. `at_risk` when coverage < 0.7 or exception rate
+        > 0.1 or grievance rate > 0.05; `watch` when coverage < 0.9 or exception rate
+        > 0.05 or grievance rate > 0.02; `unknown` when none of the three has ever been
+        reported; otherwise `healthy`. Metric keys outside the recognised set
+        (`volume`, `coverage_ratio`, `exception_rate`, `grievance_rate`, `revenue`) are
+        counted in `metricCount` but never influence the band — a tenant recording its
+        own metric must not be able to silently redefine what "at risk" means.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+        - name: periodStartFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: periodStartTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Execution-health roll-up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProgrammeExecutionHealth"
+        "400":
+          description: "`VALIDATION_FAILED` — a non-ISO date filter or an unknown query field"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no programme with that id in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/programmes/{id}/deals/{dealId}:
+    post:
+      operationId: linkDealToProgramme
+      tags: [CRM]
+      summary: Register an opportunity under a programme
+      description: |
+        Links an existing deal to the programme. `dealVersion` is the DEAL's current
+        version, not the programme's — the link UPDATE is guarded on it. Re-posting the
+        same deal to the same programme is idempotent; a deal already registered under a
+        DIFFERENT programme is a 409 rather than a silent re-parenting.
+
+        CQRS write — returns 202.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - $ref: "#/components/parameters/ProgrammeIdPath"
+        - name: dealId
+          in: path
+          required: true
+          description: The opportunity to register under the programme
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkDealToProgrammeRequest"
+      responses:
+        "202":
+          description: Link command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — a non-UUID path id, missing `dealVersion`, or an unknown field"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no such programme, or no such deal, in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: |
+            `VERSION_CONFLICT` — `dealVersion` is stale.
+            `DEAL_ALREADY_LINKED` — the deal is registered under another programme.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`PROGRAMME_CLOSED` — a closed programme cannot take on new opportunities"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -15388,6 +15945,33 @@ components:
         (Azure AD, Okta, Google Workspace, MeriPehchaan).
 
   parameters:
+    CrmPageParam:
+      name: page
+      in: query
+      description: 1-based page number (crm-service list routes)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    CrmLimitParam:
+      name: limit
+      in: query
+      description: |
+        Page size (crm-service default 50, max 200). Clamped server-side — an unbounded
+        LIMIT is the easiest way to turn a tenant's list page into a database incident.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ProgrammeIdPath:
+      name: id
+      in: path
+      required: true
+      description: Programme id
+      schema:
+        type: string
+        format: uuid
     LimitParam:
       name: limit
       in: query
@@ -22338,3 +22922,361 @@ components:
         totalFields:
           type: integer
           description: Number of scored fields (configured, or the default map)
+
+    # ───────────────────────────────────────────────────────────────────────────
+    # CRM — government programmes (G12)
+    # ───────────────────────────────────────────────────────────────────────────
+
+    ListMeta:
+      type: object
+      description: Standard list envelope metadata.
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    ProgrammeStatus:
+      type: string
+      description: |
+        Programme lifecycle. `closed` is terminal — a programme that has ended is
+        superseded by a new one, never reopened.
+      enum: [draft, active, suspended, closed]
+
+    ProgrammeMetricKind:
+      type: string
+      description: |
+        How a metric's value is interpreted. `money` is stored as bigint minor units and
+        serialised as a string; `count` and `ratio` are exact decimals (≤6 dp).
+      enum: [money, count, ratio]
+
+    ProgrammeCoverageScope:
+      type: object
+      description: |
+        The geography the programme is executed over. Both keys optional. Entries are
+        trimmed, de-duplicated and sorted on write, so two identical scopes compare equal
+        between reporting periods.
+      properties:
+        regions:
+          type: array
+          maxItems: 500
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+        districts:
+          type: array
+          maxItems: 500
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+
+    Programme:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        programmeCode:
+          type: string
+          description: Uppercase machine key, unique per tenant
+          example: PMAY-U
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        accountId:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Reference into contract-service. Recorded, never dereferenced here
+            (database-per-service).
+        productLine:
+          type: string
+          example: government
+        status:
+          $ref: "#/components/schemas/ProgrammeStatus"
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        sponsoringDepartment:
+          type: string
+          nullable: true
+        coverageScope:
+          $ref: "#/components/schemas/ProgrammeCoverageScope"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: Optimistic-locking counter — required on PATCH and status changes
+
+    CreateProgrammeRequest:
+      type: object
+      additionalProperties: false
+      required: [programmeCode, name, accountId]
+      properties:
+        programmeCode:
+          type: string
+          minLength: 3
+          maxLength: 64
+          description: |
+            Uppercased and trimmed during validation, then must match
+            `^[A-Z0-9][A-Z0-9\-_/]{2,63}$`. Deliberately narrow: the code ends up in
+            report headers, file names and other departments' systems.
+          example: PMAY-U
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        accountId:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        productLine:
+          type: string
+          minLength: 1
+          maxLength: 64
+          default: government
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        sponsoringDepartment:
+          type: string
+          minLength: 1
+          maxLength: 200
+        coverageScope:
+          $ref: "#/components/schemas/ProgrammeCoverageScope"
+
+    UpdateProgrammeRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      description: |
+        At least one mutable field is required alongside `version`. `programmeCode` and
+        `accountId` are not amendable. Nullable fields accept an explicit `null` to clear.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+          nullable: true
+        contractId:
+          type: string
+          format: uuid
+          nullable: true
+        productLine:
+          type: string
+          minLength: 1
+          maxLength: 64
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        sponsoringDepartment:
+          type: string
+          minLength: 1
+          maxLength: 200
+          nullable: true
+        coverageScope:
+          $ref: "#/components/schemas/ProgrammeCoverageScope"
+        version:
+          type: integer
+          minimum: 1
+
+    ProgrammeStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, version]
+      properties:
+        status:
+          $ref: "#/components/schemas/ProgrammeStatus"
+        reason:
+          type: string
+          maxLength: 2000
+          description: Why the programme was suspended / closed. Trimmed before storage.
+        version:
+          type: integer
+          minimum: 1
+
+    ProgrammeMetric:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        programmeId:
+          type: string
+          format: uuid
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        metricKey:
+          type: string
+          example: coverage_ratio
+        metricKind:
+          $ref: "#/components/schemas/ProgrammeMetricKind"
+        valueMinor:
+          type: string
+          nullable: true
+          description: |
+            Minor units as a STRING when `metricKind` is `money`, otherwise null. A string
+            because a revenue figure above 2^53 minor units cannot survive a JSON number.
+          example: "125000000"
+        currency:
+          type: string
+          nullable: true
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217, set only for monetary metrics
+          example: INR
+        valueNumeric:
+          type: string
+          nullable: true
+          description: Exact decimal (≤6 dp) for `count` and `ratio`, otherwise null
+          example: "0.874000"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+
+    RecordProgrammeMetricRequest:
+      type: object
+      additionalProperties: false
+      required: [periodStart, periodEnd, metricKey, value]
+      properties:
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        metricKey:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z][a-z0-9_]*$"
+          description: |
+            lower_snake_case. The keys the J6 roll-up recognises by name are `volume`,
+            `coverage_ratio`, `exception_rate`, `grievance_rate` and `revenue`; any other
+            key is stored and counted but does not influence the health band.
+          example: coverage_ratio
+        metricKind:
+          allOf:
+            - $ref: "#/components/schemas/ProgrammeMetricKind"
+          description: |
+            Optional. When omitted it is inferred from `metricKey`: keys reading as money
+            (revenue/cost/amount/value/billing/invoiced/penalty/payout) → `money`; keys
+            containing ratio/rate/percent/pct/coverage → `ratio`; otherwise `count`.
+        value:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            ALWAYS a string, monetary or not — a JSON number would round large money
+            figures and re-scale 6-dp ratios. `money`: integer minor units. `ratio`: a
+            fraction 0–1. `count`: non-negative. Non-monetary values allow ≤6 fractional
+            digits.
+          example: "0.874"
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: |
+            ISO 4217. Only meaningful for monetary metrics (defaults to `INR`); sending it
+            for a count or ratio is a 400 `CURRENCY_NOT_APPLICABLE`.
+          example: INR
+
+    ProgrammeExecutionHealth:
+      type: object
+      description: The Journey J6 execution-health roll-up over the selected periods.
+      properties:
+        programmeId:
+          type: string
+          format: uuid
+        programmeCode:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProgrammeStatus"
+        volume:
+          type: number
+          description: Summed delivery volume over the periods included
+        coverageRatio:
+          type: number
+          nullable: true
+          description: Mean coverage ratio (0–1); null when never reported
+        exceptionRate:
+          type: number
+          nullable: true
+        grievanceRate:
+          type: number
+          nullable: true
+        revenueMinor:
+          type: string
+          description: |
+            Revenue in minor units as a STRING, summed with BigInt so a programme whose
+            lifetime billing exceeds 2^53 paise still reports an exact figure.
+          example: "125000000"
+        band:
+          type: string
+          enum: [unknown, healthy, watch, at_risk]
+          description: Worst signal wins — see the endpoint description for thresholds
+        metricCount:
+          type: integer
+          description: Metric rows considered, including keys outside the recognised set
+
+    LinkDealToProgrammeRequest:
+      type: object
+      additionalProperties: false
+      required: [dealVersion]
+      properties:
+        dealVersion:
+          type: integer
+          minimum: 1
+          description: |
+            The DEAL's current version, not the programme's — the link UPDATE is guarded
+            on it.

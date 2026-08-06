@@ -74,6 +74,7 @@ import { flagRoutes } from "./modules/contacts/flags-routes.js";
 import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
+import { programmeRoutes } from "./modules/programmes/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -194,6 +195,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(volumeVsActualRoutes);
   await app.register(sponsorRoutes);
+  // G12 (Spec §25.7, Journey J6): government programmes — the entity an opportunity is
+  // registered under, and the anchor for per-programme execution health and revenue.
+  await app.register(programmeRoutes);
 
   return app;
 }

@@ -218,6 +218,53 @@ export const COMMANDS = {
   verifyDocument: "crm.document.verify",
   /** DM-001 internal (service-secret gated) malware scan result -> sets scan_status. */
   recordDocumentScan: "crm.document.scan_result",
+  // ── G12: Government programme / engagement management (Spec §25.7, Journey J6) ──
+  /**
+   * Register a government programme against a client department account.
+   *
+   * Payload: { id, tenantId, programmeCode, name, description, accountId, contractId,
+   * productLine, status: 'draft', startDate, endDate, sponsoringDepartment,
+   * coverageScope }. Fires when an admin POSTs /v1/crm/programmes.
+   *
+   * `programmeCode` is already normalised (uppercased) by the route, so uniqueness is
+   * decided on the canonical form. Contains no PII: a sponsoring department and a
+   * coverage list are organisational facts, not personal data.
+   */
+  createProgramme: "crm.programme.create",
+  /**
+   * Amend a programme's descriptive metadata (name, description, contract reference,
+   * product line, dates, sponsor, coverage scope).
+   *
+   * Payload: { id, tenantId, changed: {...}, version }. `programmeCode` is deliberately
+   * NOT amendable — it is the stable key downstream reporting joins on, and rotating it
+   * would orphan the metric series. Applied under WHERE version = $version.
+   */
+  updateProgramme: "crm.programme.update",
+  /**
+   * Move a programme through its lifecycle (draft → active → suspended ⇄ active → closed).
+   * Payload: { id, tenantId, fromStatus, toStatus, reason, version }. Guarded on both the
+   * version and `fromStatus` so a stale transition is dropped and audited, not applied.
+   */
+  changeProgrammeStatus: "crm.programme.change_status",
+  /**
+   * Record one execution-health or revenue metric for one programme period.
+   *
+   * Payload: { id, tenantId, programmeId, periodStart, periodEnd, metricKey, metricKind,
+   * valueMinor (STRING minor units, monetary metrics only), currency, valueNumeric
+   * (decimal STRING, counts/ratios only) }.
+   *
+   * Money is a STRING on the wire, never a JSON number: a revenue figure above 2^53 paise
+   * would otherwise be rounded by the JSON parser before it reached the consumer.
+   * Idempotent by (tenantId, programmeId, periodStart, metricKey), so a redelivery
+   * corrects the period's row rather than double-counting it.
+   */
+  recordProgrammeMetric: "crm.programme_metric.record",
+  /**
+   * Register an existing opportunity under a programme (Journey J6).
+   * Payload: { id (programmeId), tenantId, dealId, dealVersion }. The consumer writes ONLY
+   * crm.deals.programme_id, guarded on the deal's version; no other deal field is touched.
+   */
+  linkDealToProgramme: "crm.programme.link_deal",
   // ── Gap 2: Campaign approval workflow ──
   /** Submit a bulk campaign for approval when it exceeds the threshold. */
   submitCampaignForApproval: "crm.campaign.submit_for_approval",
@@ -441,6 +488,38 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+
+  // ── G12: Government programme / engagement management (Spec §25.7, Journey J6) ──
+  /**
+   * A government programme was registered.
+   *
+   * Payload: { programmeId, programmeCode, accountId, productLine, status } — identifiers
+   * and classification only. MUST stay distinct from COMMANDS.createProgramme, or the
+   * consumer that emits this would re-consume its own event as a fresh command.
+   *
+   * Consumed by: audit-service (via the shared audit event), and available to
+   * analytics/report services for per-programme revenue and SLA reporting.
+   */
+  programmeCreated: "crm.programme.created",
+  /** Programme metadata amended. Payload: { programmeId, changed: string[] } — field NAMES only, not values. */
+  programmeUpdated: "crm.programme.updated",
+  /**
+   * Programme lifecycle transition. Payload: { programmeId, fromStatus, toStatus }.
+   * Fires only when the guarded UPDATE actually applied; a dropped transition emits an
+   * audit record with a `rejected_*` outcome instead.
+   */
+  programmeStatusChanged: "crm.programme.status_changed",
+  /**
+   * A programme metric was recorded or corrected for a period.
+   *
+   * Payload: { programmeId, metricId, periodStart, periodEnd, metricKey, metricKind,
+   * valueMinor (STRING or null), currency, valueNumeric (STRING or null), outcome:
+   * 'created'|'updated' }. Money stays a STRING here too — a downstream consumer parsing a
+   * JSON number would reintroduce exactly the precision loss the bigint column prevents.
+   */
+  programmeMetricRecorded: "crm.programme_metric.recorded",
+  /** An opportunity was registered under a programme. Payload: { programmeId, dealId }. */
+  programmeDealLinked: "crm.programme.deal_linked",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

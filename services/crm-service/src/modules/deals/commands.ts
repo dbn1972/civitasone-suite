@@ -47,6 +47,9 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     stageEnteredAt: nowIso,
     closeOutcome: null,
     closeCompetitor: null,
+    // G12: a newly created deal is never pre-linked to a programme. Linking is an explicit
+    // separate action (POST /v1/crm/programmes/:id/deals/:dealId).
+    programmeId: null,
     version: 1,
   };
 

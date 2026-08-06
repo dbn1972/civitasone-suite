@@ -78,6 +78,13 @@ export const dealViewSchema = z.object({
   stageEnteredAt: z.string().nullable().optional(),
   closeOutcome: z.string().nullable().optional(),
   closeCompetitor: z.array(z.string()).nullable().optional(),
+  /**
+   * G12 (Journey J6): programme this opportunity is registered under. Optional and
+   * nullable, so every existing client and every unlinked deal are unaffected. Declared
+   * here because a plain `z.object` STRIPS unknown keys on the way out — without this the
+   * field would silently never reach a caller.
+   */
+  programmeId: z.string().uuid().nullable().optional(),
   version: z.number().int(),
 });
 
