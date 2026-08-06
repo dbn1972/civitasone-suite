@@ -51,9 +51,20 @@ function statusLabel(s: string) {
 
 const RESULT_SEG_OPTIONS = ["All", "Documents", "Files"];
 
+/** A hit from the real server index (GET /v1/knowledge/search). */
+type ServerHit = {
+  id: string;
+  documentId?: string;
+  title: string;
+  tags?: string[];
+  score?: number;
+};
+
 export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  // null → server index unavailable, fall back to client-side metadata scoring.
+  const [serverHits, setServerHits] = useState<ServerHit[] | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -62,14 +73,32 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
   const categories = Array.from(new Set(initialDocs.map((d) => d.category).filter(Boolean))).sort();
   const statuses = Array.from(new Set(initialDocs.map((d) => d.status).filter(Boolean))).sort();
 
+  // Server results are authoritative (full-text over CONTENT, which client
+  // metadata scoring can never see); local docs supply display metadata, and
+  // client scoring remains only as the degraded fallback.
+  const docById = new Map(initialDocs.map((d) => [d.id, d]));
   const matchedDocs = submitted && query.trim()
-    ? initialDocs
-        .filter((doc) => (categoryFilter ? doc.category === categoryFilter : true))
-        .filter((doc) => (statusFilter ? doc.status === statusFilter : true))
-        .map((doc) => ({ doc, score: relevanceScore(doc, query.trim()) }))
-        .filter((r) => r.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map((r) => r.doc)
+    ? serverHits
+      ? serverHits
+          .map((h) => docById.get(h.documentId ?? h.id) ?? ({
+            id: h.documentId ?? h.id,
+            title: h.title,
+            category: "",
+            createdAt: "",
+            tags: h.tags ?? [],
+            status: "approved",
+            accessLevel: "",
+            version: "",
+          } as Doc))
+          .filter((doc) => (categoryFilter ? doc.category === categoryFilter : true))
+          .filter((doc) => (statusFilter ? doc.status === statusFilter : true))
+      : initialDocs
+          .filter((doc) => (categoryFilter ? doc.category === categoryFilter : true))
+          .filter((doc) => (statusFilter ? doc.status === statusFilter : true))
+          .map((doc) => ({ doc, score: relevanceScore(doc, query.trim()) }))
+          .filter((r) => r.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map((r) => r.doc)
     : [];
 
   const maxScore = 24;
@@ -101,20 +130,43 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
     };
   });
 
+  const runSearch = useCallback(async () => {
+    setSubmitted(true);
+    const q = query.trim();
+    if (!q) return;
+    try {
+      const params = new URLSearchParams({ q, limit: "50" });
+      if (categoryFilter) params.set("category", categoryFilter);
+      const res = await fetch(`/api/proxy/v1/knowledge/search?${params.toString()}`);
+      if (res.ok) {
+        const json: unknown = await res.json();
+        const hits = Array.isArray(json)
+          ? json
+          : ((json as { hits?: unknown[]; data?: unknown[] })?.hits ??
+             (json as { data?: unknown[] })?.data ?? []);
+        setServerHits(hits as ServerHit[]);
+        return;
+      }
+    } catch {
+      /* index unreachable — degrade below */
+    }
+    setServerHits(null);
+  }, [query, categoryFilter]);
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-  }, []);
+    void runSearch();
+  }, [runSearch]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
-    if (submitted) setSubmitted(false);
+    if (submitted) { setSubmitted(false); setServerHits(null); }
   }, [submitted]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") setSubmitted(true);
-    if (e.key === "Escape") { setQuery(""); setSubmitted(false); }
-  }, []);
+    if (e.key === "Enter") void runSearch();
+    if (e.key === "Escape") { setQuery(""); setSubmitted(false); setServerHits(null); }
+  }, [runSearch]);
 
   return (
     <div className="wrap">
