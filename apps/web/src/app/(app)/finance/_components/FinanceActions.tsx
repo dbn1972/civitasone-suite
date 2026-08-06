@@ -1,14 +1,24 @@
 "use client";
 
 /**
- * Finance maker-checker action buttons (client). Each wraps the shared
- * ActionButton/ConfirmDialog primitive so irreversible postings require an
- * explicit confirmation + a reason (maker-checker). The "checker" role is
- * surfaced in the dialog copy; the action POSTs/PATCHes the real proxied
- * finance-service endpoint and refreshes the route on success.
+ * Finance maker-checker actions (client).
+ *
+ * Checker actions (approve/pass) wrap the shared ActionButton/ConfirmDialog
+ * primitive. Maker CREATE actions open a small form dialog that captures the
+ * fields the finance validators actually require — a bare confirm cannot
+ * create a sanction/bill/EFT (createSanctionBody needs sanctionNo, purpose,
+ * headId, amountMinor; createBillBody needs billNo, vendorId, headId, ddoCode,
+ * grossMinor; initiateEftBody needs billId, ddoCode, mode, amountMinor).
+ *
+ * MONEY: clerks type rupees; rupeesToMinorString converts without ever
+ * touching floats. Minor units cross to the API as integers (Number of a
+ * paise string is exact well past any sanction size) or as the string the
+ * validator accepts (EFT).
  */
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/app/_components/ds";
+import { rupeesToMinorString } from "@/lib/money";
 
 async function postJson(url: string, body: unknown): Promise<void> {
   const res = await fetch(url, {
@@ -44,38 +54,163 @@ async function patchJson(url: string, body: unknown): Promise<void> {
   }
 }
 
-/* ── Payments: PFMS sync + release (treasury) ───────────────────── */
+/** Display a paise string as "₹1,23,456.78" using string math only. */
+function minorToRupeesDisplay(minor: string): string {
+  const digits = minor.replace(/^0+(?=\d)/, "");
+  const padded = digits.padStart(3, "0");
+  const rupees = padded.slice(0, -2);
+  const paise = padded.slice(-2);
+  return `₹${Number(rupees).toLocaleString("en-IN")}.${paise}`;
+}
+
+/* ── Shared form-dialog scaffolding ─────────────────────────────── */
+
+function FieldRow({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--border, #cbd5e1)",
+  borderRadius: 6,
+  padding: "8px 10px",
+  fontSize: 14,
+};
+
+function FormDialog({
+  title,
+  description,
+  submitLabel,
+  busy,
+  error,
+  onSubmit,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: string;
+  submitLabel: string;
+  busy: boolean;
+  error: string;
+  onSubmit: (e: React.FormEvent) => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000, display: "flex",
+        alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)",
+      }}
+    >
+      <div style={{ background: "var(--surface, #fff)", borderRadius: 12, width: "100%", maxWidth: 480, padding: 24, margin: 16, boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{title}</h2>
+        <p style={{ fontSize: 13, color: "var(--text-secondary, #64748b)", marginBottom: 16 }}>{description}</p>
+        <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {children}
+          {error && (
+            <p role="alert" style={{ fontSize: 13, color: "#dc2626" }}>
+              <span style={{ fontWeight: 600 }}>Error: </span>{error}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+            <button type="submit" className="btn primary" disabled={busy}>
+              {busy ? "Submitting…" : submitLabel}
+            </button>
+            <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Payments: release EFT (treasury, no bill context) ──────────── */
+
+const EFT_MODES = ["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"] as const;
+
 export function PaymentActions() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [billId, setBillId] = useState("");
+  const [ddoCode, setDdoCode] = useState("");
+  const [mode, setMode] = useState<(typeof EFT_MODES)[number]>("NEFT");
+  const [amountRupees, setAmountRupees] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const billIdId = useId();
+  const ddoId = useId();
+  const modeId = useId();
+  const amtId = useId();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const amountMinor = rupeesToMinorString(amountRupees);
+    if (!billId.trim() || !ddoCode.trim() || !amountMinor) {
+      setError("Bill ID, DDO code and a positive rupee amount are required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await postJson("/api/proxy/v1/finance/payments/eft", {
+        billId: billId.trim(),
+        ddoCode: ddoCode.trim(),
+        mode,
+        amountMinor,
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not release the payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
-      <ActionButton
-        label="PFMS Sync"
-        className="btn ghost"
-        confirmTitle="Sync the payment register with PFMS?"
-        confirmDescription="This reconciles released payments against the PFMS gateway. It may move funds for queued instructions and cannot be reversed from here."
-        confirmLabel="Run sync"
-        requireReason
-        reasonLabel="Reason / approving authority"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "pfms-sync", reason });
-        }}
-        onSuccess={() => router.refresh()}
-      />
-      <ActionButton
-        label="+ New Payment"
-        className="btn primary"
-        danger
-        confirmTitle="Release a new payment?"
-        confirmDescription="Releasing initiates an outward EFT/PFMS disbursement. The maker prepares it; a distinct checker must authorise. This is irreversible once submitted to the gateway."
-        confirmLabel="Release payment"
-        requireReason
-        reasonLabel="Authorising officer & reason (maker-checker)"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "release", reason });
-        }}
-        onSuccess={() => router.refresh()}
-      />
+      <button type="button" className="btn primary" onClick={() => { setOpen(true); setError(""); }}>
+        + New Payment
+      </button>
+      {open && (
+        <FormDialog
+          title="Release a payment"
+          description="Initiates an outward EFT/PFMS disbursement against a passed bill. The amount must equal the bill's net payable (conservation is enforced server-side). Irreversible once submitted to the gateway."
+          submitLabel="Release payment"
+          busy={busy}
+          error={error}
+          onSubmit={submit}
+          onClose={() => setOpen(false)}
+        >
+          <FieldRow id={billIdId} label="Bill ID (UUID of a passed bill)">
+            <input id={billIdId} style={inputStyle} value={billId} onChange={(e) => setBillId(e.target.value)} required />
+          </FieldRow>
+          <FieldRow id={ddoId} label="DDO code">
+            <input id={ddoId} style={inputStyle} value={ddoCode} onChange={(e) => setDdoCode(e.target.value)} maxLength={12} required />
+          </FieldRow>
+          <FieldRow id={modeId} label="Mode">
+            <select id={modeId} style={inputStyle} value={mode} onChange={(e) => setMode(e.target.value as (typeof EFT_MODES)[number])}>
+              {EFT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </FieldRow>
+          <FieldRow id={amtId} label="Amount (₹, must equal the bill's net payable)">
+            <input id={amtId} style={inputStyle} inputMode="decimal" placeholder="e.g. 125000.50" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value)} required />
+          </FieldRow>
+        </FormDialog>
+      )}
     </>
   );
 }
@@ -106,6 +241,65 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
   const router = useRouter();
   const s = (status ?? "").toLowerCase();
   const canPay = s === "passed" || s === "approved";
+
+  const [open, setOpen] = useState(false);
+  const [loadingBill, setLoadingBill] = useState(false);
+  const [ddoCode, setDdoCode] = useState("");
+  const [netMinor, setNetMinor] = useState<string | null>(null);
+  const [amountDisplay, setAmountDisplay] = useState("");
+  const [mode, setMode] = useState<(typeof EFT_MODES)[number]>("NEFT");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const ddoId = useId();
+  const modeId = useId();
+
+  async function openRelease() {
+    setOpen(true);
+    setError("");
+    setLoadingBill(true);
+    try {
+      // The EFT must carry the bill's exact net amount; read it rather than
+      // asking the officer to re-type money.
+      const res = await fetch(`/api/proxy/v1/finance/bills/${id}/release-info`);
+      if (res.ok) {
+        const bill = (await res.json()) as { ddoCode?: string | null; netMinor?: string };
+        if (bill.ddoCode) setDdoCode(bill.ddoCode);
+        if (bill.netMinor) {
+          setNetMinor(bill.netMinor);
+          setAmountDisplay(minorToRupeesDisplay(bill.netMinor));
+        }
+      }
+    } catch {
+      // Officer can still fill the DDO code by hand; amount check happens server-side.
+    } finally {
+      setLoadingBill(false);
+    }
+  }
+
+  async function submitRelease(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ddoCode.trim() || !netMinor) {
+      setError(!netMinor ? "Could not read the bill's net payable — reload and retry." : "DDO code is required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await postJson("/api/proxy/v1/finance/payments/eft", {
+        billId: id,
+        ddoCode: ddoCode.trim(),
+        mode,
+        amountMinor: netMinor,
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not release the payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <ActionButton
@@ -121,61 +315,181 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
         }}
         onSuccess={() => router.refresh()}
       />
-      <ActionButton
-        label="Release payment"
-        className="btn primary"
-        danger
-        disabled={!canPay}
-        confirmTitle="Release payment for this bill?"
-        confirmDescription="This authorises an irreversible outward disbursement against the passed bill. A distinct treasury officer must authorise (maker-checker)."
-        confirmLabel="Release payment"
-        requireReason
-        reasonLabel="Treasury officer & reason"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { billId: id, action: "release", reason });
-        }}
-        onSuccess={() => router.refresh()}
-      />
+      <button type="button" className="btn primary" disabled={!canPay} onClick={() => void openRelease()}>
+        Release payment
+      </button>
+      {open && (
+        <FormDialog
+          title="Release payment for this bill"
+          description={`Authorises an irreversible outward disbursement of ${amountDisplay || "the bill's net payable"} against the passed bill. A distinct treasury officer must authorise (maker-checker).`}
+          submitLabel={loadingBill ? "Loading bill…" : "Release payment"}
+          busy={busy || loadingBill}
+          error={error}
+          onSubmit={submitRelease}
+          onClose={() => setOpen(false)}
+        >
+          <FieldRow id={ddoId} label="DDO code">
+            <input id={ddoId} style={inputStyle} value={ddoCode} onChange={(e) => setDdoCode(e.target.value)} maxLength={12} required />
+          </FieldRow>
+          <FieldRow id={modeId} label="Mode">
+            <select id={modeId} style={inputStyle} value={mode} onChange={(e) => setMode(e.target.value as (typeof EFT_MODES)[number])}>
+              {EFT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </FieldRow>
+        </FormDialog>
+      )}
     </>
   );
 }
 
-
 /* ── List-level create actions (maker prepares; checker approves later) ── */
+
 export function SanctionCreateAction() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [sanctionNo, setSanctionNo] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [headId, setHeadId] = useState("");
+  const [amountRupees, setAmountRupees] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const noId = useId();
+  const purposeId = useId();
+  const headIdId = useId();
+  const amtId = useId();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const minor = rupeesToMinorString(amountRupees);
+    if (!sanctionNo.trim() || purpose.trim().length < 3 || !headId.trim() || !minor) {
+      setError("Sanction no, a purpose (min 3 chars), budget head ID and a positive rupee amount are required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await postJson("/api/proxy/v1/finance/sanctions", {
+        sanctionNo: sanctionNo.trim(),
+        purpose: purpose.trim(),
+        headId: headId.trim(),
+        amountMinor: Number(minor),
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the sanction.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <ActionButton
-      label="+ New Sanction"
-      className="btn primary"
-      confirmTitle="Raise a new sanction?"
-      confirmDescription="This records a draft administrative/financial sanction for budget check. A distinct approving authority must sanction it before any expenditure is committed (maker-checker)."
-      confirmLabel="Create draft"
-      requireReason
-      reasonLabel="Proposing officer & purpose"
-      onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" });
-      }}
-      onSuccess={() => router.refresh()}
-    />
+    <>
+      <button type="button" className="btn primary" onClick={() => { setOpen(true); setError(""); }}>
+        + New Sanction
+      </button>
+      {open && (
+        <FormDialog
+          title="Raise a new sanction"
+          description="Records a draft administrative/financial sanction for budget check. A distinct approving authority must sanction it before any expenditure is committed (maker-checker)."
+          submitLabel="Create draft"
+          busy={busy}
+          error={error}
+          onSubmit={submit}
+          onClose={() => setOpen(false)}
+        >
+          <FieldRow id={noId} label="Sanction no">
+            <input id={noId} style={inputStyle} value={sanctionNo} onChange={(e) => setSanctionNo(e.target.value)} maxLength={64} placeholder="e.g. SAN/2026/0042" required />
+          </FieldRow>
+          <FieldRow id={purposeId} label="Purpose">
+            <input id={purposeId} style={inputStyle} value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={500} required />
+          </FieldRow>
+          <FieldRow id={headIdId} label="Budget head ID (UUID)">
+            <input id={headIdId} style={inputStyle} value={headId} onChange={(e) => setHeadId(e.target.value)} required />
+          </FieldRow>
+          <FieldRow id={amtId} label="Amount (₹)">
+            <input id={amtId} style={inputStyle} inputMode="decimal" placeholder="e.g. 250000" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value)} required />
+          </FieldRow>
+        </FormDialog>
+      )}
+    </>
   );
 }
 
 export function BillCreateAction() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [billNo, setBillNo] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [headId, setHeadId] = useState("");
+  const [ddoCode, setDdoCode] = useState("");
+  const [grossRupees, setGrossRupees] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const noId = useId();
+  const vendorIdId = useId();
+  const headIdId = useId();
+  const ddoId = useId();
+  const grossId = useId();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const minor = rupeesToMinorString(grossRupees);
+    if (!billNo.trim() || !vendorId.trim() || !headId.trim() || !ddoCode.trim() || !minor) {
+      setError("Bill no, vendor ID, budget head ID, DDO code and a positive gross amount are required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await postJson("/api/proxy/v1/finance/bills", {
+        billNo: billNo.trim(),
+        vendorId: vendorId.trim(),
+        headId: headId.trim(),
+        ddoCode: ddoCode.trim(),
+        grossMinor: Number(minor),
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit the bill.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <ActionButton
-      label="+ New Bill"
-      className="btn primary"
-      confirmTitle="Submit a new bill?"
-      confirmDescription="This lodges a bill for pre-audit and 3-way match. It must be passed by a distinct officer before payment can be released."
-      confirmLabel="Submit bill"
-      requireReason
-      reasonLabel="Submitting officer & reason"
-      onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/bills", { reason, status: "pending" });
-      }}
-      onSuccess={() => router.refresh()}
-    />
+    <>
+      <button type="button" className="btn primary" onClick={() => { setOpen(true); setError(""); }}>
+        + New Bill
+      </button>
+      {open && (
+        <FormDialog
+          title="Submit a new bill"
+          description="Lodges a bill for pre-audit and 3-way match. It must be passed by a distinct officer before payment can be released."
+          submitLabel="Submit bill"
+          busy={busy}
+          error={error}
+          onSubmit={submit}
+          onClose={() => setOpen(false)}
+        >
+          <FieldRow id={noId} label="Bill no">
+            <input id={noId} style={inputStyle} value={billNo} onChange={(e) => setBillNo(e.target.value)} maxLength={64} placeholder="e.g. BILL/2026/0108" required />
+          </FieldRow>
+          <FieldRow id={vendorIdId} label="Vendor ID (UUID)">
+            <input id={vendorIdId} style={inputStyle} value={vendorId} onChange={(e) => setVendorId(e.target.value)} required />
+          </FieldRow>
+          <FieldRow id={headIdId} label="Budget head ID (UUID)">
+            <input id={headIdId} style={inputStyle} value={headId} onChange={(e) => setHeadId(e.target.value)} required />
+          </FieldRow>
+          <FieldRow id={ddoId} label="DDO code">
+            <input id={ddoId} style={inputStyle} value={ddoCode} onChange={(e) => setDdoCode(e.target.value)} maxLength={12} required />
+          </FieldRow>
+          <FieldRow id={grossId} label="Gross amount (₹)">
+            <input id={grossId} style={inputStyle} inputMode="decimal" placeholder="e.g. 118000.00" value={grossRupees} onChange={(e) => setGrossRupees(e.target.value)} required />
+          </FieldRow>
+        </FormDialog>
+      )}
+    </>
   );
 }

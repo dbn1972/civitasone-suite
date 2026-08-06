@@ -39,6 +39,24 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, BillDetailSchema, detail);
   });
 
+  // Release-info for the web release-payment flow. The EFT consumer enforces
+  // amountMinor === bill.netMinor (conservation), so the UI reads the exact
+  // stored amount instead of asking an officer to re-type money. Minor units
+  // stay a string — no float touches the value.
+  app.get("/v1/finance/bills/:id/release-info", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const row = await repo.findBillByIdAndTenant(id, ctx.tenantId);
+    if (!row || row.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "bill not found");
+    return reply.send({
+      id: row.id,
+      ddoCode: row.ddoCode ?? null,
+      netMinor: String(row.netMinor),
+      status: row.status,
+    });
+  });
+
   app.get("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
