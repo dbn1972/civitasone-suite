@@ -225,6 +225,25 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G6: Segment eligibility rules (product×segment recommendation gating) ──
+  /**
+   * Create a segment eligibility rule (G6).
+   * Payload: { id, tenantId, segmentCode, productId, eligible, channelOverride }.
+   * Controls whether a product can be cross-sold to contacts in a given segment,
+   * and optionally overrides the segment's primary delivery channels.
+   */
+  createSegmentEligibilityRule: "crm.segment_eligibility_rule.create",
+  /**
+   * Update a segment eligibility rule (G6).
+   * Payload: { id, tenantId, eligible?, channelOverride?, version }.
+   * Uses optimistic locking via version.
+   */
+  updateSegmentEligibilityRule: "crm.segment_eligibility_rule.update",
+  /**
+   * Delete a segment eligibility rule (G6).
+   * Payload: { id, tenantId }.
+   */
+  deleteSegmentEligibilityRule: "crm.segment_eligibility_rule.delete",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +460,13 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G6: Segment eligibility rule events ──
+  /** A segment eligibility rule was created (G6). Payload: { ruleId, segmentCode, productId, eligible }. */
+  segmentEligibilityRuleCreated: "crm.segment_eligibility_rule.created",
+  /** A segment eligibility rule was updated (G6). Payload: { ruleId, fields }. */
+  segmentEligibilityRuleUpdated: "crm.segment_eligibility_rule.updated",
+  /** A segment eligibility rule was deleted (G6). Payload: { ruleId }. */
+  segmentEligibilityRuleDeleted: "crm.segment_eligibility_rule.deleted",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
