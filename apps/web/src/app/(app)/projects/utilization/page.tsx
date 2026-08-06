@@ -1,34 +1,61 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { getProjectFundReleases } from "../../../_data/loaders";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { UtilizationTable, type UtilizationRow } from "./UtilizationTable";
 
-const rows: UtilizationRow[] = [
-  { project: "NH-44 Bypass Construction", allocated: "345.00", released: "210.00", utilized: "185.50", utilizationPct: "88%", status: "active" },
-  { project: "District Hospital Upgradation - Lucknow", allocated: "128.00", released: "96.00", utilized: "42.30", utilizationPct: "44%", status: "review" },
-  { project: "Smart City Phase-II Varanasi", allocated: "512.00", released: "384.00", utilized: "310.20", utilizationPct: "81%", status: "active" },
-  { project: "Integrated Water Supply - Dehradun", allocated: "89.00", released: "45.00", utilized: "12.80", utilizationPct: "28%", status: "overdue" },
-  { project: "Solar Power Plant - Jaipur", allocated: "215.00", released: "160.00", utilized: "148.90", utilizationPct: "93%", status: "active" },
-  { project: "Primary School Construction - Raipur", allocated: "42.00", released: "21.00", utilized: "8.40", utilizationPct: "40%", status: "review" },
-  { project: "Urban Metro Corridor - Patna", allocated: "1850.00", released: "925.00", utilized: "780.00", utilizationPct: "84%", status: "active" },
-  { project: "State Highway Widening - Bhopal", allocated: "178.00", released: "134.00", utilized: "98.60", utilizationPct: "74%", status: "active" },
-];
+/**
+ * Fund Utilization — aggregated per project from the real fund-release
+ * register. "Allocated" is every sanctioned/released/utilized release for the
+ * project; "Released" excludes still-sanctioned amounts; "Utilized" is the
+ * utilized bucket. On loader failure the page shows the error badge and an
+ * empty state — it never fabricates numbers.
+ */
+export default async function UtilizationPage() {
+  const { data: releases, source } = await getProjectFundReleases();
 
-export default function UtilizationPage() {
-  const totalAllocated = "₹3,359 Cr";
-  const totalUtilized = "₹1,586.70 Cr";
-  const avgUtilization = "66%";
-  const unspent = "₹1,772.30 Cr";
+  const byProject = new Map<string, { project: string; allocated: number; released: number; utilized: number }>();
+  for (const r of releases) {
+    const agg = byProject.get(r.projectId) ?? { project: r.projectName, allocated: 0, released: 0, utilized: 0 };
+    agg.allocated += r.amount;
+    if (r.status === "released" || r.status === "utilized") agg.released += r.amount;
+    if (r.status === "utilized") agg.utilized += r.amount;
+    byProject.set(r.projectId, agg);
+  }
+
+  const rows: UtilizationRow[] = Array.from(byProject.values()).map((p) => ({
+    project: p.project,
+    allocated: formatMoney(p.allocated),
+    released: formatMoney(p.released),
+    utilized: formatMoney(p.utilized),
+    // Guard: 0 released must render as "—", not Infinity/NaN.
+    utilizationPct: p.released > 0 ? `${Math.round((p.utilized / p.released) * 100)}%` : "—",
+    status: p.utilized > 0 ? "utilizing" : p.released > 0 ? "released" : "sanctioned",
+  }));
+
+  const totalAllocated = rows.length ? formatMoney(Array.from(byProject.values()).reduce((s, p) => s + p.allocated, 0)) : "—";
+  const totalReleased = rows.length ? formatMoney(Array.from(byProject.values()).reduce((s, p) => s + p.released, 0)) : "—";
+  const totalUtilized = rows.length ? formatMoney(Array.from(byProject.values()).reduce((s, p) => s + p.utilized, 0)) : "—";
+  const sumReleased = Array.from(byProject.values()).reduce((s, p) => s + p.released, 0);
+  const sumUtilized = Array.from(byProject.values()).reduce((s, p) => s + p.utilized, 0);
+  const avgUtilization = sumReleased > 0 ? `${Math.round((sumUtilized / sumReleased) * 100)}%` : "—";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Fund Utilization" subtitle="Track allocation, releases and utilization across all projects." back="/projects" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocated" value={totalAllocated} />
         <StatCard icon="📊" iconBg="#ecfdf3" label="Utilized" value={totalUtilized} />
         <StatCard icon="📈" iconBg="#fffaeb" label="Utilization %" value={avgUtilization} />
-        <StatCard icon="🏦" iconBg="#f1f5f9" label="Unspent Balance" value={unspent} />
+        <StatCard icon="🏦" iconBg="#f1f5f9" label="Released" value={totalReleased} />
       </StatGrid>
       <Card title="Project-wise Utilization">
-        <UtilizationTable rows={rows} />
+        {rows.length === 0 ? (
+          <EmptyState icon="📊" title="No fund releases" message="Utilization appears here once funds are released to projects." />
+        ) : (
+          <UtilizationTable rows={rows} />
+        )}
       </Card>
     </main>
   );

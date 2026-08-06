@@ -18,9 +18,9 @@ const COLUMNS: {
   align?: "left" | "right" | "center";
 }[] = [
   { key: "project", label: "Project" },
-  { key: "allocated", label: "Allocated (₹ Cr)", align: "right" },
-  { key: "released", label: "Released (₹ Cr)", align: "right" },
-  { key: "utilized", label: "Utilized (₹ Cr)", align: "right" },
+  { key: "allocated", label: "Allocated", align: "right" },
+  { key: "released", label: "Released", align: "right" },
+  { key: "utilized", label: "Utilized", align: "right" },
   { key: "utilizationPct", label: "Utilization %", align: "right" },
   { key: "status", label: "Status", cellType: "status" },
 ];
