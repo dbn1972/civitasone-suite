@@ -3,7 +3,16 @@
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate } from "@/lib/formatters";
+
+/**
+ * The releases list API returns `amount` in RUPEES (minorToAmount on the
+ * backend). formatMoney() expects paise, which rendered every amount 100×
+ * too small here — format the rupee number directly.
+ */
+function formatRupees(amount: number): string {
+  return `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 import type { GrantRelease } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -39,7 +48,7 @@ export function ReleasesTable({ releases, source = "api" }: { releases: GrantRel
     { key: "releaseNo", label: "Release No" },
     { key: "grantNo", label: "Grant No" },
     { key: "granteeName", label: "Grantee" },
-    { key: "amount", label: "Amount", align: "right", render: (row) => formatMoney(row.amount) },
+    { key: "amount", label: "Amount", align: "right", render: (row) => formatRupees(row.amount) },
     { key: "releaseDate", label: "Release Date", render: (row) => formatIndianDate(row.releaseDate) },
     { key: "bankRef", label: "Bank Ref", render: (row) => row.bankRef ?? "—" },
     { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
@@ -50,26 +59,24 @@ export function ReleasesTable({ releases, source = "api" }: { releases: GrantRel
       render: (row) =>
         row.status === "pending" ? (
           <ActionButton
-            label="Approve"
+            label="Submit for approval"
             className="btn primary sm"
-            confirmTitle={`Approve release ${row.releaseNo}?`}
+            confirmTitle={`Submit release ${row.releaseNo} for approval?`}
             confirmDescription={
               <>
-                This approves the fund release of <strong>{formatMoney(row.amount)}</strong> to{" "}
-                <strong>{row.granteeName}</strong> and cannot be undone. A reason is recorded in the
-                audit trail.
+                This raises an eOffice approval file for the fund release of{" "}
+                <strong>{formatRupees(row.amount)}</strong> to <strong>{row.granteeName}</strong>.
+                The disbursement moves forward only when the file is decided. A reason is recorded
+                in the audit trail.
               </>
             }
-            confirmLabel="Approve release"
+            confirmLabel="Submit for approval"
             requireReason
             reasonLabel="Approval reference / reason (required)"
             onConfirm={async (reason) => {
-              // NOTE: grant-service exposes GET /v1/grants/releases (read-only);
-              // there is no release-approve write endpoint yet. This POST will
-              // surface the gateway's response (e.g. 404/405) until the backend
-              // adds it. The real maker action today is "Release" on the grant's
-              // installment (POST .../installments/:id/disburse).
-              await postAction(`/api/proxy/v1/grants/releases/${row.id}/approve`, {
+              // Row ids ARE disbursement ids; the decision itself comes back on
+              // grant.disbursement.file_decided via the eOffice integration.
+              await postAction(`/api/proxy/v1/grants/disbursements/${row.id}/submit-approval`, {
                 reason,
               });
               router.refresh();
