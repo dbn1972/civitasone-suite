@@ -225,6 +225,36 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+
+  // ── G18: outcome capture with reason codes (spec §25.3) ─────────────────────
+  /**
+   * Add a code to the GENERIC outcome reason-code catalogue (G18).
+   * Payload: { id, tenantId, code, label, description|null, category, appliesTo[],
+   * governance: 'tenant', versionNumber, active, ordinal }.
+   * Fires when an admin POSTs a reason code. `governance` is always 'tenant' — canonical
+   * codes arrive only through a seed migration, never through a command.
+   */
+  createOutcomeReasonCode: "crm.outcome_reason_code.create",
+  /**
+   * Amend a tenant-owned reason code (G18).
+   * Payload: { id, tenantId, label?, description?, appliesTo?, ordinal?, active?, version }.
+   * `code`, `category` and `versionNumber` are NOT amendable: they are the business key
+   * historic outcomes point at, so a new meaning is a new revision, not an edit.
+   */
+  updateOutcomeReasonCode: "crm.outcome_reason_code.update",
+  /** Soft-delete a tenant-owned reason code (G18). Payload: { id, tenantId }. */
+  deleteOutcomeReasonCode: "crm.outcome_reason_code.delete",
+  /**
+   * Record the outcome of an interaction on any journey subject (G18, spec §25.3).
+   * Payload: { id, tenantId, subjectType: 'contact'|'deal'|'next_action', subjectId,
+   * outcomeRef, outcomeType: 'converted'|'declined'|'deferred', reasonCodeId|null,
+   * productId|null, amountMinor: STRING|null, currency|null, followUpNextActionId|null,
+   * occurredAt }.
+   * `amountMinor` is a decimal STRING of minor units: a JSON number loses paise above
+   * 2^53. (tenantId, subjectType, subjectId, outcomeRef) is the duplicate guard, so a
+   * double-submitted capture is a no-op rather than a second row in the propensity feed.
+   */
+  recordInteractionOutcome: "crm.interaction_outcome.record",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +471,53 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+
+  // ── G18: outcome capture with reason codes (spec §25.3) ─────────────────────
+  /**
+   * A reason code was added to the outcome catalogue (G18).
+   * Payload: { reasonCodeId, code, category, appliesTo, versionNumber, active, governance }
+   * — catalogue configuration only, no customer data.
+   * MUST stay distinct from COMMANDS.createOutcomeReasonCode: the consumer of that command
+   * emits this, and sharing the string would make it re-consume its own event.
+   */
+  outcomeReasonCodeCreated: "crm.outcome_reason_code.created",
+  /** A reason code was amended (G18). Payload: { reasonCodeId, changed: string[] }. */
+  outcomeReasonCodeUpdated: "crm.outcome_reason_code.updated",
+  /** A reason code was retired (G18). Payload: { reasonCodeId }. */
+  outcomeReasonCodeDeleted: "crm.outcome_reason_code.deleted",
+  /**
+   * AN INTERACTION OUTCOME WAS CAPTURED (G18, spec §25.3). The event §25 means by
+   * "every outcome feeds the propensity model".
+   *
+   * Fires exactly once per recorded outcome, from inside the same transaction as the
+   * crm.interaction_outcomes insert — so an outcome that is visible in CRM is always
+   * accompanied by this event, and a duplicate capture (same subject + outcomeRef)
+   * emits nothing.
+   *
+   * Payload:
+   *   {
+   *     outcomeId: uuid,
+   *     tenantId: uuid,
+   *     subjectType: 'contact' | 'deal' | 'next_action',
+   *     subjectId: uuid,
+   *     outcomeRef: string,              // caller's business key for the interaction
+   *     outcomeType: 'converted' | 'declined' | 'deferred',
+   *     reasonCode: string | null,       // machine key, e.g. 'moved_to_other_provider'
+   *     reasonCodeId: uuid | null,
+   *     reasonCodeCategory: string | null,
+   *     productId: uuid | null,          // set for 'converted'
+   *     amountMinor: string | null,      // DECIMAL STRING of minor units, never a number
+   *     currency: string | null,         // ISO 4217, present iff amountMinor is
+   *     followUpNextActionId: uuid | null, // set for 'deferred'
+   *     propensitySignal: 1 | 0 | -1,    // converted / deferred / declined
+   *     occurredAt: ISO-8601 string
+   *   }
+   *
+   * Consumers: recommendation-service (measurement — cross-sell attribution; it owns its
+   * own tables and this event is the input, never a mirror of them) and analytics-service.
+   * NO PII: identifiers, codes and amounts only, and there is no free-text field to leak.
+   */
+  interactionOutcomeRecorded: "crm.interaction_outcome.recorded",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

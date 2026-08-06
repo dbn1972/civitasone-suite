@@ -15,6 +15,7 @@ import { schema as onboardingModule } from "../modules/onboarding/schema.js";
 import { schema as sentimentModule } from "../modules/sentiment/schema.js";
 import { schema as leadFieldRulesModule } from "../modules/leads/field-rules-schema.js";
 import { schema as leadCaptureFormsModule } from "../modules/leads/capture-forms-schema.js";
+import { schema as outcomesModule } from "../modules/outcomes/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -28,6 +29,8 @@ const SCHEMA = {
   ...sentimentModule,
   ...leadFieldRulesModule,
   ...leadCaptureFormsModule,
+  // G18: generic outcome reason-code catalogue + captured interaction outcomes.
+  ...outcomesModule,
   ...outboxSchema,
 };
 

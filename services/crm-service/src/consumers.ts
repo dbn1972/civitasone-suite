@@ -49,6 +49,7 @@ import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
+import { registerOutcomeConsumers } from "./modules/outcomes/consumer.js";
 
 export function registerAllConsumers(queue: Queue): void {
   registerContactConsumers(queue);
@@ -105,4 +106,8 @@ export function registerAllConsumers(queue: Queue): void {
   registerCommissionConsumers(queue);
   // Gap 6: payment-due and balance-alert event consumers
   registerPaymentConsumers(queue);
+  // G18 (spec §25.3): outcome reason-code catalogue + interaction outcome capture.
+  // The recorded outcome event is what feeds the propensity model, so an unsubscribed
+  // command here would mean silently missing training signal, not just a missing row.
+  registerOutcomeConsumers(queue);
 }
