@@ -32,13 +32,39 @@ export interface ApprovalRow {
   requestedBy: string;
   approver: string | null;
   version: number;
+  /** G26 — which delegation limit was applied, snapshotted at request time. */
+  appliedLimitId: string | null;
+  appliedLimitBps: number | null;
+  requiredApproverRole: string | null;
+  requiredApproverLevel: number | null;
+  authorityOutcome: string | null;
+  /**
+   * G26 — the SERVER-DERIVED discount the request was routed by, lifted out of the
+   * threshold snapshot so the decide path compares an approver's authority against the
+   * same figure the routing used rather than re-deriving it from lines that may since
+   * have changed.
+   */
+  appliedRequestBps: number | null;
 }
+
+/**
+ * G26 added five columns to this ledger (migration 0092). They are projected here rather
+ * than in a second query so a caller cannot read an approval without its authority context.
+ */
+const APPROVAL_COLS = sql`
+  id, quotation_id AS "quotationId", approval_type AS "approvalType", status,
+  threshold_breached AS "thresholdBreached", reason, requested_by AS "requestedBy",
+  approver, version,
+  applied_limit_id AS "appliedLimitId", applied_limit_bps AS "appliedLimitBps",
+  required_approver_role AS "requiredApproverRole",
+  required_approver_level AS "requiredApproverLevel",
+  authority_outcome AS "authorityOutcome",
+  (threshold_breached->>'discountBps')::int AS "appliedRequestBps"
+`;
 
 export async function findApproval(tenantId: string, id: string): Promise<ApprovalRow | null> {
   const rows = await scopedRead(async (tx) => tx.execute(sql`
-    SELECT id, quotation_id AS "quotationId", approval_type AS "approvalType", status,
-           threshold_breached AS "thresholdBreached", reason, requested_by AS "requestedBy",
-           approver, version
+    SELECT ${APPROVAL_COLS}
     FROM crm.quotation_approvals WHERE id = ${id} AND tenant_id = ${tenantId}
   `)) as unknown as ApprovalRow[];
   return rows[0] ?? null;
@@ -46,9 +72,7 @@ export async function findApproval(tenantId: string, id: string): Promise<Approv
 
 export async function listApprovals(tenantId: string, quotationId: string): Promise<ApprovalRow[]> {
   return scopedRead(async (tx) => tx.execute(sql`
-    SELECT id, quotation_id AS "quotationId", approval_type AS "approvalType", status,
-           threshold_breached AS "thresholdBreached", reason, requested_by AS "requestedBy",
-           approver, version
+    SELECT ${APPROVAL_COLS}
     FROM crm.quotation_approvals WHERE tenant_id = ${tenantId} AND quotation_id = ${quotationId}
     ORDER BY created_at ASC
   `)) as unknown as ApprovalRow[];

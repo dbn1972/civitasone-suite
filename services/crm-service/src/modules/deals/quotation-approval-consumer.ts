@@ -42,23 +42,38 @@ export function registerQuotationApprovalConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; quotationId: string; approvalType: string; status: string;
       thresholdBreached: unknown; reason: string | null; requestedBy: string;
+      // G26 delegation context. Optional so a command in flight from before G26 (or from a
+      // non-discount approval type, which has no delegation limit) still applies cleanly.
+      appliedLimitId?: string | null; appliedLimitBps?: number | null;
+      requiredApproverRole?: string | null; requiredApproverLevel?: number | null;
+      authorityOutcome?: string | null;
     };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await tx.execute(sql`
           INSERT INTO crm.quotation_approvals
-            (id, tenant_id, quotation_id, approval_type, status, threshold_breached, reason, requested_by, approver, decided_at)
+            (id, tenant_id, quotation_id, approval_type, status, threshold_breached, reason, requested_by, approver, decided_at,
+             applied_limit_id, applied_limit_bps, required_approver_role, required_approver_level, authority_outcome)
           VALUES (${p.id}, ${p.tenantId}, ${p.quotationId}, ${p.approvalType}, ${p.status},
                   ${JSON.stringify(p.thresholdBreached)}::jsonb, ${p.reason}, ${p.requestedBy},
                   ${p.status === "approved" ? msg.actorId : null},
-                  ${p.status === "approved" ? sql`now()` : sql`NULL`})
+                  ${p.status === "approved" ? sql`now()` : sql`NULL`},
+                  ${p.appliedLimitId ?? null}, ${p.appliedLimitBps ?? null},
+                  ${p.requiredApproverRole ?? null}, ${p.requiredApproverLevel ?? null},
+                  ${p.authorityOutcome ?? null})
           ON CONFLICT (id) DO NOTHING
         `);
         await emitWithAudit(tx, ctxOf(msg), {
           eventType: EVENTS.quotationApprovalRequested, action: "request_approval", resourceType: "quotation_approval",
           resourceId: p.id,
-          payload: { approvalId: p.id, quotationId: p.quotationId, approvalType: p.approvalType, status: p.status },
+          payload: {
+            approvalId: p.id, quotationId: p.quotationId, approvalType: p.approvalType, status: p.status,
+            // Policy identifiers only — which limit applied and who must sign. No person.
+            appliedLimitId: p.appliedLimitId ?? null, appliedLimitBps: p.appliedLimitBps ?? null,
+            authorityOutcome: p.authorityOutcome ?? null,
+            requiredApproverRole: p.requiredApproverRole ?? null,
+          },
         });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "requestQuotationApproval failed"); throw err; }

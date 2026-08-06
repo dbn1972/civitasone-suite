@@ -209,6 +209,51 @@ export const COMMANDS = {
   decideQuotationApproval: "crm.quotation_approval.decide",
   /** Convert an accepted quotation into an order (QP-005). */
   convertQuotationToOrder: "crm.quotation.convert_to_order",
+  // -- G26: slab discount schedules + delegation-of-authority limits --
+  /**
+   * G26 create an effective-dated slab discount schedule (rate card) for a product or
+   * price book, together with all of its slabs in one command.
+   *
+   * Payload: { id, tenantId, name, scopeType: 'product'|'price_book', scopeId, basis:
+   * 'volume'|'value', currency, effectiveFrom, effectiveTo|null, enabled,
+   * slabs: [{ fromThreshold, toThreshold|null, discountBps, ordinal }] }.
+   *
+   * Thresholds are decimal STRINGS of integers (units for a volume basis, MINOR units for
+   * a value basis) so a threshold above 2^53 survives the queue; `discountBps` is an
+   * integer number of basis points, never a percentage. Slabs travel WITH the header
+   * because a schedule with no slabs prices nothing — splitting them into a second command
+   * would leave a window in which the card resolves to a 0% discount.
+   *
+   * Fires when an admin POSTs /v1/crm/discount-schedules.
+   */
+  createDiscountSchedule: "crm.discount_schedule.create",
+  /**
+   * G26 end-date a schedule so a newer card supersedes it (OPTIMISTIC LOCK).
+   *
+   * Payload: { id, tenantId, effectiveTo, expectedVersion }. The guarded UPDATE carries
+   * `WHERE version = expectedVersion`, so a command minted against a stale read never
+   * clobbers a newer end-date. This is the only mutation on a schedule: the slabs of a
+   * card in force are never edited, because editing them would retroactively change the
+   * discount a quotation was approved at. Superseding is close-then-create.
+   */
+  closeDiscountSchedule: "crm.discount_schedule.close",
+  /**
+   * G26 retire a schedule and its slabs. Payload: { id, tenantId }.
+   * Hard delete: a rate card is configuration, and a soft-deleted card that still resolves
+   * is a price nobody believes is live.
+   */
+  deleteDiscountSchedule: "crm.discount_schedule.delete",
+  /**
+   * G26 set the maximum discount (bps) a role may grant without escalating.
+   *
+   * Payload: { id, tenantId, role, level, maxDiscountBps, effectiveFrom,
+   * effectiveTo|null, enabled }. Upserts on (tenantId, role, effectiveFrom) so
+   * re-issuing the same day's limit corrects it rather than leaving two rows whose
+   * precedence depends on row order.
+   */
+  upsertDelegationLimit: "crm.delegation_limit.upsert",
+  /** G26 remove a delegation limit. Payload: { id, tenantId }. */
+  deleteDelegationLimit: "crm.delegation_limit.delete",
   // -- DM: Document & Attachment Management (BRD 7.12, DM-001/002) --
   /** DM-001 confirm an uploaded object -> create document metadata (scan_status pending). */
   confirmDocument: "crm.document.confirm",
@@ -428,6 +473,27 @@ export const EVENTS = {
   quotationApprovalDecided: "crm.quotation_approval.decided",
   /** An accepted quotation was converted to an order (QP-005). Money as STRING. */
   orderCreated: "crm.order.created",
+  // -- G26: slab discount schedules + delegation limits --
+  /**
+   * A slab discount schedule was created (G26).
+   * Payload: { scheduleId, scopeType, scopeId, basis, currency, effectiveFrom,
+   * effectiveTo, slabCount } — the shape of the card, not its slab table, and no money.
+   * MUST stay distinct from COMMANDS.createDiscountSchedule or the consumer would
+   * re-consume its own event as a fresh command.
+   */
+  discountScheduleCreated: "crm.discount_schedule.created",
+  /** A schedule was end-dated (G26). Payload: { scheduleId, effectiveTo }. */
+  discountScheduleClosed: "crm.discount_schedule.closed",
+  /** A slab discount schedule was removed (G26). Payload: { scheduleId }. */
+  discountScheduleDeleted: "crm.discount_schedule.deleted",
+  /**
+   * A delegation-of-authority limit was set (G26).
+   * Payload: { limitId, role, level, maxDiscountBps, effectiveFrom, effectiveTo }.
+   * Consumed by audit; carries policy only, never a person.
+   */
+  delegationLimitUpserted: "crm.delegation_limit.upserted",
+  /** A delegation limit was removed (G26). Payload: { limitId }. */
+  delegationLimitDeleted: "crm.delegation_limit.deleted",
   // -- DM: Document & Attachment Management (BRD 7.12) --
   /** DM-001 a document version was created. Payload: { documentId, subjectType, subjectId, version }. */
   documentUploaded: "crm.document.uploaded",

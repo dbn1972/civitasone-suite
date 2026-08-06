@@ -64,6 +64,7 @@ import { stageLimitRoutes } from "./modules/deals/stage-limits-routes.js";
 import { productRoutes } from "./modules/products/routes.js";
 import { priceBookRoutes } from "./modules/price-books/routes.js";
 import { quotationApprovalRoutes } from "./modules/deals/quotation-approval-routes.js";
+import { discountRoutes } from "./modules/discounts/routes.js";
 import { documentRoutes } from "./modules/documents/routes.js";
 import { documentTypeRoutes } from "./modules/documents/types-routes.js";
 // Generic CRM gaps
@@ -183,6 +184,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(productRoutes);
   await app.register(priceBookRoutes);
   await app.register(quotationApprovalRoutes);
+  // ── G26: slab discount schedules + delegation-of-authority limits. Registered after
+  // the quotation approval routes because it is that approval path the limits drive.
+  await app.register(discountRoutes);
   // ── DM: Document & Attachment Management (BRD §7.12) ──
   await app.register(documentRoutes);
   await app.register(documentTypeRoutes);

@@ -46,6 +46,7 @@ import { registerProductConsumers } from "./modules/products/consumer.js";
 import { registerPriceBookConsumers } from "./modules/price-books/consumer.js";
 import { registerQuotationApprovalConsumers } from "./modules/deals/quotation-approval-consumer.js";
 import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
+import { registerDiscountConsumers } from "./modules/discounts/consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
@@ -98,6 +99,8 @@ export function registerAllConsumers(queue: Queue): void {
   registerPriceBookConsumers(queue);
   registerQuotationApprovalConsumers(queue);
   registerOrderConsumers(queue);
+  // ── G26: slab discount schedules + delegation-of-authority limits ──
+  registerDiscountConsumers(queue);
   // ── DM: Document & Attachment Management (BRD §7.12) ──
   registerDocumentConsumers(queue);
   // ── Generic CRM gaps ──
