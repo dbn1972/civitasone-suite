@@ -71,8 +71,10 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
       downloadUrl: job.downloadUrl ?? undefined,
       rowCount: job.rowCount ?? undefined,
-      columns: [],
-      rows: [],
+      // Bounded, PII-masked preview persisted by the render consumer (0017);
+      // the download stays the source of truth for the full result.
+      columns: job.resultColumns ?? [],
+      rows: job.resultPreview ?? [],
       totalCount: job.rowCount ?? 0,
     });
   });

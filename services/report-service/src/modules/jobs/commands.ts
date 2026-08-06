@@ -23,6 +23,8 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
     requestedBy: ctx.actorId,
     completedAt: null,
     downloadUrl: null,
+    resultColumns: null,
+    resultPreview: null,
     version: 1,
   };
 

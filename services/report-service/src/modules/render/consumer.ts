@@ -120,6 +120,16 @@ export function registerRenderConsumers(queue: Queue): void {
       await putObject(key, buffer, contentType);
       const downloadUrl = await presignedGetUrl({ key, expiresIn: 86400 }); // 24h
 
+      // Persist a bounded preview for the web detail view — from the MASKED
+      // rows, keyed by column header and stringified to match the detail
+      // schema. The rendered file remains the full result.
+      const previewColumns = (p.columns ?? []).map((c) => c.header);
+      const resultPreview = rows.slice(0, 100).map((row) =>
+        Object.fromEntries(
+          (p.columns ?? []).map((c) => [c.header, String(row[c.key] ?? "")]),
+        ) as Record<string, string>,
+      );
+
       // Mark completed
       await db.transaction(async (tx) => {
         await tx.update(jobs)
@@ -128,6 +138,8 @@ export function registerRenderConsumers(queue: Queue): void {
             downloadUrl,
             format: ext,
             rowCount: p.rows?.length ?? null,
+            resultColumns: previewColumns,
+            resultPreview,
             completedAt: new Date(),
             updatedAt: new Date(),
             updatedBy: msg.actorId,

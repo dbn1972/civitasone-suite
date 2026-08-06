@@ -17,6 +17,8 @@ function toView(r: JobRow): JobView {
     requestedBy: r.requestedBy,
     completedAt: r.completedAt,
     downloadUrl: r.downloadUrl,
+    resultColumns: r.resultColumns ?? null,
+    resultPreview: r.resultPreview ?? null,
     version: r.version,
   };
 }

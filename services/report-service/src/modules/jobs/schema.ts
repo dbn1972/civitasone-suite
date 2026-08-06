@@ -1,7 +1,7 @@
 /**
  * jobs module — Drizzle schema in Postgres schema `reports`.
  */
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("reports");
 
@@ -16,6 +16,9 @@ export const jobs = domainSchema.table("jobs", {
   requestedBy: uuid("requested_by"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   downloadUrl: varchar("download_url", { length: 1024 }),
+  // Bounded, PII-masked preview written at render completion (0017).
+  resultColumns: jsonb("result_columns").$type<string[] | null>(),
+  resultPreview: jsonb("result_preview").$type<Record<string, string>[] | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -37,6 +40,8 @@ export type JobView = {
   requestedBy: string | null;
   completedAt: Date | null;
   downloadUrl: string | null;
+  resultColumns: string[] | null;
+  resultPreview: Record<string, string>[] | null;
   version: number;
 };
 
