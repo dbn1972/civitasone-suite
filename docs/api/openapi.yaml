@@ -15364,6 +15364,604 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security: []
 
+  # ── G7: checklist-driven cases (exporter readiness / insurance / B2B onboarding) ──
+  /v1/crm/checklist-templates:
+    get:
+      operationId: listChecklistTemplates
+      tags: [CRM]
+      summary: List checklist template versions
+      description: |
+        Every version of every checklist template in the tenant, newest version first
+        within each `templateKey`. Templates are versioned by row: a published template is
+        never edited in place, because instances reference its structure.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: templateKey
+          in: query
+          description: Restrict to one checklist's version history
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, published, deprecated] }
+      responses:
+        "200":
+          description: Template versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChecklistTemplate"
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+        "400":
+          description: "`VALIDATION_FAILED` — pagination or filter outside its bounds"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createChecklistTemplate
+      tags: [CRM]
+      summary: Create a draft checklist template version
+      description: |
+        Creates a DRAFT. `versionNumber` is assigned by the server as one more than the
+        highest existing version of the same `templateKey`, so authoring a change to a live
+        checklist is always a new row and never an edit of a structure an in-flight case
+        already references.
+
+        The `sections` body is validated structurally (unique section and question ids,
+        non-negative weights, conditional rules that reference real questions, prerequisites
+        that exist and do not cycle). A violation is a 400 carrying the specific code.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChecklistTemplateRequest"
+      responses:
+        "202":
+          description: Create command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            `VALIDATION_FAILED`, or a structural code from the checklist engine:
+            `DUPLICATE_SECTION_IDS`, `DUPLICATE_QUESTION_IDS`, `INVALID_SECTION_WEIGHT`,
+            `INVALID_QUESTION_WEIGHT`, `INVALID_PREREQUISITE_SCORE`,
+            `UNKNOWN_CONDITION_DEPENDENCY`, `SELF_REFERENTIAL_CONDITION`,
+            `INVALID_CONDITION_VALUE`, `SELF_REFERENTIAL_PREREQUISITE`,
+            `UNKNOWN_PREREQUISITE`, `PREREQUISITE_CYCLE`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — authoring a template is tenant configuration
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-templates/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getChecklistTemplate
+      tags: [CRM]
+      summary: Read one checklist template version
+      description: "Roles: crm_user, crm_admin, tenant_admin, super_admin."
+      responses:
+        "200":
+          description: The template version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChecklistTemplate"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a uuid"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no such template in this tenant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+    patch:
+      operationId: updateChecklistTemplate
+      tags: [CRM]
+      summary: Amend a draft checklist template
+      description: |
+        DRAFT only. A published template is immutable — publish a new version instead.
+        Supply `version` for optimistic locking; a stale value is refused with 409 rather
+        than accepted and silently dropped by the consumer.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateChecklistTemplateRequest"
+      responses:
+        "202":
+          description: Update command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — no amendable field named, or an invalid structure"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT` — the template has moved on"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`TEMPLATE_IMMUTABLE` — the template is published or deprecated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-templates/{id}/publish:
+    post:
+      operationId: publishChecklistTemplate
+      tags: [CRM]
+      summary: Put a checklist template version in force
+      description: |
+        Publishes a draft. The previously published version of the same `templateKey` is
+        deprecated in the same transaction, so exactly one version of a key is ever live
+        (enforced by a partial unique index). Existing instances are untouched — they hold
+        their own frozen copy of the structure they were created from.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChecklistTemplateStatusRequest"
+      responses:
+        "202":
+          description: Publish command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: |
+            `INVALID_TRANSITION` (not a draft), `TEMPLATE_EMPTY` (no section holds a
+            question), or a structural code from the checklist engine.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-templates/{id}/deprecate:
+    post:
+      operationId: deprecateChecklistTemplate
+      tags: [CRM]
+      summary: Retire a checklist template version
+      description: |
+        No new instance can be raised from a deprecated version. Instances already open
+        stay answerable — they carry their own frozen structure. `deprecated` is terminal.
+
+        Roles: crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChecklistTemplateStatusRequest"
+      responses:
+        "202":
+          description: Deprecate command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`INVALID_TRANSITION` — already deprecated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-instances:
+    get:
+      operationId: listChecklistInstances
+      tags: [CRM]
+      summary: List checklist instances
+      description: |
+        Newest activity first. Filter by subject to answer "what checklists are open on this
+        account".
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: subjectType
+          in: query
+          schema: { type: string, enum: [onboarding_case, deal, contact, account] }
+        - name: subjectId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [in_progress, completed, cancelled] }
+        - name: templateKey
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Instances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChecklistInstance"
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+        "400":
+          description: "`VALIDATION_FAILED`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+    post:
+      operationId: createChecklistInstance
+      tags: [CRM]
+      summary: Raise a checklist against a subject
+      description: |
+        Supply either `templateId` (an exact version) or `templateKey` (whichever version is
+        currently published). The instance stores a DEEP COPY of the template's structure:
+        a version published later must not retroactively change what an in-flight case was
+        asked.
+
+        One open instance per (subject, templateKey) — a superseding checklist is raised only
+        after the previous one is completed or cancelled.
+
+        `subjectId` is not dereferenced; the checklist records what it was told to attach to.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChecklistInstanceRequest"
+      responses:
+        "202":
+          description: Create command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: "`VALIDATION_FAILED` — neither `templateId` nor `templateKey` supplied"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND` — no such template, or no published version for that key"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`OPEN_INSTANCE_EXISTS` — this subject already has an open checklist for that key"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`TEMPLATE_NOT_PUBLISHED` — the named version is a draft or deprecated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-instances/{id}:
+    get:
+      operationId: getChecklistInstance
+      tags: [CRM]
+      summary: Read one checklist instance
+      description: |
+        Returns the frozen structure and the answers recorded so far.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The instance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChecklistInstance"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a uuid"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-instances/{id}/responses:
+    post:
+      operationId: submitChecklistResponses
+      tags: [CRM]
+      summary: Record answers on a checklist (partial saves allowed)
+      description: |
+        Submit only the answers that changed; everything already recorded survives, keeping
+        its original `answeredAt`. Question ids are checked against the instance's frozen
+        structure, so a typo fails with 400 instead of being stored where nothing will ever
+        count it.
+
+        An answer to a currently-hidden question is accepted and stored — visibility changes
+        as earlier answers change, and discarding it would silently lose work — but it is not
+        counted toward completion while hidden.
+
+        Completion is DERIVED: the instance becomes `completed` on the submission that clears
+        the last required, visible, unlocked question. There is no "mark complete" call.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitChecklistResponsesRequest"
+      responses:
+        "202":
+          description: Submission command queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: |
+            `VALIDATION_FAILED` (empty `answers`, or a value outside the accepted scalar /
+            array-of-scalar shapes), or `UNKNOWN_QUESTION` — a question id the instance's
+            structure does not define. `details.unknownQuestionIds` names them.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "`VERSION_CONFLICT`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "`INSTANCE_NOT_OPEN` — the checklist is completed or cancelled"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/crm/checklist-instances/{id}/completion:
+    get:
+      operationId: getChecklistCompletion
+      tags: [CRM]
+      summary: Progress, outstanding required items and score
+      description: |
+        Computed live from the instance's frozen structure and its recorded answers, with
+        conditional visibility and section prerequisites applied. `unansweredRequired` lists
+        only items that are required AND currently visible AND in a section whose
+        prerequisite chain is satisfied — anything else cannot be answered yet, so demanding
+        it would make the checklist impossible to finish.
+
+        Roles: crm_user, crm_admin, tenant_admin, super_admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Completion report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChecklistCompletion"
+        "400":
+          description: "`VALIDATION_FAILED` — `id` is not a uuid"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+        "404":
+          description: "`NOT_FOUND`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -22338,3 +22936,332 @@ components:
         totalFields:
           type: integer
           description: Number of scored fields (configured, or the default map)
+
+    # ── G7: checklist-driven cases ──────────────────────────────────────────────
+    ChecklistConditionalRule:
+      type: object
+      required: [dependsOn, operator, value, action]
+      properties:
+        dependsOn:
+          type: string
+          description: Id of the question whose answer this rule reads
+        operator:
+          type: string
+          enum: [eq, neq, gt, lt, in, not_in]
+        value:
+          description: |
+            Scalar, or an array of scalars for `in` / `not_in`. `eq` / `neq` are strict —
+            no type coercion.
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: "null"
+            - type: array
+              items:
+                oneOf:
+                  - type: string
+                  - type: number
+                  - type: boolean
+        action:
+          type: string
+          enum: [show, hide]
+    ChecklistQuestion:
+      type: object
+      required: [id, text, type, sortOrder, weight, required]
+      properties:
+        id:
+          type: string
+          description: Unique across the whole template, not just its section
+        text:
+          type: string
+        type:
+          type: string
+          enum: [text, number, boolean, select, multi_select, date, document, signature]
+        sortOrder:
+          type: integer
+        weight:
+          type: number
+          minimum: 0
+          description: Relative scoring weight within the section
+        required:
+          type: boolean
+        helpText:
+          type: string
+        conditionalLogic:
+          type: array
+          description: All rules must permit the question for it to be visible (AND)
+          items:
+            $ref: "#/components/schemas/ChecklistConditionalRule"
+    ChecklistSection:
+      type: object
+      required: [id, title, sortOrder, weight, questions]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        sortOrder:
+          type: integer
+        weight:
+          type: number
+          minimum: 0
+        prerequisite:
+          type: object
+          description: |
+            The section unlocks only once `sectionId` has scored at least `minScore`.
+            Prerequisites chain, so a section behind a locked section stays locked.
+          required: [sectionId, minScore]
+          properties:
+            sectionId:
+              type: string
+            minScore:
+              type: integer
+              minimum: 0
+              maximum: 100
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistQuestion"
+    ChecklistTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        templateKey:
+          type: string
+          description: Stable business key shared by every version of one checklist
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistSection"
+        versionNumber:
+          type: integer
+          description: Template version. Amending a published checklist creates the next one.
+        status:
+          type: string
+          enum: [draft, published, deprecated]
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          description: Optimistic lock counter — distinct from `versionNumber`
+    CreateChecklistTemplateRequest:
+      type: object
+      required: [templateKey, name]
+      properties:
+        templateKey:
+          type: string
+          maxLength: 64
+          pattern: "^[a-z0-9][a-z0-9_-]*$"
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        sections:
+          type: array
+          maxItems: 50
+          default: []
+          items:
+            $ref: "#/components/schemas/ChecklistSection"
+    UpdateChecklistTemplateRequest:
+      type: object
+      description: At least one of `name`, `description` or `sections` is required.
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        sections:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ChecklistSection"
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic lock; a stale value is refused with 409
+    ChecklistTemplateStatusRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+    ChecklistInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        subjectType:
+          type: string
+          enum: [onboarding_case, deal, contact, account]
+        subjectId:
+          type: string
+          format: uuid
+        templateId:
+          type: string
+          format: uuid
+        templateKey:
+          type: string
+        templateVersionNumber:
+          type: integer
+        structure:
+          type: array
+          description: Deep copy of the template's sections, frozen at creation
+          items:
+            $ref: "#/components/schemas/ChecklistSection"
+        responses:
+          type: object
+          description: |
+            questionId → `{ value, answeredAt }`. May contain personal data; never emitted
+            in an event payload.
+          additionalProperties:
+            type: object
+            properties:
+              value: {}
+              answeredAt:
+                type: string
+                format: date-time
+        status:
+          type: string
+          enum: [in_progress, completed, cancelled]
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    CreateChecklistInstanceRequest:
+      type: object
+      required: [subjectType, subjectId]
+      description: One of `templateId` or `templateKey` is required.
+      properties:
+        subjectType:
+          type: string
+          enum: [onboarding_case, deal, contact, account]
+        subjectId:
+          type: string
+          format: uuid
+        templateId:
+          type: string
+          format: uuid
+          description: An exact template version
+        templateKey:
+          type: string
+          description: Use whichever version of this key is currently published
+    SubmitChecklistResponsesRequest:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [questionId, value]
+            properties:
+              questionId:
+                type: string
+              value:
+                description: Scalar, or an array of scalars for a multi-select
+                oneOf:
+                  - type: string
+                  - type: number
+                  - type: boolean
+                  - type: "null"
+                  - type: array
+                    items:
+                      oneOf:
+                        - type: string
+                        - type: number
+                        - type: boolean
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic lock; a stale value is refused with 409
+    ChecklistCompletion:
+      type: object
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [in_progress, completed, cancelled]
+        complete:
+          type: boolean
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        requiredTotal:
+          type: integer
+          description: Required questions that are visible and in an unlocked section
+        requiredAnswered:
+          type: integer
+        unansweredRequired:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId:
+                type: string
+              sectionId:
+                type: string
+              text:
+                type: string
+        sectionScores:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+            maximum: 100
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Section scores averaged by section weight, over unlocked sections
+        availableSectionIds:
+          type: array
+          items:
+            type: string
+        lockedSectionIds:
+          type: array
+          items:
+            type: string

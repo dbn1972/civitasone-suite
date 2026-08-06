@@ -47,6 +47,7 @@ import { registerPriceBookConsumers } from "./modules/price-books/consumer.js";
 import { registerQuotationApprovalConsumers } from "./modules/deals/quotation-approval-consumer.js";
 import { registerOrderConsumers } from "./modules/deals/orders-consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
+import { registerChecklistConsumers } from "./modules/checklists/consumer.js";
 import { registerCommissionConsumers } from "./modules/commissions/consumer.js";
 import { registerPaymentConsumers } from "./modules/subscriptions/payment-consumer.js";
 
@@ -100,6 +101,8 @@ export function registerAllConsumers(queue: Queue): void {
   registerOrderConsumers(queue);
   // ── DM: Document & Attachment Management (BRD §7.12) ──
   registerDocumentConsumers(queue);
+  // ── G7: checklist templates + instances (exporter readiness / insurance / B2B onboarding) ──
+  registerChecklistConsumers(queue);
   // ── Generic CRM gaps ──
   // Gap 1: commission computation on deal closed
   registerCommissionConsumers(queue);

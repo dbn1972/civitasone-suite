@@ -168,6 +168,21 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.43)(jsdom@24.1.0)
 
+  packages/checklist:
+    devDependencies:
+      '@types/node':
+        specifier: 20.19.43
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   packages/circuit-breaker:
     devDependencies:
       typescript:
@@ -1413,6 +1428,9 @@ importers:
       '@civitasone/cache':
         specifier: workspace:*
         version: link:../../packages/cache
+      '@civitasone/checklist':
+        specifier: workspace:*
+        version: link:../../packages/checklist
       '@civitasone/circuit-breaker':
         specifier: workspace:*
         version: link:../../packages/circuit-breaker

@@ -218,6 +218,54 @@ export const COMMANDS = {
   verifyDocument: "crm.document.verify",
   /** DM-001 internal (service-secret gated) malware scan result -> sets scan_status. */
   recordDocumentScan: "crm.document.scan_result",
+  // ── G7: checklist-driven cases (exporter readiness / insurance proposal / B2B onboarding) ──
+  /**
+   * Create a DRAFT checklist template version (G7).
+   * Payload: { id, tenantId, templateKey, name, description, sections, versionNumber }.
+   * Fires when an admin POSTs a template. `versionNumber` is resolved at the route from
+   * the highest existing version of the same `templateKey` — versioning is by row, so a
+   * new draft is always an INSERT and never an edit of a published structure.
+   */
+  createChecklistTemplate: "crm.checklist_template.create",
+  /**
+   * Amend a DRAFT checklist template (G7).
+   * Payload: { id, tenantId, name?, description?, sections?, version }.
+   * Guarded on `status = 'draft'` AND `version` in the consumer: a published template is
+   * immutable because live instances hold a copy of its structure.
+   */
+  updateChecklistTemplate: "crm.checklist_template.update",
+  /**
+   * Publish a draft so it may be instantiated (G7).
+   * Payload: { id, tenantId, templateKey, versionNumber, version }.
+   * The consumer deprecates the previously published version of the same key in the same
+   * transaction, keeping the "one published version per key" unique index satisfied.
+   */
+  publishChecklistTemplate: "crm.checklist_template.publish",
+  /**
+   * Retire a template so no new instance can be raised from it (G7).
+   * Payload: { id, tenantId, version }. Existing instances are untouched — they carry
+   * their own frozen structure and remain answerable.
+   */
+  deprecateChecklistTemplate: "crm.checklist_template.deprecate",
+  /**
+   * Raise a checklist instance against a subject from a PUBLISHED template (G7).
+   * Payload: { id, tenantId, subjectType, subjectId, templateId, templateKey,
+   * templateVersionNumber, structure }. `structure` is the frozen deep copy resolved at
+   * the route, carried on the command so the consumer writes exactly what the caller was
+   * shown.
+   */
+  createChecklistInstance: "crm.checklist_instance.create",
+  /**
+   * Record a PARTIAL set of answers on an instance (G7).
+   * Payload: { id, tenantId, responses, version } where `responses` is
+   * Record<questionId, { value, answeredAt }>.
+   *
+   * This is the ONE checklist topic that carries answer VALUES, which may be personal
+   * data (a medical declaration, an identifier). Deliberately narrow: the events the
+   * consumer emits in response carry ids and counts only, so answer content never reaches
+   * a downstream consumer or its logs.
+   */
+  submitChecklistResponses: "crm.checklist_instance.submit_responses",
   // ── Gap 2: Campaign approval workflow ──
   /** Submit a bulk campaign for approval when it exceeds the threshold. */
   submitCampaignForApproval: "crm.campaign.submit_for_approval",
@@ -441,6 +489,65 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+
+  // ── G7: checklist-driven cases ──────────────────────────────────────────────
+  /**
+   * A draft checklist template version was created (G7).
+   * Payload: { templateId, templateKey, versionNumber, sectionCount, questionCount }.
+   * Structure metrics only — the section/question text is configuration, not something
+   * every downstream consumer needs a copy of.
+   *
+   * MUST stay distinct from COMMANDS.createChecklistTemplate: the consumer of that
+   * command emits this, and sharing the string would make it re-consume its own event
+   * as a fresh command.
+   */
+  checklistTemplateCreated: "crm.checklist_template.created",
+  /** A draft template was amended (G7). Payload: { templateId, changed: string[] }. */
+  checklistTemplateUpdated: "crm.checklist_template.updated",
+  /**
+   * A template version is now in force (G7).
+   * Payload: { templateId, templateKey, versionNumber, supersededTemplateId | null }.
+   * Consumed by nobody today; emitted so a future onboarding/journey listener can raise
+   * instances automatically without this module knowing who they are.
+   */
+  checklistTemplatePublished: "crm.checklist_template.published",
+  /** A template was retired; no new instances may be raised from it (G7). Payload: { templateId, templateKey, versionNumber }. */
+  checklistTemplateDeprecated: "crm.checklist_template.deprecated",
+  /**
+   * A checklist instance was raised against a subject (G7).
+   *
+   * Payload: { instanceId, subjectType, subjectId, templateId, templateKey,
+   * templateVersionNumber, requiredTotal }.
+   *
+   * Identifiers and counts ONLY — never answer content. Deliberately NOT coupled to
+   * onboarding: this module emits the fact and lets onboarding (or anything else)
+   * subscribe later, so a checklist is usable by journeys that do not exist yet.
+   */
+  checklistInstanceCreated: "crm.checklist_instance.created",
+  /**
+   * One or more answers were recorded on an instance (G7).
+   *
+   * Payload: { instanceId, subjectType, subjectId, questionIds: string[],
+   * answeredCount, requiredAnswered, requiredTotal, progressPercent, score }.
+   *
+   * Carries the ANSWERED QUESTION IDS and the resulting progress, never the submitted
+   * values: an answer value can be personal data (a medical declaration, an identifier)
+   * and an event fans out to every subscriber and their logs.
+   *
+   * Fires once per accepted submission, including a partial save that leaves the
+   * instance in progress.
+   */
+  checklistItemAnswered: "crm.checklist_item.answered",
+  /**
+   * An instance reached completion (G7).
+   *
+   * Payload: { instanceId, subjectType, subjectId, templateKey, score, completedAt }.
+   *
+   * Fires on the submission that clears the last outstanding required + visible +
+   * unlocked question — derived, never asserted by the caller. Emitted exactly once per
+   * instance because `completed` is terminal.
+   */
+  checklistInstanceCompleted: "crm.checklist_instance.completed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

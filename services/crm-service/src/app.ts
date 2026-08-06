@@ -66,6 +66,7 @@ import { priceBookRoutes } from "./modules/price-books/routes.js";
 import { quotationApprovalRoutes } from "./modules/deals/quotation-approval-routes.js";
 import { documentRoutes } from "./modules/documents/routes.js";
 import { documentTypeRoutes } from "./modules/documents/types-routes.js";
+import { checklistRoutes } from "./modules/checklists/routes.js";
 // Generic CRM gaps
 import { commissionRoutes } from "./modules/commissions/routes.js";
 import { referralRoutes } from "./modules/referrals/routes.js";
@@ -186,6 +187,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ── DM: Document & Attachment Management (BRD §7.12) ──
   await app.register(documentRoutes);
   await app.register(documentTypeRoutes);
+  // ── G7: checklist-driven cases (exporter readiness / insurance proposal / B2B onboarding) ──
+  await app.register(checklistRoutes);
   // ── Generic CRM gaps ──
   await app.register(commissionRoutes);
   await app.register(referralRoutes);
