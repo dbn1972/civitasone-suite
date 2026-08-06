@@ -5,10 +5,18 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createSettlementBody } from "./validators.js";
 import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];
+const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
 
 export async function settlementRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/legal/settlements", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send({ items: await repo.listSettlements(ctx.tenantId) });
+  });
+
   app.post("/v1/legal/settlements", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);

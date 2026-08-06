@@ -1,5 +1,14 @@
+import { desc, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalSettlements, legalLokAdalat } from "./schema.js";
+
+export async function listSettlements(tenantId: string, limit = 100) {
+  return db.transaction(async (tx) =>
+    tx.select().from(legalSettlements)
+      .where(eq(legalSettlements.tenantId, tenantId))
+      .orderBy(desc(legalSettlements.createdAt))
+      .limit(limit));
+}
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 

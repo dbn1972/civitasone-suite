@@ -1,6 +1,14 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalContractReviews, legalClearances, type ReviewRow } from "./schema.js";
+
+export async function listReviews(tenantId: string, limit = 100): Promise<ReviewRow[]> {
+  return db.transaction(async (tx) =>
+    tx.select().from(legalContractReviews)
+      .where(eq(legalContractReviews.tenantId, tenantId))
+      .orderBy(desc(legalContractReviews.createdAt))
+      .limit(limit));
+}
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 

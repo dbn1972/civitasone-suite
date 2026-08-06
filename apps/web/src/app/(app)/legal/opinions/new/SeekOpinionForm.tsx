@@ -6,12 +6,10 @@ import { useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 
 /**
- * "Seek Opinion" form.
- *
- * legal-service exposes no opinions create endpoint (opinions are read-only via
- * GET /api/v1/legal/opinions). Per the closest-existing-command rule this posts
- * to POST /api/v1/legal/notices, recording the opinion request as an outbound
- * legal notice. See the note banner on the page.
+ * "Seek Opinion" form — posts POST /v1/legal/opinions (seekOpinionBody:
+ * opinionNo, subject, question, soughtBy). It previously posted into the
+ * write-only notices module, so requests vanished and never appeared on the
+ * opinions register.
  *
  * Recording the request is irreversible, so submission is gated behind an
  * accessible ConfirmDialog (maker-checker).
@@ -27,12 +25,12 @@ export function SeekOpinionForm() {
     onConfirm: async () => {
       const ref = reference.trim() || `OPN/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 900) + 100)}`;
       const body = {
-        noticeNo: ref,
-        subject: subject.trim(),
-        partyRef: addressedTo.trim(),
-        direction: "sent" as const,
+        opinionNo: ref,
+        subject: subject.trim().slice(0, 256),
+        question: subject.trim(),
+        soughtBy: addressedTo.trim(),
       };
-      const res = await fetch("/api/proxy/v1/legal/notices", {
+      const res = await fetch("/api/proxy/v1/legal/opinions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
