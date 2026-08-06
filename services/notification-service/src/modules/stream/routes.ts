@@ -172,6 +172,29 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * GET /v1/notifications/stream/unread — Unread notifications for the caller.
+   * Non-SSE companion to the stream: the web bell fetches this on mount so the
+   * badge is correct even when the SSE connection is unavailable.
+   */
+  app.get("/v1/notifications/stream/unread", async (req: FastifyRequest, reply: FastifyReply) => {
+    const ctx = resolveContext(req);
+    const limitRaw = Number((req.query as { limit?: string }).limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 100) : 20;
+    const rows = await repo.listUnread(ctx.tenantId, ctx.actorId, limit);
+    return reply.send({
+      data: rows.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        metadata: n.metadata,
+        createdAt: n.createdAt instanceof Date ? n.createdAt.toISOString() : String(n.createdAt),
+        readAt: n.readAt ?? null,
+      })),
+    });
+  });
+
+  /**
    * POST /v1/notifications/stream/mark-read — Mark notification(s) as read.
    */
   app.post("/v1/notifications/stream/mark-read", async (req: FastifyRequest, reply: FastifyReply) => {

@@ -22,7 +22,7 @@ export interface Notification {
 interface NotificationBellProps {
   notifications?: Notification[];
   unreadCount?: number;
-  /** SSE stream URL — defaults to /api/proxy/notifications/v1/notifications/stream */
+  /** SSE stream URL — defaults to /api/proxy/v1/notifications/stream */
   streamUrl?: string;
   /** Whether to show the SSE connection status indicator. Default: true */
   showConnectionStatus?: boolean;
@@ -80,7 +80,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
 
   // SSE connection with exponential backoff reconnection
   const sseEnabled = !propNotifications;
-  const sseUrl = streamUrl ?? "/api/proxy/notifications/v1/notifications/stream";
+  const sseUrl = streamUrl ?? "/api/proxy/v1/notifications/stream";
 
   const handleSSEEvent = useCallback((_eventType: string, data: unknown) => {
     try {
@@ -128,7 +128,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
     setLoading(true);
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/notifications/v1/notifications/stream/unread?limit=20", {
+        const res = await fetch("/api/proxy/v1/notifications/stream/unread?limit=20", {
           credentials: "same-origin",
         });
         if (!res.ok) return;
@@ -169,7 +169,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
     setLocalUnreadCount((prev) => Math.max(0, prev - 1));
 
     try {
-      await fetch("/api/proxy/notifications/v1/notifications/stream/mark-read", {
+      await fetch("/api/proxy/v1/notifications/stream/mark-read", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -192,7 +192,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
     setLocalUnreadCount(0);
 
     try {
-      await fetch("/api/proxy/notifications/v1/notifications/stream/mark-read", {
+      await fetch("/api/proxy/v1/notifications/stream/mark-read", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },

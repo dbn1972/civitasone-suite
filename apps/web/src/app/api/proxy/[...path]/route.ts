@@ -44,9 +44,25 @@ async function proxy(req: Request, segments: string[], method: string) {
   const body = hasBody ? await req.text() : undefined;
 
   const upstream = await fetch(target, { method, headers, body });
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
+
+  // SSE must be passed through as a stream: buffering with .text() would hold the
+  // response open until the upstream closes (30-min idle timeout), so the client
+  // would never receive a single event.
+  if (contentType.includes("text/event-stream")) {
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: {
+        "content-type": contentType,
+        "cache-control": "no-cache, no-transform",
+        "x-accel-buffering": "no",
+      },
+    });
+  }
+
   const text = await upstream.text();
   return new NextResponse(text, {
     status: upstream.status,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
+    headers: { "content-type": contentType },
   });
 }

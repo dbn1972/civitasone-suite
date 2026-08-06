@@ -67,10 +67,14 @@ export async function proxyFetch(
   try {
     const response = await breaker.call(async () => {
       const timeoutMs = configValue("upstreamTimeoutMs");
+      // AbortSignal.timeout() governs the response BODY too, not just headers —
+      // it would sever a long-lived SSE stream at timeoutMs. SSE connections are
+      // heartbeat-kept-alive and idle-timed-out by the upstream itself.
+      const isEventStream = (init.headers["accept"] ?? "").includes("text/event-stream");
       const fetchInit: RequestInit = {
         method: init.method,
         headers: init.headers,
-        signal: AbortSignal.timeout(timeoutMs),
+        ...(isEventStream ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
       };
       if (init.body) fetchInit.body = init.body;
 
