@@ -107,7 +107,7 @@ export function OpportunityViews() {
     setMoveBusy(true);
     setMoveError("");
     try {
-      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStage);
+      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStage, pendingMove.deal.version);
       setMessage(`“${pendingMove.deal.name}” moved to ${pendingMove.toStageName}.`);
       setPendingMove(null);
       await reload();

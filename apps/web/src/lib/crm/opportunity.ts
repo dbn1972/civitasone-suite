@@ -205,6 +205,8 @@ export interface Opportunity {
   accountId?: string;
   status?: string;
   outcome?: CloseOutcome | null;
+  /** Optimistic-concurrency version — required by the stage-move endpoint. */
+  version?: number;
 }
 
 export function normaliseOpportunity(raw: unknown): Opportunity | null {
@@ -231,6 +233,9 @@ export function normaliseOpportunity(raw: unknown): Opportunity | null {
     outcome: (CLOSE_OUTCOMES as readonly string[]).includes(str(r.outcome))
       ? (str(r.outcome) as CloseOutcome)
       : null,
+    ...(typeof r.version === "number" && Number.isInteger(r.version) && r.version >= 1
+      ? { version: r.version }
+      : {}),
   };
 }
 
@@ -282,21 +287,43 @@ async function throwStageError(res: Response): Promise<never> {
   throw new Error(await errorMessageFromResponse(res));
 }
 
+/**
+ * Serialize an Opportunity into the shape the deal write validators accept:
+ * minor-unit money crosses as an integer (paise fit an int exactly), and empty
+ * optional strings are omitted because the validators enforce min-length /
+ * ISO-date on any value that IS present.
+ */
+function toDealWriteBody(opp: Opportunity): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: opp.name,
+    stage: opp.stage,
+    valueMinor: Number(opp.valueMinor || "0"),
+    probability: opp.probability,
+    quantity: opp.quantity,
+    competitors: opp.competitors,
+  };
+  if (opp.pipelineId) body.pipelineId = opp.pipelineId;
+  if (opp.product) body.product = opp.product;
+  if (opp.nextStep) body.nextStep = opp.nextStep;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(opp.expectedCloseDate)) body.expectedCloseDate = opp.expectedCloseDate;
+  return body;
+}
+
 export async function createOpportunity(opp: Opportunity): Promise<void> {
-  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(opp) });
+  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(toDealWriteBody(opp)) });
   if (!res.ok) await throwStageError(res);
 }
 
 export async function updateOpportunity(id: string, opp: Opportunity): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PUT", body: JSON.stringify(opp) });
+  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(toDealWriteBody(opp)) });
   if (!res.ok) await throwStageError(res);
 }
 
 /** OP-003 stage move — 422 MANDATORY_STAGE_FIELDS_MISSING surfaces the fields. */
-export async function changeOpportunityStage(id: string, stage: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ stage }),
+export async function changeOpportunityStage(id: string, stage: string, version?: number): Promise<void> {
+  const res = await browserFetch(`v1/crm/deals/${id}/stage`, {
+    method: "PATCH",
+    body: JSON.stringify({ stage, version: version && version >= 1 ? version : 1 }),
   });
   if (!res.ok) await throwStageError(res);
 }
@@ -498,7 +525,7 @@ export function normaliseStageLimit(raw: unknown): StageLimit | null {
     id: typeof r.id === "string" ? r.id : undefined,
     pipelineId: str(r.pipelineId) || undefined,
     stage,
-    limitDays: num(r.limitDays),
+    limitDays: num(r.maxDays ?? r.limitDays),
   };
 }
 
@@ -508,9 +535,19 @@ export function normaliseStageLimits(raw: unknown): StageLimit[] {
     .filter((s): s is StageLimit => s !== null);
 }
 
+/** The backend upserts stage limits keyed on (pipelineId, stage) via PUT. */
+function toStageLimitBody(limit: StageLimit): Record<string, unknown> {
+  return {
+    ...(limit.pipelineId ? { pipelineId: limit.pipelineId } : {}),
+    stage: limit.stage,
+    maxDays: limit.limitDays,
+    enabled: true,
+  };
+}
+
 export async function getStageLimits(): Promise<LoaderResult<StageLimit[]>> {
   try {
-    const res = await browserFetch("v1/crm/deals/stage-limits");
+    const res = await browserFetch("v1/crm/stage-limits");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseStageLimits(await res.json()), source: "api" };
   } catch {
@@ -519,22 +556,23 @@ export async function getStageLimits(): Promise<LoaderResult<StageLimit[]>> {
 }
 
 export async function createStageLimit(limit: StageLimit): Promise<void> {
-  const res = await browserFetch("v1/crm/deals/stage-limits", {
-    method: "POST",
-    body: JSON.stringify(limit),
+  const res = await browserFetch("v1/crm/stage-limits", {
+    method: "PUT",
+    body: JSON.stringify(toStageLimitBody(limit)),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function updateStageLimit(id: string, limit: StageLimit): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/stage-limits/${id}`, {
+export async function updateStageLimit(_id: string, limit: StageLimit): Promise<void> {
+  // Same upsert endpoint as create — the backend keys on (pipelineId, stage).
+  const res = await browserFetch("v1/crm/stage-limits", {
     method: "PUT",
-    body: JSON.stringify(limit),
+    body: JSON.stringify(toStageLimitBody(limit)),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
 export async function deleteStageLimit(id: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/stage-limits/${id}`, { method: "DELETE" });
+  const res = await browserFetch(`v1/crm/stage-limits/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }

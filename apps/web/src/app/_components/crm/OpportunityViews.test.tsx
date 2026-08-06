@@ -63,7 +63,7 @@ describe("OpportunityViews (OP-004)", () => {
     // confirm dialog appears; nothing called yet
     expect(op.changeOpportunityStage).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
-    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "propose"));
+    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "propose", undefined));
   });
 
   it("surfaces a blocked stage move (422 mandatory fields) in the dialog", async () => {
