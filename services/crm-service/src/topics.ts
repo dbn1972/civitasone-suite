@@ -225,6 +225,13 @@ export const COMMANDS = {
   approveCampaign: "crm.campaign.approve",
   /** Reject a pending campaign with optional reason. */
   rejectCampaign: "crm.campaign.reject",
+  // ── G17: Due-horizon work-queue generator ──
+  /** Create a due-horizon config (J2 step 1 — 60/30/7 day maturity lists). */
+  createDueHorizonConfig: "crm.due_horizon_config.create",
+  /** Update a due-horizon config. */
+  updateDueHorizonConfig: "crm.due_horizon_config.update",
+  /** Trigger a sweep run for a config — generates work queues for each horizon. */
+  runDueHorizonSweep: "crm.due_horizon.run_sweep",
 } as const;
 
 export const EVENTS = {
@@ -441,6 +448,13 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // ── G17: Due-horizon work-queue generator events ──
+  /** A due-horizon config was created. Payload: { configId, name, horizons }. */
+  dueHorizonConfigCreated: "crm.due_horizon_config.created",
+  /** A due-horizon config was updated. Payload: { configId }. */
+  dueHorizonConfigUpdated: "crm.due_horizon_config.updated",
+  /** A due-horizon sweep completed for all horizons. Payload: { configId, horizons, runAt }. */
+  dueHorizonRunCompleted: "crm.due_horizon.run_completed",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */
