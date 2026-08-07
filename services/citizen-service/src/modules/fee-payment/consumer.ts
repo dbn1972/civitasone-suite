@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
+import * as catalogueRepo from "../catalogue/repo.js";
 import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
 import type { FeeScheduleRow } from "./schema.js";
 
@@ -106,12 +107,26 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         gatewayRef: p.reference ?? null, receiptNo, receiptIssuedAt: now,
         reconciliationStatus: "reconciled", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      let hoaCode: string | null = null;
+      let serviceKey: string | null = null;
+      if (p.serviceId) {
+        const def = await catalogueRepo.findPublishedByServiceIdTx(tx, p.tenantId, p.serviceId);
+        if (def) {
+          hoaCode = def.hoaCode ?? null;
+          serviceKey = def.serviceKey;
+        }
+      }
       await enqueue(tx, {
         topic: EVENTS.receiptIssued, eventType: EVENTS.receiptIssued,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          id: p.id, applicationId: p.applicationId, receiptNo,
-          amount: fee.amount, currency: sched.currency,
+          id: p.id,
+          applicationId: p.applicationId,
+          receiptNo,
+          amountMinor: BigInt(fee.amount).toString(),
+          currency: sched.currency,
+          ...(hoaCode ? { hoaCode } : {}),
+          ...(serviceKey ? { serviceKey } : {}),
         },
       });
       await audit(tx, msg, "payment_offline_record", "payment", p.id);

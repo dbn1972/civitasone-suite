@@ -1,7 +1,13 @@
 import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
-import type { RequiredDocument, ServiceChannel } from "./domain.js";
+import type { RequiredDocument, ServiceChannel, ServicePattern, FeeModel } from "./domain.js";
 
 export const catalogueSchema = pgSchema("catalogue");
+
+export interface StatutoryReference {
+  act: string;
+  section?: string;
+  url?: string;
+}
 
 export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   id:                   uuid("id").primaryKey().defaultRandom(),
@@ -10,6 +16,14 @@ export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   serviceId:            uuid("service_id"),
   name:                 text("name").notNull(),
   ownerDepartment:      text("owner_department"),
+  servicePattern:       varchar("service_pattern", { length: 32 }).$type<ServicePattern>(),
+  ownerOfficeId:        uuid("owner_office_id"),
+  offeringOfficeIds:    uuid("offering_office_ids").array(),
+  workflowDefinitionId: uuid("workflow_definition_id"),
+  formId:               uuid("form_id"),
+  feeModel:             varchar("fee_model", { length: 8 }).$type<FeeModel>(),
+  hoaCode:              varchar("hoa_code", { length: 32 }),
+  statutoryReferences:  jsonb("statutory_references").$type<StatutoryReference[]>().notNull().default([]),
   version:              integer("version").notNull().default(1),
   status:               varchar("status", { length: 16 }).notNull().default("draft"),
   eligibilityRuleSetId: uuid("eligibility_rule_set_id"),

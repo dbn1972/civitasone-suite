@@ -36,7 +36,7 @@ import { registerVoucherPrintConsumers }  from "./modules/voucher-print/consumer
 import { registerAnomalyConsumers }       from "./modules/anomaly/consumer.js";
 import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/consumer.js";
 import { registerReconConsumers } from "./modules/recon/consumer.js";
-import { registerRevenueBridgeConsumers } from "./modules/revenue-bridge/consumer.js";
+import { registerRevenueGlConsumers } from "./modules/revenue-gl/consumer.js";
 
 const log = pino({ name: "finance-worker" });
 
@@ -97,7 +97,7 @@ registerVoucherPrintConsumers(queue);
 registerAnomalyConsumers(queue);
 registerResolutionIntakeConsumers(queue);
 registerReconConsumers(queue);
-registerRevenueBridgeConsumers(queue);
+registerRevenueGlConsumers(queue);
 
 await queue.start();
 const relay = startRelay(scannerDb as unknown as typeof db, queue);
