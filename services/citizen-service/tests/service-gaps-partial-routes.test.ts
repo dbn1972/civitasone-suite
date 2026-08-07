@@ -96,6 +96,27 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
     v1 = def.version;
   });
 
+  it("patches a draft definition (designer B1 autosave)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/citizen/catalogue/services/${defId}`, headers: hdr(tok(TENANT_A, MAKER)),
+      payload: {
+        name: "Trade Licence (Revised)",
+        servicePattern: "certificate",
+        slaDays: 21,
+        channels: ["portal", "mobile"],
+        statutoryReferences: [{ act: "Municipal Act", section: "12" }],
+      },
+    });
+    expect(res.statusCode).toBe(202);
+    const def = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/catalogue/services/${defId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.json().slaDays === 21 ? g.json() : null;
+    });
+    expect(def.name).toBe("Trade Licence (Revised)");
+    expect(def.servicePattern).toBe("certificate");
+    expect(def.channels).toEqual(["portal", "mobile"]);
+  });
+
   it("submit records the maker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/catalogue/services/${defId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(202);

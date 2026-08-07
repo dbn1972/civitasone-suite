@@ -31,6 +31,8 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       ownerDepartment?: string; eligibilityRuleSetId?: string; feeScheduleId?: string;
       issuanceType?: string; requiredDocuments: unknown[]; slaDays?: number;
       channels: unknown[]; forms?: unknown[]; outputs?: unknown[];
+      servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
+      hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -39,6 +41,12 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, serviceKey: p.serviceKey,
         serviceId: p.serviceId ?? null, name: p.name,
         ownerDepartment: p.ownerDepartment ?? null,
+        servicePattern: (p.servicePattern as never) ?? null,
+        ownerOfficeId: p.ownerOfficeId ?? null,
+        offeringOfficeIds: p.offeringOfficeIds ?? null,
+        hoaCode: p.hoaCode ?? null,
+        feeModel: (p.feeModel as never) ?? null,
+        statutoryReferences: (p.statutoryReferences ?? []) as never,
         version: next, status: "draft",
         eligibilityRuleSetId: p.eligibilityRuleSetId ?? null,
         feeScheduleId: p.feeScheduleId ?? null,
@@ -51,6 +59,37 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "definition_create", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
+  });
+
+  queue.subscribe(COMMANDS.catalogueDefinitionUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string;
+      name?: string; serviceKey?: string; ownerDepartment?: string;
+      slaDays?: number; channels?: unknown[]; requiredDocuments?: unknown[];
+      servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
+      hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const def = await repo.findDefinitionByIdTx(tx, p.id, msg.tenantId);
+      if (!def || def.status !== "draft") return;
+      const patch: Record<string, unknown> = { updatedBy: msg.actorId };
+      if (p.name !== undefined) patch.name = p.name;
+      if (p.serviceKey !== undefined) patch.serviceKey = p.serviceKey;
+      if (p.ownerDepartment !== undefined) patch.ownerDepartment = p.ownerDepartment;
+      if (p.slaDays !== undefined) patch.slaDays = p.slaDays;
+      if (p.channels !== undefined) patch.channels = p.channels;
+      if (p.requiredDocuments !== undefined) patch.requiredDocuments = p.requiredDocuments;
+      if (p.servicePattern !== undefined) patch.servicePattern = p.servicePattern;
+      if (p.ownerOfficeId !== undefined) patch.ownerOfficeId = p.ownerOfficeId;
+      if (p.offeringOfficeIds !== undefined) patch.offeringOfficeIds = p.offeringOfficeIds;
+      if (p.hoaCode !== undefined) patch.hoaCode = p.hoaCode;
+      if (p.feeModel !== undefined) patch.feeModel = p.feeModel;
+      if (p.statutoryReferences !== undefined) patch.statutoryReferences = p.statutoryReferences;
+      await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
+      await audit(tx, msg, "definition_update", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
   });

@@ -4,20 +4,37 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader, Card, HelpTip } from "@/app/_components/ds";
-import { SERVICE_PATTERN_OPTIONS } from "./_data/designerLoader";
+import { createServiceDefinition, slugifyServiceKey, waitForServiceDefinition } from "../_data/designerApi";
+import { SERVICE_PATTERN_OPTIONS } from "../_data/designerConstants";
 
 export default function PatternPickerPage() {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [office, setOffice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const pattern = SERVICE_PATTERN_OPTIONS.find((p) => p.id === selected);
 
-  const handleCreate = () => {
-    if (!selected || !name.trim()) return;
-    const id = crypto.randomUUID();
-    router.push(`/designer/${id}/b1?pattern=${selected}&name=${encodeURIComponent(name.trim())}`);
+  const handleCreate = async () => {
+    if (!selected || !name.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await createServiceDefinition({
+        serviceKey: slugifyServiceKey(name.trim()),
+        name: name.trim(),
+        servicePattern: selected,
+        ownerDepartment: office.trim() || undefined,
+        channels: ["portal"],
+      });
+      await waitForServiceDefinition(id);
+      router.push(`/designer/${id}/b1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create draft.");
+      setBusy(false);
+    }
   };
 
   return (
@@ -83,16 +100,19 @@ export default function PatternPickerPage() {
                 className="input"
                 value={office}
                 onChange={(e) => setOffice(e.target.value)}
-                placeholder="Pre-filled from your office (stub)"
+                placeholder="Pre-filled from your office (optional)"
               />
             </label>
             <div>
               <span style={{ fontSize: 13, color: "var(--ink2)" }}>Active blocks: </span>
               <span style={{ fontSize: 13 }}>{pattern.activeBlocks.join(" · ")}</span>
             </div>
+            {error ? (
+              <p role="alert" style={{ margin: 0, color: "var(--bad-fg)", fontSize: 13 }}>{error}</p>
+            ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" className="btn primary" disabled={!name.trim()} onClick={handleCreate}>
-                Create draft
+              <button type="button" className="btn primary" disabled={!name.trim() || busy} onClick={() => { void handleCreate(); }}>
+                {busy ? "Creating…" : "Create draft"}
               </button>
               <Link href="/designer/library" className="btn ghost">or start from a pack</Link>
             </div>
