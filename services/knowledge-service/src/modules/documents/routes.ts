@@ -69,6 +69,17 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+  app.get("/v1/knowledge/articles", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listDocuments(ctx.tenantId, q.limit, q.offset);
+    return reply.send({
+      data: result.data,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: result.data.length },
+    });
+  });
+
   app.post("/v1/knowledge/search", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);

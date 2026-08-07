@@ -46,6 +46,46 @@ export interface ProfileListFilters {
   servedAfter?: Date;
 }
 
+export async function listAll(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  filters: ProfileListFilters = {},
+): Promise<{ rows: RecommendationRow[]; total: number }> {
+  const conditions: SQL[] = [
+    eq(recommendations.tenantId, tenantId),
+  ];
+
+  if (filters.statuses !== undefined && filters.statuses.length > 0) {
+    conditions.push(inArray(recommendations.status, filters.statuses));
+  }
+  if (filters.channel !== undefined) {
+    conditions.push(eq(recommendations.channel, filters.channel));
+  }
+  if (filters.servedAfter !== undefined) {
+    conditions.push(gte(recommendations.servedAt, filters.servedAfter));
+  }
+
+  const where = and(...conditions);
+
+  const rows = await scopedRead((tx) =>
+    tx
+      .select()
+      .from(recommendations)
+      .where(where)
+      .orderBy(desc(recommendations.score), desc(recommendations.servedAt))
+      .limit(limit)
+      .offset(offset),
+  );
+
+  const countResult = await scopedRead((tx) =>
+    tx.select({ count: sql<number>`count(*)::int` }).from(recommendations).where(where),
+  );
+  const total = countResult[0]?.count ?? 0;
+
+  return { rows, total };
+}
+
 export async function listForProfile(
   tenantId: string,
   profileId: string,

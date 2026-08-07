@@ -240,6 +240,22 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
   });
 
+  app.get("/v1/estab/dak", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listInward(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
+  });
+
+  app.get("/v1/estab/notings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listNotings(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
+  });
+
   app.get("/v1/estab/dispatch", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

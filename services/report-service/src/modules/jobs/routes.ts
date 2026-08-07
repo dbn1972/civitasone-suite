@@ -28,6 +28,17 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     sendAccepted(reply, acceptedResponseSchema, await commands.createJob(ctx, body));
   });
 
+  app.get("/v1/reports", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset);
+    return reply.send({
+      data: result.data,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: result.data.length },
+    });
+  });
+
   app.get("/v1/reports/jobs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);

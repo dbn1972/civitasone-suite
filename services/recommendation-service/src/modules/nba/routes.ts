@@ -59,6 +59,26 @@ const rejectBody = z.object({
 });
 
 export async function nbaRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/recommendations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REC_ROLES);
+    const q = listQuery.parse(req.query);
+
+    const { rows, total } = await repo.listAll(ctx.tenantId, q.limit, q.offset, {
+      statuses: ["served"],
+      servedAfter: ttlCutoff(DEFAULT_TTL_HOURS),
+      ...(q.channel !== undefined ? { channel: q.channel } : {}),
+    });
+
+    const ranked = rankRecommendations(rows.map(repo.toView), q.limit);
+    const page = Math.floor(q.offset / q.limit) + 1;
+
+    return reply.send({
+      data: ranked,
+      meta: { page, pageSize: q.limit, total },
+    });
+  });
+
   app.get("/v1/recommendations/:profileId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REC_ROLES);

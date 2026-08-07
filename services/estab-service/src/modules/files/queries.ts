@@ -151,6 +151,10 @@ export async function listInward(tenantId: string, limit: number) {
   return repo.listInwardByTenant(tenantId, limit);
 }
 
+export async function listNotings(tenantId: string, limit: number) {
+  return repo.listNotingsByTenant(tenantId, limit);
+}
+
 export async function listDispatch(tenantId: string, limit: number) {
   return repo.listDispatchByTenant(tenantId, limit);
 }

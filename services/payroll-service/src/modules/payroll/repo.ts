@@ -65,6 +65,11 @@ export async function listComponentsByStructure(structureId: string, tenantId: s
     .where(and(eq(payrollComponents.structureId, structureId), eq(payrollComponents.tenantId, tenantId))));
 }
 
+export async function listComponentsByTenant(tenantId: string, limit: number) {
+  return scopedRead((tx) => tx.select().from(payrollComponents)
+    .where(eq(payrollComponents.tenantId, tenantId)).limit(limit));
+}
+
 export async function listSlipsByRun(runId: string, tenantId: string): Promise<PayrollSlipRow[]> {
   return scopedRead((tx) => tx.select().from(payrollSlips)
     .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId))));

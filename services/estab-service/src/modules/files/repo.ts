@@ -166,6 +166,11 @@ export async function searchFiles(tenantId: string, q: string, limit: number): P
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
+export async function listNotingsByTenant(tenantId: string, limit: number): Promise<NotingRow[]> {
+  return db.transaction((tx) => tx.select().from(estabNotings).where(eq(estabNotings.tenantId, tenantId))
+    .orderBy(desc(estabNotings.createdAt)).limit(limit));
+}
+
 export async function listInwardByTenant(tenantId: string, limit: number) {
   return db.transaction((tx) => tx.select().from(estabInward).where(eq(estabInward.tenantId, tenantId))
     .orderBy(desc(estabInward.receivedAt)).limit(limit));

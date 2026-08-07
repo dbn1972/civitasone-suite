@@ -20,6 +20,13 @@ export async function entityRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: entities, meta: { total: entities.length } });
   });
 
+  app.get("/v1/metadata/objects", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const entities = await withTenant(ctx.tenantId, (tx) =>
+      tx.select().from(entityDefinitions).where(eq(entityDefinitions.tenantId, ctx.tenantId)));
+    return reply.send({ data: entities, meta: { page: 1, pageSize: entities.length, total: entities.length } });
+  });
+
   app.get("/v1/metadata/entities/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
