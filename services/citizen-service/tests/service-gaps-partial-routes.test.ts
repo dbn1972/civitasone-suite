@@ -77,6 +77,7 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
       method: "POST", url: "/v1/citizen/catalogue/services", headers: hdr(tok(TENANT_A, MAKER)),
       payload: {
         serviceKey: SERVICE_KEY, serviceId: SERVICE_ID, name: "Trade Licence",
+        servicePattern: "certificate",
         ownerDepartment: "Municipal Licensing", channels: ["portal", "counter"],
         requiredDocuments: [
           { docType: "id_proof", label: "ID proof", mandatory: true },
@@ -93,6 +94,7 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
     });
     expect(def.version).toBe(1);
     expect(def.status).toBe("draft");
+    expect(def.servicePattern).toBe("certificate");
     v1 = def.version;
   });
 

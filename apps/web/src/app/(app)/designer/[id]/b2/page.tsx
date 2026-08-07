@@ -1,27 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { HelpTip } from "@/app/_components/ds";
+import { EmptyState, HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
-import { CatalogueB1Form, type CatalogueB1Values } from "../../_components/CatalogueB1Form";
 import { fetchServiceDefinition } from "../../_data/designerApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
-export default function DesignerB1Page() {
+export default function DesignerB2Page() {
   const params = useParams<{ id: string }>();
-  const search = useSearchParams();
   const router = useRouter();
-
-  const queryPattern = search.get("pattern") ?? "certificate";
-  const queryName = search.get("name") ?? "";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
-  const [initial, setInitial] = useState<CatalogueB1Values | null>(null);
-  const [meta, setMeta] = useState({ name: queryName || "Untitled service", pattern: queryPattern, version: 1, status: "draft" });
+  const [meta, setMeta] = useState({ name: "Untitled service", pattern: "certificate", version: 1, status: "draft" });
 
   useEffect(() => {
     let cancelled = false;
@@ -29,21 +22,11 @@ export default function DesignerB1Page() {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
-        const pattern = def.servicePattern ?? queryPattern;
         setMeta({
           name: def.name,
-          pattern,
+          pattern: def.servicePattern ?? "certificate",
           version: def.version,
           status: def.status,
-        });
-        setInitial({
-          name: def.name,
-          serviceKey: def.serviceKey,
-          ownerDepartment: def.ownerDepartment ?? "",
-          slaDays: def.slaDays ?? "",
-          channels: def.channels?.length ? def.channels : ["portal"],
-          statutoryReferences: def.statutoryReferences ?? [],
-          servicePattern: pattern,
         });
         setError(null);
       } catch (e) {
@@ -53,7 +36,7 @@ export default function DesignerB1Page() {
       }
     })();
     return () => { cancelled = true; };
-  }, [params.id, queryPattern]);
+  }, [params.id]);
 
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
@@ -65,7 +48,7 @@ export default function DesignerB1Page() {
         shortLabel: b.shortLabel,
         label: b.label,
         hidden: hidden.has(b.id),
-        status: b.id === "b1" ? "in-progress" : "empty",
+        status: b.id === "b1" ? "complete" : b.id === "b2" ? "in-progress" : "empty",
       })),
     [hidden],
   );
@@ -74,10 +57,10 @@ export default function DesignerB1Page() {
     return <p style={{ color: "var(--mut)" }}>Loading draft…</p>;
   }
 
-  if (error || !initial) {
+  if (error) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{error ?? "Draft not found."}</p>
+        <p style={{ color: "var(--bad-fg)" }}>{error}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -89,26 +72,27 @@ export default function DesignerB1Page() {
       patternLabel={patternMeta?.title ?? meta.pattern}
       version={meta.version}
       status={meta.status}
-      saveState={saveState}
+      saveState="saved"
       blocks={blocks}
-      activeBlockId="b1"
+      activeBlockId="b2"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
-      onNext={() => router.push(`/designer/${params.id}/b2`)}
+      onBack={() => router.push(`/designer/${params.id}/b1`)}
       help={
-        <HelpTip term="Catalogue & Identity">
-          Set the service name, owning office, channels, and SLA. This is what citizens see in the service list.
+        <HelpTip term="Intake Form">
+          The visual form builder connects to metadata-service in the next sprint. Catalogue identity is already saved.
         </HelpTip>
       }
     >
-      <CatalogueB1Form
-        definitionId={params.id}
-        initial={initial}
-        onSaveState={setSaveState}
-        onPatternChange={(pattern) => setMeta((m) => ({ ...m, pattern }))}
+      <EmptyState
+        icon="📝"
+        title="Form builder — next sprint"
+        message="B1 catalogue identity is saved. FN-02 form builder (metadata visual UI) ships in the following increment."
+        action={
+          <Link href={`/designer/${params.id}/b1`} className="btn primary">
+            Back to Catalogue & Identity
+          </Link>
+        }
       />
-      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <Link href="/designer" className="btn ghost">← Library</Link>
-      </div>
     </WizardShell>
   );
 }
