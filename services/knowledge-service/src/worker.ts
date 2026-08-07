@@ -12,8 +12,21 @@ import { registerRetentionConsumers } from "./modules/retention/consumer.js";
 import { registerSearchConsumers } from "./modules/search/consumer.js";
 import { registerVersionsConsumers } from "./modules/versions/consumer.js";
 import { registerSharingConsumers } from "./modules/sharing/consumer.js";
+import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "knowledge-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerDocumentsConsumers(queue);
 registerCategoriesConsumers(queue);
