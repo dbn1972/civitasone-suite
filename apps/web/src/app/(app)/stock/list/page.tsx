@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { getStockItems } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
@@ -19,7 +20,7 @@ export default async function StockListPage() {
         subtitle="All stock-keeping units, levels and valuations."
         actions={
           <>
-            <button className="btn ghost">Export</button>
+            <PrintExportButton label="Export" documentTitle="Stock Items" />
             <Link className="btn primary" href="/stock/items/new">+ New Item</Link>
           </>
         }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getHelpdeskTicketList } from "../../../_data/loaders";
 import { TicketsTable } from "./TicketsTable";
@@ -27,7 +28,7 @@ export default async function Page() {
         subtitle="Tickets, SLAs, agents, queues and knowledge base."
         actions={
           <>
-            <button className="btn ghost">Export</button>
+            <PrintExportButton label="Export" documentTitle="Helpdesk Tickets" />
             <Link href="/helpdesk/tickets/new" className="btn primary">+ New Ticket</Link>
           </>
         }

@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
+import { PlaceholderButton } from "../../_components/PlaceholderButton";
 import { PageHeader, StatCard, DataTable, EmptyState } from "../../_components/ds";
 import { getTenantAdminDashboard } from "../../_data/loaders";
 import { Breadcrumb } from "./Breadcrumb";
@@ -24,7 +25,7 @@ export default async function TenantAdminPage() {
           <>
             <a href="/tenant-admin/audit?export=true" className="btn ghost" style={{ minHeight: 44 }}>Export report</a>
             {canViewOperations && <a className="btn ghost" href="/tenant-admin/operations" style={{ minHeight: 44 }}>Operations</a>}
-            <button className="btn primary" style={{ minHeight: 44 }}>Invite user</button>
+            <PlaceholderButton label="Invite user" className="btn primary" style={{ minHeight: 44 }} />
           </>
         }
       />

@@ -15,6 +15,9 @@ type ModuleRow = { moduleKey: string; moduleName: string; enabled: boolean; enab
  * state by POSTing to the admin-service module toggle endpoint via the proxy,
  * then refreshes. WCAG: switches are keyboard-operable buttons with labels, and
  * a polite aria-live region announces save status; errors use an alert region.
+ *
+ * Audit emission happens server-side in the admin-service consumer that processes
+ * the module toggle command — the FE does not emit audit events directly.
  */
 export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
   const router = useRouter();
@@ -50,22 +53,6 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
           body: JSON.stringify({ enabled: pending[key] }),
         });
         if (!res.ok) throw new Error(await res.text());
-      }
-      // Emit audit event for module changes
-      try {
-        await fetch("/api/proxy/v1/audit/events", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            service: "admin",
-            action: dirtyKeys.map((k) => `module_${pending[k] ? "enable" : "disable"}_${k}`).join(","),
-            resourceType: "module_config",
-            resourceId: dirtyKeys.join(","),
-            outcome: "success",
-          }),
-        });
-      } catch {
-        // Audit failure should not block the save
       }
       setStatus(`Saved ${dirtyKeys.length} module${dirtyKeys.length === 1 ? "" : "s"}.`);
       router.refresh();

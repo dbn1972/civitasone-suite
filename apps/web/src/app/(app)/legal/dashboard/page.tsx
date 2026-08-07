@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
 import Link from "next/link";
 import { PageHeader, StatCard, DataTable } from "../../../_components/ds";
 import { getLegalDashboard } from "../../../_data/loaders";
@@ -14,7 +15,7 @@ export default async function LegalDashboardPage() {
         subtitle="Court cases, hearings, legal opinions & order compliance."
         actions={
           <>
-            <button className="btn ghost">Export</button>
+            <PrintExportButton label="Export" documentTitle="Legal Dashboard" />
             <Link href="/legal/cases/new" className="btn primary">+ New Case</Link>
           </>
         }

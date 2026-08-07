@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getBreakglassLog } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
@@ -30,7 +31,7 @@ export default async function BreakglassPage() {
         subtitle="Emergency support access events — all instances require justification and are fully audited."
         actions={
           <>
-            <button type="button" className="btn ghost" style={{ minHeight: 44 }}>Export log</button>
+            <PrintExportButton label="Export log" style={{ minHeight: 44 }} documentTitle="Break-Glass Access Log" />
             {source === "error" && <DataSourceBadge source={source} />}
           </>
         }
