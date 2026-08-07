@@ -1,4 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getActiveSessions } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
@@ -19,7 +20,7 @@ export default async function AdminSessionsPage() {
         back="/tenant-admin"
         title="Active Sessions"
         subtitle="All active and recent user sessions for this tenant."
-        actions={<button type="button" className="btn ghost" style={{ minHeight: 44 }}>Export</button>}
+        actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Active Sessions" />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🖥️" iconBg="#f1f5f9" label="Active Sessions" value={active} />

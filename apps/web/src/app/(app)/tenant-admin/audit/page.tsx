@@ -1,4 +1,6 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PrintExportButton } from "../../../_components/PrintExportButton";
+import { PlaceholderButton } from "../../../_components/PlaceholderButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getTenantAuditLog } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
@@ -23,8 +25,8 @@ export default async function TenantAuditPage() {
         subtitle="Tenant-scoped audit events — all actor actions and outcomes."
         actions={
           <>
-            <button className="btn ghost" style={{ minHeight: 44 }}>Export</button>
-            <button className="btn ghost" style={{ minHeight: 44 }}>Filter</button>
+            <PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Audit Log" />
+            <PlaceholderButton label="Filter" style={{ minHeight: 44 }} />
           </>
         }
       />

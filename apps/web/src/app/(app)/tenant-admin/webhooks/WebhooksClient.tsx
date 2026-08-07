@@ -31,7 +31,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
   const [testResult, setTestResult] = useState<string | null>(null);
 
   function handleTest(id: string) {
-    void fetch(`/api/proxy/v1/admin/webhooks/${id}/test`, { method: "POST", credentials: "same-origin" });
+    void fetch(`/api/v1/admin/webhooks/${id}/test`, { method: "POST", credentials: "same-origin" });
     setTestResult(`Test event sent to webhook ${id}. Check delivery log.`);
     setTimeout(() => setTestResult(null), 3000);
   }
@@ -39,7 +39,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
   async function handleViewDeliveries(webhookId: string) {
     setSelectedWebhook(webhookId);
     try {
-      const res = await fetch(`/api/proxy/v1/admin/webhooks/${webhookId}/deliveries`, { credentials: "same-origin" });
+      const res = await fetch(`/api/v1/admin/webhooks/${webhookId}/deliveries`, { credentials: "same-origin" });
       if (res.ok) {
         const payload = await res.json();
         const items = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
@@ -57,7 +57,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
     const description = formData.get("description") as string;
     const events = Array.from(formData.getAll("events")) as string[];
 
-    void fetch("/api/proxy/v1/admin/webhooks", {
+    void fetch("/api/v1/admin/webhooks", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",

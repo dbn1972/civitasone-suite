@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PlaceholderButton } from "../../../_components/PlaceholderButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getCourtOrders } from "../../../_data/loaders";
 import { CourtOrdersTable } from "./CourtOrdersTable";
@@ -26,7 +27,7 @@ export default async function CourtOrdersPage() {
         subtitle="Track implementation of court orders & judgments."
         actions={
           <>
-            <button className="btn ghost">Contempt watch</button>
+            <PlaceholderButton label="Contempt watch" />
             <Link href="/legal/court-orders/new" className="btn primary">+ Record Order</Link>
           </>
         }

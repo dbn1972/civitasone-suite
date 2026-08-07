@@ -1,4 +1,5 @@
 import { PageHeader, Card, StatusPill } from "@/app/_components/ds";
+import { PlaceholderButton } from "@/app/_components/PlaceholderButton";
 import { Breadcrumb } from "../../Breadcrumb";
 
 type SessionDetail = {
@@ -51,9 +52,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         title="Session Detail"
         subtitle={`Session for ${session.userName} (${session.userEmail})`}
         actions={
-          <button type="button" className="btn ghost" aria-label="Revoke this session" style={{ minHeight: 44, minWidth: 44 }}>
-            Revoke Session
-          </button>
+          <PlaceholderButton label="Revoke Session" aria-label="Revoke this session" style={{ minHeight: 44, minWidth: 44 }} />
         }
       />
 

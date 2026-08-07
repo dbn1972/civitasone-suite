@@ -36,7 +36,7 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
   function handleAddDomain(e: React.FormEvent) {
     e.preventDefault();
     // POST to real backend
-    void fetch("/api/proxy/v1/admin/domains", {
+    void fetch("/api/v1/admin/custom-domains", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
@@ -61,12 +61,12 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
   }
 
   function handleVerify(id: string) {
-    void fetch(`/api/proxy/v1/admin/domains/${id}/verify`, { method: "POST", credentials: "same-origin" });
+    void fetch(`/api/v1/admin/custom-domains/${id}/verify`, { method: "POST", credentials: "same-origin" });
     setDomains((prev) => prev.map((d) => d.id === id ? { ...d, status: "verified" as const } : d));
   }
 
   function handleDelete(id: string) {
-    void fetch(`/api/proxy/v1/admin/domains/${id}`, { method: "DELETE", credentials: "same-origin" });
+    void fetch(`/api/v1/admin/custom-domains/${id}`, { method: "DELETE", credentials: "same-origin" });
     setDomains((prev) => prev.filter((d) => d.id !== id));
   }
 
