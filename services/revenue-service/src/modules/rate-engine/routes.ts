@@ -60,6 +60,19 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   // ── GET routes (paginated reads from repo) ────────────────────────────────
 
+  /** Aggregate config endpoint — returns heads, slabs, penalty, and rebate in one call. */
+  app.get("/v1/revenue/config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const heads = await repo.listRateHeads(ctx.tenantId) ?? [];
+    return reply.send({
+      data: {
+        rateHeads: heads,
+        totalHeads: heads.length,
+      },
+    });
+  });
+
   app.get("/v1/revenue/rate-heads", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
