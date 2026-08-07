@@ -55,6 +55,15 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(app);
   });
 
+  /** List all grant applications for the tenant (paginated). */
+  app.get("/v1/grants/applications", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listGrantSummaries(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
+  });
+
   app.get("/v1/grants/grants", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
