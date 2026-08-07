@@ -54,10 +54,10 @@ export function DesignerHomeClient({ services, domainPacks }: Props) {
       />
 
       <StatGrid>
-        <StatCard label="Drafts" value={String(stats.drafts)} hint="Work in progress" />
-        <StatCard label="In Review" value={String(stats.inReview)} hint="Awaiting checker" />
-        <StatCard label="Published" value={String(stats.published)} hint="Live services" />
-        <StatCard label="Needs Attention" value={String(stats.attention)} hint="Rejected or blocked" />
+        <StatCard icon="📝" iconBg="var(--panel)" label="Drafts" value={String(stats.drafts)} />
+        <StatCard icon="🔍" iconBg="var(--info-bg)" label="In Review" value={String(stats.inReview)} />
+        <StatCard icon="✅" iconBg="var(--good-bg)" label="Published" value={String(stats.published)} />
+        <StatCard icon="⚠️" iconBg="var(--warn-bg)" label="Needs Attention" value={String(stats.attention)} />
       </StatGrid>
 
       <div style={{ marginTop: 20 }}>

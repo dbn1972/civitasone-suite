@@ -95,7 +95,7 @@ export default function DesignerB1Page() {
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onNext={() => router.push(`/designer/${params.id}/b2`)}
       help={
-        <HelpTip label="Catalogue & Identity">
+        <HelpTip term="Catalogue & Identity">
           Set the service name, owning office, channels, and SLA. This is what citizens see in the service list.
         </HelpTip>
       }

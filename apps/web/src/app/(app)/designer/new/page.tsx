@@ -125,7 +125,7 @@ export default function PatternPickerPage() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        <HelpTip label="What is a Service Pattern?">
+        <HelpTip term="What is a Service Pattern?">
           Patterns fix which of the eight composition blocks apply. You can change the pattern later from Catalogue & Identity — hidden block data is preserved, not deleted.
         </HelpTip>
       </div>
