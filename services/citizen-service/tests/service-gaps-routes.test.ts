@@ -81,6 +81,23 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
     });
   });
 
+  it("updates a draft rule set (designer autosave)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}`, headers: hdr(tok(TENANT_A, MAKER)),
+      payload: {
+        rules: [
+          { id: "age", attribute: "age", op: "gte", value: 65, effect: "disqualify", label: "65+" },
+          { id: "proof", attribute: "income_proof", op: "exists", effect: "refer", label: "needs proof" },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.json().rules?.[0]?.value === 65 ? g.json() : null;
+    });
+  });
+
   it("submit records the maker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(202);

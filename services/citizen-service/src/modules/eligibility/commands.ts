@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertRulesWellFormed } from "./domain.js";
-import type { CreateRuleSetBody, EvaluateBody, ReviewDecisionBody } from "./validators.js";
+import type { CreateRuleSetBody, UpdateRuleSetBody, EvaluateBody, ReviewDecisionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -29,6 +29,17 @@ export async function createRuleSet(ctx: RequestContext, body: CreateRuleSetBody
   assertRulesWellFormed(body.rules);
   const id = randomUUID();
   return publish(ctx, COMMANDS.eligibilityRuleSetCreate, id, { id, ...body });
+}
+
+/** Update a DRAFT rule set (designer autosave). */
+export async function updateRuleSet(ctx: RequestContext, id: string, body: UpdateRuleSetBody): Promise<Accepted> {
+  const rs = await repo.findRuleSetById(id, ctx.tenantId);
+  if (!rs) throw new HttpError(404, "NOT_FOUND", "rule set not found");
+  if (rs.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be updated");
+  if (body.rules !== undefined) assertRulesWellFormed(body.rules);
+  const accepted = await publish(ctx, COMMANDS.eligibilityRuleSetUpdate, randomUUID(), { id, ...body });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "eligibility", id));
+  return { ...accepted, id };
 }
 
 /** Maker step — record the submitter requesting publication (does NOT publish). */

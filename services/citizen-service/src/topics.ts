@@ -61,6 +61,7 @@ export const COMMANDS = {
   documentVerify:          "citizen.document.verify",
   documentResubmit:        "citizen.document.resubmit",
   eligibilityRuleSetCreate:  "citizen.eligibility.ruleset_create",
+  eligibilityRuleSetUpdate:  "citizen.eligibility.ruleset_update",
   eligibilityRuleSetSubmit:  "citizen.eligibility.ruleset_submit",
   eligibilityRuleSetPublish: "citizen.eligibility.ruleset_publish",
   eligibilityEvaluate:     "citizen.eligibility.evaluate",

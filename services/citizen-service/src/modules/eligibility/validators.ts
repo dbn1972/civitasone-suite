@@ -20,6 +20,12 @@ export const createRuleSetBody = z.object({
 });
 export type CreateRuleSetBody = z.infer<typeof createRuleSetBody>;
 
+export const updateRuleSetBody = z.object({
+  name:  safeText({ max: 128 }).optional(),
+  rules: z.array(ruleSchema).max(200).optional(),
+}).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+export type UpdateRuleSetBody = z.infer<typeof updateRuleSetBody>;
+
 /** Maker step: submit a draft for publication. */
 export const submitRuleSetBody = z.object({
   note: safeText({ max: 500, multiline: true }).optional(),

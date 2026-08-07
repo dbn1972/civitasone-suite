@@ -43,6 +43,24 @@ export function registerEligibilityConsumers(rawQueue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "eligibility", p.id));
   });
 
+  queue.subscribe(COMMANDS.eligibilityRuleSetUpdate, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name?: string; rules?: unknown[] };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const rs = await repo.findRuleSetByIdTx(tx, p.id, msg.tenantId);
+      if (!rs || rs.status !== "draft") return;
+      const patch: { name?: string; rules?: never; updatedBy: string } = { updatedBy: msg.actorId };
+      if (p.name !== undefined) patch.name = p.name;
+      if (p.rules !== undefined) {
+        try { assertRulesWellFormed(p.rules as never); } catch { return; }
+        patch.rules = p.rules as never;
+      }
+      await repo.updateRuleSet(tx, p.id, msg.tenantId, patch);
+      await audit(tx, msg, "ruleset_update", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "eligibility", p.id));
+  });
+
   queue.subscribe(COMMANDS.eligibilityRuleSetSubmit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {

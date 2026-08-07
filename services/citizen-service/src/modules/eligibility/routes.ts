@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { idParam, createRuleSetBody, evaluateBody, reviewDecisionBody } from "./validators.js";
+import { idParam, createRuleSetBody, updateRuleSetBody, evaluateBody, reviewDecisionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -16,6 +16,14 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createRuleSetBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRuleSet(ctx, body));
+  });
+
+  app.patch("/v1/citizen/eligibility/rule-sets/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateRuleSetBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateRuleSet(ctx, id, body));
   });
 
   app.post("/v1/citizen/eligibility/rule-sets/:id/submit", async (req, reply) => {
