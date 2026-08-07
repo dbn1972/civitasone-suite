@@ -20,6 +20,14 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
   });
 
+  // Alias: /v1/procurement/purchase-orders → same as /pos (UAT compat)
+  app.get("/v1/procurement/purchase-orders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
+  });
+
   app.get("/v1/procurement/pos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

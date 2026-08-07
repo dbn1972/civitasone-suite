@@ -28,6 +28,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(asset);
   });
 
+  // Alias: /v1/assets/register → same as /v1/assets/assets (UAT compat)
+  app.get("/v1/assets/register", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = assetQueryParams.parse(req.query);
+    const opts: { category?: string; status?: string; type?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
+    if (q.category !== undefined) opts.category = q.category;
+    if (q.status !== undefined) opts.status = q.status;
+    if (q.type !== undefined) opts.type = q.type;
+    const assets = await queries.listAssets(ctx.tenantId, opts);
+    return reply.send({ data: assets, limit: q.limit, offset: q.offset });
+  });
+
   app.get("/v1/assets/assets", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
