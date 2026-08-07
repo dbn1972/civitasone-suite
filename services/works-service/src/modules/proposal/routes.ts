@@ -20,6 +20,15 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
   });
 
+  // Alias: /v1/works/work-orders → same as proposals (UAT compat)
+  app.get("/v1/works/work-orders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const data = await listProposals(ctx.tenantId, query.page, query.pageSize);
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
   // Get proposal by id
   app.get("/v1/works/proposals/:id", async (req, reply) => {
     const ctx = resolveContext(req);
