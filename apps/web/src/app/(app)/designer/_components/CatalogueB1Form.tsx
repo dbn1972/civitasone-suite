@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "@/app/_components/ds";
+import { Card, ConfirmDialog } from "@/app/_components/ds";
 import type { StatutoryReference } from "../_data/designerApi";
 import { updateServiceDefinition } from "../_data/designerApi";
+import { patternChangeImpact, SERVICE_PATTERN_OPTIONS } from "../_data/designerConstants";
 
 const CHANNEL_OPTIONS = [
   { id: "portal", label: "Portal" },
@@ -26,10 +27,12 @@ interface Props {
   definitionId: string;
   initial: CatalogueB1Values;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
+  onPatternChange?: (pattern: string) => void;
 }
 
-export function CatalogueB1Form({ definitionId, initial, onSaveState }: Props) {
+export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternChange }: Props) {
   const [values, setValues] = useState(initial);
+  const [pendingPattern, setPendingPattern] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(values);
   latest.current = values;
@@ -98,9 +101,71 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState }: Props) {
     [values.servicePattern, values.statutoryReferences],
   );
 
+  const patternImpact = pendingPattern
+    ? patternChangeImpact(values.servicePattern, pendingPattern)
+    : null;
+
+  const applyPattern = (nextPattern: string) => {
+    setValues((prev) => {
+      const next = { ...prev, servicePattern: nextPattern };
+      scheduleSave(next);
+      return next;
+    });
+    onPatternChange?.(nextPattern);
+    setPendingPattern(null);
+  };
+
+  const requestPatternChange = (nextPattern: string) => {
+    if (nextPattern === values.servicePattern) return;
+    setPendingPattern(nextPattern);
+  };
+
   return (
-    <Card title="B1 — Catalogue & Identity" padding>
+    <>
+      <ConfirmDialog
+        open={pendingPattern !== null}
+        title="Change Service Pattern?"
+        description={
+          patternImpact ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <p style={{ margin: 0 }}>
+                Hidden block data is preserved — only the wizard steps change.
+              </p>
+              {patternImpact.hidden.length > 0 ? (
+                <p style={{ margin: 0 }}>
+                  These blocks will be hidden: {patternImpact.hidden.join(", ")}.
+                </p>
+              ) : null}
+              {patternImpact.shown.length > 0 ? (
+                <p style={{ margin: 0 }}>
+                  These blocks will become available: {patternImpact.shown.join(", ")}.
+                </p>
+              ) : null}
+            </div>
+          ) : null
+        }
+        confirmLabel="Change pattern"
+        onConfirm={() => { if (pendingPattern) applyPattern(pendingPattern); }}
+        onCancel={() => setPendingPattern(null)}
+      />
+      <Card title="B1 — Catalogue & Identity" padding>
       <div style={{ display: "grid", gap: 16, maxWidth: 640 }}>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span>Service Pattern</span>
+          <select
+            className="input"
+            value={values.servicePattern}
+            onChange={(e) => requestPatternChange(e.target.value)}
+          >
+            {SERVICE_PATTERN_OPTIONS.map((p) => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 12, color: "var(--mut)" }}>
+            Changing the pattern updates which composition blocks appear in the wizard.
+          </span>
+        </label>
+
         <label style={{ display: "grid", gap: 6 }}>
           <span>Service name</span>
           <input
@@ -203,5 +268,6 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState }: Props) {
         </div>
       </div>
     </Card>
+    </>
   );
 }

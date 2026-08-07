@@ -53,3 +53,18 @@ export function hiddenBlocksForPattern(pattern: string): Set<string> {
       return new Set();
   }
 }
+
+/** Human-readable block labels affected when switching Service Pattern (FN-19). */
+export function patternChangeImpact(from: string, to: string): { hidden: string[]; shown: string[] } {
+  const fromHidden = hiddenBlocksForPattern(from);
+  const toHidden = hiddenBlocksForPattern(to);
+  const hidden: string[] = [];
+  const shown: string[] = [];
+  for (const block of DEFAULT_BLOCKS) {
+    const wasHidden = fromHidden.has(block.id);
+    const nowHidden = toHidden.has(block.id);
+    if (!wasHidden && nowHidden) hidden.push(block.label);
+    if (wasHidden && !nowHidden) shown.push(block.label);
+  }
+  return { hidden, shown };
+}
