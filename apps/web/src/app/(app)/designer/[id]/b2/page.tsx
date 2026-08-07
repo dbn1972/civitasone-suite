@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { EmptyState, HelpTip } from "@/app/_components/ds";
-import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
-import { fetchServiceDefinition } from "../../_data/designerApi";
+import { HelpTip } from "@/app/_components/ds";
+import { WizardShell, type DesignerBlock, type FormDesignState } from "@/app/_components/ds/designer";
+import { FormBuilder } from "../../_components/FormBuilder";
+import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB2Page() {
@@ -14,7 +16,9 @@ export default function DesignerB2Page() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState({ name: "Untitled service", pattern: "certificate", version: 1, status: "draft" });
+  const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
+  const [initialDesign, setInitialDesign] = useState<FormDesignState | null>(null);
+  const [meta, setMeta] = useState({ name: "Untitled service", pattern: "certificate", version: 1, status: "draft", serviceKey: "" });
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +31,15 @@ export default function DesignerB2Page() {
           pattern: def.servicePattern ?? "certificate",
           version: def.version,
           status: def.status,
+          serviceKey: def.serviceKey,
         });
+        let design = emptyFormDesign();
+        try {
+          design = await loadFormDesign(def.serviceKey, def.name);
+        } catch {
+          design = emptyFormDesign();
+        }
+        setInitialDesign(design);
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -48,19 +60,31 @@ export default function DesignerB2Page() {
         shortLabel: b.shortLabel,
         label: b.label,
         hidden: hidden.has(b.id),
-        status: b.id === "b1" ? "complete" : b.id === "b2" ? "in-progress" : "empty",
+        status: b.id === "b2" ? "in-progress" : b.id === "b1" ? "complete" : "empty",
       })),
     [hidden],
   );
 
+  const onDesignPersisted = async (design: FormDesignState) => {
+    if (!design.layoutId) return;
+    try {
+      await updateServiceDefinition(params.id, {
+        formId: design.layoutId,
+        forms: [{ layoutId: design.layoutId, entityId: design.entityId, formVersionId: design.formVersionId }],
+      });
+    } catch {
+      // best-effort catalogue linkage
+    }
+  };
+
   if (loading) {
-    return <p style={{ color: "var(--mut)" }}>Loading draft…</p>;
+    return <p style={{ color: "var(--mut)" }}>Loading form builder…</p>;
   }
 
-  if (error) {
+  if (error || !initialDesign) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{error}</p>
+        <p style={{ color: "var(--bad-fg)" }}>{error ?? "Draft not found."}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -72,27 +96,28 @@ export default function DesignerB2Page() {
       patternLabel={patternMeta?.title ?? meta.pattern}
       version={meta.version}
       status={meta.status}
-      saveState="saved"
+      saveState={saveState}
       blocks={blocks}
       activeBlockId="b2"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/b1`)}
+      onNext={() => router.push(`/designer/${params.id}/b3`)}
       help={
         <HelpTip term="Intake Form">
-          The visual form builder connects to metadata-service in the next sprint. Catalogue identity is already saved.
+          Build applicant questions here. Preview uses the shared runtime renderer. Changes autosave to metadata-service.
         </HelpTip>
       }
     >
-      <EmptyState
-        icon="📝"
-        title="Form builder — next sprint"
-        message="B1 catalogue identity is saved. FN-02 form builder (metadata visual UI) ships in the following increment."
-        action={
-          <Link href={`/designer/${params.id}/b1`} className="btn primary">
-            Back to Catalogue & Identity
-          </Link>
-        }
+      <FormBuilder
+        serviceKey={meta.serviceKey}
+        serviceName={meta.name}
+        initial={initialDesign}
+        onSaveState={setSaveState}
+        onDesignPersisted={onDesignPersisted}
       />
+      <div style={{ marginTop: 16 }}>
+        <Link href={`/designer/${params.id}/b1`} className="btn ghost">← Catalogue</Link>
+      </div>
     </WizardShell>
   );
 }

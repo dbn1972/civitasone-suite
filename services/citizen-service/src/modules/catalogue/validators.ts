@@ -23,6 +23,8 @@ const designerFields = {
   hoaCode:              safeText({ max: 32 }).optional(),
   feeModel:             z.enum(FEE_MODELS).optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
+  forms:                z.array(z.unknown()).max(50).optional(),
+  formId:               z.string().uuid().optional(),
 };
 
 export const createDefinitionBody = z.object({

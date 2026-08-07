@@ -37,6 +37,8 @@ export interface UpdateDefinitionPayload {
   slaDays?: number;
   channels?: string[];
   statutoryReferences?: StatutoryReference[];
+  forms?: unknown[];
+  formId?: string;
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {
