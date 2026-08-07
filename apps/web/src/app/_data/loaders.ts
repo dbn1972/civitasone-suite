@@ -4100,7 +4100,7 @@ export type CustomDomain = {
 };
 
 export async function getCustomDomains(): Promise<LoaderResult<CustomDomain[]>> {
-  return fetchJson<unknown, CustomDomain[]>("/api/v1/admin/domains", [], {
+  return fetchJson<unknown, CustomDomain[]>("/api/v1/admin/custom-domains", [], {
     revalidateSeconds: 120,
     telemetryKey: "admin.domains",
     mapResponse: (p) => getArrayPayload(p) as CustomDomain[] | null,

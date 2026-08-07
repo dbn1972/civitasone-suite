@@ -81,6 +81,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "hierarchy",     prefix: "/api/v1/hierarchy",    upstream: upstream("location", 4012) },
   { name: "pincodes",      prefix: "/api/v1/pincodes",     upstream: upstream("location", 4012) },
   { name: "tenant",       prefix: "/api/v1/tenants",   upstream: upstream("tenant", 3002) },
+  { name: "tenant-singular", prefix: "/api/v1/tenant", upstream: upstream("tenant", 3002) },
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },
