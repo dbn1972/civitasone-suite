@@ -16,6 +16,14 @@ const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
 
 export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/hrms/recruitment/jobs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const result = await queries.listJobOpenings(ctx.tenantId, q.limit);
+    return reply.send({ data: result.data, meta: { page: 1, pageSize: q.limit, total: result.data.length } });
+  });
+
   app.get("/v1/hrms/job-openings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
@@ -124,6 +132,16 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
  * where external candidates can browse published vacancies and apply.
  */
 export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<void> {
+  // List published jobs for a tenant (public, no auth).
+  app.get("/v1/careers/jobs", { config: { public: true } }, async (req, reply) => {
+    const tenantId = (req.query as { tenantId?: string })?.tenantId
+      || (req.headers["x-tenant-id"] as string | undefined)
+      || "";
+    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "tenantId is required");
+    const vacancies = await queries.listPublishedVacancies(tenantId);
+    return reply.send({ data: vacancies, meta: { page: 1, pageSize: vacancies.length, total: vacancies.length } });
+  });
+
   // List published vacancies for a tenant (public, no auth).
   // Requires x-tenant-id header (set by the gateway for the custom domain or by the web proxy).
   app.get("/v1/careers/vacancies", { config: { public: true } }, async (req, reply) => {

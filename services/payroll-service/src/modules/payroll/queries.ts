@@ -83,3 +83,15 @@ export async function listStructures(tenantId: string, limit: number) {
   const rows = await repo.listStructuresByTenant(tenantId, limit);
   return rows.map((s) => ({ id: s.id, name: s.name, isDefault: s.isDefault, status: s.status }));
 }
+
+export async function listComponents(tenantId: string, limit: number) {
+  const rows = await repo.listComponentsByTenant(tenantId, limit);
+  return rows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    componentType: c.componentType,
+    isTaxable: c.isTaxable,
+    structureId: c.structureId,
+  }));
+}

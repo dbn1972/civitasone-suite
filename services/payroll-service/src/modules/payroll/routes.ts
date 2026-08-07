@@ -28,6 +28,14 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await queries.listStructures(ctx.tenantId, q.limit));
   });
 
+  app.get("/v1/payroll/components", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await queries.listComponents(ctx.tenantId, q.limit);
+    return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
+  });
+
   app.get("/v1/payroll/runs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

@@ -160,6 +160,18 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectLeave(ctx, id, body.reason));
   });
 
+  app.get("/v1/hrms/leave/applications", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
+    if (q.empId) {
+      const data = await queries.getLeaveApplicationsByEmp(ctx.tenantId, q.empId);
+      return reply.send({ data, meta: { page: 1, pageSize: q.limit, total: data.length } });
+    }
+    const result = await queries.listLeaveApplications(ctx.tenantId, q.limit);
+    return reply.send({ data: result.data, meta: { page: 1, pageSize: q.limit, total: result.data.length } });
+  });
+
   app.get("/v1/hrms/leave-applications", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);

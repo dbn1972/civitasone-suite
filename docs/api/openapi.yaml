@@ -72,6 +72,8 @@ tags:
     description: Email deliverability — sending domains, DKIM/SPF/DMARC authentication health
   - name: CRM
     description: Contacts and leads, configurable lead field rules, lead completeness scoring
+  - name: Knowledge
+    description: Documents, articles, records, full-text search
 
 paths:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -15364,6 +15366,51 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       security: []
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Knowledge Service
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/knowledge/articles:
+    get:
+      operationId: listKnowledgeArticles
+      tags: [Knowledge]
+      summary: List knowledge articles
+      description: |
+        Returns a paginated list of knowledge articles for the current tenant.
+        Articles are sourced from the documents store and returned with standard
+        pagination metadata. Supports offset-based pagination via limit/offset
+        query parameters.
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: Paginated list of knowledge articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/KnowledgeArticle"
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires knowledge_user, knowledge_admin, or super_admin
+      security:
+        - bearerAuth: []
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Components
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -22338,3 +22385,62 @@ components:
         totalFields:
           type: integer
           description: Number of scored fields (configured, or the default map)
+
+    # ─── Knowledge Service ─────────────────────────────────────────────────────
+
+    KnowledgeArticle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        category:
+          type: string
+          maxLength: 64
+          nullable: true
+        status:
+          type: string
+          enum: [draft, under_review, approved, archived]
+        tags:
+          type: array
+          items:
+            type: string
+        accessLevel:
+          type: string
+          enum: [public, internal, restricted, confidential]
+        fileType:
+          type: string
+          maxLength: 64
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+          description: File size in bytes
+        author:
+          type: string
+          maxLength: 200
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+      required:
+        - id
+        - tenantId
+        - title
+        - status
+        - tags
+        - accessLevel
+        - createdAt
+        - updatedAt
+        - version
