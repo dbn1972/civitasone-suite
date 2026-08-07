@@ -14,6 +14,7 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { pluginHooks } from "../hooks/schema.js";
 import { plugins } from "../registry/schema.js";
 import { eq, and } from "drizzle-orm";
@@ -37,73 +38,77 @@ export function registerRuntimeConsumers(queue: Queue): void {
   queue.subscribe<DispatchPayload>(DISPATCH_TOPIC, async (msg) => {
     const { eventType, tenantId, payload, correlationId } = msg.payload;
 
-    // Load active hooks for this event type + tenant
-    const hooks = await db.select().from(pluginHooks)
-      .where(and(
-        eq(pluginHooks.tenantId, tenantId),
-        eq(pluginHooks.eventType, eventType),
-        eq(pluginHooks.active, true),
-      ));
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
 
-    if (hooks.length === 0) return; // no hooks registered for this event
+      // Load active hooks for this event type + tenant
+      const hooks = await tx.select().from(pluginHooks)
+        .where(and(
+          eq(pluginHooks.tenantId, tenantId),
+          eq(pluginHooks.eventType, eventType),
+          eq(pluginHooks.active, true),
+        ));
 
-    // Build the hook definitions for the engine
-    const hookDefs: PluginHookDef[] = hooks.map((h) => ({
-      id: h.id,
-      pluginId: h.pluginId,
-      tenantId: h.tenantId,
-      eventType: h.eventType,
-      handlerPath: h.handlerPath,
-      active: h.active,
-    }));
+      if (hooks.length === 0) return; // no hooks registered for this event
 
-    // Manifest lookup: load plugin manifests for permission checks
-    const pluginIds = [...new Set(hooks.map((h) => h.pluginId))];
-    const pluginRows = await db.select().from(plugins)
-      .where(and(eq(plugins.tenantId, tenantId)));
-    const manifestMap = new Map<string, PluginManifest>();
-    for (const p of pluginRows) {
-      if (pluginIds.includes(p.id)) {
-        const manifest = p.manifestJson as Record<string, unknown>;
-        const sandboxManifest: SandboxManifest = {
-          id: p.id,
-          permissions: ((manifest["permissions"] as string[]) ?? []) as PluginPermission[],
-          events: (manifest["events"] as string[]) ?? [],
-        };
+      // Build the hook definitions for the engine
+      const hookDefs: PluginHookDef[] = hooks.map((h) => ({
+        id: h.id,
+        pluginId: h.pluginId,
+        tenantId: h.tenantId,
+        eventType: h.eventType,
+        handlerPath: h.handlerPath,
+        active: h.active,
+      }));
 
-        // Skip preview plugins when the feature gate is disabled
-        if (!isPluginAllowed(sandboxManifest)) {
-          log.debug({ pluginId: p.id }, "skipping preview plugin — feature gate disabled");
-          continue;
+      // Manifest lookup: load plugin manifests for permission checks
+      const pluginIds = [...new Set(hooks.map((h) => h.pluginId))];
+      const pluginRows = await tx.select().from(plugins)
+        .where(and(eq(plugins.tenantId, tenantId)));
+      const manifestMap = new Map<string, PluginManifest>();
+      for (const p of pluginRows) {
+        if (pluginIds.includes(p.id)) {
+          const manifest = p.manifestJson as Record<string, unknown>;
+          const sandboxManifest: SandboxManifest = {
+            id: p.id,
+            permissions: ((manifest["permissions"] as string[]) ?? []) as PluginPermission[],
+            events: (manifest["events"] as string[]) ?? [],
+          };
+
+          // Skip preview plugins when the feature gate is disabled
+          if (!isPluginAllowed(sandboxManifest)) {
+            log.debug({ pluginId: p.id }, "skipping preview plugin — feature gate disabled");
+            continue;
+          }
+
+          // Only deliver event if manifest declares this event type
+          if (!shouldDeliverEvent(sandboxManifest, eventType)) {
+            log.debug({ pluginId: p.id, eventType }, "skipping plugin — not subscribed to event");
+            continue;
+          }
+
+          manifestMap.set(p.id, {
+            name: (manifest["name"] as string) ?? "unknown",
+            version: (manifest["version"] as string) ?? "0.0.0",
+            permissions: (manifest["permissions"] as string[]) ?? [],
+            events: (manifest["events"] as string[]) ?? [],
+          });
         }
+      }
 
-        // Only deliver event if manifest declares this event type
-        if (!shouldDeliverEvent(sandboxManifest, eventType)) {
-          log.debug({ pluginId: p.id, eventType }, "skipping plugin — not subscribed to event");
-          continue;
+      const results = await executeHooks(
+        hookDefs,
+        { tenantId, eventType, payload, correlationId },
+        (pluginId) => manifestMap.get(pluginId) ?? null,
+      );
+
+      for (const r of results) {
+        if (r.status === "error" || r.status === "timeout") {
+          log.warn({ hookId: r.hookId, status: r.status, error: r.error }, "hook execution failed");
         }
-
-        manifestMap.set(p.id, {
-          name: (manifest["name"] as string) ?? "unknown",
-          version: (manifest["version"] as string) ?? "0.0.0",
-          permissions: (manifest["permissions"] as string[]) ?? [],
-          events: (manifest["events"] as string[]) ?? [],
-        });
       }
-    }
 
-    const results = await executeHooks(
-      hookDefs,
-      { tenantId, eventType, payload, correlationId },
-      (pluginId) => manifestMap.get(pluginId) ?? null,
-    );
-
-    for (const r of results) {
-      if (r.status === "error" || r.status === "timeout") {
-        log.warn({ hookId: r.hookId, status: r.status, error: r.error }, "hook execution failed");
-      }
-    }
-
-    log.info({ eventType, tenantId, hookCount: hooks.length, executed: results.length }, "hooks dispatched");
+      log.info({ eventType, tenantId, hookCount: hooks.length, executed: results.length }, "hooks dispatched");
+    });
   });
 }

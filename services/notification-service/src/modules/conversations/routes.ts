@@ -7,14 +7,17 @@
  * GET    /notifications/conversations/:id/messages — list messages (paginated, newest first)
  * POST   /notifications/conversations/:id/messages — add message to thread
  * PATCH  /notifications/conversations/:id        — update status / assign agent
+ *
+ * Write routes publish commands and return 202 Accepted (CQRS pattern).
+ * The actual DB writes happen in the consumer (consumer.ts).
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, readScoped } from "../../shared/db.js";
+import { readScoped } from "../../shared/db.js";
 import { conversations, conversationMessages } from "./schema.js";
-import { runWithTenant } from "@civitasone/db";
+import { publishCreateConversation, publishAddMessage, publishUpdateConversation } from "./commands.js";
 
 const ALLOWED_ROLES = ["notification_user", "notification_admin", "super_admin", "tenant_admin", "helpdesk_user", "helpdesk_admin"];
 
@@ -67,29 +70,23 @@ const patchConversationBody = z.object({
 
 export async function conversationRoutes(app: FastifyInstance): Promise<void> {
 
-  // POST /notifications/conversations — create
+  // POST /notifications/conversations — create (queued, 202)
   app.post("/notifications/conversations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALLOWED_ROLES);
     const body = createConversationBody.parse(req.body);
 
-    const rows = await runWithTenant(ctx.tenantId, () =>
-      db.transaction(async (tx) =>
-        tx.insert(conversations).values({
-          tenantId: ctx.tenantId,
-          contactId: body.contactId,
-          channel: body.channel,
-          subject: body.subject ?? null,
-          providerThreadId: body.providerThreadId ?? null,
-          assignedTo: body.assignedTo ?? null,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        }).returning(),
-      ),
-    );
-    const row = rows[0]!;
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
 
-    return reply.code(201).send({ data: formatConversation(row) });
+    await publishCreateConversation(ctx.tenantId, ctx.actorId, correlationId, {
+      contactId: body.contactId,
+      channel: body.channel,
+      subject: body.subject ?? null,
+      providerThreadId: body.providerThreadId ?? null,
+      assignedTo: body.assignedTo ?? null,
+    });
+
+    return reply.code(202).send({ accepted: true });
   });
 
   // GET /notifications/conversations — list
@@ -156,7 +153,7 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows.map(formatMessage), meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: rows.length } });
   });
 
-  // POST /notifications/conversations/:id/messages — add message
+  // POST /notifications/conversations/:id/messages — add message (queued, 202)
   app.post("/notifications/conversations/:id/messages", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALLOWED_ROLES);
@@ -171,40 +168,21 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     );
     if (!convo) throw new HttpError(404, "NOT_FOUND", "conversation not found");
 
-    const now = new Date();
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
 
-    const msgs = await runWithTenant(ctx.tenantId, () =>
-      db.transaction(async (tx) => {
-        const inserted = await tx.insert(conversationMessages).values({
-          tenantId: ctx.tenantId,
-          conversationId: id,
-          direction: body.direction,
-          content: body.content ?? null,
-          contentType: body.contentType,
-          providerMessageId: body.providerMessageId ?? null,
-          status: body.status,
-          createdBy: ctx.actorId,
-        }).returning();
+    await publishAddMessage(ctx.tenantId, ctx.actorId, correlationId, {
+      conversationId: id,
+      direction: body.direction,
+      content: body.content ?? null,
+      contentType: body.contentType,
+      providerMessageId: body.providerMessageId ?? null,
+      status: body.status,
+    });
 
-        // Update last_message_at and increment message_count
-        await tx.update(conversations)
-          .set({
-            lastMessageAt: now,
-            messageCount: sql`${conversations.messageCount} + 1`,
-            updatedAt: now,
-            updatedBy: ctx.actorId,
-          })
-          .where(and(eq(conversations.id, id), eq(conversations.tenantId, ctx.tenantId)));
-
-        return inserted;
-      }),
-    );
-    const msg = msgs[0]!;
-
-    return reply.code(201).send({ data: formatMessage(msg) });
+    return reply.code(202).send({ accepted: true });
   });
 
-  // PATCH /notifications/conversations/:id — update status/assign
+  // PATCH /notifications/conversations/:id — update status/assign (queued, 202)
   app.patch("/notifications/conversations/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALLOWED_ROLES);
@@ -213,35 +191,22 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
 
     // Verify conversation exists and belongs to tenant
     const [existing] = await readScoped(ctx.tenantId, async (tx) =>
-      tx.select().from(conversations)
+      tx.select({ id: conversations.id }).from(conversations)
         .where(and(eq(conversations.id, id), eq(conversations.tenantId, ctx.tenantId)))
         .limit(1),
     );
     if (!existing) throw new HttpError(404, "NOT_FOUND", "conversation not found");
 
-    const updates: Record<string, unknown> = {
-      updatedAt: new Date(),
-      updatedBy: ctx.actorId,
-      version: sql`${conversations.version} + 1`,
-    };
-    if (body.status !== undefined) {
-      updates.status = body.status;
-      if (body.status === "closed") updates.closedAt = new Date();
-    }
-    if (body.assignedTo !== undefined) updates.assignedTo = body.assignedTo;
-    if (body.subject !== undefined) updates.subject = body.subject;
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
 
-    const updatedRows = await runWithTenant(ctx.tenantId, () =>
-      db.transaction(async (tx) =>
-        tx.update(conversations)
-          .set(updates)
-          .where(and(eq(conversations.id, id), eq(conversations.tenantId, ctx.tenantId)))
-          .returning(),
-      ),
-    );
-    const updated = updatedRows[0]!;
+    await publishUpdateConversation(ctx.tenantId, ctx.actorId, correlationId, {
+      conversationId: id,
+      status: body.status,
+      assignedTo: body.assignedTo,
+      subject: body.subject,
+    });
 
-    return reply.send({ data: formatConversation(updated) });
+    return reply.code(202).send({ accepted: true });
   });
 
   // ─── Error handler ──────────────────────────────────────────────────────────

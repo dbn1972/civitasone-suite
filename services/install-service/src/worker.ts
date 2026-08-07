@@ -7,8 +7,21 @@ import { registerStageConsumers } from "./modules/stages/consumer.js";
 import { registerProvisioningConsumers } from "./modules/provisioning/consumer.js";
 import { startProvisioningPollLoop } from "./modules/provisioning/scheduler.js";
 import { registerOrchestratorConsumers } from "./modules/orchestrator/consumer.js";
+import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "install-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerStageConsumers(queue);
 registerProvisioningConsumers(queue);

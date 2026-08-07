@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -29,8 +30,22 @@ import { registerExperimentConsumers } from "./modules/experiments/consumer.js";
 import { registerPushConsumers } from "./modules/push/consumer.js";
 import { registerBounceConsumers } from "./modules/bounces/consumer.js";
 import { registerInboxConsumers } from "./modules/inbox/consumer.js";
+import { registerConversationConsumers } from "./modules/conversations/consumer.js";
 
 const log = pino({ name: "notification-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
+
 registerTemplateConsumers(queue);
 registerDeliveryConsumers(queue);
 registerChannelConsumers(queue);
@@ -58,6 +73,8 @@ registerBounceConsumers(queue);
 // This also consumes notification.inbox.inbound_received, which previously had
 // no subscriber at all.
 registerInboxConsumers(queue);
+// G5: conversation thread CQRS consumers (create, add message, update).
+registerConversationConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
 // G7: scheduled outbox purge — remove published messages older than 7 days.

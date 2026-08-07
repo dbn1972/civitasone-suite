@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -13,6 +14,18 @@ import { registerBbpsConsumers } from "./modules/bbps/consumer.js";
 import { registerReconConsumers } from "./modules/collection/recon-consumer.js";
 
 const log = pino({ name: "revenue-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 // Register all module consumers
 registerRateEngineConsumers(queue);

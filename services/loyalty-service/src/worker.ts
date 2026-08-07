@@ -12,8 +12,21 @@ import { registerEnrolmentConsumers } from "./modules/enrolments/consumer.js";
 import { registerAccrualConsumers } from "./modules/accruals/consumer.js";
 import { registerRedemptionConsumers } from "./modules/redemptions/consumer.js";
 import { registerTierConsumers } from "./modules/tiers/consumer.js";
+import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "loyalty-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerProgramConsumers(queue);
 registerEnrolmentConsumers(queue);

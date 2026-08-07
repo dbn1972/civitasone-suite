@@ -72,6 +72,10 @@ export const COMMANDS = {
   transitionHandoff:      "notification.inbox.handoff.transition",
   // G7: Channel usage metering → billing
   recordChannelUsage:     "notification.channel.usage",
+  // G5: Conversation thread model
+  createConversation:     "notification.conversation.create",
+  addConversationMessage: "notification.conversation.add_message",
+  updateConversation:     "notification.conversation.update",
 } as const;
 
 export const EVENTS = {

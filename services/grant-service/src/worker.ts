@@ -3,6 +3,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { runWithTenant } from "@civitasone/db";
 import { registerSchemeConsumers }        from "./modules/scheme/consumer.js";
 import { registerApplicationConsumers }   from "./modules/application/consumer.js";
 import { registerDisbursementConsumers } from "./modules/disbursement/consumer.js";
@@ -13,6 +14,18 @@ import { registerBeneficiaryConsumers } from "./modules/beneficiary/consumer.js"
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 
 const log = pino({ name: "grant-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerSchemeConsumers(queue);
 registerApplicationConsumers(queue);

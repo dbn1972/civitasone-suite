@@ -10,6 +10,19 @@ import { registerCompositionConsumers } from "./modules/composition/consumer.js"
 import { registerLayoutConsumers } from "./modules/layouts/consumer.js";
 import { registerNumberingConsumers } from "./modules/numbering/consumer.js";
 import { registerFormulaConsumers } from "./modules/formula/consumer.js";
+import { runWithTenant } from "@civitasone/db";
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerEntityConsumers(queue);
 registerFieldConsumers(queue);

@@ -3,6 +3,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
+import { runWithTenant } from "@civitasone/db";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import { registerPortalConsumers }      from "./modules/portal/consumer.js";
 import { registerApplicationConsumers } from "./modules/application/consumer.js";
@@ -20,6 +21,18 @@ import { registerDocumentsConsumers }   from "./modules/documents/consumer.js";
 import { registerEligibilityConsumers } from "./modules/eligibility/consumer.js";
 
 const log = pino({ name: "citizen-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so the worker never runs fail-open.
 assertPiiKeyConfigured();

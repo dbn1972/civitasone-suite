@@ -16,8 +16,21 @@ import { registerApiKeyConsumers } from "./modules/apikeys/consumer.js";
 import { registerDeviceConsumers } from "./modules/devices/consumer.js";
 import * as keycloak from "./shared/keycloak.js";
 import { reconcileDueDeactivations, countPending } from "./shared/kc-reconcile.js";
+import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "identity-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerUserConsumers(queue);
 registerRbacConsumers(queue);

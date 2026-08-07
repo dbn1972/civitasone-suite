@@ -57,8 +57,21 @@ import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerContractExpiryConsumers } from "./modules/contracts/expiry-consumer.js";
 import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
+import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "hrms-worker" });
+
+// Wrap queue.subscribe to set tenant context from message — consumers run
+// db.transaction() and RLS policies require app.tenant_id GUC to be set.
+{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = queue as any;
+  const rawSubscribe = q.subscribe.bind(q);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+}
 
 registerEmployeeConsumers(queue);
 registerLifecycleMutationConsumers(queue);
