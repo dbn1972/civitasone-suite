@@ -71,7 +71,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
       forms?: unknown[]; formId?: string;
-      eligibilityRuleSetId?: string; workflowDefinitionId?: string;
+      eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -94,6 +94,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.formId !== undefined) patch.formId = p.formId;
       if (p.eligibilityRuleSetId !== undefined) patch.eligibilityRuleSetId = p.eligibilityRuleSetId;
       if (p.workflowDefinitionId !== undefined) patch.workflowDefinitionId = p.workflowDefinitionId;
+      if (p.feeScheduleId !== undefined) patch.feeScheduleId = p.feeScheduleId;
       await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
       await audit(tx, msg, "definition_update", p.id);
     });

@@ -22,6 +22,21 @@ export type {
   EligibilityDesignState,
   EligibilityEvalResult,
 } from "./eligibilityTypes";
+export { FeeExemptionBuilder } from "./FeeExemptionBuilder";
+export type { FeeExemptionBuilderProps } from "./FeeExemptionBuilder";
+export { SlabTableEditor, validateSlabTable } from "./SlabTableEditor";
+export type { SlabTableEditorProps } from "./SlabTableEditor";
+export type {
+  FeeModelUi,
+  ExemptionKindUi,
+  FeeExemptionUi,
+  SlabTypeUi,
+  SlabRowUi,
+  DemandTrigger,
+  FeeDesignState,
+  DemandLine,
+  SampleCalculation,
+} from "./feeTypes";
 export { SplitPreview } from "./SplitPreview";
 export type { SplitPreviewProps } from "./SplitPreview";
 export { FormRenderer } from "./FormRenderer";
