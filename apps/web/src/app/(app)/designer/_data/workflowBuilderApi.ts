@@ -3,6 +3,8 @@
 import type { WorkflowDesignState, WorkflowLane } from "./workflowConstants";
 import { defaultLanes, emptyWorkflowDesign } from "./workflowConstants";
 
+export { emptyWorkflowDesign };
+
 interface DesignerNode {
   id: string;
   type: string;

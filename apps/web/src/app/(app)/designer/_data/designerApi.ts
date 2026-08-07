@@ -23,6 +23,9 @@ export interface ServiceDefinitionDto {
   formId?: string | null;
   eligibilityRuleSetId?: string | null;
   workflowDefinitionId?: string | null;
+  feeScheduleId?: string | null;
+  feeModel?: string | null;
+  hoaCode?: string | null;
 }
 
 export interface CreateDefinitionPayload {
@@ -45,6 +48,9 @@ export interface UpdateDefinitionPayload {
   formId?: string;
   eligibilityRuleSetId?: string;
   workflowDefinitionId?: string;
+  feeScheduleId?: string;
+  feeModel?: string;
+  hoaCode?: string;
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {

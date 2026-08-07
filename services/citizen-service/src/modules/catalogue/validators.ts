@@ -22,6 +22,7 @@ const designerFields = {
   offeringOfficeIds:    z.array(z.string().uuid()).max(50).optional(),
   hoaCode:              safeText({ max: 32 }).optional(),
   feeModel:             z.enum(FEE_MODELS).optional(),
+  feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
   formId:               z.string().uuid().optional(),
 };
@@ -32,7 +33,6 @@ export const createDefinitionBody = z.object({
   name:                  safeText({ max: 160 }),
   ownerDepartment:       safeText({ max: 160 }).optional(),
   eligibilityRuleSetId:  z.string().uuid().optional(),
-  feeScheduleId:         z.string().uuid().optional(),
   issuanceType:          safeText({ max: 48 }).optional(),
   requiredDocuments:     z.array(requiredDocSchema).max(50).default([]),
   slaDays:               z.number().int().min(0).max(3650).optional(),
