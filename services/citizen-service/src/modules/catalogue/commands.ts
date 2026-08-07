@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertDefinitionPublishable } from "./domain.js";
-import type { CreateDefinitionBody } from "./validators.js";
+import type { CreateDefinitionBody, UpdateDefinitionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -28,6 +28,16 @@ async function publish(
 export async function createDefinition(ctx: RequestContext, body: CreateDefinitionBody): Promise<Accepted> {
   const id = randomUUID();
   return publish(ctx, COMMANDS.catalogueDefinitionCreate, id, { id, ...body });
+}
+
+/** Patch a DRAFT service definition (B1 catalogue fields, FN-01). */
+export async function updateDefinition(ctx: RequestContext, id: string, body: UpdateDefinitionBody): Promise<Accepted> {
+  const def = await repo.findDefinitionById(id, ctx.tenantId);
+  if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+  if (def.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be edited");
+  const accepted = await publish(ctx, COMMANDS.catalogueDefinitionUpdate, randomUUID(), { id, ...body });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
+  return { ...accepted, id };
 }
 
 /** Maker step — record the submitter requesting publication (does NOT publish). */

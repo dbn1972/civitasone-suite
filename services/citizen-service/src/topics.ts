@@ -49,6 +49,7 @@ export const COMMANDS = {
   appealPrepareOrder:      "citizen.appeal.prepare_order",
   appealIssueOrder:        "citizen.appeal.issue_order",
   catalogueDefinitionCreate:  "citizen.catalogue.definition_create",
+  catalogueDefinitionUpdate:  "citizen.catalogue.definition_update",
   catalogueDefinitionSubmit:  "citizen.catalogue.definition_submit",
   catalogueDefinitionPublish: "citizen.catalogue.definition_publish",
   discoveryConsentGrant:   "citizen.discovery.consent_grant",
