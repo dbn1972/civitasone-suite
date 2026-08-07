@@ -23,7 +23,6 @@ const designerFields = {
   hoaCode:              safeText({ max: 32 }).optional(),
   feeModel:             z.enum(FEE_MODELS).optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
-  forms:                z.array(z.unknown()).max(50).optional(),
   formId:               z.string().uuid().optional(),
 };
 
@@ -51,6 +50,9 @@ export const updateDefinitionBody = z.object({
   slaDays:               z.number().int().min(0).max(3650).optional(),
   channels:              z.array(z.enum(SERVICE_CHANNELS)).max(8).optional(),
   requiredDocuments:     z.array(requiredDocSchema).max(50).optional(),
+  forms:                 z.array(z.unknown()).max(50).optional(),
+  eligibilityRuleSetId:  z.string().uuid().optional(),
+  workflowDefinitionId:  z.string().uuid().optional(),
   ...designerFields,
 }).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
 export type UpdateDefinitionBody = z.infer<typeof updateDefinitionBody>;

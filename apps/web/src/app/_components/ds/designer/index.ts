@@ -6,6 +6,22 @@ export { PropertyPanel } from "./PropertyPanel";
 export type { PropertyPanelProps } from "./PropertyPanel";
 export { ConditionBuilder } from "./ConditionBuilder";
 export type { ConditionBuilderProps } from "./ConditionBuilder";
+export { EligibilityConditionBuilder } from "./EligibilityConditionBuilder";
+export type { EligibilityConditionBuilderProps } from "./EligibilityConditionBuilder";
+export {
+  ELIGIBILITY_OPS,
+  ELIGIBILITY_EFFECTS,
+  PROFILE_ATTRIBUTES,
+  effectUiToApi,
+  effectApiToUi,
+} from "./eligibilityTypes";
+export type {
+  EligibilityOp,
+  EligibilityEffectUi,
+  EligibilityRuleUi,
+  EligibilityDesignState,
+  EligibilityEvalResult,
+} from "./eligibilityTypes";
 export { SplitPreview } from "./SplitPreview";
 export type { SplitPreviewProps } from "./SplitPreview";
 export { FormRenderer } from "./FormRenderer";

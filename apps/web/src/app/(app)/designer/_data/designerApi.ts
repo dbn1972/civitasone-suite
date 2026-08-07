@@ -9,6 +9,7 @@ export interface StatutoryReference {
 export interface ServiceDefinitionDto {
   id: string;
   serviceKey: string;
+  serviceId?: string | null;
   name: string;
   servicePattern?: string | null;
   ownerDepartment?: string | null;
@@ -19,6 +20,9 @@ export interface ServiceDefinitionDto {
   statutoryReferences?: StatutoryReference[];
   status: string;
   version: number;
+  formId?: string | null;
+  eligibilityRuleSetId?: string | null;
+  workflowDefinitionId?: string | null;
 }
 
 export interface CreateDefinitionPayload {
@@ -39,6 +43,8 @@ export interface UpdateDefinitionPayload {
   statutoryReferences?: StatutoryReference[];
   forms?: unknown[];
   formId?: string;
+  eligibilityRuleSetId?: string;
+  workflowDefinitionId?: string;
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {
