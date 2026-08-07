@@ -14,6 +14,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
 import { eq, and, notInArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { queue as queueInstance } from "../../shared/infra.js";
 import { EVENTS, CONSUMES } from "../../topics.js";
 import { tickets } from "../tickets/schema.js";
@@ -40,16 +41,22 @@ export function registerBreachRiskConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   // Re-score on ticket status transitions
   queue.subscribe<TicketUpdatedPayload>(EVENTS.ticketTransitioned, async (msg) => {
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
     await rescoreTicket(msg.payload.ticketId, msg.tenantId, msg.correlationId);
   });
 
   // Re-score on ticket assignment changes
   queue.subscribe<TicketUpdatedPayload>(EVENTS.ticketAssigned, async (msg) => {
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
     await rescoreTicket(msg.payload.ticketId, msg.tenantId, msg.correlationId);
   });
 
   // Re-score on ticket creation
   queue.subscribe<TicketUpdatedPayload>(EVENTS.ticketCreated, async (msg) => {
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
     await rescoreTicket(msg.payload.ticketId, msg.tenantId, msg.correlationId);
   });
 }

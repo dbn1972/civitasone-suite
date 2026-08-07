@@ -7,6 +7,8 @@
  * Requirements: 8.8
  */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { pino } from "pino";
 
@@ -23,6 +25,9 @@ export function registerForecastConsumers(queue: Queue): void {
   queue.subscribe(EVENTS.receiptPosted, async (msg: CommandEnvelope) => {
     if (process.env.FEATURE_ML_ENABLED !== "true") return;
 
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
+
     const payload = msg.payload as { movementId?: string; toStoreId?: string; lines?: number };
     log.info(
       { messageId: msg.messageId, tenantId: msg.tenantId, movementId: payload.movementId },
@@ -35,6 +40,9 @@ export function registerForecastConsumers(queue: Queue): void {
   // Listen for issue posted events
   queue.subscribe(EVENTS.issuePosted, async (msg: CommandEnvelope) => {
     if (process.env.FEATURE_ML_ENABLED !== "true") return;
+
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
 
     const payload = msg.payload as { movementId?: string; fromStoreId?: string; lines?: number };
     log.info(

@@ -12,6 +12,8 @@
  */
 
 import type { Queue } from "@civitasone/queue";
+import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
@@ -41,6 +43,9 @@ export function registerDelayForecastConsumers(queue: Queue): void {
   queue.subscribe<TaskUpdatedPayload>(
     EVENTS.taskUpdated,
     async (msg) => {
+      const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+      if (!isNew) return;
+
       const { taskId, projectId, tenantId } = msg.payload;
       const startMs = Date.now();
 

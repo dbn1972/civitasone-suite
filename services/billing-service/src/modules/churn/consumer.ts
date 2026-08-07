@@ -11,6 +11,8 @@
 
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
@@ -35,6 +37,9 @@ export function registerChurnConsumers(rawQueue: Queue): void {
   queue.subscribe<SubscriptionUpdatedPayload>(
     EVENTS.subscriptionUpdated,
     async (msg) => {
+      const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+      if (!isNew) return;
+
       const { subscriptionId, tenantId } = msg.payload;
       const startMs = Date.now();
 
