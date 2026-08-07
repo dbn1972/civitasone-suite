@@ -11,6 +11,13 @@
 export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
 export type ServiceChannel = typeof SERVICE_CHANNELS[number];
 
+/** Universal Service Designer — four workflow shapes (FN-01). */
+export const SERVICE_PATTERNS = ["certificate", "booking", "collection", "grievance"] as const;
+export type ServicePattern = typeof SERVICE_PATTERNS[number];
+
+export const FEE_MODELS = ["flat", "slab", "engine"] as const;
+export type FeeModel = typeof FEE_MODELS[number];
+
 export interface RequiredDocument {
   docType: string;
   label?: string | undefined;

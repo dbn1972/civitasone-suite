@@ -17,6 +17,7 @@ import { schema as feePaymentModule }  from "../modules/fee-payment/schema.js";
 import { schema as issuanceModule }    from "../modules/issuance/schema.js";
 import { schema as discoveryModule }   from "../modules/discovery/schema.js";
 import { schema as catalogueModule }   from "../modules/catalogue/schema.js";
+import { schema as packsModule }       from "../modules/packs/schema.js";
 import { schema as documentsModule }   from "../modules/documents/schema.js";
 import { schema as appealModule }      from "../modules/appeal/schema.js";
 import { outboxSchema }                from "./outbox.js";
@@ -34,6 +35,7 @@ const SCHEMA = {
   ...issuanceModule,
   ...discoveryModule,
   ...catalogueModule,
+  ...packsModule,
   ...documentsModule,
   ...appealModule,
   ...outboxSchema,

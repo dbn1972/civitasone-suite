@@ -119,14 +119,6 @@ export const CONSUMED_EVENTS = {
   billingInvoiceIssued:     "billing.invoice.issued",
   /** billing-service: SaaS invoice paid (cash receipt → GL). */
   billingInvoicePaid:       "billing.invoice.paid",
-  /** revenue-service: a payment receipt has been captured (DR Cash, CR Revenue). */
-  revenueReceiptCaptured:   "revenue.receipt.captured",
-  /** revenue-service: a refund has been processed against a prior receipt. */
-  revenueRefundProcessed:   "revenue.refund.processed",
-  /** billing-service: a SaaS invoice has been issued to a customer. */
-  billingInvoiceIssued:     "billing.invoice.issued",
-  /** billing-service: an issued invoice has been paid by the customer. */
-  billingInvoicePaid:       "billing.invoice.paid",
   /**
    * Owner: meeting-service. Fires when a board/committee records a decision with a
    * financial implication (Req 22.2). payload: { decisionId, meetingId, text,
@@ -134,6 +126,8 @@ export const CONSUMED_EVENTS = {
    * Action: open a PENDING REVIEW sanction-intake item (no auto-sanction; GFR maker-checker).
    */
   meetingDecisionFinancial: "meeting.decision.financial",
+  /** FN-14: citizen-service fee-payment offline receipt → GL posting. */
+  citizenReceiptIssued:     "citizen.receipt.issued",
 } as const;
 
 export const SERVICE  = "finance";
