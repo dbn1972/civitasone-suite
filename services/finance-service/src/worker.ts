@@ -14,6 +14,7 @@ import { registerTreasuryConsumers }      from "./modules/treasury/consumer.js";
 import { registerPaymentsConsumers }      from "./modules/payments/consumer.js";
 import { registerPaymentEOfficeDecisionConsumers } from "./modules/payments/eoffice-consumer.js";
 import { registerIntegrationConsumers }   from "./modules/integrations/consumer.js";
+import { registerRevenueBillingConsumers } from "./modules/revenue-billing/consumer.js";
 import { registerTenantOnboardConsumers } from "./modules/tenant-onboard/consumer.js";
 import { registerBankReconConsumers }     from "./modules/bank-recon/consumer.js";
 import { registerCashbookConsumers }      from "./modules/cashbook/consumer.js";
@@ -35,6 +36,7 @@ import { registerVoucherPrintConsumers }  from "./modules/voucher-print/consumer
 import { registerAnomalyConsumers }       from "./modules/anomaly/consumer.js";
 import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/consumer.js";
 import { registerReconConsumers } from "./modules/recon/consumer.js";
+import { registerRevenueBridgeConsumers } from "./modules/revenue-bridge/consumer.js";
 
 const log = pino({ name: "finance-worker" });
 
@@ -73,6 +75,7 @@ registerTreasuryConsumers(queue);
 registerPaymentsConsumers(queue);
 registerPaymentEOfficeDecisionConsumers(queue);
 registerIntegrationConsumers(queue);
+registerRevenueBillingConsumers(queue);
 registerTenantOnboardConsumers(queue);
 registerBankReconConsumers(queue);
 registerCashbookConsumers(queue);
@@ -94,6 +97,7 @@ registerVoucherPrintConsumers(queue);
 registerAnomalyConsumers(queue);
 registerResolutionIntakeConsumers(queue);
 registerReconConsumers(queue);
+registerRevenueBridgeConsumers(queue);
 
 await queue.start();
 const relay = startRelay(scannerDb as unknown as typeof db, queue);

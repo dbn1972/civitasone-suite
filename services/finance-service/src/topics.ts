@@ -111,6 +111,22 @@ export const CONSUMED_EVENTS = {
   reappropriationFileDecided: "finance.reappropriation.file_decided",
   /** ml-service emits anomaly detected when transaction Z-score > 3. */
   mlAnomalyDetected:        "ml.prediction.anomaly_detected",
+  /** revenue-service: receipt captured (collections → GL posting). */
+  revenueReceiptCaptured:   "revenue.receipt.captured",
+  /** revenue-service: refund processed (GL reversal). */
+  revenueRefundProcessed:   "revenue.refund.processed",
+  /** billing-service: SaaS invoice issued (revenue recognition). */
+  billingInvoiceIssued:     "billing.invoice.issued",
+  /** billing-service: SaaS invoice paid (cash receipt → GL). */
+  billingInvoicePaid:       "billing.invoice.paid",
+  /** revenue-service: a payment receipt has been captured (DR Cash, CR Revenue). */
+  revenueReceiptCaptured:   "revenue.receipt.captured",
+  /** revenue-service: a refund has been processed against a prior receipt. */
+  revenueRefundProcessed:   "revenue.refund.processed",
+  /** billing-service: a SaaS invoice has been issued to a customer. */
+  billingInvoiceIssued:     "billing.invoice.issued",
+  /** billing-service: an issued invoice has been paid by the customer. */
+  billingInvoicePaid:       "billing.invoice.paid",
   /**
    * Owner: meeting-service. Fires when a board/committee records a decision with a
    * financial implication (Req 22.2). payload: { decisionId, meetingId, text,
