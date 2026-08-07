@@ -53,6 +53,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "analytics",    prefix: "/api/v1/analytics", upstream: upstream("analytics", 3031) },
   { name: "ml",           prefix: "/api/v1/ml",        upstream: upstream("ml", 3032) },
   { name: "meeting",      prefix: "/api/v1/meeting",   upstream: upstream("meeting", 3033), upstreamPath: "/v1/meetings" },
+  { name: "meetings",     prefix: "/api/v1/meetings",  upstream: upstream("meeting", 3033) },
   { name: "court",        prefix: "/api/v1/court",     upstream: upstream("court", 3034) },
   { name: "courts",       prefix: "/api/v1/courts",    upstream: upstream("court", 3034), upstreamPath: "/v1/court" },
   { name: "visitor",     prefix: "/api/v1/visitor",   upstream: upstream("visitor", 3035) },
