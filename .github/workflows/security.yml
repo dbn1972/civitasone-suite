@@ -117,7 +117,12 @@ jobs:
           node scripts/ci/start-mock-gateway.mjs > mock-gateway.log 2>&1 &
           npx --yes wait-on http://localhost:8080/health --timeout 60000
       - name: ZAP baseline scan
+        # v0.12 still uses legacy artifact upload that returns a spurious
+        # "artifact name is not valid" 400 (zaproxy/action-baseline#134) even
+        # when the scan itself succeeds (FAIL-NEW: 0). We archive reports below
+        # with upload-artifact@v4, so do not hard-fail the job on that bug.
         uses: zaproxy/action-baseline@v0.12.0
+        continue-on-error: true
         with:
           target: 'http://localhost:8080'
           rules_file_name: .zap/rules.tsv
@@ -126,8 +131,7 @@ jobs:
           # as a release blocker would be misleading. Ratchet via rules.tsv.
           cmd_options: '-a -I'
           allow_issue_writing: false
-          # Default artifact_name zap_scan is rejected by Actions artifact API.
-          artifact_name: zap-baseline-scan
+          artifact_name: zapbaselinescan
           fail_action: false
       - name: Archive ZAP report
         if: always()
@@ -140,6 +144,20 @@ jobs:
             report_md.md
             mock-gateway.log
           retention-days: 30
+      - name: Fail if ZAP reported FAIL-NEW alerts
+        if: always()
+        run: |
+          if [ ! -f report_md.md ]; then
+            echo "ZAP report missing — scan step failed before producing output"
+            exit 1
+          fi
+          # Fail only on real FAIL-NEW findings; WARN-NEW and the action's
+          # broken artifact uploader must not block the PR.
+          if grep -E 'FAIL-NEW: [1-9]' report_md.md; then
+            echo "ZAP reported new FAIL alerts"
+            exit 1
+          fi
+          echo "ZAP baseline clean of FAIL-NEW alerts"
 
   codeql:
     name: CodeQL SAST
