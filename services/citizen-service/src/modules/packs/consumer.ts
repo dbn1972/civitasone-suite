@@ -12,6 +12,64 @@ const AUDIT = "audit.event.record";
 export function registerPacksConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
+  queue.subscribe(COMMANDS.packServiceExport, async (msg) => {
+    const p = msg.payload as {
+      id: string;
+      tenantId: string;
+      definitionId: string;
+      packKey: string;
+      name: string;
+      servicePattern?: string | null;
+      feeModel?: string | null;
+      hoaCode?: string | null;
+      serviceDefinitionId?: string | null;
+      formId?: string | null;
+      eligibilityRuleSetId?: string | null;
+      feeRefId?: string | null;
+      workflowDefinitionId?: string | null;
+      statutoryReferences?: unknown[];
+      engineBindings?: unknown[];
+      manifest?: Record<string, unknown>;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const next = (await packRepo.latestVersionForPackKey(tx, msg.tenantId, p.packKey)) + 1;
+      await packRepo.insertServicePack(tx, {
+        id: p.id,
+        tenantId: msg.tenantId,
+        sourceTenantId: msg.tenantId,
+        packKey: p.packKey,
+        name: p.name,
+        servicePattern: (p.servicePattern as never) ?? null,
+        serviceDefinitionId: p.serviceDefinitionId ?? p.definitionId,
+        formId: p.formId ?? null,
+        eligibilityRuleSetId: p.eligibilityRuleSetId ?? null,
+        feeModel: (p.feeModel as never) ?? null,
+        feeRefId: p.feeRefId ?? null,
+        workflowDefinitionId: p.workflowDefinitionId ?? null,
+        hoaCode: p.hoaCode ?? null,
+        engineBindings: (p.engineBindings ?? []) as never,
+        statutoryReferences: (p.statutoryReferences ?? []) as never,
+        manifest: (p.manifest ?? {}) as never,
+        status: "published",
+        version: next,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "citizen", action: "pack_export", resourceType: "service_pack",
+          resourceId: p.id, outcome: "success", packKey: p.packKey,
+          definitionId: p.definitionId,
+        },
+      });
+    });
+  });
+
   queue.subscribe(COMMANDS.packServiceImport, async (msg) => {
     const p = msg.payload as {
       id: string;
@@ -28,7 +86,7 @@ export function registerPacksConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const pack = await packRepo.findServicePackById(p.packId, msg.tenantId);
+      const pack = await packRepo.findServicePackByIdTx(tx, p.packId, msg.tenantId);
       if (!pack) return;
 
       const serviceKey = `${p.packKey.replace(/^pack:/, "")}-${randomSuffix()}`;

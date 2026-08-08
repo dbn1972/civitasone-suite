@@ -55,6 +55,7 @@ export const COMMANDS = {
   catalogueDefinitionReject:  "citizen.catalogue.definition_reject",
   sandboxTestRecord:          "citizen.sandbox_test.record",
   packServiceImport:          "citizen.pack.service_import",
+  packServiceExport:          "citizen.pack.service_export",
   discoveryConsentGrant:   "citizen.discovery.consent_grant",
   discoveryConsentRevoke:  "citizen.discovery.consent_revoke",
   discoveryRun:            "citizen.discovery.run",

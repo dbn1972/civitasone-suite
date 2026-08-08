@@ -37,11 +37,27 @@ export async function fetchServicePack(id: string): Promise<ServicePackDto | nul
   return mapPack(await res.json());
 }
 
-export async function importServicePack(packId: string): Promise<string> {
+/** FN-09 — export a published catalogue definition as a versioned service pack. */
+export async function exportServicePack(definitionId: string): Promise<string> {
+  const res = await fetch(`/api/proxy/v1/citizen/packs/services/export`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ definitionId }),
+  });
+  return parseAccepted(res);
+}
+
+/** FN-09 / FN-29 — import as draft; pass acknowledgeStatutory when pack has statutory refs. */
+export async function importServicePack(
+  packId: string,
+  opts: { acknowledgeStatutory?: boolean } = {},
+): Promise<string> {
   const res = await fetch(`/api/proxy/v1/citizen/packs/services/${packId}/import`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: "{}",
+    body: JSON.stringify({
+      acknowledgeStatutory: opts.acknowledgeStatutory === true ? true : undefined,
+    }),
   });
   return parseAccepted(res);
 }
