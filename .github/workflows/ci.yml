@@ -306,13 +306,17 @@ jobs:
             exit 1
           fi
           echo "✅ No console.log in service source"
-      - name: Check no raw 'any' type
+      - name: Check no exported 'any' type
         run: |
-          if grep -rn ": any" services/*/src --include="*.ts" | grep -v ".test.ts" | grep -v "node_modules" | grep -v "eslint-disable"; then
-            echo "❌ Raw 'any' type found"
+          # CLAUDE.md: no `any` typed exports (type/alias/value annotations).
+          # Function-parameter `any` (e.g. Fastify handlers) is eslint territory.
+          if grep -rnE 'export[[:space:]]+(type|interface)[[:space:]]+\w+[^=]*=[[:space:]]*any\b|export[[:space:]]+(const|let|var)[[:space:]]+\w+[[:space:]]*:[[:space:]]*any\b' \
+               services/*/src --include="*.ts" \
+               | grep -v ".test.ts" | grep -v "node_modules" | grep -v "eslint-disable"; then
+            echo "❌ Exported 'any' type found"
             exit 1
           fi
-          echo "✅ No raw any types"
+          echo "✅ No exported any types"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }

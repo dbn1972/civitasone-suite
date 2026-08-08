@@ -22,7 +22,7 @@
     "drizzle-orm": "^0.30.0"
   },
   "devDependencies": {
-    "typescript": "*",
+    "typescript": "^5.4.0",
     "vitest": "^2.0.0",
     "@vitest/coverage-v8": "^2.0.0"
   }

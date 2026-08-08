@@ -34,8 +34,8 @@
 40024	FAIL	SQL Injection — SQLite
 90019	FAIL	Server Side Code Injection
 90020	FAIL	Remote OS Command Injection
-7		FAIL	Remote File Inclusion
-6		FAIL	Path Traversal
+7	FAIL	Remote File Inclusion
+6	FAIL	Path Traversal
 90022	FAIL	Application Error Disclosure — must not leak stack traces
 10037	FAIL	Server leaks information via X-Powered-By / Server header
 

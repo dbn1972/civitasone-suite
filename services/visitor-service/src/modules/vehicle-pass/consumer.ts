@@ -25,14 +25,14 @@ import { COMMANDS } from "../../topics.js";
 import { vehiclePasses } from "./schema.js";
 import { parkingSlots } from "../location/schema.js";
 import {
-
-const AUDIT_TOPIC = "audit.event.record";
   allocateParkingSlotOrThrow,
   releaseParkingSlot,
   type VehicleType,
   type VisitorCategory,
   type ParkingSlotCandidate,
 } from "./domain.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "vehicle-pass-consumer" });
 
@@ -179,13 +179,13 @@ export function registerVehiclePassConsumers(queue: Queue): void {
           updatedAt: new Date(),
           updatedBy: msg.actorId,
         })
-        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "vehicle_pass", resourceId: p.parkingSlotId, outcome: "success" } });
         .where(
           and(
             eq(vehiclePasses.id, p.vehiclePassId),
             eq(vehiclePasses.tenantId, msg.tenantId),
           ),
         );
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "vehicle_pass", resourceId: p.parkingSlotId, outcome: "success" } });
     });
 
     log.info(

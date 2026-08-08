@@ -111,7 +111,7 @@ export function registerRuntimeConsumers(queue: Queue): void {
       }
 
       log.info({ eventType, tenantId, hookCount: hooks.length, executed: results.length }, "hooks dispatched");
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "plugin-service", action: "process", resourceType: "runtime", resourceId: p.id, outcome: "success" } });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "plugin-service", action: "process", resourceType: "runtime", resourceId: msg.messageId, outcome: "success" } });
     });
   });
 }
