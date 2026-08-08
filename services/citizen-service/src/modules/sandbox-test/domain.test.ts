@@ -18,6 +18,7 @@ function baseDef(overrides: Partial<ServiceDefinitionRow> = {}): ServiceDefiniti
     feeModel: "flat",
     hoaCode: "4201",
     statutoryReferences: [],
+    engineBindings: [],
     version: 1,
     status: "draft",
     eligibilityRuleSetId: "elig-1",
@@ -77,8 +78,53 @@ describe("runSandboxPipeline (FN-10)", () => {
   });
 
   it("fails engine fee without binding", () => {
-    const result = runSandboxPipeline(baseDef({ feeModel: "engine", outputs: [] }));
+    const result = runSandboxPipeline(baseDef({ feeModel: "engine", outputs: [], engineBindings: [] }));
     expect(result.passed).toBe(false);
+    expect(result.steps.find((s) => s.id === "demand")?.status).toBe("fail");
+  });
+
+  it("passes engine fee with a live assessment binding + HOA", () => {
+    const result = runSandboxPipeline(baseDef({
+      feeModel: "engine",
+      hoaCode: null,
+      engineBindings: [{
+        id: "11111111-1111-4111-8111-111111111111",
+        block: "fee",
+        engineKey: "revenue.assessment",
+        config: {
+          exemptionCategories: [{ code: "SENIOR", label: "Senior", percentBps: 1000 }],
+          penaltyPercentBps: 0,
+          rebatePercentBps: 0,
+          rebateWindowDays: 0,
+          penaltyGraceDays: 0,
+          hoaCode: "4201",
+          extras: { businessService: "PT" },
+        },
+        requiredForPublish: true,
+      }],
+    }));
+    expect(result.steps.find((s) => s.id === "demand")?.status).toBe("pass");
+  });
+
+  it("fails engine fee when only a stub verification engine is bound", () => {
+    const result = runSandboxPipeline(baseDef({
+      feeModel: "engine",
+      engineBindings: [{
+        id: "22222222-2222-4222-8222-222222222222",
+        block: "verification",
+        engineKey: "police.verification",
+        config: {
+          exemptionCategories: [],
+          penaltyPercentBps: 0,
+          rebatePercentBps: 0,
+          rebateWindowDays: 0,
+          penaltyGraceDays: 0,
+          hoaCode: "",
+          extras: {},
+        },
+        requiredForPublish: true,
+      }],
+    }));
     expect(result.steps.find((s) => s.id === "demand")?.status).toBe("fail");
   });
 });

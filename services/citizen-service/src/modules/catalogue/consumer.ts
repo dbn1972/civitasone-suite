@@ -36,6 +36,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       formId?: string; workflowDefinitionId?: string;
       allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string;
       profileAttributeBindings?: unknown[];
+      engineBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -50,6 +51,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         hoaCode: p.hoaCode ?? null,
         feeModel: (p.feeModel as never) ?? null,
         statutoryReferences: (p.statutoryReferences ?? []) as never,
+        engineBindings: (p.engineBindings ?? []) as never,
         version: next, status: "draft",
         eligibilityRuleSetId: p.eligibilityRuleSetId ?? null,
         feeScheduleId: p.feeScheduleId ?? null,
@@ -78,6 +80,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       slaDays?: number; channels?: unknown[]; requiredDocuments?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+      engineBindings?: unknown[];
       forms?: unknown[]; formId?: string; outputs?: unknown[]; issuanceType?: string;
       eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
       allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string | null;
@@ -100,6 +103,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.hoaCode !== undefined) patch.hoaCode = p.hoaCode;
       if (p.feeModel !== undefined) patch.feeModel = p.feeModel;
       if (p.statutoryReferences !== undefined) patch.statutoryReferences = p.statutoryReferences;
+      if (p.engineBindings !== undefined) patch.engineBindings = p.engineBindings;
       if (p.forms !== undefined) patch.forms = p.forms;
       if (p.formId !== undefined) patch.formId = p.formId;
       if (p.outputs !== undefined) patch.outputs = p.outputs;

@@ -37,6 +37,23 @@ export type {
   DemandLine,
   SampleCalculation,
 } from "./feeTypes";
+export type {
+  EngineBlockUi,
+  EngineKeyUi,
+  ExemptionCategoryUi,
+  EngineBindingConfigUi,
+  EngineBindingUi,
+  EngineParamFieldUi,
+  EngineDescriptorUi,
+  EnginePreviewLineUi,
+  EnginePreviewResultUi,
+} from "./engineBindingTypes";
+export {
+  emptyEngineBindingConfig,
+  hasFeeEngineBinding,
+  bpsToPercentInput,
+  percentInputToBps,
+} from "./engineBindingTypes";
 export { SplitPreview } from "./SplitPreview";
 export type { SplitPreviewProps } from "./SplitPreview";
 export { LocaleTabs } from "./LocaleTabs";

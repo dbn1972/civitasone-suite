@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safeText } from "../../shared/sanitize.js";
+import { engineBindingsArraySchema } from "../engine-bindings/validators.js";
 import { FEE_MODELS, SERVICE_CHANNELS, SERVICE_PATTERNS } from "./domain.js";
 import { APPLICANT_TYPES } from "../applicant-identity/domain.js";
 
@@ -35,6 +36,7 @@ const designerFields = {
   feeModel:             z.enum(FEE_MODELS).optional(),
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
+  engineBindings:       engineBindingsArraySchema.optional(),
   formId:               z.string().uuid().optional(),
   workflowDefinitionId: z.string().uuid().optional(),
   /** FN-23 — applicant identity configuration (B1 Catalogue & Identity). */

@@ -1,6 +1,7 @@
 import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import type { RequiredDocument, ServiceChannel, ServicePattern, FeeModel } from "./domain.js";
 import type { ApplicantType, ProfileAttributeBinding } from "../applicant-identity/domain.js";
+import type { EngineBinding } from "../engine-bindings/domain.js";
 
 export const catalogueSchema = pgSchema("catalogue");
 
@@ -25,6 +26,7 @@ export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   feeModel:             varchar("fee_model", { length: 8 }).$type<FeeModel>(),
   hoaCode:              varchar("hoa_code", { length: 32 }),
   statutoryReferences:  jsonb("statutory_references").$type<StatutoryReference[]>().notNull().default([]),
+  engineBindings:       jsonb("engine_bindings").$type<EngineBinding[]>().notNull().default([]),
   version:              integer("version").notNull().default(1),
   status:               varchar("status", { length: 16 }).notNull().default("draft"),
   eligibilityRuleSetId: uuid("eligibility_rule_set_id"),

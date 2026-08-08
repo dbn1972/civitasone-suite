@@ -67,6 +67,7 @@ describe("Trade License pack manifest (FN-09/10)", () => {
       feeModel: blocks!.feeModel!,
       hoaCode: blocks!.hoaCode!,
       statutoryReferences: [],
+      engineBindings: [],
       version: 1,
       status: "draft",
       eligibilityRuleSetId: blocks!.eligibilityRuleSetId!,
