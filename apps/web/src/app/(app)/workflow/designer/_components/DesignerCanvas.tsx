@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useMemo,
   useState,
   useRef,
   type DragEvent,
@@ -48,19 +49,58 @@ function nextId(): string {
   return `node_${Date.now()}_${idCounter}`;
 }
 
-interface Props {
-  definitions: DesignerDefinitionSummary[];
+/** Optional seed graph from Universal Designer B4 template → BPMN round-trip. */
+export interface DesignerCanvasSeedGraph {
+  name?: string;
+  elements: Array<{
+    id: string;
+    type: string;
+    label: string;
+    position: { x: number; y: number };
+    properties?: Record<string, unknown>;
+  }>;
+  edges: Array<{ id: string; source: string; target: string }>;
 }
 
-export function DesignerCanvas({ definitions }: Props) {
+interface Props {
+  definitions: DesignerDefinitionSummary[];
+  /** When set (e.g. from guided approval lanes), canvas opens pre-populated. */
+  seedGraph?: DesignerCanvasSeedGraph;
+  /** Compact height for embedding inside the service designer wizard. */
+  embedded?: boolean;
+}
+
+function seedToFlow(seed?: DesignerCanvasSeedGraph): { nodes: Node[]; edges: Edge[] } {
+  if (!seed) return { nodes: [], edges: [] };
+  return {
+    nodes: seed.elements.map((el) => ({
+      id: el.id,
+      type: el.type,
+      position: el.position,
+      data: {
+        label: el.label,
+        ...(el.properties ?? {}),
+      },
+    })),
+    edges: seed.edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      animated: true,
+    })),
+  };
+}
+
+export function DesignerCanvas({ definitions: _definitions, seedGraph, embedded = false }: Props) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const seeded = useMemo(() => seedToFlow(seedGraph), [seedGraph]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(seeded.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(seeded.edges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [violations, setViolations] = useState<DesignerViolation[]>([]);
   const [definitionId, setDefinitionId] = useState<string | null>(null);
-  const [definitionName, setDefinitionName] = useState("Untitled Process");
+  const [definitionName, setDefinitionName] = useState(seedGraph?.name ?? "Untitled Process");
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -215,8 +255,11 @@ export function DesignerCanvas({ definitions }: Props) {
 
   const totalElements = nodes.length + edges.length;
 
+  const canvasHeight = embedded ? 420 : "calc(100vh - 180px)";
+  const canvasMinHeight = embedded ? 360 : 500;
+
   return (
-    <div className="flex gap-3" style={{ height: "calc(100vh - 180px)", minHeight: 500 }}>
+    <div className="flex gap-3" style={{ height: canvasHeight, minHeight: canvasMinHeight }}>
       {/* Left: Palette */}
       <BpmnPalette />
 
