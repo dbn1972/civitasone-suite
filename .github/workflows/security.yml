@@ -54,7 +54,7 @@ jobs:
           docker build -f services/${{ matrix.service }}/Dockerfile \
             -t civitasone/${{ matrix.service }}:scan .
       - name: Trivy scan (fail on fixable CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: civitasone/${{ matrix.service }}:scan
           format: table
@@ -63,7 +63,7 @@ jobs:
           exit-code: '1'
       - name: Trivy full report (SARIF, informational)
         if: always()
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: civitasone/${{ matrix.service }}:scan
           format: sarif
