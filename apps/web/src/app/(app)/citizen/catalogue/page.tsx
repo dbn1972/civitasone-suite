@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getCatalogueServices } from "../../../_data/citizenPartials";
@@ -37,7 +38,12 @@ export default async function CataloguePage() {
               <tbody>
                 {services.map((s) => (
                   <tr key={s.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <td style={{ padding: 8 }}>{s.name}<br /><span style={{ fontSize: 11, color: "var(--muted)" }}>{s.serviceKey}</span></td>
+                    <td style={{ padding: 8 }}>
+                      <Link href={`/citizen/services/${encodeURIComponent(s.serviceKey)}`} style={{ fontWeight: 600 }}>
+                        {s.name}
+                      </Link>
+                      <br /><span style={{ fontSize: 11, color: "var(--muted)" }}>{s.serviceKey}</span>
+                    </td>
                     <td style={{ padding: 8 }}>{s.ownerDepartment || "—"}</td>
                     <td style={{ padding: 8 }}>v{s.version}</td>
                     <td style={{ padding: 8 }}>{s.channels.join(", ") || "—"}</td>

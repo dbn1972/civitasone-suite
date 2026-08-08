@@ -16,4 +16,10 @@ describe("FormRenderer", () => {
     expect(screen.getByLabelText(/Applicant name/)).toBeInTheDocument();
     expect(screen.getByText(/Runtime skeleton/)).toBeInTheDocument();
   });
+
+  it("renders stepped mode without runtime note", () => {
+    render(<FormRenderer design={design} mode="stepped" showRuntimeNote={false} />);
+    expect(screen.getByLabelText(/Applicant name/)).toBeInTheDocument();
+    expect(screen.queryByText(/Runtime skeleton/)).not.toBeInTheDocument();
+  });
 });

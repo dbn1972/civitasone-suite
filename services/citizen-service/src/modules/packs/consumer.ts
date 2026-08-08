@@ -5,6 +5,7 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as catalogueRepo from "../catalogue/repo.js";
 import * as packRepo from "./repo.js";
+import { applyManifestToDefinition } from "./manifest-apply.js";
 
 const AUDIT = "audit.event.record";
 
@@ -33,7 +34,8 @@ export function registerPacksConsumers(rawQueue: Queue): void {
       const serviceKey = `${p.packKey.replace(/^pack:/, "")}-${randomSuffix()}`;
       const next = (await catalogueRepo.latestVersionForKey(tx, msg.tenantId, serviceKey)) + 1;
 
-      await catalogueRepo.insertDefinition(tx, {
+      const manifest = (p.manifest ?? pack.manifest) as Record<string, unknown> | undefined;
+      await catalogueRepo.insertDefinition(tx, applyManifestToDefinition({
         id: p.id,
         tenantId: msg.tenantId,
         serviceKey,
@@ -50,7 +52,7 @@ export function registerPacksConsumers(rawQueue: Queue): void {
         outputs: [],
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }, p.packKey, manifest));
 
       await enqueue(tx, {
         topic: AUDIT, eventType: AUDIT,
