@@ -20,6 +20,8 @@ export interface ServiceDefinitionDto {
   statutoryReferences?: StatutoryReference[];
   status: string;
   version: number;
+  submittedBy?: string | null;
+  publishedBy?: string | null;
   formId?: string | null;
   eligibilityRuleSetId?: string | null;
   workflowDefinitionId?: string | null;

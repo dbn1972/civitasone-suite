@@ -6,6 +6,7 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { assertDefinitionPublishable } from "./domain.js";
 import type { CreateDefinitionBody, UpdateDefinitionBody } from "./validators.js";
+import { assertLatestTestPassed } from "../sandbox-test/commands.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -46,6 +47,7 @@ export async function submitDefinition(ctx: RequestContext, id: string): Promise
   if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
   if (def.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be submitted");
   assertDefinitionPublishable(def);
+  await assertLatestTestPassed(ctx, id);
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionSubmit, randomUUID(), { id });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
   return { ...accepted, id };
@@ -63,6 +65,22 @@ export async function publishDefinition(ctx: RequestContext, id: string): Promis
   }
   assertDefinitionPublishable(def);
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionPublish, randomUUID(), { id });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
+  return { ...accepted, id };
+}
+
+/** Checker step — reject a submitted draft (clears submitter, stays draft). */
+export async function rejectDefinition(ctx: RequestContext, id: string, comment: string): Promise<Accepted> {
+  const def = await repo.findDefinitionById(id, ctx.tenantId);
+  if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+  if (def.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be rejected");
+  if (!def.submittedBy) throw new HttpError(409, "NOT_SUBMITTED", "definition must be submitted before reject");
+  if (def.submittedBy === ctx.actorId) {
+    throw new HttpError(403, "MAKER_CHECKER", "rejector must differ from the submitter");
+  }
+  const trimmed = comment.trim();
+  if (trimmed.length === 0) throw new HttpError(400, "COMMENT_REQUIRED", "rejection comment is mandatory");
+  const accepted = await publish(ctx, COMMANDS.catalogueDefinitionReject, randomUUID(), { id, comment: trimmed });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
   return { ...accepted, id };
 }

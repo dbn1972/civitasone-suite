@@ -128,6 +128,9 @@ export interface WizardShellProps {
   onNext?: () => void;
   canRunTest?: boolean;
   canSubmit?: boolean;
+  onRunTest?: () => void;
+  onSubmit?: () => void;
+  submitBusy?: boolean;
   children: ReactNode;
   help?: ReactNode;
 }
@@ -145,6 +148,9 @@ export function WizardShell({
   onNext,
   canRunTest = false,
   canSubmit = false,
+  onRunTest,
+  onSubmit,
+  submitBusy = false,
   children,
   help,
 }: WizardShellProps) {
@@ -213,11 +219,23 @@ export function WizardShell({
           {onNext ? (
             <button type="button" className="btn primary" onClick={onNext}>Next</button>
           ) : null}
-          <button type="button" className="btn ghost" disabled={!canRunTest} title={canRunTest ? undefined : "Complete all active blocks first"}>
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={!canRunTest}
+            onClick={onRunTest}
+            title={canRunTest ? undefined : "Complete all active blocks first"}
+          >
             Run Test
           </button>
-          <button type="button" className="btn primary" disabled={!canSubmit} title={canSubmit ? undefined : "Pass the latest sandbox test before submitting"}>
-            Submit for Approval
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!canSubmit || submitBusy}
+            onClick={onSubmit}
+            title={canSubmit ? undefined : "Pass the latest sandbox test before submitting"}
+          >
+            {submitBusy ? "Submitting…" : "Submit for Approval"}
           </button>
         </div>
       </footer>
