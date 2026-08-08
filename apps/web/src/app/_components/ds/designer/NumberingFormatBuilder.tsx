@@ -134,7 +134,7 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
                 />
               </label>
             ) : null}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+            <div style={{ marginInlineStart: "auto", display: "flex", gap: 4 }}>
               <button
                 type="button"
                 className="btn ghost"

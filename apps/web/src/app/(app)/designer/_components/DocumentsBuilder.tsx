@@ -332,7 +332,7 @@ export function DocumentsBuilder({
                       <div style={{ fontWeight: 600 }}>
                         {item.labels.en || item.labels.hi || "Untitled"}
                         {!item.labels.hi.trim() || !item.labels.en.trim() ? (
-                          <span style={{ marginLeft: 6, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>
+                          <span style={{ marginInlineStart: 6, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>
                             locale incomplete
                           </span>
                         ) : null}

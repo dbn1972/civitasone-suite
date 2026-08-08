@@ -55,7 +55,7 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                 onKeyDown={(e) => handleKey(e, block)}
                 style={{
                   width: "100%",
-                  textAlign: "left",
+                  textAlign: "start",
                   display: "flex",
                   alignItems: "center",
                   gap: 10,

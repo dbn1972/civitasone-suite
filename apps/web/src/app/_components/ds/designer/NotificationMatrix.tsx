@@ -236,7 +236,7 @@ export function NotificationMatrix({
                       : `${ev.hint} (not typical for this service pattern — still editable)`
                   }
                 >
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 500 }}>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 500 }}>
                     {ev.label}
                     {!inPattern ? (
                       <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: "var(--mut)" }}>

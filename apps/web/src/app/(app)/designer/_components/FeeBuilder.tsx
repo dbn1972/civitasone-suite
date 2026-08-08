@@ -213,7 +213,7 @@ export function FeeBuilder({
                     disabled={disabled}
                     onClick={() => selectModel(card.id)}
                     style={{
-                      textAlign: "left",
+                      textAlign: "start",
                       padding: 14,
                       cursor: disabled ? "not-allowed" : "pointer",
                       opacity: disabled ? 0.55 : 1,
@@ -443,7 +443,7 @@ export function FeeBuilder({
                               style={{
                                 width: "100%",
                                 justifyContent: "flex-start",
-                                textAlign: "left",
+                                textAlign: "start",
                                 borderRadius: 0,
                                 fontWeight: design.hoaCode === h.code ? 700 : 400,
                               }}
