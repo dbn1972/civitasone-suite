@@ -14,6 +14,52 @@ import {
 import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
 import type { FeeScheduleRow } from "./schema.js";
 
+async function resolveHoaForSchedule(
+  tx: repo.Writer,
+  tenantId: string,
+  scheduleId: string | null | undefined,
+): Promise<{ hoaCode: string | null; serviceKey: string | null; serviceId: string | null }> {
+  if (!scheduleId) return { hoaCode: null, serviceKey: null, serviceId: null };
+  const sched = await repo.findScheduleByIdTx(tx, scheduleId, tenantId);
+  if (!sched) return { hoaCode: null, serviceKey: null, serviceId: null };
+  const def = await catalogueRepo.findPublishedByServiceIdTx(tx, tenantId, sched.serviceId);
+  return {
+    hoaCode: def?.hoaCode ?? null,
+    serviceKey: def?.serviceKey ?? null,
+    serviceId: sched.serviceId,
+  };
+}
+
+async function emitReceiptIssued(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  payload: {
+    id: string;
+    applicationId: string;
+    receiptNo: string;
+    amountMinor: string;
+    currency: string;
+    hoaCode?: string | null;
+    serviceKey?: string | null;
+    captureMode?: string;
+  },
+): Promise<void> {
+  await enqueue(tx, {
+    topic: EVENTS.receiptIssued, eventType: EVENTS.receiptIssued,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      id: payload.id,
+      applicationId: payload.applicationId,
+      receiptNo: payload.receiptNo,
+      amountMinor: payload.amountMinor,
+      currency: payload.currency,
+      ...(payload.hoaCode ? { hoaCode: payload.hoaCode } : {}),
+      ...(payload.serviceKey ? { serviceKey: payload.serviceKey } : {}),
+      ...(payload.captureMode ? { captureMode: payload.captureMode } : {}),
+    },
+  });
+}
+
 const log = pino({ name: "citizen.fee-payment.consumer" });
 const AUDIT = "audit.event.record";
 
@@ -138,18 +184,20 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
           serviceKey = def.serviceKey;
         }
       }
-      await enqueue(tx, {
-        topic: EVENTS.receiptIssued, eventType: EVENTS.receiptIssued,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          id: p.id,
-          applicationId: p.applicationId,
-          receiptNo,
-          amountMinor: BigInt(fee.amount).toString(),
-          currency: sched.currency,
-          ...(hoaCode ? { hoaCode } : {}),
-          ...(serviceKey ? { serviceKey } : {}),
-        },
+      if (!hoaCode) {
+        const fromSched = await resolveHoaForSchedule(tx, p.tenantId, sched.id);
+        hoaCode = fromSched.hoaCode;
+        serviceKey = serviceKey ?? fromSched.serviceKey;
+      }
+      await emitReceiptIssued(tx, msg, {
+        id: p.id,
+        applicationId: p.applicationId,
+        receiptNo,
+        amountMinor: BigInt(fee.amount).toString(),
+        currency: sched.currency,
+        hoaCode,
+        serviceKey,
+        captureMode: "offline",
       });
       // FN-08: payment_received bindings
       const serviceId = p.serviceId ?? sched.serviceId;
@@ -172,6 +220,56 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "payment_offline_record", "payment", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+  });
+
+  /**
+   * FN-14 — confirm pending online intent → receipt + citizen.receipt.issued (GL).
+   * Sandbox mode is an explicitly labelled Test capture (never claims live gateway).
+   */
+  queue.subscribe(COMMANDS.paymentConfirm, async (msg) => {
+    const p = msg.payload as {
+      paymentId: string; tenantId: string; mode: "gateway" | "sandbox"; gatewayRef?: string | null;
+    };
+    let confirmed = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const pay = await repo.findPaymentByIdTx(tx, p.paymentId, msg.tenantId);
+      if (!pay || pay.status !== "pending") return;
+
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const seq = await repo.nextReceiptSeq(tx, msg.tenantId, year);
+      const receiptNo = buildReceiptNo(year, seq);
+      const gatewayRef = (p.gatewayRef?.trim() || pay.gatewayRef || (p.mode === "sandbox" ? `sandbox_${p.paymentId}` : null));
+      const reconciliationStatus = p.mode === "sandbox" ? "sandbox" : "reconciled";
+
+      await repo.updatePayment(tx, p.paymentId, msg.tenantId, {
+        status: "paid",
+        gatewayRef,
+        receiptNo,
+        receiptIssuedAt: now,
+        reconciliationStatus,
+        updatedBy: msg.actorId,
+      });
+
+      const hoa = await resolveHoaForSchedule(tx, msg.tenantId, pay.scheduleId);
+      await emitReceiptIssued(tx, msg, {
+        id: p.paymentId,
+        applicationId: pay.applicationId,
+        receiptNo,
+        amountMinor: BigInt(pay.amount).toString(),
+        currency: pay.currency,
+        hoaCode: hoa.hoaCode,
+        serviceKey: hoa.serviceKey,
+        captureMode: p.mode,
+      });
+      await audit(tx, msg, p.mode === "sandbox" ? "payment_sandbox_confirm" : "payment_confirm", "payment", p.paymentId);
+      confirmed = true;
+    });
+    if (confirmed) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.paymentId));
+      log.info({ paymentId: p.paymentId, mode: p.mode }, "online payment confirmed; receipt issued for GL");
+    }
   });
 
   queue.subscribe(COMMANDS.refundRequest, async (msg) => {

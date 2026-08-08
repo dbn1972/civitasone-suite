@@ -8,6 +8,8 @@ export interface StatutoryWarningDialogProps {
   open: boolean;
   packName: string;
   references: StatutoryReference[];
+  /** Optional authority / jurisdiction scope shown under the refs list. */
+  authorityScope?: string;
   crossTenant?: boolean;
   busy?: boolean;
   onConfirm: () => void;
@@ -18,6 +20,7 @@ export function StatutoryWarningDialog({
   open,
   packName,
   references,
+  authorityScope,
   crossTenant = false,
   busy = false,
   onConfirm,
@@ -63,7 +66,9 @@ export function StatutoryWarningDialog({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="statutory-dialog-title" style={{ margin: "0 0 8px", fontSize: 18 }}>Statutory references</h2>
+        <h2 id="statutory-dialog-title" style={{ margin: "0 0 8px", fontSize: 18 }}>
+          Statutory references
+        </h2>
         <p style={{ margin: "0 0 12px", color: "var(--ink2)", fontSize: 14 }}>
           <strong>{packName}</strong> references the following legislation. Review before importing.
         </p>
@@ -77,20 +82,35 @@ export function StatutoryWarningDialog({
             </li>
           ))}
         </ul>
-        {crossTenant ? (
-          <p style={{ color: "var(--warn-fg)", fontSize: 13 }}>Cross-tenant import requires Platform Admin acknowledgment.</p>
+        {authorityScope ? (
+          <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink2)" }}>
+            Authority scope: <strong>{authorityScope}</strong>. Confirm your office is empowered
+            under this jurisdiction before publishing locally.
+          </p>
         ) : null}
-        <label htmlFor={ackId} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 16 }}>
+        {crossTenant ? (
+          <p style={{ color: "var(--warn-fg)", fontSize: 13 }}>
+            Cross-tenant import requires Platform Admin acknowledgment.
+          </p>
+        ) : null}
+        <label
+          htmlFor={ackId}
+          style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 16 }}
+        >
           <input
             id={ackId}
             type="checkbox"
             checked={acknowledged}
             onChange={(e) => setAcknowledged(e.target.checked)}
           />
-          <span>I have reviewed the statutory references and authority scope for this import.</span>
+          <span>
+            I have reviewed the statutory references and authority scope for this import.
+          </span>
         </label>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
           <button
             type="button"
             className="btn primary"

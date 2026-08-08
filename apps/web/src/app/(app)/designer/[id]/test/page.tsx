@@ -10,24 +10,19 @@ import {
   runSandboxTest,
   type SandboxRunHistoryRow,
 } from "../../_data/sandboxTestApi";
+import {
+  DEFAULT_SANDBOX_STEPS,
+  stepsAsRunning,
+  stepsAsTransportFail,
+} from "../../_data/sandboxTestModel";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
-
-const DEFAULT_STEPS: TestRunStep[] = [
-  { id: "form", label: "Intake form validates", status: "pending" },
-  { id: "eligibility", label: "Eligibility rules", status: "pending" },
-  { id: "workflow", label: "Approval chain lanes", status: "pending" },
-  { id: "demand", label: "Fee demand lines", status: "pending" },
-  { id: "payment", label: "Sandbox payment", status: "pending" },
-  { id: "gl", label: "GL journal entry", status: "pending" },
-  { id: "certificate", label: "Certificate issuance", status: "pending" },
-];
 
 export default function DesignerTestPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const wizard = useDesignerWizard(params.id, "test");
 
-  const [steps, setSteps] = useState<TestRunStep[]>(DEFAULT_STEPS);
+  const [steps, setSteps] = useState<TestRunStep[]>(DEFAULT_SANDBOX_STEPS);
   const [history, setHistory] = useState<SandboxRunHistoryRow[]>([]);
   const [running, setRunning] = useState(false);
 
@@ -41,18 +36,14 @@ export default function DesignerTestPage() {
 
   const runTest = async () => {
     setRunning(true);
-    setSteps(DEFAULT_STEPS.map((s) => ({ ...s, status: "running" as const })));
+    setSteps(stepsAsRunning());
     try {
       const result = await runSandboxTest(params.id);
-      setSteps(result.steps ?? DEFAULT_STEPS);
+      setSteps(result.steps ?? DEFAULT_SANDBOX_STEPS);
       await wizard.reload();
       await loadHistory();
     } catch (e) {
-      setSteps(DEFAULT_STEPS.map((s) => ({
-        ...s,
-        status: "fail" as const,
-        error: e instanceof Error ? e.message : "Test run failed.",
-      })));
+      setSteps(stepsAsTransportFail(e instanceof Error ? e.message : "Test run failed."));
     } finally {
       setRunning(false);
     }
@@ -89,7 +80,8 @@ export default function DesignerTestPage() {
       submitBusy={wizard.submitting}
       help={
         <HelpTip term="Sandbox test">
-          Run a full pipeline check before submitting for approval.
+          Run a full pipeline check before submitting for approval. Failed steps expand with what
+          happened, why, and what to do next.
         </HelpTip>
       }
     >

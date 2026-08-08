@@ -5,12 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
-import { fetchServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import type { ServiceDefinitionDto } from "../../_data/designerApi";
 import {
   fetchPublishedByKey,
   publishDefinition,
   rejectDefinition,
 } from "../../_data/designerReviewApi";
+import { feeSummaryForPublish } from "../../_data/versionDiffModel";
 import { useDesignerSession } from "../../_data/useDesignerSession";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
@@ -166,7 +167,7 @@ export default function DesignerReviewPage() {
         description={
           <p style={{ margin: 0 }}>
             Publish <strong>{wizard.meta.name}</strong> v{wizard.meta.version}?
-            {wizard.def.hoaCode ? ` Fee posts to HOA ${wizard.def.hoaCode}.` : ""}
+            {" "}{feeSummaryForPublish(wizard.def)}.
             {" "}Citizens will see this service once published.
           </p>
         }

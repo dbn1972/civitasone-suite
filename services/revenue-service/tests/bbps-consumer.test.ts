@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockValues = vi.fn().mockReturnThis();
-const mockReturning = vi.fn().mockResolvedValue([{ id: "bbps-txn-1" }]);
+const mockReturning = vi.fn().mockResolvedValue([{ id: "receipt-bbps-1" }]);
 const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
 mockValues.mockReturnValue({ returning: mockReturning });
 
@@ -171,6 +171,7 @@ describe("BBPS Consumer", () => {
       expect(mockEnqueue).toHaveBeenCalledTimes(2);
       expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.receipt.captured");
       expect(mockEnqueue.mock.calls[0]![1].payload).toMatchObject({
+        receiptId: "receipt-bbps-1",
         assesseeId: "assessee-1",
         bbpsTxnId: "BBPS-TXN-001",
       });

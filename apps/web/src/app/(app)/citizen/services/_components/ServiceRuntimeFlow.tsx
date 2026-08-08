@@ -10,14 +10,18 @@ import {
   channelDisabledMessage,
   formatFee,
   isChannelAllowed,
+  type RuntimeJourneyStep,
+  buildDemandLines,
+  confirmPayment,
+  createPaymentIntent,
+  formatExpectedByDate,
+  journeyStepsForService,
   listDraftsForService,
   saveDraft,
   submitDraft,
   updateDraft,
   validateField,
 } from "../_data/runtimeApi";
-
-type FlowStep = "form" | "review" | "fee" | "submitted";
 
 export interface ServiceRuntimeFlowProps {
   service: PublishedServiceRuntime;
@@ -34,20 +38,66 @@ function valuesFromDraft(formData: Record<string, unknown>): Record<string, stri
   return out;
 }
 
+function JourneyRail({
+  steps,
+  active,
+}: {
+  steps: { id: RuntimeJourneyStep; label: string }[];
+  active: RuntimeJourneyStep;
+}) {
+  const activeIdx = Math.max(0, steps.findIndex((s) => s.id === active));
+  return (
+    <nav aria-label="Application steps" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      {steps.map((step, idx) => {
+        const done = idx < activeIdx;
+        const current = idx === activeIdx;
+        return (
+          <span
+            key={step.id}
+            aria-current={current ? "step" : undefined}
+            style={{
+              flex: "1 1 64px",
+              textAlign: "center",
+              fontSize: 12,
+              fontWeight: current ? 700 : 500,
+              padding: "8px 6px",
+              minHeight: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "var(--r-sm)",
+              border: `1px solid ${current ? "var(--primary)" : "var(--line)"}`,
+              background: done ? "var(--good-bg)" : current ? "var(--primary-soft, var(--info-bg))" : "var(--panel)",
+              color: done ? "var(--good-fg)" : current ? "var(--ink)" : "var(--mut)",
+            }}
+          >
+            {idx + 1}. {step.label}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null }: ServiceRuntimeFlowProps) {
   const design = service.formDesign;
-  const [step, setStep] = useState<FlowStep>("form");
+  const hasFee = service.feeFromMinor != null;
+  const journey = useMemo(() => journeyStepsForService(hasFee), [hasFee]);
+  const [step, setStep] = useState<RuntimeJourneyStep>("form");
   const [sectionIndex, setSectionIndex] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draftId, setDraftId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [trackingNo, setTrackingNo] = useState<string | null>(null);
+  const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const channel = counterMode ? "counter" : "portal";
   const channelOk = isChannelAllowed(service.channels, channel);
+  const demandLines = useMemo(() => buildDemandLines(service), [service]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,15 +200,44 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         await updateDraft(id, values);
       }
       const ack = await submitDraft(id);
+      // FN-14 — fee-bearing packs: labelled sandbox capture → receipt → GL when
+      // no live gateway key is configured (pilot / Test Run path).
+      if (service.feeFromMinor != null && ack.applicationId) {
+        try {
+          const paymentId = await createPaymentIntent({
+            applicationId: ack.applicationId,
+            serviceId: service.id,
+            subject: values,
+          });
+          await confirmPayment(paymentId, "sandbox");
+        } catch {
+          /* payment is best-effort after submit; tracking still succeeds */
+        }
+      }
       setTrackingNo(ack.trackingNo);
+      setSubmittedAt(new Date());
       setStep("submitted");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Submission failed.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : "We could not submit your application. Check your connection and try again.",
+      );
     } finally {
       setBusy(false);
     }
   };
 
+  const copyTracking = async () => {
+    if (!trackingNo) return;
+    try {
+      await navigator.clipboard?.writeText(trackingNo);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
   if (!channelOk) {
     return (
       <ErrorState
@@ -177,16 +256,18 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
       <ErrorState
         error={{
           what: "Form not available",
-          next: "This service does not yet have a published application form. The department is still configuring it.",
+          next: "This service does not yet have a published application form. Try again later or ask at the counter.",
           actions: ["back"],
         }}
-        backHref={`/citizen/catalogue`}
+        backHref="/citizen/catalogue"
       />
     );
   }
 
+  const expectedBy = formatExpectedByDate(service.slaDays, submittedAt ?? new Date());
+
   return (
-    <div style={{ display: "grid", gap: 16, maxWidth: counterMode ? 960 : 640, margin: "0 auto" }}>
+    <div style={{ display: "grid", gap: 16, maxWidth: counterMode ? 960 : 640, margin: "0 auto", width: "100%" }}>
       {counterMode ? (
         <div
           className="pad"
@@ -202,6 +283,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           {assistedBy ? ` (operator ${assistedBy.slice(0, 8)}…)` : ""}
         </div>
       ) : null}
+
+      <JourneyRail steps={journey} active={step} />
 
       {step === "form" ? (
         <>
@@ -226,9 +309,9 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
               });
             }}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: "var(--mut)" }}>
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Offline — retrying" : ""}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--mut)" }} aria-live="polite">
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved just now" : saveState === "error" ? "Offline — retrying" : ""}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               {sectionIndex > 0 ? (
@@ -237,7 +320,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
                 </button>
               ) : null}
               <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={onNextSection}>
-                {sectionIndex < visibleSectionCount - 1 ? "Next section" : "Review"}
+                {sectionIndex < visibleSectionCount - 1 ? "Next section" : "Review answers"}
               </button>
             </div>
           </div>
@@ -248,50 +331,106 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         <ReviewPanel
           design={design}
           values={values}
+          continueLabel={hasFee ? "Continue to fee" : "Submit application"}
           onEditSection={(idx) => { setSectionIndex(idx); setStep("form"); }}
           onContinue={() => {
-            if (service.feeFromMinor != null) setStep("fee");
+            if (hasFee) setStep("fee");
             else void onSubmit();
           }}
+          busy={busy}
+          error={error}
         />
       ) : null}
 
       {step === "fee" ? (
-        <div className="card pad" style={{ display: "grid", gap: 12 }}>
-          <h3 style={{ margin: 0 }}>Fee & payment</h3>
-          <ul style={{ margin: 0, paddingLeft: 20 }}>
-            <li>Application fee — {formatFee(service.feeFromMinor, service.feeCurrency)}</li>
-            <li>Inspection fee — included (stub)</li>
-          </ul>
+        <div className="card pad" style={{ display: "grid", gap: 14 }}>
+          <h3 style={{ margin: 0 }}>Fee summary</h3>
           <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            Online payment gateway integration is stubbed in this pilot — submit to receive tracking number; pay at counter or via SMS link when live.
+            Review the demand lines below. For Test runs, sandbox capture posts a receipt and GL journal when no live
+            gateway key is configured. Counter/offline payments remain available to officers; otherwise you may also
+            receive a payment link or counter slip when the office raises the demand.
           </p>
-          <div style={{ display: "flex", gap: 8 }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+            {demandLines.map((line) => (
+              <li
+                key={line.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: "var(--r-sm)",
+                  border: "1px solid var(--line)",
+                  background: "var(--bg)",
+                  fontSize: 14,
+                  minHeight: 44,
+                  alignItems: "center",
+                }}
+              >
+                <span>{line.label}</span>
+                <strong>{line.amountLabel}</strong>
+              </li>
+            ))}
+          </ul>
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              padding: 12,
+              borderRadius: "var(--r-sm)",
+              background: "var(--info-bg)",
+              border: "1px solid var(--info-border)",
+              fontSize: 13,
+            }}
+          >
+            <strong>How you can pay</strong>
+            <span>Counter / CSC — pay at the desk when asked.</span>
+            <span>Online — SMS or WhatsApp payment link after the office raises the demand.</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>Back</button>
-            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={onSubmit}>
-              {busy ? "Submitting…" : "Submit application"}
+            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
+              {busy ? "Submitting…" : "Pay (sandbox) & submit"}
             </button>
           </div>
-          {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
         </div>
       ) : null}
 
       {step === "submitted" && trackingNo ? (
-        <div className="card pad" style={{ textAlign: "center", display: "grid", gap: 12 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "var(--mut)" }}>Application submitted</p>
-          <p style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: 1 }}>{trackingNo}</p>
-          <button
-            type="button"
-            className="btn"
-            style={{ minHeight: 44 }}
-            onClick={() => navigator.clipboard?.writeText(trackingNo)}
+        <div className="card pad" style={{ textAlign: "center", display: "grid", gap: 14 }}>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--good-fg)", fontWeight: 600 }}>Application submitted</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>Your tracking number</p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 28,
+              fontWeight: 700,
+              letterSpacing: 1,
+              wordBreak: "break-all",
+              fontVariantNumeric: "tabular-nums",
+            }}
           >
-            Copy tracking number
+            {trackingNo}
+          </p>
+          <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
+            {copied ? "Copied" : "Copy tracking number"}
           </button>
-          {service.slaDays ? (
-            <p style={{ margin: 0, fontSize: 13 }}>Expected by {service.slaDays} working days</p>
+          {expectedBy ? (
+            <p style={{ margin: 0, fontSize: 14 }}>
+              Expected decision by <strong>{expectedBy}</strong>
+              {service.slaDays ? (
+                <span style={{ display: "block", fontSize: 12, color: "var(--mut)", marginTop: 4 }}>
+                  ({service.slaDays} working days from today)
+                </span>
+              ) : null}
+            </p>
           ) : null}
-          <Link href={`/citizen/services/${service.serviceKey}/track/${encodeURIComponent(trackingNo)}`} className="btn primary" style={{ minHeight: 44 }}>
+          <Link
+            href={`/citizen/services/${service.serviceKey}/track/${encodeURIComponent(trackingNo)}`}
+            className="btn primary"
+            style={{ minHeight: 44 }}
+          >
             Track status
           </Link>
         </div>
@@ -305,18 +444,24 @@ function ReviewPanel({
   values,
   onEditSection,
   onContinue,
+  continueLabel,
+  busy,
+  error,
 }: {
   design: FormDesignState;
   values: Record<string, string>;
   onEditSection: (idx: number) => void;
   onContinue: () => void;
+  continueLabel: string;
+  busy: boolean;
+  error: string | null;
 }) {
   return (
     <div className="card pad" style={{ display: "grid", gap: 16 }}>
       <h3 style={{ margin: 0 }}>Review your answers</h3>
       {design.sections.map((sec, idx) => (
         <div key={sec.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <strong>{sec.label}</strong>
             <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => onEditSection(idx)}>
               Edit
@@ -336,9 +481,10 @@ function ReviewPanel({
           </dl>
         </div>
       ))}
-      <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={onContinue}>
-        Continue to fee
+      <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={onContinue}>
+        {busy ? "Submitting…" : continueLabel}
       </button>
+      {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
     </div>
   );
 }

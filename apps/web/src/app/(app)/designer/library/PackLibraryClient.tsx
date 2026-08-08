@@ -12,6 +12,16 @@ import {
   type ServicePackDto,
 } from "../_data/packLibraryApi";
 import type { DomainPackRow } from "../_data/designerLoader";
+import {
+  buildPackPreviewBlocks,
+  filterServicePacks,
+  packJurisdiction,
+  packSector,
+  packSourceLabel,
+  uniqueJurisdictions,
+  uniquePatterns,
+  uniqueSectors,
+} from "../_data/packLibraryModel";
 
 interface PackLibraryClientProps {
   domainPacks: DomainPackRow[];
@@ -25,6 +35,8 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
   const [sector, setSector] = useState("all");
   const [pattern, setPattern] = useState("all");
   const [domainFilter, setDomainFilter] = useState("all");
+  const [jurisdiction, setJurisdiction] = useState("all");
+  const [source, setSource] = useState("all");
   const [previewPack, setPreviewPack] = useState<ServicePackDto | null>(null);
   const [importPack, setImportPack] = useState<ServicePackDto | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -42,25 +54,25 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
     return () => { cancelled = true; };
   }, []);
 
-  const sectors = useMemo(() => {
-    const fromDomain = domainPacks.map((d) => d.sector).filter(Boolean);
-    return ["all", ...Array.from(new Set(fromDomain))];
-  }, [domainPacks]);
+  const domainByKey = useMemo(
+    () => new Map(domainPacks.map((d) => [d.domainPackKey, d])),
+    [domainPacks],
+  );
 
-  const patterns = useMemo(() => {
-    const vals = packs.map((p) => p.servicePattern).filter(Boolean) as string[];
-    return ["all", ...Array.from(new Set(vals))];
-  }, [packs]);
+  const sectors = useMemo(() => ["all", ...uniqueSectors(domainPacks)], [domainPacks]);
+  const jurisdictions = useMemo(() => ["all", ...uniqueJurisdictions(domainPacks)], [domainPacks]);
+  const patterns = useMemo(() => ["all", ...uniquePatterns(packs)], [packs]);
 
-  const filtered = packs.filter((p) => {
-    if (domainFilter !== "all" && p.domainPackKey !== domainFilter) return false;
-    if (pattern !== "all" && p.servicePattern !== pattern) return false;
-    if (sector !== "all") {
-      const domain = domainPacks.find((d) => d.domainPackKey === p.domainPackKey);
-      if (domain && domain.sector !== sector) return false;
-    }
-    return true;
-  });
+  const filtered = useMemo(
+    () => filterServicePacks(packs, domainPacks, {
+      sector,
+      pattern,
+      domainFilter,
+      jurisdiction,
+      source,
+    }),
+    [packs, domainPacks, sector, pattern, domainFilter, jurisdiction, source],
+  );
 
   const needsStatutoryAck = (pack: ServicePackDto) => {
     if (pack.statutoryReferences.some((r) => r.act.trim().length > 0)) return true;
@@ -90,6 +102,11 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
     }
   };
 
+  const importDomain = importPack?.domainPackKey
+    ? domainByKey.get(importPack.domainPackKey)
+    : undefined;
+  const previewBlocks = previewPack ? buildPackPreviewBlocks(previewPack) : [];
+
   return (
     <>
       <PageHeader
@@ -115,6 +132,26 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
           Sector{" "}
           <select value={sector} onChange={(e) => setSector(e.target.value)} className="btn ghost">
             {sectors.map((s) => <option key={s} value={s}>{s === "all" ? "All sectors" : s}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: 13, color: "var(--ink2)" }}>
+          Jurisdiction{" "}
+          <select
+            value={jurisdiction}
+            onChange={(e) => setJurisdiction(e.target.value)}
+            className="btn ghost"
+          >
+            {jurisdictions.map((j) => (
+              <option key={j} value={j}>{j === "all" ? "All jurisdictions" : j}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ fontSize: 13, color: "var(--ink2)" }}>
+          Source{" "}
+          <select value={source} onChange={(e) => setSource(e.target.value)} className="btn ghost">
+            <option value="all">All sources</option>
+            <option value="domain">Domain packs</option>
+            <option value="tenant">Tenant library</option>
           </select>
         </label>
         <label style={{ fontSize: 13, color: "var(--ink2)" }}>
@@ -145,15 +182,20 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
             gap: 16,
           }}
         >
-          {filtered.map((pack) => (
-            <PackCard
-              key={pack.id}
-              pack={pack}
-              source={pack.domainPackKey ?? "tenant"}
-              onPreview={setPreviewPack}
-              onImport={beginImport}
-            />
-          ))}
+          {filtered.map((pack) => {
+            const domain = pack.domainPackKey ? domainByKey.get(pack.domainPackKey) : undefined;
+            return (
+              <PackCard
+                key={pack.id}
+                pack={pack}
+                source={packSourceLabel(pack, domain)}
+                sector={packSector(pack, domain)}
+                jurisdiction={packJurisdiction(pack, domain)}
+                onPreview={setPreviewPack}
+                onImport={beginImport}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -161,6 +203,7 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="pack-preview-title"
           style={{
             position: "fixed",
             inset: 0,
@@ -175,7 +218,9 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
         >
           <div
             style={{
-              width: "min(560px, 100%)",
+              width: "min(640px, 100%)",
+              maxHeight: "90vh",
+              overflow: "auto",
               background: "var(--panel)",
               borderRadius: "var(--r-sm)",
               border: "1px solid var(--line)",
@@ -183,18 +228,40 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ margin: "0 0 8px" }}>{previewPack.name}</h2>
+            <h2 id="pack-preview-title" style={{ margin: "0 0 8px" }}>{previewPack.name}</h2>
             <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 14 }}>
-              Read-only preview — {previewPack.servicePattern} · v{previewPack.version}
+              Read-only wizard walkthrough — {previewPack.servicePattern} · v{previewPack.version}
             </p>
-            <ul style={{ fontSize: 14, paddingLeft: 20 }}>
-              <li>Fee model: {previewPack.feeModel ?? "none"}</li>
-              <li>HOA: {previewPack.hoaCode ?? "—"}</li>
-              <li>Business service: {String(previewPack.manifest.businessService ?? "—")}</li>
-            </ul>
+            <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+              {previewBlocks.map((block) => (
+                <li
+                  key={block.id}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid var(--line)",
+                    borderRadius: "var(--r-sm)",
+                    background: "var(--bg)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{block.label}</div>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--ink2)" }}>
+                    {block.summary}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--mut)" }}>
+              Import creates a local draft — nothing is live until your office publishes it.
+            </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button type="button" className="btn ghost" onClick={() => setPreviewPack(null)}>Close</button>
-              <button type="button" className="btn primary" onClick={() => { beginImport(previewPack); setPreviewPack(null); }}>
+              <button type="button" className="btn ghost" onClick={() => setPreviewPack(null)}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => { beginImport(previewPack); setPreviewPack(null); }}
+              >
                 Import as draft
               </button>
             </div>
@@ -206,6 +273,11 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
         open={Boolean(importPack)}
         packName={importPack?.name ?? ""}
         references={importPack?.statutoryReferences ?? []}
+        authorityScope={
+          importDomain
+            ? [importDomain.sector, importDomain.jurisdiction].filter(Boolean).join(" · ")
+            : undefined
+        }
         busy={importBusy}
         onCancel={() => setImportPack(null)}
         onConfirm={() => importPack && void doImport(importPack, true)}

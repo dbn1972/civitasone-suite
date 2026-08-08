@@ -188,7 +188,7 @@ export function FormRenderer({
             color: "var(--ink2)",
           }}
         >
-          Runtime skeleton — shared FormRenderer for preview and the future citizen apply flow.
+          Citizen preview — this is the same FormRenderer used on Apply. Type here to feel validation.
         </p>
       ) : null}
 

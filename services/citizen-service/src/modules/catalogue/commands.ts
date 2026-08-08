@@ -84,12 +84,24 @@ export async function updateDefinition(ctx: RequestContext, id: string, body: Up
   return { ...accepted, id };
 }
 
+function ensurePublishable(def: Parameters<typeof assertDefinitionPublishable>[0]): void {
+  try {
+    assertDefinitionPublishable(def);
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "INVALID_DEFINITION";
+    if (code === "DEF_MISSING_HOA") {
+      throw new HttpError(422, code, "fee-bearing services require an HOA code before submit/publish");
+    }
+    throw new HttpError(422, code, "service definition is not publishable");
+  }
+}
+
 /** Maker step — record the submitter requesting publication (does NOT publish). */
 export async function submitDefinition(ctx: RequestContext, id: string): Promise<Accepted> {
   const def = await repo.findDefinitionById(id, ctx.tenantId);
   if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
   if (def.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be submitted");
-  assertDefinitionPublishable(def);
+  ensurePublishable(def);
   await assertLatestTestPassed(ctx, id);
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionSubmit, randomUUID(), { id });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
@@ -106,7 +118,7 @@ export async function publishDefinition(ctx: RequestContext, id: string): Promis
   if (def.submittedBy === ctx.actorId) {
     throw new HttpError(403, "MAKER_CHECKER", "publisher must differ from the submitter");
   }
-  assertDefinitionPublishable(def);
+  ensurePublishable(def);
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionPublish, randomUUID(), { id });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
   return { ...accepted, id };

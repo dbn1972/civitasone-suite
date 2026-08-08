@@ -22,15 +22,19 @@ export function NotificationMatrix({ matrix, onChange }: NotificationMatrixProps
   const [editing, setEditing] = useState<{ event: NotificationEvent; channel: NotificationChannel } | null>(null);
   const [locale, setLocale] = useState<LocaleKey>("en");
 
-  const toggleCell = (event: NotificationEvent, channel: NotificationChannel) => {
+  const openOrEnableCell = (event: NotificationEvent, channel: NotificationChannel) => {
     const cell = matrix[event]?.[channel];
-    const nextEnabled = !(cell?.enabled ?? false);
+    if (cell?.enabled) {
+      // UX §5.11 — enabled cells open the editor; do not turn off on first click
+      setEditing({ event, channel });
+      return;
+    }
     const next: NotificationMatrixState = {
       ...matrix,
       [event]: {
         ...matrix[event],
         [channel]: {
-          enabled: nextEnabled,
+          enabled: true,
           body: cell?.body ?? { en: "", hi: "" },
           subject: cell?.subject,
           templateId: cell?.templateId,
@@ -39,7 +43,27 @@ export function NotificationMatrix({ matrix, onChange }: NotificationMatrixProps
       },
     };
     onChange(next);
-    if (nextEnabled) setEditing({ event, channel });
+    setEditing({ event, channel });
+  };
+
+  const disableEditingCell = () => {
+    if (!editing) return;
+    const { event, channel } = editing;
+    const cell = matrix[event]?.[channel];
+    onChange({
+      ...matrix,
+      [event]: {
+        ...matrix[event],
+        [channel]: {
+          enabled: false,
+          body: cell?.body ?? { en: "", hi: "" },
+          subject: cell?.subject,
+          templateId: cell?.templateId,
+          templateName: cell?.templateName,
+        },
+      },
+    });
+    setEditing(null);
   };
 
   const updateEditing = (patch: Partial<NotificationCellBinding>) => {
@@ -55,7 +79,12 @@ export function NotificationMatrix({ matrix, onChange }: NotificationMatrixProps
     });
   };
 
-  const editingCell = editing ? matrix[editing.event]?.[editing.channel] : undefined;
+  const editingCell = editing
+    ? (matrix[editing.event]?.[editing.channel] ?? {
+        enabled: true,
+        body: { en: "", hi: "" },
+      })
+    : undefined;
 
   return (
     <div>
@@ -82,10 +111,15 @@ export function NotificationMatrix({ matrix, onChange }: NotificationMatrixProps
                         type="button"
                         className={on ? "btn primary" : "btn ghost"}
                         aria-pressed={on}
-                        onClick={() => toggleCell(ev.id, ch.id)}
-                        style={{ fontSize: 12, padding: "4px 8px" }}
+                        aria-label={
+                          on
+                            ? `Edit ${ev.label} ${ch.label} template`
+                            : `Enable ${ev.label} ${ch.label}`
+                        }
+                        onClick={() => openOrEnableCell(ev.id, ch.id)}
+                        style={{ fontSize: 12, padding: "4px 8px", minHeight: 32 }}
                       >
-                        {on ? (cell?.templateName ?? "On") : "Off"}
+                        {on ? (cell?.templateName ?? "Edit") : "Off"}
                       </button>
                     </td>
                   );
@@ -165,9 +199,14 @@ export function NotificationMatrix({ matrix, onChange }: NotificationMatrixProps
               {renderMergePills(editingCell.body[locale]) || "Preview…"}
             </div>
           ) : null}
-          <button type="button" className="btn ghost" onClick={() => setEditing(null)} style={{ marginTop: 8 }}>
-            Done
-          </button>
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn primary" onClick={() => setEditing(null)}>
+              Done
+            </button>
+            <button type="button" className="btn ghost" onClick={disableEditingCell}>
+              Turn off this channel
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
