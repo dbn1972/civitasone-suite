@@ -1,3 +1,4 @@
+import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
 export async function listDefinitions(tenantId: string) {
@@ -5,7 +6,9 @@ export async function listDefinitions(tenantId: string) {
 }
 
 export async function getDefinition(tenantId: string, id: string) {
-  return repo.findDefinitionById(id, tenantId);
+  return cache.getOrLoad(cache.makeKey(tenantId, "catalogue", id), () =>
+    repo.findDefinitionById(id, tenantId),
+  );
 }
 
 /** Citizen-facing browse: latest published definitions across the catalogue. */

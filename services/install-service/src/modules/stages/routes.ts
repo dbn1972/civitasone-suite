@@ -8,9 +8,25 @@ import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as commands from "./commands.js";
+import * as domainPackCommands from "./domain-pack-commands.js";
 import * as queries from "./queries.js";
+import { MUNICIPAL_ONBOARDING_PACK_KEYS } from "../orchestrator/domain-pack-constants.js";
 
-const ROLES = ["install_user","install_admin","super_admin"];
+const ROLES = ["install_user","install_admin","super_admin","tenant_admin"];
+
+const activateDomainPackBody = z.object({
+  domainPackKey: z.string().min(1).max(64).optional().default("municipal-in-v1"),
+  packKeys: z.array(z.string().min(1).max(64)).max(50).optional(),
+});
+
+const domainPackActivateAcceptedSchema = z.object({
+  id: z.string().uuid(),
+  status: z.literal("accepted"),
+  correlationId: z.string(),
+  domainPackKey: z.string(),
+  stageNumber: z.literal(3),
+  packKeys: z.array(z.string()),
+});
 
 export async function stagesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/install/stages", async (req, reply) => {
@@ -49,6 +65,25 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
     const row = await queries.getStage(id, ctx.tenantId);
     if (!row) throw new HttpError(404, "NOT_FOUND", "stage not found");
     return reply.send(row);
+  });
+
+  /**
+   * FN-17 — Install Stage 3: activate a Domain Pack (default municipal-in-v1).
+   * Publishes citizen.pack.domain_activate so TL / PGR / Water become editable drafts.
+   */
+  app.post("/v1/install/stages/3/domain-pack/activate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const body = activateDomainPackBody.parse(req.body ?? {});
+    const accepted = await domainPackCommands.activateDomainPackStage3(ctx, {
+      domainPackKey: body.domainPackKey,
+      packKeys: body.packKeys ?? [...MUNICIPAL_ONBOARDING_PACK_KEYS],
+    });
+    sendAccepted(reply, domainPackActivateAcceptedSchema, {
+      ...accepted,
+      status: "accepted" as const,
+      stageNumber: 3 as const,
+    });
   });
 
   /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry) */
