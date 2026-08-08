@@ -11,7 +11,7 @@ export interface SandboxTestRunDto {
   createdAt?: string;
 }
 
-export interface SandboxRunHistoryRow {
+export interface SandboxRunHistoryRow extends Record<string, unknown> {
   id: string;
   status: string;
   durationMs: number | null;
