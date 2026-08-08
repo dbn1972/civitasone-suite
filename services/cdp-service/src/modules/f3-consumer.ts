@@ -1,4 +1,4 @@
-// @ts-nocheck — F3 leftover consumer for cdp route writes
+// F3 leftover consumer for cdp route writes
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../shared/db.js";
@@ -18,12 +18,26 @@ import * as nameKeyRepo from "./identity/name-key-repo.js";
 import * as segmentRepo from "./segments/repo.js";
 import * as membershipRepo from "./segments/membership-repo.js";
 import * as activationsRepo from "./activations/repo.js";
-import { hashIdentifier } from "./identity/domain.js";
 import { ANONYMOUS_PROFILE_TYPE } from "./identity/stitch-domain.js";
 import type { SegmentCriteria } from "./segments/domain.js";
 
 const log = pino({ name: "cdp-f3-consumer" });
 const VISITOR_IDENTIFIER_TYPE = "visitorId";
+
+type SourceLineage = Array<{
+  source: string;
+  sourceId: string;
+  timestamp: string;
+  attributes?: string[];
+}>;
+
+function asAttributes(value: unknown): Record<string, unknown> {
+  return (value ?? {}) as Record<string, unknown>;
+}
+
+function asSourceLineage(value: unknown): SourceLineage {
+  return (Array.isArray(value) ? value : []) as SourceLineage;
+}
 
 export function registerF3CdpConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -142,8 +156,8 @@ export function registerF3CdpConsumers(queue: Queue): void {
           }
           case "template_apply": {
             const ok = await profilesRepo.update(tx, p.profileId as string, p.tenantId as string, {
-              attributes: p.attributes,
-              sourceLineage: p.sourceLineage,
+              attributes: asAttributes(p.attributes),
+              sourceLineage: asSourceLineage(p.sourceLineage),
               updatedBy: msg.actorId,
             }, p.version as number);
             if (!ok) return;
@@ -278,8 +292,8 @@ export function registerF3CdpConsumers(queue: Queue): void {
               id: p.anonymousProfileId as string,
               tenantId: p.tenantId as string,
               profileType: ANONYMOUS_PROFILE_TYPE,
-              attributes: p.attributes,
-              sourceLineage: p.sourceLineage,
+              attributes: asAttributes(p.attributes),
+              sourceLineage: asSourceLineage(p.sourceLineage),
               createdBy: msg.actorId,
               updatedBy: msg.actorId,
             });
@@ -335,7 +349,15 @@ export function registerF3CdpConsumers(queue: Queue): void {
             const identifiersMerged = await identityRepo.reassignProfile(tx, p.anonymousProfileId as string, p.knownProfileId as string, p.tenantId as string);
             const devicesMerged = await deviceRepo.reassignProfile(tx, p.anonymousProfileId as string, p.knownProfileId as string, p.tenantId as string);
             await nameKeyRepo.deleteByProfile(tx, p.anonymousProfileId as string, p.tenantId as string);
-            await profilesRepo.markMerged(tx, p.knownProfileId as string, p.anonymousProfileId as string, p.tenantId as string, p.attributes, p.sourceLineage, p.mergedFromIds as string[]);
+            await profilesRepo.markMerged(
+              tx,
+              p.knownProfileId as string,
+              p.anonymousProfileId as string,
+              p.tenantId as string,
+              asAttributes(p.attributes),
+              asSourceLineage(p.sourceLineage),
+              p.mergedFromIds as string[],
+            );
             const claimed = await visitorRepo.markMerged(tx, p.visitorId as string, p.tenantId as string, {
               mergedIntoProfileId: p.knownProfileId as string,
               eventsMerged,
@@ -384,7 +406,7 @@ export function registerF3CdpConsumers(queue: Queue): void {
               tx,
               p.profileId as string,
               p.tenantId as string,
-              { sourceLineage: p.sourceLineage, updatedBy: msg.actorId },
+              { sourceLineage: asSourceLineage(p.sourceLineage), updatedBy: msg.actorId },
               p.version as number,
             );
             if (!ok) return;

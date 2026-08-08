@@ -22,6 +22,8 @@ const filename = z
   .string()
   .min(1)
   .max(255)
+  // Null-byte rejection is intentional for upload path safety.
+  // eslint-disable-next-line no-control-regex -- block NUL in filenames
   .regex(/^[^/\\\x00]+$/u, "filename must not contain path separators");
 
 const mimeType = z.string().min(1).max(255);
