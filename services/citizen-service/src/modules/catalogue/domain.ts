@@ -8,7 +8,8 @@
  * a NEW row at version+1 in 'draft'.
  */
 
-export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
+/** FN-24 — portal, mobile, CSC/counter, assisted, WhatsApp handoff, API. */
+export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted", "whatsapp", "api"] as const;
 export type ServiceChannel = typeof SERVICE_CHANNELS[number];
 
 /** Universal Service Designer — four workflow shapes (FN-01). */

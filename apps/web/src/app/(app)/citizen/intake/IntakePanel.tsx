@@ -66,7 +66,12 @@ export function IntakePanel() {
             <option value="mobile">Mobile</option>
             <option value="counter">Counter (assisted)</option>
             <option value="assisted">Assisted</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="api">API</option>
           </select>
+          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: -4, marginBottom: 8 }}>
+            Disallowed channels are rejected by the server when the published service does not enable them (FN-24).
+          </p>
           <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>
             {busy ? "Saving…" : "Save draft"}
           </button>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PublishedServiceRuntime } from "../_data/runtimeApi";
-import { listDraftsForService } from "../_data/runtimeApi";
+import { channelDisabledMessage, isChannelAllowed, listDraftsForService } from "../_data/runtimeApi";
 
 interface Props {
   service: PublishedServiceRuntime;
@@ -12,18 +12,27 @@ interface Props {
 
 export function ServicePageClient({ service, counterMode = false }: Props) {
   const [draftBanner, setDraftBanner] = useState<string | null>(null);
+  const channel = counterMode ? "counter" : "portal";
+  const channelOk = isChannelAllowed(service.channels, channel);
 
   useEffect(() => {
+    if (!channelOk) return;
     void listDraftsForService(service.id).then((drafts) => {
       if (drafts[0]) setDraftBanner(drafts[0].id);
     });
-  }, [service.id]);
+  }, [service.id, channelOk]);
 
   const applyHref = `/citizen/services/${service.serviceKey}/apply${counterMode ? "?counter=1" : ""}`;
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {draftBanner ? (
+      {!channelOk ? (
+        <p role="alert" style={{ margin: 0, fontSize: 14, color: "var(--bad-fg, #b42318)" }}>
+          {channelDisabledMessage(channel, service.channels)}
+        </p>
+      ) : null}
+
+      {channelOk && draftBanner ? (
         <div
           className="pad"
           role="status"
@@ -41,9 +50,15 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         </div>
       ) : null}
 
-      <Link href={applyHref} className="btn primary" style={{ minHeight: 44, textAlign: "center" }}>
-        Apply now
-      </Link>
+      {channelOk ? (
+        <Link href={applyHref} className="btn primary" style={{ minHeight: 44, textAlign: "center" }}>
+          Apply now
+        </Link>
+      ) : (
+        <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled aria-disabled="true">
+          Apply now
+        </button>
+      )}
     </div>
   );
 }

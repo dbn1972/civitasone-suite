@@ -118,9 +118,20 @@ export async function saveDraft(payload: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error((await res.text()) || "Could not save draft.");
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Could not save draft."));
   const body = (await res.json()) as { id?: string };
   return body.id ?? "";
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const text = await res.text();
+  try {
+    const parsed = JSON.parse(text) as { message?: string };
+    if (typeof parsed.message === "string" && parsed.message.length > 0) return parsed.message;
+  } catch {
+    /* use raw text */
+  }
+  return text || fallback;
 }
 
 export async function updateDraft(draftId: string, formData: Record<string, unknown>): Promise<void> {
@@ -138,7 +149,7 @@ export async function submitDraft(draftId: string): Promise<TrackingAck> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
   });
-  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Submit failed.");
+  if (!(res.ok || res.status === 202)) throw new Error(await readErrorMessage(res, "Submit failed."));
   // Poll tracking after consumer processes
   await new Promise((r) => setTimeout(r, 200));
   const draftsRes = await fetch(`/api/proxy/v1/citizen/intake/drafts/${draftId}`, { cache: "no-store" });
@@ -196,4 +207,14 @@ export function validateField(apiName: string, value: string, required: boolean)
     return "Enter a valid email address.";
   }
   return undefined;
+}
+
+/** FN-24 — UI gate mirroring server CHANNEL_NOT_ALLOWED. */
+export function isChannelAllowed(channels: readonly string[], channel: string): boolean {
+  return channels.includes(channel);
+}
+
+export function channelDisabledMessage(channel: string, channels: readonly string[]): string {
+  const allowed = channels.length > 0 ? channels.join(", ") : "none";
+  return `This service is not available on the ${channel} channel. Allowed channels: ${allowed}.`;
 }

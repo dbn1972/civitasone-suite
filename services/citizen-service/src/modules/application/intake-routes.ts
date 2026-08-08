@@ -11,6 +11,21 @@ import * as commands from "./commands.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 
+async function requireAllowedChannel(
+  tenantId: string,
+  channel: string,
+  opts: { serviceId: string; serviceKey?: string | undefined },
+): Promise<void> {
+  try {
+    await intake.enforceChannelAtIntake(tenantId, channel, opts);
+  } catch (e) {
+    if (e instanceof Error && e.name === "CHANNEL_NOT_ALLOWED") {
+      throw new HttpError(422, "CHANNEL_NOT_ALLOWED", e.message);
+    }
+    throw e;
+  }
+}
+
 export async function intakeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/citizen/intake/drafts", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -18,6 +33,10 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const body = saveDraftBody.parse(req.body);
     const citizenId = resolveCitizenId(ctx, body.citizenId);
     const channel = body.channel as IntakeChannel;
+    await requireAllowedChannel(ctx.tenantId, channel, {
+      serviceId: body.serviceId,
+      serviceKey: body.serviceKey,
+    });
     const operatorId = isAssistedChannel(channel) ? (body.operatorId ?? ctx.actorId) : undefined;
     let assistedBy: string | null;
     try {
@@ -75,6 +94,11 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const draft = await intake.getDraft(ctx, id);
     if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
     if (draft.status !== "draft") throw new HttpError(409, "ALREADY_SUBMITTED", "draft has already been submitted");
+    // FN-24 — re-check at submit so a channel disabled after draft save cannot be smuggled through.
+    await requireAllowedChannel(ctx.tenantId, draft.channel, {
+      serviceId: draft.serviceId,
+      serviceKey: draft.serviceKey ?? undefined,
+    });
     const applicationId = randomUUID();
     const trackingNo = buildTrackingNumber();
     const accepted = await commands.submitDraft(ctx, id, {
