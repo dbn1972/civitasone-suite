@@ -98,6 +98,8 @@ export {
 } from "./notificationTypes";
 export { FormRenderer } from "./FormRenderer";
 export type { FormRendererProps } from "./FormRenderer";
+export { StatusTimeline, formDesignFromService } from "./StatusTimeline";
+export type { StatusTimelineProps, StatusTimelineStep } from "./StatusTimeline";
 export { useUndoRedo } from "./useUndoRedo";
 export {
   FIELD_PALETTE_GROUPS,
