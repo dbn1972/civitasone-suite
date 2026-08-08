@@ -2,9 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "@/app/_components/ds";
+import { Card, ConfirmDialog } from "@/app/_components/ds";
 import { narrateWorkflow, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
 import { fetchTenantPositions, persistWorkflowDesign } from "../_data/workflowBuilderApi";
+import {
+  cloneLanes,
+  describeRevertToTemplateDiff,
+  lanesToBpmn,
+  type WorkflowDiffRow,
+} from "../_data/workflowRoundTrip";
 
 const DesignerCanvas = dynamic(
   () => import("@/app/(app)/workflow/designer/_components/DesignerCanvas").then((m) => m.DesignerCanvas),
@@ -26,7 +32,9 @@ export function ApprovalChainBuilder({
 }: Props) {
   const [design, setDesign] = useState(initial);
   const [advanced, setAdvanced] = useState(initial.mode === "custom");
+  const [templateSnapshot, setTemplateSnapshot] = useState<WorkflowLane[]>(() => cloneLanes(initial.lanes));
   const [positions, setPositions] = useState<{ id: string; label: string }[]>([]);
+  const [revertOpen, setRevertOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
@@ -36,9 +44,25 @@ export function ApprovalChainBuilder({
   }, []);
 
   const narration = useMemo(() => narrateWorkflow(design.lanes), [design.lanes]);
+  const isCustom = design.mode === "custom";
+  const guidedLocked = isCustom;
+
+  const seedGraph = useMemo(
+    () => ({
+      name: design.name || `${serviceName} approval chain`,
+      ...lanesToBpmn(design.lanes),
+    }),
+    [design.lanes, design.name, serviceName],
+  );
+
+  const revertDiff: WorkflowDiffRow[] = useMemo(
+    () => describeRevertToTemplateDiff(design.lanes, templateSnapshot),
+    [design.lanes, templateSnapshot],
+  );
 
   const schedulePersist = useCallback(() => {
-    if (advanced) return;
+    // Custom mode: guided autosave must not overwrite the custom-workflow projection.
+    if (advanced || latest.current.mode === "custom") return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
@@ -57,6 +81,7 @@ export function ApprovalChainBuilder({
   useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
 
   const updateLane = (laneId: string, patch: Partial<WorkflowLane>) => {
+    if (guidedLocked) return;
     setDesign((d) => ({
       ...d,
       lanes: d.lanes.map((l) => (l.id === laneId ? { ...l, ...patch } : l)),
@@ -64,6 +89,7 @@ export function ApprovalChainBuilder({
   };
 
   const toggleOptionalLane = (laneId: string) => {
+    if (guidedLocked) return;
     setDesign((d) => ({
       ...d,
       lanes: d.lanes.map((l) => (l.id === laneId ? { ...l, enabled: !l.enabled } : l)),
@@ -71,15 +97,21 @@ export function ApprovalChainBuilder({
   };
 
   const openAdvanced = () => {
+    if (!isCustom) {
+      setTemplateSnapshot(cloneLanes(design.lanes));
+    }
     setAdvanced(true);
     setDesign((d) => ({ ...d, mode: "custom" }));
   };
 
-  const revertToTemplate = () => {
-    if (!window.confirm("Revert to the guided approval chain? Custom canvas changes will be replaced on next save.")) return;
+  const confirmRevertToTemplate = () => {
+    const restored = cloneLanes(templateSnapshot);
     setAdvanced(false);
-    setDesign((d) => ({ ...d, mode: "template" }));
+    setRevertOpen(false);
+    setDesign((d) => ({ ...d, mode: "template", lanes: restored }));
   };
+
+  const actionLanes = design.lanes.filter((l) => l.key !== "submitted" && l.key !== "issued");
 
   if (advanced) {
     return (
@@ -96,20 +128,51 @@ export function ApprovalChainBuilder({
           }}
         >
           Advanced editor — changes here switch this service to custom-workflow mode.
+          The guided chain below is locked until you revert to the template.
         </div>
-        <DesignerCanvas definitions={[]} />
+        <DesignerCanvas
+          key={`seed-${design.definitionId ?? "draft"}-${templateSnapshot.map((l) => l.id).join("-")}`}
+          definitions={[]}
+          seedGraph={seedGraph}
+          embedded
+        />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn ghost" onClick={revertToTemplate}>Revert to template</button>
-          <button type="button" className="btn ghost" onClick={() => setAdvanced(false)}>Back to guided chain</button>
+          <button type="button" className="btn ghost" onClick={() => setRevertOpen(true)}>
+            Revert to template
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setAdvanced(false)}>
+            Back to guided chain
+          </button>
         </div>
+        <RevertDiffDialog
+          open={revertOpen}
+          rows={revertDiff}
+          onCancel={() => setRevertOpen(false)}
+          onConfirm={confirmRevertToTemplate}
+        />
       </div>
     );
   }
 
-  const actionLanes = design.lanes.filter((l) => l.key !== "submitted" && l.key !== "issued");
-
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {isCustom ? (
+        <div
+          role="status"
+          style={{
+            padding: "10px 14px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--warn-bg)",
+            border: "1px solid var(--warn-border)",
+            color: "var(--warn-fg)",
+            fontSize: 13,
+          }}
+        >
+          This service uses a custom workflow. Guided step controls are locked.
+          Open the visual editor to continue editing, or revert to the template to unlock the approval chain.
+        </div>
+      ) : null}
+
       <Card>
         <div className="pad">
           <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>Approval chain</h3>
@@ -124,8 +187,15 @@ export function ApprovalChainBuilder({
               paddingBottom: 8,
             }}
             aria-label="Approval chain steps"
+            aria-disabled={guidedLocked || undefined}
           >
-            <LaneCard lane={design.lanes.find((l) => l.key === "submitted")!} positions={positions} onChange={updateLane} locked />
+            <LaneCard
+              lane={design.lanes.find((l) => l.key === "submitted")!}
+              positions={positions}
+              onChange={updateLane}
+              locked
+              disabled={guidedLocked}
+            />
             {actionLanes.map((lane) => (
               <LaneCard
                 key={lane.id}
@@ -133,18 +203,98 @@ export function ApprovalChainBuilder({
                 positions={positions}
                 onChange={updateLane}
                 onToggleOptional={lane.optional ? () => toggleOptionalLane(lane.id) : undefined}
+                disabled={guidedLocked}
               />
             ))}
-            <LaneCard lane={design.lanes.find((l) => l.key === "issued")!} positions={positions} onChange={updateLane} locked />
+            <LaneCard
+              lane={design.lanes.find((l) => l.key === "issued")!}
+              positions={positions}
+              onChange={updateLane}
+              locked
+              disabled={guidedLocked}
+            />
           </div>
           <p style={{ margin: "16px 0 0", fontSize: 13, color: "var(--ink2)", fontStyle: "italic" }}>{narration}</p>
         </div>
       </Card>
 
-      <div>
-        <button type="button" className="btn ghost" onClick={openAdvanced}>Open visual editor (Advanced)</button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn ghost" onClick={openAdvanced}>
+          {isCustom ? "Open visual editor" : "Open visual editor (Advanced)"}
+        </button>
+        {isCustom ? (
+          <button type="button" className="btn ghost" onClick={() => setRevertOpen(true)}>
+            Revert to template
+          </button>
+        ) : null}
       </div>
+
+      <RevertDiffDialog
+        open={revertOpen}
+        rows={revertDiff}
+        onCancel={() => setRevertOpen(false)}
+        onConfirm={confirmRevertToTemplate}
+      />
     </div>
+  );
+}
+
+function RevertDiffDialog({
+  open,
+  rows,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  rows: WorkflowDiffRow[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ConfirmDialog
+      open={open}
+      title="Revert to guided approval chain?"
+      danger
+      confirmLabel="Revert to template"
+      cancelLabel="Keep custom workflow"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      description={
+        <div style={{ display: "grid", gap: 10 }}>
+          <p style={{ margin: 0 }}>
+            Custom visual-editor changes will be discarded. The guided chain will restore the steps below.
+          </p>
+          <div style={{ display: "grid", gap: 8 }} role="list" aria-label="Changes on revert">
+            {rows.map((row) => (
+              <div
+                key={row.label}
+                role="listitem"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "140px 1fr 1fr",
+                  gap: 10,
+                  padding: "8px 10px",
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--r-sm)",
+                  background: "var(--panel)",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--ink2)" }}>{row.label}</span>
+                <span style={{ color: "var(--mut)" }}>
+                  <span className="sr-only">Before: </span>
+                  {row.before}
+                </span>
+                <span style={{ color: "var(--ink)" }}>
+                  <span className="sr-only">After: </span>
+                  {row.after}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      }
+    />
   );
 }
 
@@ -154,12 +304,14 @@ function LaneCard({
   onChange,
   onToggleOptional,
   locked = false,
+  disabled = false,
 }: {
   lane: WorkflowLane;
   positions: { id: string; label: string }[];
   onChange: (laneId: string, patch: Partial<WorkflowLane>) => void;
   onToggleOptional?: () => void;
   locked?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -170,7 +322,7 @@ function LaneCard({
         borderRadius: "var(--r-sm)",
         border: `1px solid ${lane.enabled ? "var(--line)" : "var(--line2)"}`,
         background: lane.enabled ? "var(--panel)" : "var(--bg)",
-        opacity: lane.enabled ? 1 : 0.65,
+        opacity: disabled ? 0.55 : lane.enabled ? 1 : 0.65,
       }}
     >
       {locked ? (
@@ -181,6 +333,7 @@ function LaneCard({
           value={lane.name}
           onChange={(e) => onChange(lane.id, { name: e.target.value })}
           aria-label="Step name"
+          disabled={disabled}
           style={{ marginBottom: 8, fontWeight: 600 }}
         />
       )}
@@ -191,6 +344,7 @@ function LaneCard({
             <select
               className="input"
               value={lane.designationId}
+              disabled={disabled}
               onChange={(e) => {
                 const opt = positions.find((p) => p.id === e.target.value);
                 onChange(lane.id, { designationId: e.target.value, designationLabel: opt?.label ?? "" });
@@ -210,6 +364,7 @@ function LaneCard({
               min={0}
               max={365}
               value={lane.slaDays}
+              disabled={disabled}
               onChange={(e) => onChange(lane.id, { slaDays: Number(e.target.value) || 0 })}
             />
           </label>
@@ -218,6 +373,7 @@ function LaneCard({
               <input
                 type="checkbox"
                 checked={lane.enabled}
+                disabled={disabled}
                 onChange={onToggleOptional}
               />
               Include this step
@@ -225,7 +381,9 @@ function LaneCard({
           ) : null}
         </>
       ) : (
-        <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>Fixed step</p>
+        <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
+          {disabled ? "Locked while custom workflow is active" : "Fixed step"}
+        </p>
       )}
     </div>
   );
