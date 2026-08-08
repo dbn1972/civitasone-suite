@@ -1,4 +1,4 @@
-// @ts-nocheck — F3 leftover consumer for cdp route writes
+// F3 leftover consumer for cdp route writes
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../shared/db.js";
@@ -18,7 +18,6 @@ import * as nameKeyRepo from "./identity/name-key-repo.js";
 import * as segmentRepo from "./segments/repo.js";
 import * as membershipRepo from "./segments/membership-repo.js";
 import * as activationsRepo from "./activations/repo.js";
-import { hashIdentifier } from "./identity/domain.js";
 import { ANONYMOUS_PROFILE_TYPE } from "./identity/stitch-domain.js";
 import type { SegmentCriteria } from "./segments/domain.js";
 
