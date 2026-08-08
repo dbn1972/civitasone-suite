@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
 import { ErrorState } from "@/app/_components/ds";
-import { trackApplication, type TrackingAck } from "../../_data/runtimeApi";
+import { trackApplication, type TrackingAck } from "../_data/runtimeApi";
 
 interface Props {
   serviceKey: string;

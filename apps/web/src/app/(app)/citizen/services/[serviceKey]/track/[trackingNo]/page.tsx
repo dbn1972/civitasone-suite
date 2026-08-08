@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/app/_components/ds";
-import { TrackClient } from "../../_components/TrackClient";
+import { TrackClient } from "../../../_components/TrackClient";
 
 interface Props {
   params: { serviceKey: string; trackingNo: string };

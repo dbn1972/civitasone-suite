@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
-import { parsePublishedService, formatFee } from "./_data/runtimeApi";
-import { ServicePageClient } from "./_components/ServicePageClient";
+import { parsePublishedService, formatFee } from "../_data/runtimeApi";
+import { ServicePageClient } from "../_components/ServicePageClient";
 
 interface Props {
   params: { serviceKey: string };
