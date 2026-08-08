@@ -1,6 +1,9 @@
+import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
+
+const log = pino({ name: "metadata-worker" });
 import { registerEntityConsumers } from "./modules/entities/consumer.js";
 import { registerFieldConsumers } from "./modules/fields/consumer.js";
 import { registerRuleConsumers } from "./modules/rules/consumer.js";
@@ -35,10 +38,10 @@ registerNumberingConsumers(queue);
 registerFormulaConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);
-console.log("metadata-service worker running");
+log.info("metadata-service worker running");
 
 async function shutdown(signal: string): Promise<void> {
-  console.log(`${signal}: shutting down`);
+  log.info({ signal }, "shutting down");
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();
