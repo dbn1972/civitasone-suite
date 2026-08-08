@@ -50,7 +50,13 @@ export type { NumberingFormatBuilderProps } from "./NumberingFormatBuilder";
 export { NotificationMatrix } from "./NotificationMatrix";
 export type { NotificationMatrixProps } from "./NotificationMatrix";
 export { TestRunPanel } from "./TestRunPanel";
-export type { TestRunPanelProps, TestRunStep, TestStepStatus } from "./TestRunPanel";
+export type { TestRunPanelProps, TestRunStep, TestStepStatus, TestRunHistoryRow } from "./TestRunPanel";
+export { VersionDiff } from "./VersionDiff";
+export type { VersionDiffProps } from "./VersionDiff";
+export { PackCard } from "./PackCard";
+export type { PackCardProps } from "./PackCard";
+export { StatutoryWarningDialog } from "./StatutoryWarningDialog";
+export type { StatutoryWarningDialogProps } from "./StatutoryWarningDialog";
 export type {
   DocumentFormat,
   LocaleLabels,

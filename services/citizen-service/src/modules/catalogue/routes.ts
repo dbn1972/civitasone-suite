@@ -3,7 +3,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { z } from "zod";
 import { idParam, createDefinitionBody, updateDefinitionBody, serviceKeyQuery } from "./validators.js";
+
+const rejectBody = z.object({ comment: z.string().min(1).max(2000) });
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -39,6 +42,14 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.publishDefinition(ctx, id));
+  });
+
+  app.post("/v1/citizen/catalogue/services/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const { comment } = rejectBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectDefinition(ctx, id, comment));
   });
 
   app.get("/v1/citizen/catalogue/services", async (req, reply) => {

@@ -136,4 +136,27 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
   });
+
+  queue.subscribe(COMMANDS.catalogueDefinitionReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; comment: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const def = await repo.findDefinitionByIdTx(tx, p.id, msg.tenantId);
+      if (!def || def.status !== "draft" || !def.submittedBy) return;
+      if (def.submittedBy === msg.actorId) return;
+      await repo.updateDefinition(tx, p.id, msg.tenantId, {
+        submittedBy: null,
+        updatedBy: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "citizen", action: "definition_reject", resourceType: "service_definition",
+          resourceId: p.id, outcome: "success", comment: p.comment,
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
+  });
 }
