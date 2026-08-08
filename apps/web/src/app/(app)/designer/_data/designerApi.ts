@@ -23,6 +23,7 @@ export interface ServiceDefinitionDto {
   submittedBy?: string | null;
   publishedBy?: string | null;
   formId?: string | null;
+  forms?: unknown[];
   eligibilityRuleSetId?: string | null;
   workflowDefinitionId?: string | null;
   feeScheduleId?: string | null;
