@@ -85,13 +85,19 @@ export function buildExportedPackManifest(def: ServiceDefinitionRow): ExportedPa
 /** FN-29 — import requires explicit ack when statutory refs or authority scope are present. */
 export function requiresStatutoryAcknowledgement(pack: {
   statutoryReferences?: unknown[] | null;
-  manifest?: Record<string, unknown> | null;
+  // The DB column is a jsonb typed as `unknown` on the row; accept that and
+  // narrow here rather than forcing every caller to cast.
+  manifest?: unknown;
 }): boolean {
   const refs = Array.isArray(pack.statutoryReferences) ? pack.statutoryReferences : [];
   if (refs.some((r) => r && typeof r === "object" && typeof (r as { act?: unknown }).act === "string"
     && String((r as { act: string }).act).trim().length > 0)) {
     return true;
   }
-  const scope = pack.manifest?.authorityScope;
+  const manifest = pack.manifest;
+  const scope =
+    manifest && typeof manifest === "object"
+      ? (manifest as Record<string, unknown>).authorityScope
+      : undefined;
   return typeof scope === "string" && scope.trim().length > 0;
 }

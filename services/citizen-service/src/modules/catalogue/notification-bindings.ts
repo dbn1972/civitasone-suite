@@ -70,7 +70,9 @@ export function extractNotificationBindings(outputs: unknown[] | null | undefine
       event: event as PackNotificationEvent,
       channel: channel as PackNotificationChannel,
       templateId,
-      templateName: typeof raw.templateName === "string" ? raw.templateName : undefined,
+      // exactOptionalPropertyTypes: omit the key entirely rather than setting
+      // it to undefined, which is not assignable to `templateName?: string`.
+      ...(typeof raw.templateName === "string" ? { templateName: raw.templateName } : {}),
       enabled: true,
     });
   }
@@ -133,9 +135,10 @@ export async function enqueuePackNotifications(
     const payload: NotificationSendPayload = buildNotificationPayload({
       eventType,
       recipient: args.recipient,
-      recipientId: args.recipientId,
+      // exactOptionalPropertyTypes: omit optional keys instead of passing undefined.
+      ...(args.recipientId !== undefined ? { recipientId: args.recipientId } : {}),
       channel: b.channel,
-      templateId: b.templateId,
+      ...(b.templateId !== undefined ? { templateId: b.templateId } : {}),
       variables: baseVars,
     });
     await enqueue(tx, {

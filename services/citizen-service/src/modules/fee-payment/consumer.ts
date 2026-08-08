@@ -91,7 +91,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       await enqueuePackNotifications(tx, {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         serviceId, lifecycleEvent: "payment_due",
-        recipient, recipientId: p.citizenId ?? undefined,
+        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
         variables: {
           applicationId: p.applicationId,
           app_no: p.applicationId,
@@ -157,7 +157,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       await enqueuePackNotifications(tx, {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         serviceId, lifecycleEvent: "payment_received",
-        recipient, recipientId: p.citizenId ?? undefined,
+        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
         variables: {
           applicationId: p.applicationId,
           app_no: p.applicationId,

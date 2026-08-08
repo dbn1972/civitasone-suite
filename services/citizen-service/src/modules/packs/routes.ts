@@ -72,7 +72,12 @@ export async function packsRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(
       reply,
       acceptedResponseSchema,
-      await commands.importServicePack(ctx, id, { acknowledgeStatutory: body.acknowledgeStatutory }),
+      await commands.importServicePack(ctx, id, {
+        // exactOptionalPropertyTypes: omit rather than pass undefined.
+        ...(body.acknowledgeStatutory !== undefined
+          ? { acknowledgeStatutory: body.acknowledgeStatutory }
+          : {}),
+      }),
     );
   });
 

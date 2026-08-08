@@ -43,6 +43,13 @@ function sampleDef(overrides: Partial<ServiceDefinitionRow> = {}): ServiceDefini
     createdBy: "00000000-0000-0000-0000-000000000099",
     updatedBy: "00000000-0000-0000-0000-000000000099",
     rowVersion: 1,
+    // notNull() columns — required on the row type even though the DB fills
+    // them from defaults, so the fixture must supply them explicitly.
+    engineBindings: [],
+    laneBindings: [],
+    profileAttributeBindings: [],
+    allowedApplicantTypes: ["citizen"], // matches the column default
+    applicantTypeRejectMessage: null, // nullable text column
     ...overrides,
   };
 }
