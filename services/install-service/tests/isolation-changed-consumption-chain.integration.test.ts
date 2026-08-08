@@ -54,7 +54,11 @@ const ACTOR = "00000000-dddd-4000-8000-000000000002";
 // password). Hardcoded civitas_dev_pw fails auth against the GHA service
 // container where bootstrap sets civitas_admin from PGPASSWORD=civitas_test.
 const ADMIN_PW =
-  process.env.POSTGRES_ADMIN_PASSWORD ?? process.env.PGPASSWORD ?? "civitas_dev_pw";
+  process.env.POSTGRES_ADMIN_PASSWORD ??
+  process.env.PGPASSWORD ??
+  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+    ? "civitas_test"
+    : "civitas_dev_pw");
 const RUNNER_DSN =
   process.env.PROVISIONING_RUNNER_DSN ??
   `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${process.env.PGHOST ?? "localhost"}:${process.env.PGPORT ?? "5435"}/civitas_install`;
