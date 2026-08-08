@@ -72,12 +72,16 @@ export {
 export type {
   OutputType,
   ValidityMode,
+  TemplateOrientation,
   NumberingToken,
   IssuanceDesignState,
 } from "./issuanceTypes";
 export {
   OUTPUT_TYPE_OPTIONS,
   defaultOutputTypeForPattern,
+  defaultTemplateBodyForOutputType,
+  certificateTemplateBody,
+  closureNoteTemplateBody,
   emptyIssuanceDesign,
   formatNumberingPreview,
 } from "./issuanceTypes";

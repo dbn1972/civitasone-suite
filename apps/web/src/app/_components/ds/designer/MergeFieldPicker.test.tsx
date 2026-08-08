@@ -10,6 +10,25 @@ describe("MergeFieldPicker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Applicant name" }));
     expect(onInsert).toHaveBeenCalledWith("{{applicant_name}}");
   });
+
+  it("filters fields by search query", () => {
+    const onInsert = vi.fn();
+    render(
+      <MergeFieldPicker
+        onInsert={onInsert}
+        fields={[
+          { key: "applicant_name", label: "Applicant name", group: "Application" },
+          { key: "trade_name", label: "Trade name", group: "Form answers" },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Insert field" }));
+    fireEvent.change(screen.getByTestId("merge-field-search"), { target: { value: "trade" } });
+    expect(screen.getByRole("button", { name: "Trade name" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Applicant name" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Trade name" }));
+    expect(onInsert).toHaveBeenCalledWith("{{trade_name}}");
+  });
 });
 
 describe("renderMergePills", () => {

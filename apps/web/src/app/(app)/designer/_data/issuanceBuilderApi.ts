@@ -1,7 +1,9 @@
 "use client";
 
+import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { emptyIssuanceDesign, formatNumberingPreview } from "@/app/_components/ds/designer/issuanceTypes";
+import { buildSandboxPreview, type SandboxPreviewResult } from "./issuanceBuilderModel";
 
 export interface IssuanceOutputConfig {
   kind: "issuance";
@@ -16,6 +18,9 @@ export interface IssuanceOutputConfig {
   validityYears: number;
   validityFixedDate: string;
   renewable: boolean;
+  renewalWindowDays: number;
+  orientation: string;
+  qrVerifyEnabled: boolean;
 }
 
 export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputConfig {
@@ -32,6 +37,9 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
     validityYears: design.validityYears,
     validityFixedDate: design.validityFixedDate,
     renewable: design.renewable,
+    renewalWindowDays: design.renewalWindowDays,
+    orientation: design.orientation,
+    qrVerifyEnabled: design.qrVerifyEnabled,
   };
 }
 
@@ -60,6 +68,9 @@ export function issuanceOutputToUi(
     validityYears: cfg.validityYears ?? base.validityYears,
     validityFixedDate: cfg.validityFixedDate ?? "",
     renewable: cfg.renewable ?? false,
+    renewalWindowDays: cfg.renewalWindowDays ?? base.renewalWindowDays,
+    orientation: (cfg.orientation as IssuanceDesignState["orientation"]) ?? base.orientation,
+    qrVerifyEnabled: cfg.qrVerifyEnabled ?? base.qrVerifyEnabled,
   };
 }
 
@@ -73,38 +84,62 @@ export function mergeOutputsWithIssuance(
   return [...rest, issuance];
 }
 
+export interface SamplePdfResult extends SandboxPreviewResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Probe issuance request endpoint; always return an honest sandbox/pipeline preview. */
 export async function requestSamplePdf(
   design: IssuanceDesignState,
   serviceName: string,
-): Promise<{ ok: boolean; message: string }> {
+  formFields: FormFieldDefinition[] = [],
+): Promise<SamplePdfResult> {
+  let pipelineAvailable = false;
   try {
     const res = await fetch("/api/proxy/v1/citizen/certificates/requests", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         certType: design.outputType,
-        subject: { service_name: serviceName, applicant_name: "Sample Applicant" },
-        payload: { templateBody: design.templateBody, preview: true },
+        subject: {
+          service_name: serviceName,
+          applicant_name: "Sample Applicant",
+        },
+        payload: {
+          templateBody: design.templateBody,
+          preview: true,
+          sandbox: true,
+        },
       }),
     });
-    if (res.ok || res.status === 202) {
-      return { ok: true, message: "Sample certificate queued via issuance pipeline." };
-    }
+    pipelineAvailable = res.ok || res.status === 202;
   } catch {
-    // fall through to stub
+    pipelineAvailable = false;
   }
+
+  const preview = buildSandboxPreview(design, serviceName, {
+    pipelineAvailable,
+    formFields,
+  });
+
   return {
-    ok: false,
-    message: "Sample PDF preview is not available in this environment — template saved for publish.",
+    ...preview,
+    ok: true,
+    message: preview.banner,
   };
 }
 
 export async function fetchTenantPositions(): Promise<{ id: string; label: string }[]> {
-  const res = await fetch("/api/proxy/v1/tenant/positions", { cache: "no-store" });
-  if (!res.ok) return [];
-  const payload = (await res.json()) as { data?: { id: string; title?: string; name?: string }[] };
-  return (payload.data ?? []).map((p) => ({
-    id: p.id,
-    label: p.title ?? p.name ?? p.id,
-  }));
+  try {
+    const res = await fetch("/api/proxy/v1/tenant/positions", { cache: "no-store" });
+    if (!res.ok) return [];
+    const payload = (await res.json()) as { data?: { id: string; title?: string; name?: string }[] };
+    return (payload.data ?? []).map((p) => ({
+      id: p.id,
+      label: p.title ?? p.name ?? p.id,
+    }));
+  } catch {
+    return [];
+  }
 }
