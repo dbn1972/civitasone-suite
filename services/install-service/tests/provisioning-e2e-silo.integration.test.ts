@@ -36,9 +36,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { provisionSiloDatabase, SERVICES } from "../src/modules/provisioning/actuator.js";
 
+// Prefer PROVISIONING_RUNNER_DSN (set by vitest.config from CI PGPASSWORD /
+// POSTGRES_ADMIN_PASSWORD). Fall back builds the same way so a bare
+// `vitest run` against CI's civitas_test password still authenticates.
+const ADMIN_PW =
+  process.env.POSTGRES_ADMIN_PASSWORD ?? process.env.PGPASSWORD ?? "civitas_dev_pw";
 const RUNNER_DSN =
   process.env.PROVISIONING_RUNNER_DSN ??
-  "postgres://civitas_admin:civitas_dev_pw@localhost:5435/postgres";
+  `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${process.env.PGHOST ?? "localhost"}:${process.env.PGPORT ?? "5435"}/postgres`;
 
 describe("provisionSiloDatabase — end-to-end (real Postgres)", () => {
   let fixtureRoot: string;
