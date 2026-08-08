@@ -19,6 +19,10 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "audit-events", prefix: "/api/audit",        upstream: upstream("audit", 3004) },
   { name: "audit",        prefix: "/api/v1/audit",     upstream: upstream("audit", 3004) },
   { name: "notification", prefix: "/api/notification", upstream: upstream("notification", 3006), upstreamPath: "/notifications" },
+  // CR-MKT-05 A/B experiments (+ other /v1/notification/* modules) live on the
+  // versioned upstream path. Legacy /api/notification → /notifications rewrite
+  // cannot reach them; longest-prefix match keeps the two prefixes distinct.
+  { name: "notification-v1", prefix: "/api/v1/notification", upstream: upstream("notification", 3006), upstreamPath: "/v1/notification" },
   { name: "finance",      prefix: "/api/v1/finance",   upstream: upstream("finance", 3007) },
   { name: "procurement",  prefix: "/api/v1/procurement", upstream: upstream("procurement", 3008) },
   { name: "contract",     prefix: "/api/v1/contract",  upstream: upstream("contract", 3009) },

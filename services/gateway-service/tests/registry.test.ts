@@ -25,4 +25,11 @@ describe("gateway registry", () => {
     expect(resolved?.route.name).toBe("admin-users");
     expect(resolved?.route.upstreamPath).toBe("/identity/users");
   });
+
+  it("maps /api/v1/notification/* to versioned upstream /v1/notification/*", () => {
+    const resolved = resolveRoute("/api/v1/notification/experiments");
+    expect(resolved?.route.name).toBe("notification-v1");
+    expect(resolved?.route.upstreamPath).toBe("/v1/notification");
+    expect(resolved?.remainder).toBe("/experiments");
+  });
 });
