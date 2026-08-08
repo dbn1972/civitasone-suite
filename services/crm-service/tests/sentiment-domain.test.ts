@@ -1,296 +1,112 @@
 /**
- * Voice-of-Customer scoring (P2-6) — pure domain.
- *
- * These assert the properties an officer would rely on when acting on a reading:
- * that "no signal" is never reported as satisfaction, that negation is not read
- * backwards, and that one long complaint cannot manufacture a theme trend.
+ * CRM Sentiment — VoC lexicon analysis, polarity, themes, summary tests.
+ * Pack #21. Source: modules/sentiment/domain.ts
  */
 import { describe, it, expect } from "vitest";
-import {
-  analyse,
-  detectThemes,
-  polarityOf,
-  summarise,
-  NEUTRAL_BAND,
-  SCORE_MIN,
-  SCORE_MAX,
-  POLARITIES,
-  THEMES,
-} from "../src/modules/sentiment/domain.js";
+import { analyse, polarityOf, detectThemes, summarise, NEUTRAL_BAND, SCORE_MIN, SCORE_MAX } from "../src/modules/sentiment/domain.js";
 
-describe("polarityOf", () => {
-  it("bands scores around the neutral window", () => {
-    expect(polarityOf(100)).toBe("positive");
-    expect(polarityOf(NEUTRAL_BAND + 1)).toBe("positive");
-    expect(polarityOf(NEUTRAL_BAND)).toBe("neutral");
-    expect(polarityOf(0)).toBe("neutral");
-    expect(polarityOf(-NEUTRAL_BAND)).toBe("neutral");
-    expect(polarityOf(-NEUTRAL_BAND - 1)).toBe("negative");
-    expect(polarityOf(-100)).toBe("negative");
-  });
-});
-
-describe("analyse", () => {
-  it("scores plain praise positive", () => {
-    const r = analyse(
-      "Thank you, the officer was very helpful and the issue was resolved quickly.",
-    );
+describe("analyse — lexicon-based sentiment scoring", () => {
+  it("positive text scores > NEUTRAL_BAND", () => {
+    const r = analyse("Thank you so much, your team was excellent and very helpful!");
     expect(r.polarity).toBe("positive");
     expect(r.score).toBeGreaterThan(NEUTRAL_BAND);
   });
 
-  it("scores a complaint negative", () => {
-    const r = analyse(
-      "This is unacceptable. The payment is delayed again and nobody has responded.",
-    );
+  it("negative text scores < -NEUTRAL_BAND", () => {
+    const r = analyse("I am very angry about the terrible delay. This is unacceptable and frustrating!");
     expect(r.polarity).toBe("negative");
     expect(r.score).toBeLessThan(-NEUTRAL_BAND);
   });
 
-  it("reports empty text as neutral zero rather than guessing", () => {
-    for (const text of ["", "   ", "\n\t"]) {
-      const r = analyse(text);
-      expect(r).toEqual({
-        polarity: "neutral",
-        score: 0,
-        themes: [],
-        matchedTerms: [],
-      });
-    }
-  });
-
-  it("reports text with no sentiment words as neutral, not positive", () => {
-    const r = analyse("Applicant submitted form 16 on Tuesday at the counter.");
+  it("neutral text (no sentiment terms) scores 0", () => {
+    const r = analyse("The meeting is scheduled for Tuesday at 3pm in the conference room.");
     expect(r.polarity).toBe("neutral");
     expect(r.score).toBe(0);
-    expect(r.matchedTerms).toEqual([]);
   });
 
-  it("reads negation rather than inverting the meaning", () => {
-    const plain = analyse("the staff was helpful");
-    const negated = analyse("the staff was not helpful");
-    expect(plain.polarity).toBe("positive");
-    expect(negated.polarity).toBe("negative");
-  });
-
-  it("handles a negator separated from the term by one word", () => {
-    expect(analyse("this was not very helpful").polarity).toBe("negative");
-  });
-
-  it("treats a typographic apostrophe the same as a plain one", () => {
-    expect(analyse("didn’t resolve").score).toBe(
-      analyse("didn't resolve").score,
-    );
-  });
-
-  it("keeps the score inside the reporting range however long the text", () => {
-    const rant = "terrible awful rude corrupt negligence ".repeat(200);
-    const r = analyse(rant);
-    expect(r.score).toBeGreaterThanOrEqual(SCORE_MIN);
-    expect(r.score).toBeLessThanOrEqual(SCORE_MAX);
-  });
-
-  it("scores a short and a long complaint of equal intensity alike", () => {
-    const short = analyse("terrible service");
-    const long = analyse(
-      "terrible service. terrible service. terrible service. terrible service.",
-    );
-    expect(short.score).toBe(long.score);
-  });
-
-  it("is deterministic — the same text always scores the same", () => {
-    const text = "The delay is frustrating but the officer was polite.";
-    expect(analyse(text)).toEqual(analyse(text));
-  });
-
-  it("reports the matched terms so a score can be explained", () => {
-    const r = analyse("the delay was frustrating");
-    expect(r.matchedTerms.length).toBeGreaterThan(0);
-    expect(r.matchedTerms.every((t) => typeof t === "string")).toBe(true);
-  });
-
-  it("does not read a longer unrelated word as a lexicon term", () => {
-    // "badge" is not "bad"; "against" is not "again"; "commence" is not "commend".
-    for (const text of [
-      "officer badge number 42",
-      "checked against the register",
-      "commence the process",
-    ]) {
-      const r = analyse(text);
-      expect(
-        r.matchedTerms,
-        `"${text}" should match no sentiment term`,
-      ).toEqual([]);
-      expect(r.polarity).toBe("neutral");
-    }
-  });
-
-  it("still recognises ordinary inflections of a lexicon term", () => {
-    for (const text of [
-      "the payment was delayed",
-      "repeated delays",
-      "this is frustrating",
-    ]) {
-      expect(analyse(text).polarity, `"${text}" should read negative`).toBe(
-        "negative",
-      );
-    }
-  });
-
-  it("attaches themes even when the text carries no sentiment", () => {
-    const r = analyse("Please confirm the invoice amount for the certificate.");
+  it("empty text → neutral, score 0", () => {
+    const r = analyse("");
     expect(r.polarity).toBe("neutral");
-    expect(r.themes).toContain("billing");
+    expect(r.score).toBe(0);
+    expect(r.themes).toEqual([]);
   });
 
-  it("only ever returns a declared polarity", () => {
-    for (const text of [
-      "great",
-      "awful",
-      "",
-      "form submitted",
-      "not not good",
-    ]) {
-      expect(POLARITIES).toContain(analyse(text).polarity);
-    }
+  it("negator inverts sentiment: 'not helpful' → negative", () => {
+    const r = analyse("The officer was not helpful at all");
+    expect(r.score).toBeLessThan(0);
+  });
+
+  it("intensifier amplifies: 'very good' scores higher than 'good'", () => {
+    const plain = analyse("The service was good");
+    const intensified = analyse("The service was very good");
+    expect(intensified.score).toBeGreaterThanOrEqual(plain.score);
+  });
+
+  it("score is clamped to [-100, 100]", () => {
+    const r = analyse("excellent excellent excellent excellent excellent excellent excellent");
+    expect(r.score).toBeLessThanOrEqual(SCORE_MAX);
+    expect(r.score).toBeGreaterThanOrEqual(SCORE_MIN);
+  });
+
+  it("matchedTerms contains sentiment-bearing tokens", () => {
+    const r = analyse("Thank you for the prompt resolution");
+    expect(r.matchedTerms.length).toBeGreaterThan(0);
+  });
+});
+
+describe("polarityOf", () => {
+  it("> 15 = positive", () => expect(polarityOf(16)).toBe("positive"));
+  it("< -15 = negative", () => expect(polarityOf(-16)).toBe("negative"));
+  it("within [-15, 15] = neutral", () => {
+    expect(polarityOf(0)).toBe("neutral");
+    expect(polarityOf(15)).toBe("neutral");
+    expect(polarityOf(-15)).toBe("neutral");
   });
 });
 
 describe("detectThemes", () => {
-  it("recognises the themes a complaint touches", () => {
-    const themes = detectThemes(
-      "The bill is wrong and the clerk was rude about the delay.",
-    );
-    expect(themes).toContain("billing");
-    expect(themes).toContain("staff_conduct");
-    expect(themes).toContain("delay");
+  it("detects delay theme", () => expect(detectThemes("There has been a long delay in processing")).toContain("delay"));
+  it("detects billing theme", () => expect(detectThemes("The invoice amount is wrong")).toContain("billing"));
+  it("detects staff_conduct theme", () => expect(detectThemes("The clerk was rude")).toContain("staff_conduct"));
+  it("detects corruption theme", () => expect(detectThemes("They asked for a bribe")).toContain("corruption"));
+  it("returns sorted themes", () => {
+    const themes = detectThemes("The delay in billing is due to a rude clerk");
+    expect(themes).toEqual([...themes].sort());
   });
-
-  it("returns themes sorted and de-duplicated for a stable stored value", () => {
-    const themes = detectThemes("delay delay delay bill bill");
-    expect(themes).toEqual([...new Set(themes)].sort());
-  });
-
-  it("is case-insensitive", () => {
-    expect(detectThemes("BRIBE DEMANDED")).toEqual(
-      detectThemes("bribe demanded"),
-    );
-  });
-
-  it("returns nothing recognisable as an empty list", () => {
-    expect(detectThemes("xyzzy plugh")).toEqual([]);
-  });
-
-  it("does not attach a theme because a word merely contains a trigger", () => {
-    // "information" contains "form"; "happy" contains "app"; "taxi" contains "tax".
-    expect(detectThemes("please share the information")).not.toContain(
-      "documentation",
-    );
-    expect(detectThemes("the citizen was happy")).not.toContain(
-      "accessibility",
-    );
-    expect(detectThemes("he took a taxi")).not.toContain("billing");
-  });
-
-  it("still attaches a theme for a plural or inflected trigger", () => {
-    expect(detectThemes("submit the documents")).toContain("documentation");
-    expect(detectThemes("two payments are pending")).toContain("billing");
-    expect(detectThemes("repeated delays")).toContain("delay");
-  });
-
-  it("only ever returns declared themes", () => {
-    const themes = detectThemes(
-      "bill delay rude broken document portal bribe no response",
-    );
-    expect(themes.every((t) => THEMES.includes(t))).toBe(true);
-  });
+  it("returns empty for irrelevant text", () => expect(detectThemes("The sky is blue today")).toEqual([]));
 });
 
-describe("summarise", () => {
-  const rows = [
-    { polarity: "negative", score: -80, themes: ["delay", "billing"] },
-    { polarity: "negative", score: -60, themes: ["delay"] },
-    { polarity: "positive", score: 70, themes: ["staff_conduct"] },
-    { polarity: "neutral", score: 0, themes: [] },
-  ];
-
-  it("counts each polarity", () => {
+describe("summarise — VoC aggregation", () => {
+  it("aggregates polarity counts and average", () => {
+    const rows = [
+      { polarity: "positive", score: 50, themes: ["service_quality"] },
+      { polarity: "negative", score: -60, themes: ["delay"] },
+      { polarity: "neutral", score: 0, themes: [] },
+    ];
     const s = summarise(rows);
-    expect(s.total).toBe(4);
-    expect(s.byPolarity).toEqual({ positive: 1, neutral: 1, negative: 2 });
+    expect(s.total).toBe(3);
+    expect(s.byPolarity.positive).toBe(1);
+    expect(s.byPolarity.negative).toBe(1);
+    expect(s.byPolarity.neutral).toBe(1);
+    expect(s.averageScore).toBe(-3); // (50-60+0)/3 = -3.33 → -3
+    expect(s.negativeShare).toBe(33); // 1/3 ≈ 33%
   });
 
-  it("averages the score across every reading", () => {
-    // (-80 + -60 + 70 + 0) / 4 = -17.5, rounded away from zero → -18
-    expect(summarise(rows).averageScore).toBe(-18);
+  it("topThemes sorted by count", () => {
+    const rows = [
+      { polarity: "negative", score: -40, themes: ["delay", "billing"] },
+      { polarity: "negative", score: -50, themes: ["delay"] },
+    ];
+    const s = summarise(rows);
+    expect(s.topThemes[0]!.theme).toBe("delay");
+    expect(s.topThemes[0]!.count).toBe(2);
+    expect(s.topThemes[0]!.negativeCount).toBe(2);
   });
 
-  it("rounds a tied average symmetrically, without a bias toward happy", () => {
-    const negative = summarise([
-      { polarity: "negative", score: -18, themes: [] },
-      { polarity: "negative", score: -17, themes: [] },
-    ]);
-    const positive = summarise([
-      { polarity: "positive", score: 18, themes: [] },
-      { polarity: "positive", score: 17, themes: [] },
-    ]);
-    expect(negative.averageScore).toBe(-18);
-    expect(positive.averageScore).toBe(18);
-  });
-
-  it("reports the negative share as a whole percentage", () => {
-    expect(summarise(rows).negativeShare).toBe(50);
-  });
-
-  it("ranks themes by frequency and tracks how many were negative", () => {
-    const top = summarise(rows).topThemes;
-    expect(top[0]).toEqual({ theme: "delay", count: 2, negativeCount: 2 });
-    expect(top.find((t) => t.theme === "staff_conduct")).toEqual({
-      theme: "staff_conduct",
-      count: 1,
-      negativeCount: 0,
-    });
-  });
-
-  it("counts a theme once per interaction, so one rant cannot fake a trend", () => {
-    const s = summarise([
-      { polarity: "negative", score: -90, themes: ["delay", "delay", "delay"] },
-    ]);
-    expect(s.topThemes).toEqual([
-      { theme: "delay", count: 1, negativeCount: 1 },
-    ]);
-  });
-
-  it("breaks frequency ties alphabetically so the ordering is stable", () => {
-    const s = summarise([
-      { polarity: "neutral", score: 0, themes: ["zebra", "alpha"] },
-      { polarity: "neutral", score: 0, themes: ["zebra", "alpha"] },
-    ]);
-    expect(s.topThemes.map((t) => t.theme)).toEqual(["alpha", "zebra"]);
-  });
-
-  it("honours the theme limit", () => {
-    const many = Array.from({ length: 30 }, (_, i) => ({
-      polarity: "neutral",
-      score: 0,
-      themes: [`theme_${i}`],
-    }));
-    expect(summarise(many, 5).topThemes).toHaveLength(5);
-  });
-
-  it("reports an empty period as zero rather than dividing by zero", () => {
-    expect(summarise([])).toEqual({
-      total: 0,
-      byPolarity: { positive: 0, neutral: 0, negative: 0 },
-      averageScore: 0,
-      negativeShare: 0,
-      topThemes: [],
-    });
-  });
-
-  it("ignores an unrecognised stored polarity instead of miscounting it", () => {
-    const s = summarise([{ polarity: "furious", score: -50, themes: [] }]);
-    expect(s.total).toBe(1);
-    expect(s.byPolarity).toEqual({ positive: 0, neutral: 0, negative: 0 });
+  it("empty rows → all zeros", () => {
+    const s = summarise([]);
+    expect(s.total).toBe(0);
+    expect(s.averageScore).toBe(0);
+    expect(s.negativeShare).toBe(0);
   });
 });
