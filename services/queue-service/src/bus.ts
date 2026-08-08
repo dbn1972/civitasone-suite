@@ -461,7 +461,7 @@ export class SqsQueue implements Queue {
     const res = await this.client.send(new ListQueuesCommand({
       QueueNamePrefix: topicQueuePrefix(topic), MaxResults: 1000,
     }));
-    const urls = (res.QueueUrls ?? []).filter((u) => {
+    const urls = (res.QueueUrls ?? []).filter((u: string) => {
       const n = u.split("/").pop() ?? "";
       return !n.endsWith("-dlq") && !n.endsWith("-dlq.fifo");
     });

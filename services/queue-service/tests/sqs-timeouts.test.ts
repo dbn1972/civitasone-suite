@@ -15,11 +15,12 @@ import {
   DEFAULT_SQS_REQUEST_TIMEOUT_MS,
   resolveConnectionTimeout,
   resolveRequestTimeout,
+  resolveWaitTimeSeconds,
   buildRequestHandler,
 } from "../src/bus.js";
 
-/** The long-poll ReceiveMessage wait; requestTimeout must stay above it. */
-const LONG_POLL_WAIT_MS = 20_000;
+/** Effective long-poll wait (env-aware); requestTimeout must stay above it. */
+const LONG_POLL_WAIT_MS = resolveWaitTimeSeconds() * 1000;
 
 describe("resolveConnectionTimeout", () => {
   it("defaults to a short, finite connect ceiling", () => {
