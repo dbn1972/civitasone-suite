@@ -9,7 +9,14 @@ import {
 import {
   assertWithinFilingWindow, orderOutcome, canIssueOrder, addDays, DEFAULT_FILING_WINDOW_DAYS,
 } from "../src/modules/appeal/domain.js";
-import { buildTrackingNumber, resolveAssistedBy, isAssistedChannel } from "../src/modules/application/intake-domain.js";
+import {
+  assertChannelAllowed,
+  buildTrackingNumber,
+  channelNotAllowedMessage,
+  isAssistedChannel,
+  isChannelAllowed,
+  resolveAssistedBy,
+} from "../src/modules/application/intake-domain.js";
 
 describe("SVC-081 catalogue domain", () => {
   it("accepts a well-formed publishable definition", () => {
@@ -107,5 +114,14 @@ describe("SVC-082 intake domain — tracking + assisted", () => {
     expect(resolveAssistedBy("assisted", "op-1")).toBe("op-1");
     expect(() => resolveAssistedBy("counter", undefined)).toThrow("ASSISTED_OPERATOR_REQUIRED");
     expect(resolveAssistedBy("portal", undefined)).toBeNull();
+  });
+
+  it("FN-24: portal-only service rejects mobile channel with clear error", () => {
+    expect(isChannelAllowed("portal", ["portal"])).toBe(true);
+    expect(isChannelAllowed("mobile", ["portal"])).toBe(false);
+    expect(() => assertChannelAllowed("portal", ["portal"])).not.toThrow();
+    expect(() => assertChannelAllowed("mobile", ["portal"])).toThrow("CHANNEL_NOT_ALLOWED");
+    expect(channelNotAllowedMessage("mobile", ["portal"])).toContain("mobile");
+    expect(channelNotAllowedMessage("mobile", ["portal"])).toContain("portal");
   });
 });
