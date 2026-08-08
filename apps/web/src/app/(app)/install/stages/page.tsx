@@ -12,10 +12,13 @@ export default async function Page() {
       </nav>
       <ModuleListPage
         title="Install — Stages"
-        description="Installer stages from install-service."
+        description="Installer stages from install-service. Stage 3 activates a Domain Pack (municipal-in-v1 → TL / PGR / Water drafts)."
         rows={data}
         source={source}
       />
+      <p className="back" style={{ marginTop: 16 }}>
+        <a href="/install/domain-packs">Open Domain Pack activation (Stage 3) →</a>
+      </p>
     </main>
   );
 }
