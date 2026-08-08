@@ -22,7 +22,16 @@ export function TrackClient({ serviceKey, trackingNo }: Props) {
   }, [trackingNo]);
 
   if (error) {
-    return <ErrorState title="Tracking unavailable" message={error} />;
+    return (
+      <ErrorState
+        error={{
+          what: "Tracking unavailable",
+          next: error,
+          actions: ["back"],
+        }}
+        backHref={`/citizen/catalogue`}
+      />
+    );
   }
 
   if (!ack) {
