@@ -11,6 +11,8 @@ export interface PublishedServiceRuntime {
   description: string;
   slaDays: number | null;
   channels: string[];
+  allowedApplicantTypes: string[];
+  applicantTypeRejectMessage: string | null;
   requiredDocuments: { docType: string; label: string; mandatory: boolean }[];
   feeFromMinor: number | null;
   feeCurrency: string;
@@ -65,6 +67,10 @@ export function parsePublishedService(raw: unknown): PublishedServiceRuntime | n
     description: str(runtimeMeta?.description ?? raw.description) || "Government service application",
     slaDays: num(raw.slaDays),
     channels: Array.isArray(raw.channels) ? raw.channels.map(str) : ["portal"],
+    allowedApplicantTypes: Array.isArray(raw.allowedApplicantTypes) && raw.allowedApplicantTypes.length > 0
+      ? raw.allowedApplicantTypes.map(str)
+      : ["citizen"],
+    applicantTypeRejectMessage: raw.applicantTypeRejectMessage ? str(raw.applicantTypeRejectMessage) : null,
     requiredDocuments: Array.isArray(raw.requiredDocuments)
       ? raw.requiredDocuments.filter(isRecord).map((d) => ({
           docType: str(d.docType),
@@ -112,11 +118,12 @@ export async function saveDraft(payload: {
   channel: string;
   formData: Record<string, unknown>;
   operatorId?: string;
+  applicantType?: string;
 }): Promise<string> {
   const res = await fetch("/api/proxy/v1/citizen/intake/drafts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ applicantType: "citizen", ...payload }),
   });
   if (!res.ok) throw new Error((await res.text()) || "Could not save draft.");
   const body = (await res.json()) as { id?: string };

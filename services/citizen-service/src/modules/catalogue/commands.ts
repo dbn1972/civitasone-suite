@@ -7,6 +7,32 @@ import * as repo from "./repo.js";
 import { assertDefinitionPublishable } from "./domain.js";
 import type { CreateDefinitionBody, UpdateDefinitionBody } from "./validators.js";
 import { assertLatestTestPassed } from "../sandbox-test/commands.js";
+import {
+  assertAllowedApplicantTypesConfig,
+  assertProfileAttributeBindings,
+  coerceAllowedApplicantTypes,
+} from "../applicant-identity/domain.js";
+
+function assertApplicantIdentityDraft(
+  body: {
+    allowedApplicantTypes?: unknown;
+    profileAttributeBindings?: unknown;
+    servicePattern?: string | null | undefined;
+  },
+  existingPattern?: string | null,
+): void {
+  if (body.allowedApplicantTypes === undefined && body.profileAttributeBindings === undefined) return;
+  const pattern = body.servicePattern ?? existingPattern ?? null;
+  const allowed = coerceAllowedApplicantTypes(body.allowedApplicantTypes);
+  if (body.allowedApplicantTypes !== undefined) {
+    assertAllowedApplicantTypesConfig(body.allowedApplicantTypes, pattern);
+  } else {
+    assertAllowedApplicantTypesConfig(allowed, pattern);
+  }
+  if (body.profileAttributeBindings !== undefined) {
+    assertProfileAttributeBindings(body.profileAttributeBindings, allowed);
+  }
+}
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -27,15 +53,32 @@ async function publish(
 
 /** Create a new DRAFT service definition at the next version for the service_key. */
 export async function createDefinition(ctx: RequestContext, body: CreateDefinitionBody): Promise<Accepted> {
+  try {
+    assertApplicantIdentityDraft(body, body.servicePattern ?? null);
+  } catch (e) {
+    throw new HttpError(422, "APPLICANT_IDENTITY_INVALID", e instanceof Error ? e.message : "invalid applicant identity config");
+  }
   const id = randomUUID();
   return publish(ctx, COMMANDS.catalogueDefinitionCreate, id, { id, ...body });
 }
 
-/** Patch a DRAFT service definition (B1 catalogue fields, FN-01). */
+/** Patch a DRAFT service definition (B1 catalogue fields, FN-01 / FN-23). */
 export async function updateDefinition(ctx: RequestContext, id: string, body: UpdateDefinitionBody): Promise<Accepted> {
   const def = await repo.findDefinitionById(id, ctx.tenantId);
   if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
   if (def.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be edited");
+  try {
+    assertApplicantIdentityDraft(
+      {
+        ...body,
+        allowedApplicantTypes: body.allowedApplicantTypes ?? def.allowedApplicantTypes,
+        profileAttributeBindings: body.profileAttributeBindings ?? def.profileAttributeBindings,
+      },
+      def.servicePattern,
+    );
+  } catch (e) {
+    throw new HttpError(422, "APPLICANT_IDENTITY_INVALID", e instanceof Error ? e.message : "invalid applicant identity config");
+  }
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionUpdate, randomUUID(), { id, ...body });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
   return { ...accepted, id };

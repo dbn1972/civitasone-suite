@@ -2,12 +2,22 @@
  * SVC-082 — pure intake domain helpers (no I/O, unit-tested).
  *
  * Channel attribution + acknowledgement tracking-number generation for online
- * and assisted-service intake.
+ * and assisted-service intake. FN-23 applicant-type gating is delegated to
+ * applicant-identity/domain (kept separate from FN-24 channel work).
  */
 import { randomBytes } from "node:crypto";
+import {
+  assertApplicantTypeAllowed,
+  coerceAllowedApplicantTypes,
+  normalizeApplicantType,
+  type ApplicantType,
+  ApplicantTypeRejectedError,
+} from "../applicant-identity/domain.js";
 
 export const INTAKE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
 export type IntakeChannel = typeof INTAKE_CHANNELS[number];
+
+export { ApplicantTypeRejectedError };
 
 /** Channels that represent operator-on-behalf-of (assisted) entry. */
 const ASSISTED_CHANNELS: IntakeChannel[] = ["counter", "assisted"];
@@ -36,4 +46,22 @@ export function resolveAssistedBy(channel: IntakeChannel, operatorId: string | u
     return operatorId;
   }
   return null;
+}
+
+/**
+ * Resolve + gate applicant type against the service definition (FN-23).
+ * Defaults to `citizen` when the client omits a type (legacy clients).
+ */
+export function resolveAndGateApplicantType(input: {
+  rawApplicantType?: string | null | undefined;
+  allowedApplicantTypes?: unknown;
+  rejectMessage?: string | null | undefined;
+}): ApplicantType {
+  const applicantType = normalizeApplicantType(input.rawApplicantType ?? "citizen") ?? "citizen";
+  assertApplicantTypeAllowed({
+    allowedApplicantTypes: coerceAllowedApplicantTypes(input.allowedApplicantTypes),
+    applicantType,
+    rejectMessage: input.rejectMessage,
+  });
+  return applicantType;
 }

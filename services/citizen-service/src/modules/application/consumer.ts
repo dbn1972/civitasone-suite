@@ -168,6 +168,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; serviceId: string;
       serviceKey?: string | null; channel: string; assistedBy: string | null;
+      applicantType?: string | null;
       formData: Record<string, unknown>; documentTypes: string[];
     };
     await db.transaction(async (tx) => {
@@ -175,6 +176,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       await intakeRepo.insertDraft(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId, serviceId: p.serviceId,
         serviceKey: p.serviceKey ?? null, channel: p.channel, assistedBy: p.assistedBy,
+        applicantType: p.applicantType ?? "citizen",
         formData: p.formData, documentTypes: p.documentTypes, status: "draft",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -186,6 +188,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string;
       formData?: Record<string, unknown>; documentTypes?: string[];
+      applicantType?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -194,6 +197,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       await intakeRepo.updateDraft(tx, p.id, msg.tenantId, {
         ...(p.formData ? { formData: p.formData } : {}),
         ...(p.documentTypes ? { documentTypes: p.documentTypes } : {}),
+        ...(p.applicantType ? { applicantType: p.applicantType } : {}),
         updatedBy: msg.actorId,
       });
       await audit(tx, msg, "draft_update", "application_intake", p.id);
@@ -204,16 +208,18 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; draftId: string; tenantId: string; trackingNo: string; channel: string;
       documentTypes?: string[];
+      applicantType?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const draft = await intakeRepo.findDraftByIdTx(tx, p.draftId, msg.tenantId);
       if (!draft || draft.status !== "draft") return;
       const now = new Date();
+      const applicantType = p.applicantType ?? draft.applicantType ?? "citizen";
       await repo.insertApplication(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: draft.citizenId, serviceId: draft.serviceId,
         refNo: p.trackingNo, status: "submitted", trackingNo: p.trackingNo, channel: draft.channel,
-        assistedBy: draft.assistedBy, acknowledgedAt: now, submittedAt: now,
+        assistedBy: draft.assistedBy, applicantType, acknowledgedAt: now, submittedAt: now,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.insertStatusHistory(tx, {
@@ -222,7 +228,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await intakeRepo.updateDraft(tx, p.draftId, msg.tenantId, {
-        status: "submitted", applicationId: p.id, updatedBy: msg.actorId,
+        status: "submitted", applicationId: p.id, applicantType, updatedBy: msg.actorId,
       });
       // FN-08: pack bindings for lifecycle event "submitted" (intake path)
       await enqueuePackNotifications(tx, {

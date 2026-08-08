@@ -1,5 +1,6 @@
 import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import type { RequiredDocument, ServiceChannel, ServicePattern, FeeModel } from "./domain.js";
+import type { ApplicantType, ProfileAttributeBinding } from "../applicant-identity/domain.js";
 
 export const catalogueSchema = pgSchema("catalogue");
 
@@ -34,6 +35,10 @@ export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   channels:             jsonb("channels").$type<ServiceChannel[]>().notNull().default([]),
   forms:                jsonb("forms").$type<unknown[]>().notNull().default([]),
   outputs:              jsonb("outputs").$type<unknown[]>().notNull().default([]),
+  /** FN-23 — allowed applicant identity types for intake. */
+  allowedApplicantTypes: jsonb("allowed_applicant_types").$type<ApplicantType[]>().notNull().default(["citizen"]),
+  applicantTypeRejectMessage: text("applicant_type_reject_message"),
+  profileAttributeBindings: jsonb("profile_attribute_bindings").$type<ProfileAttributeBinding[]>().notNull().default([]),
   submittedBy:          uuid("submitted_by"),
   publishedBy:          uuid("published_by"),
   publishedAt:          timestamp("published_at", { withTimezone: true }),
