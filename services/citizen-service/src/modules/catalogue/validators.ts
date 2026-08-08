@@ -29,6 +29,7 @@ const designerFields = {
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
   formId:               z.string().uuid().optional(),
+  workflowDefinitionId: z.string().uuid().optional(),
 };
 
 export const createDefinitionBody = z.object({
@@ -58,7 +59,6 @@ export const updateDefinitionBody = z.object({
   outputs:               z.array(z.unknown()).max(50).optional(),
   issuanceType:          safeText({ max: 48 }).optional(),
   eligibilityRuleSetId:  z.string().uuid().optional(),
-  workflowDefinitionId:  z.string().uuid().optional(),
   ...designerFields,
 }).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
 export type UpdateDefinitionBody = z.infer<typeof updateDefinitionBody>;

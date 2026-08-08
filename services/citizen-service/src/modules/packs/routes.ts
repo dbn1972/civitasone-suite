@@ -9,6 +9,12 @@ import * as commands from "./commands.js";
 const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 const packIdParam = z.object({ id: z.string().uuid() });
+const exportBody = z.object({
+  definitionId: z.string().uuid(),
+});
+const importBody = z.object({
+  acknowledgeStatutory: z.boolean().optional(),
+}).default({});
 
 export async function packsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/packs/domain", async (req, reply) => {
@@ -35,10 +41,23 @@ export async function packsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(pack);
   });
 
+  /** FN-09 — export published catalogue definition → versioned service pack. */
+  app.post("/v1/citizen/packs/services/export", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const body = exportBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.exportServicePack(ctx, body.definitionId));
+  });
+
   app.post("/v1/citizen/packs/services/:id/import", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const { id } = packIdParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.importServicePack(ctx, id));
+    const body = importBody.parse(req.body ?? {});
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.importServicePack(ctx, id, { acknowledgeStatutory: body.acknowledgeStatutory }),
+    );
   });
 }

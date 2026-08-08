@@ -33,6 +33,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       channels: unknown[]; forms?: unknown[]; outputs?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+      formId?: string; workflowDefinitionId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -50,6 +51,8 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         version: next, status: "draft",
         eligibilityRuleSetId: p.eligibilityRuleSetId ?? null,
         feeScheduleId: p.feeScheduleId ?? null,
+        formId: p.formId ?? null,
+        workflowDefinitionId: p.workflowDefinitionId ?? null,
         issuanceType: p.issuanceType ?? null,
         requiredDocuments: p.requiredDocuments as never,
         slaDays: p.slaDays ?? null,
