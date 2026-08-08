@@ -52,8 +52,13 @@ DO $$ BEGIN
     SELECT 1 FROM pg_policies
     WHERE tablename = 'sla_config' AND schemaname = 'helpdesk' AND policyname = 'tenant_isolation'
   ) THEN
+    -- NULLIF(..., true, '') rather than a bare current_setting(): with the bare
+    -- form, any query issued without the tenant GUC set fails with a confusing
+    -- 22P02 "invalid input syntax for uuid" from inside the policy instead of
+    -- simply returning no rows. This form is fail-closed (predicate is NULL, so
+    -- nothing is visible) and is the dominant convention in this repo.
     CREATE POLICY tenant_isolation ON helpdesk.sla_config
-      USING (tenant_id = current_setting('app.tenant_id')::uuid);
+      USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
   END IF;
 END $$;
 

@@ -17,6 +17,8 @@ export const tickets = helpdeskSchema.table("tickets", {
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
   // HD1 — one-shot SLA-breach notification markers (NULL = not yet notified).
+  /** Set when the ticket enters resolved/closed, cleared when it is reopened. */
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   slaAtRiskNotifiedAt: timestamp("sla_at_risk_notified_at", { withTimezone: true }),
   slaBreachedNotifiedAt: timestamp("sla_breached_notified_at", { withTimezone: true }),
   // HD2 — provenance for tickets auto-opened from a foreign producer event.
