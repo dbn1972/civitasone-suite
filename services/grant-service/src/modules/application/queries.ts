@@ -41,8 +41,11 @@ async function mapApplicationRow(row: ApplicationRow) {
     beneficiaryRepo.findBeneficiaryById(row.beneficiaryId, row.tenantId),
     disbursementRepo.sumDisbursedForApplication(db, row.id, row.tenantId),
   ]);
-  const totalMinor = row.amountApprovedMinor || row.amountRequestedMinor;
-  const pendingMinor = totalMinor - disbursedMinor > 0n ? totalMinor - disbursedMinor : 0n;
+  // Coerce: drizzle/SQL can surface numeric amounts as bigint or string; never
+  // mix with number literals (throws TypeError: Cannot mix BigInt and other types).
+  const totalMinor = BigInt(row.amountApprovedMinor || row.amountRequestedMinor || 0);
+  const disbursed = BigInt(disbursedMinor);
+  const pendingMinor = totalMinor > disbursed ? totalMinor - disbursed : 0n;
   return {
     id: row.id,
     grantNo: row.grantNo,
@@ -50,7 +53,7 @@ async function mapApplicationRow(row: ApplicationRow) {
     granteeId: row.beneficiaryId,
     granteeName: beneficiary?.name,
     totalAmount: minorToAmount(totalMinor),
-    disbursedAmount: minorToAmount(disbursedMinor),
+    disbursedAmount: minorToAmount(disbursed),
     pendingAmount: minorToAmount(pendingMinor),
     sanctionDate: toDateOnly(row.approvedAt ?? row.submittedAt ?? row.createdAt),
     purpose: row.purpose,
