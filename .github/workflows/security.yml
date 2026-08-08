@@ -126,6 +126,9 @@ jobs:
           # as a release blocker would be misleading. Ratchet via rules.tsv.
           cmd_options: '-a -I'
           allow_issue_writing: false
+          # Default artifact_name zap_scan is rejected by Actions artifact API.
+          artifact_name: zap-baseline-scan
+          fail_action: false
       - name: Archive ZAP report
         if: always()
         uses: actions/upload-artifact@v4

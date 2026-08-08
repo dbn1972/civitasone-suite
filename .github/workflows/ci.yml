@@ -141,15 +141,12 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
+      # Coverage thresholds are enforced by the dedicated coverage-gate job
+      # (`pnpm turbo coverage`). Passing `--coverage` here forces every package
+      # to load `@vitest/coverage-v8` and apply root thresholds, which fails
+      # packages that either lack the provider dep or are below the global bar.
       - name: Run all service tests
-        run: pnpm turbo test -- --coverage
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: '**/coverage/'
-          retention-days: 7
+        run: pnpm turbo test
 
   # ─────────────────────────────────────────────
   # Job 2b: Integration tests (blocking gate)
