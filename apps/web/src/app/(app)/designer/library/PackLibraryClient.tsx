@@ -74,18 +74,24 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
     [packs, domainPacks, sector, pattern, domainFilter, jurisdiction, source],
   );
 
+  const needsStatutoryAck = (pack: ServicePackDto) => {
+    if (pack.statutoryReferences.some((r) => r.act.trim().length > 0)) return true;
+    const scope = pack.manifest.authorityScope;
+    return typeof scope === "string" && scope.trim().length > 0;
+  };
+
   const beginImport = (pack: ServicePackDto) => {
-    if (pack.statutoryReferences.length > 0) {
+    if (needsStatutoryAck(pack)) {
       setImportPack(pack);
       return;
     }
-    void doImport(pack);
+    void doImport(pack, false);
   };
 
-  const doImport = async (pack: ServicePackDto) => {
+  const doImport = async (pack: ServicePackDto, acknowledgeStatutory: boolean) => {
     setImportBusy(true);
     try {
-      const draftId = await importServicePack(pack.id);
+      const draftId = await importServicePack(pack.id, { acknowledgeStatutory });
       setNotice("Imported as draft — nothing is live until your office publishes it.");
       setImportPack(null);
       router.push(`/designer/${draftId}/b1`);
@@ -274,7 +280,7 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
         }
         busy={importBusy}
         onCancel={() => setImportPack(null)}
-        onConfirm={() => importPack && void doImport(importPack)}
+        onConfirm={() => importPack && void doImport(importPack, true)}
       />
     </>
   );

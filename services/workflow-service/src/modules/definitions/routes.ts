@@ -15,6 +15,8 @@ const nodeSchema = z.object({
   nodeKey: z.string().min(1).max(64),
   name: z.string().min(1).max(200),
   roleRef: z.string().max(128).optional(),
+  /** FN-25 — superior designation notified on SLA breach. */
+  escalateToRef: z.string().max(128).optional(),
   nodeType: z.enum(["task", "split", "parallel", "join", "start", "end", "timer", "xor", "exclusive", "call", "message_catch", "message_throw", "signal_catch", "decision"]).default("task"),
   slaMinutes: z.number().int().positive().optional(),
   // SECURITY C-1b — deemed-approval dwell floor is enforced in validateGraph

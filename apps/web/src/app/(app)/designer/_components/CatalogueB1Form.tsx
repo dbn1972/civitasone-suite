@@ -11,6 +11,8 @@ const CHANNEL_OPTIONS = [
   { id: "mobile", label: "Mobile" },
   { id: "counter", label: "Counter / CSC" },
   { id: "assisted", label: "Assisted" },
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "api", label: "API" },
 ] as const;
 
 export interface CatalogueB1Values {

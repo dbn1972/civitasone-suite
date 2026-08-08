@@ -7,6 +7,10 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as catalogueRepo from "../catalogue/repo.js";
+import {
+  enqueuePackNotifications,
+  formatAmountMajor,
+} from "../catalogue/notification-bindings.js";
 import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
 import type { FeeScheduleRow } from "./schema.js";
 
@@ -127,6 +131,24 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
           currency: sched.currency, gatewayConfigured: configured,
         },
       });
+      // FN-08: payment_due bindings (amount + pay_link merge fields)
+      const serviceId = p.serviceId ?? sched.serviceId;
+      const recipient = p.citizenId ?? p.applicationId;
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId, lifecycleEvent: "payment_due",
+        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
+        variables: {
+          applicationId: p.applicationId,
+          app_no: p.applicationId,
+          amount: formatAmountMajor(fee.amount, sched.currency),
+          amount_paise: String(fee.amount),
+          currency: sched.currency,
+          pay_link: `/citizen/payments/${p.id}/pay`,
+          payment_id: p.id,
+        },
+        eventType: "citizen.payment.due",
+      });
       await audit(tx, msg, "payment_intent_create", "payment", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
@@ -176,6 +198,24 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         hoaCode,
         serviceKey,
         captureMode: "offline",
+      });
+      // FN-08: payment_received bindings
+      const serviceId = p.serviceId ?? sched.serviceId;
+      const recipient = p.citizenId ?? p.applicationId;
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId, lifecycleEvent: "payment_received",
+        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
+        variables: {
+          applicationId: p.applicationId,
+          app_no: p.applicationId,
+          amount: formatAmountMajor(fee.amount, sched.currency),
+          amount_paise: String(fee.amount),
+          currency: sched.currency,
+          receipt_no: receiptNo,
+          payment_id: p.id,
+        },
+        eventType: "citizen.payment.received",
       });
       await audit(tx, msg, "payment_offline_record", "payment", p.id);
     });

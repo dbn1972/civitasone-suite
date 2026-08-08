@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/app/_components/ds";
 import type { PublishedServiceRuntime } from "../_data/runtimeApi";
-import { formatFee, listDraftsForService } from "../_data/runtimeApi";
+import { channelDisabledMessage, formatFee, isChannelAllowed, listDraftsForService } from "../_data/runtimeApi";
 
 interface Props {
   service: PublishedServiceRuntime;
@@ -21,17 +21,26 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 export function ServicePageClient({ service, counterMode = false }: Props) {
   const [draftBanner, setDraftBanner] = useState<string | null>(null);
+  const channel = counterMode ? "counter" : "portal";
+  const channelOk = isChannelAllowed(service.channels, channel);
 
   useEffect(() => {
+    if (!channelOk) return;
     void listDraftsForService(service.id).then((drafts) => {
       if (drafts[0]) setDraftBanner(drafts[0].id);
     });
-  }, [service.id]);
+  }, [service.id, channelOk]);
 
   const applyHref = `/citizen/services/${service.serviceKey}/apply${counterMode ? "?counter=1" : ""}`;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {!channelOk ? (
+        <p role="alert" style={{ margin: 0, fontSize: 14, color: "var(--bad-fg, #b42318)" }}>
+          {channelDisabledMessage(channel, service.channels)}
+        </p>
+      ) : null}
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         <StatusPill status="published" label="Open for applications" />
         {service.channels.map((ch) => (
@@ -134,7 +143,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         </p>
       )}
 
-      {draftBanner ? (
+      {channelOk && draftBanner ? (
         <div
           className="pad"
           role="status"
@@ -152,13 +161,20 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         </div>
       ) : null}
 
-      <Link
-        href={applyHref}
-        className="btn primary"
-        style={{ minHeight: 44, textAlign: "center", fontSize: 16 }}
-      >
-        {draftBanner ? "Resume application" : "Apply now"}
-      </Link>
+      {/* FN-24 channel gate (#543) wrapping main's richer CTA styling + resume label. */}
+      {channelOk ? (
+        <Link
+          href={applyHref}
+          className="btn primary"
+          style={{ minHeight: 44, textAlign: "center", fontSize: 16 }}
+        >
+          {draftBanner ? "Resume application" : "Apply now"}
+        </Link>
+      ) : (
+        <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled aria-disabled="true">
+          Apply now
+        </button>
+      )}
     </div>
   );
 }

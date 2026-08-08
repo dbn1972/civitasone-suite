@@ -7,6 +7,22 @@ export interface WorkflowLane {
   designationId: string;
   designationLabel: string;
   slaDays: number;
+  /** FN-25 — superior designation notified on SLA breach. */
+  escalationDesignationId: string;
+  escalationDesignationLabel: string;
+}
+
+/** Pack-level lane binding persisted on the catalogue (FN-25). */
+export interface LaneBindingDto {
+  key: string;
+  name: string;
+  optional?: boolean;
+  enabled?: boolean;
+  designationId?: string;
+  designationLabel?: string;
+  slaDays: number;
+  escalationDesignationId?: string;
+  escalationDesignationLabel?: string;
 }
 
 export interface WorkflowDesignState {
@@ -22,7 +38,10 @@ export interface TenantPosition {
   label: string;
 }
 
-export const DEFAULT_LANE_TEMPLATE: Omit<WorkflowLane, "id" | "designationId" | "designationLabel">[] = [
+export const DEFAULT_LANE_TEMPLATE: Omit<
+  WorkflowLane,
+  "id" | "designationId" | "designationLabel" | "escalationDesignationId" | "escalationDesignationLabel"
+>[] = [
   { key: "submitted", name: "Submitted", optional: false, enabled: true, slaDays: 1 },
   { key: "inspection", name: "Inspection", optional: true, enabled: true, slaDays: 7 },
   { key: "decision", name: "Decision", optional: false, enabled: true, slaDays: 5 },
@@ -36,7 +55,30 @@ export function defaultLanes(): WorkflowLane[] {
     id: crypto.randomUUID(),
     designationId: "",
     designationLabel: "",
+    escalationDesignationId: "",
+    escalationDesignationLabel: "",
   }));
+}
+
+/** Convert guided lanes into catalogue laneBindings for runtime/sandbox. */
+export function lanesToBindings(lanes: WorkflowLane[]): LaneBindingDto[] {
+  return lanes.map((l) => ({
+    key: l.key,
+    name: l.name,
+    optional: l.optional,
+    enabled: l.enabled,
+    designationId: l.designationId || undefined,
+    designationLabel: l.designationLabel || undefined,
+    slaDays: l.slaDays,
+    escalationDesignationId: l.escalationDesignationId || undefined,
+    escalationDesignationLabel: l.escalationDesignationLabel || undefined,
+  }));
+}
+
+/** Designer SLA days → workflow engine minutes (24h calendar days). */
+export function slaDaysToMinutes(slaDays: number): number | null {
+  if (!Number.isFinite(slaDays) || slaDays <= 0) return null;
+  return Math.round(slaDays * 24 * 60);
 }
 
 export function emptyWorkflowDesign(serviceName: string): WorkflowDesignState {

@@ -7,6 +7,9 @@ import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { ErrorState } from "@/app/_components/ds";
 import {
   type PublishedServiceRuntime,
+  channelDisabledMessage,
+  formatFee,
+  isChannelAllowed,
   type RuntimeJourneyStep,
   buildDemandLines,
   confirmPayment,
@@ -93,6 +96,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
   const [error, setError] = useState<string | null>(null);
 
   const channel = counterMode ? "counter" : "portal";
+  const channelOk = isChannelAllowed(service.channels, channel);
   const demandLines = useMemo(() => buildDemandLines(service), [service]);
 
   useEffect(() => {
@@ -234,6 +238,18 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
       setCopied(false);
     }
   };
+  if (!channelOk) {
+    return (
+      <ErrorState
+        error={{
+          what: "Channel not available",
+          next: channelDisabledMessage(channel, service.channels),
+          actions: ["back"],
+        }}
+        backHref={`/citizen/services/${service.serviceKey}`}
+      />
+    );
+  }
 
   if (!design) {
     return (

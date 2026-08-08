@@ -11,6 +11,7 @@ import { tasks } from "./schema.js";
 import { instances } from "../instances/schema.js";
 import * as repo from "./repo.js";
 import * as historyRepo from "../history/repo.js";
+import { resolveEscalationRecipient } from "../sla/lane-compile.js";
 
 const log = pino({ name: "workflow-sla-sweeper" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -84,13 +85,17 @@ async function sweepOverdueTasksForTenant(
 
   let escalated = 0;
   for (const t of due) {
-    // resolve a real recipient: the instance owner (a user UUID), else the
-    // task's role ref (role-resolved owner), else the instance id as last resort.
-    let ownerId: string | null = null;
+    // FN-25 — prefer the superior designation stamped on the task at spawn;
+    // else fall back to instance owner → role pool → instance id.
     const inst = await scopedRead((tx) => tx.select({ createdBy: instances.createdBy }).from(instances)
       .where(eq(instances.id, t.instanceId)).limit(1));
-    ownerId = inst[0]?.createdBy ?? null;
-    const recipient = ownerId ?? t.roleRef ?? t.instanceId;
+    const ownerId = inst[0]?.createdBy ?? null;
+    const recipient = resolveEscalationRecipient({
+      escalateToRef: t.escalateToRef,
+      roleRef: t.roleRef,
+      instanceOwnerId: ownerId,
+      instanceId: t.instanceId,
+    });
 
     await db.transaction(async (tx) => {
       // re-check the cooldown under the row to avoid double escalation across
@@ -128,7 +133,11 @@ async function sweepOverdueTasksForTenant(
       await enqueue(t2, {
         topic: ESCALATION_TOPIC, eventType: ESCALATION_TOPIC,
         tenantId: t.tenantId, actorId: SYSTEM_ACTOR_ID, correlationId,
-        payload: { taskId: t.id, instanceId: t.instanceId, name: t.name, roleRef: t.roleRef, recipient, escalationCount: count, dueAt: t.dueAt?.toISOString() ?? null },
+        payload: {
+          taskId: t.id, instanceId: t.instanceId, name: t.name, roleRef: t.roleRef,
+          escalateToRef: t.escalateToRef ?? null,
+          recipient, escalationCount: count, dueAt: t.dueAt?.toISOString() ?? null,
+        },
       });
       await enqueue(t2, {
         topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
@@ -140,6 +149,7 @@ async function sweepOverdueTasksForTenant(
             taskId: t.id,
             instanceId: t.instanceId,
             escalationCount: String(count),
+            escalateToRef: t.escalateToRef ?? "",
             summary: `SLA breached — task overdue: ${t.name}`,
             link: `/workflow/tasks/${t.id}`,
           },

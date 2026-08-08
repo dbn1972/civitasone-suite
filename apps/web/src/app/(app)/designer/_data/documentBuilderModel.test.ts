@@ -31,6 +31,9 @@ function lane(partial: Partial<WorkflowLane> & { key: string; name: string }): W
     designationId: "",
     designationLabel: "",
     slaDays: 5,
+    // FN-25 — required on WorkflowLane; default alongside the other required strings.
+    escalationDesignationId: "",
+    escalationDesignationLabel: "",
     ...partial,
   };
 }

@@ -6,6 +6,12 @@ export interface StatutoryReference {
   url?: string;
 }
 
+export interface ProfileAttributeBindingDto {
+  attributeKey: string;
+  applicantType: string;
+  required: boolean;
+}
+
 export interface ServiceDefinitionDto {
   id: string;
   serviceKey: string;
@@ -18,6 +24,8 @@ export interface ServiceDefinitionDto {
   slaDays?: number | null;
   channels: string[];
   statutoryReferences?: StatutoryReference[];
+  /** FN-21 — engineered backend bindings (fee/assessment/verification/…). */
+  engineBindings?: unknown[];
   status: string;
   version: number;
   submittedBy?: string | null;
@@ -30,8 +38,14 @@ export interface ServiceDefinitionDto {
   feeModel?: string | null;
   hoaCode?: string | null;
   requiredDocuments?: unknown[];
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings?: unknown[];
   issuanceType?: string | null;
   outputs?: unknown[];
+  /** FN-23 */
+  allowedApplicantTypes?: string[];
+  applicantTypeRejectMessage?: string | null;
+  profileAttributeBindings?: ProfileAttributeBindingDto[];
 }
 
 export interface CreateDefinitionPayload {
@@ -50,6 +64,7 @@ export interface UpdateDefinitionPayload {
   slaDays?: number;
   channels?: string[];
   statutoryReferences?: StatutoryReference[];
+  engineBindings?: unknown[];
   forms?: unknown[];
   formId?: string;
   eligibilityRuleSetId?: string;
@@ -58,8 +73,12 @@ export interface UpdateDefinitionPayload {
   feeModel?: string;
   hoaCode?: string;
   requiredDocuments?: unknown[];
+  laneBindings?: unknown[];
   issuanceType?: string;
   outputs?: unknown[];
+  allowedApplicantTypes?: string[];
+  applicantTypeRejectMessage?: string;
+  profileAttributeBindings?: ProfileAttributeBindingDto[];
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {

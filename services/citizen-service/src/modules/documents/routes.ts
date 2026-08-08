@@ -33,8 +33,17 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/documents/checklist", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
-    const { serviceId, applicationId } = checklistQuery.parse(req.query);
-    return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId));
+    const { serviceId, applicationId, laneKey } = checklistQuery.parse(req.query);
+    return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId, laneKey));
+  });
+
+  /** FN-26 — officer lane checklist alias (same handler, clearer intent). */
+  app.get("/v1/citizen/documents/verification-lane", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { serviceId, applicationId, laneKey } = checklistQuery.parse(req.query);
+    if (!laneKey) throw new HttpError(400, "VALIDATION_FAILED", "laneKey is required");
+    return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId, laneKey));
   });
 
   app.get("/v1/citizen/documents/pending", async (req, reply) => {

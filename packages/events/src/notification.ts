@@ -55,9 +55,12 @@ export function buildNotificationPayload(opts: {
   recipient: string;
   recipientId?: string;
   channel?: NotificationSendPayload["channel"];
+  /** When set (e.g. pack FN-08 binding), overrides the system EVENT_TEMPLATE_MAP. */
+  templateId?: string;
   variables?: Record<string, string>;
 }): NotificationSendPayload {
-  const templateId = EVENT_TEMPLATE_MAP[opts.eventType] ?? SYSTEM_TEMPLATE_IDS.default;
+  const templateId =
+    opts.templateId ?? EVENT_TEMPLATE_MAP[opts.eventType] ?? SYSTEM_TEMPLATE_IDS.default;
   const payload: NotificationSendPayload = {
     templateId,
     recipient: opts.recipient,

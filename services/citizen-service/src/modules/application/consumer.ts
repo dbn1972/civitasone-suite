@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
+import { enqueuePackNotifications } from "../catalogue/notification-bindings.js";
 import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
 
 export function registerApplicationConsumers(rawQueue: Queue): void {
@@ -46,6 +47,14 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         note: initialStatus === "pending_docs" ? "Missing required documents" : "Application submitted",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // FN-08: pack bindings for lifecycle event "submitted"
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId: p.serviceId, lifecycleEvent: "submitted",
+        recipient: p.citizenId, recipientId: p.citizenId,
+        variables: { applicationId: p.id, app_no: p.refNo },
+        eventType: "citizen.application.submitted",
+      });
       await audit(tx, msg, "submit", "citizen_application", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
@@ -70,16 +79,40 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { applicationId: p.id, citizenId: app.citizenId },
         });
-        await enqueue(tx, {
-          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+      }
+      // FN-08: pack bindings for approved / rejected / issued; fall back to system
+      // template for approved when the published pack has no bindings for that event.
+      const packEvent =
+        p.status === "approved" || p.status === "rejected" || p.status === "issued"
+          ? (p.status as "approved" | "rejected" | "issued")
+          : null;
+      if (packEvent) {
+        const sent = await enqueuePackNotifications(tx, {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: buildNotificationPayload({
-            eventType: EVENTS.applicationApproved,
-            recipient: app.citizenId ?? p.id,
-            recipientId: app.citizenId ?? undefined,
-            variables: { applicationId: p.id },
-          }),
+          serviceId: app.serviceId, lifecycleEvent: packEvent,
+          recipient: app.citizenId ?? p.id,
+          recipientId: app.citizenId ?? undefined,
+          variables: {
+            applicationId: p.id,
+            app_no: app.refNo ?? app.trackingNo ?? p.id,
+          },
+          eventType:
+            packEvent === "approved"
+              ? EVENTS.applicationApproved
+              : `citizen.application.${packEvent}`,
         });
+        if (packEvent === "approved" && sent === 0) {
+          await enqueue(tx, {
+            topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: buildNotificationPayload({
+              eventType: EVENTS.applicationApproved,
+              recipient: app.citizenId ?? p.id,
+              recipientId: app.citizenId ?? undefined,
+              variables: { applicationId: p.id },
+            }),
+          });
+        }
       }
       await audit(tx, msg, "status_update", "citizen_application", p.id);
     });
@@ -135,6 +168,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; serviceId: string;
       serviceKey?: string | null; channel: string; assistedBy: string | null;
+      applicantType?: string | null;
       formData: Record<string, unknown>; documentTypes: string[];
     };
     await db.transaction(async (tx) => {
@@ -142,6 +176,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       await intakeRepo.insertDraft(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId, serviceId: p.serviceId,
         serviceKey: p.serviceKey ?? null, channel: p.channel, assistedBy: p.assistedBy,
+        applicantType: p.applicantType ?? "citizen",
         formData: p.formData, documentTypes: p.documentTypes, status: "draft",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -153,6 +188,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string;
       formData?: Record<string, unknown>; documentTypes?: string[];
+      applicantType?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -161,6 +197,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       await intakeRepo.updateDraft(tx, p.id, msg.tenantId, {
         ...(p.formData ? { formData: p.formData } : {}),
         ...(p.documentTypes ? { documentTypes: p.documentTypes } : {}),
+        ...(p.applicantType ? { applicantType: p.applicantType } : {}),
         updatedBy: msg.actorId,
       });
       await audit(tx, msg, "draft_update", "application_intake", p.id);
@@ -171,16 +208,18 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; draftId: string; tenantId: string; trackingNo: string; channel: string;
       documentTypes?: string[];
+      applicantType?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const draft = await intakeRepo.findDraftByIdTx(tx, p.draftId, msg.tenantId);
       if (!draft || draft.status !== "draft") return;
       const now = new Date();
+      const applicantType = p.applicantType ?? draft.applicantType ?? "citizen";
       await repo.insertApplication(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: draft.citizenId, serviceId: draft.serviceId,
         refNo: p.trackingNo, status: "submitted", trackingNo: p.trackingNo, channel: draft.channel,
-        assistedBy: draft.assistedBy, acknowledgedAt: now, submittedAt: now,
+        assistedBy: draft.assistedBy, applicantType, acknowledgedAt: now, submittedAt: now,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.insertStatusHistory(tx, {
@@ -189,7 +228,15 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await intakeRepo.updateDraft(tx, p.draftId, msg.tenantId, {
-        status: "submitted", applicationId: p.id, updatedBy: msg.actorId,
+        status: "submitted", applicationId: p.id, applicantType, updatedBy: msg.actorId,
+      });
+      // FN-08: pack bindings for lifecycle event "submitted" (intake path)
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId: draft.serviceId, lifecycleEvent: "submitted",
+        recipient: draft.citizenId, recipientId: draft.citizenId,
+        variables: { applicationId: p.id, app_no: p.trackingNo },
+        eventType: "citizen.application.submitted",
       });
       await audit(tx, msg, "draft_submit", "application_intake", p.id);
     });

@@ -1,19 +1,51 @@
 /**
- * SVC-082 — pure intake domain helpers (no I/O, unit-tested).
+ * SVC-082 / FN-24 — pure intake domain helpers (no I/O, unit-tested).
  *
  * Channel attribution + acknowledgement tracking-number generation for online
- * and assisted-service intake.
+ * and assisted-service intake. FN-24 enforces the published catalogue channel
+ * allow-list at draft save and submit. FN-23 applicant-type gating is delegated
+ * to applicant-identity/domain.
  */
 import { randomBytes } from "node:crypto";
+import {
+  assertApplicantTypeAllowed,
+  coerceAllowedApplicantTypes,
+  normalizeApplicantType,
+  type ApplicantType,
+  ApplicantTypeRejectedError,
+} from "../applicant-identity/domain.js";
 
-export const INTAKE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
+/** Intake + catalogue channel vocabulary (FN-24 / B1 designer). */
+export const INTAKE_CHANNELS = ["portal", "counter", "mobile", "assisted", "whatsapp", "api"] as const;
 export type IntakeChannel = typeof INTAKE_CHANNELS[number];
+
+export { ApplicantTypeRejectedError };
 
 /** Channels that represent operator-on-behalf-of (assisted) entry. */
 const ASSISTED_CHANNELS: IntakeChannel[] = ["counter", "assisted"];
 
 export function isAssistedChannel(channel: IntakeChannel): boolean {
   return ASSISTED_CHANNELS.includes(channel);
+}
+
+/** True when the intake channel is in the service's published allow-list. */
+export function isChannelAllowed(channel: string, allowedChannels: readonly string[]): boolean {
+  return allowedChannels.includes(channel);
+}
+
+/**
+ * FN-24 — reject intake when the chosen channel is not enabled on the published
+ * service definition. Throws `CHANNEL_NOT_ALLOWED`.
+ */
+export function assertChannelAllowed(channel: string, allowedChannels: readonly string[]): void {
+  if (isChannelAllowed(channel, allowedChannels)) return;
+  throw new Error("CHANNEL_NOT_ALLOWED");
+}
+
+/** Clear, applicant-facing explanation for a CHANNEL_NOT_ALLOWED rejection. */
+export function channelNotAllowedMessage(channel: string, allowedChannels: readonly string[]): string {
+  const allowed = allowedChannels.length > 0 ? allowedChannels.join(", ") : "none";
+  return `This service does not accept applications via the ${channel} channel. Allowed channels: ${allowed}.`;
 }
 
 /**
@@ -36,4 +68,22 @@ export function resolveAssistedBy(channel: IntakeChannel, operatorId: string | u
     return operatorId;
   }
   return null;
+}
+
+/**
+ * Resolve + gate applicant type against the service definition (FN-23).
+ * Defaults to `citizen` when the client omits a type (legacy clients).
+ */
+export function resolveAndGateApplicantType(input: {
+  rawApplicantType?: string | null | undefined;
+  allowedApplicantTypes?: unknown;
+  rejectMessage?: string | null | undefined;
+}): ApplicantType {
+  const applicantType = normalizeApplicantType(input.rawApplicantType ?? "citizen") ?? "citizen";
+  assertApplicantTypeAllowed({
+    allowedApplicantTypes: coerceAllowedApplicantTypes(input.allowedApplicantTypes),
+    applicantType,
+    rejectMessage: input.rejectMessage,
+  });
+  return applicantType;
 }

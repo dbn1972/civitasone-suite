@@ -107,7 +107,8 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
         name: "Trade Licence (Revised)",
         servicePattern: "certificate",
         slaDays: 21,
-        channels: ["portal", "mobile"],
+        // Include assisted/counter so SVC-082 assisted intake fixtures remain valid under FN-24.
+        channels: ["portal", "mobile", "counter", "assisted"],
         statutoryReferences: [{ act: "Municipal Act", section: "12" }],
       },
     });
@@ -118,7 +119,7 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
     });
     expect(def.name).toBe("Trade Licence (Revised)");
     expect(def.servicePattern).toBe("certificate");
-    expect(def.channels).toEqual(["portal", "mobile"]);
+    expect(def.channels).toEqual(["portal", "mobile", "counter", "assisted"]);
   });
 
   it("submit records the maker", async () => {

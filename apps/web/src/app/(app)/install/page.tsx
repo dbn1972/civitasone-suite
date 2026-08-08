@@ -4,6 +4,8 @@ import { getInstallSteps } from "../../_data/loaders";
 import { StatGrid, StatCard, ProgressBar, StatusPill, EmptyState, Card } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { InstallStepActions } from "./InstallStepActions";
+import { DomainPackActivatePanel } from "./DomainPackActivatePanel";
+import { isDomainPackStageStep } from "./domainPackCatalog";
 
 const STATUS_ICON: Record<string, string> = {
   pending: "○",
@@ -46,11 +48,14 @@ export default async function Page() {
       {source === "error" ? <DataSourceBadge source={source} /> : null}
 
       {total === 0 ? (
-        <EmptyState
-          icon="🧩"
-          title="No installation steps found"
-          message="There are no setup steps to display for this tenant yet."
-        />
+        <div className="space-y-6">
+          <EmptyState
+            icon="🧩"
+            title="No installation steps found"
+            message="There are no setup steps to display for this tenant yet. You can still run Stage 3 Domain Pack activation below."
+          />
+          <DomainPackActivatePanel variant="embedded" />
+        </div>
       ) : (
         <div className="space-y-6">
           <StatGrid>
@@ -141,16 +146,30 @@ export default async function Page() {
                           isRequired={step.isRequired}
                         />
                       ) : null}
+                      {isDomainPackStageStep(step) && step.status !== "completed" ? (
+                        <div className="mt-4">
+                          <DomainPackActivatePanel variant="embedded" />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </li>
               );
             })}
           </ol>
+
+          {/* FN-17 Stage 3 — always discoverable even when step list predates Domain Pack keys */}
+          {!steps.some((s) => isDomainPackStageStep(s)) ? (
+            <div className="mt-6">
+              <DomainPackActivatePanel variant="embedded" />
+            </div>
+          ) : null}
         </div>
       )}
     <p className="back" style={{ marginTop: 16 }}>
         <a href="/install/console">Open install console →</a>
+        {" · "}
+        <a href="/install/domain-packs">Domain Packs (Stage 3) →</a>
       </p>
     </PageShell>
   );

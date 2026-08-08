@@ -33,6 +33,11 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       channels: unknown[]; forms?: unknown[]; outputs?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+      formId?: string; workflowDefinitionId?: string;
+      allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string;
+      profileAttributeBindings?: unknown[];
+      engineBindings?: unknown[];
+      laneBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -47,15 +52,22 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         hoaCode: p.hoaCode ?? null,
         feeModel: (p.feeModel as never) ?? null,
         statutoryReferences: (p.statutoryReferences ?? []) as never,
+        engineBindings: (p.engineBindings ?? []) as never,
         version: next, status: "draft",
         eligibilityRuleSetId: p.eligibilityRuleSetId ?? null,
         feeScheduleId: p.feeScheduleId ?? null,
+        formId: p.formId ?? null,
+        workflowDefinitionId: p.workflowDefinitionId ?? null,
         issuanceType: p.issuanceType ?? null,
         requiredDocuments: p.requiredDocuments as never,
+        laneBindings: (p.laneBindings ?? []) as never,
         slaDays: p.slaDays ?? null,
         channels: p.channels as never,
         forms: (p.forms ?? []) as never,
         outputs: (p.outputs ?? []) as never,
+        allowedApplicantTypes: (p.allowedApplicantTypes ?? ["citizen"]) as never,
+        applicantTypeRejectMessage: p.applicantTypeRejectMessage ?? null,
+        profileAttributeBindings: (p.profileAttributeBindings ?? []) as never,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "definition_create", p.id);
@@ -70,8 +82,12 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       slaDays?: number; channels?: unknown[]; requiredDocuments?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+      engineBindings?: unknown[];
       forms?: unknown[]; formId?: string; outputs?: unknown[]; issuanceType?: string;
       eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
+      allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string | null;
+      profileAttributeBindings?: unknown[];
+      laneBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -84,12 +100,14 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.slaDays !== undefined) patch.slaDays = p.slaDays;
       if (p.channels !== undefined) patch.channels = p.channels;
       if (p.requiredDocuments !== undefined) patch.requiredDocuments = p.requiredDocuments;
+      if (p.laneBindings !== undefined) patch.laneBindings = p.laneBindings;
       if (p.servicePattern !== undefined) patch.servicePattern = p.servicePattern;
       if (p.ownerOfficeId !== undefined) patch.ownerOfficeId = p.ownerOfficeId;
       if (p.offeringOfficeIds !== undefined) patch.offeringOfficeIds = p.offeringOfficeIds;
       if (p.hoaCode !== undefined) patch.hoaCode = p.hoaCode;
       if (p.feeModel !== undefined) patch.feeModel = p.feeModel;
       if (p.statutoryReferences !== undefined) patch.statutoryReferences = p.statutoryReferences;
+      if (p.engineBindings !== undefined) patch.engineBindings = p.engineBindings;
       if (p.forms !== undefined) patch.forms = p.forms;
       if (p.formId !== undefined) patch.formId = p.formId;
       if (p.outputs !== undefined) patch.outputs = p.outputs;
@@ -97,6 +115,9 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.eligibilityRuleSetId !== undefined) patch.eligibilityRuleSetId = p.eligibilityRuleSetId;
       if (p.workflowDefinitionId !== undefined) patch.workflowDefinitionId = p.workflowDefinitionId;
       if (p.feeScheduleId !== undefined) patch.feeScheduleId = p.feeScheduleId;
+      if (p.allowedApplicantTypes !== undefined) patch.allowedApplicantTypes = p.allowedApplicantTypes;
+      if (p.applicantTypeRejectMessage !== undefined) patch.applicantTypeRejectMessage = p.applicantTypeRejectMessage;
+      if (p.profileAttributeBindings !== undefined) patch.profileAttributeBindings = p.profileAttributeBindings;
       await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
       await audit(tx, msg, "definition_update", p.id);
     });

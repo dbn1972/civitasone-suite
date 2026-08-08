@@ -5,11 +5,47 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, resolveCitizenId, isOfficer } from "../../shared/context.js";
 import { idParam, trackingParam, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
-import { buildTrackingNumber, resolveAssistedBy, isAssistedChannel, type IntakeChannel } from "./intake-domain.js";
+import {
+  buildTrackingNumber, resolveAssistedBy, isAssistedChannel, resolveAndGateApplicantType,
+  ApplicantTypeRejectedError, type IntakeChannel,
+} from "./intake-domain.js";
 import * as intake from "./intake.js";
 import * as commands from "./commands.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
+
+function gateApplicantType(
+  def: Awaited<ReturnType<typeof intake.resolveDefinitionForIntake>>,
+  rawApplicantType: string | undefined,
+): string {
+  try {
+    return resolveAndGateApplicantType({
+      rawApplicantType,
+      allowedApplicantTypes: def?.allowedApplicantTypes,
+      rejectMessage: def?.applicantTypeRejectMessage,
+    });
+  } catch (e) {
+    if (e instanceof ApplicantTypeRejectedError) {
+      throw new HttpError(422, e.code, e.rejectMessage);
+    }
+    throw e;
+  }
+}
+
+async function requireAllowedChannel(
+  tenantId: string,
+  channel: string,
+  opts: { serviceId: string; serviceKey?: string | undefined },
+): Promise<void> {
+  try {
+    await intake.enforceChannelAtIntake(tenantId, channel, opts);
+  } catch (e) {
+    if (e instanceof Error && e.name === "CHANNEL_NOT_ALLOWED") {
+      throw new HttpError(422, "CHANNEL_NOT_ALLOWED", e.message);
+    }
+    throw e;
+  }
+}
 
 export async function intakeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/citizen/intake/drafts", async (req, reply) => {
@@ -18,6 +54,10 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const body = saveDraftBody.parse(req.body);
     const citizenId = resolveCitizenId(ctx, body.citizenId);
     const channel = body.channel as IntakeChannel;
+    await requireAllowedChannel(ctx.tenantId, channel, {
+      serviceId: body.serviceId,
+      serviceKey: body.serviceKey,
+    });
     const operatorId = isAssistedChannel(channel) ? (body.operatorId ?? ctx.actorId) : undefined;
     let assistedBy: string | null;
     try {
@@ -28,12 +68,15 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     if (assistedBy && !isOfficer(ctx)) {
       throw new HttpError(403, "FORBIDDEN", "assisted intake requires an officer-tier operator");
     }
+    const def = await intake.resolveDefinitionForIntake(ctx.tenantId, body.serviceId, body.serviceKey);
+    const applicantType = gateApplicantType(def, body.applicantType);
     return sendAccepted(reply, acceptedResponseSchema, await commands.saveDraft(ctx, {
       citizenId,
       serviceId: body.serviceId,
       serviceKey: body.serviceKey,
       channel,
       assistedBy,
+      applicantType,
       formData: body.formData,
       documentTypes: body.documentTypes,
     }));
@@ -64,7 +107,16 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const draft = await intake.getDraft(ctx, id);
     if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
     if (draft.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft can be updated");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDraft(ctx, id, body));
+    let applicantType: string | undefined;
+    if (body.applicantType !== undefined) {
+      const def = await intake.resolveDefinitionForIntake(ctx.tenantId, draft.serviceId, draft.serviceKey);
+      applicantType = gateApplicantType(def, body.applicantType);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateDraft(ctx, id, {
+      formData: body.formData,
+      documentTypes: body.documentTypes,
+      ...(applicantType !== undefined ? { applicantType } : {}),
+    }));
   });
 
   app.post("/v1/citizen/intake/drafts/:id/submit", async (req, reply) => {
@@ -75,6 +127,13 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const draft = await intake.getDraft(ctx, id);
     if (!draft) throw new HttpError(404, "NOT_FOUND", "draft not found");
     if (draft.status !== "draft") throw new HttpError(409, "ALREADY_SUBMITTED", "draft has already been submitted");
+    // FN-24 — re-check at submit so a channel disabled after draft save cannot be smuggled through.
+    await requireAllowedChannel(ctx.tenantId, draft.channel, {
+      serviceId: draft.serviceId,
+      serviceKey: draft.serviceKey ?? undefined,
+    });
+    const def = await intake.resolveDefinitionForIntake(ctx.tenantId, draft.serviceId, draft.serviceKey);
+    const applicantType = gateApplicantType(def, body.applicantType ?? draft.applicantType ?? undefined);
     const applicationId = randomUUID();
     const trackingNo = buildTrackingNumber();
     const accepted = await commands.submitDraft(ctx, id, {
@@ -82,6 +141,7 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       trackingNo,
       applicationId,
       channel: draft.channel,
+      applicantType,
     });
     return reply.code(202).send(accepted);
   });

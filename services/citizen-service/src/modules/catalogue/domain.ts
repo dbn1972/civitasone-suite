@@ -8,7 +8,13 @@
  * a NEW row at version+1 in 'draft'.
  */
 
-export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
+import {
+  assertAllowedApplicantTypesConfig,
+  assertProfileAttributeBindings,
+} from "../applicant-identity/domain.js";
+
+/** FN-24 — portal, mobile, CSC/counter, assisted, WhatsApp handoff, API. */
+export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted", "whatsapp", "api"] as const;
 export type ServiceChannel = typeof SERVICE_CHANNELS[number];
 
 /** Universal Service Designer — four workflow shapes (FN-01). */
@@ -22,7 +28,22 @@ export interface RequiredDocument {
   docType: string;
   label?: string | undefined;
   mandatory: boolean;
+  /** FN-26 — workflow lane key that verifies this document (e.g. "inspection"). */
+  verifiedAtLane?: string | undefined;
 }
+
+export type { LaneBinding } from "./lane-bindings.js";
+export {
+  slaDaysToMinutes,
+  computeLaneDueAt,
+  resolveEscalationRecipient,
+  isSlaTrackedLane,
+  simulateLaneSlaBreach,
+  normalizeLaneKey,
+  docsForVerificationLane,
+  unboundMandatoryDocs,
+  assertLaneBindings,
+} from "./lane-bindings.js";
 
 export const CATALOGUE_STATUSES = ["draft", "published", "archived"] as const;
 export type CatalogueStatus = typeof CATALOGUE_STATUSES[number];
@@ -40,6 +61,8 @@ export function assertDefinitionPublishable(def: {
   channels: ServiceChannel[];
   requiredDocuments: RequiredDocument[];
   servicePattern?: ServicePattern | null;
+  allowedApplicantTypes?: unknown;
+  profileAttributeBindings?: unknown;
   feeModel?: FeeModel | null;
   hoaCode?: string | null;
 }): void {
@@ -54,6 +77,10 @@ export function assertDefinitionPublishable(def: {
     if (seen.has(d.docType)) throw new Error(`DEF_DUPLICATE_DOCUMENT: ${d.docType}`);
     seen.add(d.docType);
   }
+  // FN-23 — applicant identity gates must be well-formed before publish freeze.
+  const allowed = def.allowedApplicantTypes ?? ["citizen"];
+  assertAllowedApplicantTypesConfig(allowed, def.servicePattern ?? null);
+  assertProfileAttributeBindings(def.profileAttributeBindings ?? [], allowed);
   // Fee-bearing: explicit fee model, or a non-grievance pattern (Certificate /
   // Booking / Collection default to fees per FN-14 / FN-19).
   const feeBearing =
@@ -64,7 +91,6 @@ export function assertDefinitionPublishable(def: {
     if (hoa.length === 0) throw new Error("DEF_MISSING_HOA");
   }
 }
-
 /** The mandatory docType checklist a citizen must provide for this definition. */
 export function mandatoryDocTypes(requiredDocuments: RequiredDocument[]): string[] {
   return requiredDocuments.filter((d) => d.mandatory).map((d) => d.docType);

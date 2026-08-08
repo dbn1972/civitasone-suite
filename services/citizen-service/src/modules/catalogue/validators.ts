@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { safeText } from "../../shared/sanitize.js";
+import { engineBindingsArraySchema } from "../engine-bindings/validators.js";
 import { FEE_MODELS, SERVICE_CHANNELS, SERVICE_PATTERNS } from "./domain.js";
+import { APPLICANT_TYPES } from "../applicant-identity/domain.js";
 
 export const idParam = z.object({ id: z.string().uuid() });
 
@@ -20,6 +22,24 @@ const statutoryRefSchema = z.object({
   url:     safeText({ max: 512 }).optional(),
 });
 
+const profileBindingSchema = z.object({
+  attributeKey:  safeText({ max: 64 }),
+  applicantType: z.enum(APPLICANT_TYPES),
+  required:      z.boolean().default(true),
+});
+
+const laneBindingSchema = z.object({
+  key:                          safeText({ max: 64 }),
+  name:                         safeText({ max: 120 }),
+  optional:                     z.boolean().optional(),
+  enabled:                      z.boolean().optional(),
+  designationId:                safeText({ max: 128 }).optional(),
+  designationLabel:             safeText({ max: 160 }).optional(),
+  slaDays:                      z.number().int().min(0).max(3650),
+  escalationDesignationId:      safeText({ max: 128 }).optional(),
+  escalationDesignationLabel:   safeText({ max: 160 }).optional(),
+});
+
 const designerFields = {
   servicePattern:       z.enum(SERVICE_PATTERNS).optional(),
   ownerOfficeId:        z.string().uuid().optional(),
@@ -28,7 +48,15 @@ const designerFields = {
   feeModel:             z.enum(FEE_MODELS).optional(),
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
+  engineBindings:       engineBindingsArraySchema.optional(),
   formId:               z.string().uuid().optional(),
+  workflowDefinitionId: z.string().uuid().optional(),
+  /** FN-23 — applicant identity configuration (B1 Catalogue & Identity). */
+  allowedApplicantTypes: z.array(z.enum(APPLICANT_TYPES)).min(1).max(4).optional(),
+  applicantTypeRejectMessage: safeText({ max: 500, multiline: true }).optional(),
+  profileAttributeBindings: z.array(profileBindingSchema).max(50).optional(),
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings:         z.array(laneBindingSchema).max(20).optional(),
 };
 
 export const createDefinitionBody = z.object({
@@ -58,7 +86,6 @@ export const updateDefinitionBody = z.object({
   outputs:               z.array(z.unknown()).max(50).optional(),
   issuanceType:          safeText({ max: 48 }).optional(),
   eligibilityRuleSetId:  z.string().uuid().optional(),
-  workflowDefinitionId:  z.string().uuid().optional(),
   ...designerFields,
 }).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
 export type UpdateDefinitionBody = z.infer<typeof updateDefinitionBody>;

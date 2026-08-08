@@ -4,7 +4,7 @@
  */
 
 import type { WorkflowLane } from "./workflowConstants";
-import { defaultLanes } from "./workflowConstants";
+import { defaultLanes, slaDaysToMinutes } from "./workflowConstants";
 
 export interface DesignerNode {
   id: string;
@@ -63,6 +63,12 @@ export function lanesToBpmn(lanes: WorkflowLane[]): { elements: DesignerNode[]; 
         designationId: lane.designationId,
         designationLabel: lane.designationLabel,
         slaDays: lane.slaDays,
+        // FN-25 — also stamp slaMinutes so compile/deploy paths can start clocks.
+        ...(slaDaysToMinutes(lane.slaDays) != null
+          ? { slaMinutes: slaDaysToMinutes(lane.slaDays) }
+          : {}),
+        escalationDesignationId: lane.escalationDesignationId,
+        escalationDesignationLabel: lane.escalationDesignationLabel,
       },
     });
     edges.push({ id: `edge_${prevId}_${nodeId}`, source: prevId, target: nodeId });

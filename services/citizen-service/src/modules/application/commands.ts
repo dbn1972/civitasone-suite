@@ -48,6 +48,7 @@ export async function saveDraft(
     serviceKey?: string | undefined;
     channel: string;
     assistedBy: string | null;
+    applicantType: string;
     formData: Record<string, unknown>;
     documentTypes: string[];
   },
@@ -64,7 +65,11 @@ export async function saveDraft(
 export async function updateDraft(
   ctx: RequestContext,
   id: string,
-  body: { formData?: Record<string, unknown> | undefined; documentTypes?: string[] | undefined },
+  body: {
+    formData?: Record<string, unknown> | undefined;
+    documentTypes?: string[] | undefined;
+    applicantType?: string | undefined;
+  },
 ): Promise<Accepted> {
   await queue.publish(COMMANDS.draftUpdate, {
     messageId: randomUUID(), type: COMMANDS.draftUpdate,
@@ -77,7 +82,13 @@ export async function updateDraft(
 export async function submitDraft(
   ctx: RequestContext,
   draftId: string,
-  body: { documentTypes?: string[] | undefined; trackingNo: string; applicationId: string; channel: string },
+  body: {
+    documentTypes?: string[] | undefined;
+    trackingNo: string;
+    applicationId: string;
+    channel: string;
+    applicantType: string;
+  },
 ): Promise<Accepted & { trackingNo: string; channel: string; applicationId: string }> {
   await queue.publish(COMMANDS.draftSubmit, {
     messageId: body.applicationId, type: COMMANDS.draftSubmit,
@@ -89,6 +100,7 @@ export async function submitDraft(
       trackingNo: body.trackingNo,
       channel: body.channel,
       documentTypes: body.documentTypes,
+      applicantType: body.applicantType,
     },
   });
   return {
