@@ -35,10 +35,10 @@ export async function listServicePacks(tenantId: string, domainPackKey?: string,
 }
 
 export async function findServicePackByIdTx(
-  tx: { select: typeof db.select },
+  tx: Writer,
   id: string,
   tenantId: string,
-) {
+): Promise<ServicePackRow | null> {
   const rows = await (tx as typeof db).select().from(servicePacks)
     .where(and(eq(servicePacks.id, id), eq(servicePacks.tenantId, tenantId)))
     .limit(1);
@@ -64,13 +64,6 @@ export async function findServicePacksByKeys(
       ))
       .orderBy(desc(servicePacks.version)),
   );
-}
-
-export async function findServicePackByIdTx(tx: Writer, id: string, tenantId: string): Promise<ServicePackRow | null> {
-  const rows = await (tx as typeof db).select().from(servicePacks)
-    .where(and(eq(servicePacks.id, id), eq(servicePacks.tenantId, tenantId)))
-    .limit(1);
-  return rows[0] ?? null;
 }
 
 /** Latest version for (tenant, pack_key) or 0 when none exist. */
