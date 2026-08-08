@@ -27,6 +27,8 @@ export const definitionNodes = domainSchema.table("definition_nodes", {
   nodeKey: varchar("node_key", { length: 64 }).notNull(),
   name: varchar("name", { length: 200 }).notNull(),
   roleRef: varchar("role_ref", { length: 128 }),
+  /** FN-25 — superior designation notified when this lane's SLA is breached. */
+  escalateToRef: varchar("escalate_to_ref", { length: 128 }),
   nodeType: varchar("node_type", { length: 16 }).notNull().default("task"),
   slaMinutes: integer("sla_minutes"),
   // P1-2 — deemed-approval window (minutes) for a `timer` node. The instance

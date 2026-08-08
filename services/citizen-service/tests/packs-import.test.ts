@@ -73,6 +73,7 @@ describe("Trade License pack manifest (FN-09/10)", () => {
       feeScheduleId: blocks!.feeScheduleId!,
       issuanceType: blocks!.issuanceType!,
       requiredDocuments: blocks!.requiredDocuments ?? [],
+      laneBindings: blocks!.laneBindings ?? [],
       slaDays: blocks!.slaDays ?? 15,
       channels: ["portal"],
       forms: blocks!.forms ?? [],

@@ -22,7 +22,22 @@ export interface RequiredDocument {
   docType: string;
   label?: string | undefined;
   mandatory: boolean;
+  /** FN-26 — workflow lane key that verifies this document (e.g. "inspection"). */
+  verifiedAtLane?: string | undefined;
 }
+
+export type { LaneBinding } from "./lane-bindings.js";
+export {
+  slaDaysToMinutes,
+  computeLaneDueAt,
+  resolveEscalationRecipient,
+  isSlaTrackedLane,
+  simulateLaneSlaBreach,
+  normalizeLaneKey,
+  docsForVerificationLane,
+  unboundMandatoryDocs,
+  assertLaneBindings,
+} from "./lane-bindings.js";
 
 export const CATALOGUE_STATUSES = ["draft", "published", "archived"] as const;
 export type CatalogueStatus = typeof CATALOGUE_STATUSES[number];

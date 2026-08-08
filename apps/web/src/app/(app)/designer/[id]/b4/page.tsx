@@ -9,7 +9,7 @@ import { ApprovalChainBuilder } from "../../_components/ApprovalChainBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
-import type { WorkflowDesignState } from "../../_data/workflowConstants";
+import { lanesToBindings, type WorkflowDesignState } from "../../_data/workflowConstants";
 
 export default function DesignerB4Page() {
   const params = useParams<{ id: string }>();
@@ -73,9 +73,12 @@ export default function DesignerB4Page() {
   );
 
   const onDesignPersisted = async (design: WorkflowDesignState) => {
-    if (!design.definitionId) return;
     try {
-      await updateServiceDefinition(params.id, { workflowDefinitionId: design.definitionId });
+      // FN-25 — persist pack-level lane SLA/escalation bindings + designer link.
+      await updateServiceDefinition(params.id, {
+        ...(design.definitionId ? { workflowDefinitionId: design.definitionId } : {}),
+        laneBindings: lanesToBindings(design.lanes),
+      });
     } catch {
       // best-effort catalogue linkage
     }

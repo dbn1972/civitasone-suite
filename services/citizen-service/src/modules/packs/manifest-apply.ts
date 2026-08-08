@@ -1,4 +1,5 @@
 import type { ServiceDefinitionInsert } from "../catalogue/schema.js";
+import type { LaneBinding } from "../catalogue/lane-bindings.js";
 import { tradeLicenseManifestBlocks } from "./manifests/trade-license.js";
 
 export interface PackManifestBlocks {
@@ -13,7 +14,9 @@ export interface PackManifestBlocks {
   hoaCode?: string;
   issuanceType?: string;
   outputs?: unknown[];
-  requiredDocuments?: { docType: string; label: string; mandatory: boolean }[];
+  requiredDocuments?: { docType: string; label: string; mandatory: boolean; verifiedAtLane?: string }[];
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings?: LaneBinding[];
   channels?: string[];
   feeFromMinor?: number;
   feeCurrency?: string;
@@ -56,6 +59,7 @@ export function applyManifestToDefinition(
     forms: (formsWithMeta ?? base.forms) as never,
     outputs: (blocks.outputs ?? base.outputs) as never,
     requiredDocuments: blocks.requiredDocuments ?? base.requiredDocuments ?? [],
+    laneBindings: blocks.laneBindings ?? base.laneBindings ?? [],
     channels: (blocks.channels ?? base.channels) as never,
   };
 

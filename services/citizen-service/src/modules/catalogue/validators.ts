@@ -20,6 +20,18 @@ const statutoryRefSchema = z.object({
   url:     safeText({ max: 512 }).optional(),
 });
 
+const laneBindingSchema = z.object({
+  key:                          safeText({ max: 64 }),
+  name:                         safeText({ max: 120 }),
+  optional:                     z.boolean().optional(),
+  enabled:                      z.boolean().optional(),
+  designationId:                safeText({ max: 128 }).optional(),
+  designationLabel:             safeText({ max: 160 }).optional(),
+  slaDays:                      z.number().int().min(0).max(3650),
+  escalationDesignationId:      safeText({ max: 128 }).optional(),
+  escalationDesignationLabel:   safeText({ max: 160 }).optional(),
+});
+
 const designerFields = {
   servicePattern:       z.enum(SERVICE_PATTERNS).optional(),
   ownerOfficeId:        z.string().uuid().optional(),
@@ -29,6 +41,8 @@ const designerFields = {
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
   formId:               z.string().uuid().optional(),
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings:         z.array(laneBindingSchema).max(20).optional(),
 };
 
 export const createDefinitionBody = z.object({

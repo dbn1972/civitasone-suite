@@ -30,6 +30,8 @@ export interface ServiceDefinitionDto {
   feeModel?: string | null;
   hoaCode?: string | null;
   requiredDocuments?: unknown[];
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings?: unknown[];
   issuanceType?: string | null;
   outputs?: unknown[];
 }
@@ -58,6 +60,7 @@ export interface UpdateDefinitionPayload {
   feeModel?: string;
   hoaCode?: string;
   requiredDocuments?: unknown[];
+  laneBindings?: unknown[];
   issuanceType?: string;
   outputs?: unknown[];
 }
