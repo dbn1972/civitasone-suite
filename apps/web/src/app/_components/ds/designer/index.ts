@@ -33,7 +33,9 @@ export type {
   SlabTypeUi,
   SlabRowUi,
   DemandTrigger,
+  SamplePaymentScenario,
   FeeDesignState,
+  DemandLineKind,
   DemandLine,
   SampleCalculation,
 } from "./feeTypes";

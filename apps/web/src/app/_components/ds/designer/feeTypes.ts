@@ -30,6 +30,9 @@ export interface SlabRowUi {
 
 export type DemandTrigger = "submission" | "approval";
 
+/** Sample rail payment timing — drives rebate / penalty preview lines. */
+export type SamplePaymentScenario = "on_time" | "early" | "late";
+
 export interface FeeDesignState {
   feeModel: FeeModelUi | null;
   scheduleId?: string;
@@ -45,16 +48,27 @@ export interface FeeDesignState {
   hoaCode: string;
   demandTrigger: DemandTrigger;
   rebateDays: number;
+  /** Designer-preview rebate percent when paying within rebateDays (0–100). */
+  rebatePercent: number;
   penaltyDays: number;
+  /** Designer-preview penalty percent after grace (0–100). */
+  penaltyPercent: number;
 }
+
+export type DemandLineKind = "base" | "exemption" | "rebate" | "penalty" | "info";
 
 export interface DemandLine {
   label: string;
   amountPaise: number;
+  /** UPYOG-style tax head for demand parity (preview). */
+  taxHeadCode?: string;
+  kind?: DemandLineKind;
 }
 
 export interface SampleCalculation {
   lines: DemandLine[];
   totalPaise: number;
   currency: string;
+  hoaCode?: string;
+  scenario?: SamplePaymentScenario;
 }
