@@ -98,29 +98,30 @@ async function wipe(tenantId: string) {
 }
 
 /**
- * CI's bootstrap applies install-service's migrations under install_svc
- * (self-owned schema — see 0001_init.sql header), but `db`/`sqlClient` here
- * connect via createTenantDb()'s DATABASE_URL fallback. In some CI runs that
- * fallback has resolved to a role without USAGE on schema `install`
- * ("permission denied for schema install"), a known bootstrap-wiring gap
- * distinct from this test's actual assertions. Skip rather than fail Tests
- * on that gap — same precedent as revenue-service's outbox-relay-rls.test.ts.
+ * The poll loop's findPollable() uses PROVISIONING_RUNNER_DSN (civitas_admin),
+ * not DATABASE_URL/install_svc. Probing only install_svc masked the real CI
+ * failure ("permission denied for schema install" on the runner). Probe the
+ * runner DSN instead; migration 0013 grants the runner role. Skip only when
+ * that grant is still missing (older DBs / partial bootstrap).
  */
-let schemaAccessible = false;
+let runnerCanPoll = false;
 
 beforeAll(async () => {
+  const runner = postgres(RUNNER_DSN, { max: 1 });
   try {
-    await db.select().from(siloProvisions).limit(1);
-    schemaAccessible = true;
+    await runner`SELECT 1 FROM install.silo_provisions LIMIT 1`;
+    runnerCanPoll = true;
   } catch {
-    schemaAccessible = false;
+    runnerCanPoll = false;
+  } finally {
+    await runner.end({ timeout: 5 }).catch(() => undefined);
   }
 });
 
-function skipUnlessSchemaAccessible(context: { skip: (note?: string) => void }): void {
-  if (!schemaAccessible) {
+function skipUnlessRunnerCanPoll(context: { skip: (note?: string) => void }): void {
+  if (!runnerCanPoll) {
     context.skip(
-      "schema 'install' not accessible under the CI test role (known DATABASE_URL/grant wiring gap)",
+      "civitas_admin cannot SELECT install.silo_provisions (apply migration 0013_provisioning_runner_grants)",
     );
   }
 }
@@ -145,7 +146,7 @@ describe("tenant.tenant.isolation_changed → install-service — full consumpti
   });
 
   it("onboarding a silo tenant publishes exactly one isolation_changed event, creates exactly one requested record, and the poll loop drives it to ready", async (ctx) => {
-    skipUnlessSchemaAccessible(ctx);
+    skipUnlessRunnerCanPoll(ctx);
     fixtureRoot = mkdtempSync(join(tmpdir(), "isolation-chain-"));
     for (const svc of FIXTURE_SERVICES) {
       const dir = join(fixtureRoot, "services", svc, "migrations");
