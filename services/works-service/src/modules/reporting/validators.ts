@@ -10,9 +10,9 @@ export const reportFiltersSchema = paginationSchema.extend({
 export type ReportFiltersInput = z.infer<typeof reportFiltersSchema>;
 
 export interface ReportFilters {
-  fromDate?: Date;
-  toDate?: Date;
-  divisionId?: string;
+  fromDate?: Date | undefined;
+  toDate?: Date | undefined;
+  divisionId?: string | undefined;
   page: number;
   pageSize: number;
 }
