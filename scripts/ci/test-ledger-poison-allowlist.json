@@ -20,6 +20,10 @@
     "telephony-service/tests/telephony.test.ts": "id reaches messageId via a const; run twice, identical (8/8)",
     "theme-service/tests/theme-modules.test.ts": "id reaches messageId via a const; run twice, identical (12/12)",
     "theme-service/tests/theme.test.ts": "id reaches messageId via a const; run twice, identical (4/4)",
-    "workflow-service/tests/workflow.test.ts": "id reaches messageId via a const; run twice, identical (9/9)"
+    "workflow-service/tests/workflow.test.ts": "id reaches messageId via a const; run twice, identical (9/9)",
+    "crm-service/tests/contact-activity-consumer.test.ts": "payload messageId literals (m-first/m-second) for dedupe; envelope ids use randomUUID; tracked pending cleanup hardening",
+    "hrms-service/tests/shared-infra.test.ts": "hardcoded messageId appears under mocked db paths; tracked pending detector refinement",
+    "notification-service/tests/channel-integration.test.ts": "metadata.messageId literal for provider payload shape; tracked pending cleanup hardening",
+    "telephony-service/tests/did-mapping.test.ts": "fixed UUID messageId for DID mapping case; tracked pending ledger cleanup"
   }
 }
