@@ -51,6 +51,13 @@ export const recordOfflineBody = z.object({
 }).refine((b) => b.serviceId || b.scheduleId, { message: "serviceId or scheduleId required" });
 export type RecordOfflineBody = z.infer<typeof recordOfflineBody>;
 
+/** FN-14 — confirm a pending online intent (live gateway or labelled sandbox). */
+export const confirmPaymentBody = z.object({
+  mode:       z.enum(["gateway", "sandbox"]).default("gateway"),
+  gatewayRef: safeText({ max: 128 }).optional(),
+});
+export type ConfirmPaymentBody = z.infer<typeof confirmPaymentBody>;
+
 export const refundRequestBody = z.object({
   amount: z.number().int().positive().max(100_000_000_00), // paise (max ₹100 Cr)
   reason: safeText({ max: 500, multiline: true }).optional(),

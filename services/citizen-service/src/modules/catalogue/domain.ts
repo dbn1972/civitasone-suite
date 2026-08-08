@@ -31,11 +31,17 @@ export type CatalogueStatus = typeof CATALOGUE_STATUSES[number];
  * Structural validation before publish. A published definition is immutable
  * forever, so it MUST be well-formed: a name, at least one channel, and a
  * checklist with unique, non-empty docTypes.
+ *
+ * FN-14: fee-bearing patterns (anything other than grievance, or any explicit
+ * feeModel) require an HOA so payment confirmation can post a balanced journal.
  */
 export function assertDefinitionPublishable(def: {
   name: string;
   channels: ServiceChannel[];
   requiredDocuments: RequiredDocument[];
+  servicePattern?: ServicePattern | null;
+  feeModel?: FeeModel | null;
+  hoaCode?: string | null;
 }): void {
   if (typeof def.name !== "string" || def.name.trim().length === 0) throw new Error("DEF_MISSING_NAME");
   if (!Array.isArray(def.channels) || def.channels.length === 0) throw new Error("DEF_NO_CHANNELS");
@@ -47,6 +53,15 @@ export function assertDefinitionPublishable(def: {
     if (!d || typeof d.docType !== "string" || d.docType.length === 0) throw new Error("DEF_BAD_DOCUMENT");
     if (seen.has(d.docType)) throw new Error(`DEF_DUPLICATE_DOCUMENT: ${d.docType}`);
     seen.add(d.docType);
+  }
+  // Fee-bearing: explicit fee model, or a non-grievance pattern (Certificate /
+  // Booking / Collection default to fees per FN-14 / FN-19).
+  const feeBearing =
+    def.feeModel != null ||
+    (def.servicePattern != null && def.servicePattern !== "grievance");
+  if (feeBearing) {
+    const hoa = typeof def.hoaCode === "string" ? def.hoaCode.trim() : "";
+    if (hoa.length === 0) throw new Error("DEF_MISSING_HOA");
   }
 }
 

@@ -5,10 +5,10 @@ import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { isRefundable } from "./domain.js";
+import { assertPaymentConfirmable, isGatewayConfigured, isRefundable } from "./domain.js";
 import type {
   CreateScheduleBody, CreateIntentBody, RecordOfflineBody,
-  RefundRequestBody, RefundDecisionBody,
+  ConfirmPaymentBody, RefundRequestBody, RefundDecisionBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -41,6 +41,43 @@ export async function createPaymentIntent(ctx: RequestContext, body: CreateInten
 export async function recordOfflinePayment(ctx: RequestContext, body: RecordOfflineBody): Promise<Accepted> {
   const id = randomUUID();
   return publish(ctx, COMMANDS.paymentOfflineRecord, id, { id, ...body });
+}
+
+/**
+ * FN-14 — confirm a pending online payment intent.
+ * Live gateway requires configured credentials + gatewayRef; sandbox is an
+ * explicitly labelled Test capture that still emits receipt → GL.
+ */
+export async function confirmPayment(
+  ctx: RequestContext, paymentId: string, body: ConfirmPaymentBody,
+): Promise<Accepted> {
+  const pay = await repo.findPaymentById(paymentId, ctx.tenantId);
+  if (!pay) throw new HttpError(404, "NOT_FOUND", "payment not found");
+  try {
+    assertPaymentConfirmable({
+      status: pay.status,
+      mode: body.mode,
+      gatewayRef: body.gatewayRef ?? pay.gatewayRef,
+      gatewayConfigured: isGatewayConfigured(),
+    });
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "CONFIRM_REJECTED";
+    if (code === "PAYMENT_NOT_PENDING") {
+      throw new HttpError(409, code, "payment is not pending confirmation");
+    }
+    if (code === "GATEWAY_NOT_CONFIGURED") {
+      throw new HttpError(409, code, "payment gateway is not configured; use mode=sandbox for Test runs");
+    }
+    if (code === "GATEWAY_REF_REQUIRED") {
+      throw new HttpError(400, code, "gatewayRef is required for live confirmation");
+    }
+    throw new HttpError(400, code, "payment cannot be confirmed");
+  }
+  return publish(ctx, COMMANDS.paymentConfirm, randomUUID(), {
+    paymentId,
+    mode: body.mode,
+    gatewayRef: body.gatewayRef ?? pay.gatewayRef ?? null,
+  });
 }
 
 export async function requestRefund(ctx: RequestContext, paymentId: string, body: RefundRequestBody): Promise<Accepted> {

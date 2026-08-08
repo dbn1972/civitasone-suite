@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   idParam, createScheduleBody, computeFeeBody, createIntentBody,
-  recordOfflineBody, refundRequestBody, refundDecisionBody,
+  recordOfflineBody, confirmPaymentBody, refundRequestBody, refundDecisionBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -45,6 +45,15 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, OFFICER_ROLES);
     const body = recordOfflineBody.parse(req.body);
     return reply.code(202).send(await commands.recordOfflinePayment(ctx, body));
+  });
+
+  /** FN-14 — confirm pending online intent (gateway callback or labelled sandbox). */
+  app.post("/v1/citizen/payments/:id/confirm", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = confirmPaymentBody.parse(req.body ?? {});
+    return reply.code(202).send(await commands.confirmPayment(ctx, id, body));
   });
 
   app.get("/v1/citizen/payments/:id", async (req, reply) => {

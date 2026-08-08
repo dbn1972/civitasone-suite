@@ -67,6 +67,36 @@ export function isGatewayConfigured(env: NodeJS.ProcessEnv = process.env): boole
   return typeof key === "string" && key.trim().length > 0;
 }
 
+export const PAYMENT_CONFIRM_MODES = ["gateway", "sandbox"] as const;
+export type PaymentConfirmMode = (typeof PAYMENT_CONFIRM_MODES)[number];
+
+/**
+ * FN-14 — decide whether an online payment may be confirmed.
+ * - gateway mode: requires configured gateway + a non-empty gatewayRef
+ * - sandbox mode: labelled Test/Sandbox capture only (never pretends to be live)
+ * Pending-only: already-collected payments cannot be confirmed again.
+ */
+export function assertPaymentConfirmable(input: {
+  status: string;
+  mode: PaymentConfirmMode;
+  gatewayRef?: string | null;
+  gatewayConfigured: boolean;
+}): void {
+  if (input.status !== "pending") {
+    throw new Error("PAYMENT_NOT_PENDING");
+  }
+  if (input.mode === "sandbox") {
+    return;
+  }
+  if (!input.gatewayConfigured) {
+    throw new Error("GATEWAY_NOT_CONFIGURED");
+  }
+  const ref = input.gatewayRef?.trim() ?? "";
+  if (ref.length === 0) {
+    throw new Error("GATEWAY_REF_REQUIRED");
+  }
+}
+
 /** A payment is refundable only once it has actually been collected. */
 export function isRefundable(status: string): boolean {
   return status === "paid" || status === "offline_recorded";

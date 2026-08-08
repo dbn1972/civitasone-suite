@@ -218,6 +218,45 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
     expect(Number(pay.amount)).toBe(500);
   });
 
+  it("FN-14: sandbox confirm of pending intent issues receipt and emits receipt.issued", async () => {
+    const intent = await app.inject({
+      method: "POST", url: "/v1/citizen/payments/intent", headers: hdr(tok(TENANT_A, MAKER)),
+      payload: { applicationId: APP_ID, scheduleId, subject: {} },
+    });
+    expect(intent.statusCode).toBe(202);
+    const intentId = intent.json().id as string;
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${intentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 && g.json().status === "pending" ? g.json() : null;
+    });
+
+    const liveReject = await app.inject({
+      method: "POST", url: `/v1/citizen/payments/${intentId}/confirm`,
+      headers: hdr(tok(TENANT_A, MAKER)),
+      payload: { mode: "gateway", gatewayRef: "pi_fake" },
+    });
+    expect(liveReject.statusCode).toBe(409);
+    expect(liveReject.json().code).toBe("GATEWAY_NOT_CONFIGURED");
+
+    const confirm = await app.inject({
+      method: "POST", url: `/v1/citizen/payments/${intentId}/confirm`,
+      headers: hdr(tok(TENANT_A, MAKER)),
+      payload: { mode: "sandbox" },
+    });
+    expect(confirm.statusCode).toBe(202);
+
+    const pay = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${intentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      const body = g.statusCode === 200 ? g.json() : null;
+      return body?.receiptNo && body.status === "paid" ? body : null;
+    });
+    expect(pay.status).toBe("paid");
+    expect(pay.reconciliationStatus).toBe("sandbox");
+    expect(pay.receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
+    const topics = await outboxTopics();
+    expect(topics).toContain("citizen.receipt.issued");
+  });
+
   it("offline payment records + issues a receipt and emits receipt.issued", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/payments/offline", headers: hdr(tok(TENANT_A, MAKER)),

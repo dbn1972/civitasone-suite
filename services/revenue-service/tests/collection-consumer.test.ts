@@ -152,6 +152,11 @@ describe("Collection Consumer", () => {
       // 2 enqueue: receiptCaptured + audit
       expect(mockEnqueue).toHaveBeenCalledTimes(2);
       expect(mockEnqueue.mock.calls[0]![1].topic).toBe("revenue.receipt.captured");
+      expect(mockEnqueue.mock.calls[0]![1].payload).toMatchObject({
+        receiptId: "receipt-1",
+        assesseeId: "assessee-1",
+        demandId: "demand-1",
+      });
       expect(mockEnqueue.mock.calls[1]![1].topic).toBe("audit.event.record");
 
       // Cache invalidation

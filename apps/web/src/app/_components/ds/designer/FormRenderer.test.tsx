@@ -14,12 +14,12 @@ describe("FormRenderer", () => {
   it("renders preview fields", () => {
     render(<FormRenderer design={design} />);
     expect(screen.getByLabelText(/Applicant name/)).toBeInTheDocument();
-    expect(screen.getByText(/Runtime skeleton/)).toBeInTheDocument();
+    expect(screen.getByText(/Citizen preview/)).toBeInTheDocument();
   });
 
   it("renders stepped mode without runtime note", () => {
     render(<FormRenderer design={design} mode="stepped" showRuntimeNote={false} />);
     expect(screen.getByLabelText(/Applicant name/)).toBeInTheDocument();
-    expect(screen.queryByText(/Runtime skeleton/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Citizen preview/)).not.toBeInTheDocument();
   });
 });

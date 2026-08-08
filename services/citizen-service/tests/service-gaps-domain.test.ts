@@ -7,7 +7,8 @@ import {
   evaluateRule, evaluateEligibility, assertRulesWellFormed, type EligibilityRule,
 } from "../src/modules/eligibility/domain.js";
 import {
-  computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, type ExemptionRule,
+  computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, assertPaymentConfirmable,
+  type ExemptionRule,
 } from "../src/modules/fee-payment/domain.js";
 import {
   normalizeCertType, buildCertNumber, canonicalize, hashPayload, signPayloadHash,
@@ -143,6 +144,23 @@ describe("SVC-085 helpers", () => {
     expect(isGatewayConfigured({ PAYMENT_GATEWAY_KEY: "  " })).toBe(false);
     expect(isGatewayConfigured({ PAYMENT_GATEWAY_KEY: "sk_live" })).toBe(true);
     expect(isGatewayConfigured({ CITIZEN_PAYMENT_GATEWAY_KEY: "k" })).toBe(true);
+  });
+  it("assertPaymentConfirmable — sandbox always allowed for pending; gateway needs ref", () => {
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "sandbox", gatewayConfigured: false,
+    })).not.toThrow();
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "gateway", gatewayConfigured: false, gatewayRef: "pi_x",
+    })).toThrow("GATEWAY_NOT_CONFIGURED");
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "",
+    })).toThrow("GATEWAY_REF_REQUIRED");
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "pi_ok",
+    })).not.toThrow();
+    expect(() => assertPaymentConfirmable({
+      status: "paid", mode: "sandbox", gatewayConfigured: false,
+    })).toThrow("PAYMENT_NOT_PENDING");
   });
   it("isRefundable", () => {
     expect(isRefundable("paid")).toBe(true);
