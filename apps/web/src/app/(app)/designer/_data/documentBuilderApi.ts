@@ -5,6 +5,7 @@ import type {
   RequiredDocumentUi,
 } from "@/app/_components/ds/designer/documentTypes";
 import { emptyDocumentsDesign, slugifyDocType } from "@/app/_components/ds/designer/documentTypes";
+import { documentsWithWarnings as assessWarnings } from "./documentBuilderModel";
 
 interface ApiRequiredDoc {
   docType: string;
@@ -64,13 +65,5 @@ export function documentsWithWarnings(
   docs: RequiredDocumentUi[],
   laneKeys: string[],
 ): { doc: RequiredDocumentUi; warning: string | null }[] {
-  return docs.map((doc) => {
-    if (doc.mandatory && doc.verifiedAtLane && !laneKeys.includes(doc.verifiedAtLane)) {
-      return { doc, warning: "Selected lane is not in the approval chain." };
-    }
-    if (doc.mandatory && !doc.verifiedAtLane) {
-      return { doc, warning: "Mandatory document has no verifying lane — officers may not see a checklist." };
-    }
-    return { doc, warning: null };
-  });
+  return assessWarnings(docs, laneKeys);
 }

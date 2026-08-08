@@ -9,6 +9,7 @@
  *  - Retry logic (3 retries on delivery failure)
  *  - Optimistic locking on update
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll, beforeAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";

@@ -17,6 +17,12 @@ function fmtDateTime(iso: string): string {
   return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Keep path prefixes as plain string literals so crm-link-integrity can resolve them. */
+function subjectHref(subjectType: string, subjectId: string): string {
+  if (subjectType === "account") return `/crm/accounts/${subjectId}`;
+  return `/crm/contacts/${subjectId}`;
+}
+
 export function OverdueTaskAlerts() {
   const [tasks, setTasks] = useState<OverdueTask[]>([]);
   const [source, setSource] = useState<AaSource | "loading">("loading");
@@ -70,7 +76,7 @@ export function OverdueTaskAlerts() {
                 <tr key={t.id}>
                   <td>
                     {t.subjectType && t.subjectId ? (
-                      <a href={`/crm/${t.subjectType === "account" ? "accounts" : "contacts"}/${t.subjectId}`}>{t.subject || "Task"}</a>
+                      <a href={subjectHref(t.subjectType, t.subjectId)}>{t.subject || "Task"}</a>
                     ) : (
                       t.subject || "Task"
                     )}

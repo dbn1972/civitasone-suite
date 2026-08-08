@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSampleCalculation,
   computeFlatFeeLocal,
   computeSlabFeeLocal,
+  emptyFeeDesign,
   exemptionsUiToApi,
   rupeesInputToPaise,
 } from "./feeBuilderApi";
@@ -46,5 +48,43 @@ describe("feeBuilderApi", () => {
       { id: "s1", from: "", to: "", rate: "500", type: "ad_valorem" },
     ];
     expect(computeSlabFeeLocal(slabs, 100000)).toBe(5000);
+  });
+
+  it("previews flat ₹500 with 50% micro exemption as demand lines", () => {
+    const design = {
+      ...emptyFeeDesign("Trade License"),
+      feeModel: "flat" as const,
+      baseAmountPaise: 50000,
+      hoaCode: "0070",
+      exemptions: [
+        { id: "e1", attribute: "category", op: "eq" as const, value: "micro", kind: "percent" as const, amount: "50", label: "Micro enterprise" },
+      ],
+    };
+    const calc = buildSampleCalculation(design, { category: "micro" }, 0, "on_time");
+    expect(calc.lines[0]?.taxHeadCode).toBe("BASE");
+    expect(calc.lines[0]?.amountPaise).toBe(50000);
+    expect(calc.lines.some((l) => l.kind === "exemption" && l.amountPaise === -25000)).toBe(true);
+    expect(calc.totalPaise).toBe(25000);
+    expect(calc.hoaCode).toBe("0070");
+  });
+
+  it("applies early rebate and late penalty on sample rail", () => {
+    const design = {
+      ...emptyFeeDesign("Fee"),
+      feeModel: "flat" as const,
+      baseAmountPaise: 10000,
+      hoaCode: "0029",
+      rebateDays: 7,
+      rebatePercent: 10,
+      penaltyDays: 15,
+      penaltyPercent: 5,
+    };
+    const early = buildSampleCalculation(design, {}, 0, "early");
+    expect(early.totalPaise).toBe(9000);
+    expect(early.lines.some((l) => l.kind === "rebate")).toBe(true);
+
+    const late = buildSampleCalculation(design, {}, 0, "late");
+    expect(late.totalPaise).toBe(10500);
+    expect(late.lines.some((l) => l.kind === "penalty")).toBe(true);
   });
 });

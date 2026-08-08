@@ -14,6 +14,12 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 const RESOURCE = "scheduled";
 const AUDIT_TOPIC = "audit.event.record";
 
+
+function asDate(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+
 function keyFor(tenantId: string, id: string): string {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
@@ -33,7 +39,7 @@ export function registerScheduledConsumers(queue: Queue, publishQueue: Queue = d
         recipients: p.recipients,
         format: p.format,
         enabled: p.enabled,
-        nextRunAt: p.nextRunAt,
+        nextRunAt: asDate(p.nextRunAt),
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,
@@ -71,10 +77,14 @@ export function registerScheduledConsumers(queue: Queue, publishQueue: Queue = d
       const { id, version, ...updates } = msg.payload;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const success = await repo.update(tx, id, msg.tenantId, version, {
+        const coerced = {
           ...updates,
+          ...(updates.nextRunAt !== undefined
+            ? { nextRunAt: asDate(updates.nextRunAt as Date | string) }
+            : {}),
           updatedBy: msg.actorId,
-        } as Parameters<typeof repo.update>[4]);
+        };
+        const success = await repo.update(tx, id, msg.tenantId, version, coerced as Parameters<typeof repo.update>[4]);
         if (!success) return;
         await enqueue(tx, {
           topic: EVENTS.scheduledUpdated,
@@ -194,7 +204,7 @@ export async function handleCreateScheduled(
       recipients: payload.recipients,
       format: payload.format,
       enabled: payload.enabled,
-      nextRunAt: payload.nextRunAt,
+      nextRunAt: asDate(payload.nextRunAt),
       createdBy: ctx.actorId,
       updatedBy: ctx.actorId,
       version: 1,
@@ -219,10 +229,14 @@ export async function handleUpdateScheduled(
   const { id, version, ...updates } = payload;
   await db.transaction(async (tx) => {
     await markProcessed(tx, messageId);
-    const success = await repo.update(tx, id, ctx.tenantId, version, {
+    const coerced = {
       ...updates,
+      ...(updates.nextRunAt !== undefined
+        ? { nextRunAt: asDate(updates.nextRunAt as Date | string) }
+        : {}),
       updatedBy: ctx.actorId,
-    } as Parameters<typeof repo.update>[4]);
+    };
+    const success = await repo.update(tx, id, ctx.tenantId, version, coerced as Parameters<typeof repo.update>[4]);
     if (!success) return;
     await enqueue(tx, {
       topic: EVENTS.scheduledUpdated,

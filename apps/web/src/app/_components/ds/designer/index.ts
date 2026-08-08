@@ -33,7 +33,9 @@ export type {
   SlabTypeUi,
   SlabRowUi,
   DemandTrigger,
+  SamplePaymentScenario,
   FeeDesignState,
+  DemandLineKind,
   DemandLine,
   SampleCalculation,
 } from "./feeTypes";
@@ -72,12 +74,16 @@ export {
 export type {
   OutputType,
   ValidityMode,
+  TemplateOrientation,
   NumberingToken,
   IssuanceDesignState,
 } from "./issuanceTypes";
 export {
   OUTPUT_TYPE_OPTIONS,
   defaultOutputTypeForPattern,
+  defaultTemplateBodyForOutputType,
+  certificateTemplateBody,
+  closureNoteTemplateBody,
   emptyIssuanceDesign,
   formatNumberingPreview,
 } from "./issuanceTypes";
@@ -94,7 +100,18 @@ export {
   NOTIFICATION_CHANNELS,
   seedMatrixForPattern,
   emptyNotificationsDesign,
+  eventsForPattern,
   smsSegmentCount,
+  smsCharCount,
+  smsStats,
+  cellChipLabel,
+  enableCell,
+  disableCell,
+  patchCell,
+  applyMergeSample,
+  channelPreviewTitle,
+  eventLabel,
+  channelLabel,
 } from "./notificationTypes";
 export { FormRenderer } from "./FormRenderer";
 export type { FormRendererProps } from "./FormRenderer";
