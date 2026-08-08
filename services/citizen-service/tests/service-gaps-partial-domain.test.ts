@@ -21,6 +21,24 @@ describe("SVC-081 catalogue domain", () => {
     expect(() => assertDefinitionPublishable({ name: "X", channels: ["mail" as never], requiredDocuments: [] })).toThrow("DEF_BAD_CHANNEL");
     expect(() => assertDefinitionPublishable({ name: "X", channels: ["portal"], requiredDocuments: [{ docType: "a", mandatory: true }, { docType: "a", mandatory: false }] })).toThrow("DEF_DUPLICATE_DOCUMENT");
   });
+  it("FN-14: fee-bearing patterns/models require HOA; grievance does not", () => {
+    expect(() => assertDefinitionPublishable({
+      name: "Trade Licence", channels: ["portal"], requiredDocuments: [],
+      servicePattern: "certificate",
+    })).toThrow("DEF_MISSING_HOA");
+    expect(() => assertDefinitionPublishable({
+      name: "Trade Licence", channels: ["portal"], requiredDocuments: [],
+      feeModel: "flat",
+    })).toThrow("DEF_MISSING_HOA");
+    expect(() => assertDefinitionPublishable({
+      name: "Trade Licence", channels: ["portal"], requiredDocuments: [],
+      servicePattern: "certificate", feeModel: "flat", hoaCode: "4201",
+    })).not.toThrow();
+    expect(() => assertDefinitionPublishable({
+      name: "PGR", channels: ["portal"], requiredDocuments: [],
+      servicePattern: "grievance",
+    })).not.toThrow();
+  });
   it("mandatoryDocTypes filters to mandatory", () => {
     expect(mandatoryDocTypes([{ docType: "a", mandatory: true }, { docType: "b", mandatory: false }])).toEqual(["a"]);
   });

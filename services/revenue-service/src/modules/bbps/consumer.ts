@@ -110,14 +110,20 @@ export function registerBbpsConsumers(queue: Queue): void {
         receiptId,
       });
 
-      // Enqueue receipt captured event
+      // Enqueue receipt captured event (receiptId required by finance GL consumer)
       await enqueue(tx, {
         topic: EVENTS.receiptCaptured,
         eventType: EVENTS.receiptCaptured,
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { assesseeId: dcb.assesseeId, amountMinor, channel, bbpsTxnId },
+        payload: {
+          receiptId: receiptId ?? bbpsTxnId,
+          assesseeId: dcb.assesseeId,
+          amountMinor,
+          channel,
+          bbpsTxnId,
+        },
       });
 
       // Audit

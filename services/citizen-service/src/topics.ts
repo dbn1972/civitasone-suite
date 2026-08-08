@@ -30,6 +30,8 @@ export const COMMANDS = {
   paymentRequested:        "citizen.payment.requested",
   feeScheduleCreate:       "citizen.fee_schedule.create",
   paymentIntentCreate:     "citizen.payment.intent_create",
+  /** FN-14: gateway callback or labelled sandbox capture → receipt + GL. */
+  paymentConfirm:          "citizen.payment.confirm",
   paymentOfflineRecord:    "citizen.payment.offline_record",
   refundRequest:           "citizen.refund.request",
   refundDecide:            "citizen.refund.decide",

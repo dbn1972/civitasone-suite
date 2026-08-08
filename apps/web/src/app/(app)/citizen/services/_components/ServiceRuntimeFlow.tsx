@@ -9,6 +9,8 @@ import {
   type PublishedServiceRuntime,
   type RuntimeJourneyStep,
   buildDemandLines,
+  confirmPayment,
+  createPaymentIntent,
   formatExpectedByDate,
   journeyStepsForService,
   listDraftsForService,
@@ -194,6 +196,20 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         await updateDraft(id, values);
       }
       const ack = await submitDraft(id);
+      // FN-14 — fee-bearing packs: labelled sandbox capture → receipt → GL when
+      // no live gateway key is configured (pilot / Test Run path).
+      if (service.feeFromMinor != null && ack.applicationId) {
+        try {
+          const paymentId = await createPaymentIntent({
+            applicationId: ack.applicationId,
+            serviceId: service.id,
+            subject: values,
+          });
+          await confirmPayment(paymentId, "sandbox");
+        } catch {
+          /* payment is best-effort after submit; tracking still succeeds */
+        }
+      }
       setTrackingNo(ack.trackingNo);
       setSubmittedAt(new Date());
       setStep("submitted");
@@ -314,7 +330,9 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         <div className="card pad" style={{ display: "grid", gap: 14 }}>
           <h3 style={{ margin: 0 }}>Fee summary</h3>
           <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            Review the demand lines below. You will receive a payment link or counter slip after submission when the office raises the demand.
+            Review the demand lines below. For Test runs, sandbox capture posts a receipt and GL journal when no live
+            gateway key is configured. Counter/offline payments remain available to officers; otherwise you may also
+            receive a payment link or counter slip when the office raises the demand.
           </p>
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
             {demandLines.map((line) => (
@@ -356,7 +374,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>Back</button>
             <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
-              {busy ? "Submitting…" : "Submit application"}
+              {busy ? "Submitting…" : "Pay (sandbox) & submit"}
             </button>
           </div>
           {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
