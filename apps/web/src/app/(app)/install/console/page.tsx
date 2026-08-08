@@ -8,6 +8,11 @@ export default function Page() {
       help="install"
       links={[
         { href: "/install", label: "Installer wizard", note: "Guided install steps" },
+        {
+          href: "/install/domain-packs",
+          label: "Domain Packs (Stage 3)",
+          note: "Browse & activate municipal-in-v1 → TL / PGR / Water drafts",
+        },
         { href: "/install/stages", label: "Stages", note: "Install stages and progress" },
         { href: "/install/steps", label: "Steps", note: "Atomic install steps" },
         { href: "/install/modules", label: "Modules", note: "Module resolution catalogue" },

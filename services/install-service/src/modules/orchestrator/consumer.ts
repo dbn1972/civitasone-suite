@@ -1,11 +1,17 @@
+import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import { cache, queue as sharedQueue } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { resolveReadySteps, isWizardComplete } from "./domain.js";
 import type { StepDef, StepExec } from "./domain.js";
+import {
+  CITIZEN_PACK_DOMAIN_ACTIVATE,
+  MUNICIPAL_ONBOARDING_PACK_KEYS,
+} from "./domain-pack-constants.js";
+import { DOMAIN_PACK_ACTIVATE_HANDLER } from "./onboarding.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "wizard";
@@ -94,18 +100,61 @@ export function registerOrchestratorConsumers(queue: Queue): void {
 
   // --- install.step.start ---
   queue.subscribe<StepActionPayload>(COMMANDS.stepStart, async (msg) => {
+    const { wizardId, stepKey } = msg.payload;
+    let domainPackKey: string | undefined;
+    let packKeys: string[] | undefined;
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const { wizardId, stepKey } = msg.payload;
 
       await repo.upsertStepExecution(tx, msg.tenantId, wizardId, stepKey, "in_progress", {
         startedAt: new Date(),
       });
 
+      const defs = await repo.getStepDefinitions(wizardId, msg.tenantId);
+      const def = defs.find((d) => d.stepKey === stepKey);
+      if (def?.handlerType === DOMAIN_PACK_ACTIVATE_HANDLER) {
+        const cfg = (def.config ?? {}) as { domainPackKey?: string; packKeys?: string[] };
+        domainPackKey = cfg.domainPackKey ?? "municipal-in-v1";
+        packKeys = Array.isArray(cfg.packKeys) && cfg.packKeys.length > 0
+          ? cfg.packKeys
+          : [...MUNICIPAL_ONBOARDING_PACK_KEYS];
+        await repo.upsertStepExecution(tx, msg.tenantId, wizardId, stepKey, "in_progress", {
+          output: {
+            handlerType: DOMAIN_PACK_ACTIVATE_HANDLER,
+            domainPackKey,
+            packKeys,
+          },
+        });
+      }
+
       await emitAudit(tx, msg, "step_started", wizardId);
     });
 
-    await cache.invalidate(progressKey(msg.tenantId, msg.payload.wizardId));
+    // FN-17: Stage 3 handler — publish Domain Pack activation to citizen-service (out of TX).
+    if (domainPackKey && packKeys) {
+      const activationId = randomUUID();
+      await sharedQueue.publish(CITIZEN_PACK_DOMAIN_ACTIVATE, {
+        messageId: activationId,
+        type: CITIZEN_PACK_DOMAIN_ACTIVATE,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        schemaVersion: "1.0",
+        payload: {
+          id: activationId,
+          tenantId: msg.tenantId,
+          domainPackKey,
+          packKeys,
+          stageNumber: 3,
+          source: "install_wizard_step",
+          wizardId,
+          stepKey,
+        },
+      });
+    }
+
+    await cache.invalidate(progressKey(msg.tenantId, wizardId));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 

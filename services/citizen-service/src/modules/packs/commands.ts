@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
-import { queue } from "../../shared/infra.js";
+import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as catalogueRepo from "../catalogue/repo.js";
@@ -10,8 +10,15 @@ import {
   packKeyFromServiceKey,
   requiresStatutoryAcknowledgement,
 } from "./manifest-export.js";
+import { resolveDomainPackDrafts } from "./activate-resolve.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
+
+export type DomainPackActivateAccepted = Accepted & {
+  domainPackKey: string;
+  draftIds: string[];
+  packKeys: string[];
+};
 
 async function publish(
   ctx: RequestContext, type: string, messageId: string, payload: Record<string, unknown>,
@@ -93,4 +100,94 @@ export async function importServicePack(
     domainPackKey: pack.domainPackKey,
     acknowledgeStatutory: opts.acknowledgeStatutory === true,
   });
+}
+
+/**
+ * Activate a Domain Pack: import selected (or pilot) service packs as editable drafts (FN-17 / FN-20).
+ * Never auto-publishes — drafts stay local for office review.
+ */
+export async function activateDomainPack(
+  ctx: RequestContext,
+  domainPackKey: string,
+  requestedPackKeys?: string[],
+): Promise<DomainPackActivateAccepted> {
+  const resolved = await resolveDomainPackDrafts(ctx.tenantId, domainPackKey, requestedPackKeys);
+  if (!resolved) throw new HttpError(404, "NOT_FOUND", "domain pack not found");
+  if (resolved.drafts.length === 0) {
+    throw new HttpError(400, "VALIDATION_FAILED", "domain pack has no service packs to activate");
+  }
+
+  const activationId = randomUUID();
+  const drafts = resolved.drafts;
+  const draftIds = drafts.map((d) => d.id);
+  const packKeys = drafts.map((d) => d.packKey);
+
+  const projected = {
+    id: activationId,
+    tenantId: ctx.tenantId,
+    domainPackKey,
+    domainPackId: resolved.domainPackId,
+    packKeys,
+    draftIds,
+    status: "accepted",
+  };
+
+  // Read-your-writes: project activation + draft stubs for same-session catalogue GETs.
+  await cache.put(cache.makeKey(ctx.tenantId, "domain_pack_activation", activationId), projected);
+  for (const d of drafts) {
+    // Project a catalogue-shaped draft so same-session GET succeeds (read-your-writes).
+    await cache.put(cache.makeKey(ctx.tenantId, "catalogue", d.id), {
+      id: d.id,
+      tenantId: ctx.tenantId,
+      serviceKey: `${d.packKey.replace(/^pack:/, "")}-pending`,
+      serviceId: null,
+      name: d.name,
+      ownerDepartment: null,
+      servicePattern: d.servicePattern ?? "certificate",
+      ownerOfficeId: null,
+      offeringOfficeIds: null,
+      workflowDefinitionId: null,
+      formId: null,
+      feeModel: d.feeModel ?? null,
+      hoaCode: d.hoaCode ?? null,
+      statutoryReferences: d.statutoryReferences ?? [],
+      version: 1,
+      status: "draft",
+      eligibilityRuleSetId: null,
+      feeScheduleId: null,
+      issuanceType: null,
+      requiredDocuments: [],
+      slaDays: null,
+      channels: ["portal", "counter"],
+      forms: [],
+      outputs: [],
+      submittedBy: null,
+      publishedBy: null,
+      publishedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: ctx.actorId,
+      updatedBy: ctx.actorId,
+      rowVersion: 1,
+      packKey: d.packKey,
+      domainPackKey,
+    });
+  }
+
+  await publish(ctx, COMMANDS.packDomainActivate, activationId, {
+    id: activationId,
+    domainPackKey,
+    domainPackId: resolved.domainPackId,
+    packKeys,
+    drafts,
+  });
+
+  return {
+    id: activationId,
+    status: "accepted",
+    correlationId: ctx.correlationId,
+    domainPackKey,
+    draftIds,
+    packKeys,
+  };
 }

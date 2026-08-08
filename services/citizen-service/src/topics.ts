@@ -56,6 +56,7 @@ export const COMMANDS = {
   sandboxTestRecord:          "citizen.sandbox_test.record",
   packServiceImport:          "citizen.pack.service_import",
   packServiceExport:          "citizen.pack.service_export",
+  packDomainActivate:         "citizen.pack.domain_activate",
   discoveryConsentGrant:   "citizen.discovery.consent_grant",
   discoveryConsentRevoke:  "citizen.discovery.consent_revoke",
   discoveryRun:            "citizen.discovery.run",
