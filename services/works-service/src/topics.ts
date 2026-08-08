@@ -89,6 +89,7 @@ export const EVENTS = {
   progressRecorded:            "works.progress.recorded",
   photoUploaded:                "works.photo.uploaded",
   issueCreated:                 "works.issue.created",
+  issueClosed:                  "works.issue.closed",
   workClosed:                   "works.work.closed",
   physicalCompleted:            "works.physical.completed",
   // Cross-service: emitted on a completion-type closure so asset-service
@@ -105,5 +106,10 @@ export const EVENTS = {
 } as const;
 
 export const CONSUMED_EVENTS = {} as const;
+
+/** Cross-service command consumed by finance-service when a works RA bill is DO-finalized. */
+export const FINANCE_HANDOFF = {
+  billCreate: "finance.bill.create",
+} as const;
 
 export const SERVICE = "works";

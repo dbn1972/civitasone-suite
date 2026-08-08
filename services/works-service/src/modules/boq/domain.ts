@@ -62,3 +62,31 @@ export function canModifyBoq(hasTenderDetails: boolean): boolean {
 export function canEnterBoq(tsExists: boolean): boolean {
   return tsExists;
 }
+
+/** Normalised duplicate key: itemCode when present, else lower-cased description. */
+export function boqLineKey(itemCode: string | null | undefined, itemDescription: string): string {
+  const code = itemCode?.trim();
+  if (code) return code.toLowerCase();
+  return itemDescription.trim().toLowerCase();
+}
+
+export interface BoqLineRef {
+  workId: string;
+  itemCode: string | null;
+  itemDescription: string;
+}
+
+/**
+ * BR-016: reject duplicate BoQ lines for the same work (same item code or description key).
+ */
+export function isDuplicateBoqLine(
+  existing: BoqLineRef[],
+  workId: string,
+  itemCode: string | null | undefined,
+  itemDescription: string,
+): boolean {
+  const key = boqLineKey(itemCode, itemDescription);
+  return existing.some(
+    (row) => row.workId === workId && boqLineKey(row.itemCode, row.itemDescription) === key,
+  );
+}

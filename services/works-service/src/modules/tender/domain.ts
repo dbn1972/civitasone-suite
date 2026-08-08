@@ -55,3 +55,36 @@ export function canDoFinalizeAward(status: string): { allowed: boolean; reason?:
   }
   return { allowed: true };
 }
+
+/** Roles that may read unredacted bid/quotation amounts (operators + approvers). */
+const BID_DETAIL_ROLES = new Set([
+  "works_admin", "works_operator", "super_admin", "dao", "do", "sdo",
+]);
+
+/**
+ * Bid confidentiality: read-only viewers see redacted quotation fields.
+ */
+export function canViewBidDetails(roles: string[]): boolean {
+  return roles.some((r) => BID_DETAIL_ROLES.has(r));
+}
+
+export interface QuotationRecord {
+  id: string;
+  contractorName: string;
+  method: string;
+  quotedAmountMinor: bigint | null;
+  quotedPercentage: string | null;
+  aboveOrBelowOrAtPar: string | null;
+}
+
+/** Mask sensitive bid fields when the caller lacks bid-detail roles. */
+export function redactQuotation<T extends QuotationRecord>(q: T, showDetails: boolean): T {
+  if (showDetails) return q;
+  return {
+    ...q,
+    contractorName: "Bidder (confidential)",
+    quotedAmountMinor: null,
+    quotedPercentage: null,
+    aboveOrBelowOrAtPar: null,
+  };
+}

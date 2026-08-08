@@ -90,6 +90,14 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createIssueCommand(ctx, body));
   });
 
+  // Close issue
+  app.post("/v1/works/execution/issues/:id/close", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const body = v.closeIssueSchema.parse({ id: (req.params as { id: string }).id });
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closeIssueCommand(ctx, body.id));
+  });
+
   // Close work
   app.post("/v1/works/execution/close", async (req, reply) => {
     const ctx = resolveContext(req);

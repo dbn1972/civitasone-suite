@@ -10,7 +10,14 @@ const mockUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ wher
 const mockTx = {
   insert: mockInsert,
   update: mockUpdate,
-  select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) }),
+  select: vi.fn().mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue([{ id: "award-1", acceptedAmountMinor: 999999999999n }]),
+        then: (resolve: Function) => Promise.resolve([]).then(resolve),
+      }),
+    }),
+  }),
 };
 const mockTransaction = vi.fn((fn: Function) => fn(mockTx));
 

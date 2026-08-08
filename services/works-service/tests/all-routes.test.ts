@@ -42,6 +42,26 @@ vi.mock("@civitasone/cache", () => ({
   },
 }));
 
+vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/tender/repo.js")>();
+  const defaultAward = {
+    id: "00000000-2222-4000-8000-000000000001",
+    tenantId: "11111111-bbbb-4000-8000-000000000001",
+    workId: "00000000-1111-4000-8000-000000000001",
+    acceptedAmountMinor: 999999999999n,
+    status: "do_finalized",
+    contractorName: "Test Contractor",
+  };
+  return {
+    ...orig,
+    getAwardById: vi.fn(async () => defaultAward),
+    getAward: vi.fn(async () => defaultAward),
+    listTenders: vi.fn(async () => []),
+    listQuotations: vi.fn(async () => []),
+    hasTenderForWork: vi.fn(async () => false),
+  };
+});
+
 vi.mock("@civitasone/queue", () => ({
   createQueue: () => ({
     publish: vi.fn().mockResolvedValue(undefined),

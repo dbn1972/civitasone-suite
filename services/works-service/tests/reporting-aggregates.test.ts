@@ -105,8 +105,8 @@ describe("Reporting aggregates", () => {
     expect(body.totalWorks).toBe(50);
     expect(body.closedWorks).toBe(12);
     expect(body.activeWorks).toBe(38);
-    expect(countProposals).toHaveBeenCalledWith(TENANT_A);
-    expect(countClosures).toHaveBeenCalledWith(TENANT_A);
+    expect(countProposals).toHaveBeenCalledWith(TENANT_A, expect.objectContaining({}));
+    expect(countClosures).toHaveBeenCalledWith(TENANT_A, expect.objectContaining({}));
   });
 
   it("summary report: activeWorks never negative when closed > total", async () => {
@@ -128,8 +128,8 @@ describe("Reporting aggregates", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toEqual(statusData);
-    expect(proposalStatusCounts).toHaveBeenCalledWith(TENANT_A);
-    expect(proposalStatusCounts).not.toHaveBeenCalledWith(TENANT_B);
+    expect(proposalStatusCounts).toHaveBeenCalledWith(TENANT_A, expect.objectContaining({}));
+    expect(proposalStatusCounts).not.toHaveBeenCalledWith(TENANT_B, expect.anything());
   });
 
   it("status report for tenant B uses tenant B scope only", async () => {
@@ -138,7 +138,7 @@ describe("Reporting aggregates", () => {
       method: "GET", url: "/v1/works/reports/status",
       headers: { authorization: `Bearer ${bearerToken(jwtPayload(TENANT_B, ["works_viewer"]))}` },
     });
-    expect(proposalStatusCounts).toHaveBeenCalledWith(TENANT_B);
+    expect(proposalStatusCounts).toHaveBeenCalledWith(TENANT_B, expect.objectContaining({}));
   });
 
   it("reports are read-only (GET only — no mutation endpoints in reporting/routes.ts)", async () => {

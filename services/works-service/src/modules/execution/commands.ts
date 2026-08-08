@@ -39,6 +39,10 @@ export async function createIssueCommand(ctx: RequestContext, body: Record<strin
   return publish(ctx, COMMANDS.issueCreate, body);
 }
 
+export async function closeIssueCommand(ctx: RequestContext, id: string): Promise<Accepted> {
+  return publish(ctx, COMMANDS.issueClose, { id });
+}
+
 export async function closeWorkCommand(ctx: RequestContext, body: Record<string, unknown>): Promise<Accepted> {
   return publish(ctx, COMMANDS.workClose, body);
 }
