@@ -1,9 +1,18 @@
 /**
- * SVC-084 — pure document-verification domain helpers (no I/O, unit-tested).
+ * SVC-084 / FN-26 — pure document-verification domain helpers (no I/O, unit-tested).
  *
  * Covers: the DigiLocker adapter honesty gate, the per-service required-document
- * checklist status computation, and the verification/deficiency state machine.
+ * checklist status computation, lane-scoped officer checklists (FN-26), and the
+ * verification/deficiency state machine.
  */
+
+import {
+  docsForVerificationLane,
+  normalizeLaneKey,
+  type RequiredDocWithLane,
+} from "../catalogue/lane-bindings.js";
+
+export { docsForVerificationLane, normalizeLaneKey };
 
 export const DOC_SOURCES = ["upload", "digilocker"] as const;
 export type DocSource = typeof DOC_SOURCES[number];
@@ -62,7 +71,7 @@ export interface ChecklistItem {
  * submission of that docType exists, and `verified` if any is verified.
  */
 export function computeChecklist(
-  required: Array<{ docType: string; label?: string | undefined; mandatory: boolean }>,
+  required: Array<{ docType: string; label?: string | undefined; mandatory: boolean; verifiedAtLane?: string | undefined }>,
   submissions: Array<{ docType: string; status: string; verificationStatus: string }>,
 ): { items: ChecklistItem[]; complete: boolean } {
   const items = required.map((r) => {
@@ -73,6 +82,20 @@ export function computeChecklist(
   });
   const complete = items.filter((i) => i.mandatory).every((i) => i.verified);
   return { items, complete };
+}
+
+/**
+ * FN-26 — officer workbasket checklist for a single verification lane.
+ * When `laneKey` is set, only documents bound to that lane are returned.
+ */
+export function computeLaneChecklist(
+  required: RequiredDocWithLane[],
+  submissions: Array<{ docType: string; status: string; verificationStatus: string }>,
+  laneKey?: string | undefined,
+): { items: ChecklistItem[]; complete: boolean; laneKey: string | null } {
+  const scoped = laneKey ? docsForVerificationLane(required, laneKey) : required;
+  const { items, complete } = computeChecklist(scoped, submissions);
+  return { items, complete, laneKey: laneKey ? normalizeLaneKey(laneKey) : null };
 }
 
 /** Map an officer verification decision to the resulting persisted state. */

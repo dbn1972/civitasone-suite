@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { assertDefinitionPublishable, mandatoryDocTypes } from "../src/modules/catalogue/domain.js";
 import {
-  isDigiLockerConfigured, digiLockerFetch, computeChecklist, verificationTransition,
+  isDigiLockerConfigured, digiLockerFetch, computeChecklist, computeLaneChecklist, verificationTransition,
 } from "../src/modules/documents/domain.js";
 import {
   assertWithinFilingWindow, orderOutcome, canIssueOrder, addDays, DEFAULT_FILING_WINDOW_DAYS,
@@ -66,6 +66,18 @@ describe("SVC-084 documents domain — DigiLocker honesty gate", () => {
     );
     expect(items.find((i) => i.docType === "a")?.verified).toBe(true);
     expect(complete).toBe(true); // only mandatory 'a' must be verified
+  });
+  it("FN-26 computeLaneChecklist scopes to verifiedAtLane", () => {
+    const { items, laneKey } = computeLaneChecklist(
+      [
+        { docType: "id", mandatory: true, verifiedAtLane: "inspection" },
+        { docType: "noc", mandatory: true, verifiedAtLane: "decision" },
+      ],
+      [],
+      "lane_inspection",
+    );
+    expect(laneKey).toBe("inspection");
+    expect(items.map((i) => i.docType)).toEqual(["id"]);
   });
   it("superseded submissions do not count as provided", () => {
     const { items } = computeChecklist([{ docType: "a", mandatory: true }], [{ docType: "a", status: "superseded", verificationStatus: "failed" }]);

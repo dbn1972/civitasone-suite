@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/app/_components/ds";
-import { narrateWorkflow, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
+import {
+  narrateWorkflow,
+  type WorkflowDesignState,
+  type WorkflowLane,
+} from "../_data/workflowConstants";
 import { fetchTenantPositions, persistWorkflowDesign } from "../_data/workflowBuilderApi";
 
 const DesignerCanvas = dynamic(
@@ -15,7 +19,7 @@ interface Props {
   serviceName: string;
   initial: WorkflowDesignState;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
-  onDesignPersisted?: (design: WorkflowDesignState) => void;
+  onDesignPersisted?: (design: WorkflowDesignState) => void | Promise<void>;
 }
 
 export function ApprovalChainBuilder({
@@ -212,6 +216,26 @@ function LaneCard({
               value={lane.slaDays}
               onChange={(e) => onChange(lane.id, { slaDays: Number(e.target.value) || 0 })}
             />
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 12, marginBottom: 8 }}>
+            <span style={{ color: "var(--mut)" }}>Escalate to (on breach)</span>
+            <select
+              className="input"
+              value={lane.escalationDesignationId}
+              onChange={(e) => {
+                const opt = positions.find((p) => p.id === e.target.value);
+                onChange(lane.id, {
+                  escalationDesignationId: e.target.value,
+                  escalationDesignationLabel: opt?.label ?? "",
+                });
+              }}
+              aria-label="Escalation designation"
+            >
+              <option value="">Select superior designation</option>
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
           </label>
           {onToggleOptional ? (
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>

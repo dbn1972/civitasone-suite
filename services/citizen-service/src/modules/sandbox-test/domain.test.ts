@@ -24,7 +24,29 @@ function baseDef(overrides: Partial<ServiceDefinitionRow> = {}): ServiceDefiniti
     eligibilityRuleSetId: "elig-1",
     feeScheduleId: "fee-1",
     issuanceType: "certificate",
-    requiredDocuments: [{ docType: "id", mandatory: true }],
+    requiredDocuments: [{ docType: "id", mandatory: true, verifiedAtLane: "inspection" }],
+    laneBindings: [
+      {
+        key: "inspection",
+        name: "Inspection",
+        enabled: true,
+        designationId: "pos-inspector",
+        designationLabel: "Licensing Inspector",
+        slaDays: 7,
+        escalationDesignationId: "pos-officer",
+        escalationDesignationLabel: "Licensing Officer",
+      },
+      {
+        key: "decision",
+        name: "Decision",
+        enabled: true,
+        designationId: "pos-officer",
+        designationLabel: "Licensing Officer",
+        slaDays: 5,
+        escalationDesignationId: "pos-chief",
+        escalationDesignationLabel: "Chief Licensing Officer",
+      },
+    ],
     slaDays: 15,
     channels: ["portal"],
     forms: [],
@@ -126,5 +148,30 @@ describe("runSandboxPipeline (FN-10)", () => {
       }],
     }));
     expect(result.steps.find((s) => s.id === "demand")?.status).toBe("fail");
+  });
+
+  it("FN-25: passes SLA breach escalation when lanes have clocks + superiors", () => {
+    const result = runSandboxPipeline(baseDef());
+    const step = result.steps.find((s) => s.id === "sla_escalation");
+    expect(step?.status).toBe("pass");
+    const notes = (step?.artifacts as { breachedNotifications?: unknown[] })?.breachedNotifications;
+    expect(notes?.length).toBeGreaterThan(0);
+  });
+
+  it("FN-25: fails when escalation designation is missing on a tracked lane", () => {
+    const result = runSandboxPipeline(baseDef({
+      laneBindings: [{
+        key: "inspection", name: "Inspection", enabled: true, slaDays: 7, designationId: "pos-i",
+      }],
+    }));
+    expect(result.steps.find((s) => s.id === "sla_escalation")?.status).toBe("fail");
+  });
+
+  it("FN-26: fails when a mandatory document has no verifying lane", () => {
+    const result = runSandboxPipeline(baseDef({
+      requiredDocuments: [{ docType: "id", mandatory: true }],
+    }));
+    expect(result.steps.find((s) => s.id === "doc_verification")?.status).toBe("fail");
+  });
   });
 });

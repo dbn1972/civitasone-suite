@@ -10,6 +10,8 @@ export const tasks = domainSchema.table("tasks", {
   name: varchar("name", { length: 200 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("pending"),
   roleRef: varchar("role_ref", { length: 128 }),
+  /** FN-25 — superior designation for SLA escalation (copied from definition node). */
+  escalateToRef: varchar("escalate_to_ref", { length: 128 }),
   nodeKey: varchar("node_key", { length: 64 }),
   refType: varchar("ref_type", { length: 64 }),
   refId: uuid("ref_id"),

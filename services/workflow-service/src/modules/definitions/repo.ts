@@ -134,6 +134,8 @@ export interface NodeSpec {
   nodeKey: string;
   name: string;
   roleRef?: string | null | undefined;
+  /** FN-25 — superior designation for SLA breach escalation. */
+  escalateToRef?: string | null | undefined;
   nodeType?: string | undefined;
   slaMinutes?: number | null | undefined;
   timerMinutes?: number | null | undefined;
@@ -185,6 +187,7 @@ export async function insertGraphTx(
         nodeKey: n.nodeKey,
         name: n.name,
         ...(n.roleRef !== undefined && n.roleRef !== null ? { roleRef: n.roleRef } : {}),
+        ...(n.escalateToRef !== undefined && n.escalateToRef !== null ? { escalateToRef: n.escalateToRef } : {}),
         nodeType: n.nodeType ?? "task",
         ...(n.slaMinutes !== undefined && n.slaMinutes !== null ? { slaMinutes: n.slaMinutes } : {}),
         ...(n.timerMinutes !== undefined && n.timerMinutes !== null ? { timerMinutes: n.timerMinutes } : {}),

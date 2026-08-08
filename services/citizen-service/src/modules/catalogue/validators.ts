@@ -28,6 +28,18 @@ const profileBindingSchema = z.object({
   required:      z.boolean().default(true),
 });
 
+const laneBindingSchema = z.object({
+  key:                          safeText({ max: 64 }),
+  name:                         safeText({ max: 120 }),
+  optional:                     z.boolean().optional(),
+  enabled:                      z.boolean().optional(),
+  designationId:                safeText({ max: 128 }).optional(),
+  designationLabel:             safeText({ max: 160 }).optional(),
+  slaDays:                      z.number().int().min(0).max(3650),
+  escalationDesignationId:      safeText({ max: 128 }).optional(),
+  escalationDesignationLabel:   safeText({ max: 160 }).optional(),
+});
+
 const designerFields = {
   servicePattern:       z.enum(SERVICE_PATTERNS).optional(),
   ownerOfficeId:        z.string().uuid().optional(),
@@ -43,6 +55,8 @@ const designerFields = {
   allowedApplicantTypes: z.array(z.enum(APPLICANT_TYPES)).min(1).max(4).optional(),
   applicantTypeRejectMessage: safeText({ max: 500, multiline: true }).optional(),
   profileAttributeBindings: z.array(profileBindingSchema).max(50).optional(),
+  /** FN-25 — per-lane SLA + escalation designations. */
+  laneBindings:         z.array(laneBindingSchema).max(20).optional(),
 };
 
 export const createDefinitionBody = z.object({

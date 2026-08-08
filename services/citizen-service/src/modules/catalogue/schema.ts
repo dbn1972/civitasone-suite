@@ -2,6 +2,7 @@ import { pgSchema, uuid, text, varchar, integer, timestamp, jsonb } from "drizzl
 import type { RequiredDocument, ServiceChannel, ServicePattern, FeeModel } from "./domain.js";
 import type { ApplicantType, ProfileAttributeBinding } from "../applicant-identity/domain.js";
 import type { EngineBinding } from "../engine-bindings/domain.js";
+import type { LaneBinding } from "./lane-bindings.js";
 
 export const catalogueSchema = pgSchema("catalogue");
 
@@ -10,6 +11,8 @@ export interface StatutoryReference {
   section?: string;
   url?: string;
 }
+
+export type { LaneBinding };
 
 export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   id:                   uuid("id").primaryKey().defaultRandom(),
@@ -33,6 +36,8 @@ export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   feeScheduleId:        uuid("fee_schedule_id"),
   issuanceType:         varchar("issuance_type", { length: 48 }),
   requiredDocuments:    jsonb("required_documents").$type<RequiredDocument[]>().notNull().default([]),
+  /** FN-25 — per-lane SLA days + escalation designation bindings. */
+  laneBindings:         jsonb("lane_bindings").$type<LaneBinding[]>().notNull().default([]),
   slaDays:              integer("sla_days"),
   channels:             jsonb("channels").$type<ServiceChannel[]>().notNull().default([]),
   forms:                jsonb("forms").$type<unknown[]>().notNull().default([]),

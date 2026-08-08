@@ -11,6 +11,7 @@ import type { WorkflowTask } from "../_data/workflowTypes";
 import { titleCase } from "../_data/workflowTypes";
 import { StatusFilter } from "./StatusFilter";
 import { TaskActions } from "./TaskActions";
+import { DocVerificationChecklist } from "./DocVerificationChecklist";
 
 type Row = WorkflowTask & Record<string, unknown>;
 
@@ -111,7 +112,17 @@ export function TasksTable({ tasks, showInstance = true }: TasksTableProps) {
             align: "right",
             sortable: false,
             render: (r) => (
-              <TaskActions taskId={r.id} status={r.status} assigned={Boolean(r.assigneeId)} compact />
+              <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
+                <TaskActions taskId={r.id} status={r.status} assigned={Boolean(r.assigneeId)} compact />
+                {/* FN-26 — lane-scoped mandatory document checklist for officers. */}
+                {r.nodeKey && r.refId && (r.refType ?? "").toLowerCase().includes("application") ? (
+                  <DocVerificationChecklist
+                    laneKey={r.nodeKey}
+                    applicationId={r.refId}
+                    compact
+                  />
+                ) : null}
+              </div>
             ),
           },
         ]}

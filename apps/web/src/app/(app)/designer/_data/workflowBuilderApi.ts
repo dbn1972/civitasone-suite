@@ -1,9 +1,9 @@
 "use client";
 
 import type { WorkflowDesignState, WorkflowLane } from "./workflowConstants";
-import { defaultLanes, emptyWorkflowDesign } from "./workflowConstants";
+import { defaultLanes, emptyWorkflowDesign, slaDaysToMinutes } from "./workflowConstants";
 
-export { emptyWorkflowDesign };
+export { emptyWorkflowDesign, slaDaysToMinutes };
 
 interface DesignerNode {
   id: string;
@@ -62,6 +62,12 @@ export function lanesToBpmn(lanes: WorkflowLane[]): { elements: DesignerNode[]; 
         designationId: lane.designationId,
         designationLabel: lane.designationLabel,
         slaDays: lane.slaDays,
+        // FN-25 — also stamp slaMinutes so compile/deploy paths can start clocks.
+        ...(slaDaysToMinutes(lane.slaDays) != null
+          ? { slaMinutes: slaDaysToMinutes(lane.slaDays) }
+          : {}),
+        escalationDesignationId: lane.escalationDesignationId,
+        escalationDesignationLabel: lane.escalationDesignationLabel,
       },
     });
     edges.push({ id: `edge_${prevId}_${nodeId}`, source: prevId, target: nodeId });
@@ -90,12 +96,18 @@ function lanesFromBpmn(elements: DesignerNode[]): WorkflowLane[] | null {
     const node = tasks.find((t) => (t.properties?.laneKey as string) === lane.key)
       ?? tasks.find((t) => t.label.toLowerCase() === lane.name.toLowerCase());
     if (!node) return lane;
+    const props = node.properties ?? {};
+    const slaFromMinutes = typeof props.slaMinutes === "number" && props.slaMinutes > 0
+      ? Math.round(props.slaMinutes / (24 * 60))
+      : undefined;
     return {
       ...lane,
       name: node.label || lane.name,
-      designationId: String(node.properties?.designationId ?? ""),
-      designationLabel: String(node.properties?.designationLabel ?? ""),
-      slaDays: Number(node.properties?.slaDays ?? lane.slaDays),
+      designationId: String(props.designationId ?? ""),
+      designationLabel: String(props.designationLabel ?? ""),
+      slaDays: Number(props.slaDays ?? slaFromMinutes ?? lane.slaDays),
+      escalationDesignationId: String(props.escalationDesignationId ?? ""),
+      escalationDesignationLabel: String(props.escalationDesignationLabel ?? ""),
       enabled: true,
     };
   });

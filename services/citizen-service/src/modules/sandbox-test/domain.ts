@@ -1,9 +1,19 @@
 /**
  * FN-10 — synthetic sandbox pipeline validation (pure, no I/O).
- * Steps: form → eligibility → workflow → demand → payment → GL → certificate.
+ * Steps: form → eligibility → workflow → sla_escalation → doc_verification
+ *        → demand → payment → GL → certificate.
+ *
+ * FN-25/26 additions: simulate per-lane SLA breach → escalation notification,
+ * and assert document verification lanes are bound for mandatory docs.
  */
 import { hiddenBlocksForPattern } from "./pattern.js";
 import type { ServiceDefinitionRow } from "../catalogue/schema.js";
+import {
+  isSlaTrackedLane,
+  simulateLaneSlaBreach,
+  unboundMandatoryDocs,
+  type LaneBinding,
+} from "../catalogue/lane-bindings.js";
 import {
   hasLiveFeeEngineBinding,
   normalizeEngineBindings,
@@ -107,6 +117,58 @@ export function runSandboxPipeline(def: ServiceDefinitionRow): SandboxRunResult 
     ));
   } else {
     steps.push(pass("workflow", "Approval chain lanes", { workflowDefinitionId: def.workflowDefinitionId }));
+  }
+
+  // 3b — FN-25 SLA / escalation (sandbox breach → notification)
+  const laneBindings = (Array.isArray(def.laneBindings) ? def.laneBindings : []) as LaneBinding[];
+  const tracked = laneBindings.filter(isSlaTrackedLane);
+  if (hidden.has("b4")) {
+    steps.push(skip("sla_escalation", "SLA breach escalates"));
+  } else if (tracked.length === 0) {
+    steps.push(fail(
+      "sla_escalation", "SLA breach escalates", "b4",
+      "No lane SLA clocks are configured.",
+      "Per-lane SLA days drive due timers and escalation on breach.",
+      "Set SLA days (and optionally an escalation designation) on each approval lane.",
+    ));
+  } else {
+    const missingEscalation = tracked.filter((l) => !l.escalationDesignationId?.trim());
+    if (missingEscalation.length > 0) {
+      steps.push(fail(
+        "sla_escalation", "SLA breach escalates", "b4",
+        `Lane "${missingEscalation[0]!.name}" has no escalation designation.`,
+        "On breach the sweeper must notify a superior designation.",
+        "Pick an escalation designation on each SLA-tracked lane.",
+      ));
+    } else {
+      const simulations = tracked.map((l) => simulateLaneSlaBreach(l));
+      const breached = simulations.filter((s) => s.breached && s.notification);
+      steps.push(pass("sla_escalation", "SLA breach escalates", {
+        lanesChecked: tracked.length,
+        breachedNotifications: breached.map((s) => s.notification),
+      }));
+    }
+  }
+
+  // 3c — FN-26 document verification lane binding
+  const docs = Array.isArray(def.requiredDocuments) ? def.requiredDocuments : [];
+  if (hidden.has("b6") || docs.length === 0) {
+    steps.push(skip("doc_verification", "Document verification lanes"));
+  } else {
+    const unbound = unboundMandatoryDocs(docs);
+    if (unbound.length > 0) {
+      steps.push(fail(
+        "doc_verification", "Document verification lanes", "b6",
+        `Mandatory document "${unbound[0]!.docType}" has no verifying lane.`,
+        "Officers will not see a checklist for unbound documents.",
+        "Map each mandatory document to a verification lane in the Documents block.",
+      ));
+    } else {
+      steps.push(pass("doc_verification", "Document verification lanes", {
+        boundCount: docs.filter((d) => d.verifiedAtLane).length,
+        lanes: [...new Set(docs.map((d) => d.verifiedAtLane).filter(Boolean))],
+      }));
+    }
   }
 
   // 4 — Fee demand lines

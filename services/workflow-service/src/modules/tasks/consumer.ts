@@ -727,6 +727,7 @@ async function spawnTask(
   fromNode: string,
   node: {
     nodeKey: string; name: string; roleRef: string | null; slaMinutes: number | null;
+    escalateToRef?: string | null;
     nodeType?: string; timerMinutes?: number | null;
     assignStrategy?: string | null; assignRef?: string | null;
   },
@@ -760,6 +761,9 @@ async function spawnTask(
     name: node.name,
     status: "pending",
     roleRef: node.roleRef,
+    // FN-25 — copy superior designation so the sweeper can escalate without
+    // re-reading the definition graph under a race.
+    escalateToRef: node.escalateToRef ?? null,
     nodeKey: node.nodeKey,
     refType: instance.refType,
     refId: instance.refId,

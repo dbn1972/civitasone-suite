@@ -37,6 +37,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string;
       profileAttributeBindings?: unknown[];
       engineBindings?: unknown[];
+      laneBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -59,6 +60,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         workflowDefinitionId: p.workflowDefinitionId ?? null,
         issuanceType: p.issuanceType ?? null,
         requiredDocuments: p.requiredDocuments as never,
+        laneBindings: (p.laneBindings ?? []) as never,
         slaDays: p.slaDays ?? null,
         channels: p.channels as never,
         forms: (p.forms ?? []) as never,
@@ -85,6 +87,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
       allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string | null;
       profileAttributeBindings?: unknown[];
+      laneBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -97,6 +100,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.slaDays !== undefined) patch.slaDays = p.slaDays;
       if (p.channels !== undefined) patch.channels = p.channels;
       if (p.requiredDocuments !== undefined) patch.requiredDocuments = p.requiredDocuments;
+      if (p.laneBindings !== undefined) patch.laneBindings = p.laneBindings;
       if (p.servicePattern !== undefined) patch.servicePattern = p.servicePattern;
       if (p.ownerOfficeId !== undefined) patch.ownerOfficeId = p.ownerOfficeId;
       if (p.offeringOfficeIds !== undefined) patch.offeringOfficeIds = p.offeringOfficeIds;

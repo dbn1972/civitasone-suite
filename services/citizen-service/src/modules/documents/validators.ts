@@ -33,7 +33,11 @@ export const resubmitBody = z.object({
 export type ResubmitBody = z.infer<typeof resubmitBody>;
 
 export const checklistQuery = z.object({
-  serviceId:     z.string().uuid(),
+  serviceId:     z.string().uuid().optional(),
   applicationId: z.string().uuid().optional(),
+  /** FN-26 — when set, return only documents verified at this workflow lane. */
+  laneKey:       safeText({ max: 64 }).optional(),
+}).refine((q) => Boolean(q.serviceId || q.applicationId), {
+  message: "serviceId or applicationId required",
 });
 export const applicationQuery = z.object({ applicationId: z.string().uuid() });
