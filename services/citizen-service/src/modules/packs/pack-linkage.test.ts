@@ -64,7 +64,8 @@ describe("FN-27 appealEligibility", () => {
   });
 
   it("falls back to the appeal module's default window", () => {
-    const { filingWindowDays: _omitted, ...noWindow } = APPEALABLE;
+    const noWindow: AppealLinkage = { ...APPEALABLE };
+    delete noWindow.filingWindowDays;
     const r = appealEligibility(noWindow, DECIDED, d("2026-06-10"));
     expect(r.filingDeadline).toBe("2026-07-01"); // DEFAULT_FILING_WINDOW_DAYS = 30
   });
