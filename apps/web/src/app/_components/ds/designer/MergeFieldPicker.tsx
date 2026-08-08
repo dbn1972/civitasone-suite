@@ -9,7 +9,7 @@ export interface MergeField {
 }
 
 export interface MergeFieldPickerProps {
-  fields: MergeField[];
+  fields?: MergeField[];
   onInsert: (token: string) => void;
   disabled?: boolean;
 }
