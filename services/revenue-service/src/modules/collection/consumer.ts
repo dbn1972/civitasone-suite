@@ -38,7 +38,7 @@ export function registerCollectionConsumers(queue: Queue): void {
       );
 
       // Insert receipt
-      await tx.insert(receipts).values({
+      const receiptRows = await tx.insert(receipts).values({
         tenantId: msg.tenantId,
         assesseeId,
         demandId,
@@ -49,7 +49,8 @@ export function registerCollectionConsumers(queue: Queue): void {
         bankName: bankName ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      }).returning({ id: receipts.id });
+      const receiptId = receiptRows[0]?.id ?? reference;
 
       // Insert DCB entry (type: collection)
       const newBalance = balance - amount;
@@ -60,19 +61,20 @@ export function registerCollectionConsumers(queue: Queue): void {
         entryType: "collection",
         amountMinor: amount,
         balanceMinor: newBalance,
+        referenceId: receiptId,
         referenceType: "receipt",
         narration: `Receipt collected via ${channel}`,
         createdBy: msg.actorId,
       });
 
-      // Enqueue outbox events
+      // Enqueue outbox events (receiptId required by finance GL consumer)
       await enqueue(tx, {
         topic: EVENTS.receiptCaptured,
         eventType: EVENTS.receiptCaptured,
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { assesseeId, demandId, amountMinor: amountMinor, channel },
+        payload: { receiptId, assesseeId, demandId, amountMinor: amountMinor, channel },
       });
       await enqueue(tx, {
         topic: "audit.event.record",

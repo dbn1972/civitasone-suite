@@ -78,6 +78,8 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
       payload: {
         serviceKey: SERVICE_KEY, serviceId: SERVICE_ID, name: "Trade Licence",
         servicePattern: "certificate",
+        feeModel: "flat",
+        hoaCode: "4201",
         ownerDepartment: "Municipal Licensing", channels: ["portal", "counter"],
         requiredDocuments: [
           { docType: "id_proof", label: "ID proof", mandatory: true },

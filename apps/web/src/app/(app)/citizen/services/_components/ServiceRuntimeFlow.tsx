@@ -7,6 +7,8 @@ import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { ErrorState } from "@/app/_components/ds";
 import {
   type PublishedServiceRuntime,
+  confirmPayment,
+  createPaymentIntent,
   formatFee,
   listDraftsForService,
   saveDraft,
@@ -147,6 +149,20 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         await updateDraft(id, values);
       }
       const ack = await submitDraft(id);
+      // FN-14 — fee-bearing packs: labelled sandbox capture → receipt → GL when
+      // no live gateway key is configured (pilot / Test Run path).
+      if (service.feeFromMinor != null && ack.applicationId) {
+        try {
+          const paymentId = await createPaymentIntent({
+            applicationId: ack.applicationId,
+            serviceId: service.id,
+            subject: values,
+          });
+          await confirmPayment(paymentId, "sandbox");
+        } catch {
+          /* payment is best-effort after submit; tracking still succeeds */
+        }
+      }
       setTrackingNo(ack.trackingNo);
       setStep("submitted");
     } catch (e) {
@@ -248,12 +264,12 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             <li>Inspection fee — included (stub)</li>
           </ul>
           <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            Online payment gateway integration is stubbed in this pilot — submit to receive tracking number; pay at counter or via SMS link when live.
+            Sandbox capture posts a receipt and GL journal for Test runs when no live gateway key is configured. Counter/offline payments remain available to officers.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>Back</button>
             <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={onSubmit}>
-              {busy ? "Submitting…" : "Submit application"}
+              {busy ? "Submitting…" : "Pay (sandbox) & submit"}
             </button>
           </div>
           {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13 }}>{error}</p> : null}

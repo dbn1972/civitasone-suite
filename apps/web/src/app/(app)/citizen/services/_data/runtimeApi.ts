@@ -165,6 +165,44 @@ export async function submitDraft(draftId: string): Promise<TrackingAck> {
   return { trackingNo: "PENDING", applicationId: "", status: "submitted", channel: "portal", acknowledgedAt: null };
 }
 
+/** FN-14 — create online payment intent for a submitted application. */
+export async function createPaymentIntent(payload: {
+  applicationId: string;
+  serviceId: string;
+  subject?: Record<string, unknown>;
+}): Promise<string> {
+  const res = await fetch("/api/proxy/v1/citizen/payments/intent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      applicationId: payload.applicationId,
+      serviceId: payload.serviceId,
+      subject: payload.subject ?? {},
+    }),
+  });
+  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Payment intent failed.");
+  const body = (await res.json()) as { id?: string };
+  if (!body.id) throw new Error("Payment intent missing id.");
+  return body.id;
+}
+
+/**
+ * FN-14 — confirm payment. Use mode=sandbox for Test/pilot when no live gateway
+ * credentials are configured (emits receipt → GL via finance consumer).
+ */
+export async function confirmPayment(
+  paymentId: string,
+  mode: "sandbox" | "gateway" = "sandbox",
+  gatewayRef?: string,
+): Promise<void> {
+  const res = await fetch(`/api/proxy/v1/citizen/payments/${paymentId}/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mode, ...(gatewayRef ? { gatewayRef } : {}) }),
+  });
+  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Payment confirm failed.");
+}
+
 export async function trackApplication(trackingNo: string): Promise<TrackingAck> {
   const res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackingNo)}`, {
     cache: "no-store",
