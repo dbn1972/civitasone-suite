@@ -12,6 +12,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -57,6 +58,7 @@ async function seedForm(
 let app: FastifyInstance;
 
 beforeAll(async () => {
+  registerConsumersOnce();
   app = await buildApp();
 });
 
@@ -76,7 +78,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-/** Create a draft version and return its id. */
+/** Create a draft version and return its id (CQRS: 202 + drain). */
 async function createDraft(layoutId: string, body: Record<string, unknown> = {}): Promise<string> {
   const res = await app.inject({
     method: "POST",
@@ -84,7 +86,8 @@ async function createDraft(layoutId: string, body: Record<string, unknown> = {})
     headers: hdr(TENANT, MAKER),
     body: JSON.stringify(body),
   });
-  expect(res.statusCode).toBe(201);
+  expect(res.statusCode).toBe(202);
+  await drainQueue();
   return res.json().data.id as string;
 }
 
@@ -97,14 +100,16 @@ async function publish(layoutId: string, body: Record<string, unknown> = {}): Pr
     headers: hdr(TENANT, MAKER),
     body: "{}",
   });
-  expect(submit.statusCode).toBe(200);
+  expect(submit.statusCode).toBe(202);
+  await drainQueue();
   const approve = await app.inject({
     method: "POST",
     url: `/v1/metadata/form-versions/${id}/approve`,
     headers: hdr(TENANT, CHECKER),
     body: "{}",
   });
-  expect(approve.statusCode).toBe(200);
+  expect(approve.statusCode).toBe(202);
+  await drainQueue();
   return id;
 }
 
@@ -160,8 +165,12 @@ describe("FRM-04/FRM-05 — creating a draft version", () => {
         cascadeRules: [],
       }),
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).toMatchObject({ versionNumber: 1, status: "draft" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+    const id = res.json().data.id as string;
+    await drainQueue();
+    const get = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, MAKER) });
+    expect(get.json().data).toMatchObject({ versionNumber: 1, status: "draft" });
   });
 
   it("400 when the body carries an unexpected key (strict schema)", async () => {
@@ -261,7 +270,11 @@ describe("FRM-04/FRM-05 — creating a draft version", () => {
       headers: hdr(TENANT, MAKER),
       body: "{}",
     });
-    expect(second.json().data.versionNumber).toBe(2);
+    expect(second.statusCode).toBe(202);
+    const id = second.json().data.id as string;
+    await drainQueue();
+    const get = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, MAKER) });
+    expect(get.json().data.versionNumber).toBe(2);
   });
 });
 
@@ -358,14 +371,18 @@ describe("FRM-07 — maker-checker publish", () => {
       headers: hdr(TENANT, MAKER),
       body: "{}",
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ status: "pending_approval", submittedBy: MAKER });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const after = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, MAKER) });
+    expect(after.json().data).toMatchObject({ status: "pending_approval", submittedBy: MAKER });
   });
 
   it("409 when submitting a version that is already awaiting approval", async () => {
     const { layoutId } = await seedForm(TENANT);
     const id = await createDraft(layoutId);
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    const first = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    expect(first.statusCode).toBe(202);
+    await drainQueue();
     const again = await app.inject({
       method: "POST",
       url: `/v1/metadata/form-versions/${id}/submit`,
@@ -379,7 +396,9 @@ describe("FRM-07 — maker-checker publish", () => {
   it("THE SUBMITTER CANNOT APPROVE THEIR OWN FORM VERSION (403)", async () => {
     const { layoutId } = await seedForm(TENANT);
     const id = await createDraft(layoutId);
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    expect(submit.statusCode).toBe(202);
+    await drainQueue();
 
     const selfApprove = await app.inject({
       method: "POST",
@@ -403,16 +422,20 @@ describe("FRM-07 — maker-checker publish", () => {
   it("a different actor can approve, and publish is recorded", async () => {
     const { layoutId } = await seedForm(TENANT);
     const id = await createDraft(layoutId);
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    expect(submit.statusCode).toBe(202);
+    await drainQueue();
     const res = await app.inject({
       method: "POST",
       url: `/v1/metadata/form-versions/${id}/approve`,
       headers: hdr(TENANT, CHECKER),
       body: "{}",
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ status: "published", publishedBy: CHECKER });
-    expect(res.json().data.publishedAt).toBeTruthy();
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const after = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, CHECKER) });
+    expect(after.json().data).toMatchObject({ status: "published", publishedBy: CHECKER });
+    expect(after.json().data.publishedAt).toBeTruthy();
   });
 
   it("409 on a second approve; publishedBy is not re-stamped", async () => {
@@ -459,15 +482,19 @@ describe("FRM-07 — maker-checker publish", () => {
   it("rejects a pending version back to draft and clears the submitter", async () => {
     const { layoutId } = await seedForm(TENANT);
     const id = await createDraft(layoutId);
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    expect(submit.statusCode).toBe(202);
+    await drainQueue();
     const res = await app.inject({
       method: "POST",
       url: `/v1/metadata/form-versions/${id}/reject`,
       headers: hdr(TENANT, CHECKER),
       body: JSON.stringify({ reason: "cascade options incomplete" }),
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ status: "draft", submittedBy: null });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const after = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, CHECKER) });
+    expect(after.json().data).toMatchObject({ status: "draft", submittedBy: null });
   });
 
   it("409 when rejecting a draft", async () => {
@@ -539,7 +566,9 @@ describe("FRM-07 — a published version is IMMUTABLE", () => {
   it("409 when patching a version awaiting approval", async () => {
     const { layoutId } = await seedForm(TENANT);
     const id = await createDraft(layoutId);
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${id}/submit`, headers: hdr(TENANT, MAKER), body: "{}" });
+    expect(submit.statusCode).toBe(202);
+    await drainQueue();
     const patch = await app.inject({
       method: "PATCH",
       url: `/v1/metadata/form-versions/${id}`,
@@ -559,8 +588,10 @@ describe("FRM-07 — a published version is IMMUTABLE", () => {
       headers: hdr(TENANT, MAKER),
       body: JSON.stringify({ visibilityRules: [{ field: "gstin", showWhen: "entity_type == 1" }] }),
     });
-    expect(ok.statusCode).toBe(200);
-    expect(ok.json().data.version).toBe(2);
+    expect(ok.statusCode).toBe(202);
+    await drainQueue();
+    const after = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${id}`, headers: hdr(TENANT, MAKER) });
+    expect(after.json().data.version).toBe(2);
 
     const bad = await app.inject({
       method: "PATCH",
@@ -593,13 +624,15 @@ describe("FRM-07 — a published version is IMMUTABLE", () => {
       headers: hdr(TENANT, MAKER),
       body: "{}",
     });
-    expect(revise.statusCode).toBe(201);
-    const draft = revise.json().data;
-    expect(draft.id).not.toBe(published);
-    expect(draft.status).toBe("draft");
-    expect(draft.versionNumber).toBe(2);
+    expect(revise.statusCode).toBe(202);
+    const draftId = revise.json().data.id as string;
+    expect(draftId).not.toBe(published);
+    await drainQueue();
+    const draft = await app.inject({ method: "GET", url: `/v1/metadata/form-versions/${draftId}`, headers: hdr(TENANT, MAKER) });
+    expect(draft.json().data.status).toBe("draft");
+    expect(draft.json().data.versionNumber).toBe(2);
     // The copy carries the source definition forward.
-    expect(draft.visibilityRules).toEqual([{ field: "gstin", showWhen: 'entity_type == "company"' }]);
+    expect(draft.json().data.visibilityRules).toEqual([{ field: "gstin", showWhen: 'entity_type == "company"' }]);
 
     const publishedAfter = await app.inject({
       method: "GET",
@@ -723,9 +756,10 @@ describe("LM-002 — minting a public endpoint", () => {
       headers: hdr(TENANT, MAKER),
       body: JSON.stringify({ label: "Campaign form" }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().data.publicKey).toMatch(/^[0-9a-f]{64}$/);
     expect(res.json().data.submitUrl).toContain(`/v1/metadata/public/tenants/${TENANT}/forms/`);
+    await drainQueue();
   });
 
   it("400 without a label", async () => {

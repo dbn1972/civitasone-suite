@@ -74,6 +74,7 @@ const SERVICE_DIR_MAP = {
   'audit-events': 'audit-service',
   'audit': 'audit-service',
   'notification': 'notification-service',
+  'notification-v1': 'notification-service',
   'finance': 'finance-service',
   'procurement': 'procurement-service',
   'contract': 'contract-service',

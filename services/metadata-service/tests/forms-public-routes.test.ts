@@ -22,6 +22,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
 import { MAX_UTM_LENGTH } from "../src/modules/forms/lead-domain.js";
 import {
   publicSubmissionFormLimiter,
@@ -91,17 +92,21 @@ async function seedPublishedPublicForm(
       cascadeRules: opts.cascadeRules ?? [],
     }),
   });
-  expect(draft.statusCode).toBe(201);
+  expect(draft.statusCode).toBe(202);
   const formVersionId = draft.json().data.id as string;
+  await drainQueue();
 
-  await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${formVersionId}/submit`, headers: hdr(tid, MAKER), body: "{}" });
+  const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${formVersionId}/submit`, headers: hdr(tid, MAKER), body: "{}" });
+  expect(submit.statusCode).toBe(202);
+  await drainQueue();
   const approve = await app.inject({
     method: "POST",
     url: `/v1/metadata/form-versions/${formVersionId}/approve`,
     headers: hdr(tid, CHECKER),
     body: "{}",
   });
-  expect(approve.statusCode).toBe(200);
+  expect(approve.statusCode).toBe(202);
+  await drainQueue();
 
   const endpoint = await app.inject({
     method: "POST",
@@ -109,7 +114,8 @@ async function seedPublishedPublicForm(
     headers: hdr(tid, MAKER),
     body: JSON.stringify({ label: "Campaign landing form" }),
   });
-  expect(endpoint.statusCode).toBe(201);
+  expect(endpoint.statusCode).toBe(202);
+  await drainQueue();
 
   return { layoutId, formVersionId, publicKey: endpoint.json().data.publicKey as string };
 }
@@ -129,6 +135,7 @@ async function countSubmissions(tid: string, formVersionId: string): Promise<num
 }
 
 beforeAll(async () => {
+  registerConsumersOnce();
   app = await buildApp();
 });
 
@@ -176,8 +183,9 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
         },
       }),
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("captured");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+    await drainQueue();
     const submissionId = res.json().data.id as string;
 
     const rows = await sqlClient.begin(async (sql) => {
@@ -205,7 +213,8 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
         answers: { entity_type: "individual", message: "call after 6pm" },
       }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const id = res.json().data.id as string;
 
     const rows = await sqlClient.begin(async (sql) => {
@@ -234,6 +243,8 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
         utm: { source: "linkedin", campaign: "q3" },
       }),
     });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const id = res.json().data.id as string;
 
     const rows = await sqlClient.begin(async (sql) => {
@@ -260,12 +271,14 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
 
   it("also emits an audit event", async () => {
     const form = await seedPublishedPublicForm(TENANT_A);
-    await app.inject({
+    const res = await app.inject({
       method: "POST",
       url: submitUrl(TENANT_A, form.publicKey),
       headers: JSON_HEADERS,
       body: JSON.stringify({ contact: { name: "Audit Check" }, answers: { entity_type: "individual" } }),
     });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const rows = await sqlClient.begin(async (sql) => {
       await sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
       return sql`SELECT count(*)::int AS n FROM _outbox.messages
@@ -286,7 +299,8 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
         landingUrl: "https://civitasone.gov.in/erp?utm_source=newsletter&utm_campaign=aug",
       }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const rows = await sqlClient.begin(async (sql) => {
       await sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
       return sql`SELECT utm_source, utm_campaign FROM metadata.form_submissions WHERE id = ${res.json().data.id}`;
@@ -302,7 +316,8 @@ describe("LM-002 happy path — capture a lead with UTM, no auth", () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ contact: { name: "Direct Lead" }, answers: { entity_type: "individual" } }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
   });
 });
 
@@ -352,7 +367,8 @@ describe("LM-002 tenant isolation — the property that matters most", () => {
       headers: { ...JSON_HEADERS, "x-tenant-id": TENANT_B },
       body: JSON.stringify({ contact: { name: "Header Tenant" }, answers: { entity_type: "individual" } }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const rows = await sqlClient.begin(async (sql) => {
       await sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
       return sql`SELECT tenant_id FROM metadata.form_submissions WHERE id = ${res.json().data.id}`;
@@ -396,9 +412,15 @@ describe("LM-002 does not leak — every resolution failure looks the same", () 
       headers: hdr(TENANT_A, MAKER),
       body: "{}",
     });
+    expect(draft.statusCode).toBe(202);
     const v2 = draft.json().data.id as string;
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${v2}/submit`, headers: hdr(TENANT_A, MAKER), body: "{}" });
-    await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${v2}/approve`, headers: hdr(TENANT_A, CHECKER), body: "{}" });
+    await drainQueue();
+    const submit = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${v2}/submit`, headers: hdr(TENANT_A, MAKER), body: "{}" });
+    expect(submit.statusCode).toBe(202);
+    await drainQueue();
+    const approve = await app.inject({ method: "POST", url: `/v1/metadata/form-versions/${v2}/approve`, headers: hdr(TENANT_A, CHECKER), body: "{}" });
+    expect(approve.statusCode).toBe(202);
+    await drainQueue();
 
     const res = await app.inject({
       method: "POST",
@@ -602,8 +624,9 @@ describe("LM-002 no stored XSS, no reflection", () => {
         answers: { entity_type: "individual" },
       }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(Object.keys(res.json().data).sort()).toEqual(["id", "status"]);
+    expect(res.json().data.status).toBe("accepted");
     expect(res.body).not.toContain("Quiet Response");
     expect(res.body).not.toContain("quiet@example.gov.in");
   });
@@ -624,7 +647,8 @@ describe("LM-002 + FRM-05 — hidden fields on a public submission", () => {
         answers: { entity_type: "individual" },
       }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
   });
 
   it("the same field DOES block when it is visible", async () => {
@@ -651,7 +675,8 @@ describe("LM-002 + FRM-05 — hidden fields on a public submission", () => {
         answers: { entity_type: "individual", gstin: "SPOOFED_VALUE" },
       }),
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
     const id = res.json().data.id as string;
 
     // Read back through the authenticated API: the strip is recorded...
@@ -695,7 +720,8 @@ describe("LM-002 + FRM-05 — hidden fields on a public submission", () => {
         answers: { entity_type: "company", gstin: "GST-OK" },
       }),
     });
-    expect(good.statusCode).toBe(201);
+    expect(good.statusCode).toBe(202);
+    await drainQueue();
   });
 });
 

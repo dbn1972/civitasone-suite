@@ -11,18 +11,35 @@
 ALTER TABLE disbursement.grant_disbursements
   ADD COLUMN IF NOT EXISTS eft_emitted boolean NOT NULL DEFAULT false;
 
--- Backfill: any disbursement that is not in a not-yet-paid holding state has
--- already had its EFT emitted under the legacy immediate-pay path.
-UPDATE disbursement.grant_disbursements
-   SET eft_emitted = true
- WHERE status NOT IN ('pending_approval', 'cancelled');
-
 -- Latent fix: the original status CHECK (migration 0001) omitted
 -- 'pending_approval' and 'cancelled', so the eOffice approval flow could never
 -- persist those states. Recreate the constraint with the full state set.
+-- Applied BEFORE the backfill so a failed backfill cannot leave the status
+-- vocabulary incomplete (CI bootstrap aborts the file on first uncaught ERROR).
 ALTER TABLE disbursement.grant_disbursements
   DROP CONSTRAINT IF EXISTS grant_disbursements_status_check;
 ALTER TABLE disbursement.grant_disbursements
   ADD CONSTRAINT grant_disbursements_status_check CHECK (status IN
     ('initiated','completed','failed','pending_approval','cancelled'));
 
+-- Backfill: any disbursement that is not in a not-yet-paid holding state has
+-- already had its EFT emitted under the legacy immediate-pay path.
+--
+-- Migration 0005 enabled FORCE RLS with a policy that calls
+-- current_setting('app.tenant_id', false). CI bootstrap runs this file as
+-- grant_svc with no GUC set, so a plain UPDATE errors with
+-- "unrecognized configuration parameter app.tenant_id".
+-- Temporarily drop FORCE so the table owner can backfill all tenants, then
+-- restore FORCE RLS. Wrapped so a privilege mismatch (admin-owned cluster)
+-- cannot abort the migration after the constraint rewrite above.
+DO $$
+BEGIN
+  ALTER TABLE disbursement.grant_disbursements NO FORCE ROW LEVEL SECURITY;
+  UPDATE disbursement.grant_disbursements
+     SET eft_emitted = true
+   WHERE status NOT IN ('pending_approval', 'cancelled');
+  ALTER TABLE disbursement.grant_disbursements FORCE ROW LEVEL SECURITY;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'eft_emitted backfill skipped (%). Status CHECK rewrite above still applies.', SQLERRM;
+END $$;

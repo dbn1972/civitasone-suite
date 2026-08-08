@@ -276,8 +276,10 @@ describe("handleCreateTemplate", () => {
     await handleCreateTemplate("msg-1", ctx, payload as any);
 
     expect(mockState.inserted.length).toBeGreaterThan(0);
-    expect(mockState.enqueueCalls.length).toBe(1);
+    // Domain event + audit.event.record (architecture rule: every mutation audits).
+    expect(mockState.enqueueCalls.length).toBe(2);
     expect(mockState.enqueueCalls[0]!.topic).toBe("reports.template.created");
+    expect(mockState.enqueueCalls[1]!.topic).toBe("audit.event.record");
     expect(mockState.cacheInvalidations.length).toBe(1);
   });
 });
@@ -290,8 +292,9 @@ describe("handleUpdateTemplate", () => {
 
     await handleUpdateTemplate("msg-2", ctx, payload);
 
-    expect(mockState.enqueueCalls.length).toBe(1);
+    expect(mockState.enqueueCalls.length).toBe(2);
     expect(mockState.enqueueCalls[0]!.topic).toBe("reports.template.updated");
+    expect(mockState.enqueueCalls[1]!.topic).toBe("audit.event.record");
     expect(mockState.cacheInvalidations.length).toBe(1);
   });
 });
@@ -304,8 +307,9 @@ describe("handleDeleteTemplate", () => {
 
     await handleDeleteTemplate("msg-3", ctx, payload);
 
-    expect(mockState.enqueueCalls.length).toBe(1);
+    expect(mockState.enqueueCalls.length).toBe(2);
     expect(mockState.enqueueCalls[0]!.topic).toBe("reports.template.deleted");
+    expect(mockState.enqueueCalls[1]!.topic).toBe("audit.event.record");
     expect(mockState.cacheInvalidations.length).toBe(1);
   });
 });
@@ -465,10 +469,13 @@ describe("registerRenderConsumers", () => {
     };
 
     await handlers.get("reports.job.render")!(msg);
-    // Should have updated job status and enqueued completion event
+    // Running-step audit + completion domain event.
     expect(mockState.updateCalls.length).toBeGreaterThan(0);
-    expect(mockState.enqueueCalls.length).toBe(1);
-    expect(mockState.enqueueCalls[0]!.topic).toBe("reports.job.completed");
+    expect(mockState.enqueueCalls.length).toBe(2);
+    expect(mockState.enqueueCalls.map((e) => e.topic)).toEqual([
+      "audit.event.record",
+      "reports.job.completed",
+    ]);
   });
 
   it("processes XLSX format", async () => {

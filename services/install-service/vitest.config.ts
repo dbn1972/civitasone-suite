@@ -1,11 +1,34 @@
 import { defineConfig } from "vitest/config";
 
+// CI bootstrap sets civitas_admin's password from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
+// (civitas_test). Local compose defaults to civitas_dev_pw. Silo provisioning
+// integration tests must use the same password or CREATE DATABASE fails auth.
+// Turbo 2 strict mode strips undeclared env — PGPASSWORD is listed in
+// turbo.json test.passThroughEnv. Also fall back to civitas_test when CI=true
+// so a direct `vitest run` in GHA still authenticates if pass-through is missed.
+const adminPw =
+  process.env.POSTGRES_ADMIN_PASSWORD ??
+  process.env.PGPASSWORD ??
+  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+    ? "civitas_test"
+    : "civitas_dev_pw");
+const pgHost = process.env.PGHOST ?? "localhost";
+const pgPort = process.env.PGPORT ?? "5435";
+const provisioningRunnerDsn =
+  process.env.PROVISIONING_RUNNER_DSN ??
+  `postgres://civitas_admin:${encodeURIComponent(adminPw)}@${pgHost}:${pgPort}/civitas_install`;
+
 export default defineConfig({
   test: {
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL: process.env.DATABASE_URL ?? "postgres://install_svc:install_dev_pw@localhost:5435/civitas_install",
+      PROVISIONING_RUNNER_DSN: provisioningRunnerDsn,
+      POSTGRES_ADMIN_PASSWORD: adminPw,
+      PGPASSWORD: adminPw,
+      PGHOST: pgHost,
+      PGPORT: pgPort,
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

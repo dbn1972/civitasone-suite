@@ -12,6 +12,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const A = randomUUID();
@@ -38,17 +39,23 @@ async function definePublished(
     method: "POST", url: "/v1/metadata/number-formats", headers: hdr(tid, MAKER),
     body: JSON.stringify({ formatKey, label: formatKey, ...spec }),
   });
-  expect(create.statusCode).toBe(201);
+  expect(create.statusCode).toBe(202);
   const id = create.json().data.id as string;
+  await drainQueue();
   const pub = await app.inject({ method: "POST", url: `/v1/metadata/number-formats/${id}/publish`, headers: auth(tid, CHECKER) });
-  expect(pub.statusCode).toBe(200);
-  expect(pub.json().data.status).toBe("active");
+  expect(pub.statusCode).toBe(202);
+  await drainQueue();
+  const active = await app.inject({ method: "GET", url: `/v1/metadata/number-formats/${id}`, headers: auth(tid, CHECKER) });
+  expect(active.json().data.status).toBe("active");
   return id;
 }
 
 let app: FastifyInstance;
 
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => {
+  registerConsumersOnce();
+  app = await buildApp();
+});
 
 afterAll(async () => {
   await app.close();
@@ -77,16 +84,20 @@ describe("auth + validation", () => {
 describe("maker-checker on format definition", () => {
   it("author cannot publish their own format; a different admin can", async () => {
     const create = await app.inject({ method: "POST", url: "/v1/metadata/number-formats", headers: hdr(A, MAKER), body: JSON.stringify({ formatKey: "test.mc", label: "MC", prefix: "MC" }) });
-    expect(create.statusCode).toBe(201);
-    expect(create.json().data.status).toBe("draft");
-    const id = create.json().data.id;
+    expect(create.statusCode).toBe(202);
+    expect(create.json().data.status).toBe("accepted");
+    const id = create.json().data.id as string;
+    await drainQueue();
+    const draft = await app.inject({ method: "GET", url: `/v1/metadata/number-formats/${id}`, headers: auth(A, MAKER) });
+    expect(draft.json().data.status).toBe("draft");
 
     const self = await app.inject({ method: "POST", url: `/v1/metadata/number-formats/${id}/publish`, headers: auth(A, MAKER) });
     expect(self.statusCode).toBe(403);
     expect(self.json().code).toBe("MAKER_CANNOT_CHECK");
 
     const ok = await app.inject({ method: "POST", url: `/v1/metadata/number-formats/${id}/publish`, headers: auth(A, CHECKER) });
-    expect(ok.statusCode).toBe(200);
+    expect(ok.statusCode).toBe(202);
+    await drainQueue();
 
     // Editing an active format is rejected.
     const edit = await app.inject({ method: "PATCH", url: `/v1/metadata/number-formats/${id}`, headers: hdr(A, CHECKER), body: JSON.stringify({ prefix: "XX" }) });
@@ -96,7 +107,8 @@ describe("maker-checker on format definition", () => {
 
   it("allocation requires an active format", async () => {
     const create = await app.inject({ method: "POST", url: "/v1/metadata/number-formats", headers: hdr(A, MAKER), body: JSON.stringify({ formatKey: "test.inactive", label: "x", prefix: "IN" }) });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
+    await drainQueue();
     const res = await app.inject({ method: "POST", url: "/v1/metadata/numbers/allocate", headers: hdr(A, MAKER), body: JSON.stringify({ formatKey: "test.inactive" }) });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("FORMAT_NOT_ACTIVE");
