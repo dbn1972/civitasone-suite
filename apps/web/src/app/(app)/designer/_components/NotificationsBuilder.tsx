@@ -53,7 +53,7 @@ export function NotificationsBuilder({
       </p>
       <NotificationMatrix
         matrix={design.matrix}
-        onChange={setDesign}
+        onChange={(matrix) => setDesign({ matrix })}
       />
     </Card>
   );
