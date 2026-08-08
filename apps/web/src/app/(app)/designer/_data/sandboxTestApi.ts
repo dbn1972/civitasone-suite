@@ -1,6 +1,7 @@
 "use client";
 
 import type { TestRunStep } from "@/app/_components/ds/designer";
+import { mapSandboxSteps } from "./sandboxTestModel";
 
 export interface SandboxTestRunDto {
   id: string;
@@ -18,28 +19,6 @@ export interface SandboxRunHistoryRow extends Record<string, unknown> {
   createdAt: string;
 }
 
-function mapSteps(steps: unknown, definitionId: string): TestRunStep[] {
-  if (!Array.isArray(steps)) return [];
-  return steps.map((s) => {
-    const row = s as Record<string, unknown>;
-    const status = row.status === "pass" || row.status === "fail" || row.status === "skip"
-      ? (row.status === "skip" ? "pass" : row.status)
-      : "pending";
-    return {
-      id: String(row.id ?? ""),
-      label: String(row.label ?? ""),
-      status: status as TestRunStep["status"],
-      error: typeof row.error === "string" ? row.error : undefined,
-      blockLink: typeof row.blockLink === "string"
-        ? row.blockLink.replace("__ID__", definitionId)
-        : undefined,
-      artifacts: typeof row.artifacts === "object" && row.artifacts !== null
-        ? row.artifacts as Record<string, unknown>
-        : undefined,
-    };
-  });
-}
-
 export async function runSandboxTest(definitionId: string): Promise<SandboxTestRunDto> {
   const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${definitionId}/sandbox-test/run`, {
     method: "POST",
@@ -55,7 +34,7 @@ export async function runSandboxTest(definitionId: string): Promise<SandboxTestR
     status: body.status === "pass" ? "pass" : "fail",
     passed: Boolean(body.passed),
     durationMs: typeof body.durationMs === "number" ? body.durationMs : undefined,
-    steps: mapSteps(body.steps, definitionId),
+    steps: mapSandboxSteps(body.steps, definitionId),
   };
 }
 
@@ -88,5 +67,6 @@ export async function fetchLatestSandboxTest(definitionId: string): Promise<Sand
     status: body.status === "pass" ? "pass" : "fail",
     durationMs: typeof body.durationMs === "number" ? body.durationMs : undefined,
     createdAt: String(body.createdAt ?? ""),
+    steps: body.steps != null ? mapSandboxSteps(body.steps, definitionId) : undefined,
   };
 }

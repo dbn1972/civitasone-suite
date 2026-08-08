@@ -12,13 +12,29 @@ const PATTERN_ICONS: Record<string, string> = {
 export interface PackCardProps {
   pack: ServicePackDto;
   source?: string;
+  sector?: string;
+  jurisdiction?: string;
   onPreview: (pack: ServicePackDto) => void;
   onImport: (pack: ServicePackDto) => void;
 }
 
-export function PackCard({ pack, source = "Domain pack", onPreview, onImport }: PackCardProps) {
+export function PackCard({
+  pack,
+  source = "Domain pack",
+  sector,
+  jurisdiction,
+  onPreview,
+  onImport,
+}: PackCardProps) {
   const icon = PATTERN_ICONS[pack.servicePattern ?? "certificate"] ?? "📦";
   const hasStatutory = pack.statutoryReferences.length > 0;
+  const metaBits = [
+    pack.domainPackKey ?? "tenant",
+    `v${pack.version}`,
+    source,
+    sector && sector !== "—" ? sector : null,
+    jurisdiction && jurisdiction !== "—" ? jurisdiction : null,
+  ].filter(Boolean);
 
   return (
     <article
@@ -38,7 +54,7 @@ export function PackCard({ pack, source = "Domain pack", onPreview, onImport }: 
         <div style={{ flex: 1 }}>
           <h3 style={{ margin: 0, fontSize: 16, color: "var(--ink)" }}>{pack.name}</h3>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>
-            {pack.domainPackKey ?? "—"} · v{pack.version} · {source}
+            {metaBits.join(" · ")}
           </p>
         </div>
         {hasStatutory ? (
