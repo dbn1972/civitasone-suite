@@ -766,24 +766,30 @@ describe("Store routes — happy paths", () => {
     expect(body.data.sizeBytes).toBe(18);
   });
 
-  it("PUT /v1/plugins/:pluginId/store/:key → 200 sets value", async () => {
+  it("PUT /v1/plugins/:pluginId/store/:key → 202 enqueues value", async () => {
     const res = await app.inject({
       method: "PUT", url: `/v1/plugins/${PLUGIN_ID}/store/settings`,
       headers: headers(["plugin_admin"]),
       payload: { value: { theme: "light", fontSize: 14 } },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.data).toBeDefined();
     expect(body.data.key).toBe("settings");
     expect(body.data.sizeBytes).toBeGreaterThan(0);
+    expect(body.data.status).toBe("accepted");
+    expect(body.data.correlationId).toBeDefined();
   });
 
-  it("DELETE /v1/plugins/:pluginId/store/:key → 204 deletes entry", async () => {
+  it("DELETE /v1/plugins/:pluginId/store/:key → 202 enqueues delete", async () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/plugins/${PLUGIN_ID}/store/settings`,
       headers: headers(["plugin_admin"]),
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(202);
+    const body = res.json();
+    expect(body.data.key).toBe("settings");
+    expect(body.data.status).toBe("accepted");
+    expect(body.data.correlationId).toBeDefined();
   });
 });
