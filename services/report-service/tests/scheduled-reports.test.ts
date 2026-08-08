@@ -11,6 +11,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll, beforeAll, afterEach, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -21,7 +22,19 @@ import {
   handleUpdateScheduled,
   handleDisableScheduled,
 } from "../src/modules/scheduled/consumer.js";
+import type { ScheduledReportView } from "../src/modules/scheduled/schema.js";
 import type { FastifyInstance } from "fastify";
+
+/** JSON round-trip turns Dates into strings; Drizzle timestamp columns need Date. */
+function asScheduledView(data: Record<string, unknown>): ScheduledReportView {
+  return {
+    ...(data as unknown as ScheduledReportView),
+    nextRunAt: new Date(String(data.nextRunAt)),
+    createdAt: new Date(String(data.createdAt)),
+    updatedAt: new Date(String(data.updatedAt)),
+    lastRunAt: data.lastRunAt == null ? null : new Date(String(data.lastRunAt)),
+  };
+}
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000077";
@@ -449,7 +462,11 @@ describe("Scheduled report lifecycle", () => {
     expect(data.format).toBe("xlsx");
     expect(data.enabled).toBe(true);
 
-    await handleCreateScheduled(createdId, { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-create" }, data);
+    await handleCreateScheduled(
+      createdId,
+      { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-create" },
+      asScheduledView(data as Record<string, unknown>),
+    );
   });
 
   it("updates the scheduled report", async () => {
@@ -462,6 +479,7 @@ describe("Scheduled report lifecycle", () => {
     expect(res.statusCode).toBe(202);
     expect(res.json().data.status).toBe("accepted");
 
+    // markProcessed stores messageId as uuid — non-uuid strings fail against real Postgres.
     await handleUpdateScheduled(
       randomUUID(),
       { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-update" },

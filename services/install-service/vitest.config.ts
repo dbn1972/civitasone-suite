@@ -23,7 +23,7 @@ export default defineConfig({
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
-      DATABASE_URL: process.env.INSTALL_DATABASE_URL ?? `postgres://install_svc:install_dev_pw@${pgHost}:${pgPort}/civitas_install`,
+      DATABASE_URL: process.env.DATABASE_URL ?? "postgres://install_svc:install_dev_pw@localhost:5435/civitas_install",
       PROVISIONING_RUNNER_DSN: provisioningRunnerDsn,
       POSTGRES_ADMIN_PASSWORD: adminPw,
       PGPASSWORD: adminPw,

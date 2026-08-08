@@ -146,7 +146,16 @@ jobs:
       # to load `@vitest/coverage-v8` and apply root thresholds, which fails
       # packages that either lack the provider dep or are below the global bar.
       - name: Run all service tests
+<<<<<<< HEAD
         run: pnpm turbo test
+=======
+        # --continue: without it Turbo aborts the whole run at the FIRST failing
+        # package, so a red CI reports exactly one broken service out of 71 and
+        # each fix costs a full ~18min cycle just to reveal the next one. With
+        # it, one run enumerates every failing package and the job still exits
+        # non-zero, so the gate is unchanged — only the diagnostics improve.
+        run: pnpm turbo test --continue
+>>>>>>> origin/main
 
   # ─────────────────────────────────────────────
   # Job 2b: Integration tests (blocking gate)
