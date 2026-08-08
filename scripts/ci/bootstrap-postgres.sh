@@ -44,7 +44,10 @@ run_bootstrap() {
 # at bootstrap_inspection.sql:55 and exited 3 BEFORE APPLYING ANY MIGRATION, so
 # every later step ran against an empty database. Invisible on dev machines
 # because the role was created there by hand, outside version control.
-ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}"
+# Must match the password used later when applying admin-owned migrations
+# (see PGPASSWORD reassignment below). Prefer POSTGRES_ADMIN_PASSWORD, then the
+# ambient PGPASSWORD (CI sets civitas_test), then the local-dev default.
+ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
 echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
      -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
