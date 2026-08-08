@@ -41,6 +41,7 @@ export async function importServicePack(packId: string): Promise<string> {
   const res = await fetch(`/api/proxy/v1/citizen/packs/services/${packId}/import`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: "{}",
   });
   return parseAccepted(res);
 }
