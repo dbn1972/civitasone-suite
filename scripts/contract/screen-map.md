@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-08-03T20:12:05.836Z
+Generated: 2026-08-08T07:33:57.588Z
 
-**Summary:** 212 WIRED | 0 MISSING | 0 MISMATCH | 441 NO_LOADER
+**Summary:** 217 WIRED | 0 MISSING | 0 MISMATCH | 485 NO_LOADER
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -105,6 +105,7 @@ Generated: 2026-08-03T20:12:05.836Z
 | cdp | /cdp/events | — | — | — | — | — | — NO_LOADER |
 | cdp | /cdp/identity | — | — | — | — | — | — NO_LOADER |
 | cdp | /cdp | — | — | — | — | — | — NO_LOADER |
+| cdp | /cdp/profiles/[id] | — | — | — | — | — | — NO_LOADER |
 | cdp | /cdp/profiles | — | — | — | — | — | — NO_LOADER |
 | cdp | /cdp/segments | — | — | — | — | — | — NO_LOADER |
 | cdp | /cdp/steward | — | — | — | — | — | — NO_LOADER |
@@ -131,6 +132,9 @@ Generated: 2026-08-03T20:12:05.836Z
 | citizen | /citizen/requests | getCitizenRequests | /api/v1/citizen/requests | citizen → /v1/citizen/requests | ✓ `/v1/citizen/requests` | ✓ | ✅ WIRED |
 | citizen | /citizen/rti/[id] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/rti | getRTIApplications | /api/v1/citizen/rti | citizen → /v1/citizen/rti | ✓ `/v1/citizen/rti` | ✓ | ✅ WIRED |
+| citizen | /citizen/services/[serviceKey]/apply | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/services/[serviceKey] | — | — | — | — | — | — NO_LOADER |
+| citizen | /citizen/services/[serviceKey]/track/[trackingNo] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/surveys | getCitizenSurveys | /api/v1/citizen/surveys | citizen → /v1/citizen/surveys | ✓ `/v1/citizen/surveys` | ✓ | ✅ WIRED |
 | contracts | /contracts/[id] | — | — | — | — | — | — NO_LOADER |
 | contracts | /contracts/list | getContracts | /api/v1/contract/contracts | contract → /v1/contract/contracts | ✓ `/v1/contract/contracts` | ✓ | ✅ WIRED |
@@ -148,24 +152,66 @@ Generated: 2026-08-03T20:12:05.836Z
 | crm | /crm/accounts/[id] | getCrmAccounts | /api/v1/crm/accounts | crm → /v1/crm/accounts | ✓ `/v1/crm/accounts` | ✓ | ✅ WIRED |
 | crm | /crm/accounts | getCrmAccounts | /api/v1/crm/accounts | crm → /v1/crm/accounts | ✓ `/v1/crm/accounts` | ✓ | ✅ WIRED |
 | crm | /crm/activities | getCRMActivities | /api/v1/crm/activities | crm → /v1/crm/activities | ✓ `/v1/crm/activities` | ✓ | ✅ WIRED |
+| crm | /crm/agent-workload | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/assignment-directory | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/assignment-rules | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/campaigns/[id] | getCrmCampaignRoi | /api/v1/crm/campaigns/:param/roi | crm → /v1/crm/campaigns/:param/roi | ✓ `/v1/crm/campaigns/:id/roi` | ✓ | ✅ WIRED |
+| crm | /crm/campaigns | getCrmCampaignRoiSummary | /api/v1/crm/campaigns/roi-summary | crm → /v1/crm/campaigns/roi-summary | ✓ `/v1/crm/campaigns/roi-summary` | ✓ | ✅ WIRED |
 | crm | /crm/contacts/[id]/edit | getContactById | /api/v1/crm/contacts/:param/detail | crm → /v1/crm/contacts/:param/detail | ✓ `/v1/crm/contacts/:id/detail` | ✓ | ✅ WIRED |
 | crm | /crm/contacts/[id] | getContactById | /api/v1/crm/contacts/:param/detail | crm → /v1/crm/contacts/:param/detail | ✓ `/v1/crm/contacts/:id/detail` | ✓ | ✅ WIRED |
 | crm | /crm/contacts/import | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/contacts/new | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/contacts | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/control-tower | getCrmControlTower | /api/v1/crm/dashboard/control-tower | crm → /v1/crm/dashboard/control-tower | ✓ `/v1/crm/dashboard/control-tower` | ✓ | ✅ WIRED |
+| crm | /crm/custom-fields | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/dashboard | getCRMDashboard | /api/v1/crm/dashboard | crm → /v1/crm/dashboard | ✓ `/v1/crm/dashboard` | ✓ | ✅ WIRED |
+| crm | /crm/data-quality | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/deals/[id] | getDealById | /api/v1/crm/deals/:param | crm → /v1/crm/deals/:param | ✓ `/v1/crm/deals/:id` | ✓ | ✅ WIRED |
 | crm | /crm/deals/new | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/deals | getDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
+| crm | /crm/dedup-rules | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/document-types | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/documents | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/escalation-rules | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/forecast | getCrmForecast | /api/v1/crm/forecast | crm → /v1/crm/forecast | ✓ `/v1/crm/forecast` | ✓ | ✅ WIRED |
 | crm | /crm/forecast | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
 | crm | /crm/health/[accountId] | getAccountHealthBreakdown | /api/v1/recommendations/health/:param/breakdown | recommendations → /v1/recommendations/health/:param/breakdown | ✓ `/v1/recommendations/health/:accountId/breakdown` | ✓ | ✅ WIRED |
 | crm | /crm/health | getAccountHealthWatchlist | /api/v1/recommendations/health/at-risk | recommendations → /v1/recommendations/health/at-risk | ✓ `/v1/recommendations/health/:accountId` | ✓ | ✅ WIRED |
 | crm | /crm/health | getCrmAccounts | /api/v1/crm/accounts | crm → /v1/crm/accounts | ✓ `/v1/crm/accounts` | ✓ | ✅ WIRED |
+| crm | /crm/lead-forms | getCrmLeadCaptureForms | /api/v1/crm/lead-capture-forms | crm → /v1/crm/lead-capture-forms | ✓ `/v1/crm/lead-capture-forms` | ✓ | ✅ WIRED |
+| crm | /crm/lead-reason-codes | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/lead-scoring | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/linked-accounts | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/onboarding/[id] | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/onboarding | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/opportunities/new | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/opportunities | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/opportunity-ageing | — | — | — | — | — | — NO_LOADER |
 | crm | /crm | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/pipeline | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
 | crm | /crm/pipeline | getPipelineDeals | /api/v1/crm/deals | crm → /v1/crm/deals | ✓ `/v1/crm/deals` | ✓ | ✅ WIRED |
+| crm | /crm/pipelines | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/price-books | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/products | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/qualification-frameworks | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/quotations | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/task-escalation | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/voice-of-customer | — | — | — | — | — | — NO_LOADER |
 | dashboard | /dashboard | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b1 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b2 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b3 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b4 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b5 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b6 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b7 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/b8 | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id] | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/review | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/[id]/test | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/library | — | — | — | — | — | — NO_LOADER |
+| designer | /designer/new | — | — | — | — | — | — NO_LOADER |
+| designer | /designer | — | — | — | — | — | — NO_LOADER |
 | developer-portal | /developer-portal | getAPIKeys | /api/v1/admin/api-keys | admin → /v1/admin/api-keys | ✓ `/v1/admin/api-keys` | ✓ | ✅ WIRED |
 | estab | /estab/approval-matrix | — | — | — | — | — | — NO_LOADER |
 | estab | /estab/approvals | — | — | — | — | — | — NO_LOADER |
@@ -482,9 +528,12 @@ Generated: 2026-08-03T20:12:05.836Z
 | metadata | /metadata | — | — | — | — | — | — NO_LOADER |
 | metadata | /metadata/records | — | — | — | — | — | — NO_LOADER |
 | metadata | /metadata/rules | — | — | — | — | — | — NO_LOADER |
+| notifications | /notifications/campaigns/[id] | — | — | — | — | — | — NO_LOADER |
+| notifications | /notifications/campaigns | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/compose | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/deliveries/[id] | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/deliveries | — | — | — | — | — | — NO_LOADER |
+| notifications | /notifications/experiments | getNotificationExperiments | /api/v1/notification/experiments | notification-v1 → /v1/notification/experiments | ✓ `/v1/notification/experiments` | ✓ | ✅ WIRED |
 | notifications | /notifications/list | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/templates/[id] | — | — | — | — | — | — NO_LOADER |
@@ -609,7 +658,7 @@ Generated: 2026-08-03T20:12:05.836Z
 | tenant-admin | /tenant-admin/breakglass | getBreakglassLog | /api/v1/admin/breakglass | admin → /v1/admin/breakglass | ✓ `/v1/admin/breakglass` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/compliance | getComplianceOverview | /api/v1/admin/compliance | admin → /v1/admin/compliance | ✓ `/v1/admin/compliance` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/data-export | getDataExports | /api/v1/admin/data-exports | admin → /v1/admin/data-exports | ✓ `/v1/admin/data-exports` | ✓ | ✅ WIRED |
-| tenant-admin | /tenant-admin/domain | getCustomDomains | /api/v1/admin/domains | admin → /v1/admin/domains | ✓ `/v1/admin/domains` | ✓ | ✅ WIRED |
+| tenant-admin | /tenant-admin/domain | getCustomDomains | /api/v1/admin/custom-domains | admin → /v1/admin/custom-domains | ✓ `/v1/admin/custom-domains` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/idp | getIdpProviders | /api/v1/admin/idp/providers | admin → /v1/admin/idp/providers | ✓ `/v1/admin/idp/providers` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/install | getInstallSteps | /api/v1/install/steps | install → /v1/install/steps | ✓ `/v1/install/steps` | ✓ | ✅ WIRED |
 | tenant-admin | /tenant-admin/mfa | getMfaUsers | /api/v1/admin/mfa/users | admin → /v1/admin/mfa/users | ✓ `/v1/admin/mfa/users` | ✓ | ✅ WIRED |
@@ -659,5 +708,3 @@ Generated: 2026-08-03T20:12:05.836Z
 | works | /works | — | — | — | — | — | — NO_LOADER |
 | works | /works/proposals | — | — | — | — | — | — NO_LOADER |
 | works | /works/tenders | — | — | — | — | — | — NO_LOADER |
-| crm | /crm/campaigns/[id] | getCrmCampaignRoi | /api/v1/crm/campaigns/:param/roi | crm → /v1/crm/campaigns/:param/roi | ✓ `/v1/crm/campaigns/:id/roi` | ✓ | ✅ WIRED |
-| crm | /crm/campaigns | getCrmCampaignRoiSummary | /api/v1/crm/campaigns/roi-summary | crm → /v1/crm/campaigns/roi-summary | ✓ `/v1/crm/campaigns/roi-summary` | ✓ | ✅ WIRED |
