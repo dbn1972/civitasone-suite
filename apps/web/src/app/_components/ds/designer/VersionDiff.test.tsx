@@ -15,6 +15,12 @@ const current: ServiceDefinitionDto = {
   feeModel: "flat",
   slaDays: 21,
   requiredDocuments: [{ docType: "id", mandatory: true }],
+  forms: [
+    {
+      formDesign: { sections: [], fields: { a: {}, b: {} } },
+      runtimeMeta: { feeFromMinor: 75000 },
+    },
+  ],
 };
 
 describe("VersionDiff", () => {
@@ -23,21 +29,39 @@ describe("VersionDiff", () => {
     expect(screen.getAllByText(/first version/i).length).toBeGreaterThan(0);
   });
 
-  it("shows human-readable fee/HOA changes", () => {
+  it("shows human-readable fee amount change in unified mode", () => {
     render(
       <VersionDiff
         current={current}
-        published={{ name: "Trade License", hoaCode: "4100", feeModel: "slab", channels: ["portal"], requiredDocuments: [] }}
+        published={{
+          name: "Trade License",
+          hoaCode: "4100",
+          feeModel: "flat",
+          channels: ["portal"],
+          requiredDocuments: [],
+          forms: [{ runtimeMeta: { feeFromMinor: 50000 }, formDesign: { fields: { a: {} } } }],
+        }}
       />,
     );
-    expect(screen.getByText(/Head of Account/i)).toBeInTheDocument();
-    expect(screen.getByText(/HOA 4100/)).toBeInTheDocument();
-    expect(screen.getByText(/HOA 4201/)).toBeInTheDocument();
+    expect(screen.getByText(/Fee changed ₹500 → ₹750/i)).toBeInTheDocument();
+    expect(screen.getByText(/Head of Account changed/i)).toBeInTheDocument();
+  });
+
+  it("toggles to side-by-side columns", () => {
+    render(
+      <VersionDiff
+        current={current}
+        published={{ name: "Old name", channels: ["portal"], requiredDocuments: [] }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /Side by side/i }));
+    expect(screen.getByText("Old name")).toBeInTheDocument();
+    expect(screen.getByText("Trade License")).toBeInTheDocument();
   });
 });
 
 describe("PackCard", () => {
-  it("renders preview and import actions", async () => {
+  it("renders preview and import actions with sector meta", async () => {
     const { PackCard } = await import("./PackCard");
     const onPreview = vi.fn();
     const onImport = vi.fn();
@@ -56,10 +80,15 @@ describe("PackCard", () => {
           version: 1,
           status: "published",
         }}
+        source="Domain · Municipal India v1"
+        sector="municipal"
+        jurisdiction="IN"
         onPreview={onPreview}
         onImport={onImport}
       />,
     );
+    expect(screen.getByText(/municipal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Statutory/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Preview/i }));
     expect(onPreview).toHaveBeenCalled();
   });
