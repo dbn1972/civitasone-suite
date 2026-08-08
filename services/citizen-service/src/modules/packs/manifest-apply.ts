@@ -2,6 +2,8 @@ import type { ServiceDefinitionInsert } from "../catalogue/schema.js";
 import type { LaneBinding } from "../catalogue/lane-bindings.js";
 import type { RequiredDocument } from "../catalogue/domain.js";
 import { tradeLicenseManifestBlocks } from "./manifests/trade-license.js";
+import { hallBookingManifestBlocks } from "./manifests/hall-booking.js";
+import { eventPermissionManifestBlocks } from "./manifests/event-permission.js";
 
 // Every optional block is written from a nullable DB column via `?? undefined`
 // (see manifest-export.ts). Under exactOptionalPropertyTypes a bare `?: T`
@@ -37,6 +39,9 @@ export function blocksFromManifest(
   const raw = manifest?.blocks;
   if (raw && typeof raw === "object") return raw as PackManifestBlocks;
   if (packKey === "pack:trade-license") return tradeLicenseManifestBlocks();
+  // Non-municipal packs (Phase 3 / DoD (g)) — same 8-block wiring, other sectors.
+  if (packKey === "pack:hall-booking") return hallBookingManifestBlocks();
+  if (packKey === "pack:event-permission") return eventPermissionManifestBlocks();
   return null;
 }
 
