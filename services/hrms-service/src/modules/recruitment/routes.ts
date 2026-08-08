@@ -21,7 +21,7 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.parse(req.query);
     const result = await queries.listJobOpenings(ctx.tenantId, q.limit);
-    return reply.send({ data: result.data, meta: { page: 1, pageSize: q.limit, total: result.data.length } });
+    return reply.send({ data: result, meta: { page: 1, pageSize: q.limit, total: result.length } });
   });
 
   app.get("/v1/hrms/job-openings", async (req, reply) => {

@@ -5,7 +5,7 @@
  *
  * Validates: Req 14.1 (stock-service/inventory-service unification)
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";

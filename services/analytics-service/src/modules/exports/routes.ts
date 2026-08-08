@@ -43,8 +43,8 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     const accepted = await createExport(ctx, {
       queryRunId: body.queryRunId,
       format: body.format as ExportFormat,
-      watermark: body.watermark,
-      piiColumns: body.piiColumns,
+      ...(body.watermark !== undefined ? { watermark: body.watermark } : {}),
+      ...(body.piiColumns !== undefined ? { piiColumns: body.piiColumns } : {}),
     });
 
     return reply.code(202).send({

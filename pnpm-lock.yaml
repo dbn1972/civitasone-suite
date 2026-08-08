@@ -143,13 +143,13 @@ importers:
         specifier: ^9.0.0
         version: 9.0.10
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^1.6.0
@@ -184,10 +184,10 @@ importers:
         version: link:../types
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
@@ -215,10 +215,10 @@ importers:
   packages/data-governance:
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.1.9
@@ -316,7 +316,7 @@ importers:
         specifier: ^20.0.0
         version: 20.19.43
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
@@ -325,10 +325,10 @@ importers:
   packages/kms:
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.1.9
@@ -344,7 +344,7 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
@@ -426,13 +426,13 @@ importers:
         version: 9.1.0
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.1.9
@@ -479,10 +479,10 @@ importers:
         version: 3.25.76
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
@@ -516,13 +516,13 @@ importers:
   packages/security-headers:
     devDependencies:
       '@types/node':
-        specifier: '*'
+        specifier: ^20.0.0
         version: 20.19.43
       fastify:
         specifier: ^4.28.0
         version: 4.29.1
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.1.9
@@ -547,7 +547,7 @@ importers:
   packages/types:
     devDependencies:
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
 
   packages/ui-kit:
@@ -559,7 +559,7 @@ importers:
         specifier: ^18.3.0
         version: 18.3.1
       typescript:
-        specifier: '*'
+        specifier: ^5.4.0
         version: 5.9.3
 
   services/adapters/india-post/apt-adapter:
@@ -777,6 +777,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/render':
+        specifier: workspace:*
+        version: link:../../packages/render
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -2757,6 +2760,9 @@ importers:
       fastify:
         specifier: 4.28.1
         version: 4.28.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
       postgres:
         specifier: 3.4.4
         version: 3.4.4
