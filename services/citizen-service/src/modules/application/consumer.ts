@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
+import { enqueuePackNotifications } from "../catalogue/notification-bindings.js";
 import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
 
 export function registerApplicationConsumers(rawQueue: Queue): void {
@@ -46,6 +47,14 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         note: initialStatus === "pending_docs" ? "Missing required documents" : "Application submitted",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // FN-08: pack bindings for lifecycle event "submitted"
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId: p.serviceId, lifecycleEvent: "submitted",
+        recipient: p.citizenId, recipientId: p.citizenId,
+        variables: { applicationId: p.id, app_no: p.refNo },
+        eventType: "citizen.application.submitted",
+      });
       await audit(tx, msg, "submit", "citizen_application", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
@@ -70,16 +79,40 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { applicationId: p.id, citizenId: app.citizenId },
         });
-        await enqueue(tx, {
-          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+      }
+      // FN-08: pack bindings for approved / rejected / issued; fall back to system
+      // template for approved when the published pack has no bindings for that event.
+      const packEvent =
+        p.status === "approved" || p.status === "rejected" || p.status === "issued"
+          ? (p.status as "approved" | "rejected" | "issued")
+          : null;
+      if (packEvent) {
+        const sent = await enqueuePackNotifications(tx, {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: buildNotificationPayload({
-            eventType: EVENTS.applicationApproved,
-            recipient: app.citizenId ?? p.id,
-            recipientId: app.citizenId ?? undefined,
-            variables: { applicationId: p.id },
-          }),
+          serviceId: app.serviceId, lifecycleEvent: packEvent,
+          recipient: app.citizenId ?? p.id,
+          recipientId: app.citizenId ?? undefined,
+          variables: {
+            applicationId: p.id,
+            app_no: app.refNo ?? app.trackingNo ?? p.id,
+          },
+          eventType:
+            packEvent === "approved"
+              ? EVENTS.applicationApproved
+              : `citizen.application.${packEvent}`,
         });
+        if (packEvent === "approved" && sent === 0) {
+          await enqueue(tx, {
+            topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: buildNotificationPayload({
+              eventType: EVENTS.applicationApproved,
+              recipient: app.citizenId ?? p.id,
+              recipientId: app.citizenId ?? undefined,
+              variables: { applicationId: p.id },
+            }),
+          });
+        }
       }
       await audit(tx, msg, "status_update", "citizen_application", p.id);
     });
@@ -190,6 +223,14 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       });
       await intakeRepo.updateDraft(tx, p.draftId, msg.tenantId, {
         status: "submitted", applicationId: p.id, updatedBy: msg.actorId,
+      });
+      // FN-08: pack bindings for lifecycle event "submitted" (intake path)
+      await enqueuePackNotifications(tx, {
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        serviceId: draft.serviceId, lifecycleEvent: "submitted",
+        recipient: draft.citizenId, recipientId: draft.citizenId,
+        variables: { applicationId: p.id, app_no: p.trackingNo },
+        eventType: "citizen.application.submitted",
       });
       await audit(tx, msg, "draft_submit", "application_intake", p.id);
     });

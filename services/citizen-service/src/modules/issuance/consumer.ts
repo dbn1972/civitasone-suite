@@ -6,6 +6,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
+import * as applicationRepo from "../application/repo.js";
+import { enqueuePackNotifications } from "../catalogue/notification-bindings.js";
 import {
   buildCertNumber, hashPayload, signPayloadHash, generateVerifyToken,
 } from "./domain.js";
@@ -95,6 +97,25 @@ export function registerIssuanceConsumers(rawQueue: Queue): void {
           applicationId: cert.applicationId, verifyToken,
         },
       });
+      // FN-08: issued bindings with cert_no (when linked to a pack-backed application)
+      if (cert.applicationId) {
+        const app = await applicationRepo.findApplicationByIdTx(tx, cert.applicationId, msg.tenantId);
+        if (app) {
+          await enqueuePackNotifications(tx, {
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            serviceId: app.serviceId, lifecycleEvent: "issued",
+            recipient: app.citizenId, recipientId: app.citizenId,
+            variables: {
+              applicationId: app.id,
+              app_no: app.refNo ?? app.trackingNo ?? app.id,
+              cert_no: certNo,
+              cert_type: cert.certType,
+              verify_token: verifyToken,
+            },
+            eventType: EVENTS.certificateIssued,
+          });
+        }
+      }
       await audit(tx, msg, "issuance_approve", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "certificate", p.id));
