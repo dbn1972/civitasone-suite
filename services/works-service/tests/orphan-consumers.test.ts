@@ -12,7 +12,7 @@ import { awards } from "../src/modules/tender/schema.js";
 import { workSplits, workProposals } from "../src/modules/proposal/schema.js";
 import { physicalCompletions } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
-import { measurements, measurementBooks } from "../src/modules/billing/schema.js";
+import { measurements, measurementBooks, bills } from "../src/modules/billing/schema.js";
 import { vi } from "vitest";
 
 const mockInserted: unknown[] = [];
@@ -353,6 +353,7 @@ describe("Billing orphan consumers", () => {
   // was somehow bypassed or the MB's status changed since the HTTP request.
   it("billCreate is rejected when the referenced MB exists but is not do_finalized (canCreateBill gate)", async () => {
     mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "draft" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
     const h = await load();
     await h[COMMANDS.billCreate]({
       ...base,
@@ -366,6 +367,7 @@ describe("Billing orphan consumers", () => {
 
   it("billCreate is rejected when the referenced MB does not exist (canCreateBill gate)", async () => {
     mockSelectMap.set(measurementBooks, []);
+    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
     const h = await load();
     await h[COMMANDS.billCreate]({
       ...base,
@@ -379,6 +381,8 @@ describe("Billing orphan consumers", () => {
 
   it("billCreate persists when the referenced MB is do_finalized", async () => {
     mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(bills, []);
     const h = await load();
     await h[COMMANDS.billCreate]({
       ...base,
@@ -392,6 +396,8 @@ describe("Billing orphan consumers", () => {
   });
 
   it("billCreate persists when no mbId is referenced at all (abstract bill)", async () => {
+    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(bills, []);
     const h = await load();
     await h[COMMANDS.billCreate]({
       ...base,

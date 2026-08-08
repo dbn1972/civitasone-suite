@@ -1,6 +1,8 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { workScopes, scopeProgress, workIssues, workClosures, physicalCompletions } from "./schema.js";
+import { workProposals } from "../proposal/schema.js";
+import type { ReportFilters } from "../reporting/validators.js";
 
 export async function listScopes(tenantId: string, workId: string) {
   return scopedRead(async (tx) => {
@@ -79,9 +81,35 @@ export async function listClosures(tenantId: string, page: number, pageSize: num
 }
 
 /** Count of closed works for a tenant — feeds the works reporting summary. */
-export async function countClosures(tenantId: string): Promise<number> {
+export async function countClosures(
+  tenantId: string,
+  filters?: Pick<ReportFilters, "fromDate" | "toDate" | "divisionId">,
+): Promise<number> {
   return scopedRead(async (tx) => {
-    const rows = await tx.select().from(workClosures).where(eq(workClosures.tenantId, tenantId));
+    if (!filters?.fromDate && !filters?.toDate && !filters?.divisionId) {
+      const rows = await tx.select().from(workClosures).where(eq(workClosures.tenantId, tenantId));
+      return rows.length;
+    }
+
+    const proposalRows = await tx.select({ id: workProposals.id })
+      .from(workProposals)
+      .where(and(
+        eq(workProposals.tenantId, tenantId),
+        ...(filters?.fromDate ? [gte(workProposals.createdAt, filters.fromDate)] : []),
+        ...(filters?.toDate ? [lte(workProposals.createdAt, filters.toDate)] : []),
+        ...(filters?.divisionId ? [eq(workProposals.executingDivisionId, filters.divisionId)] : []),
+      ));
+    const workIds = proposalRows.map((r) => r.id);
+    if (workIds.length === 0) return 0;
+
+    const closureConditions = [
+      eq(workClosures.tenantId, tenantId),
+      inArray(workClosures.workId, workIds),
+    ];
+    if (filters?.fromDate) closureConditions.push(gte(workClosures.closedDate, filters.fromDate));
+    if (filters?.toDate) closureConditions.push(lte(workClosures.closedDate, filters.toDate));
+
+    const rows = await tx.select().from(workClosures).where(and(...closureConditions));
     return rows.length;
   });
 }

@@ -5,7 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { boqItems, recapitulation } from "./schema.js";
 import { measurements } from "../billing/schema.js";
 import { awards } from "../tender/schema.js";
-import { calculateBoqAmount, calculateRecapitulation } from "./domain.js";
+import { calculateBoqAmount, calculateRecapitulation, isDuplicateBoqLine } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -17,6 +17,20 @@ export function registerBoqConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      const workId = p.workId as string;
+      const itemCode = (p.itemCode as string) ?? null;
+      const itemDescription = p.itemDescription as string;
+
+      const existingRows = await tx.select({
+        workId: boqItems.workId,
+        itemCode: boqItems.itemCode,
+        itemDescription: boqItems.itemDescription,
+      }).from(boqItems)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.workId, workId)));
+      if (isDuplicateBoqLine(existingRows, workId, itemCode, itemDescription)) {
+        return;
+      }
+
       const rate = BigInt(p.rate as string | number);
       const quantity = p.quantity as number;
       const amountMinor = calculateBoqAmount(rate, quantity);

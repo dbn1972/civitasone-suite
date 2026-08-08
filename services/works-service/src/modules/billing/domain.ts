@@ -33,6 +33,23 @@ export function billedQuantityExceedsBoq(billed: number, boqApproved: number): b
 }
 
 /**
+ * FR-BIL-012: cumulative gross bill amount (prior bills + this bill) must not
+ * exceed the accepted award ceiling.
+ */
+export function billAmountExceedsAward(
+  priorBilledGross: bigint,
+  newBillGross: bigint,
+  awardCeiling: bigint,
+): boolean {
+  return priorBilledGross + newBillGross > awardCeiling;
+}
+
+/** Terminal step in bill finalization — triggers finance hand-off. */
+export function isTerminalBillStatus(status: string): boolean {
+  return status === "do_finalized";
+}
+
+/**
  * Calculate net payable: gross - deductions.
  */
 export function calculateNetPayable(gross: bigint, deductions: bigint): bigint {

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { countProposals, proposalStatusCounts } from "../proposal/repo.js";
+import { countProposals, proposalStatusCounts, listProposalsForReport } from "../proposal/repo.js";
 import { countClosures } from "../execution/repo.js";
+import { reportFiltersSchema, parseReportFilters } from "./validators.js";
 
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 
@@ -10,9 +11,12 @@ export async function reportingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/reports/summary", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
+    const query = reportFiltersSchema.parse(req.query);
+    const filters = parseReportFilters(query);
+    const scope = { fromDate: filters.fromDate, toDate: filters.toDate, divisionId: filters.divisionId };
     const [totalWorks, closedWorks] = await Promise.all([
-      countProposals(ctx.tenantId),
-      countClosures(ctx.tenantId),
+      countProposals(ctx.tenantId, scope),
+      countClosures(ctx.tenantId, scope),
     ]);
     return reply.send({
       data: {
@@ -20,6 +24,7 @@ export async function reportingRoutes(app: FastifyInstance): Promise<void> {
         activeWorks: Math.max(totalWorks - closedWorks, 0),
         closedWorks,
       },
+      meta: { filters: scope },
     });
   });
 
@@ -27,7 +32,32 @@ export async function reportingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/reports/status", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const data = await proposalStatusCounts(ctx.tenantId);
-    return reply.send({ data });
+    const query = reportFiltersSchema.parse(req.query);
+    const filters = parseReportFilters(query);
+    const scope = { fromDate: filters.fromDate, toDate: filters.toDate, divisionId: filters.divisionId };
+    const data = await proposalStatusCounts(ctx.tenantId, scope);
+    return reply.send({ data, meta: { filters: scope } });
+  });
+
+  // Paginated works register for reporting dashboards.
+  app.get("/v1/works/reports/works", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = reportFiltersSchema.parse(req.query);
+    const filters = parseReportFilters(query);
+    const data = await listProposalsForReport(ctx.tenantId, filters);
+    return reply.send({
+      data,
+      meta: {
+        page: filters.page,
+        pageSize: filters.pageSize,
+        total: data.length,
+        filters: {
+          fromDate: filters.fromDate?.toISOString(),
+          toDate: filters.toDate?.toISOString(),
+          divisionId: filters.divisionId,
+        },
+      },
+    });
   });
 }

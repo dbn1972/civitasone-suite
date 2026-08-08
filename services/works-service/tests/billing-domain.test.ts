@@ -8,6 +8,7 @@ import {
   billFinalizationSequence,
   canCreateBill,
   billedQuantityExceedsBoq,
+  billAmountExceedsAward,
   calculateNetPayable,
   isValidNextStep,
 } from "../src/modules/billing/domain.js";
@@ -71,6 +72,16 @@ describe("billedQuantityExceedsBoq (FR-BIL-011)", () => {
   it("handles zero", () => {
     expect(billedQuantityExceedsBoq(0, 0)).toBe(false);
     expect(billedQuantityExceedsBoq(1, 0)).toBe(true);
+  });
+});
+
+describe("billAmountExceedsAward (FR-BIL-012)", () => {
+  it("allows cumulative gross equal to award ceiling", () => {
+    expect(billAmountExceedsAward(500000n, 500000n, 1000000n)).toBe(false);
+  });
+
+  it("rejects cumulative gross above award ceiling", () => {
+    expect(billAmountExceedsAward(900000n, 200000n, 1000000n)).toBe(true);
   });
 });
 

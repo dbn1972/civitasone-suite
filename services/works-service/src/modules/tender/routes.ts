@@ -4,8 +4,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, listTenders } from "./repo.js";
-import { canDaoFinalizeAward, canDoFinalizeAward } from "./domain.js";
+import { getAwardById, listTenders, listQuotations } from "./repo.js";
+import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
@@ -19,6 +19,29 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const query = paginationSchema.parse(req.query);
     const data = await listTenders(ctx.tenantId, query.page, query.pageSize);
     return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
+  });
+
+  // List quotations for a tender (bid confidentiality enforced for viewers).
+  app.get("/v1/works/tenders/:tenderId/quotations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { tenderId } = req.params as { tenderId: string };
+    const rows = await listQuotations(ctx.tenantId, tenderId);
+    const showDetails = canViewBidDetails(ctx.roles);
+    const data = rows.map((q) => {
+      const normalized = {
+        ...q,
+        quotedAmountMinor: q.quotedAmountMinor ?? null,
+      };
+      const redacted = redactQuotation(normalized, showDetails);
+      return {
+        ...redacted,
+        quotedAmountMinor: redacted.quotedAmountMinor != null
+          ? redacted.quotedAmountMinor.toString()
+          : null,
+      };
+    });
+    return reply.send({ data });
   });
 
   // Create pre-tender

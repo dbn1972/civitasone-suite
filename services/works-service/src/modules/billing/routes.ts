@@ -4,8 +4,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill } from "./domain.js";
+import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, billAmountExceedsAward } from "./domain.js";
 import { getMb, getBill, listBillsForWork } from "./repo.js";
+import { getAwardById } from "../tender/repo.js";
+import { parseMinor } from "@civitasone/schemas";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -63,6 +65,22 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
           `Cannot create bill: measurement book status is '${mb.status}', must be 'do_finalized'`,
         );
       }
+    }
+
+    const award = await getAwardById(ctx.tenantId, body.awardId);
+    if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
+    const priorBills = await listBillsForWork(ctx.tenantId, body.workId);
+    const priorBilledGross = priorBills.reduce(
+      (sum, row) => sum + (row.grossAmountMinor ?? 0n),
+      0n,
+    );
+    const newGross = parseMinor(body.grossAmountMinor);
+    if (billAmountExceedsAward(priorBilledGross, newGross, award.acceptedAmountMinor)) {
+      throw new HttpError(
+        422,
+        "AWARD_CEILING_EXCEEDED",
+        "Cumulative bill gross amount exceeds accepted award ceiling",
+      );
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.createBillCommand(ctx, body));

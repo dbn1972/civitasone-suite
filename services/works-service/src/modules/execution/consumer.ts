@@ -45,6 +45,34 @@ export function registerExecutionConsumers(q: Queue): void {
     });
   });
 
+  q.subscribe(COMMANDS.issueClose, async (msg) => {
+    await db.transaction(async (tx) => {
+      const ok = await markProcessed(tx, msg.messageId);
+      if (!ok) return;
+
+      const { id } = msg.payload as { id: string };
+      const rows = await tx.select().from(workIssues)
+        .where(and(eq(workIssues.tenantId, msg.tenantId), eq(workIssues.id, id)))
+        .limit(1);
+      const issue = rows[0];
+      if (!issue || issue.status === "closed") return;
+
+      await tx.update(workIssues)
+        .set({ status: "closed", closedDate: new Date() })
+        .where(and(eq(workIssues.tenantId, msg.tenantId), eq(workIssues.id, id)));
+
+      await enqueue(tx, {
+        topic: EVENTS.issueClosed,
+        eventType: EVENTS.issueClosed,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { id, workId: issue.workId },
+      });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "close", resourceType: "issue", resourceId: id, outcome: "success" } });
+    });
+  });
+
   // ORPHAN FIX (SVC-067): add an execution scope target for a work.
   q.subscribe(COMMANDS.scopeAdd, async (msg) => {
     await db.transaction(async (tx) => {

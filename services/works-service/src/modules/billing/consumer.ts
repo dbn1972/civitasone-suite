@@ -1,11 +1,13 @@
 import type { Queue } from "@civitasone/queue";
+import { randomUUID } from "node:crypto";
 import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
 import { measurementBooks, measurements, bills, accountCompilations } from "./schema.js";
-import { calculateNetPayable, billedQuantityExceedsBoq, canCreateBill } from "./domain.js";
+import { calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward, isTerminalBillStatus } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
+import { awards } from "../tender/schema.js";
 import { eq, and } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -86,11 +88,31 @@ export function registerBillingConsumers(q: Queue): void {
       const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);
 
+      const workId = p.workId as string;
+      const awardId = p.awardId as string;
+
+      // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.
+      const awardRows = await tx.select().from(awards)
+        .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, awardId)))
+        .limit(1);
+      const award = awardRows[0];
+      if (!award) return;
+
+      const priorBillRows = await tx.select().from(bills)
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.workId, workId)));
+      const priorBilledGross = priorBillRows.reduce(
+        (sum, row) => sum + (row.grossAmountMinor ?? 0n),
+        0n,
+      );
+      if (billAmountExceedsAward(priorBilledGross, gross, award.acceptedAmountMinor)) {
+        return;
+      }
+
       await tx.insert(bills).values({
         id: p.id as string,
         tenantId: msg.tenantId,
-        workId: p.workId as string,
-        awardId: p.awardId as string,
+        workId,
+        awardId,
         mbId: (p.mbId as string) ?? undefined,
         billMode: p.billMode as string,
         billNumber: p.billNumber as string,
@@ -119,6 +141,13 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
+
+      const billRows = await tx.select().from(bills)
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)))
+        .limit(1);
+      const bill = billRows[0];
+      if (!bill) return;
+
       await tx.update(bills)
         .set({ status: nextStatus })
         .where(eq(bills.id, id));
@@ -132,6 +161,43 @@ export function registerBillingConsumers(q: Queue): void {
         payload: { id, status: nextStatus },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "finalize", resourceType: "bill", resourceId: id, outcome: "success" } });
+
+      // Finance hand-off: DO-finalized RA bill → draft vendor bill in finance-service.
+      if (isTerminalBillStatus(nextStatus)) {
+        const awardRows = await tx.select().from(awards)
+          .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, bill.awardId)))
+          .limit(1);
+        const award = awardRows[0];
+        const financeBillId = randomUUID();
+        const headId = process.env.WORKS_FINANCE_DEFAULT_HEAD_ID
+          ?? process.env.FINANCE_DEFAULT_HEAD_ID
+          ?? "dddddddd-0001-0000-0000-000000000001";
+
+        await enqueue(tx, {
+          topic: FINANCE_HANDOFF.billCreate,
+          eventType: FINANCE_HANDOFF.billCreate,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: financeBillId,
+            tenantId: msg.tenantId,
+            billNo: bill.billNumber,
+            vendorId: `works_award:${bill.awardId}`,
+            headId,
+            grossMinor: bill.grossAmountMinor.toString(),
+            netMinor: bill.netPayableMinor.toString(),
+            currency: "INR",
+            deductions: [],
+            poRef: `works_award:${bill.awardId}`,
+            grnRef: `works_bill:${bill.id}`,
+            billDate: new Date().toISOString().slice(0, 10),
+            contractorName: award?.contractorName ?? null,
+            workId: bill.workId,
+            worksBillId: bill.id,
+          },
+        });
+      }
     });
   });
 
