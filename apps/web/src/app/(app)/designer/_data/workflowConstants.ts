@@ -38,7 +38,10 @@ export interface TenantPosition {
   label: string;
 }
 
-export const DEFAULT_LANE_TEMPLATE: Omit<WorkflowLane, "id" | "designationId" | "designationLabel">[] = [
+export const DEFAULT_LANE_TEMPLATE: Omit<
+  WorkflowLane,
+  "id" | "designationId" | "designationLabel" | "escalationDesignationId" | "escalationDesignationLabel"
+>[] = [
   { key: "submitted", name: "Submitted", optional: false, enabled: true, slaDays: 1 },
   { key: "inspection", name: "Inspection", optional: true, enabled: true, slaDays: 7 },
   { key: "decision", name: "Decision", optional: false, enabled: true, slaDays: 5 },
