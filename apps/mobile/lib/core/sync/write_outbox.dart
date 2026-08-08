@@ -135,7 +135,11 @@ class WriteOutbox {
     final rows = await _db.queryWriteOutbox(
       where: "status = ?",
       whereArgs: [WriteOutboxStatus.pending],
-      orderBy: 'created_at ASC',
+      // created_at alone ties when two entries are enqueued within the same
+      // microsecond (observed in CI); rowid is monotonically increasing on
+      // insert for this TEXT-primary-key table, so it breaks ties in true
+      // creation order.
+      orderBy: 'created_at ASC, rowid ASC',
     );
     return rows.map(WriteOutboxEntry.fromRow).toList();
   }
@@ -145,7 +149,7 @@ class WriteOutbox {
     final rows = await _db.queryWriteOutbox(
       where: "status IN (?, ?)",
       whereArgs: [WriteOutboxStatus.pending, WriteOutboxStatus.syncing],
-      orderBy: 'created_at ASC',
+      orderBy: 'created_at ASC, rowid ASC',
     );
     return rows.map(WriteOutboxEntry.fromRow).toList();
   }
@@ -155,7 +159,7 @@ class WriteOutbox {
     final rows = await _db.queryWriteOutbox(
       where: "status = ?",
       whereArgs: [WriteOutboxStatus.dead],
-      orderBy: 'created_at DESC',
+      orderBy: 'created_at DESC, rowid DESC',
     );
     return rows.map(WriteOutboxEntry.fromRow).toList();
   }

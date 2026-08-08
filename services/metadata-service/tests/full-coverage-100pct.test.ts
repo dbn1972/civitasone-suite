@@ -22,8 +22,11 @@ describe("metadata — config & extensibility (real service)", () => {
     }
   });
 
+  // Dynamic import of app.ts pulls the full Fastify + module graph. Under CI
+  // contention (parallel service suites sharing a runner) this routinely
+  // exceeds vitest's 5s default — give it headroom without slowing the suite.
   it("buildApp is importable", async () => {
     const mod = await import("../src/app.js");
     expect(typeof mod.buildApp).toBe("function");
-  });
+  }, 30_000);
 });

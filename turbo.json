@@ -26,6 +26,25 @@
       ],
       "outputs": [
         "coverage/**"
+      ],
+      "passThroughEnv": [
+        "CI",
+        "GITHUB_ACTIONS",
+        "PGHOST",
+        "PGPORT",
+        "PGUSER",
+        "PGPASSWORD",
+        "PGDATABASE",
+        "POSTGRES_ADMIN_PASSWORD",
+        "POSTGRES_ADMIN_USER",
+        "PROVISIONING_RUNNER_DSN",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "JWT_ALGORITHM",
+        "QUEUE_DRIVER",
+        "CACHE_DRIVER",
+        "NODE_ENV"
       ]
     },
     "lint": {},

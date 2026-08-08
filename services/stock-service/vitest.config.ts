@@ -2,8 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Parallel CI load makes buildApp() slow; keep suite assertions cheap but
-    // allow up to 30s per test (describe.configure is unavailable on Vitest 2.x).
+    // buildApp() + inject under parallel CI load regularly exceeds the 5s default.
     testTimeout: 30_000,
     env: {
       JWT_ALGORITHM: "HS256",

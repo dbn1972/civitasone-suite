@@ -3,7 +3,7 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-07-27  Count: 40
+# Generated: 2026-07-27  Count: 49 (grant-service/0006 removed 2026-08-08 — now passes)
 admin-service/0006_rls_full_tenant_isolation.sql           # relation "custom_domains.custom_domains" does not exist
 admin-service/0009_fk_indexes.sql                          # relation "scheduled_jobs.job_execution_history" does not exist
 admin-service/0018_nobypassrls_service_roles.sql           # permission denied to alter role
@@ -13,7 +13,6 @@ audit-service/0018_additional_status_type_constraints.sql  # relation "vigilance
 estab-service/0030_rls_completeness.sql                    # relation "files.estab_org_unit" does not exist
 finance-service/0002_perf_indexes.sql                      # relation "payments.payments" does not exist
 finance-service/0035_rls_full_tenant_isolation.sql         # column "tenant_id" does not exist
-grant-service/0006_disbursement_eft_emitted.sql            # unrecognized configuration parameter "app.tenant_id"
 helpdesk-service/0016_scanner_role.sql                     # permission denied to create role
 hrms-service/0002_perf_indexes.sql                         # relation "employee.employees" does not exist
 hrms-service/0005_configurable_leave_policies.sql          # insert or update on table "hrms_leave_policy_rules" violates foreign key constraint "hrms_leave_policy_rules_l

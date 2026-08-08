@@ -16,6 +16,9 @@ function makeToken(roles: string[] = ["stock_admin", "super_admin"]): string {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s1" }, SECRET, 3600);
 }
 
+// Timeout headroom for congested CI is set in vitest.config.ts (testTimeout).
+// Vitest 2.1 does not support describe.configure (Vitest 3+ API).
+
 describe("stock-service — deprecation headers on /v1/stock/* routes", () => {
   it("GET /v1/stock/items adds Deprecation header", async () => {
     const { buildApp } = await import("../src/app.js");
