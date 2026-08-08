@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Card } from "@/app/_components/ds";
 import {
   ConditionBuilder,
@@ -16,7 +16,20 @@ import {
   type FormFieldDefinition,
   type ValidationPresetId,
 } from "@/app/_components/ds/designer";
-import { createField, persistFormDesign } from "../_data/formBuilderApi";
+import { persistFormDesign } from "../_data/formBuilderApi";
+import {
+  FIELD_VIRTUALIZE_THRESHOLD,
+  PALETTE_DRAG_MIME,
+  addFieldToSection,
+  addSection,
+  moveFieldToSection,
+  moveFieldWithinSection,
+  moveSection,
+  removeSection,
+  renameSection,
+  toggleSectionCollapsed,
+  totalFieldCount,
+} from "../_data/formBuilderModel";
 
 interface Props {
   serviceKey: string;
@@ -35,8 +48,10 @@ export function FormBuilder({
 }: Props) {
   const { state: design, push, replace } = useUndoRedo<FormDesignState>(initial);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<string>(initial.sections[0]?.id ?? "");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [dropTargetSectionId, setDropTargetSectionId] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<{ field: FormFieldDefinition; sectionId: string; index: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
@@ -44,6 +59,14 @@ export function FormBuilder({
 
   const selectedField = selectedFieldId ? design.fields[selectedFieldId] : null;
   const allFieldsList = useMemo(() => Object.values(design.fields), [design.fields]);
+  const fieldTotal = totalFieldCount(design);
+  const activeSection = design.sections.find((s) => s.id === activeSectionId) ?? design.sections[0];
+
+  useEffect(() => {
+    if (!design.sections.some((s) => s.id === activeSectionId) && design.sections[0]) {
+      setActiveSectionId(design.sections[0].id);
+    }
+  }, [design.sections, activeSectionId]);
 
   const commit = useCallback((next: FormDesignState) => {
     push(next);
@@ -68,18 +91,14 @@ export function FormBuilder({
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
 
-  const addField = (type: DesignerFieldType) => {
-    const sid = design.sections[0]?.id;
+  const addField = (type: DesignerFieldType, sectionId?: string) => {
+    const sid = sectionId ?? activeSection?.id;
     if (!sid) return;
-    const field = createField(type, sid);
-    commit({
-      ...design,
-      fields: { ...design.fields, [field.id]: field },
-      sections: design.sections.map((s) =>
-        s.id === sid ? { ...s, fieldIds: [...s.fieldIds, field.id] } : s,
-      ),
-    });
-    setSelectedFieldId(field.id);
+    const result = addFieldToSection(design, type, sid);
+    if (!result) return;
+    commit(result.design);
+    setActiveSectionId(sid);
+    setSelectedFieldId(result.field.id);
   };
 
   const updateField = (fieldId: string, patch: Partial<FormFieldDefinition>) => {
@@ -91,24 +110,29 @@ export function FormBuilder({
   const duplicateField = (fieldId: string) => {
     const src = design.fields[fieldId];
     if (!src) return;
-    const copy = createField(src.type, src.sectionId);
+    const result = addFieldToSection(design, src.type, src.sectionId);
+    if (!result) return;
     const dup: FormFieldDefinition = {
       ...src,
-      ...copy,
-      id: copy.id,
+      ...result.field,
+      id: result.field.id,
       apiName: `${src.apiName}_copy`.slice(0, 48),
       label: `${src.label} (copy)`,
       metadataFieldId: undefined,
     };
-    const section = design.sections.find((s) => s.id === src.sectionId);
+    const section = result.design.sections.find((s) => s.id === src.sectionId);
     if (!section) return;
-    const idx = section.fieldIds.indexOf(fieldId);
-    const fieldIds = [...section.fieldIds];
+    const idx = section.fieldIds.indexOf(src.id);
+    // addFieldToSection appended; move copy next to source
+    const withoutTail = section.fieldIds.filter((id) => id !== dup.id);
+    const fieldIds = [...withoutTail];
     fieldIds.splice(idx + 1, 0, dup.id);
     commit({
-      ...design,
-      fields: { ...design.fields, [dup.id]: dup },
-      sections: design.sections.map((s) => (s.id === src.sectionId ? { ...s, fieldIds } : s)),
+      ...result.design,
+      fields: { ...result.design.fields, [dup.id]: dup },
+      sections: result.design.sections.map((s) =>
+        s.id === src.sectionId ? { ...s, fieldIds } : s,
+      ),
     });
     setSelectedFieldId(dup.id);
   };
@@ -148,19 +172,27 @@ export function FormBuilder({
     setSelectedFieldId(field.id);
   };
 
-  const moveField = (sectionId: string, fieldId: string, direction: -1 | 1) => {
-    commit({
-      ...design,
-      sections: design.sections.map((s) => {
-        if (s.id !== sectionId) return s;
-        const idx = s.fieldIds.indexOf(fieldId);
-        const next = idx + direction;
-        if (idx < 0 || next < 0 || next >= s.fieldIds.length) return s;
-        const fieldIds = [...s.fieldIds];
-        [fieldIds[idx], fieldIds[next]] = [fieldIds[next]!, fieldIds[idx]!];
-        return { ...s, fieldIds };
-      }),
-    });
+  const onPaletteDragStart = (e: DragEvent, type: DesignerFieldType) => {
+    e.dataTransfer.setData(PALETTE_DRAG_MIME, type);
+    e.dataTransfer.setData("text/plain", type);
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  const onSectionDragOver = (e: DragEvent, sectionId: string) => {
+    if (![...e.dataTransfer.types].includes(PALETTE_DRAG_MIME) && ![...e.dataTransfer.types].includes("text/plain")) {
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDropTargetSectionId(sectionId);
+  };
+
+  const onSectionDrop = (e: DragEvent, sectionId: string) => {
+    e.preventDefault();
+    const type = (e.dataTransfer.getData(PALETTE_DRAG_MIME) || e.dataTransfer.getData("text/plain")) as DesignerFieldType;
+    setDropTargetSectionId(null);
+    if (!type || !FIELD_PALETTE_GROUPS.flatMap((g) => g.items).some((i) => i.type === type)) return;
+    addField(type, sectionId);
   };
 
   const leftPane = previewOpen ? (
@@ -169,10 +201,15 @@ export function FormBuilder({
     </SplitPreview>
   ) : (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Field palette</h3>
         <button type="button" className="btn ghost" onClick={() => setPreviewOpen(true)}>Preview</button>
       </div>
+      <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>
+        Click or drag a field onto a section. New fields go to{" "}
+        <strong style={{ color: "var(--ink2)" }}>{activeSection?.label ?? "the active section"}</strong>
+        {" "}({fieldTotal} field{fieldTotal === 1 ? "" : "s"} total).
+      </p>
       <div style={{ display: "grid", gap: 16 }}>
         {FIELD_PALETTE_GROUPS.map((group) => (
           <div key={group.label}>
@@ -183,8 +220,11 @@ export function FormBuilder({
                   key={item.type}
                   type="button"
                   className="btn ghost"
-                  style={{ justifyContent: "flex-start", display: "flex", gap: 10, alignItems: "center" }}
+                  draggable
+                  onDragStart={(e) => onPaletteDragStart(e, item.type)}
+                  style={{ justifyContent: "flex-start", display: "flex", gap: 10, alignItems: "center", cursor: "grab" }}
                   onClick={() => addField(item.type)}
+                  aria-label={`Add ${item.label} field`}
                 >
                   <span aria-hidden style={{ width: 28, textAlign: "center" }}>{item.icon}</span>
                   {item.label}
@@ -229,38 +269,138 @@ export function FormBuilder({
         <Card padding>{leftPane}</Card>
 
         <Card title="Form canvas" padding>
-          {design.sections.map((section) => {
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
+              {design.sections.length} section{design.sections.length === 1 ? "" : "s"}
+              {fieldTotal >= FIELD_VIRTUALIZE_THRESHOLD
+                ? " · large forms window the field list for smooth scrolling"
+                : null}
+            </p>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => {
+                const next = addSection(design, `Section ${design.sections.length + 1}`);
+                commit(next);
+                const created = next.sections[next.sections.length - 1];
+                if (created) setActiveSectionId(created.id);
+              }}
+            >
+              Add section
+            </button>
+          </div>
+
+          {design.sections.map((section, sectionIndex) => {
             const items = section.fieldIds
               .map((id) => design.fields[id])
               .filter((f): f is FormFieldDefinition => !!f);
+            const isDropTarget = dropTargetSectionId === section.id;
+            const isActive = activeSection?.id === section.id;
 
             return (
-              <div key={section.id} style={{ marginBottom: 20 }}>
-                <input
-                  className="input"
-                  value={section.label}
-                  onChange={(e) => {
-                    commit({
-                      ...design,
-                      sections: design.sections.map((s) =>
-                        s.id === section.id ? { ...s, label: e.target.value } : s,
-                      ),
-                    });
-                  }}
-                  aria-label="Section title"
-                  style={{ fontWeight: 600, maxWidth: 280, marginBottom: 8 }}
-                />
-                {items.length === 0 ? (
+              <div
+                key={section.id}
+                onDragOver={(e) => onSectionDragOver(e, section.id)}
+                onDragLeave={() => setDropTargetSectionId((cur) => (cur === section.id ? null : cur))}
+                onDrop={(e) => onSectionDrop(e, section.id)}
+                onClick={() => setActiveSectionId(section.id)}
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  borderRadius: "var(--r-sm)",
+                  border: isDropTarget
+                    ? "2px dashed var(--primary)"
+                    : isActive
+                      ? "1px solid var(--primary)"
+                      : "1px solid var(--line)",
+                  background: isDropTarget ? "var(--primary-soft)" : "var(--panel)",
+                }}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    aria-expanded={!section.collapsed}
+                    aria-label={section.collapsed ? "Expand section" : "Collapse section"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(toggleSectionCollapsed(design, section.id));
+                    }}
+                    style={{ padding: "2px 8px", minWidth: 32 }}
+                  >
+                    {section.collapsed ? "▸" : "▾"}
+                  </button>
+                  <input
+                    className="input"
+                    value={section.label}
+                    onChange={(e) => commit(renameSection(design, section.id, e.target.value))}
+                    onFocus={() => setActiveSectionId(section.id)}
+                    aria-label="Section title"
+                    style={{ fontWeight: 600, maxWidth: 280, flex: 1 }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--mut)" }}>
+                    {items.length} field{items.length === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    aria-label="Move section up"
+                    disabled={sectionIndex === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(moveSection(design, section.id, -1));
+                    }}
+                    style={{ padding: "2px 8px" }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    aria-label="Move section down"
+                    disabled={sectionIndex === design.sections.length - 1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(moveSection(design, section.id, 1));
+                    }}
+                    style={{ padding: "2px 8px" }}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={design.sections.length <= 1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(removeSection(design, section.id));
+                    }}
+                    title={design.sections.length <= 1 ? "Keep at least one section" : "Remove section (fields move to the first section)"}
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                {section.collapsed ? (
                   <p style={{ margin: 0, color: "var(--mut)", fontSize: 13 }}>
-                    No fields yet — pick a type from the palette.
+                    Section collapsed — expand to edit fields, or drop a palette field here.
+                  </p>
+                ) : items.length === 0 ? (
+                  <p style={{ margin: 0, color: "var(--mut)", fontSize: 13 }}>
+                    No fields yet — pick a type from the palette or drag one here.
                   </p>
                 ) : (
                   <SortableList
                     items={items}
                     selectedId={selectedFieldId}
-                    onSelect={setSelectedFieldId}
-                    onMoveUp={(id) => moveField(section.id, id, -1)}
-                    onMoveDown={(id) => moveField(section.id, id, 1)}
+                    onSelect={(id) => {
+                      setSelectedFieldId(id);
+                      setActiveSectionId(section.id);
+                    }}
+                    onMoveUp={(id) => commit(moveFieldWithinSection(design, section.id, id, -1))}
+                    onMoveDown={(id) => commit(moveFieldWithinSection(design, section.id, id, 1))}
+                    virtualizeThreshold={FIELD_VIRTUALIZE_THRESHOLD}
+                    ariaLabel={`${section.label} fields`}
                     renderItem={(field) => (
                       <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, flexWrap: "wrap" }}>
                         <span aria-hidden>{typeIcon(field.type)}</span>
@@ -296,6 +436,24 @@ export function FormBuilder({
                 <input type="checkbox" checked={selectedField.required} onChange={(e) => updateField(selectedField.id, { required: e.target.checked })} />
                 Required
               </label>
+
+              {design.sections.length > 1 ? (
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span>Section</span>
+                  <select
+                    className="input"
+                    value={selectedField.sectionId}
+                    onChange={(e) => {
+                      commit(moveFieldToSection(design, selectedField.id, e.target.value));
+                      setActiveSectionId(e.target.value);
+                    }}
+                  >
+                    {design.sections.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
               {(selectedField.type === "picklist_single" || selectedField.type === "picklist_multi") ? (
                 <label style={{ display: "grid", gap: 6 }}>

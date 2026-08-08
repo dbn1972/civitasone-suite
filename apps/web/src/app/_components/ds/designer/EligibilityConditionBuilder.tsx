@@ -15,6 +15,8 @@ export interface EligibilityConditionBuilderProps {
   rules: EligibilityRuleUi[];
   formFields: FormFieldDefinition[];
   onChange: (rules: EligibilityRuleUi[]) => void;
+  /** Per-rule pass/fail from the sample-applicant panel (UX §5.6). */
+  ruleHighlights?: Record<string, "pass" | "fail">;
 }
 
 function formFieldOptions(fields: FormFieldDefinition[]): EligibilityAttributeOption[] {
@@ -26,7 +28,12 @@ function formFieldOptions(fields: FormFieldDefinition[]): EligibilityAttributeOp
   }));
 }
 
-export function EligibilityConditionBuilder({ rules, formFields, onChange }: EligibilityConditionBuilderProps) {
+export function EligibilityConditionBuilder({
+  rules,
+  formFields,
+  onChange,
+  ruleHighlights,
+}: EligibilityConditionBuilderProps) {
   const attributes = [...PROFILE_ATTRIBUTES, ...formFieldOptions(formFields)];
 
   const addRow = () => {
@@ -65,19 +72,46 @@ export function EligibilityConditionBuilder({ rules, formFields, onChange }: Eli
       ) : (
         rules.map((row, idx) => {
           const op = ELIGIBILITY_OPERATORS.find((o) => o.id === row.op) ?? ELIGIBILITY_OPERATORS[0]!;
+          const highlight = ruleHighlights?.[row.id];
           return (
             <div
               key={row.id}
+              data-testid={`eligibility-rule-${row.id}`}
+              data-highlight={highlight ?? "none"}
               style={{
                 display: "grid",
                 gap: 8,
                 padding: 12,
-                border: "1px solid var(--line)",
+                border:
+                  highlight === "fail"
+                    ? "2px solid var(--bad-fg)"
+                    : highlight === "pass"
+                      ? "1px solid var(--good-fg)"
+                      : "1px solid var(--line)",
+                background:
+                  highlight === "fail"
+                    ? "var(--bad-bg)"
+                    : highlight === "pass"
+                      ? "var(--good-bg)"
+                      : "transparent",
                 borderRadius: "var(--r-sm)",
                 fontSize: 13,
               }}
             >
-              <span style={{ fontWeight: 600 }}>Applicants must meet</span>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <span style={{ fontWeight: 600 }}>Applicants must meet</span>
+                {highlight ? (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: highlight === "fail" ? "var(--bad-fg)" : "var(--good-fg)",
+                    }}
+                  >
+                    {highlight === "fail" ? "Fails sample" : "Passes sample"}
+                  </span>
+                ) : null}
+              </div>
               <select
                 className="input"
                 value={row.attribute}

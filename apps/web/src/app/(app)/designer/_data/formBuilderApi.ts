@@ -8,11 +8,8 @@ import type {
   ValidationPreset,
   VisibilityCondition,
 } from "@/app/_components/ds/designer/formTypes";
-import {
-  defaultLabelForType,
-  slugifyApiName,
-  visibilityToShowWhen,
-} from "@/app/_components/ds/designer/formTypes";
+import { visibilityToShowWhen } from "@/app/_components/ds/designer/formTypes";
+import { createFieldDefinition } from "./formBuilderModel";
 
 interface MetadataEntity {
   id: string;
@@ -299,19 +296,7 @@ export async function persistFormDesign(
 }
 
 export function createField(type: DesignerFieldType, sectionId: string): FormFieldDefinition {
-  const id = crypto.randomUUID();
-  const label = defaultLabelForType(type);
-  return {
-    id,
-    apiName: slugifyApiName(label, id),
-    type,
-    label,
-    required: false,
-    sectionId,
-    choices: type === "picklist_single" || type === "picklist_multi" ? ["Option 1", "Option 2"] : undefined,
-    fileTypes: type === "file" ? ["pdf", "jpg", "png"] : undefined,
-    fileMaxMb: type === "file" ? 5 : undefined,
-  };
+  return createFieldDefinition(type, sectionId);
 }
 
 export { entityApiName };

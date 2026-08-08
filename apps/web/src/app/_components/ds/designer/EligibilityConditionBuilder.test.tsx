@@ -25,4 +25,26 @@ describe("EligibilityConditionBuilder", () => {
     const next = onChange.mock.calls[0]![0] as unknown[];
     expect(next).toHaveLength(1);
   });
+
+  it("highlights failing sample rules", () => {
+    render(
+      <EligibilityConditionBuilder
+        rules={[
+          {
+            id: "r-fail",
+            attribute: "age",
+            op: "gte",
+            value: "60",
+            effect: "block",
+            message: "Senior only",
+          },
+        ]}
+        formFields={fields}
+        onChange={vi.fn()}
+        ruleHighlights={{ "r-fail": "fail" }}
+      />,
+    );
+    expect(screen.getByText("Fails sample")).toBeInTheDocument();
+    expect(screen.getByTestId("eligibility-rule-r-fail")).toHaveAttribute("data-highlight", "fail");
+  });
 });
