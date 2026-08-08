@@ -9,9 +9,10 @@ import type { FormFieldDefinition } from "@/app/_components/ds/designer/formType
 import { FeeBuilder } from "../../_components/FeeBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
-import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
+import { loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
+import { hoaBlockMessage, isHoaBlocking } from "../../_data/feeBuilderModel";
 import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
 
 export default function DesignerB5Page() {
@@ -22,6 +23,7 @@ export default function DesignerB5Page() {
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
   const [initialDesign, setInitialDesign] = useState<FeeDesignState>(() => emptyFeeDesign("Untitled service"));
+  const [liveDesign, setLiveDesign] = useState<FeeDesignState>(() => emptyFeeDesign("Untitled service"));
   const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
   const [meta, setMeta] = useState({
     name: "Untitled service",
@@ -61,6 +63,7 @@ export default function DesignerB5Page() {
           hoaCode: def.hoaCode,
         });
         setInitialDesign(design);
+        setLiveDesign(design);
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -74,6 +77,8 @@ export default function DesignerB5Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const { prev, next } = adjacentBlocks(meta.pattern, "b5");
+  const hoaBlocked = isHoaBlocking(liveDesign);
+  const hoaGate = hoaBlockMessage(liveDesign);
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -83,13 +88,14 @@ export default function DesignerB5Page() {
         label: b.label,
         hidden: hidden.has(b.id),
         status:
-          b.id === "b5" ? "in-progress"
+          b.id === "b5"
+            ? (liveDesign.feeModel && liveDesign.hoaCode ? "complete" : liveDesign.feeModel ? "in-progress" : "empty")
             : b.id === "b1" || b.id === "b2" ? "complete"
               : b.id === "b3" && !hidden.has("b3") ? "complete"
                 : b.id === "b4" && !hidden.has("b4") ? "complete"
                   : "empty",
       })),
-    [hidden],
+    [hidden, liveDesign.feeModel, liveDesign.hoaCode],
   );
 
   const onDesignPersisted = async (design: FeeDesignState) => {
@@ -128,13 +134,30 @@ export default function DesignerB5Page() {
       activeBlockId="b5"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
-      onNext={() => router.push(`/designer/${params.id}/${next}`)}
+      onNext={hoaBlocked ? undefined : () => router.push(`/designer/${params.id}/${next}`)}
       help={
         <HelpTip term="Fee & Revenue">
           Set how much applicants pay, which account receives it, and when the demand is raised.
+          Head of Account is required before you can continue.
         </HelpTip>
       }
     >
+      {hoaBlocked ? (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 12px",
+            padding: "8px 12px",
+            fontSize: 13,
+            color: "var(--bad-fg)",
+            background: "var(--bad-bg, #fdecea)",
+            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--bad-fg)",
+          }}
+        >
+          {hoaGate} Next is disabled until HOA is attached.
+        </p>
+      ) : null}
       <FeeBuilder
         serviceId={meta.serviceId}
         serviceName={meta.name}
@@ -143,9 +166,17 @@ export default function DesignerB5Page() {
         engineAvailable={false}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
+        onDesignChange={setLiveDesign}
       />
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
+        {hoaBlocked ? (
+          <button type="button" className="btn primary" disabled title={hoaGate ?? undefined}>
+            Next blocked — attach HOA
+          </button>
+        ) : (
+          <Link href={`/designer/${params.id}/${next}`} className="btn primary">Next block →</Link>
+        )}
       </div>
     </WizardShell>
   );
