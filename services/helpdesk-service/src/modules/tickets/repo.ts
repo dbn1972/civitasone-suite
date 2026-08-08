@@ -310,9 +310,16 @@ export async function transitionStatus(
   actorId: string,
   now: Date,
 ): Promise<TicketRow | null> {
+  // resolved_at is stamped here rather than left to callers because this is the
+  // only status write path — SLA metrics read it, so a status change that did
+  // not maintain it would silently skew resolution time. Any non-terminal
+  // status clears it: a ticket moved back to open is no longer resolved, and a
+  // stale timestamp would let it keep counting as resolved work.
+  const terminal = newStatus === "resolved" || newStatus === "closed";
   const res = await (tx as typeof db).update(tickets)
     .set({
       status: newStatus,
+      resolvedAt: terminal ? now : null,
       updatedBy: actorId,
       updatedAt: now,
       version: sql`${tickets.version} + 1`,
@@ -362,6 +369,9 @@ export async function reopenIfClosed(
   const res = await (tx as typeof db).update(tickets)
     .set({
       status: "open",
+      // Reopening un-resolves the ticket; leaving resolved_at set would keep it
+      // counted as resolved work in SLA metrics while it is actively open.
+      resolvedAt: null,
       updatedBy: actorId,
       updatedAt: now,
       version: sql`${tickets.version} + 1`,
