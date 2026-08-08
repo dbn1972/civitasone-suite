@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
+import type { DocumentsDesignState } from "@/app/_components/ds/designer/documentTypes";
 import { DocumentsBuilder, documentsUiToApi } from "../../_components/DocumentsBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadDocumentsDesign } from "../../_data/documentBuilderApi";
+import { documentsLocaleCompleteness } from "../../_data/documentBuilderModel";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
-import type { DocumentsDesignState } from "@/app/_components/ds/designer/documentTypes";
 
 export default function DesignerB6Page() {
   const params = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export default function DesignerB6Page() {
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
   const [initialDesign, setInitialDesign] = useState<DocumentsDesignState>({ documents: [] });
+  const [liveDesign, setLiveDesign] = useState<DocumentsDesignState>({ documents: [] });
   const [lanes, setLanes] = useState(emptyWorkflowDesign("").lanes);
   const [meta, setMeta] = useState({
     name: "Untitled service",
@@ -43,6 +45,7 @@ export default function DesignerB6Page() {
         });
         const docs = await loadDocumentsDesign(def.requiredDocuments);
         setInitialDesign(docs);
+        setLiveDesign(docs);
         const workflow = await loadWorkflowDesign(def.name, def.workflowDefinitionId);
         setLanes(workflow.lanes);
         setError(null);
@@ -58,6 +61,10 @@ export default function DesignerB6Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const { prev, next } = adjacentBlocks(meta.pattern, "b6");
+  const localeMeter = useMemo(
+    () => documentsLocaleCompleteness(liveDesign.documents),
+    [liveDesign.documents],
+  );
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -109,17 +116,26 @@ export default function DesignerB6Page() {
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
+      footerMeta={
+        <span aria-label="Locale completeness">
+          Locales {localeMeter.meterLabel}
+          {!localeMeter.complete && liveDesign.documents.length > 0 ? " · incomplete" : ""}
+        </span>
+      }
       help={
         <HelpTip term="Documents">
           List what applicants must upload and which approval step verifies each document.
+          Mandatory documents without a verifying lane warn but do not block Next.
         </HelpTip>
       }
     >
       <DocumentsBuilder
         initial={initialDesign}
         lanes={lanes}
+        serviceId={params.id}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
+        onDesignChange={setLiveDesign}
       />
     </WizardShell>
   );

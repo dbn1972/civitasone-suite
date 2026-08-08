@@ -46,18 +46,23 @@ function templateName(serviceKey: string, event: NotificationEvent, channel: Not
   return `svc:${serviceKey}:${event}:${channel}`;
 }
 
+/** Persist enabled *and* explicitly disabled cells so Off is intentional, not “never set”. */
 export function notificationsUiToConfig(design: NotificationsDesignState): NotificationBindingsConfig {
   const bindings: NotificationBindingsConfig["bindings"] = [];
   for (const [event, channels] of Object.entries(design.matrix)) {
     if (!channels) continue;
     for (const [channel, cell] of Object.entries(channels)) {
-      if (!cell?.enabled) continue;
+      if (!cell) continue;
+      const hasContent =
+        cell.enabled ||
+        Boolean(cell.body?.en?.trim() || cell.body?.hi?.trim() || cell.templateId);
+      if (!hasContent) continue;
       bindings.push({
         event: event as NotificationEvent,
         channel: channel as NotificationChannel,
         templateId: cell.templateId,
         templateName: cell.templateName,
-        enabled: true,
+        enabled: cell.enabled,
         body: cell.body,
         subject: cell.subject,
       });

@@ -55,7 +55,7 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                 onKeyDown={(e) => handleKey(e, block)}
                 style={{
                   width: "100%",
-                  textAlign: "left",
+                  textAlign: "start",
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
@@ -133,6 +133,8 @@ export interface WizardShellProps {
   submitBusy?: boolean;
   children: ReactNode;
   help?: ReactNode;
+  /** Optional meter / note rendered beside the autosave label (e.g. locale completeness). */
+  footerMeta?: ReactNode;
 }
 
 export function WizardShell({
@@ -153,6 +155,7 @@ export function WizardShell({
   submitBusy = false,
   children,
   help,
+  footerMeta,
 }: WizardShellProps) {
   const saveLabel =
     saveState === "saving" ? "Saving…"
@@ -211,7 +214,14 @@ export function WizardShell({
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontSize: 12, color: "var(--mut)" }} aria-live="polite">{saveLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", minWidth: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--mut)" }} aria-live="polite">{saveLabel}</span>
+          {footerMeta ? (
+            <span data-testid="wizard-footer-meta" style={{ fontSize: 12, color: "var(--mut)" }}>
+              {footerMeta}
+            </span>
+          ) : null}
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onBack ? (
             <button type="button" className="btn ghost" onClick={onBack}>Back</button>

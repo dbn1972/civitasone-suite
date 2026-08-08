@@ -5,10 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
+import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { NotificationsDesignState } from "@/app/_components/ds/designer/notificationTypes";
 import { NotificationsBuilder } from "../../_components/NotificationsBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
+import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
   mergeOutputsWithNotifications,
   notificationsConfigToUi,
@@ -28,6 +30,7 @@ export default function DesignerB8Page() {
   const [initialDesign, setInitialDesign] = useState<NotificationsDesignState>(() =>
     notificationsConfigToUi([], "certificate"),
   );
+  const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
   const outputsRef = useRef<unknown[]>([]);
   const [meta, setMeta] = useState({
     name: "Untitled service",
@@ -53,6 +56,13 @@ export default function DesignerB8Page() {
           status: def.status,
         });
         setInitialDesign(notificationsConfigToUi(def.outputs, pattern));
+
+        try {
+          const form = await loadFormDesign(def.serviceKey, def.name);
+          if (!cancelled) setFormFields(Object.values(form.fields));
+        } catch {
+          if (!cancelled) setFormFields([]);
+        }
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -121,13 +131,16 @@ export default function DesignerB8Page() {
       submitBusy={wizard.submitting}
       help={
         <HelpTip term="Notifications">
-          Set SMS, email, WhatsApp, and in-app messages for each step of the service.
+          Set SMS, email, WhatsApp, and in-app messages for each step. Preview uses the same FormRenderer
+          sample answers as Apply so merge fields stay honest.
         </HelpTip>
       }
     >
       <NotificationsBuilder
         serviceKey={meta.serviceKey}
+        serviceName={meta.name}
         pattern={meta.pattern}
+        formFields={formFields}
         initial={initialDesign}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}

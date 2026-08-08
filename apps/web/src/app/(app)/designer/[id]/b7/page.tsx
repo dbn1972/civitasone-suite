@@ -5,10 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
+import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
+import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
   issuanceOutputToUi,
   issuanceUiToOutput,
@@ -26,12 +28,14 @@ export default function DesignerB7Page() {
   const [initialDesign, setInitialDesign] = useState<IssuanceDesignState>(() =>
     issuanceOutputToUi([], "certificate"),
   );
+  const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
   const outputsRef = useRef<unknown[]>([]);
   const [meta, setMeta] = useState({
     name: "Untitled service",
     pattern: "certificate",
     version: 1,
     status: "draft",
+    serviceKey: "",
   });
 
   useEffect(() => {
@@ -47,8 +51,17 @@ export default function DesignerB7Page() {
           pattern,
           version: def.version,
           status: def.status,
+          serviceKey: def.serviceKey,
         });
         setInitialDesign(issuanceOutputToUi(def.outputs, pattern, def.issuanceType));
+
+        try {
+          const form = await loadFormDesign(def.serviceKey, def.name);
+          if (!cancelled) setFormFields(Object.values(form.fields));
+        } catch {
+          if (!cancelled) setFormFields([]);
+        }
+
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -70,7 +83,10 @@ export default function DesignerB7Page() {
         shortLabel: b.shortLabel,
         label: b.label,
         hidden: hidden.has(b.id),
-        status: b.id === "b7" ? "in-progress" : b.id === "b1" || b.id === "b2" ? "complete" : "empty",
+        status:
+          b.id === "b7" ? "in-progress"
+            : b.id === "b1" || b.id === "b2" ? "complete"
+              : "empty",
       })),
     [hidden],
   );
@@ -84,7 +100,7 @@ export default function DesignerB7Page() {
         outputs,
       });
     } catch {
-      // best-effort
+      // best-effort autosave — footer shows offline via onSaveState
     }
   };
 
@@ -115,12 +131,14 @@ export default function DesignerB7Page() {
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
       help={
         <HelpTip term="Output & Issuance">
-          Design the certificate, numbering format, signatory, and validity period.
+          Design the certificate or closure note, numbering format, signatory, and validity period.
         </HelpTip>
       }
     >
       <OutputIssuanceBuilder
         serviceName={meta.name}
+        pattern={meta.pattern}
+        formFields={formFields}
         initial={initialDesign}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}

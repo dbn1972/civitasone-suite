@@ -1,23 +1,11 @@
 "use client";
 
-import type { WorkflowDesignState, WorkflowLane } from "./workflowConstants";
-import { defaultLanes, emptyWorkflowDesign, slaDaysToMinutes } from "./workflowConstants";
+import type { WorkflowDesignState } from "./workflowConstants";
+import { defaultLanes, emptyWorkflowDesign } from "./workflowConstants";
+import { lanesFromBpmn, lanesToBpmn, type DesignerNode, type DesignerEdge } from "./workflowRoundTrip";
 
-export { emptyWorkflowDesign, slaDaysToMinutes };
-
-interface DesignerNode {
-  id: string;
-  type: string;
-  label: string;
-  position: { x: number; y: number };
-  properties?: Record<string, unknown>;
-}
-
-interface DesignerEdge {
-  id: string;
-  source: string;
-  target: string;
-}
+export { emptyWorkflowDesign };
+export { lanesToBpmn, lanesFromBpmn } from "./workflowRoundTrip";
 
 interface DefinitionDetail {
   id: string;
@@ -33,84 +21,6 @@ async function parseJson(res: Response): Promise<unknown> {
     throw new Error(text || `Request failed (${res.status})`);
   }
   return res.json();
-}
-
-export function lanesToBpmn(lanes: WorkflowLane[]): { elements: DesignerNode[]; edges: DesignerEdge[] } {
-  const enabled = lanes.filter((l) => l.enabled);
-  const elements: DesignerNode[] = [];
-  const edges: DesignerEdge[] = [];
-  let x = 80;
-
-  elements.push({
-    id: "start_1",
-    type: "startEvent",
-    label: "Start",
-    position: { x, y: 120 },
-  });
-  x += 140;
-
-  let prevId = "start_1";
-  for (const lane of enabled) {
-    const nodeId = `lane_${lane.key}`;
-    elements.push({
-      id: nodeId,
-      type: lane.key === "issued" ? "endEvent" : "task",
-      label: lane.name,
-      position: { x, y: 120 },
-      properties: {
-        laneKey: lane.key,
-        designationId: lane.designationId,
-        designationLabel: lane.designationLabel,
-        slaDays: lane.slaDays,
-        // FN-25 — also stamp slaMinutes so compile/deploy paths can start clocks.
-        ...(slaDaysToMinutes(lane.slaDays) != null
-          ? { slaMinutes: slaDaysToMinutes(lane.slaDays) }
-          : {}),
-        escalationDesignationId: lane.escalationDesignationId,
-        escalationDesignationLabel: lane.escalationDesignationLabel,
-      },
-    });
-    edges.push({ id: `edge_${prevId}_${nodeId}`, source: prevId, target: nodeId });
-    prevId = nodeId;
-    x += 160;
-  }
-
-  if (enabled.every((l) => l.key !== "issued")) {
-    elements.push({
-      id: "end_1",
-      type: "endEvent",
-      label: "End",
-      position: { x, y: 120 },
-    });
-    edges.push({ id: `edge_${prevId}_end`, source: prevId, target: "end_1" });
-  }
-
-  return { elements, edges };
-}
-
-function lanesFromBpmn(elements: DesignerNode[]): WorkflowLane[] | null {
-  const tasks = elements.filter((e) => e.type === "task");
-  if (tasks.length === 0) return null;
-  const base = defaultLanes();
-  return base.map((lane) => {
-    const node = tasks.find((t) => (t.properties?.laneKey as string) === lane.key)
-      ?? tasks.find((t) => t.label.toLowerCase() === lane.name.toLowerCase());
-    if (!node) return lane;
-    const props = node.properties ?? {};
-    const slaFromMinutes = typeof props.slaMinutes === "number" && props.slaMinutes > 0
-      ? Math.round(props.slaMinutes / (24 * 60))
-      : undefined;
-    return {
-      ...lane,
-      name: node.label || lane.name,
-      designationId: String(props.designationId ?? ""),
-      designationLabel: String(props.designationLabel ?? ""),
-      slaDays: Number(props.slaDays ?? slaFromMinutes ?? lane.slaDays),
-      escalationDesignationId: String(props.escalationDesignationId ?? ""),
-      escalationDesignationLabel: String(props.escalationDesignationLabel ?? ""),
-      enabled: true,
-    };
-  });
 }
 
 export async function loadWorkflowDesign(
@@ -137,6 +47,8 @@ export async function loadWorkflowDesign(
 }
 
 export async function persistWorkflowDesign(design: WorkflowDesignState): Promise<WorkflowDesignState> {
+  // Template mode regenerates BPMN from guided lanes. Custom mode still persists the
+  // last known guided projection so catalogue linkage stays intact; mode is preserved.
   const { elements, edges } = lanesToBpmn(design.lanes);
 
   if (design.definitionId) {
@@ -150,7 +62,7 @@ export async function persistWorkflowDesign(design: WorkflowDesignState): Promis
         version: design.version,
       }),
     }));
-    return { ...design, version: design.version + 1, mode: "template" };
+    return { ...design, version: design.version + 1 };
   }
 
   const created = (await parseJson(await fetch("/api/proxy/v1/workflow/designer/definitions", {
@@ -163,7 +75,6 @@ export async function persistWorkflowDesign(design: WorkflowDesignState): Promis
     ...design,
     definitionId: created.id,
     version: 1,
-    mode: "template",
   };
 }
 

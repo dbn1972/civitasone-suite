@@ -9,43 +9,69 @@ import {
 export interface NumberingFormatBuilderProps {
   tokens: NumberingToken[];
   onChange: (tokens: NumberingToken[]) => void;
+  warning?: string | null;
 }
 
-const TOKEN_OPTIONS = ["Prefix", "Ward", "Year", "Sequence"] as const;
+const TOKEN_OPTIONS = ["Prefix", "Ward", "Year", "Office", "Sequence"] as const;
 
 function tokenKindFromLabel(label: string): NumberingToken["kind"] {
   switch (label) {
-    case "Prefix": return "prefix";
-    case "Ward": return "ward";
-    case "Year": return "year";
-    default: return "seq";
+    case "Prefix":
+      return "prefix";
+    case "Ward":
+      return "ward";
+    case "Year":
+      return "year";
+    case "Office":
+      return "office";
+    default:
+      return "seq";
   }
 }
 
 function labelFromKind(kind: NumberingToken["kind"]): string {
   switch (kind) {
-    case "prefix": return "Prefix";
-    case "ward": return "Ward";
-    case "year": return "Year";
-    default: return "Sequence";
+    case "prefix":
+      return "Prefix";
+    case "ward":
+      return "Ward";
+    case "year":
+      return "Year";
+    case "office":
+      return "Office";
+    default:
+      return "Sequence";
   }
 }
 
-export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuilderProps) {
+export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingFormatBuilderProps) {
   const preview = formatNumberingPreview(tokens);
 
   const addToken = (label: string) => {
     const kind = tokenKindFromLabel(label);
-    const next: NumberingToken = kind === "prefix"
-      ? { kind, value: "TL" }
-      : kind === "seq"
-        ? { kind, seqWidth: 5 }
-        : { kind };
+    const next: NumberingToken =
+      kind === "prefix"
+        ? { kind, value: "TL" }
+        : kind === "office"
+          ? { kind, value: "HO" }
+          : kind === "seq"
+            ? { kind, seqWidth: 5 }
+            : { kind };
     onChange([...tokens, next]);
   };
 
   const removeToken = (idx: number) => {
     onChange(tokens.filter((_, i) => i !== idx));
+  };
+
+  const moveToken = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir;
+    if (target < 0 || target >= tokens.length) return;
+    const next = [...tokens];
+    const tmp = next[idx]!;
+    next[idx] = next[target]!;
+    next[target] = tmp;
+    onChange(next);
   };
 
   const updateToken = (idx: number, patch: Partial<NumberingToken>) => {
@@ -55,7 +81,7 @@ export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuil
   return (
     <div>
       <p style={{ fontSize: 13, color: "var(--mut)", marginTop: 0 }}>
-        Compose how certificate numbers are generated.
+        Compose how certificate or closure numbers are generated.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
         {TOKEN_OPTIONS.map((opt) => (
@@ -68,6 +94,7 @@ export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuil
         {tokens.map((token, idx) => (
           <li
             key={`${token.kind}-${idx}`}
+            data-testid={`numbering-token-${idx}`}
             style={{
               display: "flex",
               alignItems: "center",
@@ -76,6 +103,7 @@ export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuil
               border: "1px solid var(--line)",
               borderRadius: "var(--r-sm)",
               background: "var(--panel)",
+              flexWrap: "wrap",
             }}
           >
             <Segmented
@@ -83,12 +111,12 @@ export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuil
               value={labelFromKind(token.kind)}
               onChange={(v) => updateToken(idx, { kind: tokenKindFromLabel(v) })}
             />
-            {token.kind === "prefix" ? (
+            {token.kind === "prefix" || token.kind === "office" ? (
               <input
-                aria-label="Prefix value"
+                aria-label={token.kind === "prefix" ? "Prefix value" : "Office code"}
                 value={token.value ?? ""}
                 onChange={(e) => updateToken(idx, { value: e.target.value })}
-                placeholder="TL"
+                placeholder={token.kind === "prefix" ? "TL" : "HO"}
                 style={{ width: 80 }}
               />
             ) : null}
@@ -106,13 +134,40 @@ export function NumberingFormatBuilder({ tokens, onChange }: NumberingFormatBuil
                 />
               </label>
             ) : null}
-            <button type="button" className="btn ghost" aria-label="Remove token" onClick={() => removeToken(idx)}>×</button>
+            <div style={{ marginInlineStart: "auto", display: "flex", gap: 4 }}>
+              <button
+                type="button"
+                className="btn ghost"
+                aria-label="Move token up"
+                disabled={idx === 0}
+                onClick={() => moveToken(idx, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                aria-label="Move token down"
+                disabled={idx === tokens.length - 1}
+                onClick={() => moveToken(idx, 1)}
+              >
+                ↓
+              </button>
+              <button type="button" className="btn ghost" aria-label="Remove token" onClick={() => removeToken(idx)}>
+                ×
+              </button>
+            </div>
           </li>
         ))}
       </ul>
-      <p style={{ marginTop: 16, fontSize: 14 }}>
+      <p style={{ marginTop: 16, fontSize: 14 }} data-testid="numbering-preview">
         Next number will look like: <strong>{preview || "—"}</strong>
       </p>
+      {warning ? (
+        <p data-testid="numbering-warning" style={{ marginTop: 8, fontSize: 13, color: "var(--warn-fg)" }}>
+          {warning}
+        </p>
+      ) : null}
     </div>
   );
 }

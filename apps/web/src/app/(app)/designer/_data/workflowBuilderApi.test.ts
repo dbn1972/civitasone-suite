@@ -35,7 +35,7 @@ describe("workflowConstants", () => {
   });
 });
 
-describe("lanesToBpmn", () => {
+describe("lanesToBpmn (re-export)", () => {
   it("builds a linear chain from guided lanes", () => {
     const { elements, edges } = lanesToBpmn(defaultLanes());
     expect(elements.some((e) => e.type === "startEvent")).toBe(true);

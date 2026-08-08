@@ -7,6 +7,7 @@ import type {
   FeeExemptionUi,
   FeeModelUi,
   SampleCalculation,
+  SamplePaymentScenario,
   SlabRowUi,
 } from "@/app/_components/ds/designer/feeTypes";
 
@@ -154,40 +155,100 @@ export function computeSlabFeeLocal(slabs: SlabRowUi[], sampleValue: number): nu
   return Math.max(0, total);
 }
 
+function applyScenarioAdjustments(
+  principalPaise: number,
+  design: FeeDesignState,
+  scenario: SamplePaymentScenario,
+  lines: SampleCalculation["lines"],
+): number {
+  let total = principalPaise;
+
+  if (scenario === "early" && design.rebateDays > 0) {
+    const pct = Math.min(100, Math.max(0, Math.trunc(design.rebatePercent || 0)));
+    const rebate = pct > 0 ? -Math.trunc((principalPaise * pct) / 100) : 0;
+    lines.push({
+      label: pct > 0
+        ? `Rebate (${pct}% · within ${design.rebateDays} days)`
+        : `Rebate window (${design.rebateDays} days) — set rebate % to preview`,
+      amountPaise: rebate,
+      taxHeadCode: "REBATE",
+      kind: "rebate",
+    });
+    total += rebate;
+  } else if (scenario === "late" && design.penaltyDays >= 0 && design.penaltyPercent > 0) {
+    const pct = Math.min(100, Math.max(0, Math.trunc(design.penaltyPercent || 0)));
+    const penalty = Math.trunc((principalPaise * pct) / 100);
+    lines.push({
+      label: `Penalty (${pct}% · after ${design.penaltyDays} days grace)`,
+      amountPaise: penalty,
+      taxHeadCode: "PENALTY",
+      kind: "penalty",
+    });
+    total += penalty;
+  } else if (scenario === "late" && design.penaltyDays > 0 && design.penaltyPercent <= 0) {
+    lines.push({
+      label: `Penalty grace (${design.penaltyDays} days) — set penalty % to preview`,
+      amountPaise: 0,
+      taxHeadCode: "PENALTY",
+      kind: "info",
+    });
+  }
+
+  return Math.max(0, total);
+}
+
 export function buildSampleCalculation(
   design: FeeDesignState,
   subject: Record<string, unknown>,
   sampleNumeric: number,
+  scenario: SamplePaymentScenario = "on_time",
 ): SampleCalculation {
   const currency = "INR";
   const lines: SampleCalculation["lines"] = [];
 
   if (design.feeModel === "flat") {
     const result = computeFlatFeeLocal(design.baseAmountPaise, design.exemptions, subject);
-    lines.push({ label: "Base fee", amountPaise: result.baseAmount });
+    lines.push({
+      label: "Base fee",
+      amountPaise: result.baseAmount,
+      taxHeadCode: "BASE",
+      kind: "base",
+    });
     if (result.exemptionLabel && result.amount < result.baseAmount) {
       lines.push({
         label: `Exemption (${result.exemptionLabel})`,
         amountPaise: result.amount - result.baseAmount,
+        taxHeadCode: "EXEMPTION",
+        kind: "exemption",
       });
     }
-    if (design.rebateDays > 0) {
-      lines.push({ label: `Early payment rebate (${design.rebateDays} days)`, amountPaise: 0 });
-    }
-    if (design.penaltyDays > 0) {
-      lines.push({ label: `Late penalty (${design.penaltyDays} days grace)`, amountPaise: 0 });
-    }
-    const totalPaise = result.amount;
-    return { lines, totalPaise, currency };
+    const totalPaise = applyScenarioAdjustments(result.amount, design, scenario, lines);
+    return { lines, totalPaise, currency, hoaCode: design.hoaCode || undefined, scenario };
   }
 
   if (design.feeModel === "slab") {
     const principal = computeSlabFeeLocal(design.slabs, sampleNumeric);
-    lines.push({ label: "Principal (slab)", amountPaise: principal });
-    return { lines, totalPaise: principal, currency };
+    lines.push({
+      label: "Base (slab)",
+      amountPaise: principal,
+      taxHeadCode: "BASE",
+      kind: "base",
+    });
+    const totalPaise = applyScenarioAdjustments(principal, design, scenario, lines);
+    return { lines, totalPaise, currency, hoaCode: design.hoaCode || undefined, scenario };
   }
 
-  return { lines: [{ label: "Engine fee (preview unavailable)", amountPaise: 0 }], totalPaise: 0, currency };
+  if (design.feeModel === "engine") {
+    lines.push({
+      label: "Engine fee (live preview unavailable in designer)",
+      amountPaise: 0,
+      taxHeadCode: "BASE",
+      kind: "info",
+    });
+    return { lines, totalPaise: 0, currency, hoaCode: design.hoaCode || undefined, scenario };
+  }
+
+  return { lines: [], totalPaise: 0, currency, hoaCode: design.hoaCode || undefined, scenario };
 }
 
 export function emptyFeeDesign(serviceName: string): FeeDesignState {
@@ -202,7 +263,9 @@ export function emptyFeeDesign(serviceName: string): FeeDesignState {
     hoaCode: "",
     demandTrigger: "submission",
     rebateDays: 0,
+    rebatePercent: 0,
     penaltyDays: 0,
+    penaltyPercent: 0,
   };
 }
 
