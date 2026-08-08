@@ -17,6 +17,8 @@ import { CONSUMED_EVENTS } from "../../topics.js";
 import { getTemplateForEvent, interpolate } from "./templates.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "domain-events-consumer" });
 
 // ─── Payload types for consumed events ───────────────────────────────────────
@@ -499,6 +501,7 @@ async function handleDomainEvent(msg: CommandEnvelope): Promise<void> {
         correlationId: msg.correlationId,
         payload: notificationPayload,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "notification-service", action: "process", resourceType: "domain_events", resourceId: msg.messageId, outcome: "success" } });
     }
   });
 

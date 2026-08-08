@@ -25,9 +25,11 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { auditEvent, domainEvent } from "../../shared/audit.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 import * as repo from "./repo.js";
 import { buildMaskingPlan, type MaskingRule, type MaskingPlan } from "./domain.js";
 
@@ -130,6 +132,14 @@ export async function handleSandboxRefreshExecute(msg: RefreshExecuteMessage): P
           maskedFieldCount: plan.maskedFieldCount,
           preservedFieldCount: plan.preservedFieldCount,
           dataMovement: outcome.moved,
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: "admin-service", action: "sandbox_provision", resourceType: "sandbox", resourceId: job.id, outcome: "success" },
         });
         // Counts and field names only — never a masked value.
         log.info(

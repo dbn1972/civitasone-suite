@@ -8,6 +8,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "catalogue.price-books.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
@@ -62,6 +63,14 @@ export function registerPriceBookConsumers(rawQueue: Queue): void {
         resourceType: "catalogue_price_book",
         resourceId: p.id,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "price_book_create", resourceType: "price_book", resourceId: p.id, outcome: "success" },
+      });
     });
     log.info({ id: p.id }, "price book created");
   });
@@ -93,6 +102,14 @@ export function registerPriceBookConsumers(rawQueue: Queue): void {
         action: "price_book.update",
         resourceType: "catalogue_price_book",
         resourceId: p.id,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "price_book_update", resourceType: "price_book", resourceId: p.id, outcome: "success" },
       });
     });
   });
@@ -138,6 +155,14 @@ export function registerPriceBookConsumers(rawQueue: Queue): void {
         resourceType: "catalogue_price_book",
         resourceId: p.priceBookId,
         details: { entryCount: p.entries.length },
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "price_book_entries_replace", resourceType: "price_book", resourceId: p.priceBookId, outcome: "success" },
       });
     });
   });

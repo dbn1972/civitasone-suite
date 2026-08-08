@@ -8,6 +8,8 @@ import { calculateNetPayable, billedQuantityExceedsBoq, canCreateBill } from "./
 import { boqItems } from "../boq/schema.js";
 import { eq, and } from "drizzle-orm";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerBillingConsumers(q: Queue): void {
   q.subscribe(COMMANDS.mbIssue, async (msg) => {
     await db.transaction(async (tx) => {
@@ -33,6 +35,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "billing", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -54,6 +57,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id, status: nextStatus },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "finalize", resourceType: "mb", resourceId: id, outcome: "success" } });
     });
   });
 
@@ -105,6 +109,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId, netPayableMinor: netPayable.toString() },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "bill", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -126,6 +131,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id, status: nextStatus },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "finalize", resourceType: "bill", resourceId: id, outcome: "success" } });
     });
   });
 
@@ -180,6 +186,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, mbId: p.mbId, boqItemId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "billing", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -207,6 +214,7 @@ export function registerBillingConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, month: p.month, year: p.year },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "billing", resourceId: p.id, outcome: "success" } });
     });
   });
 }

@@ -1,3 +1,5 @@
+// NOTE: audit-service event consumer does not re-emit audit events (would cause infinite loop)
+
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";

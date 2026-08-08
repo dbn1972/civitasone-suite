@@ -1,8 +1,10 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { registerCaseTx } from "./repo.js";
 import { caseDeviations } from "./schema.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 /**
  * CAP-031 — cross-domain case registration. Each source domain emits its own
@@ -48,6 +50,7 @@ export function registerCaseRegistryConsumers(q: Queue): void {
           actorId: msg.actorId,
           correlationId: msg.correlationId,
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "register", resourceType: "case", resourceId: sourceRefId, outcome: "success" } });
       });
     });
   }
@@ -63,6 +66,7 @@ export function registerCaseRegistryConsumers(q: Queue): void {
         type: p.type, description: p.description, severity: p.severity ?? "medium",
         status: "open", createdBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "case_registry", resourceId: p.id, outcome: "success" } });
     });
   });
 }

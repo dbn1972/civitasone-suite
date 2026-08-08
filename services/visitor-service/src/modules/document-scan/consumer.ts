@@ -33,6 +33,8 @@ import { performOcr } from "./ocr-adapter.js";
 import { isLowConfidence, detectDocumentType, mapOcrFields, shouldScreenBlacklist } from "./domain.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "document-scan-consumer" });
 
 /** Cache resource keys for document-scan records. */
@@ -316,6 +318,7 @@ export function registerDocumentScanConsumers(queue: Queue): void {
             documentNumber: mapped.idDocumentNumber,
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "document_scan", resourceId: msg.messageId, outcome: "success" } });
       }
     });
 
@@ -354,6 +357,7 @@ export function registerDocumentScanConsumers(queue: Queue): void {
           status: p.status,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "complete", resourceType: "scan", resourceId: msg.messageId, outcome: "success" } });
     });
 
     // Post-commit: invalidate caches (best-effort)

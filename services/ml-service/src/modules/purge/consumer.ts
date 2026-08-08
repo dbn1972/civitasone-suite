@@ -22,13 +22,15 @@ import {
   type ListObjectsV2CommandOutput,
 } from "@aws-sdk/client-s3";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED } from "../../topics.js";
 import { mlModels } from "../models/schema.js";
 import { mlPredictions } from "../predictions/schema.js";
 import { mlFeatureVectors } from "../feature-store/schema.js";
 import { mlTrainingRuns } from "../training/schema.js";
 import { cache } from "../../shared/infra.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "ml-purge-consumer" });
 
@@ -239,6 +241,10 @@ export function registerPurgeConsumer(queue: Queue): void {
 
     try {
       const result = await purgeTenantData(tenantId);
+
+      await db.transaction(async (tx) => {
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "ml-service", action: "purge", resourceType: "tenant_data", resourceId: tenantId, outcome: "success" } });
+      });
 
       const processingTimeMs = Date.now() - startMs;
       log.info(

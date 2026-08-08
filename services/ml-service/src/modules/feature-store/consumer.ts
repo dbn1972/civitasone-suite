@@ -20,13 +20,14 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED } from "../../topics.js";
 import { computeAndCache } from "./domain.js";
 import { recordConsumerMessage } from "../observability/metrics.js";
 import type { FeatureDomain } from "./schema.js";
 
 const log = pino({ name: "ml-feature-store-consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 // ─── Payload Types ───────────────────────────────────────────────────────────
 
@@ -153,6 +154,10 @@ async function handleEntityEvent(
   // Recompute features for the affected entity
   try {
     await computeAndCache(tenantId, domain, entityId);
+
+    await db.transaction(async (tx) => {
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "ml-service", action: "recompute", resourceType: "feature_vector", resourceId: entityId, outcome: "success" } });
+    });
 
     const processingTimeMs = Date.now() - startMs;
     log.info(

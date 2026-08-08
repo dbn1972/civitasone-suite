@@ -53,6 +53,8 @@ import {
 } from "./domain.js";
 import { getAutoApproveCategories } from "../config-registry/policy.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "visit-request-consumer" });
 
 /** Restricted area threshold — areas with securityLevel > 1 need workflow approval. */
@@ -283,6 +285,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
           },
         }),
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
     });
 
     // If the visitor's category was auto-approved (config-driven), trigger pass
@@ -459,6 +462,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
       }
 
       return {
@@ -598,6 +602,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
       }
     });
   });
@@ -649,6 +654,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
           status: "cancelled",
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -738,6 +744,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
       }
     });
   });
@@ -865,6 +872,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: msg.messageId, outcome: "success" } });
       }
 
       const permittedAreaIds = (request.permittedAreas ?? []) as string[];
@@ -1025,6 +1033,7 @@ export function registerVisitRequestConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: msg.messageId, outcome: "success" } });
       }
     });
   });

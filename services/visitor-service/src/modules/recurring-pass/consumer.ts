@@ -41,6 +41,8 @@ import { recurringPasses } from "./schema.js";
 import { validateValidityWindow, suspend, revoke, type RecurringPassStatus } from "./domain.js";
 import { addToRevocationSet } from "./revocation-store.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "recurring-pass-consumer" });
 
 // ── Payload Types ────────────────────────────────────────────────────────
@@ -124,6 +126,7 @@ export function registerRecurringPassConsumers(queue: Queue): void {
           },
         }),
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "recurring_pass", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -191,6 +194,7 @@ export function registerRecurringPassConsumers(queue: Queue): void {
           variables: { visitorName: entry.visitorName, reason: p.reason },
         }),
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "recurring_pass", resourceId: p.id, outcome: "success" } });
 
       return { passId: entry.passId, visitorPhone: entry.visitorPhone, issuedBy: entry.issuedBy };
     });
@@ -272,6 +276,7 @@ export function registerRecurringPassConsumers(queue: Queue): void {
           variables: { visitorName: entry.visitorName, reason: p.reason ?? "Pass revoked" },
         }),
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "recurring_pass", resourceId: p.id, outcome: "success" } });
 
       return { passId: entry.passId, visitorPhone: entry.visitorPhone, issuedBy: entry.issuedBy };
     });

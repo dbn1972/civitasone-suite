@@ -34,11 +34,13 @@ import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { blacklistEntries, watchlistEntries } from "./schema.js";
 import { assertBlacklistTransition, assertDistinctMakerChecker, normalizeName } from "./domain.js";
 import { addToBlacklistHashSet, addToWatchlistHashSet } from "./screening-store.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "blacklist-consumer" });
 
@@ -96,6 +98,7 @@ export function registerBlacklistConsumers(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "blacklist", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -128,6 +131,7 @@ export function registerBlacklistConsumers(queue: Queue): void {
           updatedAt: new Date(),
           updatedBy: msg.actorId,
         })
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "blacklist", resourceId: p.id, outcome: "success" } });
         .where(and(eq(blacklistEntries.id, p.id), eq(blacklistEntries.tenantId, msg.tenantId)));
 
       return { identityDocHash: entry.identityDocHash };
@@ -173,6 +177,7 @@ export function registerBlacklistConsumers(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "blacklist", resourceId: p.id, outcome: "success" } });
 
       return true;
     });

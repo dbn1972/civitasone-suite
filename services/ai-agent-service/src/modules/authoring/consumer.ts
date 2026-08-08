@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "ai.authoring.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -56,6 +57,14 @@ export function registerAuthoringConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "authoring_create", resourceType: "authoring", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidateResource(msg.tenantId, "authoring-agents");
     log.info({ id: p.id }, "agent definition drafted");
@@ -78,6 +87,14 @@ export function registerAuthoringConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "authoring_update", resourceType: "authoring", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "authoring-agents");
@@ -117,6 +134,14 @@ export function registerAuthoringConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "authoring_publish", resourceType: "authoring", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidateResource(msg.tenantId, "authoring-agents");
   });
@@ -147,6 +172,14 @@ export function registerAuthoringConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "authoring_archive", resourceType: "authoring", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "authoring-agents");

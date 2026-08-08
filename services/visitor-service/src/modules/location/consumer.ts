@@ -20,6 +20,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { locations, areas } from "./schema.js";
 import type { BusinessHours } from "./schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const RESOURCE = "location";
 
 export interface LocationCreatePayload {
@@ -78,6 +80,7 @@ export function registerLocationConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, name: p.name },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "location", resourceId: p.id, outcome: "success" } });
 
       await cache.invalidateAfterCommit(tx, cache.makeKey(p.tenantId, RESOURCE, p.id));
     });
@@ -114,6 +117,7 @@ export function registerLocationConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, locationId: p.locationId, name: p.name },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "area", resourceId: p.id, outcome: "success" } });
 
       // Areas may be embedded in a future location-detail read — invalidate
       // the parent location's cache entry too, matching the previous

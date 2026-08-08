@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import type { HandoffContext } from "./domain.js";
 
 const log = pino({ name: "ai.chat.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -131,6 +132,14 @@ export function registerChatConsumers(rawQueue: Queue): void {
           });
         }
       }
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "chat_send_message", resourceType: "chat", resourceId: p.messageId, outcome: "success" },
+      });
     });
     log.info({ conversationId: p.conversationId, messageId: p.messageId }, "chat message accepted");
   });
@@ -158,6 +167,14 @@ export function registerChatConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: p.reason,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "chat_end_conversation", resourceType: "chat", resourceId: p.conversationId, outcome: "success" },
       });
     });
   });
@@ -215,6 +232,14 @@ export function registerChatConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: p.note ?? p.reasonCode,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "chat_handoff", resourceType: "chat", resourceId: p.conversationId, outcome: "success" },
+      });
     });
     log.info(
       { conversationId: p.conversationId, reasonCode: p.reasonCode },
@@ -239,6 +264,14 @@ export function registerChatConsumers(rawQueue: Queue): void {
       });
       await writeAudit(tx, ctxOf(msg) as never, {
         action: "chat.session_start", input: null, output: p.id, blocked: false, reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "chat_session_start", resourceType: "chat", resourceId: p.id, outcome: "success" },
       });
     });
     log.info({ id: p.id }, "chat session started");

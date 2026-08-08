@@ -20,6 +20,8 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { applyPdfWatermark, applyCsvWatermark } from "../../shared/watermark.js";
 import { maskPiiColumns } from "../../shared/mask.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "render-consumer" });
 
 interface RenderPayload {
@@ -52,6 +54,7 @@ export function registerRenderConsumers(queue: Queue): void {
         // Mark job as running
         await tx.update(jobs)
           .set({ status: "running", updatedAt: new Date(), updatedBy: msg.actorId })
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "report-service", action: "process", resourceType: "render", resourceId: p.jobId, outcome: "success" } });
           .where(and(eq(jobs.id, p.jobId), eq(jobs.tenantId, p.tenantId)));
       });
 

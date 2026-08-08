@@ -8,6 +8,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "ai.agents.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -44,6 +45,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_create", resourceType: "agent", resourceId: p.id, outcome: "success" },
+      });
     });
     log.info({ id: p.id }, "agent created");
   });
@@ -67,6 +76,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_update", resourceType: "agent", resourceId: p.id, outcome: "success" },
+      });
     });
   });
 
@@ -83,6 +100,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_archive", resourceType: "agent", resourceId: p.id, outcome: "success" },
       });
     });
   });
@@ -109,6 +134,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_pause", resourceType: "agent", resourceId: p.id, outcome: "success" },
+      });
     });
   });
 
@@ -125,6 +158,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_resume", resourceType: "agent", resourceId: p.id, outcome: "success" },
       });
     });
   });
@@ -159,6 +200,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_handoff", resourceType: "agent", resourceId: p.fromAgentId, outcome: "success" },
+      });
     });
   });
 
@@ -190,6 +239,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "agent_invoke", resourceType: "agent", resourceId: p.agentId, outcome: "success" },
       });
     });
   });
@@ -252,6 +309,14 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         output: p.output,
         blocked: p.blocked,
         reason: p.reason,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "record_blocked_audit", resourceType: "agent", resourceId: p.agentId ?? msg.messageId, outcome: "success" },
       });
     });
   });

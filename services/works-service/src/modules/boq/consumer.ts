@@ -8,6 +8,8 @@ import { awards } from "../tender/schema.js";
 import { calculateBoqAmount, calculateRecapitulation } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerBoqConsumers(q: Queue): void {
   q.subscribe(COMMANDS.boqAddItem, async (msg) => {
     await db.transaction(async (tx) => {
@@ -47,6 +49,7 @@ export function registerBoqConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId, amountMinor: amountMinor.toString() },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "boq", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -89,6 +92,7 @@ export function registerBoqConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { workId: p.workId, grandTotal: grandTotal.toString() },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "boq", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -136,6 +140,7 @@ export function registerBoqConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id, workId: current.workId, amountMinor: amountMinor.toString() },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "update", resourceType: "boq_item", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -179,6 +184,7 @@ export function registerBoqConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "delete", resourceType: "boq_item", resourceId: p.id, outcome: "success" } });
     });
   });
 }

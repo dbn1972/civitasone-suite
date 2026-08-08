@@ -44,6 +44,8 @@ import { generatePass, revokePass, replacePass, computeValidityWindow, type Pass
 import { addToRevokedSet } from "./revocation-store.js";
 import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "digital-pass-consumer" });
 
 // ── Payload interfaces ────────────────────────────────────────────────────
@@ -202,6 +204,7 @@ export function registerDigitalPassConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "digital_pass", resourceId: p.id, outcome: "success" } });
       }
 
       return { passId: p.id, visitorEmail, visitorPhone };
@@ -258,6 +261,7 @@ export function registerDigitalPassConsumers(queue: Queue): void {
           revokedAt: revocationFields.revokedAt.toISOString(),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "digital_pass", resourceId: msg.messageId, outcome: "success" } });
 
       return { passId: p.passId };
     });
@@ -392,6 +396,7 @@ export function registerDigitalPassConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "digital_pass", resourceId: msg.messageId, outcome: "success" } });
       }
 
       return { originalPassId: p.originalPassId, newPassId: p.newPassId };

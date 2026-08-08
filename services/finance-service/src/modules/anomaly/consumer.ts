@@ -13,7 +13,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { isTransactionDismissed } from "./queries.js";
 import { createAnomalyFlag } from "./commands.js";
@@ -28,6 +28,8 @@ import {
 } from "./domain.js";
 
 const log = pino({ name: "finance:anomaly-consumer" });
+
+const AUDIT_TOPIC = "audit.event.record";
 
 /**
  * Simulated stats retrieval — in production, these would query the ml-service
@@ -115,6 +117,15 @@ export function registerAnomalyConsumers(queue: Queue): void {
       };
 
       await createAnomalyFlag(msg.tenantId, msg.actorId, anomaly, correlationId);
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId,
+        payload: { service: "finance", action: "flag_anomaly", resourceType: "anomaly", resourceId: p.entityId, outcome: "success" },
+      });
 
       log.info(
         {

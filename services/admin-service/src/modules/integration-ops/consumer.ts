@@ -2,9 +2,11 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "admin-integration-ops-consumer" });
 
@@ -31,6 +33,14 @@ export function registerIntegrationOpsConsumers(queue: Queue): void {
           ...(p.correlationId ? { correlationId: p.correlationId } : { correlationId: msg.correlationId }),
           payload: (p.payload ?? {}) as Record<string, unknown>,
           ...(p.error ? { error: p.error } : {}),
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: "admin-service", action: "dead_letter_record", resourceType: "integration_ops", resourceId: p.id, outcome: "success" },
         });
       });
     } catch (err) {

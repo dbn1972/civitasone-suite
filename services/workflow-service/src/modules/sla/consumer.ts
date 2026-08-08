@@ -3,6 +3,8 @@ import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 import * as repo from "./repo.js";
 const log = pino({ name: "workflow-sla-consumer" });
 export function registerSlaConsumers(queue: Queue): void {
@@ -18,6 +20,7 @@ export function registerSlaConsumers(queue: Queue): void {
         });
         await enqueue(tx, { topic: EVENTS.calendarCreated, eventType: EVENTS.calendarCreated,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { id: p.id, code: p.code } });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "create", resourceType: "calendar", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "createCalendar failed"); throw err; }
   });
@@ -29,6 +32,7 @@ export function registerSlaConsumers(queue: Queue): void {
         await repo.pauseTask(p.tenantId, p.id, p.reason ?? null, msg.actorId);
         await enqueue(tx, { topic: EVENTS.taskSlaPaused, eventType: EVENTS.taskSlaPaused,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { taskId: p.id } });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "pause", resourceType: "task_sla", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "pauseTaskSla failed"); throw err; }
   });
@@ -40,6 +44,7 @@ export function registerSlaConsumers(queue: Queue): void {
         await repo.resumeTask(p.tenantId, p.id);
         await enqueue(tx, { topic: EVENTS.taskSlaResumed, eventType: EVENTS.taskSlaResumed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { taskId: p.id } });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "resume", resourceType: "task_sla", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "resumeTaskSla failed"); throw err; }
   });

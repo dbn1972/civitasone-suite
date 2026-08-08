@@ -13,6 +13,8 @@ import {
 } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerExecutionConsumers(q: Queue): void {
   q.subscribe(COMMANDS.issueCreate, async (msg) => {
     await db.transaction(async (tx) => {
@@ -39,6 +41,7 @@ export function registerExecutionConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "issue", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -66,6 +69,7 @@ export function registerExecutionConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "execution", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -116,6 +120,7 @@ export function registerExecutionConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workScopeId, cumulative },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "execution", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -147,6 +152,7 @@ export function registerExecutionConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "execution", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -174,6 +180,7 @@ export function registerExecutionConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "complete", resourceType: "physical", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -266,6 +273,7 @@ export function registerExecutionConsumers(q: Queue): void {
             closureType,
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "execution", resourceId: p.id, outcome: "success" } });
       }
     });
   });

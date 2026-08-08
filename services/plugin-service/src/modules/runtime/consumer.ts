@@ -14,7 +14,7 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { pluginHooks } from "../hooks/schema.js";
 import { plugins } from "../registry/schema.js";
 import { eq, and } from "drizzle-orm";
@@ -22,6 +22,8 @@ import { executeHooks, type PluginHookDef, type PluginManifest } from "./engine.
 import { shouldDeliverEvent } from "../events/domain.js";
 import { isPluginAllowed } from "../events/preview.js";
 import type { PluginManifest as SandboxManifest, PluginPermission } from "../sandbox/types.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "plugin-runtime-consumer" });
 
@@ -109,6 +111,7 @@ export function registerRuntimeConsumers(queue: Queue): void {
       }
 
       log.info({ eventType, tenantId, hookCount: hooks.length, executed: results.length }, "hooks dispatched");
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "plugin-service", action: "process", resourceType: "runtime", resourceId: p.id, outcome: "success" } });
     });
   });
 }

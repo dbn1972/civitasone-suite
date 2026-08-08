@@ -11,6 +11,7 @@ import { defaultToolsFor } from "./domain.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "ai.tools.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -64,6 +65,14 @@ export function registerToolConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "tool_define", resourceType: "tool", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidateResource(msg.tenantId, "tools");
     log.info({ id: p.id }, "tool defined");
@@ -96,6 +105,14 @@ export function registerToolConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "tool_update", resourceType: "tool", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "tools");
@@ -139,6 +156,14 @@ export function registerToolConsumers(rawQueue: Queue): void {
         output: String(inserted),
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "tool_seed_defaults", resourceType: "tool", resourceId: msg.messageId, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "tools");
@@ -202,6 +227,14 @@ export function registerToolConsumers(rawQueue: Queue): void {
         output: p.observation,
         blocked: !p.executed,
         reason: p.executed ? null : p.decisionMessage,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "react_step_record", resourceType: "tool", resourceId: p.stepId, outcome: "success" },
       });
     });
   });

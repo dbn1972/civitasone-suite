@@ -7,6 +7,8 @@ import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { masterTableByPrefix, masterMoneyFieldsByPrefix } from "./registry.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 /**
  * Master-create consumer (fixes the CRITICAL CQRS bug where masters/routes.ts
  * used to publish to COMMANDS.proposalCreate).
@@ -46,6 +48,7 @@ export function registerMasterConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id, masterType },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "master", resourceId: msg.messageId, outcome: "success" } });
     });
 
     if (table) {

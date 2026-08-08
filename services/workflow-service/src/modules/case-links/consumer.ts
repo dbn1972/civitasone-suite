@@ -7,6 +7,8 @@ import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { LinkType } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "workflow-case-links-consumer" });
 
 export function registerCaseLinksConsumers(queue: Queue): void {
@@ -37,6 +39,7 @@ export function registerCaseLinksConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id, fromCaseId: p.fromCaseId, toCaseId: p.toCaseId, linkType: p.linkType },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "create", resourceType: "case_link", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "createCaseLink failed");
@@ -65,6 +68,7 @@ export function registerCaseLinksConsumers(queue: Queue): void {
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: { parentCaseId: p.parentCaseId, childIds },
           });
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "split", resourceType: "case", resourceId: msg.messageId, outcome: "success" } });
         } catch (err) {
           if (err instanceof HttpError) {
             log.warn({ err, messageId: msg.messageId }, "splitCase rejected");
@@ -100,6 +104,7 @@ export function registerCaseLinksConsumers(queue: Queue): void {
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: { targetId: p.targetId, mergedCount: merged },
           });
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "merge", resourceType: "cases", resourceId: msg.messageId, outcome: "success" } });
         } catch (err) {
           if (err instanceof HttpError) {
             log.warn({ err, messageId: msg.messageId }, "mergeCases rejected");
