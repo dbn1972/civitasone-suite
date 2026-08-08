@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader } from "@/app/_components/ds";
+import { Card, PageHeader } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
-import { parsePublishedService, formatFee } from "../_data/runtimeApi";
+import { parsePublishedService } from "../_data/runtimeApi";
 import { ServicePageClient } from "../_components/ServicePageClient";
 
 interface Props {
@@ -42,26 +42,25 @@ export default async function ServicePage({ params, searchParams }: Props) {
         }
       />
 
-      <div style={{ display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }}>
-        <div className="card pad" style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14 }}>
-            <span><strong>Fee:</strong> {formatFee(service.feeFromMinor, service.feeCurrency)}</span>
-            {service.slaDays ? <span><strong>SLA:</strong> {service.slaDays} working days</span> : null}
+      <div style={{ display: "grid", gap: 16, maxWidth: 640, margin: "0 auto", width: "100%" }}>
+        {counterMode ? (
+          <div
+            className="pad"
+            role="status"
+            style={{
+              background: "var(--info-bg)",
+              border: "1px solid var(--info-border)",
+              borderRadius: "var(--r-sm)",
+              fontSize: 13,
+            }}
+          >
+            Counter / CSC mode — you are assisting an applicant at the desk.
           </div>
+        ) : null}
 
-          {service.requiredDocuments.length > 0 ? (
-            <div>
-              <strong style={{ fontSize: 14 }}>Documents needed</strong>
-              <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-                {service.requiredDocuments.map((d) => (
-                  <li key={d.docType}>{d.label}{d.mandatory ? " (required)" : ""}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
+        <Card padding>
           <ServicePageClient service={service} counterMode={counterMode} />
-        </div>
+        </Card>
       </div>
     </>
   );
