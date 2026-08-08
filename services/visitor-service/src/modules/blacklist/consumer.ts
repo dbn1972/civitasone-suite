@@ -131,8 +131,8 @@ export function registerBlacklistConsumers(queue: Queue): void {
           updatedAt: new Date(),
           updatedBy: msg.actorId,
         })
-        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "blacklist", resourceId: p.id, outcome: "success" } });
         .where(and(eq(blacklistEntries.id, p.id), eq(blacklistEntries.tenantId, msg.tenantId)));
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "blacklist", resourceId: p.id, outcome: "success" } });
 
       return { identityDocHash: entry.identityDocHash };
     });

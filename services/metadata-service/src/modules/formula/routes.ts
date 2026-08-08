@@ -44,6 +44,15 @@ export async function formulaRoutes(app: FastifyInstance): Promise<void> {
     const check = validateFormula(body.expression);
     if (!check.valid) throw new HttpError(400, "FORMULA_ERROR", check.error ?? "invalid formula");
 
+    // Uniqueness is validated synchronously so duplicate apiName returns 409
+    // rather than being accepted and failing later in the consumer.
+    const existing = await withTenant(ctx.tenantId, (tx) =>
+      tx.select({ id: formulaDefinitions.id }).from(formulaDefinitions)
+        .where(and(eq(formulaDefinitions.tenantId, ctx.tenantId), eq(formulaDefinitions.apiName, body.apiName)))
+        .limit(1),
+    );
+    if (existing[0]) throw new HttpError(409, "DUPLICATE_API_NAME", `formula apiName '${body.apiName}' already exists`);
+
     const id = randomUUID();
     return reply.code(202).send({
       data: await publishCommand(ctx, COMMANDS.FORMULA_CREATE, id, {

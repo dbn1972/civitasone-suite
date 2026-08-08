@@ -22,8 +22,8 @@ export function registerCodeListConsumers(q: Queue): void {
     await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertList(tx, { id: p.id, tenantId: p.tenantId, code: p.code, name: p.name, description: p.description ?? null, createdBy: msg.actorId });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "code_lists", resourceId: p.id, outcome: "success" } });
     }));
-    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "code_lists", resourceId: p.id, outcome: "success" } });
   });
 
   q.subscribe("tenant.code_value.add", async (msg) => {
