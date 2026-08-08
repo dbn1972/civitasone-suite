@@ -25,6 +25,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { materialPasses } from "./schema.js";
 import { reconcileOnExit, handleUndeclaredItemOnExit, type DeclaredItem } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "material-pass-consumer" });
 
 // ── Payload Types ────────────────────────────────────────────────────────
@@ -76,6 +78,7 @@ export function registerMaterialPassConsumers(queue: Queue): void {
           discrepancy: false,
           createdBy: msg.actorId,
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "material_pass", resourceId: p.passId, outcome: "success" } });
       }
     });
 
@@ -151,6 +154,7 @@ export function registerMaterialPassConsumers(queue: Queue): void {
             reconciledAt: now.toISOString(),
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "security_incident", resourceId: msg.messageId, outcome: "success" } });
       }
     });
 

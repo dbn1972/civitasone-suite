@@ -19,9 +19,11 @@
 import { pino } from "pino";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { notifications, type NotificationRow } from "../stream/schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "ml-predictions-consumer" });
 
@@ -207,6 +209,7 @@ export function registerMLPredictionConsumers(queue: Queue): void {
             },
             createdBy: SYSTEM_ACTOR,
           }).returning();
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "notification-service", action: "process", resourceType: "ml_predictions", resourceId: msg.messageId, outcome: "success" } });
           return rows[0] ?? null;
         });
 

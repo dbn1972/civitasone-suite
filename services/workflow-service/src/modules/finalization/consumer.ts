@@ -8,6 +8,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { instanceFinalizations } from "./schema.js";
 import { instances } from "../instances/schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "workflow-finalization-consumer" });
 
 export function registerFinalizationConsumers(queue: Queue): void {
@@ -28,6 +30,7 @@ export function registerFinalizationConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId || randomUUID(),
           payload: { instanceId: p.id, finalizedBy: msg.actorId },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "finalize", resourceType: "instance", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "finalizeInstance failed"); throw err; }
   });
@@ -53,6 +56,7 @@ export function registerFinalizationConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId || randomUUID(),
           payload: { instanceId: p.id, reversedBy: msg.actorId, reason: p.reason, impact: p.impact },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "finalization", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "reverseInstance failed"); throw err; }
   });

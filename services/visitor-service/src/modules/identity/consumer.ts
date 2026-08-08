@@ -39,6 +39,8 @@ import { verifyDocument } from "./digilocker-adapter.js";
 import { matchFace, DEFAULT_CONFIDENCE_THRESHOLD } from "./aadhaar-face-adapter.js";
 import { securityIncidents } from "./schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "identity-consumer" });
 
 // ── Payload types ─────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export function registerIdentityConsumers(queue: Queue): void {
             fallbackToManual: result.status === "unavailable",
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "fail", resourceType: "identity", resourceId: msg.messageId, outcome: "success" } });
 
         // If unavailable, mark identity_method as manual fallback so the
         // gate security guard knows to verify identity physically.
@@ -264,6 +267,7 @@ export function registerIdentityConsumers(queue: Queue): void {
             fallbackToManual: true,
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "fail", resourceType: "identity", resourceId: msg.messageId, outcome: "success" } });
 
         // Mark for manual verification fallback.
         await tx

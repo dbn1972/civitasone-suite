@@ -11,10 +11,12 @@ import { pino } from "pino";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { INBOUND, FACT_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { normalizeFact } from "./normalize.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "analytics-facts-consumer" });
 
@@ -27,6 +29,14 @@ async function ingestEvent(eventType: string, msg: CommandEnvelope): Promise<voi
       payload: msg.payload as Record<string, unknown>,
     });
     await repo.ingest(tx, row);
+    await enqueue(tx, {
+      topic: AUDIT_TOPIC,
+      eventType: AUDIT_TOPIC,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: { service: "analytics-service", action: "fact_ingest", resourceType: "fact", resourceId: msg.messageId, outcome: "success" },
+    });
   });
   await cache.invalidateResource(msg.tenantId, FACT_RESOURCE);
 }

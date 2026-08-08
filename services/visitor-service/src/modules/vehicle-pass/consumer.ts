@@ -20,11 +20,13 @@ import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { vehiclePasses } from "./schema.js";
 import { parkingSlots } from "../location/schema.js";
 import {
+
+const AUDIT_TOPIC = "audit.event.record";
   allocateParkingSlotOrThrow,
   releaseParkingSlot,
   type VehicleType,
@@ -111,6 +113,7 @@ export function registerVehiclePassConsumers(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "vehicle_pass", resourceId: p.locationId, outcome: "success" } });
     });
 
     log.info(
@@ -176,6 +179,7 @@ export function registerVehiclePassConsumers(queue: Queue): void {
           updatedAt: new Date(),
           updatedBy: msg.actorId,
         })
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "vehicle_pass", resourceId: p.parkingSlotId, outcome: "success" } });
         .where(
           and(
             eq(vehiclePasses.id, p.vehiclePassId),

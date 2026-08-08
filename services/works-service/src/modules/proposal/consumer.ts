@@ -8,6 +8,8 @@ import { generateWorkNumber, generateSplitNumber } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export function registerProposalConsumers(q: Queue): void {
   q.subscribe(COMMANDS.proposalCreate, async (msg) => {
     await db.transaction(async (tx) => {
@@ -50,6 +52,7 @@ export function registerProposalConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workNumber },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
     await cache.invalidate(`works:${msg.tenantId}:master:work_proposals:*`);
   });
@@ -82,6 +85,7 @@ export function registerProposalConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { workId },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "finalize", resourceType: "proposal_dao", resourceId: msg.messageId, outcome: "success" } });
     });
   });
 
@@ -116,6 +120,7 @@ export function registerProposalConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, parentWorkId, splitNumber },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "split", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -146,6 +151,7 @@ export function registerProposalConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId, majorHead: p.majorHead },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
   });
 
@@ -174,6 +180,7 @@ export function registerProposalConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, workId: p.workId, divisionId: p.divisionId, isNodal: (p.isNodal as boolean) ?? false },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "process", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
   });
 }

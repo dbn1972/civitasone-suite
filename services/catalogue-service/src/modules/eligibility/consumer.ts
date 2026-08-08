@@ -8,6 +8,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "catalogue.eligibility.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
@@ -50,6 +51,14 @@ export function registerEligibilityConsumers(rawQueue: Queue): void {
         resourceType: "catalogue_eligibility_rule",
         resourceId: p.id,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "eligibility_rule_create", resourceType: "eligibility", resourceId: p.id, outcome: "success" },
+      });
     });
     log.info({ id: p.id }, "eligibility rule created");
   });
@@ -77,6 +86,14 @@ export function registerEligibilityConsumers(rawQueue: Queue): void {
         action: "eligibility_rule.delete",
         resourceType: "catalogue_eligibility_rule",
         resourceId: p.id,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "eligibility_rule_delete", resourceType: "eligibility", resourceId: p.id, outcome: "success" },
       });
     });
   });

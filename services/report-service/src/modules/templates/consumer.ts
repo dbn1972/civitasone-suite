@@ -10,6 +10,8 @@ import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { TemplateInsert } from "./schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const RESOURCE = "template";
 
 export async function handleCreateTemplate(
@@ -28,6 +30,7 @@ export async function handleCreateTemplate(
       correlationId: ctx.correlationId,
       payload: { id: payload.id, name: payload.name },
     });
+    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "report-service", action: "create", resourceType: "template", resourceId: payload.id, outcome: "success" } });
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, payload.id as string));
 }
@@ -59,6 +62,7 @@ export async function handleUpdateTemplate(
       correlationId: ctx.correlationId,
       payload: { id },
     });
+    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "report-service", action: "update", resourceType: "template", resourceId: msg.messageId, outcome: "success" } });
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
 }
@@ -79,6 +83,7 @@ export async function handleDeleteTemplate(
       correlationId: ctx.correlationId,
       payload: { id: payload.id },
     });
+    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "report-service", action: "delete", resourceType: "template", resourceId: payload.id, outcome: "success" } });
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, payload.id));
 }

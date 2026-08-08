@@ -38,6 +38,8 @@ import {
 import { getPolicyNumber, getPolicyBoolean } from "../config-registry/policy.js";
 import type { CommandEntry } from "./command-queue.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "turnstile-control-consumer" });
 
 // ── Redis Client ──────────────────────────────────────────────────────────
@@ -272,6 +274,7 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
             source: "turnstile",
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "turnstile_control", resourceId: p.id, outcome: "success" } });
       }
     });
 
@@ -342,6 +345,7 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
           triggeredAt: now.toISOString(),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "turnstile_control", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: LPUSH emergency_open command to each device's Redis command queue
@@ -410,6 +414,7 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
           restoredAt: now.toISOString(),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "turnstile_control", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: clear emergency flag
@@ -525,6 +530,7 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
           syncedAt: now.toISOString(),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "complete", resourceType: "device_sync", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: reconcile anti-passback state for each pass in the batch

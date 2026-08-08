@@ -14,6 +14,8 @@ import * as repo from "./repo.js";
 import { computeOpportunityScore } from "./domain.js";
 import type { RiskSignal, WhiteSpaceEntry } from "./schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export interface ComputeIntelligencePayload {
   intelligenceId: string;
   accountId: string;
@@ -59,6 +61,7 @@ export async function handleComputeIntelligence(
         riskCount: p.riskSignals.length,
       },
     });
+    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "recommendation-service", action: "compute", resourceType: "intelligence", resourceId: msg.messageId, outcome: "success" } });
   });
 
   await cache.invalidate(cache.makeKey(msg.tenantId, "intelligence", p.accountId));

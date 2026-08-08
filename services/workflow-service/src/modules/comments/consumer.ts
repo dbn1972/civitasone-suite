@@ -5,6 +5,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "workflow-comments-consumer" });
 
 export function registerCommentsConsumers(queue: Queue): void {
@@ -39,6 +41,7 @@ export function registerCommentsConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id, entityType: p.entityType, entityId: p.entityId },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "comments", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "addComment failed");
@@ -58,6 +61,7 @@ export function registerCommentsConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "comments", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "editComment failed");
@@ -77,6 +81,7 @@ export function registerCommentsConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "delete", resourceType: "comment", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "deleteComment failed");

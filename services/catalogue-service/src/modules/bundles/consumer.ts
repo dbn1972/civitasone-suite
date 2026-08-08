@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import * as approvalRepo from "./approvals-repo.js";
 
 const log = pino({ name: "catalogue.bundles.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
@@ -59,6 +60,14 @@ export function registerBundleConsumers(rawQueue: Queue): void {
         resourceType: "catalogue_bundle",
         resourceId: p.id,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "bundle_create", resourceType: "bundle", resourceId: p.id, outcome: "success" },
+      });
     });
     log.info({ id: p.id }, "bundle created");
   });
@@ -88,6 +97,14 @@ export function registerBundleConsumers(rawQueue: Queue): void {
         resourceId: p.id,
         details: { fields: Object.keys(p.patch) },
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "bundle_update", resourceType: "bundle", resourceId: p.id, outcome: "success" },
+      });
     });
   });
 
@@ -109,6 +126,14 @@ export function registerBundleConsumers(rawQueue: Queue): void {
         action: "bundle.delete",
         resourceType: "catalogue_bundle",
         resourceId: p.id,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "bundle_delete", resourceType: "bundle", resourceId: p.id, outcome: "success" },
       });
     });
   });
@@ -152,6 +177,14 @@ export function registerBundleConsumers(rawQueue: Queue): void {
         action: "bundle_approval.request",
         resourceType: "catalogue_bundle_approval",
         resourceId: p.approvalId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "bundle_approval_request", resourceType: "bundle", resourceId: p.approvalId, outcome: "success" },
       });
     });
     log.info({ id: p.approvalId }, "bundle approval requested");
@@ -206,6 +239,14 @@ export function registerBundleConsumers(rawQueue: Queue): void {
         resourceType: "catalogue_bundle_approval",
         resourceId: p.approvalId,
         details: { decision: p.decision },
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "catalogue-service", action: "bundle_approval_decide", resourceType: "bundle", resourceId: p.approvalId, outcome: "success" },
       });
     });
   });

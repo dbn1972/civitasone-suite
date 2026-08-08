@@ -10,6 +10,7 @@ import * as orchRepo from "../agents/orchestration-repo.js";
 import * as qualityRepo from "./quality-repo.js";
 
 const log = pino({ name: "ai.governance.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -55,6 +56,14 @@ export function registerGovernanceConsumers(rawQueue: Queue): void {
         output: p.id,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "orchestration_start", resourceType: "governance", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "orchestration");
@@ -115,6 +124,14 @@ export function registerGovernanceConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "orchestration_handoff", resourceType: "governance", resourceId: p.orchestrationId, outcome: "success" },
+      });
     });
     await cache.invalidateResource(msg.tenantId, "orchestration");
   });
@@ -148,6 +165,14 @@ export function registerGovernanceConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: p.reason,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "orchestration_abort", resourceType: "governance", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "orchestration");
@@ -211,6 +236,14 @@ export function registerGovernanceConsumers(rawQueue: Queue): void {
         output: p.overall,
         blocked: false,
         reason: p.flagReason,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "quality_score", resourceType: "governance", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "quality-flagged");

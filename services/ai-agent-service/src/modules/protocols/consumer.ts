@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "ai.protocols.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -37,6 +38,14 @@ export function registerProtocolConsumers(rawQueue: Queue): void {
       await writeAudit(tx, ctxOf(msg) as never, {
         action: "protocol.register", input: p.protocol, output: p.id, blocked: false, reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "protocol_register", resourceType: "protocol", resourceId: p.id, outcome: "success" },
+      });
     });
     await cache.invalidateResource(msg.tenantId, "protocols");
     log.info({ id: p.id }, "protocol registered");
@@ -64,6 +73,14 @@ export function registerProtocolConsumers(rawQueue: Queue): void {
       await writeAudit(tx, ctxOf(msg) as never, {
         action: "protocol.update", input: JSON.stringify(Object.keys(p.patch)),
         output: null, blocked: false, reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "protocol_update", resourceType: "protocol", resourceId: p.id, outcome: "success" },
       });
     });
     await cache.invalidateResource(msg.tenantId, "protocols");

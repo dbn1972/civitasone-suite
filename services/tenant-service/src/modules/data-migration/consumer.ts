@@ -15,9 +15,11 @@ import type { Queue } from "@civitasone/queue";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { migrations, reconciliations, importBatches, exportJobs } from "./schema.js";
 import { orgUnits } from "../org-hierarchy/schema.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "data-migration-consumer" });
 const UNIT_TYPES = new Set(["department", "division", "section", "unit", "branch"]);
@@ -43,6 +45,7 @@ export function registerDataMigrationConsumers(q: Queue): void {
       });
       await tx.update(migrations).set({ status: "completed", recordsMigrated: 0, completedAt: new Date() })
         .where(and(eq(migrations.id, p.id), eq(migrations.tenantId, msg.tenantId)));
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "data_migration", resourceId: p.id, outcome: "success" } });
     }));
   });
 
@@ -56,6 +59,7 @@ export function registerDataMigrationConsumers(q: Queue): void {
       });
       await tx.update(reconciliations).set({ status: "completed", breakCount: 0 })
         .where(and(eq(reconciliations.id, p.id), eq(reconciliations.tenantId, msg.tenantId)));
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "data_migration", resourceId: p.id, outcome: "success" } });
     }));
   });
 
@@ -131,6 +135,7 @@ export function registerDataMigrationConsumers(q: Queue): void {
         status: errors.length > 0 && inserted === 0 ? "failed" : "completed",
         inserted, failed: errors.length, errors, completedAt: new Date(),
       }).where(and(eq(importBatches.id, p.batchId), eq(importBatches.tenantId, msg.tenantId)));
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "data_migration", resourceId: p.batchId, outcome: "success" } });
       log.info({ batchId: p.batchId, entityType: p.entityType, inserted, failed: errors.length }, "master data import completed");
     }));
   });
@@ -155,6 +160,7 @@ export function registerDataMigrationConsumers(q: Queue): void {
       await tx.update(exportJobs).set({
         status: "completed", recordCount: rows.length, payload, completedAt: new Date(),
       }).where(and(eq(exportJobs.id, p.exportId), eq(exportJobs.tenantId, msg.tenantId)));
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "data_migration", resourceId: p.exportId, outcome: "success" } });
       log.info({ exportId: p.exportId, entityType: p.entityType, format: p.format, count: rows.length }, "master data export completed");
     }));
   });

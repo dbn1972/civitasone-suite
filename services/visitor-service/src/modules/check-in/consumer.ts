@@ -40,6 +40,8 @@ import { isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 import { isWatchlisted } from "../blacklist/screening-store.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "check-in-consumer" });
 
 interface CheckInRecordPayload {
@@ -224,6 +226,7 @@ export function registerCheckInConsumers(queue: Queue): void {
             visitorCategory: badgeCategory,
           },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
       }
 
       return {
@@ -406,6 +409,7 @@ export function registerCheckInConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { passId: p.passId, locationId: pass.locationId, gateId: p.gateId, timestamp: timestamp.toISOString() },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_out", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
 
       return { locationId: pass.locationId };
     });
@@ -526,6 +530,7 @@ export function registerCheckInConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "overstay_detect", resourceType: "overstay", resourceId: msg.messageId, outcome: "success" } });
       }
 
       log.info(

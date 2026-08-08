@@ -20,6 +20,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { devices, deviceAuditLog, deviceConfigs } from "./schema.js";
 import { generateDeviceToken, canTransition, getAuthType } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "device-registry-consumer" });
 
 /** Cache resource key for device records. */
@@ -153,6 +155,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           ...(rawToken ? { token: rawToken } : {}),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: invalidate cache (best-effort)
@@ -220,6 +223,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           previousStatus: device.status,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     try {
@@ -291,6 +295,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           reason: p.reason,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     // Post-commit: revoke cached token + invalidate device cache (best-effort)
@@ -370,6 +375,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           reason: p.reason,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     // Post-commit: revoke all cached credentials (best-effort)
@@ -445,6 +451,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           token: newToken,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     // Post-commit: invalidate auth cache so the old token lookup refreshes
@@ -521,6 +528,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           configVersion: newConfigVersion,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     try {
@@ -571,6 +579,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
           deliveryStatus: "pending",
           createdBy: msg.actorId,
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.locationId, outcome: "success" } });
 
         await versionedUpdate(tx, devices, {
           id: device.id,
@@ -625,6 +634,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         online: true,
         updatedAt: now,
       }).where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)));
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
     try {
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE, p.deviceId));
@@ -679,6 +689,7 @@ export function registerDeviceRegistryConsumers(queue: Queue): void {
         details: { firmwareUrl: p.firmwareUrl, firmwareChecksum: p.firmwareChecksum },
         actorId: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "device_registry", resourceId: p.deviceId, outcome: "success" } });
     });
 
     try {

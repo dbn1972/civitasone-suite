@@ -9,8 +9,10 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "code-list-consumer" });
 
@@ -21,6 +23,7 @@ export function registerCodeListConsumers(q: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertList(tx, { id: p.id, tenantId: p.tenantId, code: p.code, name: p.name, description: p.description ?? null, createdBy: msg.actorId });
     }));
+    await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "code_lists", resourceId: p.id, outcome: "success" } });
   });
 
   q.subscribe("tenant.code_value.add", async (msg) => {
@@ -31,6 +34,7 @@ export function registerCodeListConsumers(q: Queue): void {
         id: p.id, tenantId: p.tenantId, listId: p.listId, code: p.code, label: p.label,
         sortOrder: p.sortOrder ?? 0, metadata: p.metadata ?? {}, createdBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "code_lists", resourceId: p.id, outcome: "success" } });
     }));
   });
 
@@ -47,6 +51,7 @@ export function registerCodeListConsumers(q: Queue): void {
         sortOrder: p.sortOrder ?? current.sortOrder, metadata: current.metadata as Record<string, unknown>,
         effectiveFrom: at, createdBy: msg.actorId,
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "code_lists", resourceId: p.tenantId, outcome: "success" } });
     }));
   });
 }

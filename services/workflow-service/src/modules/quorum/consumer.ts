@@ -1,10 +1,12 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { QuorumRule, VoteChoice } from "./domain.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "workflow-quorum-consumer" });
 
@@ -24,6 +26,7 @@ export function registerQuorumConsumers(queue: Queue): void {
           subject: p.subject, rule: p.rule, threshold: p.threshold, totalMembers: p.totalMembers,
           createdBy: msg.actorId,
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "quorum", resourceId: p.tenantId, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "createCommitteeDecision failed"); throw err; }
   });
@@ -34,6 +37,7 @@ export function registerQuorumConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.castVote(p.tenantId, p.id, msg.actorId, p.vote, p.reason, msg.actorId, msg.correlationId);
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "cast_vote", resourceType: "committee_vote", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "castCommitteeVote failed"); throw err; }
   });

@@ -6,6 +6,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { toggleItem, type ChecklistItem } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "workflow-checklists-consumer" });
 
 export function registerChecklistConsumers(queue: Queue): void {
@@ -25,6 +27,7 @@ export function registerChecklistConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id, code: p.code },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "upsert", resourceType: "checklist_template", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "upsertChecklistTemplate failed");
@@ -52,6 +55,7 @@ export function registerChecklistConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { id: p.id, templateId: p.templateId },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "create", resourceType: "checklist_instance", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "createChecklistInstance failed");
@@ -76,6 +80,7 @@ export function registerChecklistConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { instanceId: p.instanceId, key: p.key, checked: p.checked },
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "checklists", resourceId: msg.messageId, outcome: "success" } });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "toggleChecklistItem failed");

@@ -42,6 +42,8 @@ import { validateGroupSize, confirmBulkCheckIn } from "./domain.js";
 import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
 import { isBlacklisted } from "../blacklist/screening-store.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "group-visit-consumer" });
 
 /** Tenant QR signing key (RS256 PKCS8 PEM). */
@@ -228,6 +230,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: { visitRequestId, groupVisitId: p.id, memberCount: p.members.length },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "group_visit", resourceId: p.id, outcome: "success" } });
     });
 
     log.info(
@@ -295,6 +298,7 @@ export function registerGroupVisitConsumers(q: Queue): void {
           gateId: p.gateId,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "group_visit", resourceId: msg.messageId, outcome: "success" } });
     });
 
     log.info(

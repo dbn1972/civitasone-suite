@@ -13,7 +13,7 @@
 
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
@@ -24,6 +24,8 @@ import {
   type TaskData,
 } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+
+const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "project-delay-forecast-consumer" });
 const TASK_HIGH_RISK_EVENT = "ml.prediction.task_high_risk";
@@ -104,6 +106,10 @@ export function registerDelayForecastConsumers(queue: Queue): void {
             "delay risk assessed — no high-risk tasks",
           );
         }
+
+        await db.transaction(async (tx) => {
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "project-service", action: "forecast", resourceType: "delay_forecast", resourceId: taskId, outcome: "success" } });
+        });
       } catch (err) {
         log.warn(
           { err: (err as Error).message, tenantId, projectId, taskId, processingTimeMs: Date.now() - startMs },

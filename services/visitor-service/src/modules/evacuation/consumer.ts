@@ -31,6 +31,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { getFullRoster, addToRoster, type RosterEntry } from "./roster.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "evacuation-consumer" });
 
 // ── Payload Types ────────────────────────────────────────────────────────
@@ -99,6 +101,7 @@ export function registerEvacuationConsumers(queue: Queue): void {
           rosterCount: roster.length,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "evacuation", resourceId: p.id, outcome: "success" } });
     });
   });
 

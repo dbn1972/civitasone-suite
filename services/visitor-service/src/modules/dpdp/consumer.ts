@@ -20,6 +20,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { visitRequests } from "../visit-request/schema.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 export interface DpdpErasureRequestPayload {
   erasureId: string;
   tenantId: string;
@@ -87,6 +89,7 @@ export function registerDpdpConsumers(queue: Queue): void {
             },
           }),
         });
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "dpdp", resourceId: msg.messageId, outcome: "success" } });
       }
     });
   });

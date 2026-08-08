@@ -12,13 +12,14 @@
 import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
 import { predictChurn } from "./adapter.js";
 import { classifyRiskLevel, fallbackChurnScore, type SubscriptionFeatures } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "billing-churn-consumer" });
 const CHURN_HIGH_EVENT = "ml.prediction.churn_risk_high";
 
@@ -37,7 +38,20 @@ export function registerChurnConsumers(rawQueue: Queue): void {
   queue.subscribe<SubscriptionUpdatedPayload>(
     EVENTS.subscriptionUpdated,
     async (msg) => {
-      const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+      const isNew = await db.transaction(async (tx) => {
+        const processed = await markProcessed(tx, msg.messageId);
+        if (processed) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC,
+            eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: "billing-service", action: "churn_risk_evaluate", resourceType: "churn", resourceId: msg.payload.subscriptionId, outcome: "success" },
+          });
+        }
+        return processed;
+      });
       if (!isNew) return;
 
       const { subscriptionId, tenantId } = msg.payload;

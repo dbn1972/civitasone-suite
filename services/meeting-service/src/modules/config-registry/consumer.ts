@@ -28,6 +28,8 @@ import { configEntries } from "./schema.js";
 import * as repo from "./repo.js";
 import { assertValidNamespace, assertValidKey } from "./domain.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 interface SetConfigPayload {
   id: string;
   tenantId: string;
@@ -133,6 +135,15 @@ export function registerConfigRegistryConsumers(register: RegisterConsumer): voi
         payload: { id: p.id, namespace: p.namespace, configKey: p.configKey },
       });
 
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "meeting", action: "set_config", resourceType: "config_entry", resourceId: p.id, outcome: "success" },
+      });
+
       // Invalidate the (tenant, namespace) read cache on commit so subsequent
       // reads see the new/updated value (fires only if the tx commits).
       await cache.invalidateResourceAfterCommit(tx, p.tenantId, `config:${p.namespace}`);
@@ -170,6 +181,15 @@ export function registerConfigRegistryConsumers(register: RegisterConsumer): voi
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { id: p.configId, namespace: current.namespace },
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "meeting", action: "deactivate_config", resourceType: "config_entry", resourceId: p.configId, outcome: "success" },
       });
 
       await cache.invalidateResourceAfterCommit(tx, p.tenantId, `config:${current.namespace}`);

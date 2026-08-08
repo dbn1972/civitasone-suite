@@ -22,6 +22,8 @@ import * as repo from "./repo.js";
 
 const log = pino({ name: "risk-consumer" });
 
+const AUDIT_TOPIC = "audit.event.record";
+
 // ── Payload types ─────────────────────────────────────────────────────────────
 
 interface RiskModelConfigurePayload {
@@ -93,6 +95,15 @@ export function registerRiskConsumers(queue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { modelId: model.id, name: model.name, factorCount: p.factors.length },
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "inspection", action: "configure_model", resourceType: "risk_model", resourceId: model.id, outcome: "success" },
       });
 
       // Invalidate risk model cache for this tenant.
@@ -175,6 +186,15 @@ export function registerRiskConsumers(queue: Queue): void {
           factorBreakdown: result.breakdown,
           computedAt: new Date().toISOString(),
         },
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "inspection", action: "compute_score", resourceType: "risk_score", resourceId: p.entityId, outcome: "success" },
       });
 
       // Invalidate cached score for this entity.
@@ -272,6 +292,14 @@ export function registerRiskConsumers(queue: Queue): void {
 
       // Invalidate cached scores for this tenant.
       if (entityIds.length > 0) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: "inspection", action: "batch_compute_score", resourceType: "risk_score", resourceId: msg.messageId, outcome: "success" },
+        });
         await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "risk_score");
       }
 

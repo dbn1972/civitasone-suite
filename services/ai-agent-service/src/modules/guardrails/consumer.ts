@@ -8,6 +8,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "ai.guardrails.consumer" });
+const AUDIT_TOPIC = "audit.event.record";
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, roles: [] as string[] };
@@ -54,6 +55,14 @@ export function registerGuardrailConsumers(rawQueue: Queue): void {
         blocked: !p.passed,
         reason: p.reason,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "guardrails_check", resourceType: "guardrails", resourceId: msg.messageId, outcome: "success" },
+      });
     });
   });
 
@@ -89,6 +98,14 @@ export function registerGuardrailConsumers(rawQueue: Queue): void {
         blocked: p.blocked,
         reason: `severity ${p.severity}`,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "guardrails_check_injection", resourceType: "guardrails", resourceId: msg.messageId, outcome: "success" },
+      });
     });
   });
 
@@ -123,6 +140,14 @@ export function registerGuardrailConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "guardrail_rule_create", resourceType: "guardrails", resourceId: p.id, outcome: "success" },
+      });
     });
     log.info({ id: p.id }, "guardrail rule created");
   });
@@ -145,6 +170,14 @@ export function registerGuardrailConsumers(rawQueue: Queue): void {
         blocked: false,
         reason: null,
       });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "guardrail_rule_update", resourceType: "guardrails", resourceId: p.id, outcome: "success" },
+      });
     });
   });
 
@@ -160,6 +193,14 @@ export function registerGuardrailConsumers(rawQueue: Queue): void {
         output: null,
         blocked: false,
         reason: null,
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: "ai-agent-service", action: "guardrail_rule_delete", resourceType: "guardrails", resourceId: p.id, outcome: "success" },
       });
     });
   });

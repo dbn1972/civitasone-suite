@@ -26,6 +26,8 @@ import { renderBadge, validateTemplatePlaceholders } from "./renderer.js";
 import { computeJobScore, shouldRetry, computeNextRetryAt, createNewVersion } from "./domain.js";
 import type { PlaceholderKey } from "./renderer.js";
 
+const AUDIT_TOPIC = "audit.event.record";
+
 const log = pino({ name: "badge-print-consumer" });
 
 /** Cache resource keys for badge-print records. */
@@ -210,6 +212,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           score,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "print_job", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: ZADD to Redis sorted set (best-effort)
@@ -279,6 +282,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           completedAt: now.toISOString(),
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "complete", resourceType: "print_job", resourceId: p.jobId, outcome: "success" } });
     });
 
     // Post-commit: ZREM from Redis sorted set (best-effort)
@@ -387,6 +391,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           errorMessage: p.errorMessage,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "fail", resourceType: "print_job", resourceId: p.jobId, outcome: "success" } });
     });
 
     // Invalidate cache
@@ -445,6 +450,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           score,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "print_job", resourceId: p.jobId, outcome: "success" } });
     });
 
     // Post-commit: ZADD to Redis sorted set (best-effort)
@@ -531,6 +537,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           score,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "print_job", resourceId: p.jobId, outcome: "success" } });
     });
 
     // Post-commit: ZREM from old device, ZADD to new device (best-effort)
@@ -614,6 +621,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           templateVersion: 1,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "badge_template", resourceId: p.id, outcome: "success" } });
     });
 
     // Post-commit: invalidate cache (best-effort)
@@ -708,6 +716,7 @@ export function registerBadgePrintConsumers(queue: Queue): void {
           templateVersion,
         },
       });
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "update", resourceType: "badge_template", resourceId: newId, outcome: "success" } });
     });
 
     // Post-commit: invalidate cache (best-effort)
