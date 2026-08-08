@@ -26,6 +26,9 @@ export interface ServiceDefinitionDto {
   feeScheduleId?: string | null;
   feeModel?: string | null;
   hoaCode?: string | null;
+  requiredDocuments?: unknown[];
+  issuanceType?: string | null;
+  outputs?: unknown[];
 }
 
 export interface CreateDefinitionPayload {
@@ -51,6 +54,9 @@ export interface UpdateDefinitionPayload {
   feeScheduleId?: string;
   feeModel?: string;
   hoaCode?: string;
+  requiredDocuments?: unknown[];
+  issuanceType?: string;
+  outputs?: unknown[];
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {

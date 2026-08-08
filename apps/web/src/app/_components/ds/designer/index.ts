@@ -39,6 +39,57 @@ export type {
 } from "./feeTypes";
 export { SplitPreview } from "./SplitPreview";
 export type { SplitPreviewProps } from "./SplitPreview";
+export { LocaleTabs } from "./LocaleTabs";
+export type { LocaleKey } from "./LocaleTabs";
+export { MergeFieldPicker, renderMergePills } from "./MergeFieldPicker";
+export type { MergeField, MergeFieldPickerProps } from "./MergeFieldPicker";
+export { TemplateCanvas } from "./TemplateCanvas";
+export type { TemplateCanvasProps } from "./TemplateCanvas";
+export { NumberingFormatBuilder } from "./NumberingFormatBuilder";
+export type { NumberingFormatBuilderProps } from "./NumberingFormatBuilder";
+export { NotificationMatrix } from "./NotificationMatrix";
+export type { NotificationMatrixProps } from "./NotificationMatrix";
+export { TestRunPanel } from "./TestRunPanel";
+export type { TestRunPanelProps, TestRunStep, TestStepStatus } from "./TestRunPanel";
+export type {
+  DocumentFormat,
+  LocaleLabels,
+  RequiredDocumentUi,
+  DocumentsDesignState,
+} from "./documentTypes";
+export {
+  DOCUMENT_FORMAT_OPTIONS,
+  emptyDocumentsDesign,
+  slugifyDocType,
+  newDocumentRow,
+} from "./documentTypes";
+export type {
+  OutputType,
+  ValidityMode,
+  NumberingToken,
+  IssuanceDesignState,
+} from "./issuanceTypes";
+export {
+  OUTPUT_TYPE_OPTIONS,
+  defaultOutputTypeForPattern,
+  emptyIssuanceDesign,
+  formatNumberingPreview,
+} from "./issuanceTypes";
+export type {
+  NotificationChannel,
+  NotificationEvent,
+  LocaleTemplateBody,
+  NotificationCellBinding,
+  NotificationMatrixState,
+  NotificationsDesignState,
+} from "./notificationTypes";
+export {
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_CHANNELS,
+  seedMatrixForPattern,
+  emptyNotificationsDesign,
+  smsSegmentCount,
+} from "./notificationTypes";
 export { FormRenderer } from "./FormRenderer";
 export type { FormRendererProps } from "./FormRenderer";
 export { useUndoRedo } from "./useUndoRedo";

@@ -7,7 +7,11 @@ export const idParam = z.object({ id: z.string().uuid() });
 const requiredDocSchema = z.object({
   docType:   safeText({ max: 64 }),
   label:     safeText({ max: 128 }).optional(),
+  labels:    z.record(z.string(), safeText({ max: 128 })).optional(),
   mandatory: z.boolean().default(true),
+  formats:   z.array(z.enum(["pdf", "jpg", "png"])).max(5).optional(),
+  maxSizeMb: z.number().min(1).max(50).optional(),
+  verifiedAtLane: safeText({ max: 64 }).optional(),
 });
 
 const statutoryRefSchema = z.object({
@@ -51,6 +55,8 @@ export const updateDefinitionBody = z.object({
   channels:              z.array(z.enum(SERVICE_CHANNELS)).max(8).optional(),
   requiredDocuments:     z.array(requiredDocSchema).max(50).optional(),
   forms:                 z.array(z.unknown()).max(50).optional(),
+  outputs:               z.array(z.unknown()).max(50).optional(),
+  issuanceType:          safeText({ max: 48 }).optional(),
   eligibilityRuleSetId:  z.string().uuid().optional(),
   workflowDefinitionId:  z.string().uuid().optional(),
   ...designerFields,

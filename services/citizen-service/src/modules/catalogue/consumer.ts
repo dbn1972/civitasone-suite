@@ -70,7 +70,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       slaDays?: number; channels?: unknown[]; requiredDocuments?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
-      forms?: unknown[]; formId?: string;
+      forms?: unknown[]; formId?: string; outputs?: unknown[]; issuanceType?: string;
       eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
     };
     await db.transaction(async (tx) => {
@@ -92,6 +92,8 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.statutoryReferences !== undefined) patch.statutoryReferences = p.statutoryReferences;
       if (p.forms !== undefined) patch.forms = p.forms;
       if (p.formId !== undefined) patch.formId = p.formId;
+      if (p.outputs !== undefined) patch.outputs = p.outputs;
+      if (p.issuanceType !== undefined) patch.issuanceType = p.issuanceType;
       if (p.eligibilityRuleSetId !== undefined) patch.eligibilityRuleSetId = p.eligibilityRuleSetId;
       if (p.workflowDefinitionId !== undefined) patch.workflowDefinitionId = p.workflowDefinitionId;
       if (p.feeScheduleId !== undefined) patch.feeScheduleId = p.feeScheduleId;
