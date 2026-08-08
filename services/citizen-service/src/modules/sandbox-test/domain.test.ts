@@ -173,5 +173,4 @@ describe("runSandboxPipeline (FN-10)", () => {
     }));
     expect(result.steps.find((s) => s.id === "doc_verification")?.status).toBe("fail");
   });
-  });
 });
