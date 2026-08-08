@@ -12,6 +12,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const A_TENANT = randomUUID();
@@ -40,6 +41,7 @@ async function seedEntity(tid: string, apiName: string, createdBy = MAKER): Prom
 let app: FastifyInstance;
 
 beforeAll(async () => {
+  registerConsumersOnce();
   app = await buildApp();
 });
 
@@ -80,8 +82,10 @@ describe("auth + formula engine (CAP-113)", () => {
   it("persists, lists and evaluates a stored formula", async () => {
     const apiName = `line_total_${Math.floor(Math.random() * 1e6)}`;
     const create = await app.inject({ method: "POST", url: "/v1/metadata/formula", headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName, label: "Line total", expression: "qty * price" }) });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
+    expect(create.json().data.status).toBe("accepted");
     const id = create.json().data.id;
+    await drainQueue();
 
     const list = await app.inject({ method: "GET", url: "/v1/metadata/formula", headers: hdr(A_TENANT, MAKER) });
     expect(list.json().data.some((f: { id: string }) => f.id === id)).toBe(true);
@@ -102,12 +106,14 @@ describe("custom fields (CAP-116) + master-data records (CAP-016)", () => {
     const entityId = await seedEntity(A_TENANT, `asset_${Math.floor(Math.random() * 1e6)}`);
 
     const f1 = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: "name", label: "Name", fieldType: "text", isRequired: true }) });
-    expect(f1.statusCode).toBe(201);
+    expect(f1.statusCode).toBe(202);
     const f2 = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: "amount", label: "Amount", fieldType: "number", isRequired: true }) });
-    expect(f2.statusCode).toBe(201);
+    expect(f2.statusCode).toBe(202);
+    await drainQueue();
 
     const rule = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/validation-rules`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ name: "amount_positive", expression: "amount > 0", errorMessage: "Amount must be positive" }) });
-    expect(rule.statusCode).toBe(201);
+    expect(rule.statusCode).toBe(202);
+    await drainQueue();
 
     const listFields = await app.inject({ method: "GET", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(A_TENANT, MAKER) });
     expect(listFields.json().meta.total).toBe(2);
@@ -116,24 +122,28 @@ describe("custom fields (CAP-116) + master-data records (CAP-016)", () => {
     const bad = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/records`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ data: { amount: -5 } }) });
     expect(bad.statusCode).toBe(422);
 
-    // Valid record → 201.
+    // Valid record → 202 Accepted; consumer persists.
     const good = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/records`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ data: { name: "Truck", amount: 100 } }) });
-    expect(good.statusCode).toBe(201);
+    expect(good.statusCode).toBe(202);
     const recId = good.json().data.id;
+    await drainQueue();
 
     const get = await app.inject({ method: "GET", url: `/v1/metadata/records/${recId}`, headers: hdr(A_TENANT, MAKER) });
     expect(get.json().data.data.name).toBe("Truck");
 
-    // Patch that would break the rule → 422.
+    // Patch that would break the rule → 422 (sync validation before enqueue).
     const badPatch = await app.inject({ method: "PATCH", url: `/v1/metadata/records/${recId}`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ data: { amount: -1 } }) });
     expect(badPatch.statusCode).toBe(422);
 
     const okPatch = await app.inject({ method: "PATCH", url: `/v1/metadata/records/${recId}`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ data: { amount: 250 } }) });
-    expect(okPatch.statusCode).toBe(200);
-    expect(okPatch.json().data.data.amount).toBe(250);
+    expect(okPatch.statusCode).toBe(202);
+    await drainQueue();
+    const afterPatch = await app.inject({ method: "GET", url: `/v1/metadata/records/${recId}`, headers: hdr(A_TENANT, MAKER) });
+    expect(afterPatch.json().data.data.amount).toBe(250);
 
     const del = await app.inject({ method: "DELETE", url: `/v1/metadata/records/${recId}`, headers: hdr(A_TENANT, MAKER) });
-    expect(del.statusCode).toBe(200);
+    expect(del.statusCode).toBe(202);
+    await drainQueue();
   });
 });
 
@@ -141,12 +151,14 @@ describe("form / layout builder (CAP-109)", () => {
   it("rejects a layout referencing unknown fields, accepts known ones", async () => {
     const entityId = await seedEntity(A_TENANT, `form_${Math.floor(Math.random() * 1e6)}`);
     await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: "title", label: "Title", fieldType: "text" }) });
+    await drainQueue();
 
     const bad = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ sections: [{ label: "Main", fields: ["ghost"] }] }) });
     expect(bad.statusCode).toBe(422);
 
     const ok = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ sections: [{ label: "Main", fields: ["title"] }], isDefault: true }) });
-    expect(ok.statusCode).toBe(201);
+    expect(ok.statusCode).toBe(202);
+    await drainQueue();
   });
 });
 
@@ -159,8 +171,10 @@ describe("maker-checker on publish", () => {
     expect(selfPublish.json().code).toBe("MAKER_CANNOT_CHECK");
 
     const checkerPublish = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
-    expect(checkerPublish.statusCode).toBe(200);
-    expect(checkerPublish.json().data.publishedAt).toBeTruthy();
+    expect(checkerPublish.statusCode).toBe(202);
+    await drainQueue();
+    const published = await app.inject({ method: "GET", url: `/v1/metadata/entities/${entityId}`, headers: hdr(A_TENANT, CHECKER) });
+    expect(published.json().data.publishedAt).toBeTruthy();
 
     const again = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
     expect(again.statusCode).toBe(409);
@@ -170,19 +184,26 @@ describe("maker-checker on publish", () => {
     const entApi = `compent_${Math.floor(Math.random() * 1e6)}`;
     const entityId = await seedEntity(A_TENANT, entApi, MAKER);
     const layout = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ sections: [{ label: "S", fields: [] }] }) });
+    expect(layout.statusCode).toBe(202);
     const layoutId = layout.json().data.id;
+    await drainQueue();
 
     const create = await app.inject({ method: "POST", url: "/v1/metadata/compositions", headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: `mod_${Math.floor(Math.random() * 1e6)}`, label: "Fleet", definition: { entities: [entApi], layouts: [{ entity: entApi, layoutId }] } }) });
-    expect(create.statusCode).toBe(201);
-    const compId = create.json().data.id;
-    expect(create.json().data.status).toBe("draft");
+    expect(create.statusCode).toBe(202);
+    const compId = create.json().data.id as string;
+    expect(create.json().data.status).toBe("accepted");
+    await drainQueue();
+    const draft = await app.inject({ method: "GET", url: `/v1/metadata/compositions/${compId}`, headers: hdr(A_TENANT, MAKER) });
+    expect(draft.json().data.status).toBe("draft");
 
     const self = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, MAKER), body: "{}" });
     expect(self.statusCode).toBe(403);
 
     const checker = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
-    expect(checker.statusCode).toBe(200);
-    expect(checker.json().data.status).toBe("published");
+    expect(checker.statusCode).toBe(202);
+    await drainQueue();
+    const publishedComp = await app.inject({ method: "GET", url: `/v1/metadata/compositions/${compId}`, headers: hdr(A_TENANT, CHECKER) });
+    expect(publishedComp.json().data.status).toBe("published");
   });
 
   it("re-publishing an already-published composition returns 409 and does not change publishedAt/publishedBy", async () => {
@@ -190,14 +211,18 @@ describe("maker-checker on publish", () => {
     const entityId = await seedEntity(A_TENANT, entApi, MAKER);
     const layout = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ sections: [{ label: "S", fields: [] }] }) });
     const layoutId = layout.json().data.id;
+    await drainQueue();
 
     const create = await app.inject({ method: "POST", url: "/v1/metadata/compositions", headers: hdr(A_TENANT, MAKER), body: JSON.stringify({ apiName: `mod_${Math.floor(Math.random() * 1e6)}`, label: "Fleet", definition: { entities: [entApi], layouts: [{ entity: entApi, layoutId }] } }) });
-    const compId = create.json().data.id;
+    const compId = create.json().data.id as string;
+    await drainQueue();
 
     const first = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
-    expect(first.statusCode).toBe(200);
-    const publishedAt = first.json().data.publishedAt;
-    const publishedBy = first.json().data.publishedBy;
+    expect(first.statusCode).toBe(202);
+    await drainQueue();
+    const published = await app.inject({ method: "GET", url: `/v1/metadata/compositions/${compId}`, headers: hdr(A_TENANT, CHECKER) });
+    const publishedAt = published.json().data.publishedAt;
+    const publishedBy = published.json().data.publishedBy;
 
     const second = await app.inject({ method: "POST", url: `/v1/metadata/compositions/${compId}/publish`, headers: hdr(A_TENANT, CHECKER), body: "{}" });
     expect(second.statusCode).toBe(409);
