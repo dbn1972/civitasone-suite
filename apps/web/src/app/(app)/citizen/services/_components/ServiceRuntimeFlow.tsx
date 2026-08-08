@@ -159,8 +159,12 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
   if (!design) {
     return (
       <ErrorState
-        title="Form not available"
-        message="This service does not yet have a published application form. The department is still configuring it."
+        error={{
+          what: "Form not available",
+          next: "This service does not yet have a published application form. The department is still configuring it.",
+          actions: ["back"],
+        }}
+        backHref={`/citizen/catalogue`}
       />
     );
   }
