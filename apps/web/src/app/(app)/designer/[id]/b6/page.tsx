@@ -5,31 +5,28 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
-import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
-import { FeeBuilder } from "../../_components/FeeBuilder";
+import { DocumentsBuilder, documentsUiToApi } from "../../_components/DocumentsBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
-import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
-import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
-import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
+import { loadDocumentsDesign } from "../../_data/documentBuilderApi";
+import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
+import type { DocumentsDesignState } from "@/app/_components/ds/designer/documentTypes";
 
-export default function DesignerB5Page() {
+export default function DesignerB6Page() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
-  const [initialDesign, setInitialDesign] = useState<FeeDesignState>(() => emptyFeeDesign("Untitled service"));
-  const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
+  const [initialDesign, setInitialDesign] = useState<DocumentsDesignState>({ documents: [] });
+  const [lanes, setLanes] = useState(emptyWorkflowDesign("").lanes);
   const [meta, setMeta] = useState({
     name: "Untitled service",
     pattern: "certificate",
     version: 1,
     status: "draft",
-    serviceKey: "",
-    serviceId: "",
   });
 
   useEffect(() => {
@@ -38,29 +35,16 @@ export default function DesignerB5Page() {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
-        const sid = def.serviceId ?? def.id;
         setMeta({
           name: def.name,
           pattern: def.servicePattern ?? "certificate",
           version: def.version,
           status: def.status,
-          serviceKey: def.serviceKey,
-          serviceId: sid,
         });
-
-        try {
-          const form = await loadFormDesign(def.serviceKey, def.name);
-          setFormFields(Object.values(form.fields));
-        } catch {
-          setFormFields([]);
-        }
-
-        const design = await loadFeeDesign(sid, def.name, {
-          feeModel: def.feeModel,
-          feeScheduleId: def.feeScheduleId,
-          hoaCode: def.hoaCode,
-        });
-        setInitialDesign(design);
+        const docs = await loadDocumentsDesign(def.requiredDocuments);
+        setInitialDesign(docs);
+        const workflow = await loadWorkflowDesign(def.name, def.workflowDefinitionId);
+        setLanes(workflow.lanes);
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -73,7 +57,7 @@ export default function DesignerB5Page() {
 
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
-  const { prev, next } = adjacentBlocks(meta.pattern, "b5");
+  const { prev, next } = adjacentBlocks(meta.pattern, "b6");
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -83,29 +67,25 @@ export default function DesignerB5Page() {
         label: b.label,
         hidden: hidden.has(b.id),
         status:
-          b.id === "b5" ? "in-progress"
+          b.id === "b6" ? "in-progress"
             : b.id === "b1" || b.id === "b2" ? "complete"
-              : b.id === "b3" && !hidden.has("b3") ? "complete"
-                : b.id === "b4" && !hidden.has("b4") ? "complete"
-                  : "empty",
+              : "empty",
       })),
     [hidden],
   );
 
-  const onDesignPersisted = async (design: FeeDesignState) => {
+  const onDesignPersisted = async (design: DocumentsDesignState) => {
     try {
       await updateServiceDefinition(params.id, {
-        feeModel: design.feeModel ?? undefined,
-        hoaCode: design.hoaCode || undefined,
-        feeScheduleId: design.scheduleId,
+        requiredDocuments: documentsUiToApi(design.documents),
       });
     } catch {
-      // best-effort catalogue linkage
+      // best-effort
     }
   };
 
   if (loading) {
-    return <p style={{ color: "var(--mut)" }}>Loading fee builder…</p>;
+    return <p style={{ color: "var(--mut)" }}>Loading documents…</p>;
   }
 
   if (error) {
@@ -125,28 +105,22 @@ export default function DesignerB5Page() {
       status={meta.status}
       saveState={saveState}
       blocks={blocks}
-      activeBlockId="b5"
+      activeBlockId="b6"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
       help={
-        <HelpTip term="Fee & Revenue">
-          Set how much applicants pay, which account receives it, and when the demand is raised.
+        <HelpTip term="Documents">
+          List what applicants must upload and which approval step verifies each document.
         </HelpTip>
       }
     >
-      <FeeBuilder
-        serviceId={meta.serviceId}
-        serviceName={meta.name}
+      <DocumentsBuilder
         initial={initialDesign}
-        formFields={formFields}
-        engineAvailable={false}
+        lanes={lanes}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
-      <div style={{ marginTop: 16 }}>
-        <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
-      </div>
     </WizardShell>
   );
 }

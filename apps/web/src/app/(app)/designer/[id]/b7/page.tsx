@@ -2,34 +2,36 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
-import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
-import { FeeBuilder } from "../../_components/FeeBuilder";
+import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
+import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
-import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
-import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
-import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
+import {
+  issuanceOutputToUi,
+  issuanceUiToOutput,
+  mergeOutputsWithIssuance,
+} from "../../_data/issuanceBuilderApi";
+import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
-export default function DesignerB5Page() {
+export default function DesignerB7Page() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
-  const [initialDesign, setInitialDesign] = useState<FeeDesignState>(() => emptyFeeDesign("Untitled service"));
-  const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
+  const [initialDesign, setInitialDesign] = useState<IssuanceDesignState>(() =>
+    issuanceOutputToUi([], "certificate"),
+  );
+  const outputsRef = useRef<unknown[]>([]);
   const [meta, setMeta] = useState({
     name: "Untitled service",
     pattern: "certificate",
     version: 1,
     status: "draft",
-    serviceKey: "",
-    serviceId: "",
   });
 
   useEffect(() => {
@@ -38,29 +40,15 @@ export default function DesignerB5Page() {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
-        const sid = def.serviceId ?? def.id;
+        const pattern = def.servicePattern ?? "certificate";
+        outputsRef.current = def.outputs ?? [];
         setMeta({
           name: def.name,
-          pattern: def.servicePattern ?? "certificate",
+          pattern,
           version: def.version,
           status: def.status,
-          serviceKey: def.serviceKey,
-          serviceId: sid,
         });
-
-        try {
-          const form = await loadFormDesign(def.serviceKey, def.name);
-          setFormFields(Object.values(form.fields));
-        } catch {
-          setFormFields([]);
-        }
-
-        const design = await loadFeeDesign(sid, def.name, {
-          feeModel: def.feeModel,
-          feeScheduleId: def.feeScheduleId,
-          hoaCode: def.hoaCode,
-        });
-        setInitialDesign(design);
+        setInitialDesign(issuanceOutputToUi(def.outputs, pattern, def.issuanceType));
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
@@ -73,7 +61,7 @@ export default function DesignerB5Page() {
 
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
-  const { prev, next } = adjacentBlocks(meta.pattern, "b5");
+  const { prev, next } = adjacentBlocks(meta.pattern, "b7");
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -82,30 +70,26 @@ export default function DesignerB5Page() {
         shortLabel: b.shortLabel,
         label: b.label,
         hidden: hidden.has(b.id),
-        status:
-          b.id === "b5" ? "in-progress"
-            : b.id === "b1" || b.id === "b2" ? "complete"
-              : b.id === "b3" && !hidden.has("b3") ? "complete"
-                : b.id === "b4" && !hidden.has("b4") ? "complete"
-                  : "empty",
+        status: b.id === "b7" ? "in-progress" : b.id === "b1" || b.id === "b2" ? "complete" : "empty",
       })),
     [hidden],
   );
 
-  const onDesignPersisted = async (design: FeeDesignState) => {
+  const onDesignPersisted = async (design: IssuanceDesignState) => {
     try {
+      const outputs = mergeOutputsWithIssuance(outputsRef.current, issuanceUiToOutput(design));
+      outputsRef.current = outputs;
       await updateServiceDefinition(params.id, {
-        feeModel: design.feeModel ?? undefined,
-        hoaCode: design.hoaCode || undefined,
-        feeScheduleId: design.scheduleId,
+        issuanceType: design.outputType,
+        outputs,
       });
     } catch {
-      // best-effort catalogue linkage
+      // best-effort
     }
   };
 
   if (loading) {
-    return <p style={{ color: "var(--mut)" }}>Loading fee builder…</p>;
+    return <p style={{ color: "var(--mut)" }}>Loading output & issuance…</p>;
   }
 
   if (error) {
@@ -125,28 +109,22 @@ export default function DesignerB5Page() {
       status={meta.status}
       saveState={saveState}
       blocks={blocks}
-      activeBlockId="b5"
+      activeBlockId="b7"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
       onNext={() => router.push(`/designer/${params.id}/${next}`)}
       help={
-        <HelpTip term="Fee & Revenue">
-          Set how much applicants pay, which account receives it, and when the demand is raised.
+        <HelpTip term="Output & Issuance">
+          Design the certificate, numbering format, signatory, and validity period.
         </HelpTip>
       }
     >
-      <FeeBuilder
-        serviceId={meta.serviceId}
+      <OutputIssuanceBuilder
         serviceName={meta.name}
         initial={initialDesign}
-        formFields={formFields}
-        engineAvailable={false}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
-      <div style={{ marginTop: 16 }}>
-        <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
-      </div>
     </WizardShell>
   );
 }
