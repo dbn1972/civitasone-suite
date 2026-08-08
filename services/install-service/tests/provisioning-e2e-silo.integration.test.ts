@@ -40,7 +40,11 @@ import { provisionSiloDatabase, SERVICES } from "../src/modules/provisioning/act
 // POSTGRES_ADMIN_PASSWORD). Fall back builds the same way so a bare
 // `vitest run` against CI's civitas_test password still authenticates.
 const ADMIN_PW =
-  process.env.POSTGRES_ADMIN_PASSWORD ?? process.env.PGPASSWORD ?? "civitas_dev_pw";
+  process.env.POSTGRES_ADMIN_PASSWORD ??
+  process.env.PGPASSWORD ??
+  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+    ? "civitas_test"
+    : "civitas_dev_pw");
 const RUNNER_DSN =
   process.env.PROVISIONING_RUNNER_DSN ??
   `postgres://civitas_admin:${encodeURIComponent(ADMIN_PW)}@${process.env.PGHOST ?? "localhost"}:${process.env.PGPORT ?? "5435"}/postgres`;

@@ -23,7 +23,7 @@ export const SERVICES_DIR = join(process.cwd(), "services");
 /** Export names that mean "topics this service emits". */
 const PRODUCED_EXPORTS = new Set(["EVENTS"]);
 /** Export names that mean "this service's own write intents". */
-const COMMAND_EXPORTS = new Set(["COMMANDS"]);
+const COMMAND_EXPORTS = new Set(["COMMANDS", "VIEW_COMMANDS"]);
 /** Export names that mean "topics owned by OTHER services that we subscribe to". */
 const CONSUMED_EXPORTS = new Set([
   "CONSUMED_EVENTS",
