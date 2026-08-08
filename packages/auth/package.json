@@ -25,9 +25,9 @@
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.0",
-    "@types/node": "*",
+    "@types/node": "^20.0.0",
     "fastify": "^4.28.0",
-    "typescript": "*",
+    "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   },
   "peerDependencies": {

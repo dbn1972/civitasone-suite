@@ -8,6 +8,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerConsumersOnce, drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -29,7 +30,10 @@ async function seedEntity(apiName: string): Promise<string> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => {
+  registerConsumersOnce();
+  app = await buildApp();
+});
 afterAll(async () => {
   await app.close();
   await sqlClient.begin(async (sql) => {
@@ -70,7 +74,8 @@ describe("formula module", () => {
     expect(nf.statusCode).toBe(404);
     const apiName = `dup_${rnd()}`;
     const a = await app.inject({ method: "POST", url: "/v1/metadata/formula", headers: hdr(), body: JSON.stringify({ apiName, label: "L", expression: "1 + 1" }) });
-    expect(a.statusCode).toBe(201);
+    expect(a.statusCode).toBe(202);
+    await drainQueue();
     const b = await app.inject({ method: "POST", url: "/v1/metadata/formula", headers: hdr(), body: JSON.stringify({ apiName, label: "L2", expression: "2 + 2" }) });
     expect(b.statusCode).toBe(409);
   });
@@ -88,20 +93,25 @@ describe("fields module — update/delete", () => {
   it("PATCH and DELETE a field, plus not-found", async () => {
     const entityId = await seedEntity(`fld_${rnd()}`);
     const create = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(), body: JSON.stringify({ apiName: "status", label: "Status", fieldType: "picklist", picklistValues: ["a", "b"] }) });
-    expect(create.statusCode).toBe(201);
-    const fid = create.json().data.id;
+    expect(create.statusCode).toBe(202);
+    const fid = create.json().data.id as string;
+    await drainQueue();
 
     const patch = await app.inject({ method: "PATCH", url: `/v1/metadata/fields/${fid}`, headers: hdr(), body: JSON.stringify({ label: "Status2", isRequired: true, picklistValues: ["a", "b", "c"], sortOrder: 3, isActive: true }) });
-    expect(patch.statusCode).toBe(200);
-    expect(patch.json().data.label).toBe("Status2");
+    expect(patch.statusCode).toBe(202);
+    await drainQueue();
+    const afterPatch = await app.inject({ method: "GET", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(false) });
+    expect(afterPatch.json().data.find((f: { id: string }) => f.id === fid)?.label).toBe("Status2");
 
     const del = await app.inject({ method: "DELETE", url: `/v1/metadata/fields/${fid}`, headers: hdr(false) });
-    expect(del.statusCode).toBe(200);
+    expect(del.statusCode).toBe(202);
+    await drainQueue();
 
+    // Field update/delete are queue-first with no sync existence check.
     const patchNf = await app.inject({ method: "PATCH", url: `/v1/metadata/fields/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ label: "x" }) });
-    expect(patchNf.statusCode).toBe(404);
+    expect(patchNf.statusCode).toBe(202);
     const delNf = await app.inject({ method: "DELETE", url: `/v1/metadata/fields/${randomUUID()}`, headers: hdr(false) });
-    expect(delNf.statusCode).toBe(404);
+    expect(delNf.statusCode).toBe(202);
   });
 
   it("rejects picklist without values (400) and lookup without target (400)", async () => {
@@ -117,14 +127,17 @@ describe("layouts module — update", () => {
   it("PATCH layout sections (valid + unknown field 422) + not-found", async () => {
     const entityId = await seedEntity(`lay_${rnd()}`);
     await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/fields`, headers: hdr(), body: JSON.stringify({ apiName: "title", label: "T", fieldType: "text" }) });
+    await drainQueue();
     const create = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(), body: JSON.stringify({ sections: [{ label: "S", fields: ["title"] }] }) });
-    expect(create.statusCode).toBe(201);
-    const lid = create.json().data.id;
+    expect(create.statusCode).toBe(202);
+    const lid = create.json().data.id as string;
+    await drainQueue();
     const listLay = await app.inject({ method: "GET", url: `/v1/metadata/entities/${entityId}/layouts`, headers: hdr(false) });
     expect(listLay.json().meta.total).toBe(1);
 
     const okPatch = await app.inject({ method: "PATCH", url: `/v1/metadata/layouts/${lid}`, headers: hdr(), body: JSON.stringify({ sections: [{ label: "S2", fields: ["title"] }], isDefault: true }) });
-    expect(okPatch.statusCode).toBe(200);
+    expect(okPatch.statusCode).toBe(202);
+    await drainQueue();
     const badPatch = await app.inject({ method: "PATCH", url: `/v1/metadata/layouts/${lid}`, headers: hdr(), body: JSON.stringify({ sections: [{ label: "S3", fields: ["ghost"] }] }) });
     expect(badPatch.statusCode).toBe(422);
     const nf = await app.inject({ method: "PATCH", url: `/v1/metadata/layouts/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ isDefault: true }) });
@@ -152,25 +165,30 @@ describe("validation-rules module — CRUD", () => {
   it("create, list, patch (valid + invalid expr 400), delete, not-found", async () => {
     const entityId = await seedEntity(`vr_${rnd()}`);
     const create = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/validation-rules`, headers: hdr(), body: JSON.stringify({ name: "r1", expression: "amount > 0", errorMessage: "pos" }) });
-    expect(create.statusCode).toBe(201);
-    const rid = create.json().data.id;
+    expect(create.statusCode).toBe(202);
+    const rid = create.json().data.id as string;
+    await drainQueue();
 
     const list = await app.inject({ method: "GET", url: `/v1/metadata/entities/${entityId}/validation-rules`, headers: hdr(false) });
     expect(list.json().meta.total).toBe(1);
 
     const badCreate = await app.inject({ method: "POST", url: `/v1/metadata/entities/${entityId}/validation-rules`, headers: hdr(), body: JSON.stringify({ name: "bad", expression: "amount >", errorMessage: "e" }) });
-    expect([400, 201]).toContain(badCreate.statusCode); // tolerant: boolean engine may accept partial expr
+    expect([400, 202]).toContain(badCreate.statusCode); // tolerant: boolean engine may accept partial expr
+    if (badCreate.statusCode === 202) await drainQueue();
 
     const okPatch = await app.inject({ method: "PATCH", url: `/v1/metadata/validation-rules/${rid}`, headers: hdr(), body: JSON.stringify({ name: "r1b", errorMessage: "pos2", isActive: false, sortOrder: 2, expression: "amount >= 1" }) });
-    expect(okPatch.statusCode).toBe(200);
+    expect(okPatch.statusCode).toBe(202);
+    await drainQueue();
 
     const del = await app.inject({ method: "DELETE", url: `/v1/metadata/validation-rules/${rid}`, headers: hdr(false) });
-    expect(del.statusCode).toBe(200);
+    expect(del.statusCode).toBe(202);
+    await drainQueue();
 
+    // Rule update/delete are queue-first with no sync existence check.
     const patchNf = await app.inject({ method: "PATCH", url: `/v1/metadata/validation-rules/${randomUUID()}`, headers: hdr(), body: JSON.stringify({ name: "x" }) });
-    expect(patchNf.statusCode).toBe(404);
+    expect(patchNf.statusCode).toBe(202);
     const delNf = await app.inject({ method: "DELETE", url: `/v1/metadata/validation-rules/${randomUUID()}`, headers: hdr(false) });
-    expect(delNf.statusCode).toBe(404);
+    expect(delNf.statusCode).toBe(202);
     const postNf = await app.inject({ method: "POST", url: `/v1/metadata/entities/${randomUUID()}/validation-rules`, headers: hdr(), body: JSON.stringify({ name: "x", expression: "a > 0", errorMessage: "e" }) });
     expect(postNf.statusCode).toBe(404);
   });

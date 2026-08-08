@@ -5,7 +5,7 @@
  *
  * Validates: Req 14.1 (stock-service/inventory-service unification)
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -15,6 +15,9 @@ const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 function makeToken(roles: string[] = ["stock_admin", "super_admin"]): string {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s1" }, SECRET, 3600);
 }
+
+// Timeout headroom for congested CI is set in vitest.config.ts (testTimeout).
+// Vitest 2.1 does not support describe.configure (Vitest 3+ API).
 
 describe("stock-service — deprecation headers on /v1/stock/* routes", () => {
   it("GET /v1/stock/items adds Deprecation header", async () => {

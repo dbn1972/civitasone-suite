@@ -44,7 +44,10 @@ run_bootstrap() {
 # at bootstrap_inspection.sql:55 and exited 3 BEFORE APPLYING ANY MIGRATION, so
 # every later step ran against an empty database. Invisible on dev machines
 # because the role was created there by hand, outside version control.
-ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-civitas_dev_pw}"
+# Must match the password used later when applying admin-owned migrations
+# (see PGPASSWORD reassignment below). Prefer POSTGRES_ADMIN_PASSWORD, then the
+# ambient PGPASSWORD (CI sets civitas_test), then the local-dev default.
+ADMIN_PW="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
 echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
      -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
@@ -178,7 +181,10 @@ ADMIN_OWNED_DBS=(
   "revenue-service:civitas_revenue:revenue_svc"
   "works-service:civitas_works:works_svc"
 )
-export PGPASSWORD="${POSTGRES_ADMIN_PASSWORD:-${PGPASSWORD:-civitas_dev_pw}}"
+# Do NOT fall back to ambient PGPASSWORD here — the SERVICE_DBS loop above
+# overwrites it with each service role password. Always reuse ADMIN_PW from
+# role creation so admin-owned migrations authenticate correctly.
+export PGPASSWORD="$ADMIN_PW"
 ADMIN_USER="${POSTGRES_ADMIN_USER:-civitas_admin}"
 
 for entry in "${ADMIN_OWNED_DBS[@]}"; do

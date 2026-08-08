@@ -93,7 +93,10 @@ const KNOWN_NOT_SERVING: Record<string, string> = {
   // re-admitted by quietly adding a line.
 };
 
-/** Documented port map. Source: .kiro/steering/quick-reference.md */
+/**
+ * Documented port map. Keep in sync with ecosystem.config.js svc() declarations
+ * and the gateway registry comments (customer-engagement ports 3040–3048).
+ */
 const PORTS: Record<string, number> = {
   identity: 3001, tenant: 3002, policy: 3003, audit: 3004, install: 3005,
   notification: 3006, finance: 3007, procurement: 3008, contract: 3009,
@@ -103,7 +106,11 @@ const PORTS: Record<string, number> = {
   inventory: 3025, telephony: 3026, helpdesk: 3027, knowledge: 3028,
   workflow: 3029, queue: 3030, analytics: 3031, ml: 3032, meeting: 3033,
   court: 3034, visitor: 3035, works: 3036, inspection: 3037, revenue: 3038,
-  metadata: 3039, location: 4012, gateway: 8080,
+  metadata: 3039,
+  // Customer-engagement platform (gateway registry + ecosystem.config.js)
+  recommendation: 3040, "ai-agent": 3041, catalogue: 3044, journey: 3045,
+  field: 3046, cdp: 3047, loyalty: 3048,
+  location: 4012, gateway: 8080,
 };
 
 let discoveredServices: string[] = [];
@@ -170,7 +177,10 @@ describe("L0 — Discovery guards (a broken probe must not pass silently)", () =
 describe("L0 — Static worker declarations (court / visitor)", () => {
   it("court worker uses dist/worker-main.js in ecosystem.config.js", () => {
     const eco = readFileSync(join(REPO_ROOT, "ecosystem.config.js"), "utf8");
-    const m = eco.match(/worker\("court"[^)]*\)/);
+    // Nested scannerDbUrl(...) args — [^)]* truncates at the first '); use
+    // the same loose match as tests/ops/ecosystem-workers.test.ts.
+    const m = eco.match(/worker\(\s*"court"[\s\S]*?dist\/worker-main\.js"\s*\)/);
+    expect(m?.[0], 'court must declare worker("court", …, "dist/worker-main.js")').toBeDefined();
     expect(m?.[0]).toContain("dist/worker-main.js");
   });
 

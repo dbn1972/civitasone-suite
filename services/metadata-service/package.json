@@ -23,6 +23,7 @@
     "@civitasone/types": "workspace:*",
     "drizzle-orm": "0.30.10",
     "fastify": "4.28.1",
+    "pino": "^8.21.0",
     "postgres": "3.4.4",
     "zod": "3.23.8"
   },
