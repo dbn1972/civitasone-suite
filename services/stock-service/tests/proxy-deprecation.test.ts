@@ -16,9 +16,8 @@ function makeToken(roles: string[] = ["stock_admin", "super_admin"]): string {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s1" }, SECRET, 3600);
 }
 
-// CI runs many packages in parallel; buildApp() regularly exceeds the default
-// 5s vitest timeout under load even though the assertions themselves are cheap.
-describe.configure({ timeout: 30_000 });
+// Timeout headroom for congested CI is set in vitest.config.ts (testTimeout).
+// Vitest 2.1 does not support describe.configure (Vitest 3+ API).
 
 describe("stock-service — deprecation headers on /v1/stock/* routes", () => {
   it("GET /v1/stock/items adds Deprecation header", async () => {
