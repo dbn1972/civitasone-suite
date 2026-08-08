@@ -8,6 +8,8 @@ export default defineConfig({
       DATABASE_URL:  process.env.DATABASE_URL ?? "postgres://grant_svc:grant_dev_pw@localhost:5435/civitas_grant",
       QUEUE_DRIVER:  "memory",
       CACHE_DRIVER:  "memory",
+      // domain.maskAadhaar requires AADHAAR_HMAC_KEY (fail-closed DPDP); salt alone is ignored
+      AADHAAR_HMAC_KEY: process.env.AADHAAR_HMAC_KEY ?? "test-aadhaar-hmac-key-for-unit-tests-only",
       AADHAAR_SALT:  "test-aadhaar-salt-for-unit-tests",
     },
     coverage: {
