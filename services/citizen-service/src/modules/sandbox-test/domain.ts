@@ -4,6 +4,10 @@
  */
 import { hiddenBlocksForPattern } from "./pattern.js";
 import type { ServiceDefinitionRow } from "../catalogue/schema.js";
+import {
+  hasLiveFeeEngineBinding,
+  normalizeEngineBindings,
+} from "../engine-bindings/domain.js";
 
 export type StepStatus = "pass" | "fail" | "skip";
 
@@ -124,22 +128,29 @@ export function runSandboxPipeline(def: ServiceDefinitionRow): SandboxRunResult 
       "feeModel",
     ));
   } else if (def.feeModel === "engine") {
-    const manifestEngine = (def.outputs as unknown[] | undefined)?.length;
-    const bindings = (def as { engineBindings?: unknown[] }).engineBindings;
-    const hasEngine = Array.isArray(bindings) && bindings.length > 0;
-    if (!hasEngine && !manifestEngine) {
+    const bindings = normalizeEngineBindings(def.engineBindings);
+    if (!hasLiveFeeEngineBinding(bindings)) {
       steps.push(fail(
         "demand", "Fee demand lines", "b5",
         "Engine binding is missing or stubbed.",
         "Fee engine services are not wired for this pack.",
-        "Bind a live rate engine or switch to a fixed/slab fee model.",
+        "Bind a live assessment/rate engine under Engine Bindings, or switch to a fixed/slab fee model.",
         "engineBinding",
+      ));
+    } else if (!def.hoaCode && !bindings.some((b) => b.config.hoaCode)) {
+      steps.push(fail(
+        "demand", "Fee demand lines", "b5",
+        "Head of Account (HOA) is not set on the engine binding.",
+        "Demand lines require an HOA for GL posting.",
+        "Set HOA in Engine Bindings before submitting.",
+        "hoaCode",
       ));
     } else {
       steps.push(pass("demand", "Fee demand lines", {
         feeModel: def.feeModel,
         feeScheduleId: def.feeScheduleId,
-        sampleLines: [{ taxHeadCode: "BASE", amountMinor: 50000, label: "Base fee" }],
+        engineKey: bindings.find((b) => b.block === "fee" || b.block === "assessment")?.engineKey,
+        sampleLines: [{ taxHeadCode: "BASE", amountMinor: 50000, label: "Base fee (engine)" }],
       }));
     }
   } else if (!def.hoaCode) {

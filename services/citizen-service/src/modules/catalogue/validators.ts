@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safeText } from "../../shared/sanitize.js";
+import { engineBindingsArraySchema } from "../engine-bindings/validators.js";
 import { FEE_MODELS, SERVICE_CHANNELS, SERVICE_PATTERNS } from "./domain.js";
 
 export const idParam = z.object({ id: z.string().uuid() });
@@ -28,6 +29,7 @@ const designerFields = {
   feeModel:             z.enum(FEE_MODELS).optional(),
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
+  engineBindings:       engineBindingsArraySchema.optional(),
   formId:               z.string().uuid().optional(),
 };
 

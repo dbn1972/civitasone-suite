@@ -18,6 +18,8 @@ export interface ServiceDefinitionDto {
   slaDays?: number | null;
   channels: string[];
   statutoryReferences?: StatutoryReference[];
+  /** FN-21 — engineered backend bindings (fee/assessment/verification/…). */
+  engineBindings?: unknown[];
   status: string;
   version: number;
   submittedBy?: string | null;
@@ -50,6 +52,7 @@ export interface UpdateDefinitionPayload {
   slaDays?: number;
   channels?: string[];
   statutoryReferences?: StatutoryReference[];
+  engineBindings?: unknown[];
   forms?: unknown[];
   formId?: string;
   eligibilityRuleSetId?: string;

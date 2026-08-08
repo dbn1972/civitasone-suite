@@ -24,6 +24,7 @@ import { feePaymentRoutes } from "./modules/fee-payment/routes.js";
 import { issuanceRoutes } from "./modules/issuance/routes.js";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
 import { catalogueRoutes } from "./modules/catalogue/routes.js";
+import { engineBindingRoutes } from "./modules/engine-bindings/routes.js";
 import { packsRoutes } from "./modules/packs/routes.js";
 import { sandboxTestRoutes } from "./modules/sandbox-test/routes.js";
 import { intakeRoutes } from "./modules/application/intake-routes.js";
@@ -78,6 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(issuanceRoutes);
   await app.register(discoveryRoutes);
   await app.register(catalogueRoutes);
+  await app.register(engineBindingRoutes);
   await app.register(packsRoutes);
   await app.register(sandboxTestRoutes);
   await app.register(intakeRoutes);
