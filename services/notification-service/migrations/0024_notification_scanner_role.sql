@@ -92,6 +92,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE notification_svc IN SCHEMA segments
 -- scanner must be able to connect to THIS service database (read-only role).
 DO $$
 BEGIN
-  EXECUTE format(GRANT CONNECT ON DATABASE %I TO notification_scanner, current_database());
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO notification_scanner', current_database());
 END
 $$;

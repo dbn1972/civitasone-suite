@@ -6,6 +6,10 @@ PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5435}"
 PGUSER="${PGUSER:-civitas}"
 export PGPASSWORD="${PGPASSWORD:-civitas_test}"
+# Captured before the migration loops below reassign PGPASSWORD per service
+# role. Role-creating migrations are re-run as this superuser (see
+# needs_superuser()), so its password must survive those reassignments.
+SUPERUSER_PW="$PGPASSWORD"
 
 # The two cluster-level bootstrap files below create roles and databases, so
 # they need a maintenance database to connect to. Neither passed -d, and psql
@@ -137,6 +141,41 @@ declare -A SERVICE_DBS=(
   [install-service]="install_svc:civitas_install"
 )
 
+# ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
+#
+# The `*_scanner_role.sql` migrations (and admin-service/0018) create or alter
+# BYPASSRLS roles so cross-tenant maintenance loops — outbox relay, scheduled
+# purge — can scan every tenant's rows. Postgres enforces two separate rules
+# here, both verified empirically against postgis/postgis:16-3.4:
+#
+#   CREATE ROLE ... BYPASSRLS as a NOCREATEROLE role
+#     -> ERROR: Only roles with the CREATEROLE attribute may create roles.
+#   ...and after GRANTing CREATEROLE, the same statement still fails:
+#     -> ERROR: Only roles with the BYPASSRLS attribute may create roles with
+#               the BYPASSRLS attribute.
+#   ALTER ROLE ... NOSUPERUSER (the idempotent re-assert branch)
+#     -> ERROR: Only roles with the SUPERUSER attribute may change the
+#               SUPERUSER attribute.
+#
+# So civitas_admin cannot run these no matter what we grant it short of
+# BYPASSRLS + SUPERUSER — and bootstrap_admin_role.sql documents that it must
+# stay NOBYPASSRLS precisely so the L3 lane's "no role holds BYPASSRLS"
+# assertion keeps meaning something. Escalating it to satisfy CI would hollow
+# out that guarantee.
+#
+# Creating a BYPASSRLS role is a legitimate DBA/superuser operation; in
+# production these run once as a superuser. In CI the service container's
+# POSTGRES_USER is a superuser, so route exactly these files to it and leave
+# every other migration on its normal (service or admin) role.
+needs_superuser() {
+  # Content-based, not filename-based: catches any migration that creates or
+  # alters a role regardless of what it is called. Leading `--` comment lines
+  # are stripped first — cdp-service/0001_cdp_foundation.sql merely *mentions*
+  # `CREATE ROLE cdp_svc` in prose, and misrouting it to the superuser would
+  # silently change the owner of that service's entire foundation schema.
+  sed 's/--.*$//' "$1" | grep -qiE "(CREATE|ALTER)[[:space:]]+ROLE[[:space:]]+[a-z_]+"
+}
+
 for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
   mig_dir="$ROOT/services/$svc/migrations"
   [ -d "$mig_dir" ] || continue
@@ -144,8 +183,15 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
   pw="$(echo "$role" | sed 's/_svc/_dev_pw/')"
   export PGPASSWORD="$pw"
   for f in $(find "$mig_dir" -maxdepth 1 -name '*.sql' | sort); do
-    echo "Applying $(basename "$f") → $db ($svc)"
-    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$role" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
+    # Role-creating migrations need the superuser (see needs_superuser above).
+    if needs_superuser "$f"; then
+      run_as="$PGUSER"; run_pw="${POSTGRES_SUPERUSER_PASSWORD:-$SUPERUSER_PW}"
+      echo "Applying $(basename "$f") → $db ($svc, superuser-run: creates/alters a role)"
+    else
+      run_as="$role"; run_pw="$pw"
+      echo "Applying $(basename "$f") → $db ($svc)"
+    fi
+    if ! PGPASSWORD="$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
          2>&1 | tee /tmp/bootstrap-migration-out.txt | grep -v '^$'; then :; fi
     if grep -q '^psql:.*ERROR:' /tmp/bootstrap-migration-out.txt; then
       echo "⚠ Migration failed for $svc/$(basename "$f") — DB integration tests for this service may fail in CI."
@@ -193,8 +239,16 @@ for entry in "${ADMIN_OWNED_DBS[@]}"; do
   [ -d "$mig_dir" ] || continue
   svc_failed=0
   for f in $(find "$mig_dir" -maxdepth 1 -name '*.sql' | sort); do
-    echo "Applying $(basename "$f") → $db ($svc, admin-run)"
-    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d "$db" \
+    # Role-creating migrations need the superuser (see needs_superuser above);
+    # civitas_admin is deliberately NOBYPASSRLS/NOCREATEROLE and cannot run them.
+    if needs_superuser "$f"; then
+      run_as="$PGUSER"; run_pw="${POSTGRES_SUPERUSER_PASSWORD:-$SUPERUSER_PW}"
+      echo "Applying $(basename "$f") → $db ($svc, superuser-run: creates/alters a role)"
+    else
+      run_as="$ADMIN_USER"; run_pw="$ADMIN_PW"
+      echo "Applying $(basename "$f") → $db ($svc, admin-run)"
+    fi
+    if ! PGPASSWORD="$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" \
          -v ON_ERROR_STOP=1 -f "$f" > /tmp/bootstrap-migration-out.txt 2>&1; then
       echo "⚠ Migration failed for $svc/$(basename "$f")"
       svc_failed=$((svc_failed + 1))

@@ -3,17 +3,15 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-07-27  Count: 49 (grant-service/0006 removed 2026-08-08 — now passes)
+# Generated: 2026-08-08  Count: 34 (14 scanner/role migrations removed 2026-08-08 — now run as superuser; notification/0024 syntax bug fixed)
 admin-service/0006_rls_full_tenant_isolation.sql           # relation "custom_domains.custom_domains" does not exist
 admin-service/0009_fk_indexes.sql                          # relation "scheduled_jobs.job_execution_history" does not exist
-admin-service/0018_nobypassrls_service_roles.sql           # permission denied to alter role
 analytics-service/0007_partition_fact_events.sql           # column "version" does not exist
 audit-service/0004_cert_in_audit_fields.sql                # functions in index predicate must be marked IMMUTABLE
 audit-service/0018_additional_status_type_constraints.sql  # relation "vigilance.vigilance_cases" does not exist
 estab-service/0030_rls_completeness.sql                    # relation "files.estab_org_unit" does not exist
 finance-service/0002_perf_indexes.sql                      # relation "payments.payments" does not exist
 finance-service/0035_rls_full_tenant_isolation.sql         # column "tenant_id" does not exist
-helpdesk-service/0016_scanner_role.sql                     # permission denied to create role
 hrms-service/0002_perf_indexes.sql                         # relation "employee.employees" does not exist
 hrms-service/0005_configurable_leave_policies.sql          # insert or update on table "hrms_leave_policy_rules" violates foreign key constraint "hrms_leave_policy_rules_l
 hrms-service/0009_letters_shifts_fnf.sql                   # column "code" of relation "hrms_shifts" does not exist
@@ -26,30 +24,17 @@ identity-service/0013_rls_full_tenant_isolation.sql        # relation "devices.e
 location-service/0006_rls_full_tenant_isolation.sql        # relation "geofence.geofences" does not exist
 location-service/0009_fk_indexes.sql                       # relation "hierarchy.administrative_units" does not exist
 location-service/0010_additional_status_type_constraints.sql # relation "jurisdiction.jurisdictions" does not exist
-meeting-service/0007_meeting_scanner_role.sql              # permission denied to create role
-notification-service/0024_notification_scanner_role.sql    # permission denied to create role
 plugin-service/0004_rls_full_tenant_isolation.sql          # relation "hooks.plugin_hooks" does not exist
 plugin-service/0008_fk_indexes.sql                         # relation "hooks.plugin_hooks" does not exist
 policy-service/0003_rls_full_tenant_isolation.sql          # relation "role_features.role_feature_grants" does not exist
 procurement-service/0002_perf_indexes.sql                  # relation "vendor.vendors" does not exist
-project-service/0019_project_scanner_role.sql              # permission denied to create role
-report-service/0014_report_scanner_role.sql                # permission denied to create role
 tenant-service/0009_plans_bigint_price.sql                 # relation "plans.plans" does not exist
 tenant-service/0010_rls_full_tenant_isolation.sql          # relation "plans.plans" does not exist
 tenant-service/0013_fk_indexes.sql                         # relation "subscriptions.subscriptions" does not exist
 theme-service/0005_rls_full_tenant_isolation.sql           # relation "branding.tenant_branding" does not exist
 theme-service/0007_check_constraints_status_columns.sql    # schema "templates" does not exist
 theme-service/0009_fk_indexes.sql                          # relation "branding.tenant_branding" does not exist
-visitor-service/0009_scanner_role.sql                      # permission denied to create role
 workflow-service/0013_rls_tenant_isolation.sql             # column "tenant_id" does not exist
 workflow-service/0020_rls_completeness.sql                 # column "tenant_id" does not exist
 citizen-service/0020_designer_phase0.sql                   # fails on fresh CI cluster; tracked until designer phase0 migration is repaired
-contract-service/0015_contract_scanner_role.sql            # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-court-service/0016_court_scanner_role.sql                  # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-finance-service/0052_finance_scanner_role.sql              # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-inspection-service/0022_inspection_scanner_role.sql        # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-payroll-service/0032_payroll_scanner_role.sql              # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-procurement-service/0027_procurement_scanner_role.sql      # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
 revenue-service/0004_outbox_inbox_durable.sql              # fails on fresh CI cluster after admin-owned migration path was restored
-workflow-service/0033_workflow_scanner_role.sql            # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
-works-service/0012_works_scanner_role.sql                  # CREATE ROLE scanner requires CREATEROLE; civitas_admin is NOCREATEROLE in CI
