@@ -21,6 +21,15 @@ describe("SVC-081 catalogue domain", () => {
     expect(() => assertDefinitionPublishable({ name: "X", channels: ["mail" as never], requiredDocuments: [] })).toThrow("DEF_BAD_CHANNEL");
     expect(() => assertDefinitionPublishable({ name: "X", channels: ["portal"], requiredDocuments: [{ docType: "a", mandatory: true }, { docType: "a", mandatory: false }] })).toThrow("DEF_DUPLICATE_DOCUMENT");
   });
+  it("rejects anonymous applicant type outside grievance pattern (FN-23)", () => {
+    expect(() => assertDefinitionPublishable({
+      name: "X",
+      channels: ["portal"],
+      requiredDocuments: [{ docType: "a", mandatory: true }],
+      servicePattern: "certificate",
+      allowedApplicantTypes: ["citizen", "anonymous"],
+    })).toThrow("ANONYMOUS_GRIEVANCE_ONLY");
+  });
   it("mandatoryDocTypes filters to mandatory", () => {
     expect(mandatoryDocTypes([{ docType: "a", mandatory: true }, { docType: "b", mandatory: false }])).toEqual(["a"]);
   });

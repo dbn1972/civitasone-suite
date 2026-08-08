@@ -6,6 +6,12 @@ export interface StatutoryReference {
   url?: string;
 }
 
+export interface ProfileAttributeBindingDto {
+  attributeKey: string;
+  applicantType: string;
+  required: boolean;
+}
+
 export interface ServiceDefinitionDto {
   id: string;
   serviceKey: string;
@@ -32,6 +38,10 @@ export interface ServiceDefinitionDto {
   requiredDocuments?: unknown[];
   issuanceType?: string | null;
   outputs?: unknown[];
+  /** FN-23 */
+  allowedApplicantTypes?: string[];
+  applicantTypeRejectMessage?: string | null;
+  profileAttributeBindings?: ProfileAttributeBindingDto[];
 }
 
 export interface CreateDefinitionPayload {
@@ -60,6 +70,9 @@ export interface UpdateDefinitionPayload {
   requiredDocuments?: unknown[];
   issuanceType?: string;
   outputs?: unknown[];
+  allowedApplicantTypes?: string[];
+  applicantTypeRejectMessage?: string;
+  profileAttributeBindings?: ProfileAttributeBindingDto[];
 }
 
 async function parseAccepted(res: Response): Promise<{ id: string }> {

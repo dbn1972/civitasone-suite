@@ -33,6 +33,8 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       channels: unknown[]; forms?: unknown[]; outputs?: unknown[];
       servicePattern?: string; ownerOfficeId?: string; offeringOfficeIds?: string[];
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
+      allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string;
+      profileAttributeBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -56,6 +58,9 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         channels: p.channels as never,
         forms: (p.forms ?? []) as never,
         outputs: (p.outputs ?? []) as never,
+        allowedApplicantTypes: (p.allowedApplicantTypes ?? ["citizen"]) as never,
+        applicantTypeRejectMessage: p.applicantTypeRejectMessage ?? null,
+        profileAttributeBindings: (p.profileAttributeBindings ?? []) as never,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "definition_create", p.id);
@@ -72,6 +77,8 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       hoaCode?: string; feeModel?: string; statutoryReferences?: unknown[];
       forms?: unknown[]; formId?: string; outputs?: unknown[]; issuanceType?: string;
       eligibilityRuleSetId?: string; workflowDefinitionId?: string; feeScheduleId?: string;
+      allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string | null;
+      profileAttributeBindings?: unknown[];
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -97,6 +104,9 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.eligibilityRuleSetId !== undefined) patch.eligibilityRuleSetId = p.eligibilityRuleSetId;
       if (p.workflowDefinitionId !== undefined) patch.workflowDefinitionId = p.workflowDefinitionId;
       if (p.feeScheduleId !== undefined) patch.feeScheduleId = p.feeScheduleId;
+      if (p.allowedApplicantTypes !== undefined) patch.allowedApplicantTypes = p.allowedApplicantTypes;
+      if (p.applicantTypeRejectMessage !== undefined) patch.applicantTypeRejectMessage = p.applicantTypeRejectMessage;
+      if (p.profileAttributeBindings !== undefined) patch.profileAttributeBindings = p.profileAttributeBindings;
       await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
       await audit(tx, msg, "definition_update", p.id);
     });

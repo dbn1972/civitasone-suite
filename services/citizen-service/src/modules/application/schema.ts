@@ -17,6 +17,8 @@ export const citizenApplications = applicationSchema.table("citizen_applications
   channel:         varchar("channel", { length: 16 }).notNull().default("portal"),
   assistedBy:      uuid("assisted_by"),
   acknowledgedAt:  timestamp("acknowledged_at", { withTimezone: true }),
+  /** FN-23 — applicant identity type at submission. */
+  applicantType:   varchar("applicant_type", { length: 16 }),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -62,6 +64,8 @@ export const applicationDrafts = applicationSchema.table("application_drafts", {
   serviceKey:    varchar("service_key", { length: 64 }),
   channel:       varchar("channel", { length: 16 }).notNull().default("portal"),
   assistedBy:    uuid("assisted_by"),
+  /** FN-23 — applicant identity type for intake gating. */
+  applicantType: varchar("applicant_type", { length: 16 }),
   formData:      jsonb("form_data").$type<Record<string, unknown>>().notNull().default({}),
   documentTypes: jsonb("document_types").$type<string[]>().notNull().default([]),
   status:        varchar("status", { length: 16 }).notNull().default("draft"),

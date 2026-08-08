@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { safeText } from "../../shared/sanitize.js";
 import { FEE_MODELS, SERVICE_CHANNELS, SERVICE_PATTERNS } from "./domain.js";
+import { APPLICANT_TYPES } from "../applicant-identity/domain.js";
 
 export const idParam = z.object({ id: z.string().uuid() });
 
@@ -20,6 +21,12 @@ const statutoryRefSchema = z.object({
   url:     safeText({ max: 512 }).optional(),
 });
 
+const profileBindingSchema = z.object({
+  attributeKey:  safeText({ max: 64 }),
+  applicantType: z.enum(APPLICANT_TYPES),
+  required:      z.boolean().default(true),
+});
+
 const designerFields = {
   servicePattern:       z.enum(SERVICE_PATTERNS).optional(),
   ownerOfficeId:        z.string().uuid().optional(),
@@ -29,6 +36,10 @@ const designerFields = {
   feeScheduleId:        z.string().uuid().optional(),
   statutoryReferences:  z.array(statutoryRefSchema).max(20).default([]),
   formId:               z.string().uuid().optional(),
+  /** FN-23 — applicant identity configuration (B1 Catalogue & Identity). */
+  allowedApplicantTypes: z.array(z.enum(APPLICANT_TYPES)).min(1).max(4).optional(),
+  applicantTypeRejectMessage: safeText({ max: 500, multiline: true }).optional(),
+  profileAttributeBindings: z.array(profileBindingSchema).max(50).optional(),
 };
 
 export const createDefinitionBody = z.object({

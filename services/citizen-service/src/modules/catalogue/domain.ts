@@ -8,6 +8,11 @@
  * a NEW row at version+1 in 'draft'.
  */
 
+import {
+  assertAllowedApplicantTypesConfig,
+  assertProfileAttributeBindings,
+} from "../applicant-identity/domain.js";
+
 export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted"] as const;
 export type ServiceChannel = typeof SERVICE_CHANNELS[number];
 
@@ -36,6 +41,9 @@ export function assertDefinitionPublishable(def: {
   name: string;
   channels: ServiceChannel[];
   requiredDocuments: RequiredDocument[];
+  servicePattern?: ServicePattern | null;
+  allowedApplicantTypes?: unknown;
+  profileAttributeBindings?: unknown;
 }): void {
   if (typeof def.name !== "string" || def.name.trim().length === 0) throw new Error("DEF_MISSING_NAME");
   if (!Array.isArray(def.channels) || def.channels.length === 0) throw new Error("DEF_NO_CHANNELS");
@@ -48,8 +56,11 @@ export function assertDefinitionPublishable(def: {
     if (seen.has(d.docType)) throw new Error(`DEF_DUPLICATE_DOCUMENT: ${d.docType}`);
     seen.add(d.docType);
   }
+  // FN-23 — applicant identity gates must be well-formed before publish freeze.
+  const allowed = def.allowedApplicantTypes ?? ["citizen"];
+  assertAllowedApplicantTypesConfig(allowed, def.servicePattern ?? null);
+  assertProfileAttributeBindings(def.profileAttributeBindings ?? [], allowed);
 }
-
 /** The mandatory docType checklist a citizen must provide for this definition. */
 export function mandatoryDocTypes(requiredDocuments: RequiredDocument[]): string[] {
   return requiredDocuments.filter((d) => d.mandatory).map((d) => d.docType);
