@@ -78,3 +78,30 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3026/v1/telephony/cal
   }
   ```
 - The stack startup script should source per-service `.env` files rather than inheriting a shared environment.
+
+---
+
+# JWT Auth Misalignment — CDP & Catalogue
+
+**Discovered:** 2026-08-08 during UAT pack 06 execution
+
+## Problem
+
+CDP and Catalogue services reject the HS256 dev token that all other services accept.
+
+| Service | Port | JWT_ALGORITHM | Issue |
+|---------|------|---------------|-------|
+| cdp-service | 3043 | RS256 | Should be HS256 in dev |
+| catalogue-service | 3044 | HS256 | Config correct but auth plugin may use a different verification path |
+
+## Fix
+
+1. Restart both services with:
+   ```
+   JWT_ALGORITHM=HS256
+   JWT_SECRET=civitasone-dev-secret
+   ```
+
+2. For catalogue: check if its auth plugin imports from a local `shared/auth.ts` that overrides the algorithm. May need to align with `@civitasone/auth`.
+
+3. For CDP: process had `JWT_ALGORITHM=RS256` — change to `HS256` in the startup script/env file.
