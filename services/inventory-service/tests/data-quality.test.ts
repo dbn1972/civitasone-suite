@@ -25,9 +25,18 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
 
-const ADMIN_PW = "civitas_dev_pw";
-const HOST = "localhost";
-const PORT = 5435;
+// CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
+// (civitas_test). Local compose defaults to civitas_dev_pw. Hardcoding the
+// local password fails auth in GHA under turbo strict env filtering unless
+// those vars are passed through (see turbo.json test.passThroughEnv).
+const ADMIN_PW =
+  process.env.POSTGRES_ADMIN_PASSWORD ??
+  process.env.PGPASSWORD ??
+  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+    ? "civitas_test"
+    : "civitas_dev_pw");
+const HOST = process.env.PGHOST ?? "localhost";
+const PORT = Number(process.env.PGPORT ?? "5435");
 
 function connect(db: string) {
   return postgres({
