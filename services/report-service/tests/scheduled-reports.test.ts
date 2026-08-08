@@ -9,6 +9,7 @@
  *  - Retry logic (3 retries on delivery failure)
  *  - Optimistic locking on update
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll, beforeAll, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -462,7 +463,7 @@ describe("Scheduled report lifecycle", () => {
     expect(res.json().data.status).toBe("accepted");
 
     await handleUpdateScheduled(
-      "msg-update-1",
+      randomUUID(),
       { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-update" },
       { id: createdId, version: 1, cadence: "monthly", format: "pdf", nextRunAt: new Date() },
     );
@@ -501,7 +502,7 @@ describe("Scheduled report lifecycle", () => {
     expect(res.json().data.status).toBe("accepted");
 
     await handleDisableScheduled(
-      "msg-disable-1",
+      randomUUID(),
       { tenantId: TENANT, actorId: ACTOR, correlationId: "corr-disable" },
       { id: createdId },
     );

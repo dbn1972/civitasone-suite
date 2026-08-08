@@ -107,7 +107,7 @@ export function NotificationsBuilder({
         mergeFields={mergeFields}
         sampleFormDesign={sampleFormDesign}
         sampleValues={sampleValues}
-        onSampleValuesChange={setSampleValues}
+        onSampleValuesChange={(values) => setSampleValues(values)}
       />
     </Card>
   );
