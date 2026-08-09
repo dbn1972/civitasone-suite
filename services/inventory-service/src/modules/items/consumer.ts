@@ -14,6 +14,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, INTEGRATION, RESOURCE } from "../../topics.js";
 import { DomainError } from "../../shared/domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import {
   createItemPayload, updateItemPayload, createCategoryPayload, createUomPayload,
@@ -21,7 +22,8 @@ import {
   releaseReservationPayload, createGoodsReturnPayload, qcInspectionPayload,
 } from "./validators.js";
 
-export function registerItemConsumers(queue: Queue): void {
+export function registerItemConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.itemCreate, async (msg) => {
     const p = createItemPayload.parse(msg.payload);
     await db.transaction(async (tx) => {
