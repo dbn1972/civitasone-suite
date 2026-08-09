@@ -6,6 +6,25 @@
 **Rescued from:** EC2 suite main untracked scaffolds (session c5159612)  
 **Date:** 2026-08-09
 
+## Validation Status (2026-08-09 session 5 — domain test coverage)
+
+| Check | Result |
+|-------|--------|
+| Municipal domain tests | ✅ **17/17 services** — `tests/domain.test.ts` (5–12 cases each) covering status transitions, bigint fee helpers, validation rejects, number generators |
+| Municipal route wiring tests | ✅ **17/17 services** — `tests/routes-static.test.ts` asserts `buildApp` export (no DB required) |
+| **Total municipal service tests** | ✅ **184/184 pass** (shop 11, trade 11, building 12, fire 15, advertisement 16, vendor 12, roadcut 11, event 12, refund 12, sewerage 10, swm 9, drainage 9, parks 8, animal 10, crematorium 8, parking 10, market 8) |
+| Gateway + policy (unchanged) | ✅ gateway registry 18, policy catalog 5 |
+| Line coverage target (≥80%) | ⏳ Not met — domain/route wiring only; consumer/repo/integration tests still needed |
+
+Run all municipal tests:
+
+```bash
+cd /Users/debabratanayak_1/Projects/wt/municipal-sec5-services
+for svc in shop trade building fire advertisement vendor roadcut event refund sewerage swm drainage parks animal crematorium parking market; do
+  pnpm --filter @civitasone/${svc}-service test
+done
+```
+
 ## Validation Status (2026-08-09 session 4 — DB bootstrap + RBAC)
 
 | Check | Result |
@@ -106,7 +125,7 @@ Tenant-scoped role rows in `roles.roles` are still provisioned per tenant via in
 2. ~~**Workspace**~~ — Done: `services/*` glob covers all municipal packages; `pnpm install` verified
 3. ~~**Gateway**~~ — Done: all 17 routes in `registry.ts`; env override via `GATEWAY_{SERVICE}_URL`
 4. ~~**PM2/ecosystem**~~ — Done: 17 API + 17 worker entries (3060–3085) in `ecosystem.config.js`
-5. ~~**Tests (smoke)**~~ — Domain smoke tests added for fire + advertisement; expand to ≥80% module coverage
+5. ~~**Tests (smoke)**~~ — Domain smoke for fire + advertisement; **session 5:** domain + routes-static tests for all 17 services (184 pass); expand to ≥80% module coverage (consumers/repos)
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
 7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map (stubs; no tenant seed yet)
 8. **Events** — Wire cross-service consumers (billing for fees, notification for notices)
