@@ -6,6 +6,7 @@ import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
 import { deriveInitialStatus, validateCnr, DEFAULT_CASE_TYPES, assertCaseTypeAllowed, DEFAULT_DISPOSAL_DAYS, resolveDisposalDays, addDays } from "./domain.js";
 import { effectiveAllowed } from "../config-registry/domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 type RegisterCasePayload = {
   id: string;
@@ -29,6 +30,7 @@ type RegisterCasePayload = {
 };
 
 export function registerCaseRegistryConsumers(
+  const queue = tenantScoped(rawQueue);
   register: <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>) => void,
 ): void {
   register<RegisterCasePayload>(COMMANDS.registerCase, async (msg) => {

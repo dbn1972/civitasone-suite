@@ -3,8 +3,10 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { withTenant } from "../../shared/scope.js";
 import { entityDefinitions } from "./schema.js";
 import { eq, and } from "drizzle-orm";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 export function registerEntityConsumers(q: Queue): void {
+  const queue = tenantScoped(rawQueue);
   q.subscribe("metadata.entity.create", async (msg) => {
     const p = msg.payload as {
       id: string;

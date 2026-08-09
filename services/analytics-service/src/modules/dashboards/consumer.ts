@@ -11,6 +11,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, AUDIT_TOPIC, DASHBOARD_RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { DashboardLayout } from "./schema.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const log = pino({ name: "analytics-dashboards-consumer" });
 type Tx = Parameters<typeof enqueue>[0];
@@ -48,7 +49,8 @@ async function emit(
   });
 }
 
-export function registerDashboardsConsumers(queue: Queue): void {
+export function registerDashboardsConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<Record<string, unknown>>(COMMANDS.createDashboard, async (msg) => {
     try {
       const p = msg.payload as {

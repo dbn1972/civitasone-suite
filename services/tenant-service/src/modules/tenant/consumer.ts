@@ -12,12 +12,14 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertTransition, type TenantView } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 function keyFor(id: string) { return cache.makeKey(id, RESOURCE, id); }
 
-export function registerTenantConsumers(queue: Queue): void {
+export function registerTenantConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<TenantView>(COMMANDS.createTenant, async (msg) => {
     await runWithTenant(msg.tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return; // already handled

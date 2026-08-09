@@ -14,6 +14,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { mlExperiments } from "../training/schema.js";
 import { recordConsumerMessage } from "../observability/metrics.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "ml-experiments-consumer" });
@@ -34,7 +35,8 @@ type EndPayload = {
   status: "completed" | "cancelled";
 };
 
-export function registerExperimentConsumers(queue: Queue): void {
+export function registerExperimentConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<CreatePayload>(COMMANDS.experimentCreate, async (msg) => {
     const startMs = Date.now();
     const p = msg.payload;

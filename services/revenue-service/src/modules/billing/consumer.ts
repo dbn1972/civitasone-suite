@@ -8,8 +8,10 @@ import { demands } from "../assessment/schema.js";
 import { rateHeads } from "../rate-engine/schema.js";
 import { generateBillFromDemand } from "./domain.js";
 import { eq, and } from "drizzle-orm";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
-export function registerBillingConsumers(queue: Queue): void {
+export function registerBillingConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.billGenerate, async (msg) => {
     let assesseeId: string | undefined;
 

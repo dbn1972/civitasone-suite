@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { StageView } from "./schema.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -12,7 +13,8 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerStageConsumers(queue: Queue): void {
+export function registerStageConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<StageView>(COMMANDS.createStage, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

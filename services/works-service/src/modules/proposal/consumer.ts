@@ -7,10 +7,12 @@ import { workProposals, workSplits, workCoaMappings, workOfficeMappings } from "
 import { generateWorkNumber, generateSplitNumber } from "./domain.js";
 import { eq, and } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerProposalConsumers(q: Queue): void {
+  const queue = tenantScoped(rawQueue);
   q.subscribe(COMMANDS.proposalCreate, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);

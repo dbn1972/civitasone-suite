@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
 import { annualTaxFromTaxableMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 /** Resolve the DA rate (basis points) effective for the run month (Iter1). */
 async function resolveDaRateBps(tenantId: string, month: string): Promise<bigint> {
@@ -284,7 +285,8 @@ async function resolveDdoDepartments(tenantId: string, ddoCode: string | null): 
   return new Set(rows.map((r) => r.department_id));
 }
 
-export function registerPayrollConsumers(queue: Queue): void {
+export function registerPayrollConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
     await db.transaction(async (tx) => {

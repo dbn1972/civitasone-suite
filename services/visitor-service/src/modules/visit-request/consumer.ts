@@ -52,6 +52,7 @@ import {
   type VisitorCategory,
 } from "./domain.js";
 import { getAutoApproveCategories } from "../config-registry/policy.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -176,7 +177,8 @@ async function hasRestrictedArea(
 
 // ── Consumer Registration ────────────────────────────────────────────────
 
-export function registerVisitRequestConsumers(queue: Queue): void {
+export function registerVisitRequestConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   // ─── visitRequestCreate ──────────────────────────────────────────────
   queue.subscribe<VisitRequestCreatePayload>(COMMANDS.visitRequestCreate, async (msg) => {
     const p = msg.payload;
