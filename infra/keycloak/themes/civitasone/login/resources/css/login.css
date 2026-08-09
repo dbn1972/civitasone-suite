@@ -292,3 +292,11 @@ body.login-pf {
   position: relative !important;
   overflow: visible !important;
 }
+
+/* ─── HIDE language selector entirely — auto-detect from browser ───── */
+#kc-locale,
+#kc-locale-wrapper,
+#kc-locale-dropdown,
+.login-pf-settings {
+  display: none !important;
+}
