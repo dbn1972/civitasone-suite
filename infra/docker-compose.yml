@@ -130,6 +130,7 @@ services:
       - "${KEYCLOAK_HOST_PORT:-8180}:8080"
     volumes:
       - ./keycloak/civitasone-realm.json:/opt/keycloak/data/import/civitasone-realm.json:ro
+      - ./keycloak/themes/civitasone:/opt/keycloak/themes/civitasone:ro
     depends_on:
       postgres:
         condition: service_healthy
