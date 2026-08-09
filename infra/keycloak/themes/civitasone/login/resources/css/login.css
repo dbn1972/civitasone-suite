@@ -1,322 +1,228 @@
 /* CivitasOne Suite — World-Class Login Theme
- * Design: Clean, minimal, government-grade professional.
- * Inspired by: Apple ID, Linear, Vercel login screens.
+ * Overrides PatternFly + Keycloak base with !important where needed.
+ * Design: Clean Apple/Linear/Vercel-inspired. No polygon bg, no blue borders.
  */
 
-:root {
-  --co-primary: #1a56db;
-  --co-primary-hover: #1e40af;
-  --co-primary-light: #eff6ff;
-  --co-bg: #f8fafc;
-  --co-card: #ffffff;
-  --co-text: #0f172a;
-  --co-text-secondary: #64748b;
-  --co-border: #e2e8f0;
-  --co-error: #dc2626;
-  --co-success: #16a34a;
-  --co-radius: 12px;
-  --co-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 10px 15px -3px rgb(0 0 0 / 0.08);
-  --co-shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+/* ─── Background ──────────────────────────────────────────────────── */
+.login-pf-page {
+  background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 40%, #312e81 100%) !important;
+  min-height: 100vh !important;
 }
 
-/* ─── Page Background ─────────────────────────────────────────────── */
-body, html {
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-}
-
-#kc-login {
-  background: var(--co-bg);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-pf body {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%) !important;
-}
-
-/* ─── Header / Branding ───────────────────────────────────────────── */
-#kc-header {
-  padding: 0;
-  margin: 0;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  padding-top: 48px;
+/* ─── Header Branding ─────────────────────────────────────────────── */
+.login-pf-page-header {
+  margin-bottom: 24px !important;
 }
 
 #kc-header-wrapper {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: #ffffff;
-  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.5px !important;
+  color: #ffffff !important;
+  text-shadow: none !important;
 }
 
 /* ─── Login Card ──────────────────────────────────────────────────── */
-#kc-form-wrapper,
-#kc-content-wrapper,
+.login-pf-page .card-pf {
+  background: #ffffff !important;
+  border: none !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4) !important;
+  padding: 40px 36px 36px !important;
+  max-width: 400px !important;
+  margin: 0 auto !important;
+}
+
+/* Remove the ugly blue top border on card */
 .card-pf {
-  max-width: 420px;
-  width: 100%;
-  margin: 0 auto;
+  border-top: none !important;
 }
 
-#kc-content {
-  padding: 0;
-}
-
-.login-pf .container {
-  padding: 0;
-  max-width: 420px;
-}
-
-.login-pf .card-pf {
-  background: var(--co-card);
-  border: 1px solid var(--co-border);
-  border-radius: var(--co-radius);
-  box-shadow: var(--co-shadow-lg);
-  padding: 40px 36px 36px;
-  margin-top: 120px;
-}
-
-/* ─── Form Title ──────────────────────────────────────────────────── */
-#kc-page-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--co-text);
-  text-align: center;
-  margin-bottom: 28px;
-  letter-spacing: -0.3px;
+/* ─── Page Title ──────────────────────────────────────────────────── */
+#kc-page-title,
+.login-pf-page .card-pf h1 {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  margin-bottom: 24px !important;
+  letter-spacing: -0.3px !important;
 }
 
 /* ─── Labels ──────────────────────────────────────────────────────── */
-.login-pf label,
-.control-label {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--co-text-secondary);
-  margin-bottom: 6px;
-  display: block;
+.pf-c-form__label,
+.pf-c-form__label-text,
+.login-pf label {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #475569 !important;
+  margin-bottom: 6px !important;
 }
 
 /* ─── Input Fields ────────────────────────────────────────────────── */
-.login-pf input[type="text"],
-.login-pf input[type="password"],
-.login-pf input[type="email"],
-#kc-form-login input[type="text"],
-#kc-form-login input[type="password"] {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 15px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  border: 1.5px solid var(--co-border);
-  border-radius: 8px;
-  background: var(--co-card);
-  color: var(--co-text);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-sizing: border-box;
-  outline: none;
-  -webkit-appearance: none;
+.pf-c-form-control,
+.login-pf-page input[type="text"],
+.login-pf-page input[type="password"] {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
+  font-size: 15px !important;
+  padding: 12px 14px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+  outline: none !important;
+  height: auto !important;
+  line-height: 1.4 !important;
 }
 
-.login-pf input[type="text"]:focus,
-.login-pf input[type="password"]:focus,
-.login-pf input[type="email"]:focus {
-  border-color: var(--co-primary);
-  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+.pf-c-form-control:focus,
+.login-pf-page input[type="text"]:focus,
+.login-pf-page input[type="password"]:focus {
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12) !important;
 }
 
-.login-pf input[type="text"]::placeholder,
-.login-pf input[type="password"]::placeholder {
-  color: #94a3b8;
+/* ─── Password toggle button ──────────────────────────────────────── */
+.pf-c-button.pf-m-control {
+  border: 1.5px solid #e2e8f0 !important;
+  border-left: none !important;
+  border-radius: 0 10px 10px 0 !important;
+  background: #f8fafc !important;
+  color: #64748b !important;
+  padding: 12px 14px !important;
+}
+
+.pf-c-input-group .pf-c-form-control {
+  border-radius: 10px 0 0 10px !important;
+}
+
+/* ─── Sign In Button ──────────────────────────────────────────────── */
+.pf-c-button.pf-m-primary,
+.login-pf-page .btn-lg,
+input[type="submit"] {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  padding: 13px 24px !important;
+  background: #4f46e5 !important;
+  border: none !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  transition: background 0.2s, transform 0.1s !important;
+  letter-spacing: 0.2px !important;
+  margin-top: 8px !important;
+  text-shadow: none !important;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3) !important;
+}
+
+.pf-c-button.pf-m-primary:hover {
+  background: #4338ca !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4) !important;
+}
+
+.pf-c-button.pf-m-primary:active {
+  transform: scale(0.98) !important;
+}
+
+/* ─── Links ───────────────────────────────────────────────────────── */
+.login-pf-page a,
+#kc-form-options a,
+#kc-registration a {
+  color: #4f46e5 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+.login-pf-page a:hover {
+  color: #4338ca !important;
+  text-decoration: underline !important;
 }
 
 /* ─── Form Groups ─────────────────────────────────────────────────── */
 .form-group {
-  margin-bottom: 20px;
-}
-
-/* ─── Primary Button (Sign In) ────────────────────────────────────── */
-#kc-login,
-.login-pf input[type="submit"],
-.login-pf .btn-primary,
-#kc-form-buttons .btn-primary {
-  width: 100%;
-  padding: 13px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  background: var(--co-primary);
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.1s ease;
-  margin-top: 8px;
-  letter-spacing: 0.2px;
-}
-
-#kc-login:hover,
-.login-pf input[type="submit"]:hover,
-.login-pf .btn-primary:hover {
-  background: var(--co-primary-hover);
-}
-
-#kc-login:active,
-.login-pf input[type="submit"]:active,
-.login-pf .btn-primary:active {
-  transform: scale(0.98);
-}
-
-#kc-login:disabled,
-.login-pf .btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ─── Links (Forgot Password, Register) ──────────────────────────── */
-.login-pf a,
-#kc-registration a,
-.kc-forgot-password a {
-  color: var(--co-primary);
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.login-pf a:hover {
-  color: var(--co-primary-hover);
-  text-decoration: underline;
-}
-
-/* ─── Forgot Password Link ────────────────────────────────────────── */
-#kc-form-options {
-  margin-top: 16px;
-  text-align: right;
-}
-
-/* ─── Error / Alert Messages ──────────────────────────────────────── */
-.alert-error,
-.kc-feedback-text,
-.pf-c-alert__title {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: var(--co-error);
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 20px;
-}
-
-.alert-success {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: var(--co-success);
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 20px;
+  margin-bottom: 18px !important;
 }
 
 /* ─── Language Selector ───────────────────────────────────────────── */
-#kc-locale {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-}
-
-#kc-locale-dropdown > a,
+.pf-c-dropdown .pf-c-dropdown__toggle,
 #kc-current-locale-link {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  border: none !important;
 }
 
-/* ─── Password Toggle ─────────────────────────────────────────────── */
-.pf-c-button.pf-m-control {
-  border: 1.5px solid var(--co-border);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  background: var(--co-bg);
-  color: var(--co-text-secondary);
+.login-pf-settings {
+  margin-bottom: 16px !important;
 }
 
-/* ─── Remember Me Checkbox ────────────────────────────────────────── */
-#kc-form-options .checkbox label {
-  font-size: 13px;
-  color: var(--co-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* ─── Alert / Error Messages ──────────────────────────────────────── */
+.alert-error,
+.pf-c-alert {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  border-radius: 10px !important;
+  color: #991b1b !important;
+  padding: 12px 16px !important;
+  font-size: 13px !important;
+  margin-bottom: 16px !important;
 }
 
-/* ─── Registration Link ───────────────────────────────────────────── */
+/* ─── Remember Me / Options ───────────────────────────────────────── */
+#kc-form-options {
+  margin-top: 14px !important;
+}
+
+#kc-form-options label {
+  font-size: 13px !important;
+  color: #64748b !important;
+}
+
+/* ─── Registration / Social ───────────────────────────────────────── */
 #kc-registration {
-  text-align: center;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--co-border);
+  margin-top: 24px !important;
+  padding-top: 20px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  text-align: center !important;
 }
 
 #kc-registration span {
-  font-size: 13px;
-  color: var(--co-text-secondary);
+  font-size: 13px !important;
+  color: #64748b !important;
 }
 
 /* ─── Footer ──────────────────────────────────────────────────────── */
-#kc-info {
-  text-align: center;
-  margin-top: 24px;
-}
-
-#kc-info-wrapper {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+.login-pf-page .login-pf-footer {
+  color: rgba(255,255,255,0.4) !important;
+  font-size: 11px !important;
 }
 
 /* ─── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .login-pf .card-pf {
-    margin: 80px 16px 0;
-    padding: 32px 24px 28px;
-    border-radius: 16px;
+  .login-pf-page .card-pf {
+    margin: 0 12px !important;
+    padding: 32px 24px !important;
+    border-radius: 16px !important;
   }
-
   #kc-header-wrapper {
-    font-size: 22px;
-    padding-top: 32px;
+    font-size: 22px !important;
   }
 }
 
-/* ─── Hide unwanted Keycloak elements ─────────────────────────────── */
-.login-pf-page .login-pf-accounts,
-#kc-header-wrapper .subtitle {
-  display: none;
+/* ─── Remove PatternFly noise ─────────────────────────────────────── */
+.login-pf-page .login-pf-header {
+  padding: 0 !important;
 }
 
-/* ─── Smooth transitions ──────────────────────────────────────────── */
-* {
-  box-sizing: border-box;
-}
-
-.login-pf .card-pf,
-.form-group,
-input,
-button,
-a {
-  transition: all 0.2s ease;
+/* Remove the default polygon background image */
+.login-pf body,
+body.login-pf {
+  background-image: none !important;
 }
