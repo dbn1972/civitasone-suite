@@ -125,7 +125,14 @@ export async function registerIllegalConstructionRoutes(app: FastifyInstance): P
     const caseRow = await findCaseById(ctx.tenantId, id);
     if (!caseRow) throw new HttpError(404, "NOT_FOUND", "illegal construction case not found");
     const body = inspectCaseSchema.parse(req.body);
-    const result = await publishInspectCase({ caseId: id, ...body }, ctx);
+    const result = await publishInspectCase(
+      {
+        caseId: id,
+        inspectionFindings: body.inspectionFindings,
+        violationChecklist: body.violationChecklist,
+      },
+      ctx,
+    );
     return reply.code(202).send({ data: result });
   });
 
