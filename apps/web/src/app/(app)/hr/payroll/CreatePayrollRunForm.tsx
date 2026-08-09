@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { ConfirmDialog } from "../../../_components/ds";
+import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
 
 type Structure = { id: string; name: string };
@@ -16,6 +17,7 @@ type Props = {
 
 export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props) {
   const router = useRouter();
+  const { toast } = useToast();
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [month, setMonth] = useState(defaultMonth);
@@ -58,6 +60,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
       setConfirmOpen(false);
       trackActivation("first_transaction");
+      toast.success(`Payroll run for ${month} created successfully.`);
       if (body.id) {
         router.push(`/hr/payroll/${body.id}`);
       } else {

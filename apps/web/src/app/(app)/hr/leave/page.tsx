@@ -28,6 +28,9 @@ export default async function LeaveManagementPage() {
       <PageHeader
         title={t("leave.title")}
         subtitle={t("leave.subtitle")}
+        back="/hr"
+        backLabel="HR"
+        help="hr"
         actions={
           <>
             <Link href="/hr/leave/approvals" className="btn">{t("leave.approvals")}</Link>
@@ -36,6 +39,16 @@ export default async function LeaveManagementPage() {
         }
       />
       {source === "error" && <DataSourceBadge source="error" />}
+
+      {/* Pending approval nudge */}
+      {pending > 0 && (
+        <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+          <span aria-hidden="true">⏳</span>
+          <span><strong>{pending}</strong> request{pending > 1 ? "s" : ""} awaiting approval.</span>
+          <Link href="/hr/leave/approvals" style={{ marginLeft: "auto", color: "var(--primary-d)", fontWeight: 500 }}>Review now →</Link>
+        </div>
+      )}
+
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label={t("leave.total")} value={total} />
         <StatCard icon="⏳" iconBg="#fffbe6" label={t("leave.pending")} value={pending} />
@@ -46,6 +59,14 @@ export default async function LeaveManagementPage() {
         <DataTable<LeaveRequestDetail>
           columns={columns}
           rows={leaveRequests}
+          sortable
+          filterable
+          filterPlaceholder="Search by employee, type or status…"
+          pageSize={15}
+          emptyIcon="🌴"
+          emptyTitle="No leave requests yet"
+          emptyMessage="When employees apply for leave, their requests will appear here for you to review."
+          emptyAction={<Link href="/hr/leave/apply" className="btn primary" style={{ marginTop: 8 }}>+ Apply Leave</Link>}
         />
       </Card>
     </main>

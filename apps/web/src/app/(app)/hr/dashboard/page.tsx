@@ -29,11 +29,20 @@ export default async function HRDashboardPage() {
     { key: "status", label: "Status", cellType: "status" },
   ];
 
+  // Actionable insights — surface what needs attention today
+  const pendingLeaves = data.pendingLeaves ?? 0;
+  const payrollDue = data.payrollDue ?? 0;
+  const actionItems: { label: string; href: string; urgency: "high" | "medium" | "low" }[] = [];
+  if (pendingLeaves > 0) actionItems.push({ label: `${pendingLeaves} leave request${pendingLeaves > 1 ? "s" : ""} pending approval`, href: "/hr/leave/approvals", urgency: "high" });
+  if (payrollDue > 0) actionItems.push({ label: "Payroll run due for this month", href: "/hr/payroll", urgency: "high" });
+  if (openRoles > 0) actionItems.push({ label: `${openRoles} open role${openRoles > 1 ? "s" : ""} awaiting candidates`, href: "/hr/recruitment", urgency: "medium" });
+
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="HR Dashboard"
         subtitle="People operations overview."
+        help="hr"
       />
       {anyError && <DataSourceBadge source="error" />}
       <StatGrid>
@@ -42,6 +51,40 @@ export default async function HRDashboardPage() {
         <StatCard icon="🌴" iconBg="#fffbe6" label="On Leave" value={onLeaveCount} />
         <StatCard icon="🎯" iconBg="#fff0f0" label="Open Roles" value={openRoles} />
       </StatGrid>
+
+      {/* Actionable guidance — tells the user what needs attention */}
+      {actionItems.length > 0 && (
+        <Card title="Needs your attention" padding>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+            {actionItems.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: item.urgency === "high" ? "#fef2f2" : "#fffbeb",
+                    border: `1px solid ${item.urgency === "high" ? "#fecaca" : "#fde68a"}`,
+                    textDecoration: "none",
+                    color: "inherit",
+                    fontSize: 13,
+                  }}
+                >
+                  <span aria-hidden="true" style={{ fontSize: 16 }}>
+                    {item.urgency === "high" ? "🔴" : "🟡"}
+                  </span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  <span style={{ color: "var(--primary-d)", fontWeight: 500 }}>Review →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       <Card
         title="Employees"
         link={<Link href="/hr/employees">View all →</Link>}
