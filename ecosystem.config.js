@@ -410,6 +410,25 @@ module.exports = {
     // metadata-worker was never declared here, so CQRS writes black-holed.
     worker("metadata",     "metadata_svc",     "civitas_metadata"),
 
+    // Municipal Sec5 CQRS workers (ports 3060–3085 APIs above)
+    worker("shop",          "shop_svc",          "civitas_shop"),
+    worker("trade",         "trade_svc",         "civitas_trade"),
+    worker("building",      "building_svc",      "civitas_building"),
+    worker("fire",          "fire_svc",          "civitas_fire"),
+    worker("advertisement", "advertisement_svc", "civitas_advertisement"),
+    worker("vendor",        "vendor_svc",        "civitas_vendor"),
+    worker("roadcut",       "roadcut_svc",       "civitas_roadcut"),
+    worker("event",         "event_svc",         "civitas_event"),
+    worker("refund",        "refund_svc",        "civitas_refund"),
+    worker("sewerage",      "sewerage_svc",      "civitas_sewerage"),
+    worker("swm",           "swm_svc",           "civitas_swm"),
+    worker("drainage",      "drainage_svc",      "civitas_drainage"),
+    worker("parks",         "parks_svc",         "civitas_parks"),
+    worker("animal",        "animal_svc",        "civitas_animal"),
+    worker("crematorium",   "crematorium_svc",   "civitas_crematorium"),
+    worker("parking",       "parking_svc",       "civitas_parking"),
+    worker("market",        "market_svc",        "civitas_market"),
+
     // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
     worker("gateway",      "gateway_svc",      "civitas_gateway"),
 
@@ -460,6 +479,25 @@ module.exports = {
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
     }),
     svc("location",     4012, "location_svc",     "civitas_location"),
+
+    // ── Municipal Sec5 (BRD Section 5) ─────────────────────────────────────────
+    svc("shop",           3060, "shop_svc",           "civitas_shop"),
+    svc("trade",          3070, "trade_svc",          "civitas_trade"),
+    svc("building",       3071, "building_svc",       "civitas_building"),
+    svc("fire",           3072, "fire_svc",           "civitas_fire"),
+    svc("advertisement",  3073, "advertisement_svc",  "civitas_advertisement"),
+    svc("vendor",         3074, "vendor_svc",         "civitas_vendor"),
+    svc("roadcut",        3075, "roadcut_svc",        "civitas_roadcut"),
+    svc("event",          3076, "event_svc",          "civitas_event"),
+    svc("refund",         3077, "refund_svc",         "civitas_refund"),
+    svc("sewerage",       3078, "sewerage_svc",       "civitas_sewerage"),
+    svc("swm",            3079, "swm_svc",            "civitas_swm"),
+    svc("drainage",       3080, "drainage_svc",       "civitas_drainage"),
+    svc("parks",          3081, "parks_svc",          "civitas_parks"),
+    svc("animal",         3082, "animal_svc",         "civitas_animal"),
+    svc("crematorium",    3083, "crematorium_svc",    "civitas_crematorium"),
+    svc("parking",        3084, "parking_svc",        "civitas_parking"),
+    svc("market",         3085, "market_svc",         "civitas_market"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)

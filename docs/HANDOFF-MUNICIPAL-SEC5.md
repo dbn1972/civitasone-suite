@@ -6,7 +6,7 @@
 **Rescued from:** EC2 suite main untracked scaffolds (session c5159612)  
 **Date:** 2026-08-09
 
-## Validation Status (2026-08-09 session 2)
+## Validation Status (2026-08-09 session 3 — P2 migrations + PM2)
 
 | Check | Result |
 |-------|--------|
@@ -16,7 +16,9 @@
 | `@civitasone/trade-service typecheck` | ✅ Pass (spot-check; submittedAt null fix) |
 | Workspace coverage | ✅ `pnpm-workspace.yaml` includes `services/*` — all 17 municipal packages (16 Sec5 + shop) auto-included |
 | Gateway routes | ✅ All 17 registered in `services/gateway-service/src/registry.ts` (ports 3060–3085) |
-| Smoke tests | ✅ `fire-service/tests/domain-smoke.test.ts` (3 tests), `advertisement-service/tests/domain-smoke.test.ts` (4 tests), `gateway-service/tests/municipal-registry.test.ts` (18 tests) |
+| **Migrations** | ✅ **17× `0001_init.sql`** (16 Sec5 + shop) — schemas/tables from `schema.ts`, RLS + FORCE RLS, outbox/inbox |
+| **PM2/ecosystem** | ✅ **17 API + 17 worker** entries in `ecosystem.config.js` (ports 3060–3085) |
+| Smoke tests | ✅ `fire-service/tests/domain-smoke.test.ts` (3), `advertisement-service/tests/domain-smoke.test.ts` (4), `gateway-service/tests/municipal-registry.test.ts` (18) |
 
 **Prerequisite:** Build shared packages before service typecheck (`pnpm turbo run build --filter='@civitasone/outbox' ...` or full package build). Packages export from `dist/`; unbuilt packages cause TS2307.
 
@@ -69,15 +71,16 @@
 
 ## Next Steps (P1+)
 
-1. **Migrations** — Create SQL migrations for each service DB (`civitas_{service}`) with RLS + FORCE RLS
+1. ~~**Migrations**~~ — Done: 17× `0001_init.sql` with RLS + FORCE RLS + outbox/inbox (generator: `scripts/dev/generate-municipal-migrations.mjs`)
 2. ~~**Workspace**~~ — Done: `services/*` glob covers all municipal packages; `pnpm install` verified
 3. ~~**Gateway**~~ — Done: all 17 routes in `registry.ts`; env override via `GATEWAY_{SERVICE}_URL`
-4. **PM2/ecosystem** — Add API + worker entries for each service port (3060–3085)
+4. ~~**PM2/ecosystem**~~ — Done: 17 API + 17 worker entries (3060–3085) in `ecosystem.config.js`
 5. ~~**Tests (smoke)**~~ — Domain smoke tests added for fire + advertisement; expand to ≥80% module coverage
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
 7. **Policy/RBAC** — Register roles (`fire_user`, `adv_enforcement`, etc.) in policy-service
 8. **Events** — Wire cross-service consumers (billing for fees, notification for notices)
 9. **Web screens** — Citizen portal + officer dashboards under `apps/web`
+10. **DB bootstrap** — Ensure `civitas_{service}` databases + `{service}_svc` roles exist in infra seed/bootstrap for all 17 services
 
 ## Gateway Routes (registered)
 
