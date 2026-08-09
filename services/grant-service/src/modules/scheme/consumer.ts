@@ -3,9 +3,11 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 
-export function registerSchemeConsumers(queue: Queue): void {
+export function registerSchemeConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.schemeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string;
