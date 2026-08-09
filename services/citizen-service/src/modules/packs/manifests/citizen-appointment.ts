@@ -26,6 +26,7 @@ import { field, formDesignFrom, rupees } from "./_shared.js";
 
 const FORM_ID = "cccccccc-0001-4000-8000-000000000403";
 const WORKFLOW = "cccccccc-0003-4000-8000-000000000403";
+const FEE_SCHEDULE = "cccccccc-0004-4000-8000-000000000403";
 
 const S1 = "ap-sec-office";
 const S2 = "ap-sec-schedule";
@@ -96,8 +97,9 @@ export function citizenAppointmentManifestBlocks() {
     formId: FORM_ID,
     forms: [{ formDesign: { sections: form.sections, fields: form.fields }, layoutId: FORM_ID }],
     workflowDefinitionId: WORKFLOW,
+    feeScheduleId: FEE_SCHEDULE,
     feeModel: "flat" as const,
-    hoaCode: "1603",
+    hoaCode: "1606",
     issuanceType: "confirmation",
     outputs: [
       { type: "confirmation", templateKey: "ap-appointment-token", numberingFormat: "APT/{ward}/{year}/{seq:6}" },
