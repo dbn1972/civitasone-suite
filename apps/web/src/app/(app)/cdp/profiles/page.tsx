@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { Card, DataTable, PageHeader } from "../../../_components/ds";
+import { Card, DataTable, PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { getCdpProfileList } from "../_data";
 
@@ -39,6 +39,9 @@ export default async function CdpProfilesPage() {
     updatedAt: formatIndianDate(profile.updatedAt),
   }));
 
+  const multiSource = rows.filter((r) => r.sources > 1).length;
+  const withIdentity = rows.filter((r) => r.sources > 0).length;
+
   return (
     <>
       <PageHeader
@@ -48,6 +51,12 @@ export default async function CdpProfilesPage() {
         backLabel="Customer Data Platform"
       />
       {source === "error" && <DataSourceBadge source={source} />}
+      <StatGrid>
+        <StatCard icon="👤" iconBg="#e0f2fe" label="Total Profiles" value={rows.length.toLocaleString("en-IN")} />
+        <StatCard icon="🔗" iconBg="#dcfce7" label="With Identity" value={withIdentity.toLocaleString("en-IN")} />
+        <StatCard icon="🛰️" iconBg="#fef3c7" label="Multi-Source" value={multiSource.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#fce7f3" label="Avg Attributes" value={rows.length > 0 ? Math.round(rows.reduce((s, r) => s + r.attributes, 0) / rows.length).toString() : "0"} />
+      </StatGrid>
       <Card title="Golden Profiles">
         <DataTable<ProfileRow>
           columns={[
@@ -64,6 +73,8 @@ export default async function CdpProfilesPage() {
           filterable
           filterPlaceholder="Filter profiles"
           pageSize={25}
+          exportable
+          exportFilename="cdp-profiles"
           emptyIcon="👥"
           emptyTitle="No profiles yet"
           emptyMessage="Golden profiles appear once identity resolution has run over ingested customer events."

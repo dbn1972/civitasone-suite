@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
+import { useToast } from "@/app/_components/ds/Toast";
+import { PageHeader } from "@/app/_components/ds";
 import {
   duplicateCheck,
   parseFieldError,
@@ -21,6 +23,7 @@ type LeadFieldRule = { fieldName?: string; required?: boolean; enabled?: boolean
 
 export default function NewContactPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     name: "", email: "", phone: "", company: "", designation: "", city: "",
     gstin: "", pan: "", pincode: "",
@@ -166,6 +169,7 @@ export default function NewContactPage() {
         return;
       }
       setMessage("Contact created.");
+      toast.success("Contact created successfully.");
       if (body?.id) setTimeout(() => router.push(`/crm/contacts/${body.id}`), 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create the contact.");
@@ -188,11 +192,7 @@ export default function NewContactPage() {
 
   return (
     <>
-      <a className="back" href="/crm/contacts">← Contacts</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>New Contact</h1>
-        <div className="sub">Oracle/SAP-style contact master — lead capture with consent tracking.</div>
-      </div>
+      <PageHeader title="New Contact" subtitle="Lead capture with duplicate detection and consent tracking." back="/crm/contacts" backLabel="Contacts" />
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}

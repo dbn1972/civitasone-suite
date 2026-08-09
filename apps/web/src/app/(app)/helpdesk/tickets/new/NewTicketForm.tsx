@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useToast } from "@/app/_components/ds/Toast";
 
 type Priority = "Low" | "Medium" | "High" | "Critical";
 
 export function NewTicketForm() {
   const router = useRouter();
+  const { toast } = useToast();
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("Medium");
@@ -47,6 +49,7 @@ export function NewTicketForm() {
         setMessage(text || `Request failed (${res.status})`);
         return;
       }
+      toast.success("Ticket submitted successfully.");
       router.push("/helpdesk/tickets");
       router.refresh();
     } catch (err) {

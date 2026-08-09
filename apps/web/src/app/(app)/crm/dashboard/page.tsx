@@ -12,6 +12,8 @@ export default async function Page() {
       <PageHeader
         title="CRM"
         subtitle="Government stakeholder and vendor interaction register."
+        back="/crm"
+        backLabel="CRM Hub"
         actions={
           <>
             <a className="btn ghost" href="/crm/contacts/new">+ New Contact</a>
