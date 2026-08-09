@@ -8,7 +8,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { listMunicipalRoleNames, MUNICIPAL_SERVICE_CATALOG } from "../src/modules/roles/municipal-catalog.js";
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "aaaaaaaa-cccc-4000-8000-000000000001";
 
 function token(roles: string[] = ["super_admin"]): string {
