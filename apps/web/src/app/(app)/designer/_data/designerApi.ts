@@ -60,8 +60,18 @@ export interface ServiceDefinitionDto {
   appealLinkage?: { appealable: boolean; filingWindowDays?: number; appellateDesignationId?: string } | null;
   /** FN-28 — RTI catalogue publication. */
   rtiLinkage?: { published: boolean; pioDesignationId?: string; pioDesignationLabel?: string } | null;
-  /** FN-15 — renewal window and validity. */
-  renewalPolicy?: { renewable: boolean; renewalWindowDays: number; validityMode: string; validityYears?: number } | null;
+  /**
+   * FN-15 — renewal window and validity. `validityMode` is the exact union the
+   * API accepts, not a loose string: a typo here should fail at compile time
+   * rather than at the publish gate.
+   */
+  renewalPolicy?: {
+    renewable: boolean;
+    renewalWindowDays: number;
+    validityMode: "none" | "duration" | "fixed_date";
+    validityYears?: number;
+    validityFixedDate?: string;
+  } | null;
 }
 
 export interface CreateDefinitionPayload {

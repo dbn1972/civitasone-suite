@@ -8,7 +8,9 @@ import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
+import { RenewalPolicyBuilder } from "../../_components/RenewalPolicyBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { usePhase3Config } from "../../_data/usePhase3Config";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
@@ -20,6 +22,8 @@ import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from 
 
 export default function DesignerB7Page() {
   const params = useParams<{ id: string }>();
+  // FN-15 — validity and renewal describe the issued output.
+  const phase3 = usePhase3Config(params.id);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -143,6 +147,12 @@ export default function DesignerB7Page() {
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
+      <div style={{ marginTop: 24 }}>
+        <RenewalPolicyBuilder
+          value={phase3.config.renewalPolicy ?? null}
+          onChange={(renewalPolicy) => void phase3.patch({ renewalPolicy })}
+        />
+      </div>
     </WizardShell>
   );
 }
