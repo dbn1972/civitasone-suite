@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
+import { useToast } from "@/app/_components/ds/Toast";
 import { formatRupees } from "@/lib/formatters";
 
 type Props = {
@@ -44,6 +45,7 @@ export function PayrollRunActions({
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"good" | "bad">("good");
+  const { toast } = useToast();
 
   const cur = stageIndex(status);
 
@@ -74,6 +76,13 @@ export function PayrollRunActions({
           : action === "disburse"
             ? `Disbursement of ${formatRupees(netAmount)} to ${employeeCount} employees initiated.`
             : `Payroll run for ${payPeriod} reverted to draft.`,
+      );
+      toast.success(
+        action === "approve"
+          ? `✓ Payroll run for ${payPeriod} approved`
+          : action === "disburse"
+            ? `✓ Disbursement of ${formatRupees(netAmount)} initiated`
+            : `✓ Run reverted to draft`,
       );
       setPending(null);
       router.refresh();
