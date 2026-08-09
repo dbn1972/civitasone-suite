@@ -4,6 +4,11 @@ import type { RequiredDocument } from "../catalogue/domain.js";
 import { tradeLicenseManifestBlocks } from "./manifests/trade-license.js";
 import { hallBookingManifestBlocks } from "./manifests/hall-booking.js";
 import { eventPermissionManifestBlocks } from "./manifests/event-permission.js";
+import { pgrManifestBlocks } from "./manifests/pgr.js";
+import { waterConnectionManifestBlocks } from "./manifests/water-connection.js";
+import { fireNocManifestBlocks } from "./manifests/fire-noc.js";
+import { propertyTaxManifestBlocks } from "./manifests/property-tax.js";
+import { birthDeathManifestBlocks } from "./manifests/birth-death.js";
 
 // Every optional block is written from a nullable DB column via `?? undefined`
 // (see manifest-export.ts). Under exactOptionalPropertyTypes a bare `?: T`
@@ -38,7 +43,13 @@ export function blocksFromManifest(
 ): PackManifestBlocks | null {
   const raw = manifest?.blocks;
   if (raw && typeof raw === "object") return raw as PackManifestBlocks;
+  // municipal-in-v1 reference pack (BRD §8.1) — all six services.
   if (packKey === "pack:trade-license") return tradeLicenseManifestBlocks();
+  if (packKey === "pack:pgr") return pgrManifestBlocks();
+  if (packKey === "pack:water-connection") return waterConnectionManifestBlocks();
+  if (packKey === "pack:fire-noc") return fireNocManifestBlocks();
+  if (packKey === "pack:property-tax") return propertyTaxManifestBlocks();
+  if (packKey === "pack:birth-death") return birthDeathManifestBlocks();
   // Non-municipal packs (Phase 3 / DoD (g)) — same 8-block wiring, other sectors.
   if (packKey === "pack:hall-booking") return hallBookingManifestBlocks();
   if (packKey === "pack:event-permission") return eventPermissionManifestBlocks();
