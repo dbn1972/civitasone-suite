@@ -300,3 +300,52 @@ body.login-pf {
 .login-pf-settings {
   display: none !important;
 }
+
+/* ─── Demo Credentials Box (injected via template.ftl) ────────────── */
+#demo-credentials {
+  margin-top: 24px !important;
+  padding: 16px !important;
+  background: #f0f9ff !important;
+  border: 1px solid #bae6fd !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  color: #0c4a6e !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
+}
+
+#demo-credentials h4 {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: #0369a1 !important;
+  margin: 0 0 8px 0 !important;
+}
+
+#demo-credentials table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+#demo-credentials td {
+  padding: 3px 0 !important;
+  font-size: 12px !important;
+  vertical-align: top !important;
+}
+
+#demo-credentials .label {
+  color: #64748b !important;
+  width: 70px !important;
+}
+
+#demo-credentials .value {
+  font-family: 'SF Mono', 'Fira Code', monospace !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+}
+
+#demo-credentials hr {
+  border: none !important;
+  border-top: 1px solid #e0f2fe !important;
+  margin: 6px 0 !important;
+}
