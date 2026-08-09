@@ -22,6 +22,9 @@ import { parkingPassManifestBlocks, parkingPassFormDesign } from "./parking-pass
 import { marketStallManifestBlocks, marketStallFormDesign } from "./market-stall.js";
 import { municipalPropertyRentManifestBlocks, municipalPropertyRentFormDesign } from "./municipal-property-rent.js";
 import { generalNocManifestBlocks, generalNocFormDesign } from "./general-noc.js";
+import { sewerConnectionManifestBlocks, sewerConnectionFormDesign } from "./sewer-connection.js";
+import { desludgingManifestBlocks, desludgingFormDesign } from "./desludging-booking.js";
+import { citizenAppointmentManifestBlocks, citizenAppointmentFormDesign } from "./citizen-appointment.js";
 import { pgrFormDesign } from "./pgr.js";
 
 type Pattern = "certificate" | "booking" | "collection" | "grievance";
@@ -36,6 +39,9 @@ const CATALOGUE: readonly [string, Record<string, unknown>, Pattern][] = [
   ["pack:market-stall", marketStallManifestBlocks(), "certificate"],
   ["pack:municipal-property-rent", municipalPropertyRentManifestBlocks(), "collection"],
   ["pack:general-noc", generalNocManifestBlocks(), "certificate"],
+  ["pack:sewer-connection", sewerConnectionManifestBlocks(), "certificate"],
+  ["pack:desludging-booking", desludgingManifestBlocks(), "booking"],
+  ["pack:citizen-appointment", citizenAppointmentManifestBlocks(), "booking"],
 ];
 
 const FORMS: readonly [string, ReturnType<typeof generalNocFormDesign>][] = [
@@ -48,6 +54,9 @@ const FORMS: readonly [string, ReturnType<typeof generalNocFormDesign>][] = [
   ["market-stall", marketStallFormDesign()],
   ["municipal-property-rent", municipalPropertyRentFormDesign()],
   ["general-noc", generalNocFormDesign()],
+  ["sewer-connection", sewerConnectionFormDesign()],
+  ["desludging-booking", desludgingFormDesign()],
+  ["citizen-appointment", citizenAppointmentFormDesign()],
 ];
 
 interface Lane { key: string; designationId?: string; escalationDesignationId?: string; slaDays?: number }
@@ -63,8 +72,8 @@ describe("catalogue packs — every one resolves", () => {
     expect(blocksFromManifest(key, null), key).not.toBeNull();
   });
 
-  it("registers nine distinct packs", () => {
-    expect(new Set(CATALOGUE.map(([k]) => k)).size).toBe(9);
+  it("registers twelve distinct packs", () => {
+    expect(new Set(CATALOGUE.map(([k]) => k)).size).toBe(12);
   });
 });
 
@@ -254,6 +263,90 @@ describe("renewal policies behave at runtime", () => {
       expect(renewalEligibility(policy as never, issued, insideWindow).state, key).toBe("open");
       expect(renewalEligibility(policy as never, issued, issued).state, key).toBe("too_early");
     }
+  });
+});
+
+describe("sewer connection — water-connection variant for standalone sewerage departments", () => {
+  const sw = sewerConnectionManifestBlocks();
+
+  it("follows the same 4-lane pattern as water-connection", () => {
+    const keys = lanesOf(sw).map((l) => l.key);
+    expect(keys).toEqual(["document_verification", "field_inspection", "decision", "execution"]);
+  });
+
+  it("uses a separate HOA from water", () => {
+    expect(sw.hoaCode).toBe("1402");
+  });
+
+  it("issues a connection order, not a certificate", () => {
+    expect(sw.issuanceType).toBe("connection_order");
+  });
+
+  it("verifies documents before the field visit", () => {
+    for (const doc of sw.requiredDocuments) {
+      expect(doc.verifiedAtLane).toBe("document_verification");
+    }
+  });
+
+  it("is appealable", () => {
+    expect(sw.appealLinkage?.appealable).toBe(true);
+  });
+});
+
+describe("desludging — booking with field-evidence closure", () => {
+  const ds = desludgingManifestBlocks();
+
+  it("has a scheduling lane followed by a field closure lane", () => {
+    const keys = lanesOf(ds).map((l) => l.key);
+    expect(keys).toEqual(["scheduling", "field_closure"]);
+  });
+
+  it("requires no documents to book", () => {
+    expect(ds.requiredDocuments).toEqual([]);
+  });
+
+  it("reaches citizens who will call rather than browse", () => {
+    expect(ds.channels).toEqual(expect.arrayContaining(["counter", "assisted", "whatsapp"]));
+  });
+
+  it("completes within 5 days", () => {
+    expect(ds.slaDays).toBe(5);
+  });
+
+  it("charges a fee by volume slab", () => {
+    expect(ds.feeModel).toBe("slab");
+    expect(ds.feeFromMinor).toBeGreaterThan(0);
+  });
+});
+
+describe("citizen appointment — zero-barrier office visit booking", () => {
+  const ap = citizenAppointmentManifestBlocks();
+
+  it("is free to book", () => {
+    expect(ap.feeFromMinor).toBe(0);
+  });
+
+  it("confirms through a single lane within 1 day", () => {
+    expect(ap.slaDays).toBe(1);
+    expect(lanesOf(ap)).toHaveLength(1);
+    expect(lanesOf(ap)[0]?.key).toBe("confirmation");
+  });
+
+  it("requires no documents", () => {
+    expect(ap.requiredDocuments).toEqual([]);
+  });
+
+  it("reaches citizens who will call or walk in", () => {
+    expect(ap.channels).toEqual(expect.arrayContaining(["portal", "counter", "assisted", "whatsapp"]));
+  });
+
+  it("issues a confirmation token", () => {
+    expect(ap.issuanceType).toBe("confirmation");
+    expect(ap.outputs[0]?.type).toBe("confirmation");
+  });
+
+  it("is not renewable — each visit is a separate booking", () => {
+    expect(ap.renewalPolicy?.renewable).toBe(false);
   });
 });
 

@@ -18,6 +18,9 @@ import { parkingPassManifestBlocks } from "./manifests/parking-pass.js";
 import { marketStallManifestBlocks } from "./manifests/market-stall.js";
 import { municipalPropertyRentManifestBlocks } from "./manifests/municipal-property-rent.js";
 import { generalNocManifestBlocks } from "./manifests/general-noc.js";
+import { sewerConnectionManifestBlocks } from "./manifests/sewer-connection.js";
+import { desludgingManifestBlocks } from "./manifests/desludging-booking.js";
+import { citizenAppointmentManifestBlocks } from "./manifests/citizen-appointment.js";
 
 // Every optional block is written from a nullable DB column via `?? undefined`
 // (see manifest-export.ts). Under exactOptionalPropertyTypes a bare `?: T`
@@ -72,6 +75,10 @@ export function blocksFromManifest(
   if (packKey === "pack:market-stall") return marketStallManifestBlocks();
   if (packKey === "pack:municipal-property-rent") return municipalPropertyRentManifestBlocks();
   if (packKey === "pack:general-noc") return generalNocManifestBlocks();
+  // P0 gap closure — sewerage, desludging, appointments.
+  if (packKey === "pack:sewer-connection") return sewerConnectionManifestBlocks();
+  if (packKey === "pack:desludging-booking") return desludgingManifestBlocks();
+  if (packKey === "pack:citizen-appointment") return citizenAppointmentManifestBlocks();
   return null;
 }
 
