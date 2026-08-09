@@ -40,8 +40,8 @@ import {
   updateRemoval,
   findRemovalById,
 } from "./repo.js";
-import type {
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import type {
   CreateComplaintPayload,
   VerifyComplaintPayload,
   IssueNoticePayload,
