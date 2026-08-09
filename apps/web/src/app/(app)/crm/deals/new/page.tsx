@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useToast } from "@/app/_components/ds/Toast";
+import { PageHeader } from "@/app/_components/ds";
 
 type ContactOption = { id: string; name: string };
 
@@ -18,6 +20,7 @@ const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marg
 
 export default function NewDealPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     name: "",
     stage: "Lead",
@@ -76,6 +79,7 @@ export default function NewDealPage() {
       });
       if (!res.ok) throw new Error((await res.text()) || "Create failed");
       setMessage("Deal created.");
+      toast.success("Deal created successfully.");
       setTimeout(() => router.push("/crm/deals"), 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the deal.");
@@ -86,11 +90,7 @@ export default function NewDealPage() {
 
   return (
     <>
-      <a className="back" href="/crm/deals">← Deal Pipeline</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>New Deal</h1>
-        <div className="sub">Create an opportunity and place it on the pipeline.</div>
-      </div>
+      <PageHeader title="New Deal" subtitle="Create an opportunity and place it on the pipeline." back="/crm/deals" backLabel="Deals" />
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
           {message}

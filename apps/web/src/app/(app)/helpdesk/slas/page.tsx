@@ -72,6 +72,8 @@ export default async function Page() {
             filterable
             filterPlaceholder="Filter SLA queue…"
             pageSize={15}
+            exportable
+            exportFilename="sla-breached-tickets"
           />
         )}
       </div>

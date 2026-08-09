@@ -65,6 +65,8 @@ export default async function Page() {
             filterable
             filterPlaceholder="Filter catalogue…"
             pageSize={15}
+            exportable
+            exportFilename="catalogue-offerings"
           />
         )}
       </div>

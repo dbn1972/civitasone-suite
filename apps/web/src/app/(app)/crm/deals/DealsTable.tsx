@@ -77,9 +77,6 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <h3 style={{ marginRight: "auto" }}>Deals</h3>
         <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
-        <button type="button" className="btn ghost" onClick={exportCsv} disabled={tableRows.length === 0} style={{ minHeight: 44 }}>
-          Export
-        </button>
       </div>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
@@ -100,6 +97,11 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
           rows={tableRows}
           rowHref={(row) => `/crm/deals/${row.id}`}
           sortable
+          filterable
+          filterPlaceholder="Filter deals by name, account or stage…"
+          exportable
+          exportFilename="deals"
+          pageSize={15}
         />
       )}
     </div>

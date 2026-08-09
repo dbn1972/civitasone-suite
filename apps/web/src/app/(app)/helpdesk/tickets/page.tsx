@@ -26,6 +26,8 @@ export default async function Page() {
       <PageHeader
         title="Citizen Tickets"
         subtitle="Tickets, SLAs, agents, queues and knowledge base."
+        back="/helpdesk"
+        backLabel="Helpdesk"
         actions={
           <>
             <PrintExportButton label="Export" documentTitle="Helpdesk Tickets" />
