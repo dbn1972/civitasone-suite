@@ -54,6 +54,13 @@ export function pgrFormDesign() {
         "Blocked drain / sewerage",
         "Damaged road",
         "Stray animals",
+        // Added so the four commonest remaining complaint types route to the
+        // right crew instead of falling into "Other", where they lose their
+        // category-based auto-assignment and sit in a general queue.
+        "Public toilet / sanitation",
+        "Parks and trees",
+        "Encroachment on road or footpath",
+        "Unauthorised construction",
         "Other",
       ],
       helpText: "Pick the closest category — it decides which team receives the complaint.",
@@ -99,7 +106,8 @@ export function pgrManifestBlocks() {
   const form = pgrFormDesign();
   return {
     description:
-      "Report a civic problem — water, street lights, garbage, drains or roads. " +
+      "Report a civic problem — water, street lights, garbage, drains, roads, parks, " +
+      "sanitation, stray animals, encroachment or unauthorised construction. " +
       "There is no fee. You will be told who is handling it and when it is resolved.",
     slaDays: 7,
     formId: PGR_FORM_ID,
