@@ -57,16 +57,28 @@
         </#if>
 
         <div id="demo-credentials">
-            <h4>Demo Credentials</h4>
-            <table>
-                <tr><td class="label">Admin</td><td class="value">admin@civitasone.dev</td></tr>
-                <tr><td colspan="2"><hr/></td></tr>
-                <tr><td class="label">HR</td><td class="value">priya</td></tr>
-                <tr><td colspan="2"><hr/></td></tr>
-                <tr><td class="label">Employee</td><td class="value">meera</td></tr>
-                <tr><td colspan="2"><hr/></td></tr>
-                <tr><td class="label">Password</td><td class="value">CivitasOne#2026!</td></tr>
-            </table>
+            <div class="demo-header">
+                <span class="demo-badge">SANDBOX</span>
+                <span class="demo-title">Test Accounts</span>
+            </div>
+            <div class="demo-accounts">
+                <div class="demo-account">
+                    <div class="demo-role">Super Admin</div>
+                    <div class="demo-user">admin@civitasone.dev</div>
+                </div>
+                <div class="demo-account">
+                    <div class="demo-role">HR Admin</div>
+                    <div class="demo-user">priya</div>
+                </div>
+                <div class="demo-account">
+                    <div class="demo-role">Employee</div>
+                    <div class="demo-user">meera</div>
+                </div>
+            </div>
+            <div class="demo-password">
+                <span class="demo-pw-label">Password (all accounts):</span>
+                <code class="demo-pw-value">CivitasOne#2026!</code>
+            </div>
         </div>
       </div>
     </div>
