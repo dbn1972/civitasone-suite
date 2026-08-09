@@ -226,3 +226,69 @@ input[type="submit"] {
 body.login-pf {
   background-image: none !important;
 }
+
+/* ─── Language Selector — top-right corner, subtle ────────────────── */
+#kc-locale {
+  position: absolute !important;
+  top: 16px !important;
+  right: 20px !important;
+  z-index: 10 !important;
+}
+
+#kc-locale-dropdown {
+  display: inline-block !important;
+}
+
+#kc-current-locale-link {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  background: rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 6px !important;
+  padding: 5px 10px !important;
+  cursor: pointer !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
+}
+
+#kc-current-locale-link:hover {
+  background: rgba(255,255,255,0.15) !important;
+  color: #e2e8f0 !important;
+}
+
+.pf-c-dropdown__menu {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+  padding: 4px !important;
+  min-width: 120px !important;
+}
+
+.pf-c-dropdown__menu-item {
+  font-size: 13px !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  color: #334155 !important;
+  text-decoration: none !important;
+  display: block !important;
+}
+
+.pf-c-dropdown__menu-item:hover {
+  background: #f1f5f9 !important;
+  color: #4f46e5 !important;
+}
+
+/* ─── Fix form-group settings (locale container in form) ──────────── */
+.login-pf-settings {
+  position: relative !important;
+  height: 0 !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ─── Ensure card has relative positioning for locale absolute ─────── */
+.login-pf-page .card-pf {
+  position: relative !important;
+  overflow: visible !important;
+}
