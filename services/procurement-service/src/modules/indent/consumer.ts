@@ -8,13 +8,15 @@ import * as repo from "./repo.js";
 import { assertTransitionAllowed, assertDistinctMakerChecker } from "./domain.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { IndentItemInsert } from "./schema.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const INDENT_WORKFLOW_NAME = "Procurement Indent Approval";
 const TENDER_THRESHOLD_MINOR = 2500000n; // Rs 25,000 in paise (GFR Rule 145)
 
-export function registerIndentConsumers(queue: Queue): void {
+export function registerIndentConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.indentCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; indentNo: string; department: string; purpose: string;

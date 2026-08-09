@@ -8,6 +8,7 @@ import * as brandRepo from "./brand-repo.js";
 import { BRAND_RESOURCE } from "./brand-defaults.js";
 import type { TokenView } from "./schema.js";
 import type { ApplyBrandPresetPayload, UpsertBrandConfigPayload } from "./commands.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -19,7 +20,8 @@ function brandConfigKey(tenantId: string) {
   return cache.makeKey(tenantId, BRAND_RESOURCE, "config");
 }
 
-export function registerTokenConsumers(queue: Queue): void {
+export function registerTokenConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<TokenView>(COMMANDS.createToken, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

@@ -9,6 +9,7 @@ import { computeFileDueBy, computeNotingHash, deriveChildFileNo, assertValidFile
 import * as repo from "./repo.js";
 import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -54,7 +55,8 @@ async function signNotingChain(
   return { notingId: opts.notingId, dscHash, signatureRef, chainSeq };
 }
 
-export function registerFilesConsumers(queue: Queue): void {
+export function registerFilesConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.fileCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; fileNo: string; subject: string; dept: string;

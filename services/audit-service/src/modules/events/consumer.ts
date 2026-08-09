@@ -9,8 +9,10 @@ import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { computeHash, type IngestPayload } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 export function registerAuditConsumers(q: Queue): void {
+  const queue = tenantScoped(rawQueue);
   const handleAuditEvent = async (msg: {
     messageId: string;
     tenantId: string;
