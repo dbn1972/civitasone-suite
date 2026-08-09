@@ -15,7 +15,7 @@
  * PATCH is idempotent so the next successful save carries it.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchServiceDefinition,
   updateServiceDefinition,
@@ -78,24 +78,50 @@ export function usePhase3Config(definitionId: string) {
     };
   }, [definitionId]);
 
+  // Pending edits are coalesced and flushed on a timer, matching the 2s debounce
+  // the other Designer forms use. This is not only about network chatter: an
+  // update is a CQRS command, so every call becomes an outbox message, a
+  // consumer apply, an audit row and a cache invalidation. Saving per keystroke
+  // would turn typing one designation into two dozen audit entries.
+  const pending = useRef<Partial<Phase3Config>>({});
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(async () => {
+    const next = pending.current;
+    pending.current = {};
+    if (Object.keys(next).length === 0) return;
+    setSaveState("saving");
+    try {
+      // offeringOfficeIds is read-only here — it belongs to B1 and is loaded
+      // only so the override panel can offer the right offices. Sending it
+      // back would let this hook silently overwrite a B1 edit.
+      const writable: Record<string, unknown> = { ...next };
+      delete writable.offeringOfficeIds;
+      await updateServiceDefinition(definitionId, writable as never);
+      setSaveState("saved");
+    } catch {
+      setSaveState("offline");
+    }
+  }, [definitionId]);
+
   const patch = useCallback(
-    async (next: Partial<Phase3Config>) => {
+    (next: Partial<Phase3Config>) => {
+      // Local state updates immediately so typing is never blocked on the round
+      // trip; only the write is deferred.
       setConfig((c) => ({ ...c, ...next }));
-      setSaveState("saving");
-      try {
-        // offeringOfficeIds is read-only here — it belongs to B1 and is loaded
-        // only so the override panel can offer the right offices. Sending it
-        // back would let this hook silently overwrite a B1 edit.
-        const writable: Record<string, unknown> = { ...next };
-        delete writable.offeringOfficeIds;
-        await updateServiceDefinition(definitionId, writable as never);
-        setSaveState("saved");
-      } catch {
-        setSaveState("offline");
-      }
+      pending.current = { ...pending.current, ...next };
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => { void flush(); }, 2000);
     },
-    [definitionId],
+    [flush],
   );
+
+  // Flush rather than merely cancel on unmount: a designer who edits a field and
+  // immediately clicks Next would otherwise lose the last two seconds of typing.
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    void flush();
+  }, [flush]);
 
   return { config, loaded, saveState, setSaveState, patch };
 }
