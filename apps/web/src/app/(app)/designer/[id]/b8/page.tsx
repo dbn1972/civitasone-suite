@@ -8,7 +8,9 @@ import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { NotificationsDesignState } from "@/app/_components/ds/designer/notificationTypes";
 import { NotificationsBuilder } from "../../_components/NotificationsBuilder";
+import { WebhookSubscriptionsBuilder } from "../../_components/WebhookSubscriptionsBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { usePhase3Config } from "../../_data/usePhase3Config";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
@@ -21,6 +23,8 @@ import { useDesignerWizard } from "../../_data/useDesignerWizard";
 
 export default function DesignerB8Page() {
   const params = useParams<{ id: string }>();
+  // FN-30 — outbound webhooks are notifications to other agencies.
+  const phase3 = usePhase3Config(params.id);
   const router = useRouter();
   const wizard = useDesignerWizard(params.id, "b8");
 
@@ -145,6 +149,12 @@ export default function DesignerB8Page() {
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
       />
+      <div style={{ marginTop: 24 }}>
+        <WebhookSubscriptionsBuilder
+          value={phase3.config.webhookSubscriptions as never}
+          onChange={(webhookSubscriptions) => void phase3.patch({ webhookSubscriptions })}
+        />
+      </div>
     </WizardShell>
   );
 }

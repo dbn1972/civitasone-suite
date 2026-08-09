@@ -54,6 +54,14 @@ function baseDef(overrides: Partial<ServiceDefinitionRow> = {}): ServiceDefiniti
     allowedApplicantTypes: ["citizen"],
     applicantTypeRejectMessage: null,
     profileAttributeBindings: [],
+    // Phase 3 block config — unset on this fixture; the behaviour under test
+    // predates it and must stay unaffected by its presence.
+    officeOverrides: [],
+    webhookSubscriptions: [],
+    locales: [],
+    appealLinkage: null,
+    rtiLinkage: null,
+    renewalPolicy: null,
     submittedBy: null,
     publishedBy: null,
     publishedAt: null,

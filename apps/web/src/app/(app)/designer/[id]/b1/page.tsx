@@ -7,13 +7,18 @@ import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import { CatalogueB1Form, type CatalogueB1Values } from "../../_components/CatalogueB1Form";
 import { ApplicantTypesForm, type ApplicantTypesValues } from "../../_components/ApplicantTypesForm";
+import { GovernanceLinkageBuilder } from "../../_components/GovernanceLinkageBuilder";
 import { fetchServiceDefinition } from "../../_data/designerApi";
+import { usePhase3Config } from "../../_data/usePhase3Config";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB1Page() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const router = useRouter();
+
+  // FN-27/FN-28/FN-18 — service-level governance metadata belongs with identity.
+  const phase3 = usePhase3Config(params.id);
 
   const queryPattern = search.get("pattern") ?? "certificate";
   const queryName = search.get("name") ?? "";
@@ -120,6 +125,16 @@ export default function DesignerB1Page() {
           initial={applicantInitial}
           servicePattern={meta.pattern}
           onSaveState={setSaveState}
+        />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <GovernanceLinkageBuilder
+          appeal={phase3.config.appealLinkage ?? null}
+          rti={phase3.config.rtiLinkage ?? null}
+          locales={phase3.config.locales}
+          onAppealChange={(appealLinkage) => void phase3.patch({ appealLinkage })}
+          onRtiChange={(rtiLinkage) => void phase3.patch({ rtiLinkage })}
+          onLocalesChange={(locales) => void phase3.patch({ locales })}
         />
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>

@@ -38,6 +38,9 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       profileAttributeBindings?: unknown[];
       engineBindings?: unknown[];
       laneBindings?: unknown[];
+      // Phase 3 block config.
+      officeOverrides?: unknown[]; webhookSubscriptions?: unknown[]; locales?: string[];
+      appealLinkage?: unknown; rtiLinkage?: unknown; renewalPolicy?: unknown;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -68,6 +71,14 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         allowedApplicantTypes: (p.allowedApplicantTypes ?? ["citizen"]) as never,
         applicantTypeRejectMessage: p.applicantTypeRejectMessage ?? null,
         profileAttributeBindings: (p.profileAttributeBindings ?? []) as never,
+        // Phase 3 — list-shaped blocks default to empty; object-shaped ones stay
+        // NULL so "never configured" survives a create.
+        officeOverrides: (p.officeOverrides ?? []) as never,
+        webhookSubscriptions: (p.webhookSubscriptions ?? []) as never,
+        locales: (p.locales ?? []) as never,
+        appealLinkage: (p.appealLinkage ?? null) as never,
+        rtiLinkage: (p.rtiLinkage ?? null) as never,
+        renewalPolicy: (p.renewalPolicy ?? null) as never,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "definition_create", p.id);
@@ -88,6 +99,11 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       allowedApplicantTypes?: unknown[]; applicantTypeRejectMessage?: string | null;
       profileAttributeBindings?: unknown[];
       laneBindings?: unknown[];
+      // Phase 3 block config. The three object-shaped ones are nullable so a
+      // designer can clear a previously-configured block, which is why they are
+      // `| null` rather than merely optional.
+      officeOverrides?: unknown[]; webhookSubscriptions?: unknown[]; locales?: string[];
+      appealLinkage?: unknown | null; rtiLinkage?: unknown | null; renewalPolicy?: unknown | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -118,6 +134,15 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.allowedApplicantTypes !== undefined) patch.allowedApplicantTypes = p.allowedApplicantTypes;
       if (p.applicantTypeRejectMessage !== undefined) patch.applicantTypeRejectMessage = p.applicantTypeRejectMessage;
       if (p.profileAttributeBindings !== undefined) patch.profileAttributeBindings = p.profileAttributeBindings;
+      // Phase 3 — `undefined` means "not in this patch", `null` means "clear it".
+      // Only the object-shaped blocks can be cleared; the list-shaped ones are
+      // cleared by sending [].
+      if (p.officeOverrides !== undefined) patch.officeOverrides = p.officeOverrides;
+      if (p.webhookSubscriptions !== undefined) patch.webhookSubscriptions = p.webhookSubscriptions;
+      if (p.locales !== undefined) patch.locales = p.locales;
+      if (p.appealLinkage !== undefined) patch.appealLinkage = p.appealLinkage;
+      if (p.rtiLinkage !== undefined) patch.rtiLinkage = p.rtiLinkage;
+      if (p.renewalPolicy !== undefined) patch.renewalPolicy = p.renewalPolicy;
       await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
       await audit(tx, msg, "definition_update", p.id);
     });

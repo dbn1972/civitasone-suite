@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
+import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
 import {
   fetchPublishedByKey,
@@ -120,6 +121,13 @@ export default function DesignerReviewPage() {
         }
       >
         <VersionDiff current={wizard.def} published={published} />
+
+        {/* FN-32 — sits above the publish controls on purpose: the approver
+            should see what is wrong with the form before deciding, not after. */}
+        <div style={{ marginTop: 24 }}>
+          <AccessibilityPreview definitionId={params.id} />
+        </div>
+
         <div style={{ marginTop: 24 }}>{readOnlySummary(wizard.def)}</div>
 
         {!wizard.meta.submittedBy ? (

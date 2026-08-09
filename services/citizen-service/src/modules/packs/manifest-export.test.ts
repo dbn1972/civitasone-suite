@@ -48,6 +48,14 @@ function sampleDef(overrides: Partial<ServiceDefinitionRow> = {}): ServiceDefini
     engineBindings: [],
     laneBindings: [],
     profileAttributeBindings: [],
+    // Phase 3 block config — unset on this fixture; the behaviour under test
+    // predates it and must stay unaffected by its presence.
+    officeOverrides: [],
+    webhookSubscriptions: [],
+    locales: [],
+    appealLinkage: null,
+    rtiLinkage: null,
+    renewalPolicy: null,
     allowedApplicantTypes: ["citizen"], // matches the column default
     applicantTypeRejectMessage: null, // nullable text column
     ...overrides,

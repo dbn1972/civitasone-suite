@@ -4,7 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { z } from "zod";
-import { idParam, createDefinitionBody, updateDefinitionBody, serviceKeyQuery } from "./validators.js";
+import { idParam, createDefinitionBody, updateDefinitionBody, serviceKeyQuery, localizationQuery } from "./validators.js";
+import * as derived from "./derived.js";
 
 const rejectBody = z.object({ comment: z.string().min(1).max(2000) });
 import * as commands from "./commands.js";
@@ -80,6 +81,66 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const def = await queries.getDefinition(ctx.tenantId, id);
     if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
     return reply.send(def);
+  });
+
+  /* ── Phase 3 derived views ────────────────────────────────────────────────
+   * FN-32, FN-16, FN-31, FN-28 and FN-18 store nothing: each is computed from
+   * blocks the definition already carries. Serving them as derived endpoints
+   * rather than persisted columns means a stored copy can never drift from the
+   * form or fee it describes.
+   */
+
+  /** FN-32 — accessibility & GIGW preview for the definition's form. */
+  app.get("/v1/citizen/catalogue/services/:id/a11y-preview", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const def = await queries.getDefinition(ctx.tenantId, id);
+    if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+    return reply.send({ data: derived.a11yPreviewFor(def) });
+  });
+
+  /** FN-16 + FN-31 — auto-attached reports and KPI tiles for this pattern. */
+  app.get("/v1/citizen/catalogue/services/:id/analytics", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const def = await queries.getDefinition(ctx.tenantId, id);
+    if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+    return reply.send({ data: derived.analyticsFor(def) });
+  });
+
+  /** FN-28 — the RTI catalogue entry, or null when not published to RTI. */
+  app.get("/v1/citizen/catalogue/services/:id/rti-entry", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const def = await queries.getDefinition(ctx.tenantId, id);
+    if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+    return reply.send({ data: derived.rtiEntryFor(def) });
+  });
+
+  /** FN-18 — translatable string inventory and per-locale coverage. */
+  app.get("/v1/citizen/catalogue/services/:id/localization", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const { locale } = localizationQuery.parse(req.query ?? {});
+    const def = await queries.getDefinition(ctx.tenantId, id);
+    if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
+    return reply.send({ data: derived.localizationFor(def, locale) });
+  });
+
+  /**
+   * FN-28 — the whole tenant's RTI catalogue export.
+   * Published services only: an unpublished draft is not a service the public
+   * can request information about yet.
+   */
+  app.get("/v1/citizen/catalogue/rti-export", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const defs = await queries.listDefinitions(ctx.tenantId);
+    return reply.send({ data: derived.rtiExport(defs) });
   });
 
   app.setErrorHandler((err, req, reply) => {

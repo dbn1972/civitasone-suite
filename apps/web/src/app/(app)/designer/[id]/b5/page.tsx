@@ -7,7 +7,9 @@ import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import { FeeBuilder } from "../../_components/FeeBuilder";
+import { OfficeOverridesBuilder } from "../../_components/OfficeOverridesBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { usePhase3Config } from "../../_data/usePhase3Config";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
@@ -17,6 +19,8 @@ import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
 
 export default function DesignerB5Page() {
   const params = useParams<{ id: string }>();
+  // FN-22 — per-office fee/SLA variants sit with Fee & Revenue.
+  const phase3 = usePhase3Config(params.id);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -177,6 +181,13 @@ export default function DesignerB5Page() {
         ) : (
           <Link href={`/designer/${params.id}/${next}`} className="btn primary">Next block →</Link>
         )}
+      </div>
+      <div style={{ marginTop: 24 }}>
+        <OfficeOverridesBuilder
+          value={phase3.config.officeOverrides as never}
+          offeringOfficeIds={phase3.config.offeringOfficeIds}
+          onChange={(officeOverrides) => void phase3.patch({ officeOverrides })}
+        />
       </div>
     </WizardShell>
   );

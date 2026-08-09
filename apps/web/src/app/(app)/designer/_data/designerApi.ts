@@ -46,6 +46,32 @@ export interface ServiceDefinitionDto {
   allowedApplicantTypes?: string[];
   applicantTypeRejectMessage?: string | null;
   profileAttributeBindings?: ProfileAttributeBindingDto[];
+  /** FN-18/FN-32 — locales this service publishes content in. */
+  locales?: string[];
+  /** FN-22 — per-office fee/SLA/document variants. */
+  officeOverrides?: unknown[];
+  /**
+   * FN-30 — outbound webhook subscriptions. The shared secret is NEVER returned
+   * by the API; each entry carries `secretConfigured` instead, so the UI can
+   * show whether one is set without ever holding its value.
+   */
+  webhookSubscriptions?: { id: string; url: string; events: string[]; active: boolean; secretConfigured?: boolean }[];
+  /** FN-27 — appeal path. null means never configured. */
+  appealLinkage?: { appealable: boolean; filingWindowDays?: number; appellateDesignationId?: string } | null;
+  /** FN-28 — RTI catalogue publication. */
+  rtiLinkage?: { published: boolean; pioDesignationId?: string; pioDesignationLabel?: string } | null;
+  /**
+   * FN-15 — renewal window and validity. `validityMode` is the exact union the
+   * API accepts, not a loose string: a typo here should fail at compile time
+   * rather than at the publish gate.
+   */
+  renewalPolicy?: {
+    renewable: boolean;
+    renewalWindowDays: number;
+    validityMode: "none" | "duration" | "fixed_date";
+    validityYears?: number;
+    validityFixedDate?: string;
+  } | null;
 }
 
 export interface CreateDefinitionPayload {
@@ -135,6 +161,70 @@ export async function fetchServiceDefinition(id: string): Promise<ServiceDefinit
     throw new Error(`Could not load service definition (${res.status}).`);
   }
   return res.json() as Promise<ServiceDefinitionDto>;
+}
+
+/* ── Phase 3 derived views (FN-32, FN-16, FN-31) ──────────────────────────
+ * Computed server-side from the definition's own blocks, never stored, so what
+ * the designer sees always describes the form as it stands right now.
+ */
+
+export interface A11yIssueDto {
+  code: string;
+  severity: "error" | "warning";
+  wcag: string;
+  fieldId?: string;
+  sectionId?: string;
+  message: string;
+}
+
+export interface A11yPreviewDto {
+  formAuthored: boolean;
+  passed: boolean;
+  issues: A11yIssueDto[];
+  errorCount: number;
+  warningCount: number;
+  reason?: string;
+}
+
+export interface KpiTileDto {
+  key: string;
+  title: string;
+  unit: "count" | "days" | "percent";
+  description: string;
+  higherIsBetter: boolean;
+  target?: number;
+}
+
+export interface ReportTemplateDto {
+  key: string;
+  title: string;
+  purpose: string;
+  columns: string[];
+  filters: string[];
+  audience: string[];
+}
+
+export interface ServiceAnalyticsDto {
+  pattern: string | null;
+  reports: ReportTemplateDto[];
+  tiles: KpiTileDto[];
+  reason?: string;
+}
+
+/** FN-32 — WCAG/GIGW preview of the generated form. */
+export async function fetchA11yPreview(id: string): Promise<A11yPreviewDto> {
+  const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/a11y-preview`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Could not run the accessibility preview (${res.status}).`);
+  const body = (await res.json()) as { data: A11yPreviewDto };
+  return body.data;
+}
+
+/** FN-16 + FN-31 — reports and KPI tiles this service will get on publish. */
+export async function fetchServiceAnalytics(id: string): Promise<ServiceAnalyticsDto> {
+  const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/analytics`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Could not load reporting configuration (${res.status}).`);
+  const body = (await res.json()) as { data: ServiceAnalyticsDto };
+  return body.data;
 }
 
 export async function waitForServiceDefinition(id: string, attempts = 40, delayMs = 250): Promise<ServiceDefinitionDto> {
