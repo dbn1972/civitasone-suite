@@ -3,6 +3,11 @@ import type { RequiredDocument, ServiceChannel, ServicePattern, FeeModel } from 
 import type { ApplicantType, ProfileAttributeBinding } from "../applicant-identity/domain.js";
 import type { EngineBinding } from "../engine-bindings/domain.js";
 import type { LaneBinding } from "./lane-bindings.js";
+// Phase 3 block config — the domain types live with their gates in packs/.
+import type { OfficeOverride } from "../packs/office-overrides.js";
+import type { ServiceWebhookSubscription } from "../packs/service-webhooks.js";
+import type { AppealLinkage, RtiLinkage } from "../packs/pack-linkage.js";
+import type { RenewalPolicy } from "../packs/renewal.js";
 
 export const catalogueSchema = pgSchema("catalogue");
 
@@ -46,6 +51,21 @@ export const serviceDefinitions = catalogueSchema.table("service_definitions", {
   allowedApplicantTypes: jsonb("allowed_applicant_types").$type<ApplicantType[]>().notNull().default(["citizen"]),
   applicantTypeRejectMessage: text("applicant_type_reject_message"),
   profileAttributeBindings: jsonb("profile_attribute_bindings").$type<ProfileAttributeBinding[]>().notNull().default([]),
+  /** FN-22 — per-offering-office fee/SLA/document variants (never form or workflow). */
+  officeOverrides:      jsonb("office_overrides").$type<OfficeOverride[]>().notNull().default([]),
+  /** FN-30 — outbound webhook subscriptions on application state changes. */
+  webhookSubscriptions: jsonb("webhook_subscriptions").$type<ServiceWebhookSubscription[]>().notNull().default([]),
+  /** FN-18/FN-32 — locales this service publishes content in, e.g. ["en","or"]. */
+  locales:              jsonb("locales").$type<string[]>().notNull().default([]),
+  // The three below are nullable on purpose: NULL means "never configured",
+  // which the publish gates treat differently from a configured-but-disabled
+  // object such as {appealable:false}.
+  /** FN-27 — optional appeal path for decisions on this service. */
+  appealLinkage:        jsonb("appeal_linkage").$type<AppealLinkage | null>(),
+  /** FN-28 — RTI catalogue publication toggle + PIO designation. */
+  rtiLinkage:           jsonb("rti_linkage").$type<RtiLinkage | null>(),
+  /** FN-15 — renewal window and validity model for the issued output. */
+  renewalPolicy:        jsonb("renewal_policy").$type<RenewalPolicy | null>(),
   submittedBy:          uuid("submitted_by"),
   publishedBy:          uuid("published_by"),
   publishedAt:          timestamp("published_at", { withTimezone: true }),

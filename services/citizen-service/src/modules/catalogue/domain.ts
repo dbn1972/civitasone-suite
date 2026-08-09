@@ -12,6 +12,10 @@ import {
   assertAllowedApplicantTypesConfig,
   assertProfileAttributeBindings,
 } from "../applicant-identity/domain.js";
+// Phase 3 publish gates — each module owns the rules for its own block.
+import { assertOfficeOverrides } from "../packs/office-overrides.js";
+import { assertWebhookSubscriptions } from "../packs/service-webhooks.js";
+import { assertAppealLinkage, assertRtiLinkage } from "../packs/pack-linkage.js";
 
 /** FN-24 — portal, mobile, CSC/counter, assisted, WhatsApp handoff, API. */
 export const SERVICE_CHANNELS = ["portal", "counter", "mobile", "assisted", "whatsapp", "api"] as const;
@@ -65,6 +69,12 @@ export function assertDefinitionPublishable(def: {
   profileAttributeBindings?: unknown;
   feeModel?: FeeModel | null;
   hoaCode?: string | null;
+  // Phase 3 block config — each validated by its own module's gate below.
+  officeOverrides?: unknown;
+  webhookSubscriptions?: unknown;
+  appealLinkage?: unknown;
+  rtiLinkage?: unknown;
+  offeringOfficeIds?: readonly string[] | null;
 }): void {
   if (typeof def.name !== "string" || def.name.trim().length === 0) throw new Error("DEF_MISSING_NAME");
   if (!Array.isArray(def.channels) || def.channels.length === 0) throw new Error("DEF_NO_CHANNELS");
@@ -90,6 +100,17 @@ export function assertDefinitionPublishable(def: {
     const hoa = typeof def.hoaCode === "string" ? def.hoaCode.trim() : "";
     if (hoa.length === 0) throw new Error("DEF_MISSING_HOA");
   }
+  // Phase 3 — each module owns its own rules; this is the single point where a
+  // definition is refused publication, so the gates belong here rather than at
+  // the route. A malformed override or a webhook aimed at an internal host must
+  // block publish, not degrade silently at runtime for one office.
+  assertOfficeOverrides(def.officeOverrides, {
+    offeringOfficeIds: def.offeringOfficeIds ?? null,
+    packDocuments: def.requiredDocuments,
+  });
+  assertWebhookSubscriptions(def.webhookSubscriptions);
+  assertAppealLinkage(def.appealLinkage);
+  assertRtiLinkage(def.rtiLinkage);
 }
 /** The mandatory docType checklist a citizen must provide for this definition. */
 export function mandatoryDocTypes(requiredDocuments: RequiredDocument[]): string[] {
