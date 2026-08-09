@@ -9,6 +9,15 @@ import { waterConnectionManifestBlocks } from "./manifests/water-connection.js";
 import { fireNocManifestBlocks } from "./manifests/fire-noc.js";
 import { propertyTaxManifestBlocks } from "./manifests/property-tax.js";
 import { birthDeathManifestBlocks } from "./manifests/birth-death.js";
+import { shopsEstablishmentsManifestBlocks } from "./manifests/shops-establishments.js";
+import { streetVendorManifestBlocks } from "./manifests/street-vendor.js";
+import { advertisementManifestBlocks } from "./manifests/advertisement-hoarding.js";
+import { roadCuttingManifestBlocks } from "./manifests/road-cutting.js";
+import { crematoriumManifestBlocks } from "./manifests/crematorium-booking.js";
+import { parkingPassManifestBlocks } from "./manifests/parking-pass.js";
+import { marketStallManifestBlocks } from "./manifests/market-stall.js";
+import { municipalPropertyRentManifestBlocks } from "./manifests/municipal-property-rent.js";
+import { generalNocManifestBlocks } from "./manifests/general-noc.js";
 
 // Every optional block is written from a nullable DB column via `?? undefined`
 // (see manifest-export.ts). Under exactOptionalPropertyTypes a bare `?: T`
@@ -53,6 +62,16 @@ export function blocksFromManifest(
   // Non-municipal packs (Phase 3 / DoD (g)) — same 8-block wiring, other sectors.
   if (packKey === "pack:hall-booking") return hallBookingManifestBlocks();
   if (packKey === "pack:event-permission") return eventPermissionManifestBlocks();
+  // Wider citizen-facing catalogue — the services a ULB issues in volume.
+  if (packKey === "pack:shops-establishments") return shopsEstablishmentsManifestBlocks();
+  if (packKey === "pack:street-vendor") return streetVendorManifestBlocks();
+  if (packKey === "pack:advertisement-hoarding") return advertisementManifestBlocks();
+  if (packKey === "pack:road-cutting") return roadCuttingManifestBlocks();
+  if (packKey === "pack:crematorium-booking") return crematoriumManifestBlocks();
+  if (packKey === "pack:parking-pass") return parkingPassManifestBlocks();
+  if (packKey === "pack:market-stall") return marketStallManifestBlocks();
+  if (packKey === "pack:municipal-property-rent") return municipalPropertyRentManifestBlocks();
+  if (packKey === "pack:general-noc") return generalNocManifestBlocks();
   return null;
 }
 
