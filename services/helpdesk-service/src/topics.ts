@@ -43,6 +43,7 @@ export const COMMANDS = {
   slaResume: "helpdesk.ticket.sla_resume",
   slaExtend: "helpdesk.ticket.sla_extend",
   cesSubmit: "helpdesk.ces.submit",
+  detectDuplicates: "helpdesk.ticket.detect_duplicates",
 } as const;
 
 /** TKT-11 — saved-views command topics (moved here from views-routes.ts so
@@ -72,6 +73,7 @@ export const EVENTS = {
   ticketsLinked: "helpdesk.ticket.linked",
   /** TKT-14 — ticket reopened from resolved/closed. */
   ticketReopened: "helpdesk.ticket.reopened",
+  duplicatesSuggested: "helpdesk.ticket.duplicates_suggested",
   /** TKT-11 — saved view lifecycle. */
   viewCreated: "helpdesk.view.created",
   viewUpdated: "helpdesk.view.updated",

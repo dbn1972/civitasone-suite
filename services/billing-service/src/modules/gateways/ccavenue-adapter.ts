@@ -17,6 +17,7 @@ import type {
   GatewayOrder,
   GatewayPaymentStatus,
   GatewayCaptureResult,
+  GatewayRefundResult,
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
@@ -207,6 +208,63 @@ export const ccavenueAdapter: PaymentGateway = {
       method: paymentMode,
       errorMessage: orderStatus === "Failure" ? statusMessage : undefined,
       updatedAt: new Date().toISOString(),
+    };
+  },
+
+  async refundPayment(orderId: string, amountPaise?: bigint): Promise<GatewayRefundResult> {
+    const merchantId = getMerchantId();
+    const accessCode = getAccessCode();
+    const workingKey = getWorkingKey();
+
+    const refundData = [
+      `merchant_id=${merchantId}`,
+      `reference_no=${orderId}`,
+      `refund_amount=${amountPaise != null ? (Number(amountPaise) / 100).toFixed(2) : ""}`,
+      `refund_ref_no=refund-${orderId}-${Date.now()}`,
+    ].join("&");
+
+    const encryptedData = encrypt(refundData, workingKey);
+    const params = new URLSearchParams({
+      encRequest: encryptedData,
+      access_code: accessCode,
+    });
+
+    const res = await fetchWithTimeout(`${BASE_URL}/apis/servlet/DoWebTrans?command=refundOrder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    if (!res.ok) {
+      throw new GatewayError(
+        `CCAvenue refund failed (${res.status})`,
+        "GATEWAY_REFUND_FAILED",
+        "ccavenue",
+        res.status,
+      );
+    }
+
+    const responseText = await res.text();
+    let decryptedData: string;
+    try {
+      decryptedData = decrypt(responseText.trim(), workingKey);
+    } catch {
+      throw new GatewayError("CCAvenue refund response decryption failed", "GATEWAY_DECRYPT_ERROR", "ccavenue");
+    }
+
+    const params2 = new URLSearchParams(decryptedData);
+    const refundStatus = params2.get("refund_status") ?? "";
+    const refundRefNo = params2.get("refund_ref_no") ?? `cca-refund-${orderId}`;
+
+    return {
+      gatewayOrderId: orderId,
+      refundId: refundRefNo,
+      gateway: "ccavenue",
+      refundedAmount: amountPaise ?? BigInt(0),
+      currency: "INR",
+      status: refundStatus === "0" ? "processed" : "failed",
+      refundedAt: new Date().toISOString(),
+      errorMessage: refundStatus !== "0" ? params2.get("reason") ?? undefined : undefined,
     };
   },
 };

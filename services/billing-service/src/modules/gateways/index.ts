@@ -16,6 +16,7 @@ import type {
   GatewayOrder,
   GatewayPaymentStatus,
   GatewayCaptureResult,
+  GatewayRefundResult,
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
@@ -115,6 +116,14 @@ export async function checkStatus(orderId: string): Promise<GatewayPaymentStatus
   );
 }
 
+export async function refundPayment(orderId: string, amountPaise?: bigint): Promise<GatewayRefundResult> {
+  const gateway = resolveGateway();
+
+  return withRetry(() =>
+    breaker.call(() => gateway.refundPayment(orderId, amountPaise)),
+  );
+}
+
 // ── Exports ───────────────────────────────────────────────────────
 
 export { GatewayError, CircuitBreakerOpenError };
@@ -124,6 +133,7 @@ export type {
   GatewayOrder,
   GatewayPaymentStatus,
   GatewayCaptureResult,
+  GatewayRefundResult,
   OrderMetadata,
 };
 export { isUpiEnabled, isEmandateEnabled } from "./upi-autopay.js";

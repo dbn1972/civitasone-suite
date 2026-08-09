@@ -21,6 +21,16 @@ export const refundDecideBody = z.object({
   reason: z.string().optional(),
 });
 
+export const createBatchReceiptBody = z.object({
+  assesseeId: z.string().uuid(),
+  demandIds: z.array(z.string().uuid()).min(1).max(20),
+  amountMinor: bigintString,
+  channel: z.string().min(1),
+  reference: z.string().min(1),
+  instrumentNo: z.string().optional(),
+  bankName: z.string().optional(),
+});
+
 export const createAdjustmentBody = z.object({
   assesseeId: z.string().uuid(),
   fromDemandId: z.string().uuid(),

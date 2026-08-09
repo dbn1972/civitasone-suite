@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMES, SOURCE, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { findSimilarTickets } from "./duplicate-detection.js";
 import { randomUUID } from "node:crypto";
 import { tickets } from "./schema.js";
 import { allocateTicketNo } from "../../shared/numbering.js";
@@ -248,6 +249,19 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     const row = await repo.findById(ticketId, msg.tenantId);
     if (row) await cache.put(keyFor(msg.tenantId, ticketId), row);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+
+    // GRV-004: fire-and-forget duplicate detection (async, non-blocking)
+    if (p.description) {
+      rawQueue.publish(COMMANDS.detectDuplicates, {
+        messageId: randomUUID(),
+        type: COMMANDS.detectDuplicates,
+        tenantId: msg.tenantId,
+        actorId: "system",
+        correlationId: msg.correlationId,
+        schemaVersion: "1.0",
+        payload: { ticketId, description: p.description, tenantId: msg.tenantId },
+      }).catch(() => {});
+    }
   });
 
   // ---- ITIL: transition status --------------------------------------------
@@ -557,6 +571,47 @@ export function registerTicketConsumers(rawQueue: Queue): void {
       if (row) await cache.put(keyFor(msg.tenantId, openedId), row);
       await cache.invalidateResource(msg.tenantId, RESOURCE);
     }
+  });
+
+  // ---- GRV-004: detect duplicate tickets -----------------------------------
+  queue.subscribe<{ ticketId: string; description: string; tenantId: string }>(COMMANDS.detectDuplicates, async (msg) => {
+    const p = msg.payload;
+    const recentTickets = await repo.listByTenant(p.tenantId, 100, 0);
+    const candidates = recentTickets
+      .filter((t) => t.id !== p.ticketId && t.status !== "closed")
+      .map((t) => ({ id: t.id, subject: t.subject ?? "", description: (t as unknown as { description?: string }).description ?? t.subject ?? "" }));
+
+    if (candidates.length === 0) return;
+
+    const similar = findSimilarTickets(p.description, candidates);
+    if (similar.length === 0) return;
+
+    // Auto-create "related" links for agent review
+    for (const s of similar) {
+      const linkId = randomUUID();
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, `dedup-${p.ticketId}-${s.ticketId}`))) return;
+        await enqueue(tx, {
+          topic: COMMANDS.linkTickets,
+          eventType: COMMANDS.linkTickets,
+          tenantId: p.tenantId,
+          actorId: "system",
+          correlationId: msg.correlationId,
+          payload: {
+            id: linkId,
+            tenantId: p.tenantId,
+            sourceTicketId: p.ticketId,
+            targetTicketId: s.ticketId,
+            linkType: "related",
+            createdBy: "system",
+            autoDetected: true,
+            similarity: s.similarity,
+          },
+        });
+      });
+    }
+
+    await cache.invalidateResource(p.tenantId, "ticket_links");
   });
 }
 

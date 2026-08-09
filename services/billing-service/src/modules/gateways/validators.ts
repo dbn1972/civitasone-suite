@@ -17,4 +17,8 @@ export const paymentIdParam = z.object({
   id: z.string().min(1).max(128),
 });
 
+export const refundPaymentBody = z.object({
+  amountPaise: z.number().int().min(100).optional(),
+});
+
 export type InitiatePaymentBody = z.infer<typeof initiatePaymentBody>;

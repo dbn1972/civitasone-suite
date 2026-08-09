@@ -16,6 +16,7 @@ import type {
   GatewayOrder,
   GatewayPaymentStatus,
   GatewayCaptureResult,
+  GatewayRefundResult,
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
@@ -214,6 +215,59 @@ export const payuAdapter: PaymentGateway = {
       method: txnDetails.mode,
       errorMessage: txnDetails.error_Message,
       updatedAt: new Date().toISOString(),
+    };
+  },
+
+  async refundPayment(orderId: string, amountPaise?: bigint): Promise<GatewayRefundResult> {
+    const merchantKey = getMerchantKey();
+    const salt = getSalt();
+    const command = "cancel_refund_transaction";
+    const hashStr = `${merchantKey}|${command}|${orderId}|${salt}`;
+    const hash = computeHash(hashStr);
+
+    const params = new URLSearchParams({
+      key: merchantKey,
+      command,
+      var1: orderId,
+      hash,
+    });
+
+    if (amountPaise != null) {
+      params.set("var2", (Number(amountPaise) / 100).toFixed(2));
+    }
+
+    const res = await fetchWithTimeout(`${BASE_URL}/merchant/postservice?form=2`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    if (!res.ok) {
+      throw new GatewayError(
+        `PayU refund failed (${res.status})`,
+        "GATEWAY_REFUND_FAILED",
+        "payu",
+        res.status,
+      );
+    }
+
+    const data = (await res.json()) as {
+      status: number;
+      result: string;
+      request_id?: string;
+    };
+
+    const processed = data.status === 1;
+    return {
+      gatewayOrderId: orderId,
+      refundId: data.request_id ?? `payu-refund-${orderId}`,
+      gateway: "payu",
+      refundedAmount: amountPaise ?? BigInt(0),
+      currency: "INR",
+      status: processed ? "processed" : "failed",
+      refundedAt: new Date().toISOString(),
+      errorCode: processed ? undefined : "REFUND_FAILED",
+      errorMessage: processed ? undefined : data.result,
     };
   },
 };

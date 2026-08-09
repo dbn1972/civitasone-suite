@@ -6,6 +6,10 @@ export function createReceipt(ctx: RequestContext, payload: Record<string, unkno
   return publishCommand(COMMANDS.receiptCreate, ctx, payload);
 }
 
+export function createBatchReceipt(ctx: RequestContext, payload: Record<string, unknown>) {
+  return publishCommand(COMMANDS.batchReceiptCreate, ctx, payload);
+}
+
 export function createRefund(ctx: RequestContext, payload: Record<string, unknown>) {
   return publishCommand(COMMANDS.refundCreate, ctx, payload);
 }

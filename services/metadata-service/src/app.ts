@@ -18,6 +18,7 @@ import { previewRoutes } from "./modules/preview/routes.js";
 import { numberingRoutes } from "./modules/numbering/routes.js";
 import { formRoutes } from "./modules/forms/routes.js";
 import { publicFormRoutes } from "./modules/forms/public-routes.js";
+import { configRoutes } from "./modules/config/routes.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -39,6 +40,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(compositionRoutes);
   await app.register(previewRoutes);
   await app.register(numberingRoutes);
+  // ADM-003 — tenant config import/export (entities, fields, layouts, rules, formulas, etc.)
+  await app.register(configRoutes);
   // FRM-04 / FRM-05 / FRM-07 — authenticated forms-engine routes.
   await app.register(formRoutes);
   // ── LM-002 ── UNAUTHENTICATED. Every route in this plugin skips JWT
