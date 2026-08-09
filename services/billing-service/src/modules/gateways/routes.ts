@@ -16,7 +16,7 @@ import { CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { initiatePaymentBody, paymentIdParam } from "./validators.js";
+import { initiatePaymentBody, paymentIdParam, refundPaymentBody } from "./validators.js";
 import * as gateways from "./index.js";
 import * as upiAutopay from "./upi-autopay.js";
 import { GatewayError } from "./types.js";
@@ -185,6 +185,99 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
         errorMessage: result.errorMessage,
       },
     });
+  });
+
+  /**
+   * POST /v1/billing/payments/:id/refund
+   *
+   * Refund a captured payment via the configured gateway.
+   * Partial refunds pass amountPaise; full refund omits it.
+   */
+  app.post("/v1/billing/payments/:id/refund", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+
+    const { id } = paymentIdParam.parse(req.params);
+    const body = refundPaymentBody.parse(req.body ?? {});
+    const amountPaise = body.amountPaise != null ? BigInt(body.amountPaise) : undefined;
+    const result = await gateways.refundPayment(id, amountPaise);
+
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.paymentRefund, {
+      messageId,
+      type: COMMANDS.paymentRefund,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        gatewayOrderId: result.gatewayOrderId,
+        refundId: result.refundId,
+        gateway: result.gateway,
+        refundedAmount: result.refundedAmount.toString(),
+        status: result.status,
+      },
+    }).catch(() => {/* best-effort audit */});
+
+    return reply.code(200).send({
+      data: {
+        gatewayOrderId: result.gatewayOrderId,
+        refundId: result.refundId,
+        gateway: result.gateway,
+        refundedAmount: result.refundedAmount.toString(),
+        currency: result.currency,
+        status: result.status,
+        refundedAt: result.refundedAt,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
+      },
+    });
+  });
+
+  /**
+   * POST /v1/billing/webhooks/payu
+   * PUBLIC route — no auth. PayU sends server-to-server callbacks here.
+   */
+  app.post("/v1/billing/webhooks/payu", async (req, reply) => {
+    const body = req.body as Record<string, string>;
+    const status = body?.["status"];
+    const txnId = body?.["txnid"] ?? "";
+    const mihpayid = body?.["mihpayid"] ?? "";
+
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.webhookPayu, {
+      messageId,
+      type: COMMANDS.webhookPayu,
+      tenantId: "system",
+      actorId: "system",
+      correlationId: messageId,
+      schemaVersion: "1.0",
+      payload: { ...(typeof body === "object" ? body : {}), txnId, mihpayid, status },
+    });
+
+    return reply.code(200).send({ status: "ok" });
+  });
+
+  /**
+   * POST /v1/billing/webhooks/ccavenue
+   * PUBLIC route — no auth. CCAvenue sends encrypted callbacks here.
+   */
+  app.post("/v1/billing/webhooks/ccavenue", async (req, reply) => {
+    const body = req.body as Record<string, string>;
+    const encResp = body?.["encResp"] ?? "";
+
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.webhookCcavenue, {
+      messageId,
+      type: COMMANDS.webhookCcavenue,
+      tenantId: "system",
+      actorId: "system",
+      correlationId: messageId,
+      schemaVersion: "1.0",
+      payload: { encResp },
+    });
+
+    return reply.code(200).send({ status: "ok" });
   });
 
   // Error handler for gateway routes

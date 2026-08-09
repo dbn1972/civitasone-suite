@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { validateMime, ALLOWED_MIME_TYPES } from "./mime.js";
+import { scanFile } from "@civitasone/scanner";
 
 const UPLOAD_ROLES = ["notification_admin", "notification_user", "helpdesk_admin", "crm_user", "crm_admin", "super_admin"];
 
@@ -17,41 +18,7 @@ const UPLOAD_ROLES = ["notification_admin", "notification_user", "helpdesk_admin
 function getMaxFileSize(): number {
   return Number(process.env.MAX_ATTACHMENT_BYTES ?? process.env.MAX_ATTACHMENT_SIZE_BYTES ?? 25 * 1024 * 1024); // 25MB default per spec
 }
-const CLAMAV_URL = process.env.CLAMAV_URL ?? "http://localhost:3310/scan";
-const CLAMAV_TIMEOUT_MS = Number(process.env.CLAMAV_TIMEOUT_MS ?? 10_000);
 const STORAGE_BASE = process.env.STORAGE_URL ?? "http://localhost:4566";
-
-interface ScanResult {
-  status: "clean" | "infected" | "error";
-}
-
-/**
- * Call ClamAV REST API to scan file buffer.
- * Returns scan result or 'pending' on failure (fail-open for availability).
- */
-async function scanFile(buffer: Buffer, filename: string): Promise<ScanResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CLAMAV_TIMEOUT_MS);
-  try {
-    const formData = new FormData();
-    formData.append("file", new Blob([buffer]), filename);
-
-    const res = await fetch(CLAMAV_URL, {
-      method: "POST",
-      body: formData,
-      signal: controller.signal,
-    });
-    if (!res.ok) return { status: "error" };
-    const json = await res.json() as { infected?: boolean; status?: string };
-    if (json.infected === true || json.status === "infected") return { status: "infected" };
-    return { status: "clean" };
-  } catch {
-    // Scanner unavailable — fail open
-    return { status: "error" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 /**
  * Generate a presigned download URL (simulated for now; in prod this calls S3/MinIO).

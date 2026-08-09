@@ -47,32 +47,28 @@ export interface GatewayCaptureResult {
   errorMessage?: string | undefined;
 }
 
-/**
- * Unified payment gateway interface.
- * All gateway adapters must implement these three methods.
- */
+export interface GatewayRefundResult {
+  gatewayOrderId: string;
+  refundId: string;
+  gateway: GatewayName;
+  refundedAmount: bigint;
+  currency: string;
+  status: "processed" | "pending" | "failed";
+  refundedAt: string;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+}
+
 export interface PaymentGateway {
   readonly name: GatewayName;
 
-  /**
-   * Create a payment order on the external gateway.
-   * @param amount - Amount in paise (bigint)
-   * @param currency - ISO 4217 currency code (e.g. "INR")
-   * @param metadata - Contextual metadata (tenantId, subscriptionId, etc.)
-   */
   createOrder(amount: bigint, currency: string, metadata: OrderMetadata): Promise<GatewayOrder>;
 
-  /**
-   * Capture a previously authorized payment.
-   * @param orderId - The gateway-specific order identifier
-   */
   capturePayment(orderId: string): Promise<GatewayCaptureResult>;
 
-  /**
-   * Check the current status of a payment order.
-   * @param orderId - The gateway-specific order identifier
-   */
   checkStatus(orderId: string): Promise<GatewayPaymentStatus>;
+
+  refundPayment(orderId: string, amountPaise?: bigint): Promise<GatewayRefundResult>;
 }
 
 /**

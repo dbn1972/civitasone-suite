@@ -6,6 +6,7 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import {
   createReceiptBody,
+  createBatchReceiptBody,
   createRefundBody,
   refundDecideBody,
   createAdjustmentBody,
@@ -31,6 +32,16 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const body = createReceiptBody.parse(req.body);
     const result = await commands.createReceipt(ctx, body);
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── POST /v1/revenue/receipts/batch ───────────────────────────────────────
+
+  app.post("/v1/revenue/receipts/batch", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const body = createBatchReceiptBody.parse(req.body);
+    const result = await commands.createBatchReceipt(ctx, body);
     return reply.code(202).send({ data: result });
   });
 

@@ -14,6 +14,7 @@ import type {
   GatewayOrder,
   GatewayPaymentStatus,
   GatewayCaptureResult,
+  GatewayRefundResult,
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
@@ -191,6 +192,58 @@ export const razorpayAdapter: PaymentGateway = {
       currency: data.currency,
       method: data.method,
       updatedAt: new Date().toISOString(),
+    };
+  },
+
+  async refundPayment(orderId: string, amountPaise?: bigint): Promise<GatewayRefundResult> {
+    const paymentsRes = await fetchWithTimeout(`${BASE_URL}/orders/${orderId}/payments`, {
+      method: "GET",
+      headers: { Authorization: authHeader() },
+    });
+
+    if (!paymentsRes.ok) {
+      throw new GatewayError(
+        `Razorpay fetch payments for refund failed (${paymentsRes.status})`,
+        "GATEWAY_REFUND_FAILED",
+        "razorpay",
+        paymentsRes.status,
+      );
+    }
+
+    const paymentsData = (await paymentsRes.json()) as { items: Array<{ id: string; amount: number; currency: string; status: string }> };
+    const payment = paymentsData.items?.find((p) => p.status === "captured");
+    if (!payment) {
+      throw new GatewayError("No captured payment found for refund", "GATEWAY_NO_PAYMENT", "razorpay", 404);
+    }
+
+    const refundAmount = amountPaise != null ? Number(amountPaise) : payment.amount;
+    const res = await fetchWithTimeout(`${BASE_URL}/payments/${payment.id}/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ amount: refundAmount }),
+    });
+
+    if (!res.ok) {
+      throw new GatewayError(
+        `Razorpay refund failed (${res.status})`,
+        "GATEWAY_REFUND_FAILED",
+        "razorpay",
+        res.status,
+      );
+    }
+
+    const data = (await res.json()) as { id: string; amount: number; currency: string; status: string };
+    return {
+      gatewayOrderId: orderId,
+      refundId: data.id,
+      gateway: "razorpay",
+      refundedAmount: BigInt(data.amount),
+      currency: data.currency,
+      status: data.status === "processed" ? "processed" : "pending",
+      refundedAt: new Date().toISOString(),
     };
   },
 };

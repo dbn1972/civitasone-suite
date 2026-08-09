@@ -46,6 +46,8 @@ export const COMMANDS = {
   // ── Collection (SVC-133 + SVC-135) ───────────────────────────────────────
   /** payload: { assesseeId, demandId, amountMinor (bigint string), channel: "online"|"counter"|"cheque"|"dd"|"pos", reference?, instrumentNo?, bankName? } */
   receiptCreate: "revenue.receipt.create",
+  /** payload: { assesseeId, demandIds: uuid[], amountMinor, channel, reference, instrumentNo?, bankName? } */
+  batchReceiptCreate: "revenue.receipt.batch_create",
   /** payload: { receiptId, reason, approvedBy? } — refund, maker step */
   refundCreate: "revenue.refund.create",
   /** payload: { refundId, approvalId, approve: boolean, reason? } — checker step */
