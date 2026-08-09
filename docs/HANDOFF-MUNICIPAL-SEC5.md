@@ -34,6 +34,17 @@ Provision all municipal roles for a tenant (tenant_admin):
 curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/policy/roles/provision/municipal
 ```
 
+## Validation Status (2026-08-09 session 6 — consumer unit tests)
+
+| Check | Result |
+|-------|--------|
+| Municipal domain tests | ✅ **17/17 services** — `tests/domain.test.ts` (5–12 cases each) covering status transitions, bigint fee helpers, validation rejects, number generators |
+| Municipal route wiring tests | ✅ **17/17 services** — `tests/routes-static.test.ts` asserts `buildApp` export (no DB required) |
+| Municipal consumer tests | ✅ **8/17 services** — mocked db/repo/outbox consumer unit tests (3 cases each: happy path, tenant/transition failure, idempotent replay) for trade, building, fire, advertisement, sewerage, parking, vendor, market |
+| **Total municipal service tests** | ✅ **208/208 pass** (shop 11, trade 14, building 15, fire 18, advertisement 19, vendor 15, roadcut 11, event 12, refund 12, sewerage 13, swm 9, drainage 9, parks 8, animal 10, crematorium 8, parking 13, market 11) |
+| Gateway + policy (unchanged) | ✅ gateway registry 18, policy catalog 5 |
+| Line coverage target (≥80%) | ⏳ Partial — consumer tests added for 8 core services; repo/integration + remaining 9 services still needed |
+
 ## Validation Status (2026-08-09 session 5 — domain test coverage)
 
 | Check | Result |
@@ -156,7 +167,7 @@ Tenant-scoped role rows in `roles.roles` are provisioned per tenant via:
 2. ~~**Workspace**~~ — Done: `services/*` glob covers all municipal packages; `pnpm install` verified
 3. ~~**Gateway**~~ — Done: all 17 routes in `registry.ts`; env override via `GATEWAY_{SERVICE}_URL`
 4. ~~**PM2/ecosystem**~~ — Done: 17 API + 17 worker entries (3060–3085) in `ecosystem.config.js`
-5. ~~**Tests (smoke)**~~ — Domain smoke for fire + advertisement; **session 5:** domain + routes-static tests for all 17 services (184 pass); expand to ≥80% module coverage (consumers/repos)
+5. ~~**Tests (smoke)**~~ — Domain smoke for fire + advertisement; **session 5:** domain + routes-static tests for all 17 services (184 pass); **session 6:** consumer unit tests for 8 core services (+24 tests → 208 pass); expand to ≥80% module coverage (remaining consumers/repos/integration)
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
 7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map + tenant provision endpoint + dev seed subset
 8. ~~**Events**~~ — Cross-service outbox: `finance.challan.create` (fees) + `notification.send` (status changes) wired in shop/trade + 15 sibling services
