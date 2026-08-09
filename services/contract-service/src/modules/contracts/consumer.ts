@@ -6,10 +6,12 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertCanAmend, assertTransitionAllowed, assertDistinctMakerChecker, computeMilestonePenalty, assertBondTransition } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerContractConsumers(queue: Queue): void {
+export function registerContractConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   // ── create → draft ──────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.contractCreate, async (msg) => {
     const p = msg.payload as {
