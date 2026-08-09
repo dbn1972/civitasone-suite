@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -49,6 +50,12 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, { topic: EVENTS.applicationCreated, eventType: EVENTS.applicationCreated, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id, applicationNumber, feeMinor: String(feeMinor), feeCurrency: "INR" } });
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: msg.actorId,
+        amountMinor: feeMinor,
+        currency: "INR",
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "building_application", resourceId: p.id });
     });
     log.info({ id: p.id, applicationNumber }, "building application created");
@@ -61,6 +68,12 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.applicationSubmitted,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { applicationId: p.id },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "building_application", resourceId: p.id });
     });
   });

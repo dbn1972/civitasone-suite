@@ -6,6 +6,34 @@
 **Rescued from:** EC2 suite main untracked scaffolds (session c5159612)  
 **Date:** 2026-08-09
 
+## Validation Status (2026-08-09 session 6 — cross-service events + RBAC seeding)
+
+| Check | Result |
+|-------|--------|
+| `@civitasone/events` municipal-cross helpers | ✅ `FINANCE_CHALLAN_CREATE`, `NOTIFICATION_SEND` payload builders + 5 unit tests |
+| Municipal cross-events wiring | ✅ `src/shared/cross-events.ts` × 17 services; fee challan on application create; notifications on submit/approve/permit/notice |
+| Wire scripts | ✅ `scripts/dev/wire-municipal-cross-events.mjs` + pass2 |
+| Policy tenant RBAC bootstrap | ✅ `POST /policy/roles/provision/municipal` + `policy.municipal_roles.provision` consumer (idempotent) |
+| Dev seed municipal roles | ✅ Representative subset in `scripts/dev/seed-all.mjs` (shop/trade/fire); full catalog via provision endpoint |
+| Tests | ✅ events 5/5, shop cross-events 4/4, policy catalog+provision 9/9 |
+| `@civitasone/trade-service typecheck` | ✅ Pass (exactOptionalPropertyTypes fix in cross-events) |
+| `@civitasone/fire-service typecheck` | ✅ Pass |
+
+Run focused tests:
+
+```bash
+cd /Users/debabratanayak_1/Projects/wt/municipal-sec5-services
+pnpm --filter @civitasone/events exec vitest run tests/municipal-cross.test.ts
+pnpm --filter @civitasone/shop-service test -- tests/cross-events.test.ts
+pnpm --filter @civitasone/policy-service test -- tests/municipal-catalog.test.ts tests/municipal-provision.test.ts
+```
+
+Provision all municipal roles for a tenant (tenant_admin):
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/policy/roles/provision/municipal
+```
+
 ## Validation Status (2026-08-09 session 5 — domain test coverage)
 
 | Check | Result |
@@ -68,7 +96,10 @@ Env overrides: `PGHOST`, `PGPORT` (default 5435), `PGUSER` (default civitas), `P
 - **API:** `GET /policy/roles/catalog/municipal` (tenant_admin / super_admin)
 - **Gateway search:** municipal roles added to `services/gateway-service/src/search-route.ts` `ROLE_MODULE_MAP`
 
-Tenant-scoped role rows in `roles.roles` are still provisioned per tenant via install/seed — this session adds the canonical name catalog only.
+Tenant-scoped role rows in `roles.roles` are provisioned per tenant via:
+
+- `POST /policy/roles/provision/municipal` (full catalog, idempotent)
+- Dev seed subset in `scripts/dev/seed-all.mjs` (shop/trade/fire representative roles)
 
 ## Validation Status (2026-08-09 session 3 — P2 migrations + PM2)
 
@@ -127,8 +158,8 @@ Tenant-scoped role rows in `roles.roles` are still provisioned per tenant via in
 4. ~~**PM2/ecosystem**~~ — Done: 17 API + 17 worker entries (3060–3085) in `ecosystem.config.js`
 5. ~~**Tests (smoke)**~~ — Domain smoke for fire + advertisement; **session 5:** domain + routes-static tests for all 17 services (184 pass); expand to ≥80% module coverage (consumers/repos)
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
-7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map (stubs; no tenant seed yet)
-8. **Events** — Wire cross-service consumers (billing for fees, notification for notices)
+7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map + tenant provision endpoint + dev seed subset
+8. ~~**Events**~~ — Cross-service outbox: `finance.challan.create` (fees) + `notification.send` (status changes) wired in shop/trade + 15 sibling services
 9. ~~**Web screens**~~ — Citizen portal + officer dashboards under `apps/web` (session 6 — shared `/municipal` shell)
 10. ~~**DB bootstrap**~~ — `bootstrap_municipal_services.sql` + dev script + CI wiring
 

@@ -69,3 +69,26 @@ describe("GET /policy/roles/catalog/municipal", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe("POST /policy/roles/provision/municipal", () => {
+  it("returns 202 for tenant_admin", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/policy/roles/provision/municipal",
+      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+    });
+    expect(res.statusCode).toBe(202);
+    const body = res.json() as { status: string; correlationId: string };
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeTruthy();
+  });
+
+  it("returns 403 for employee", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/policy/roles/provision/municipal",
+      headers: { authorization: `Bearer ${token(["employee"])}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});

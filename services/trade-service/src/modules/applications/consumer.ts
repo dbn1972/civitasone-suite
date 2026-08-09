@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -78,6 +79,12 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.applicationSubmitted,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { applicationId: p.id },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "trade_application", resourceId: p.id });
     });
   });

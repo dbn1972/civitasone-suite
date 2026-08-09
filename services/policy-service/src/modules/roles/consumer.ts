@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { provisionMunicipalRolesForTenant } from "./municipal-provision.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -46,6 +47,23 @@ export function registerRoleConsumers(q: Queue): void {
       });
     }
   );
+
+  q.subscribe<{ tenantId: string }>(COMMANDS.provisionMunicipalRoles, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const result = await provisionMunicipalRolesForTenant(tx, msg.tenantId, msg.actorId);
+      await enqueue(tx, {
+        topic: EVENTS.municipalRolesProvisioned,
+        eventType: EVENTS.municipalRolesProvisioned,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { tenantId: msg.tenantId, ...result },
+      });
+      await emitAudit(tx, msg, EVENTS.municipalRolesProvisioned, result, "provision_municipal_roles", msg.tenantId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.role, msg.tenantId));
+  });
 }
 
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {

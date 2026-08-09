@@ -35,6 +35,13 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  /** Bootstrap tenant-scoped municipal roles + permissions from catalog (idempotent). */
+  app.post("/policy/roles/provision/municipal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.provisionMunicipalRoles(ctx));
+  });
+
   app.get("/policy/roles/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);

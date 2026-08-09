@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -30,6 +31,20 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, licenceNumber, status: "active", tradeCategory: p.tradeCategory, issuedAt: now, validFrom: now, validUntil, verificationCode, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, { topic: EVENTS.licenceIssued, eventType: EVENTS.licenceIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.id, licenceNumber, applicationId: p.applicationId, tradeCategory: p.tradeCategory, validFrom: now.toISOString(), validUntil: validUntil.toISOString(), verificationCode } });
+      
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.licenceIssued,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { applicationId: p.applicationId },
+      });
+      
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.licenceIssued,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { applicationId: p.applicationId },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "licence.issue", resourceType: "trade_licence", resourceId: p.id });
     });
     log.info({ id: p.id, licenceNumber }, "trade licence issued");
