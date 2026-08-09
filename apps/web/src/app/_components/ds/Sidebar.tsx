@@ -53,6 +53,12 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    group: "MUNICIPAL",
+    items: [
+      { icon: "🏛️", label: "Municipal Services", href: "/municipal", moduleKey: null },
+    ],
+  },
+  {
     group: "CITIZEN SERVICES",
     items: [
       { icon: "🤝", label: "CRM", href: "/crm", moduleKey: "crm" },

@@ -129,8 +129,29 @@ Tenant-scoped role rows in `roles.roles` are still provisioned per tenant via in
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
 7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map (stubs; no tenant seed yet)
 8. **Events** — Wire cross-service consumers (billing for fees, notification for notices)
-9. **Web screens** — Citizen portal + officer dashboards under `apps/web`
+9. ~~**Web screens**~~ — Citizen portal + officer dashboards under `apps/web` (session 6 — shared `/municipal` shell)
 10. ~~**DB bootstrap**~~ — `bootstrap_municipal_services.sql` + dev script + CI wiring
+
+## Web screens (2026-08-09 session 6)
+
+Shared municipal module at `apps/web/src/app/(app)/municipal/` — config-driven, not 16 snowflakes.
+
+| Surface | Route pattern | Gateway API |
+|---------|---------------|-------------|
+| Hub | `/municipal` | — |
+| Officer service home | `/municipal/{serviceKey}` | stats from list endpoint |
+| Officer list | `/municipal/{serviceKey}/applications` | `/api/v1/{service}/…` per catalog |
+| Officer detail | `/municipal/{serviceKey}/applications/{id}` | `{listPath}/{id}` |
+| Citizen apply | `/citizen/services/{citizenServiceKey}/apply` | existing citizen runtime |
+| Citizen track | `/citizen/services/{citizenServiceKey}` | existing citizen runtime |
+
+**Catalog:** `municipal/_data/catalog.ts` — 17 rows (16 Sec5 + shop reference) with `listPath`, display fields, `citizenServiceKey`, `moduleKey` for `ModuleGate`.
+
+**Tests:** `catalog.test.ts`, `records.test.ts`, `CitizenServiceLinks.test.tsx` (11 cases).
+
+**Sidebar:** `MUNICIPAL` group → `/municipal` (always visible).
+
+**Follow-ups:** scrutiny/approval action panels per service; wire published catalogue serviceKeys when domain pack activates; e2e smoke for `/municipal/trade/applications`.
 
 ## Gateway Routes (registered)
 
