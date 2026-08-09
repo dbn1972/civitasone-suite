@@ -6,6 +6,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT = "audit.event.record";
 
@@ -18,7 +19,8 @@ const AUDIT = "audit.event.record";
  */
 const DEFAULT_DA_RATE_PCT = 50;
 
-export function registerEmployeeConsumers(queue: Queue): void {
+export function registerEmployeeConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.employeeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; employeeNo: string; fullName: string;

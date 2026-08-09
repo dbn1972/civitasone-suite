@@ -11,6 +11,7 @@ import { buildView } from "./commands.js";
 import type { ContactView } from "./schema.js";
 import type { CreateContactBody } from "./validators.js";
 import type { RequestContext } from "@civitasone/types";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -18,7 +19,8 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerContactConsumers(queue: Queue): void {
+export function registerContactConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe<ContactView>(COMMANDS.createContact, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

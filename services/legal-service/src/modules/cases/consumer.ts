@@ -6,10 +6,12 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertCanDispose } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerCaseConsumers(queue: Queue): void {
+export function registerCaseConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.caseCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; caseNo: string; title: string; court: string;

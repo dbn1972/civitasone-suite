@@ -8,6 +8,7 @@ import { assertTransition, type UserView } from "./domain.js";
 import * as keycloak from "../../shared/keycloak.js";
 import { recordPendingDeactivation, resolvePendingDeactivation } from "../../shared/kc-reconcile.js";
 import { pino } from "pino";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const kcLog = pino({ name: "identity-keycloak" });
 
@@ -18,6 +19,7 @@ function keyFor(tenantId: string, id: string) {
 }
 
 export function registerUserConsumers(q: Queue): void {
+  const queue = tenantScoped(rawQueue);
   q.subscribe<UserView & { createdBy: string }>(COMMANDS.createUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
