@@ -267,6 +267,9 @@ describe("PGR complaint categories cover the common civic complaints", () => {
     ["parks and trees", /park|tree/i],
     ["encroachment", /encroach/i],
     ["unauthorised construction", /unauthoris|illegal construction/i],
+    ["bulk waste", /bulk waste/i],
+    ["C&D waste", /construction.*demolition|C&D/i],
+    ["dead animal removal", /dead animal/i],
   ])("offers a category for %s", (_name, pattern) => {
     // Without its own category a complaint falls into "Other" and loses the
     // category-based auto-assignment that routes it to the right crew.
