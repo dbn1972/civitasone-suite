@@ -80,6 +80,8 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_court_meeting_visitor.sql"
 # fresh CI database could not host it. Without this line the file exists but the
 # pipeline never calls it. Idempotent; safe to re-run.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql"
+# Municipal Sec5 services (16 + shop reference): roles + databases for civitas_shop … civitas_market.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_municipal_services.sql"
 # Module schemas that migrations reference but no bootstrap file created. Measured
 # against a throwaway container: `schema "X" does not exist` was the largest single
 # cause of migration failure (30 of 97). Must run before the migration loop.
@@ -139,6 +141,24 @@ declare -A SERVICE_DBS=(
   [theme-service]="theme_svc:civitas_theme"
   [plugin-service]="plugin_svc:civitas_plugin"
   [install-service]="install_svc:civitas_install"
+  # Municipal Sec5 (BRD §5) — DB-per-service, migrations run as {service}_svc.
+  [shop-service]="shop_svc:civitas_shop"
+  [trade-service]="trade_svc:civitas_trade"
+  [building-service]="building_svc:civitas_building"
+  [fire-service]="fire_svc:civitas_fire"
+  [advertisement-service]="advertisement_svc:civitas_advertisement"
+  [vendor-service]="vendor_svc:civitas_vendor"
+  [roadcut-service]="roadcut_svc:civitas_roadcut"
+  [event-service]="event_svc:civitas_event"
+  [refund-service]="refund_svc:civitas_refund"
+  [sewerage-service]="sewerage_svc:civitas_sewerage"
+  [swm-service]="swm_svc:civitas_swm"
+  [drainage-service]="drainage_svc:civitas_drainage"
+  [parks-service]="parks_svc:civitas_parks"
+  [animal-service]="animal_svc:civitas_animal"
+  [crematorium-service]="crematorium_svc:civitas_crematorium"
+  [parking-service]="parking_svc:civitas_parking"
+  [market-service]="market_svc:civitas_market"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────

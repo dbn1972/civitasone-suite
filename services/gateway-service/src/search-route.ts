@@ -50,6 +50,24 @@ const ROLE_MODULE_MAP: Record<string, string[]> = {
   contract_admin: ["contracts"],
   telephony_admin: ["telephony"],
   knowledge_admin: ["knowledge"],
+  // Municipal Sec5 (BRD §5) — mirrors policy-service municipal-catalog.ts
+  shop_user: ["shop"], shop_admin: ["shop"], shop_officer: ["shop"],
+  trade_user: ["trade"], trade_admin: ["trade"], trade_officer: ["trade"],
+  building_user: ["building"], building_admin: ["building"], building_officer: ["building"],
+  fire_user: ["fire"], fire_admin: ["fire"], fire_officer: ["fire"], fire_inspector: ["fire"],
+  adv_user: ["advertisement"], adv_admin: ["advertisement"], adv_officer: ["advertisement"], adv_enforcement: ["advertisement"],
+  vendor_user: ["vendor"], vendor_admin: ["vendor"], vendor_officer: ["vendor"],
+  roadcut_user: ["roadcut"], roadcut_admin: ["roadcut"], roadcut_officer: ["roadcut"],
+  event_user: ["event"], event_admin: ["event"], event_officer: ["event"],
+  refund_user: ["refund"], refund_admin: ["refund"], refund_officer: ["refund"],
+  sewerage_user: ["sewerage"], sewerage_admin: ["sewerage"], sewerage_officer: ["sewerage"],
+  swm_user: ["swm"], swm_admin: ["swm"], swm_officer: ["swm"],
+  drainage_user: ["drainage"], drainage_admin: ["drainage"], drainage_officer: ["drainage"],
+  parks_user: ["parks"], parks_admin: ["parks"], parks_officer: ["parks"],
+  animal_user: ["animal"], animal_admin: ["animal"], animal_officer: ["animal"],
+  crematorium_user: ["crematorium"], crematorium_admin: ["crematorium"], crematorium_officer: ["crematorium"],
+  parking_user: ["parking"], parking_admin: ["parking"], parking_officer: ["parking"],
+  market_user: ["market"], market_admin: ["market"], market_officer: ["market"],
   employee: ["hrms", "payroll"],
 };
 
@@ -60,6 +78,9 @@ const ALL_MODULES = [
   "knowledge", "workflow", "analytics", "billing", "inventory",
   "stock", "reports", "establishment", "contracts", "audit",
   "notification", "admin",
+  "shop", "trade", "building", "fire", "advertisement", "vendor", "roadcut",
+  "event", "refund", "sewerage", "swm", "drainage", "parks", "animal",
+  "crematorium", "parking", "market",
 ];
 
 /**

@@ -6,7 +6,7 @@
 **Rescued from:** EC2 suite main untracked scaffolds (session c5159612)  
 **Date:** 2026-08-09
 
-## Validation Status (2026-08-09 session 3 — P2 migrations + PM2)
+## Validation Status (2026-08-09 session 4 — DB bootstrap + RBAC)
 
 | Check | Result |
 |-------|--------|
@@ -18,9 +18,40 @@
 | Gateway routes | ✅ All 17 registered in `services/gateway-service/src/registry.ts` (ports 3060–3085) |
 | **Migrations** | ✅ **17× `0001_init.sql`** (16 Sec5 + shop) — schemas/tables from `schema.ts`, RLS + FORCE RLS, outbox/inbox |
 | **PM2/ecosystem** | ✅ **17 API + 17 worker** entries in `ecosystem.config.js` (ports 3060–3085) |
-| Smoke tests | ✅ `fire-service/tests/domain-smoke.test.ts` (3), `advertisement-service/tests/domain-smoke.test.ts` (4), `gateway-service/tests/municipal-registry.test.ts` (18) |
+| **DB bootstrap** | ✅ `infra/db/bootstrap/bootstrap_municipal_services.sql` + `scripts/dev/bootstrap-municipal-dbs.sh`; wired into `scripts/ci/bootstrap-postgres.sh` + `SERVICE_DBS` migration loop |
+| **Policy/RBAC stubs** | ✅ `policy-service` municipal catalog (`GET /policy/roles/catalog/municipal`) + gateway `ROLE_MODULE_MAP` entries |
+| Smoke tests | ✅ 25/25 pass (fire 3, advertisement 4, gateway registry 18); policy catalog 5/5 |
 
 **Prerequisite:** Build shared packages before service typecheck (`pnpm turbo run build --filter='@civitasone/outbox' ...` or full package build). Packages export from `dist/`; unbuilt packages cause TS2307.
+
+## DB Bootstrap (local / CI)
+
+Creates Postgres roles `{service}_svc` and databases `civitas_{service}` for all 17 municipal services. Idempotent — safe to re-run.
+
+```bash
+cd /Users/debabratanayak_1/Projects/wt/municipal-sec5-services
+
+# Local dev (Postgres on :5435, user civitas):
+bash scripts/dev/bootstrap-municipal-dbs.sh
+
+# Regenerate SQL after adding a municipal service:
+node scripts/dev/generate-municipal-bootstrap.mjs
+
+# Full CI bootstrap (includes municipal + applies migrations):
+bash scripts/ci/bootstrap-postgres.sh
+```
+
+Env overrides: `PGHOST`, `PGPORT` (default 5435), `PGUSER` (default civitas), `PGPASSWORD`, `PGDATABASE` (default postgres).
+
+## Policy / RBAC stubs
+
+- **Catalog:** `services/policy-service/src/modules/roles/municipal-catalog.ts` — shop pattern × 17 services (`{prefix}_user`, `{prefix}_admin`, `{prefix}_officer` + fire_inspector, adv_enforcement)
+- **API:** `GET /policy/roles/catalog/municipal` (tenant_admin / super_admin)
+- **Gateway search:** municipal roles added to `services/gateway-service/src/search-route.ts` `ROLE_MODULE_MAP`
+
+Tenant-scoped role rows in `roles.roles` are still provisioned per tenant via install/seed — this session adds the canonical name catalog only.
+
+## Validation Status (2026-08-09 session 3 — P2 migrations + PM2)
 
 ## Summary
 
@@ -77,10 +108,10 @@
 4. ~~**PM2/ecosystem**~~ — Done: 17 API + 17 worker entries (3060–3085) in `ecosystem.config.js`
 5. ~~**Tests (smoke)**~~ — Domain smoke tests added for fire + advertisement; expand to ≥80% module coverage
 6. ~~**Typecheck**~~ — fire, advertisement, trade pass after repo type fixes + package build
-7. **Policy/RBAC** — Register roles (`fire_user`, `adv_enforcement`, etc.) in policy-service
+7. ~~**Policy/RBAC**~~ — Municipal role catalog + gateway search map (stubs; no tenant seed yet)
 8. **Events** — Wire cross-service consumers (billing for fees, notification for notices)
 9. **Web screens** — Citizen portal + officer dashboards under `apps/web`
-10. **DB bootstrap** — Ensure `civitas_{service}` databases + `{service}_svc` roles exist in infra seed/bootstrap for all 17 services
+10. ~~**DB bootstrap**~~ — `bootstrap_municipal_services.sql` + dev script + CI wiring
 
 ## Gateway Routes (registered)
 

@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createRoleBody, updateRoleBody, addPermissionBody, roleIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { MUNICIPAL_SERVICE_CATALOG, listMunicipalRoleNames } from "./municipal-catalog.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
@@ -18,6 +19,22 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRole(ctx, body));
   });
 
+  app.get("/policy/roles", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    sendValidated(reply, roleListResponseSchema, await queries.listRoles(ctx.tenantId));
+  });
+
+  /** Read-only catalog of municipal Sec5 JWT role stubs (gateway/auth reference). */
+  app.get("/policy/roles/catalog/municipal", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    return reply.send({
+      data: MUNICIPAL_SERVICE_CATALOG,
+      meta: { roleCount: listMunicipalRoleNames().length, serviceCount: MUNICIPAL_SERVICE_CATALOG.length },
+    });
+  });
+
   app.get("/policy/roles/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
@@ -25,12 +42,6 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     const view = await queries.getRole(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "role not found");
     return reply.send(view);
-  });
-
-  app.get("/policy/roles", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN);
-    sendValidated(reply, roleListResponseSchema, await queries.listRoles(ctx.tenantId));
   });
 
   app.patch("/policy/roles/:id", async (req, reply) => {
