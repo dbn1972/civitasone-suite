@@ -13,7 +13,7 @@ export async function findById(id: string, tenantId: string): Promise<AdvViolati
 
 export async function list(
   tenantId: string,
-  opts: { status?: string; page?: number; pageSize?: number } = {},
+  opts: { status?: string | undefined; page?: number | undefined; pageSize?: number | undefined } = {},
 ): Promise<{ rows: AdvViolationRow[]; total: number }> {
   const page = opts.page ?? 1;
   const pageSize = opts.pageSize ?? 20;

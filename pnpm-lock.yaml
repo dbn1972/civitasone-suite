@@ -702,6 +702,67 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/advertisement-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/ai-agent-service:
     dependencies:
       '@civitasone/auth':
@@ -826,6 +887,67 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.0.0
         version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/animal-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
       tsx:
         specifier: ^4.16.0
         version: 4.22.4
@@ -1030,6 +1152,67 @@ importers:
       fast-check:
         specifier: ^4.8.0
         version: 4.8.0
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/building-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
       tsx:
         specifier: ^4.16.0
         version: 4.22.4
@@ -1420,6 +1603,67 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/crematorium-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/crm-service:
     dependencies:
       '@civitasone/auth':
@@ -1502,6 +1746,67 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/drainage-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/estab-service:
     dependencies:
       '@civitasone/auth':
@@ -1549,6 +1854,70 @@ importers:
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/event-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
       pino:
         specifier: ^8.21.0
         version: 8.21.0
@@ -1714,6 +2083,67 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.0.0
         version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/fire-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
       tsx:
         specifier: ^4.16.0
         version: 4.22.4
@@ -2655,6 +3085,67 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/market-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/meeting-service:
     dependencies:
       '@civitasone/auth':
@@ -2948,6 +3439,128 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/parking-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/parks-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27
+        version: 4.29.1
+      pino:
+        specifier: ^8.21
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4
+        version: 3.4.9
+      zod:
+        specifier: ^3.23
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   services/payroll-service:
@@ -3431,6 +4044,70 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/refund-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/report-service:
     dependencies:
       '@civitasone/auth':
@@ -3568,6 +4245,201 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
+  services/roadcut-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/sewerage-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/shop-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/circuit-breaker':
+        specifier: workspace:*
+        version: link:../../packages/circuit-breaker
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/search':
+        specifier: workspace:*
+        version: link:../../packages/search
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
   services/stock-service:
     dependencies:
       '@civitasone/auth':
@@ -3625,6 +4497,67 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.0.0
         version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/swm-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
       tsx:
         specifier: ^4.16.0
         version: 4.22.4
@@ -3773,6 +4706,131 @@ importers:
         version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
 
   services/theme-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitest/coverage-v8':
+        specifier: ^2.0.0
+        version: 2.1.9(vitest@2.1.9(@types/node@20.19.43)(jsdom@24.1.0))
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/trade-service:
+    dependencies:
+      '@civitasone/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
+      '@civitasone/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@civitasone/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@civitasone/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
+      '@civitasone/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@civitasone/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@fastify/cors':
+        specifier: ^9.0.0
+        version: 9.0.1
+      drizzle-orm:
+        specifier: ^0.30.0
+        version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
+      fastify:
+        specifier: ^4.27.0
+        version: 4.29.1
+      pino:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(jsdom@24.1.0)
+
+  services/vendor-service:
     dependencies:
       '@civitasone/auth':
         specifier: workspace:*
