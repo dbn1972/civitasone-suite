@@ -8,10 +8,12 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerBudgetConsumers(queue: Queue): void {
+export function registerBudgetConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   // Tenant context: every command carries tenantId in its envelope. Wrap each
   // handler in runWithTenant so the db.transaction() GUC (app.tenant_id) is set
   // and FORCE ROW LEVEL SECURITY writes/reads are scoped to the message tenant.
