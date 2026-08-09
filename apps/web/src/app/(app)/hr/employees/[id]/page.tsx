@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
@@ -22,6 +23,8 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     );
   }
 
+  const isActive = employee.status?.toLowerCase() === "active" || employee.status?.toLowerCase() === "probation";
+
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
@@ -34,6 +37,33 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           <DataSourceBadge source="error" />
         </div>
       )}
+
+      {/* Quick Actions — contextual things you can do for this employee */}
+      {isActive && (
+        <Card title="Quick Actions" padding>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+              🌴 Apply Leave
+            </Link>
+            <Link href={`/hr/payroll/salary-slips?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+              🧾 Salary Slips
+            </Link>
+            <Link href="/hr/transfer" className="btn ghost" style={{ fontSize: 13 }}>
+              🔄 Initiate Transfer
+            </Link>
+            <Link href="/hr/promotion" className="btn ghost" style={{ fontSize: 13 }}>
+              ⬆️ Initiate Promotion
+            </Link>
+            <Link href={`/hr/attendance?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+              📅 View Attendance
+            </Link>
+            <Link href="/hr/service-book" className="btn ghost" style={{ fontSize: 13 }}>
+              📖 Service Book
+            </Link>
+          </div>
+        </Card>
+      )}
+
       <Card title="Personal Information" padding>
         <div className="fields">
           <div className="field">

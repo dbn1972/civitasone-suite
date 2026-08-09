@@ -1,32 +1,34 @@
 "use client";
 
 /**
- * Promotion-with-eOffice-approval — the request-first raise flow.
+ * Promotion-with-eOffice-approval — two-step wizard.
  *
- * HR promotions don't pre-exist as an entity, so this is a two-step action
- * (modelled on TransferWithApproval):
- *   1) POST .../promotion/submit-approval → records a pending_approval promotion
- *      request and returns its id.
- *   2) POST /v1/estab/files/from-module   → raises the eFile against that
- *      request id (refType "hr_promotion"); it routes for approval and, on
- *      approval, the hrms promotion eoffice-consumer effects the promotion.
+ * UX: Replaces raw UUID inputs with searchable name-based dropdowns.
+ * Step 1: Select employee + new designation  Step 2: Approval routing + justification
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/app/_components/ds/Toast";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Employee = { id: string; name?: string; designation?: string; designationId?: string };
+type Designation = { id: string; name: string; grade?: string };
+type Officer = { id: string; name: string; designation?: string };
 
 export function PromoteWithApproval() {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [officers, setOfficers] = useState<Officer[]>([]);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const { toast } = useToast();
 
   const [employeeId, setEmployeeId] = useState("");
   const [fromDesigId, setFromDesigId] = useState("");
+  const [fromDesigName, setFromDesigName] = useState("");
   const [toDesigId, setToDesigId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [orderRef, setOrderRef] = useState("");
@@ -38,34 +40,61 @@ export function PromoteWithApproval() {
     if (!open) return;
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/hrms/employees?limit=200");
-        if (!res.ok) return;
-        const body = (await res.json()) as { data?: Employee[] } | Employee[];
-        setEmployees(Array.isArray(body) ? body : (body.data ?? []));
-      } catch { /* picker optional */ }
+        const [empRes, desigRes, offRes] = await Promise.all([
+          fetch("/api/proxy/v1/hrms/employees?limit=200"),
+          fetch("/api/proxy/v1/hrms/designations?limit=200"),
+          fetch("/api/proxy/v1/identity/users?limit=200"),
+        ]);
+        if (empRes.ok) {
+          const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
+          setEmployees(Array.isArray(body) ? body : (body.data ?? []));
+        }
+        if (desigRes.ok) {
+          const body = (await desigRes.json()) as { data?: Designation[] } | Designation[];
+          setDesignations(Array.isArray(body) ? body : (body.data ?? []));
+        }
+        if (offRes.ok) {
+          const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
+          setOfficers(Array.isArray(body) ? body : (body.data ?? []));
+        }
+      } catch { /* graceful fallback */ }
     })();
   }, [open]);
 
   const reset = () => {
-    setEmployeeId(""); setFromDesigId(""); setToDesigId(""); setEffectiveDate("");
-    setOrderRef(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setEmployeeId(""); setFromDesigId(""); setFromDesigName(""); setToDesigId("");
+    setEffectiveDate(""); setOrderRef(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setStep(1);
+  };
+
+  const selectedEmployee = employees.find((e) => e.id === employeeId);
+
+  const validateStep1 = (): boolean => {
+    if (!employeeId) { setError("Select an employee."); return false; }
+    if (!toDesigId) { setError("Select the new designation."); return false; }
+    if (!effectiveDate) { setError("Effective date is required."); return false; }
+    setError("");
+    return true;
+  };
+
+  const validateStep2 = (): boolean => {
+    if (!initiatedBy) { setError("Select the initiating officer."); return false; }
+    if (!currentWith) { setError("Select who should approve this promotion."); return false; }
+    if (note.trim().length < 3) { setError("Add a justification note (at least 3 characters)."); return false; }
+    setError("");
+    return true;
   };
 
   const submit = useCallback(async () => {
-    setError(""); setMessage("");
-    if (!UUID_RE.test(employeeId)) { setError("Select an employee."); return; }
-    if (!UUID_RE.test(fromDesigId) || !UUID_RE.test(toDesigId)) { setError("From and To designation IDs must be valid."); return; }
-    if (!effectiveDate) { setError("Effective date is required."); return; }
-    if (!UUID_RE.test(initiatedBy) || !UUID_RE.test(currentWith)) { setError("Initiating and forward-to officer IDs must be valid eOffice operators."); return; }
-    if (note.trim().length < 3) { setError("Add a justification note."); return; }
-
+    if (!validateStep2()) return;
+    setError("");
     setSaving(true);
     try {
-      // Step 1 — create the pending promotion request.
       const reqBody: { fromDesigId: string; toDesigId: string; effectiveDate: string; orderRef?: string } = {
         fromDesigId, toDesigId, effectiveDate,
       };
-      if (orderRef.trim().length > 0) reqBody.orderRef = orderRef.trim();
+      if (orderRef.trim()) reqBody.orderRef = orderRef.trim();
+
       const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/promotion/submit-approval`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -76,14 +105,13 @@ export function PromoteWithApproval() {
       const promotionId = sub.id;
       if (!promotionId) throw new Error("Promotion request id missing in response");
 
-      // Step 2 — raise the eFile against the promotion request.
       const raiseRes = await fetch("/api/proxy/v1/estab/files/from-module", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           refType: "hr_promotion",
           refId: promotionId,
-          subject: `Promotion order — employee ${employeeId.slice(0, 8)}`,
+          subject: `Promotion order — ${selectedEmployee?.name ?? employeeId.slice(0, 8)}`,
           dept: "HR",
           classification: "confidential",
           priority: "normal",
@@ -96,7 +124,7 @@ export function PromoteWithApproval() {
       });
       if (!raiseRes.ok) throw new Error((await raiseRes.text()) || "Promotion request created, but raising the eFile failed");
       const file = (await raiseRes.json()) as { fileNo?: string };
-      setMessage(`Promotion raised for approval (eFile ${file.fileNo ?? ""}). On approval the new grade is effected automatically.`);
+      toast.success(`Promotion raised for approval${file.fileNo ? ` (eFile ${file.fileNo})` : ""}. On approval the new grade is effected automatically.`);
       reset();
       setOpen(false);
     } catch (err) {
@@ -104,7 +132,7 @@ export function PromoteWithApproval() {
     } finally {
       setSaving(false);
     }
-  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note]);
+  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, toast]);
 
   return (
     <>
@@ -112,65 +140,183 @@ export function PromoteWithApproval() {
         {open ? "Cancel" : "+ Promotion with approval"}
       </button>
 
-      {open ? (
+      {open && (
         <div className="card" style={{ marginTop: 14 }}>
-          <div className="card-h"><h3>Raise a promotion for eOffice approval</h3></div>
-          <div role="status" aria-live="polite">
-            {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.8125rem", paddingBottom: 0 }}>{message}</p> : null}
-            {error ? <p className="pad" style={{ color: "#b91c1c", fontSize: "0.8125rem", paddingBottom: 0 }}>{error}</p> : null}
+          <div className="card-h">
+            <h3>Raise a promotion for eOffice approval</h3>
+            <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>Step {step} of 2</span>
           </div>
-          <div className="pad" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Employee</span>
-              {employees.length > 0 ? (
-                <select value={employeeId} onChange={(e) => {
-                  const id = e.target.value; setEmployeeId(id);
-                  const emp = employees.find((x) => x.id === id);
-                  if (emp?.designationId) setFromDesigId(emp.designationId);
-                }}>
-                  <option value="">Select employee…</option>
-                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}</option>)}
-                </select>
-              ) : (
-                <input value={employeeId} placeholder="employee UUID" onChange={(e) => setEmployeeId(e.target.value)} />
+
+          {error && (
+            <div role="alert" aria-live="assertive">
+              <p className="pad" style={{ color: "#b91c1c", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="pad" style={{ display: "grid", gap: 16 }}>
+              <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
+                Select the employee and the new designation they are being promoted to.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Employee</span>
+                  <select
+                    value={employeeId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setEmployeeId(id);
+                      const emp = employees.find((x) => x.id === id);
+                      if (emp?.designationId) {
+                        setFromDesigId(emp.designationId);
+                        setFromDesigName(emp.designation ?? "");
+                      }
+                    }}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                  >
+                    <option value="">Select employee…</option>
+                    {employees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Current designation</span>
+                  <input
+                    value={fromDesigName || (designations.find((d) => d.id === fromDesigId)?.name ?? fromDesigId)}
+                    disabled
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
+                    aria-label="Current designation (auto-filled)"
+                  />
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Promote to (new designation)</span>
+                  <select
+                    value={toDesigId}
+                    onChange={(e) => setToDesigId(e.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                  >
+                    <option value="">Select new designation…</option>
+                    {designations.filter((d) => d.id !== fromDesigId).map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}{d.grade ? ` (Grade ${d.grade})` : ""}</option>
+                    ))}
+                  </select>
+                  {designations.length === 0 && (
+                    <input
+                      value={toDesigId}
+                      placeholder="Designation ID (loading…)"
+                      onChange={(e) => setToDesigId(e.target.value)}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                    />
+                  )}
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Effective date</span>
+                  <input
+                    type="date"
+                    value={effectiveDate}
+                    onChange={(e) => setEffectiveDate(e.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                  />
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Order reference (optional)</span>
+                  <input
+                    value={orderRef}
+                    placeholder="e.g. PROMO/2024/001"
+                    onChange={(e) => setOrderRef(e.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button className="btn ghost" onClick={() => { reset(); setOpen(false); }}>Cancel</button>
+                <button className="btn primary" style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
+                  Next: Approval routing →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="pad" style={{ display: "grid", gap: 16 }}>
+              {selectedEmployee && (
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                  <strong>{selectedEmployee.name}</strong>: {fromDesigName} → {designations.find((d) => d.id === toDesigId)?.name ?? toDesigId}
+                  {effectiveDate && <> · Effective {effectiveDate}</>}
+                </div>
               )}
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>From designation ID</span>
-              <input value={fromDesigId} placeholder="designation UUID" onChange={(e) => setFromDesigId(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>To designation ID</span>
-              <input value={toDesigId} placeholder="designation UUID" onChange={(e) => setToDesigId(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Effective date</span>
-              <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Order reference (optional)</span>
-              <input value={orderRef} placeholder="order no / reference" onChange={(e) => setOrderRef(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Initiating officer (eOffice operator)</span>
-              <input value={initiatedBy} placeholder="operator UUID" onChange={(e) => setInitiatedBy(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Forward to officer (eOffice operator)</span>
-              <input value={currentWith} placeholder="operator UUID" onChange={(e) => setCurrentWith(e.target.value)} />
-            </label>
-          </div>
-          <div className="pad" style={{ paddingTop: 0 }}>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem", marginBottom: 12 }}>
-              <span>Justification note</span>
-              <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-            </label>
-            <button className="btn primary" disabled={saving} onClick={() => void submit()}>
-              {saving ? "Raising…" : "Submit promotion to eOffice"}
-            </button>
-          </div>
+
+              <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
+                Select who initiates this file and who should approve it.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Initiating officer</span>
+                  {officers.length > 0 ? (
+                    <select
+                      value={initiatedBy}
+                      onChange={(e) => setInitiatedBy(e.target.value)}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                    >
+                      <option value="">Select initiating officer…</option>
+                      {officers.map((o) => (
+                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={initiatedBy} placeholder="Officer ID" onChange={(e) => setInitiatedBy(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
+                  )}
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>Forward to (approving officer)</span>
+                  {officers.length > 0 ? (
+                    <select
+                      value={currentWith}
+                      onChange={(e) => setCurrentWith(e.target.value)}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                    >
+                      <option value="">Select approving officer…</option>
+                      {officers.filter((o) => o.id !== initiatedBy).map((o) => (
+                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={currentWith} placeholder="Officer ID" onChange={(e) => setCurrentWith(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
+                  )}
+                </label>
+              </div>
+
+              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                <span style={{ fontWeight: 600 }}>Justification note</span>
+                <textarea
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Why is this promotion being recommended? This will appear in the eFile noting."
+                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
+                />
+              </label>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <button className="btn ghost" onClick={() => setStep(1)}>← Back</button>
+                <button className="btn primary" style={{ minHeight: 44 }} disabled={saving} onClick={() => void submit()}>
+                  {saving ? "Raising…" : "Submit promotion to eOffice"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      ) : null}
+      )}
     </>
   );
 }

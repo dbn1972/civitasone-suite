@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { trackActivation } from "@/lib/activation";
+import { useToast } from "@/app/_components/ds/Toast";
 
 type LeaveAllocation = {
   id: string;
@@ -33,6 +34,7 @@ export function ApplyLeaveForm({ employees }: Props) {
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
+  const { toast } = useToast();
 
   const employeeFieldId = useId();
   const leaveTypeFieldId = useId();
@@ -119,6 +121,7 @@ export function ApplyLeaveForm({ employees }: Props) {
         // Offline (or server unavailable): durably queued and will replay on reconnect.
         setStatus("accepted");
         setMessage("You're offline — leave request saved and will submit automatically when you reconnect.");
+        toast.info("Leave request queued — will submit when you're back online.");
         setFromDate("");
         setToDate("");
         setReason("");
@@ -129,11 +132,13 @@ export function ApplyLeaveForm({ employees }: Props) {
       if (!response || !response.ok) {
         setStatus("error");
         setMessage(text || `Request failed (${response?.status ?? "network"})`);
+        toast.error("Leave request failed. Please check the details and try again.");
         return;
       }
       setStatus("accepted");
       trackActivation("first_transaction");
       setMessage("Leave request submitted for approval.");
+      toast.success("Leave request submitted for approval.");
       setFromDate("");
       setToDate("");
       setReason("");
