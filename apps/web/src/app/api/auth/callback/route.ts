@@ -4,6 +4,7 @@ import { exchangeAuthorizationCode } from "@civitasone/client-core";
 import { getOidcConfig, COOKIE } from "@/lib/auth/config";
 
 const SECURE = process.env.NODE_ENV === "production";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const verifier = jar.get(COOKIE.PKCE_VERIFIER)?.value;
 
   if (!code || !state || !verifier || state !== savedState) {
-    return NextResponse.redirect(new URL("/auth/login?error=invalid_callback", req.url));
+    return NextResponse.redirect(new URL("/auth/login?error=invalid_callback", APP_URL));
   }
 
   try {
@@ -25,8 +26,8 @@ export async function GET(req: Request) {
     }
     jar.delete(COOKIE.PKCE_VERIFIER);
     jar.delete(COOKIE.OAUTH_STATE);
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL("/dashboard", APP_URL));
   } catch {
-    return NextResponse.redirect(new URL("/auth/login?error=token_exchange_failed", req.url));
+    return NextResponse.redirect(new URL("/auth/login?error=token_exchange_failed", APP_URL));
   }
 }

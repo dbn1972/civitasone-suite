@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 
-const PUBLIC = ["/auth", "/api/auth", "/careers", "/_next", "/favicon.ico", "/sw.js"];
+const PUBLIC = ["/auth", "/api/auth", "/careers", "/logout", "/_next", "/favicon.ico", "/sw.js"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -16,7 +16,8 @@ export function middleware(req: NextRequest) {
 
   const token = req.cookies.get(COOKIE.ACCESS)?.value;
   if (!token) {
-    const login = new URL(defaultLoginPath(), req.url);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.url;
+    const login = new URL(defaultLoginPath(), appUrl);
     login.searchParams.set("next", pathname);
     return NextResponse.redirect(login);
   }
