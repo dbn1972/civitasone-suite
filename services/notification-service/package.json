@@ -19,9 +19,11 @@
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
+    "@civitasone/integration-config": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
+    "@civitasone/scanner": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
@@ -32,8 +34,7 @@
     "nodemailer": "^9.0.1",
     "pino": "^8.21.0",
     "postgres": "^3.4.0",
-    "zod": "^3.23.0",
-    "@civitasone/integration-config": "workspace:*"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

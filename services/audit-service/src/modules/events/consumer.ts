@@ -11,7 +11,7 @@ import * as repo from "./repo.js";
 import { computeHash, type IngestPayload } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
-export function registerAuditConsumers(q: Queue): void {
+export function registerAuditConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   const handleAuditEvent = async (msg: {
     messageId: string;
@@ -69,11 +69,11 @@ export function registerAuditConsumers(q: Queue): void {
     });
   };
 
-  q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventRecord, async (msg) => {
+  queue.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventRecord, async (msg) => {
     await handleAuditEvent(msg);
   });
 
-  q.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventIngest, async (msg) => {
+  queue.subscribe<IngestPayload>(CONSUMED_EVENTS.auditEventIngest, async (msg) => {
     await handleAuditEvent(msg);
   });
 }

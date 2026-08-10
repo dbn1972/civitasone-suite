@@ -5,9 +5,9 @@ import { entityDefinitions } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
-export function registerEntityConsumers(q: Queue): void {
+export function registerEntityConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
-  q.subscribe("metadata.entity.create", async (msg) => {
+  queue.subscribe("metadata.entity.create", async (msg) => {
     const p = msg.payload as {
       id: string;
       tenantId: string;
@@ -51,7 +51,7 @@ export function registerEntityConsumers(q: Queue): void {
     });
   });
 
-  q.subscribe("metadata.entity.update", async (msg) => {
+  queue.subscribe("metadata.entity.update", async (msg) => {
     const p = msg.payload as {
       id: string;
       tenantId: string;
@@ -88,7 +88,7 @@ export function registerEntityConsumers(q: Queue): void {
     });
   });
 
-  q.subscribe("metadata.entity.publish", async (msg) => {
+  queue.subscribe("metadata.entity.publish", async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
     await withTenant(p.tenantId, async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

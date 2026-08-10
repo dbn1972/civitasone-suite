@@ -2897,6 +2897,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/scanner':
+        specifier: workspace:*
+        version: link:../../packages/scanner
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

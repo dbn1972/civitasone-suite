@@ -578,7 +578,12 @@ export function registerTicketConsumers(rawQueue: Queue): void {
     const p = msg.payload;
     const recentTickets = await repo.listByTenant(p.tenantId, 100, 0);
     const candidates = recentTickets
-      .filter((t) => t.id !== p.ticketId && t.status !== "closed")
+      // repo.listByTenant returns TicketView, whose status has already been
+      // normalised to the capitalised display form by mapStatus() ("closed" ->
+      // "Closed"). Comparing against lowercase "closed" was therefore always
+      // true, so closed tickets were never excluded and duplicate detection
+      // kept matching against them.
+      .filter((t) => t.id !== p.ticketId && t.status !== "Closed")
       .map((t) => ({ id: t.id, subject: t.subject ?? "", description: (t as unknown as { description?: string }).description ?? t.subject ?? "" }));
 
     if (candidates.length === 0) return;

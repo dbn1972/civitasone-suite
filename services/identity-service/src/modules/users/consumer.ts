@@ -18,9 +18,13 @@ function keyFor(tenantId: string, id: string) {
   return cache.makeKey(tenantId, RESOURCE.user, id);
 }
 
-export function registerUserConsumers(q: Queue): void {
+export function registerUserConsumers(rawQueue: Queue): void {
+  // Every handler must run inside the message's tenant context so RLS applies
+  // (see shared/tenant-queue.ts). Subscriptions below use `queue`, never
+  // `rawQueue` — subscribing on the raw queue bypasses tenant scoping.
   const queue = tenantScoped(rawQueue);
-  q.subscribe<UserView & { createdBy: string }>(COMMANDS.createUser, async (msg) => {
+
+  queue.subscribe<UserView & { createdBy: string }>(COMMANDS.createUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -39,7 +43,7 @@ export function registerUserConsumers(q: Queue): void {
     ).then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak provision"); });
   });
 
-  q.subscribe<{ id: string; name?: string; empCode?: string }>(COMMANDS.updateUser, async (msg) => {
+  queue.subscribe<{ id: string; name?: string; empCode?: string }>(COMMANDS.updateUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
@@ -53,7 +57,7 @@ export function registerUserConsumers(q: Queue): void {
     await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
   });
 
-  q.subscribe<{ id: string; status: string; reason?: string }>(COMMANDS.deactivateUser, async (msg) => {
+  queue.subscribe<{ id: string; status: string; reason?: string }>(COMMANDS.deactivateUser, async (msg) => {
     let deactivatedEmail: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -101,7 +105,7 @@ export function registerUserConsumers(q: Queue): void {
   // change is delegated to Keycloak (best-effort, post-commit): when Keycloak is
   // configured we set the UPDATE_PASSWORD required action; when it is not, the
   // request is still audited but no credential changes (honest dev behaviour).
-  q.subscribe<{ id: string }>(COMMANDS.resetPassword, async (msg) => {
+  queue.subscribe<{ id: string }>(COMMANDS.resetPassword, async (msg) => {
     let userEmail: string | null = null;
     let kcEnabled = false;
     await db.transaction(async (tx) => {
