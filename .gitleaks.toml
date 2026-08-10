@@ -1,0 +1,8 @@
+# Align with scripts/ci/secret-scanner.mjs — dev/test JWT signing literals only.
+title = "civitasone-suite"
+
+[allowlist]
+description = "Known non-production JWT test fixtures"
+regexes = [
+  '''test_secret_for_civitasone_32chr''',
+]

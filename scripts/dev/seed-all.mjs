@@ -94,6 +94,25 @@ VALUES
   ('dddddddd-0001-0000-0000-000000000004', '${T}', 'bbbbbbbb-0001-0000-0000-000000000001', 'hrms.leave',   'approve', 'allow', now(), now(), '${A}', '${A}', 1),
   ('dddddddd-0001-0000-0000-000000000005', '${T}', 'bbbbbbbb-0001-0000-0000-000000000001', 'payroll.run',  'approve', 'allow', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
+
+-- Municipal Sec5 roles (representative subset; full catalog via POST /policy/roles/provision/municipal)
+INSERT INTO roles.roles (id, tenant_id, name, description, status, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('bbbbbbbb-0001-0000-0000-000000000010', '${T}', 'shop_user',    'Shop & establishment — citizen/applicant', 'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000011', '${T}', 'shop_admin',   'Shop & establishment — module administrator', 'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000012', '${T}', 'trade_user',   'Trade licence — citizen/applicant', 'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000013', '${T}', 'trade_admin',  'Trade licence — module administrator', 'active', now(), now(), '${A}', '${A}', 1),
+  ('bbbbbbbb-0001-0000-0000-000000000014', '${T}', 'fire_inspector', 'Fire NOC — field inspector', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (tenant_id, name) DO NOTHING;
+
+INSERT INTO roles.permissions (id, tenant_id, role_id, resource, action, effect, created_at, updated_at, created_by, updated_by, version)
+VALUES
+  ('dddddddd-0001-0000-0000-000000000010', '${T}', 'bbbbbbbb-0001-0000-0000-000000000010', 'shop.applications', 'read',  'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000011', '${T}', 'bbbbbbbb-0001-0000-0000-000000000010', 'shop.applications', 'write', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000012', '${T}', 'bbbbbbbb-0001-0000-0000-000000000011', 'shop.approvals', 'approve', 'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000013', '${T}', 'bbbbbbbb-0001-0000-0000-000000000012', 'trade.applications', 'read',  'allow', now(), now(), '${A}', '${A}', 1),
+  ('dddddddd-0001-0000-0000-000000000014', '${T}', 'bbbbbbbb-0001-0000-0000-000000000014', 'fire.inspections', 'write', 'allow', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────

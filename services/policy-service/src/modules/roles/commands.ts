@@ -33,3 +33,18 @@ export async function addPermission(ctx: RequestContext, roleId: string, body: A
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/** Bootstrap tenant-scoped municipal Sec5 roles from the canonical catalog. */
+export async function provisionMunicipalRoles(ctx: RequestContext): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.provisionMunicipalRoles, {
+    messageId: id,
+    type: COMMANDS.provisionMunicipalRoles,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

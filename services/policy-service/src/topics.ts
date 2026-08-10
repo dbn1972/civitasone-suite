@@ -11,6 +11,7 @@ export const COMMANDS = {
   // ── role features ──────────────────────────────────────────────────────
   roleFeatureGrant:  "policy.role_feature.grant",
   roleFeatureRevoke: "policy.role_feature.revoke",
+  provisionMunicipalRoles: "policy.municipal_roles.provision",
 } as const;
 
 export const EVENTS = {
@@ -26,6 +27,7 @@ export const EVENTS = {
   // ── role features ──────────────────────────────────────────────────────
   roleFeatureGranted: "policy.role_feature.granted",
   roleFeatureRevoked: "policy.role_feature.revoked",
+  municipalRolesProvisioned: "policy.municipal_roles.provisioned",
 } as const;
 
 export const SERVICE = "policy";

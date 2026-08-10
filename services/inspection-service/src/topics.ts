@@ -174,6 +174,42 @@ export const COMMANDS = {
   alertAcknowledge: "inspection.alert.acknowledge",
   /** payload: { alertId, findingDescription? } — create finding from alert */
   alertCreateFinding: "inspection.alert.create_finding",
+
+  // ── Encroachment (BRD 5.19) ───────────────────────────────────────────────
+  /** payload: { reportedBy, location, encroachmentType, description, photos?, landParcelRef? } */
+  encroachmentComplaintCreate: "inspection.encroachment.complaint.create",
+  /** payload: { complaintId, landVerificationReport } */
+  encroachmentComplaintVerify: "inspection.encroachment.complaint.verify",
+  /** payload: { complaintId, noticeType, issuedTo, responseDeadline } */
+  encroachmentNoticeIssue: "inspection.encroachment.notice.issue",
+  /** payload: { noticeId } */
+  encroachmentNoticeServe: "inspection.encroachment.notice.serve",
+  /** payload: { noticeId, responseText } */
+  encroachmentNoticeRespond: "inspection.encroachment.notice.respond",
+  /** payload: { complaintId, noticeId, hearingDate, hearingTime, venue, officerId } */
+  encroachmentHearingSchedule: "inspection.encroachment.hearing.schedule",
+  /** payload: { hearingId, attendees?, proceedings, decision, fineAmountMinor?, nextHearingDate? } */
+  encroachmentHearingComplete: "inspection.encroachment.hearing.complete",
+  /** payload: { complaintId, scheduledDate } */
+  encroachmentRemovalOrder: "inspection.encroachment.removal.order",
+  /** payload: { removalId, teamMembers, equipmentUsed? } */
+  encroachmentRemovalAssignTeam: "inspection.encroachment.removal.assign_team",
+  /** payload: { removalId, completionReport, photos? } */
+  encroachmentRemovalComplete: "inspection.encroachment.removal.complete",
+
+  // ── Illegal Construction (BRD 5.20) ───────────────────────────────────────
+  /** payload: { reportedBy, location, buildingPermitRef?, ownerName, ownerContact?, violationType, description, photos? } */
+  illegalConstructionCaseCreate: "inspection.illegal_construction.case.create",
+  /** payload: { caseId, inspectionFindings, violationChecklist } */
+  illegalConstructionInspect: "inspection.illegal_construction.case.inspect",
+  /** payload: { caseId } */
+  illegalConstructionConfirm: "inspection.illegal_construction.case.confirm",
+  /** payload: { caseId, actionType, details?, fineAmountMinor? } */
+  illegalConstructionActionIssue: "inspection.illegal_construction.action.issue",
+  /** payload: { actionId } */
+  illegalConstructionActionEnforce: "inspection.illegal_construction.action.enforce",
+  /** payload: { caseId, regularizationDetails } */
+  illegalConstructionRegularize: "inspection.illegal_construction.case.regularize",
 } as const;
 
 /**
@@ -287,6 +323,26 @@ export const EVENTS = {
   alertFindingCreated: "inspection.alert.finding_created",
   /** payload: { ruleId, deviceType, readingType, operator, thresholdValue, severity } */
   alertRuleCreated: "inspection.alert_rule.created",
+
+  // ── Encroachment (BRD 5.19) ───────────────────────────────────────────────
+  /** payload: { complaintId, reportedBy, encroachmentType, location } */
+  encroachmentComplaintCreated: "inspection.encroachment.complaint.created",
+  /** payload: { complaintId, verifiedBy, landVerificationReport } */
+  encroachmentComplaintVerified: "inspection.encroachment.complaint.verified",
+  /** payload: { noticeId, complaintId, noticeType, issuedTo } */
+  encroachmentNoticeIssued: "inspection.encroachment.notice.issued",
+  /** payload: { removalId, complaintId, completedBy } */
+  encroachmentRemovalCompleted: "inspection.encroachment.removal.completed",
+
+  // ── Illegal Construction (BRD 5.20) ───────────────────────────────────────
+  /** payload: { caseId, reportedBy, violationType, ownerName } */
+  illegalConstructionCaseCreated: "inspection.illegal_construction.case.created",
+  /** payload: { caseId, confirmedBy } */
+  illegalConstructionViolationConfirmed: "inspection.illegal_construction.violation.confirmed",
+  /** payload: { actionId, caseId, actionType } */
+  illegalConstructionActionIssued: "inspection.illegal_construction.action.issued",
+  /** payload: { caseId, regularizedBy } */
+  illegalConstructionRegularized: "inspection.illegal_construction.case.regularized",
 } as const;
 
 /**

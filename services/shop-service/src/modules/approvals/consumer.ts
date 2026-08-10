@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -115,6 +116,14 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
           decidedBy: msg.actorId,
         },
       });
+      if (p.decision === "approved" || p.decision === "rejected") {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(EVENTS.applicationDecided, p.decision),
+          recipient: msg.actorId,
+          recipientId: msg.actorId,
+          variables: { applicationId: p.applicationId, decision: p.decision },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: `application.${p.decision}`,
         resourceType: "shop_application",

@@ -33,8 +33,8 @@ import {
   updateAction,
   findActionById,
 } from "./repo.js";
-import type {
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import type {
   CreateCasePayload,
   InspectCasePayload,
   ConfirmViolationPayload,

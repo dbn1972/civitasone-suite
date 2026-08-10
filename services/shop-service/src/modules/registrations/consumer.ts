@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -80,6 +81,12 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
           feeCurrency: "INR",
         },
       });
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: p.establishmentName,
+        amountMinor: feeAmountMinor,
+        currency: "INR",
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "application.create",
         resourceType: "shop_application",
@@ -102,6 +109,12 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { applicationId: p.id },
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.applicationSubmitted,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { applicationId: p.id },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "application.submit",

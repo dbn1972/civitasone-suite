@@ -72,6 +72,24 @@ const SERVICES = [
   // Gateway owns civitas_gateway (api catalogue). Was the only service with a
   // migrations/ dir missing from this list.
   { name: "gateway-service",    db: "civitas_gateway" },
+  // Municipal BRD Sec5 services (3060–3085): migrations exist but were not wired here.
+  { name: "advertisement-service", db: "civitas_advertisement" },
+  { name: "animal-service",        db: "civitas_animal" },
+  { name: "building-service",      db: "civitas_building" },
+  { name: "crematorium-service",   db: "civitas_crematorium" },
+  { name: "drainage-service",      db: "civitas_drainage" },
+  { name: "event-service",         db: "civitas_event" },
+  { name: "fire-service",          db: "civitas_fire" },
+  { name: "market-service",        db: "civitas_market" },
+  { name: "parking-service",       db: "civitas_parking" },
+  { name: "parks-service",         db: "civitas_parks" },
+  { name: "refund-service",        db: "civitas_refund" },
+  { name: "roadcut-service",       db: "civitas_roadcut" },
+  { name: "sewerage-service",      db: "civitas_sewerage" },
+  { name: "shop-service",          db: "civitas_shop" },
+  { name: "swm-service",           db: "civitas_swm" },
+  { name: "trade-service",         db: "civitas_trade" },
+  { name: "vendor-service",        db: "civitas_vendor" },
 ];
 
 let applied = 0;

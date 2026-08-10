@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -62,6 +63,12 @@ export function registerPermitConsumers(rawQueue: Queue): void {
           validUntil: validUntil.toISOString(),
           verificationCode,
         },
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.permitIssued,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { permitId: p.id, applicationId: p.applicationId, permitNumber },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.issue",
@@ -196,6 +203,12 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { noticeId: p.id, permitId: p.permitId },
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: EVENTS.noticeIssued,
+        recipient: msg.actorId,
+        recipientId: msg.actorId,
+        variables: { noticeId: p.id, permitId: p.permitId },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.notice",
