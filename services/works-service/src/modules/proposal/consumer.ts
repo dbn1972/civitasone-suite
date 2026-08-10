@@ -11,9 +11,9 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-export function registerProposalConsumers(q: Queue): void {
+export function registerProposalConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
-  q.subscribe(COMMANDS.proposalCreate, async (msg) => {
+  queue.subscribe(COMMANDS.proposalCreate, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return; // idempotent skip
@@ -59,7 +59,7 @@ export function registerProposalConsumers(q: Queue): void {
     await cache.invalidate(`works:${msg.tenantId}:master:work_proposals:*`);
   });
 
-  q.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {
+  queue.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;
@@ -92,7 +92,7 @@ export function registerProposalConsumers(q: Queue): void {
   });
 
   // ORPHAN FIX: proposal split — persist a child split of a parent work.
-  q.subscribe(COMMANDS.proposalSplit, async (msg) => {
+  queue.subscribe(COMMANDS.proposalSplit, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;
@@ -127,7 +127,7 @@ export function registerProposalConsumers(q: Queue): void {
   });
 
   // ORPHAN FIX: COA mapping — persist chart-of-account heads for a work.
-  q.subscribe(COMMANDS.proposalMapCoa, async (msg) => {
+  queue.subscribe(COMMANDS.proposalMapCoa, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;
@@ -158,7 +158,7 @@ export function registerProposalConsumers(q: Queue): void {
   });
 
   // ORPHAN FIX: office mapping — persist executing office assignment for a work.
-  q.subscribe(COMMANDS.proposalMapOffice, async (msg) => {
+  queue.subscribe(COMMANDS.proposalMapOffice, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;

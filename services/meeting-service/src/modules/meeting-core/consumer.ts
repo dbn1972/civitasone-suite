@@ -46,7 +46,6 @@ import {
   type MeetingState,
 } from "./domain.js";
 import { getPolicyNumber, getPolicyBool } from "../config-registry/policy.js";
-import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "meeting";
@@ -905,7 +904,6 @@ type RegisterConsumer = <T>(topic: string, handler: ConsumerHandler<T>) => void;
  * `registerConsumer`, wiring the meeting-core COMMANDS topics to the handlers above.
  */
 export function registerMeetingCoreConsumers(register: RegisterConsumer): void {
-  const queue = tenantScoped(rawQueue);
   register(COMMANDS.meetingCreate, handleMeetingCreate);
   register(COMMANDS.meetingUpdate, handleMeetingUpdate);
   register(COMMANDS.meetingTransition, handleMeetingTransition);
