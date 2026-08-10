@@ -2,8 +2,17 @@ import type { NavTile } from "@civitasone/types";
 import { PageHeader } from "../../_components/ds";
 import { HRHubNavigation } from "./_components/HRHubNavigation";
 
-/** Tiles grouped by category for progressive disclosure. */
-export const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
+/**
+ * Tiles grouped by category for progressive disclosure.
+ *
+ * Intentionally NOT exported: Next.js App Router validates page module
+ * exports and rejects anything outside its allowed set (default export,
+ * metadata/generateMetadata, route segment config, etc.). Exporting this
+ * broke `next build` with:
+ *   Type error: "hrCategories" is not a valid Page export field.
+ * Nothing outside this file consumes it, so a module-local const is correct.
+ */
+const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 	{
 		title: "Core",
 		icon: "👥",
