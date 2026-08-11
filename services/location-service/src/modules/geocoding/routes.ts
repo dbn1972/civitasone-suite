@@ -22,7 +22,7 @@ import {
   CircuitBreakerOpenError,
 } from "./adapter.js";
 
-const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
+const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 export async function geocodingRoutes(app: FastifyInstance): Promise<void> {
   /**

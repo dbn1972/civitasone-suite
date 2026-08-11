@@ -7,6 +7,7 @@ import { ConnectionStatus } from "../ConnectionStatus";
 import { AccountMenu } from "../AccountMenu";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { VoiceNav } from "../VoiceNav";
+import { MobileNavToggle } from "../MobileNavToggle";
 
 interface TopBarProps {
   crumb?: ReactNode;
@@ -16,6 +17,7 @@ interface TopBarProps {
 export function TopBar({ crumb, userName }: TopBarProps) {
   return (
     <header className="tb">
+      <MobileNavToggle />
       <nav className="crumb" aria-label="Breadcrumb">
         {crumb ?? <b>CivitasOne</b>}
       </nav>

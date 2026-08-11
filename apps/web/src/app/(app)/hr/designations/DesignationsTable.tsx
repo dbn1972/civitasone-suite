@@ -26,6 +26,7 @@ const btnBase: React.CSSProperties = {
 
 export function DesignationsTable({ items }: { items: Designation[] }) {
   const router = useRouter();
+  const [localItems, setLocalItems] = useState<Designation[]>(items);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
@@ -71,11 +72,12 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
       if (!res.ok) throw new Error("Save failed");
       setRowError(null);
       setEditingId(null);
-      router.refresh();
+      setLocalItems(prev => prev.map(d => d.id === id ? { ...d, code: editCode, name: editName, level: editLevel, payGrade: editPayGrade || null } : d));
     } catch {
       setRowError("Save failed. Please try again.");
     } finally {
       setSaving(false);
+      try { router.refresh(); } catch {}
     }
   }
 
@@ -86,11 +88,12 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
       const res = await fetch(`/api/proxy/v1/hrms/designations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       setDeleteConfirmId(null);
-      router.refresh();
+      setLocalItems(prev => prev.filter(d => d.id !== id));
     } catch {
       setDeleteError("Delete failed. Please try again.");
     } finally {
       setDeletingId(null);
+      try { router.refresh(); } catch {}
     }
   }
 
@@ -106,7 +109,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((item) => (
+        {localItems.map((item) => (
           <tr key={item.id} style={{ borderBottom: "1px solid var(--line, #f1f5f9)" }}>
             {editingId === item.id ? (
               <>

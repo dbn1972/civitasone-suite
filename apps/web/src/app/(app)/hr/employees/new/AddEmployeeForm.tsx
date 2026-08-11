@@ -21,7 +21,7 @@ interface Props {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
+const PHONE_RE = /^[6-9]\d{9}$/;
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -35,10 +35,22 @@ const inputStyle: React.CSSProperties = {
   minHeight: 44,
 };
 
+const inputErrStyle: React.CSSProperties = {
+  ...inputStyle,
+  border: "1px solid #ef4444",
+};
+
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   color: "#0f172a",
+};
+
+const fieldErrStyle: React.CSSProperties = {
+  color: "#b91c1c",
+  fontSize: 12,
+  margin: "3px 0 0",
+  padding: 0,
 };
 
 const EMPLOYEE_TYPES = [
@@ -85,9 +97,18 @@ export function AddEmployeeForm({ departments, designations }: Props) {
     status: `${formId}-status`,
   };
 
+  function fld(key: string): React.CSSProperties {
+    return invalid.has(key) ? inputErrStyle : inputStyle;
+  }
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("Only image files (JPG, PNG, WEBP) are allowed.");
+      if (photoRef.current) photoRef.current.value = "";
+      return;
+    }
     if (file.size > 512 * 1024) {
       setMessage("Photo must be under 500 KB. Please resize and try again.");
       return;
@@ -200,7 +221,6 @@ export function AddEmployeeForm({ departments, designations }: Props) {
         <h3>Employee Details</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
-        {/* Error status region */}
         <div aria-live="polite" aria-atomic="true" id={ids.status}>
           {message && (
             <p
@@ -281,19 +301,11 @@ export function AddEmployeeForm({ departments, designations }: Props) {
         </div>
 
         {/* Row 1: Employee No + Full Name */}
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          }}
-        >
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.employeeNo} style={labelStyle}>
               Employee No{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
-                *
-              </span>
+              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
             </label>
             <input
               id={ids.employeeNo}
@@ -304,16 +316,18 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("employeeNo")}
-              style={inputStyle}
+              aria-describedby={invalid.has("employeeNo") ? `${ids.employeeNo}-err` : undefined}
+              style={fld("employeeNo")}
             />
+            {invalid.has("employeeNo") && (
+              <p id={`${ids.employeeNo}-err`} role="alert" style={fieldErrStyle}>Employee number is required.</p>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.fullName} style={labelStyle}>
               Full Name{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
-                *
-              </span>
+              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
             </label>
             <input
               id={ids.fullName}
@@ -324,25 +338,21 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("fullName")}
-              style={inputStyle}
+              aria-describedby={invalid.has("fullName") ? `${ids.fullName}-err` : undefined}
+              style={fld("fullName")}
             />
+            {invalid.has("fullName") && (
+              <p id={`${ids.fullName}-err`} role="alert" style={fieldErrStyle}>Full name is required.</p>
+            )}
           </div>
         </div>
 
         {/* Row 2: Department + Designation */}
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          }}
-        >
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.departmentId} style={labelStyle}>
               Department{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
-                *
-              </span>
+              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
             </label>
             <select
               id={ids.departmentId}
@@ -351,7 +361,8 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("departmentId")}
-              style={inputStyle}
+              aria-describedby={invalid.has("departmentId") ? `${ids.departmentId}-err` : undefined}
+              style={fld("departmentId")}
             >
               <option value="">— Select department —</option>
               {departments.map((d) => (
@@ -360,14 +371,15 @@ export function AddEmployeeForm({ departments, designations }: Props) {
                 </option>
               ))}
             </select>
+            {invalid.has("departmentId") && (
+              <p id={`${ids.departmentId}-err`} role="alert" style={fieldErrStyle}>Please select a department.</p>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.designationId} style={labelStyle}>
               Designation{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
-                *
-              </span>
+              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
             </label>
             <select
               id={ids.designationId}
@@ -376,7 +388,8 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("designationId")}
-              style={inputStyle}
+              aria-describedby={invalid.has("designationId") ? `${ids.designationId}-err` : undefined}
+              style={fld("designationId")}
             >
               <option value="">— Select designation —</option>
               {designations.map((d) => (
@@ -385,23 +398,18 @@ export function AddEmployeeForm({ departments, designations }: Props) {
                 </option>
               ))}
             </select>
+            {invalid.has("designationId") && (
+              <p id={`${ids.designationId}-err`} role="alert" style={fieldErrStyle}>Please select a designation.</p>
+            )}
           </div>
         </div>
 
         {/* Row 3: Date of Joining + Type of Employee */}
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          }}
-        >
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.dateOfJoining} style={labelStyle}>
               Date of Joining{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
-                *
-              </span>
+              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
             </label>
             <input
               id={ids.dateOfJoining}
@@ -411,8 +419,12 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("dateOfJoining")}
-              style={inputStyle}
+              aria-describedby={invalid.has("dateOfJoining") ? `${ids.dateOfJoining}-err` : undefined}
+              style={fld("dateOfJoining")}
             />
+            {invalid.has("dateOfJoining") && (
+              <p id={`${ids.dateOfJoining}-err`} role="alert" style={fieldErrStyle}>Date of joining is required.</p>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
@@ -433,13 +445,7 @@ export function AddEmployeeForm({ departments, designations }: Props) {
         </div>
 
         {/* Row 4: Gender + Mobile + Email */}
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          }}
-        >
+        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.gender} style={labelStyle}>
               Gender
@@ -466,13 +472,17 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               type="tel"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
-              placeholder="+91 98765 43210"
+              placeholder="9876543210"
               autoComplete="tel"
               required
               aria-required="true"
               aria-invalid={invalid.has("mobile")}
-              style={inputStyle}
+              aria-describedby={invalid.has("mobile") ? `${ids.mobile}-err` : undefined}
+              style={fld("mobile")}
             />
+            {invalid.has("mobile") && (
+              <p id={`${ids.mobile}-err`} role="alert" style={fieldErrStyle}>Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.</p>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
@@ -489,8 +499,12 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("email")}
-              style={inputStyle}
+              aria-describedby={invalid.has("email") ? `${ids.email}-err` : undefined}
+              style={fld("email")}
             />
+            {invalid.has("email") && (
+              <p id={`${ids.email}-err`} role="alert" style={fieldErrStyle}>Enter a valid email address.</p>
+            )}
           </div>
         </div>
 
