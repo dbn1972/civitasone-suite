@@ -21,6 +21,7 @@ export function RequestAdvanceForm() {
   const [open, setOpen] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [employeeId, setEmployeeId] = useState("");
+  const [employeeFetchError, setEmployeeFetchError] = useState(false);
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState("");
   const [months, setMonths] = useState("3");
@@ -32,13 +33,12 @@ export function RequestAdvanceForm() {
 
   useEffect(() => {
     fetch("/api/proxy/v1/hrms/employees?limit=500")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
-        if (rows[0]) setEmployeeId(rows[0].id);
       })
-      .catch(() => {});
+      .catch(() => { setEmployeeFetchError(true); });
   }, []);
 
   function clearErr(field: string) {
@@ -122,13 +122,13 @@ export function RequestAdvanceForm() {
               onChange={(e) => { setEmployeeId(e.target.value); clearErr("employee"); }}
               style={invalid.has("employee") ? inputErrStyle : inputStyle}
               aria-invalid={invalid.has("employee")}>
-              {employees.length === 0
-                ? <option value="">Loading…</option>
-                : employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
-                  ))}
+              <option value="">— Select employee —</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
+              ))}
             </select>
-            {invalid.has("employee") && <p role="alert" style={fieldErrStyle}>Please select an employee.</p>}
+            {employeeFetchError && <p role="alert" style={fieldErrStyle}>Could not load employee list. Refresh and try again.</p>}
+            {!employeeFetchError && invalid.has("employee") && <p role="alert" style={fieldErrStyle}>Please select an employee.</p>}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
@@ -179,7 +179,7 @@ export function RequestAdvanceForm() {
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" className="btn primary" disabled={busy || employees.length === 0} style={{ minHeight: 44, minWidth: 160 }}>
+            <button type="submit" className="btn primary" disabled={busy || employeeFetchError} style={{ minHeight: 44, minWidth: 160 }}>
               {busy ? "Submitting…" : "Submit Request"}
             </button>
           </div>

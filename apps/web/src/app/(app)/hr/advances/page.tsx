@@ -25,7 +25,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-function formatINR(minor: number): string {
+function formatINR(minor: number | undefined): string {
   if (minor == null) return "—";
   return `₹${(minor / 100).toLocaleString("en-IN")}`;
 }
@@ -38,8 +38,8 @@ function mapAdvances(rows: ApiAdvance[]): Row[] {
       : "—",
     amount: formatINR(a.amountMinor),
     purpose: a.purpose ?? "—",
-    recoveryMonths: `${a.recoveryMonths} mo`,
-    recovered: formatINR(a.recoveredMinor ?? 0),
+    recoveryMonths: `${String(a.recoveryMonths).padStart(2, "0")} mo`,
+    recovered: formatINR(a.recoveredMinor),
     requestDate: a.requestDate ?? a.created_at ?? "—",
     status: a.status ?? "pending",
   }));

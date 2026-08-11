@@ -49,7 +49,7 @@ export function TravelRequestForm() {
     if (!fields.fromDate) errs.add("fromDate");
     if (!fields.toDate) errs.add("toDate");
     if (fields.fromDate && fields.toDate && fields.toDate < fields.fromDate) errs.add("toDate");
-    if (fields.advanceRequired && isNaN(Number(fields.advanceRequired))) errs.add("advanceRequired");
+    if (fields.advanceRequired && (isNaN(Number(fields.advanceRequired)) || Number(fields.advanceRequired) <= 0)) errs.add("advanceRequired");
     setInvalid(errs);
     return errs.size === 0;
   }
