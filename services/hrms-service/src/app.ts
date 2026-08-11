@@ -65,6 +65,7 @@ import { leaveCancelRoutes } from "./modules/leave/cancel-route.js";
 import { compOffRoutes } from "./modules/leave/comp-off-routes.js";
 import { fnfRoutes } from "./modules/employee/fnf-route.js";
 import { lifecycleRoutes } from "./modules/lifecycle/routes.js";
+import { m7ListRoutes } from "./modules/lifecycle/m7-list-routes.js";
 import { onboardingRoutes } from "./modules/lifecycle/onboarding-routes.js";
 import { bgvPropertyPolicyRoutes } from "./modules/lifecycle/bgv-property-policy-routes.js";
 import { serviceBookRoutes } from "./modules/service-book/routes.js";
@@ -188,6 +189,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(compOffRoutes);
   await app.register(fnfRoutes);
   await app.register(lifecycleRoutes);
+  await app.register(m7ListRoutes);
   await app.register(onboardingRoutes);
   await app.register(bgvPropertyPolicyRoutes);
   await app.register(serviceBookRoutes);
