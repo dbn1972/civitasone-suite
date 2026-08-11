@@ -1,16 +1,22 @@
 import { PageHeader, Card } from "../../../../_components/ds";
 
-/**
- * Tax configuration page — shows current TDS slabs, regime, and deduction limits.
- * These drive the payroll engine's monthly TDS computation (Sec 192).
- */
+function getCurrentFY(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const start = month >= 4 ? year : year - 1;
+  const end = (start + 1) % 100;
+  return `${start}-${String(end).padStart(2, "0")}`;
+}
+
 export default function TaxConfigPage() {
+  const fy = getCurrentFY();
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Income Tax Configuration" subtitle="TDS slabs and deduction limits used by the payroll engine for monthly tax computation." back="/hr/payroll" backLabel="Payroll" />
 
       <div className="grid g-2">
-        <Card title="New Tax Regime (Default from FY 2024-25)" padding>
+        <Card title={`New Tax Regime — Default from FY ${fy}`} padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <thead><tr><th>Slab (Annual)</th><th>Rate</th></tr></thead>
             <tbody>
@@ -66,7 +72,7 @@ export default function TaxConfigPage() {
       </div>
 
       <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
-        To update tax slabs (e.g., after a Union Budget change), modify the slab configuration in the payroll engine. The rates above are applied automatically during monthly payroll computation.
+        FY {fy} slabs are active. To update tax slabs after a Union Budget change, modify the slab configuration in the payroll engine. The rates above are applied automatically during monthly payroll computation.
       </p>
     </main>
   );
