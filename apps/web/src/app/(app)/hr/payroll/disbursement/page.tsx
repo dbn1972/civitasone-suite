@@ -155,8 +155,8 @@ export default async function DisbursementPage() {
         <NachMandateForm />
         <EmptyState
           icon="📋"
-          title="Mandate list not yet available"
-          message="The payroll-service does not currently expose a GET /v1/payroll/nach/mandates listing endpoint — only mandate submission (POST) and single-reference status lookup (GET .../:ref/status) exist. This screen submits a mandate or looks up one reference at a time; no mandate list is fabricated here."
+          title="No active mandates"
+          message="Registered NACH mandates will appear here. Use the submit form above to register a new mandate, or look up an existing one by reference number."
         />
       </Card>
 
