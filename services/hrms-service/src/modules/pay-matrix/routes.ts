@@ -131,14 +131,14 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       const currentBasicN = Number(emp.basicMinor);
       // Find current cell: exact match preferred, then nearest-upper-bound for imported data.
       let currentIdx = cells.indexOf(currentBasicN);
-      if (currentIdx < 0) currentIdx = cells.findIndex((c) => c >= currentBasicN);
-      if (currentIdx < 0) currentIdx = cells.length - 1; // above matrix max — already at ceiling
+      if (currentIdx < 0) currentIdx = cells.findLastIndex((c) => c <= currentBasicN);
+      if (currentIdx < 0) currentIdx = 0; // below entry pay — treat as cell 1
 
       const nextIdx = Math.min(currentIdx + 1, cells.length - 1);
       const nextBasic = cells[nextIdx] ?? currentBasicN;
 
       if (!body.dryRun) {
-        if (nextBasic !== currentBasicN) {
+        if (nextBasic > currentBasicN) {
           await db.update(hrmsEmployees)
             .set({ basicMinor: BigInt(nextBasic), updatedBy: ctx.actorId, updatedAt: new Date() })
             .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, emp.id)));

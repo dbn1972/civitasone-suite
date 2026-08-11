@@ -16,7 +16,7 @@ export default function TaxConfigPage() {
       <PageHeader title="Income Tax Configuration" subtitle="TDS slabs and deduction limits used by the payroll engine for monthly tax computation." back="/hr/payroll" backLabel="Payroll" />
 
       <div className="grid g-2">
-        <Card title={`New Tax Regime — Default from FY ${fy}`} padding>
+        <Card title="New Tax Regime — Default from FY 2024-25" padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <thead><tr><th>Slab (Annual)</th><th>Rate</th></tr></thead>
             <tbody>
