@@ -85,7 +85,7 @@ export default async function Form16Page({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load the Form-16 filing run for FY ${fy}`}
-                message="This is not the same as “no run exists” — the status check failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The status check failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : (

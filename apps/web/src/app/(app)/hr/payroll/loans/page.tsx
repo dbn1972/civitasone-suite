@@ -41,7 +41,7 @@ export default async function LoansPage({
           <EmptyState
             icon="🔎"
             title="Search for an employee to see their loans"
-            message="The payroll-service only supports listing loans for one employee at a time (GET /v1/payroll/loans requires empId) — there is no all-tenant loan list endpoint. Enter an employee ID above."
+            message="Enter an employee ID to view their active and past loans, outstanding balance, and EMI details."
           />
         ) : (
           <LoansTable rows={loans} />

@@ -84,6 +84,14 @@ export function AddEmployeeForm({ departments, designations }: Props) {
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
 
+  // Statutory & financial fields
+  const [pan, setPan] = useState("");
+  const [bankAccountNo, setBankAccountNo] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [uanNumber, setUanNumber] = useState("");
+  const [esicIpNumber, setEsicIpNumber] = useState("");
+  const [pran, setPran] = useState("");
+
   const ids = {
     employeeNo: `${formId}-employeeNo`,
     fullName: `${formId}-fullName`,
@@ -95,6 +103,12 @@ export function AddEmployeeForm({ departments, designations }: Props) {
     email: `${formId}-email`,
     employeeType: `${formId}-employeeType`,
     status: `${formId}-status`,
+    pan: `${formId}-pan`,
+    bankAccountNo: `${formId}-bankAccountNo`,
+    bankIfsc: `${formId}-bankIfsc`,
+    uanNumber: `${formId}-uanNumber`,
+    esicIpNumber: `${formId}-esicIpNumber`,
+    pran: `${formId}-pran`,
   };
 
   function fld(key: string): React.CSSProperties {
@@ -171,6 +185,12 @@ export function AddEmployeeForm({ departments, designations }: Props) {
       body.mobile = mobile.trim();
       body.email = email.trim();
       if (photo) body.photoDataUrl = photo;
+      if (pan.trim()) body.pan = pan.trim().toUpperCase();
+      if (bankAccountNo.trim()) body.bankAccountNo = bankAccountNo.trim();
+      if (bankIfsc.trim()) body.bankIfsc = bankIfsc.trim().toUpperCase();
+      if (uanNumber.trim()) body.uanNumber = uanNumber.trim();
+      if (esicIpNumber.trim()) body.esicIpNumber = esicIpNumber.trim();
+      if (pran.trim()) body.pran = pran.trim();
 
       const res = await fetch("/api/proxy/v1/hrms/employees", {
         method: "POST",
@@ -506,6 +526,61 @@ export function AddEmployeeForm({ departments, designations }: Props) {
               <p id={`${ids.email}-err`} role="alert" style={fieldErrStyle}>Enter a valid email address.</p>
             )}
           </div>
+        </div>
+
+
+        {/* Statutory & Financial Details */}
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: "var(--ink1)" }}>
+            Statutory &amp; Financial Details
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.pan} style={labelStyle}>PAN Number</label>
+              <input id={ids.pan} type="text" value={pan}
+                onChange={(e) => setPan(e.target.value)}
+                placeholder="ABCDE1234F" maxLength={10}
+                style={inputStyle} autoComplete="off" />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.bankAccountNo} style={labelStyle}>Bank Account No.</label>
+              <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
+                onChange={(e) => setBankAccountNo(e.target.value)}
+                placeholder="e.g. 0012345678901"
+                style={inputStyle} autoComplete="off" />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.bankIfsc} style={labelStyle}>Bank IFSC Code</label>
+              <input id={ids.bankIfsc} type="text" value={bankIfsc}
+                onChange={(e) => setBankIfsc(e.target.value)}
+                placeholder="e.g. SBIN0001234" maxLength={11}
+                style={inputStyle} autoComplete="off" />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.uanNumber} style={labelStyle}>EPFO UAN Number</label>
+              <input id={ids.uanNumber} type="text" value={uanNumber}
+                onChange={(e) => setUanNumber(e.target.value)}
+                placeholder="12-digit UAN" maxLength={12}
+                style={inputStyle} autoComplete="off" />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.esicIpNumber} style={labelStyle}>ESIC IP Number</label>
+              <input id={ids.esicIpNumber} type="text" value={esicIpNumber}
+                onChange={(e) => setEsicIpNumber(e.target.value)}
+                placeholder="Employee ESIC insurance number"
+                style={inputStyle} autoComplete="off" />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={ids.pran} style={labelStyle}>PRAN (NPS Account)</label>
+              <input id={ids.pran} type="text" value={pran}
+                onChange={(e) => setPran(e.target.value)}
+                placeholder="12-digit PRAN" maxLength={12}
+                style={inputStyle} autoComplete="off" />
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--ink3)", marginTop: 12 }}>
+            Required for salary disbursement and statutory compliance. Bank account and IFSC must be set before activating the employee.
+          </p>
         </div>
 
         {/* Actions */}

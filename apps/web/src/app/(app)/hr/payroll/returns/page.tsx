@@ -197,7 +197,7 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load Form-24Q for FY ${fy} ${quarter}`}
-                message="This is not the same as “no return yet” — the request failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : (
@@ -255,7 +255,7 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load Form-26Q for FY ${fy} ${quarter}`}
-                message="This is not the same as “no data” — the request failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : !f26.populated ? (

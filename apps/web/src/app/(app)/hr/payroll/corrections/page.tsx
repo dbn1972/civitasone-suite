@@ -89,9 +89,7 @@ export default async function CorrectionsPage() {
 
       <Card title="Loss-of-Pay (LOP) Ledger" padding>
         <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-          LOP days are maintained automatically from leave and attendance events and applied during payroll
-          processing. The payroll service does not currently expose a read endpoint for the LOP ledger, so it
-          cannot be shown here — this screen intentionally omits it rather than showing fabricated figures.
+          Loss-of-pay adjustments are calculated automatically from approved leave and attendance records and applied during each payroll run. The adjusted amounts appear in the payroll register after processing.
         </p>
       </Card>
     </main>

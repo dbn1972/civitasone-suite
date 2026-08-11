@@ -30,7 +30,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       mobile?: string; email?: string; bankAccountNo?: string; bankIfsc?: string;
       payStructureId?: string;
       legalEntityId?: string; costCenterId?: string; locationId?: string;
-      esicIpNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -46,7 +46,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
         ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
         ...(p.locationId ? { locationId: p.locationId } : {}),
-        esicIpNumber: p.esicIpNumber ?? null, pran: p.pran ?? null,
+        esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ?? null, pran: p.pran ?? null,
         gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
         agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -223,7 +223,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       mobile?: string; email?: string;
       bankAccountNo?: string; bankIfsc?: string;
       basicMinor?: string; payStructureId?: string; managerId?: string;
-      esicIpNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -235,6 +235,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.bankIfsc    !== undefined) { patch.bankIfsc    = p.bankIfsc; changedFields.push("bankIfsc"); }
       if (p.basicMinor  !== undefined) { patch.basicMinor  = BigInt(p.basicMinor); changedFields.push("basicMinor"); }
       if (p.esicIpNumber !== undefined) { patch.esicIpNumber = p.esicIpNumber; changedFields.push("esicIpNumber"); }
+      if (p.uanNumber   !== undefined) { patch.uanNumber   = p.uanNumber;   changedFields.push("uanNumber"); }
       if (p.pran        !== undefined) { patch.pran        = p.pran; changedFields.push("pran"); }
       if (p.gstin       !== undefined) { patch.gstin       = p.gstin; changedFields.push("gstin"); }
       if (p.sacCode     !== undefined) { patch.sacCode     = p.sacCode; changedFields.push("sacCode"); }
