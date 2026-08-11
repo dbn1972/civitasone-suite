@@ -36,6 +36,7 @@ export default async function LeaveManagementPage() {
             <Link href="/hr/leave/balance" className="btn">Balance</Link>
             <Link href="/hr/leave/history" className="btn">History</Link>
             <Link href="/hr/leave/allocate" className="btn">Allocate</Link>
+            <Link href="/hr/leave-policies" className="btn">Policies</Link>
             <Link href="/hr/leave/approvals" className="btn">{t("leave.approvals")}</Link>
             <Link href="/hr/leave/apply" className="btn primary">{t("leave.newLeave")}</Link>
           </>
