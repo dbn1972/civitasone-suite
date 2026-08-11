@@ -140,10 +140,11 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
-    const opening = await repo.findJobOpeningById(id);
-    if (!opening || opening.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "Job opening not found");
-    const allApps = await repo.searchApplications(ctx.tenantId, {}, 500);
-    const applications = allApps.filter((a) => a.jobOpeningId === id);
+    // Use tenant-scoped lookup (repo.findJobOpeningById has no tenant filter)
+    const opening = await repo.findJobOpeningByTenant(id, ctx.tenantId);
+    if (!opening) throw new HttpError(404, "NOT_FOUND", "Job opening not found");
+    // Fetch applications specifically for this opening (avoids cross-opening truncation)
+    const applications = await repo.listApplicationsByJobOpening(ctx.tenantId, id, 500);
     return reply.send({ ...opening, applications });
   });
 

@@ -77,7 +77,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
 
     const tasks = await scopedRead((tx) => tx.select().from(hrmsOnboardingTasks)
-      .where(eq(hrmsOnboardingTasks.tenantId, ctx.tenantId)));
+      .where(eq(hrmsOnboardingTasks.tenantId, ctx.tenantId)).limit(2000));
 
     if (tasks.length === 0) return reply.send({ data: [] });
 
@@ -100,11 +100,15 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       const empTasks = grouped.get(empId) ?? [];
       const total = empTasks.length;
       const completed = empTasks.filter((t) => t.status === "completed").length;
+      const todayStr = now.toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
       const overdue = empTasks.filter((t) => {
         if (t.status === "completed" || !emp?.dateOfJoining) return false;
-        const due = new Date(emp.dateOfJoining);
-        due.setDate(due.getDate() + t.dueByDay);
-        return due < now;
+        // Both sides are date-only strings or Date objects from a date column;
+        // compute due date in UTC to avoid local-tz midnight hazard.
+        const join = new Date(emp.dateOfJoining + "T00:00:00Z");
+        const due = new Date(join);
+        due.setUTCDate(due.getUTCDate() + t.dueByDay);
+        return due.toISOString().slice(0, 10) < todayStr;
       }).length;
       const status = completed === total ? "completed" : overdue > 0 ? "overdue" : "in_progress";
       return {
