@@ -1,23 +1,48 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 
+type ApiExpense = {
+  id: string;
+  category: string;
+  amount: number;
+  description: string;
+  date: string;
+  receiptKey?: string;
+  status: string;
+  created_at: string;
+};
+
 type Row = {
   id: string;
-  employee: string;
-  department: string;
   category: string;
   amount: string;
-  claimDate: string;
   description: string;
+  date: string;
   status: string;
 } & Record<string, unknown>;
 
+function formatINR(minor: number): string {
+  if (minor == null) return "—";
+  return `₹${(minor / 100).toLocaleString("en-IN")}`;
+}
+
+function mapExpenses(rows: ApiExpense[]): Row[] {
+  return rows.map((e) => ({
+    id: e.id,
+    category: e.category ?? "—",
+    amount: formatINR(e.amount),
+    description: e.description ?? "—",
+    date: e.date ?? e.created_at ?? "—",
+    status: e.status,
+  }));
+}
+
 async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expense-claims", [], {
+  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expenses", [], {
     telemetryKey: "hr.expenses",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiExpense[] })?.data;
+      return Array.isArray(arr) ? mapExpenses(arr as ApiExpense[]) : null;
     },
   });
   return r.data;
@@ -31,11 +56,10 @@ export default async function ExpensesPage() {
   const rejected = items.filter((i) => i.status === "rejected").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
     { key: "category", label: "Category" },
     { key: "amount", label: "Amount" },
     { key: "description", label: "Description" },
-    { key: "claimDate", label: "Claim Date" },
+    { key: "date", label: "Claim Date" },
     { key: "status", label: "Status", cellType: "status" },
   ];
 
@@ -50,7 +74,7 @@ export default async function ExpensesPage() {
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Expense Claims</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, category or status…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by category or status…" pageSize={15} />
       </div>
     </main>
   );
