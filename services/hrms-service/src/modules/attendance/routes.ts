@@ -11,14 +11,8 @@ import * as repo from "./repo.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
-// Locking/unlocking a payroll period is a controlled financial-cutoff action.
 const LOCK_ROLES = ["hr_admin", "super_admin"];
 
-/**
- * DEF-AT-001 (T&A-ATM-0247): reject writes that touch a locked attendance period.
- * `dates` are ISO dates (YYYY-MM-DD); their YYYY-MM prefixes are checked against
- * the lock table. Throws 422 ATTENDANCE_LOCKED naming the offending period(s).
- */
 async function assertPeriodsUnlocked(tenantId: string, dates: string[]): Promise<void> {
   const periods = Array.from(new Set(dates.map((d) => d.slice(0, 7))));
   const locked = await repo.findLockedPeriods(tenantId, periods);
@@ -40,7 +34,6 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.markAttendance(ctx, body));
   });
 
-  // ── DEF-AT-001: attendance period lock / payroll cut-off ──
   app.get("/v1/hrms/attendance/locks", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
@@ -83,6 +76,13 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, AttendanceSummaryListSchema, await queries.listAttendance(ctx.tenantId, q.limit));
   });
 
+  app.get("/v1/hrms/attendance/checkin-log", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).parse(req.query);
+    return reply.send({ data: await repo.listCheckinLog(ctx.tenantId, q.limit) });
+  });
+
   app.get("/v1/hrms/attendance/regularisations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
@@ -96,6 +96,47 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const body = regularisationCreateBody.parse(req.body);
     await assertPeriodsUnlocked(ctx.tenantId, [body.date]);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRegularisation(ctx, body));
+  });
+
+  // PPL-D1 fix: approve / reject a pending regularisation
+  app.post("/v1/hrms/attendance/regularisations/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
+    const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "approved", ctx.actorId, reason);
+    if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    return reply.send({ id, status: "approved" });
+  });
+
+  app.post("/v1/hrms/attendance/regularisations/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body ?? {});
+    const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "rejected", ctx.actorId, reason);
+    if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    return reply.send({ id, status: "rejected" });
+  });
+
+  // Shifts list (hrmsShifts table)
+  app.get("/v1/hrms/shifts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    return reply.send({ data: await repo.listShifts(ctx.tenantId) });
+  });
+
+  // Shift-requests and WFH-requests: return empty until DB tables are built
+  app.get("/v1/hrms/shift-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    return reply.send({ data: [] });
+  });
+
+  app.get("/v1/hrms/wfh-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    return reply.send({ data: [] });
   });
 
   app.setErrorHandler(errorHandler);

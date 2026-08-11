@@ -1,7 +1,7 @@
 import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
-  hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks,
+  hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks, hrmsShifts,
   type AttendanceRow, type AttendanceInsert, type RegularisationRow, type AttendanceLockRow,
 } from "./schema.js";
 
@@ -28,7 +28,7 @@ export async function insertAttendance(tx: Writer, row: AttendanceInsert): Promi
 }
 
 export async function upsertAttendance(tx: Writer, row: AttendanceInsert): Promise<void> {
-  await (tx as typeof db).insert(hrmsAttendance).values(row)
+  await (tx as typeof db).insert(hrmsAttendance).values(row) // tx may be a transaction or the db pool
     .onConflictDoUpdate({
       target: [hrmsAttendance.tenantId, hrmsAttendance.employeeId, hrmsAttendance.attendanceDate],
       set: {
@@ -51,9 +51,73 @@ export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanc
   await tx.insert(hrmsAttendanceRegularisations).values(row);
 }
 
+/** PPL-D1 fix: update a pending regularisation to approved or rejected. Returns false if not found or already decided. */
+export async function updateRegularisationStatus(
+  tenantId: string, id: string, status: "approved" | "rejected", actorId: string, reason?: string,
+): Promise<boolean> {
+  // Atomic: WHERE status='pending' guards against concurrent approve/reject races.
+  const updated = await db.update(hrmsAttendanceRegularisations)
+    .set({ status, updatedBy: actorId, updatedAt: new Date(), ...(reason ? { reason } : {}) })
+    .where(and(
+      eq(hrmsAttendanceRegularisations.tenantId, tenantId),
+      eq(hrmsAttendanceRegularisations.id, id),
+      eq(hrmsAttendanceRegularisations.status, "pending"),
+    ))
+    .returning({ id: hrmsAttendanceRegularisations.id });
+  return updated.length > 0;
+}
+
+/** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */
+export async function listCheckinLog(tenantId: string, limit = 200) {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(hrmsAttendance)
+      .where(eq(hrmsAttendance.tenantId, tenantId))
+      .limit(limit)
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    employee: r.employeeId.slice(0, 8),
+    department: "",
+    date: r.attendanceDate,
+    checkIn: r.inTime ?? null,
+    checkOut: r.outTime ?? null,
+    source: r.source,
+    totalHours: (r.inTime && r.outTime)
+      ? (() => {
+          const [ih, im] = r.inTime.split(":").map(Number) as [number, number];
+          const [oh, om] = r.outTime!.split(":").map(Number) as [number, number];
+          const mins = (oh * 60 + om) - (ih * 60 + im);
+          return mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
+        })()
+      : "—",
+  }));
+}
+
+/** List shift definitions for a tenant. */
+export async function listShifts(tenantId: string) {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(hrmsShifts).where(eq(hrmsShifts.tenantId, tenantId))
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    breakDuration: r.graceMins ? `${r.graceMins} min grace` : "—",
+    workingHours: (() => {
+      const [sh, sm] = r.startTime.split(":").map(Number) as [number, number];
+      const [eh, em] = r.endTime.split(":").map(Number) as [number, number];
+      const mins = (eh * 60 + em) - (sh * 60 + sm);
+      return mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
+    })(),
+    applicableTo: "All",
+    status: "active",
+  }));
+}
+
 // ── DEF-AT-001: attendance period lock ─────────────────────────────────────
 
-/** Return the set of periods (YYYY-MM) that are currently LOCKED for the tenant. */
 export async function findLockedPeriods(tenantId: string, periods: string[]): Promise<string[]> {
   if (periods.length === 0) return [];
   const rows = await scopedRead((tx) => tx.select({ period: hrmsAttendanceLocks.period })
@@ -72,11 +136,6 @@ export async function listLocksByTenant(tenantId: string, limit = 200): Promise<
     .limit(limit));
 }
 
-/**
- * Idempotent upsert of a period lock state. On conflict (tenant, period) the
- * status/reason/actor are updated — locking then re-opening the same period
- * mutates the single row rather than creating duplicates.
- */
 export async function upsertLock(
   tx: Writer,
   row: {
@@ -84,7 +143,7 @@ export async function upsertLock(
     reason: string | null; actorId: string; at: Date;
   },
 ): Promise<void> {
-  await (tx as typeof db).insert(hrmsAttendanceLocks).values({
+  await (tx as typeof db).insert(hrmsAttendanceLocks).values({ // tx may be a transaction or the db pool
     id: row.id, tenantId: row.tenantId, period: row.period, status: row.status,
     reason: row.reason, lockedBy: row.actorId, lockedAt: row.at,
     createdBy: row.actorId, updatedBy: row.actorId,
