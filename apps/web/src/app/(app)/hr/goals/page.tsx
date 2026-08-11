@@ -43,7 +43,7 @@ export default async function GoalsPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, objective or cycle…" pageSize={15} emptyIcon="🎯" emptyTitle="No goals set" emptyMessage="Goals and KRAs are set during the appraisal cycle. Create an appraisal from the Appraisals page to assign objectives and targets to employees." />
       </div>
     </main>
   );

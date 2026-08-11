@@ -44,6 +44,9 @@ export default async function AppraisalsPage() {
           sortable
           filterable
           filterPlaceholder="Filter by employee, period or reviewer…"
+          emptyIcon="📊"
+          emptyTitle="No appraisals yet"
+          emptyMessage="Use '+ New Appraisal' to start a performance review cycle. Each appraisal records ratings, reviewer comments, and links to the employee's goals and KRAs."
           pageSize={15}
         />
       </Card>

@@ -43,7 +43,7 @@ export default async function ArrearsPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or period…" pageSize={15} emptyIcon="📋" emptyTitle="No arrears computed" emptyMessage="Arrears arise from DA revisions, promotions, and pay fixations applied retroactively. They appear here automatically after each payroll run that includes a backdated revision." />
       </div>
     </main>
   );

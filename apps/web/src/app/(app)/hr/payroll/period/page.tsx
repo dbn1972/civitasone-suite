@@ -43,7 +43,7 @@ export default async function PayrollPeriodPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by period or status…" pageSize={15} emptyIcon="📅" emptyTitle="No payroll periods yet" emptyMessage="Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll Runs page to generate a period record." />
       </div>
     </main>
   );
