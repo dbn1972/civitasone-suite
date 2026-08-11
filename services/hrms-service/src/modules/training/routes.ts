@@ -118,7 +118,7 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
       };
     });
 
-    return reply.send({ data });
+    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
   });
 
   // HR admin: completed nominations shaped as post-training feedback records
@@ -151,13 +151,10 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
       employee: employeeMap.get(n.employeeId)?.fullName ?? "—",
       program: trainingMap.get(n.trainingId)?.title ?? "—",
       rating: n.score != null ? String(n.score) : "—",
-      contentRating: "—",
-      trainerRating: "—",
-      comments: n.certificateRef ?? "",
-      submittedOn: n.completedDate ?? n.updatedAt.toISOString().slice(0, 10),
+      submittedOn: (n.completedDate ?? n.updatedAt.toISOString()).slice(0, 10),
     }));
 
-    return reply.send({ data });
+    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
   });
 
   app.setErrorHandler(errorHandler);
