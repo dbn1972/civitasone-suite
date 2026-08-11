@@ -68,6 +68,8 @@ export function TaxDeclarationForm() {
             setOtherSourcesIncome(toInr(data.otherSourcesIncomeMinor));
             setPerquisites(toInr(data.perquisitesMinor));
           }
+        } else {
+          setLoadFailed(true);
         }
       } catch {
         setLoadFailed(true);
@@ -102,8 +104,9 @@ export function TaxDeclarationForm() {
 
       if (!res.ok) {
         const text = await res.text();
+        console.error("[tax-declaration] submit failed", res.status, text);
         setTone("bad");
-        setMessage(text || `Submission failed (${res.status})`);
+        setMessage(`Submission failed (${res.status}). Please try again or contact support.`);
         return;
       }
       setTone("good");
