@@ -10,12 +10,14 @@ import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
 import * as repo from "./repo.js";
 import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./domain.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 
-export function registerLeaveConsumers(queue: Queue): void {
+export function registerLeaveConsumers(rawQueue: Queue): void {
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; code: string; name: string; maxDays: number; isEncashable: boolean; carryForward: boolean };
     await db.transaction(async (tx) => {
