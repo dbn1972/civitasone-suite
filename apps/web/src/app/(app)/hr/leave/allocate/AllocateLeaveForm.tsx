@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveTypeOption = { id: string; code: string; name: string };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
-const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
-const fieldErrStyle: React.CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
+const fieldErrStyle: CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
 
 function getCurrentFY(): string {
   const now = new Date();
