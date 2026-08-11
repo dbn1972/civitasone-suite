@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateStructureForm } from "./CreateStructureForm";
@@ -8,6 +8,15 @@ type Row = {
   name: string;
   isDefault: boolean;
   status: string;
+} & Record<string, unknown>;
+
+type ComponentRow = {
+  id: string;
+  code: string;
+  name: string;
+  componentType: string;
+  isTaxable: boolean;
+  structureId: string | null;
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
@@ -20,8 +29,21 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
+async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
+  return fetchJson<unknown, ComponentRow[]>("/api/v1/payroll/components", [], {
+    telemetryKey: "payroll.components",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ComponentRow[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+}
+
 export default async function PayStructuresPage() {
-  const { data: structures, source } = await getData();
+  const [{ data: structures, source: structuresSource }, { data: rawComponents, source: componentsSource }] = await Promise.all([
+    getData(),
+    getComponents(),
+  ]);
   const active = structures.filter((s) => s.status === "active").length;
   const defaultCount = structures.filter((s) => s.isDefault).length;
 
@@ -36,6 +58,18 @@ export default async function PayStructuresPage() {
     { key: "status", label: "Status", cellType: "status" },
   ];
 
+  const componentRows: (ComponentRow & { taxableLabel: string })[] = rawComponents.map((c) => ({
+    ...c,
+    taxableLabel: c.isTaxable ? "Yes" : "No",
+  }));
+
+  const componentColumns: { key: keyof ComponentRow | "taxableLabel"; label: string; cellType?: "status" }[] = [
+    { key: "code", label: "Code" },
+    { key: "name", label: "Component Name" },
+    { key: "componentType", label: "Type", cellType: "status" },
+    { key: "taxableLabel", label: "Taxable" },
+  ];
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -43,7 +77,7 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {(structuresSource === "error" || componentsSource === "error") && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🧱" iconBg="#e6f0ff" label="Total Structures" value={structures.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
@@ -67,10 +101,16 @@ export default async function PayStructuresPage() {
       </Card>
 
       <Card title="Components (earnings & deductions)">
-        <EmptyState
-          icon="🧩"
-          title="Component builder not yet available"
-          message="The payroll-service does not currently expose an API to create or list payroll_components for a structure (POST/GET routes are not implemented on the backend). This screen will light up once that endpoint ships — no component data is fabricated here."
+        <DataTable<ComponentRow & { taxableLabel: string }>
+          columns={componentColumns}
+          rows={componentRows}
+          sortable
+          filterable
+          filterPlaceholder="Filter by name or code…"
+          pageSize={20}
+          emptyIcon="🧩"
+          emptyTitle="No components yet"
+          emptyMessage="Components are added when a payroll structure is created with earnings and deductions."
         />
       </Card>
     </main>
