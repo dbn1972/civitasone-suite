@@ -1,15 +1,34 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, Card, EmptyState } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { DesignationsTable } from "./DesignationsTable";
 
 type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
 
 async function getDesignations(): Promise<Designation[]> {
-  const r = await fetchJson<unknown, Designation[]>("/api/v1/hrms/designations", [], {
-    telemetryKey: "config.designations",
-    mapResponse: (p) => (p as { data: Designation[] })?.data ?? null,
-  });
-  return r.data;
+  try {
+    const r = await fetchJson<unknown, Designation[]>("/api/v1/hrms/designations", [], {
+      telemetryKey: "config.designations",
+      mapResponse: (p) => (p as { data: Designation[] })?.data ?? null,
+    });
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
 }
+
+const newBtnStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 16px",
+  display: "flex",
+  alignItems: "center",
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 14,
+  background: "var(--primary)",
+  color: "#fff",
+  textDecoration: "none",
+};
 
 export default async function DesignationsPage() {
   const items = await getDesignations();
@@ -22,6 +41,11 @@ export default async function DesignationsPage() {
         back="/hr"
         backLabel="HR"
         help="hr"
+        actions={
+          <Link href="/hr/designations/new" style={newBtnStyle}>
+            + New Designation
+          </Link>
+        }
       />
 
       <Card title={`Designations (${items.length})`}>
@@ -32,18 +56,7 @@ export default async function DesignationsPage() {
             message="Add your first designation so employees can be given a proper job title."
           />
         ) : (
-          <DataTable<Designation>
-            columns={[
-              { key: "code", label: "Code" },
-              { key: "name", label: "Designation" },
-              { key: "level", label: "Pay Level", align: "right" },
-              { key: "payGrade", label: "Pay Grade" },
-            ]}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder="Search designations…"
-          />
+          <DesignationsTable items={items} />
         )}
       </Card>
     </main>

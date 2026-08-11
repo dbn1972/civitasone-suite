@@ -507,6 +507,7 @@ export interface ApprovalSummary {
 
 export interface EmployeeSummary {
   id: string;
+  employeeNo?: string;
   name: string;
   department: string;
   status: string;

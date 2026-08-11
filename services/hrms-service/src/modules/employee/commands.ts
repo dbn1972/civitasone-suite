@@ -1,20 +1,57 @@
 import { randomUUID } from "node:crypto";
+import { putObject, StorageNotConfiguredError } from "@civitasone/storage";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
+import { db, scopedRead } from "../../shared/db.js";
+import { hrmsEmployees } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBody): Promise<Accepted> {
-  const id = randomUUID();
-  await queue.publish(COMMANDS.employeeCreate, {
-    messageId: id, type: COMMANDS.employeeCreate,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
-  });
-  await cache.put(cache.makeKey(ctx.tenantId, "employee", id), { id, ...body, status: "probation" });
+  let photoKey: string | null = null;
+  if (body.photoDataUrl) {
+    const m = body.photoDataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (m) {
+      const mimeType = m[1] as string;
+      const ext = (mimeType.split("/")[1] ?? "jpg").replace("jpeg", "jpg");
+      const key = `${ctx.tenantId}/hrms/employees/${randomUUID()}/photo/${Date.now()}.${ext}`;
+      try {
+        await putObject(key, Buffer.from(m[2] as string, "base64"), mimeType);
+        photoKey = key;
+      } catch (err) {
+        if (!(err instanceof StorageNotConfiguredError)) throw err;
+      }
+    }
+  }
+
+  const [row] = await scopedRead((tx) =>
+    tx.insert(hrmsEmployees).values({
+      tenantId:       ctx.tenantId,
+      employeeNo:     body.employeeNo,
+      fullName:       body.fullName,
+      departmentId:   body.departmentId,
+      designationId:  body.designationId,
+      dateOfJoining:  body.dateOfJoining,
+      dateOfBirth:    body.dateOfBirth ?? null,
+      gender:         body.gender ?? null,
+      mobile:         body.mobile ?? null,
+      email:          body.email ?? null,
+      photoKey,
+      employeeType:   body.employeeType ?? "permanent",
+      basicMinor:     BigInt(body.basicMinor ?? 0),
+      currency:       body.currency ?? "INR",
+      payStructureId: body.payStructureId ?? null,
+      legalEntityId:  body.legalEntityId ?? null,
+      costCenterId:   body.costCenterId ?? null,
+      locationId:     body.locationId ?? null,
+      createdBy:      ctx.actorId,
+      updatedBy:      ctx.actorId,
+    }).returning({ id: hrmsEmployees.id })
+  );
+  const id = row!.id;
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

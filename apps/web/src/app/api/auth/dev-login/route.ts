@@ -111,7 +111,7 @@ function mint(u: DevUser, tenantId: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = b64url({ alg: "HS256", typ: "JWT" });
   const payload = b64url({
-    sub: u.sub, iss: "civitasone-dev",
+    sub: u.sub, iss: "civitasone-dev", aud: "civitasone",
     tid: tenantId, tenantId, sid: "dev-session",
     email: u.email, name: u.name, roles: u.roles,
     iat: now, exp: now + 60 * 60 * 12,

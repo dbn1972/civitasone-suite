@@ -34,6 +34,7 @@ export default async function PensionersPage() {
       <PageHeader
         title="Pensioners"
         subtitle="Pension Payment Order management and disbursement tracking."
+        back="/hr/payroll"
         actions={
           <Link href="/hr/payroll/pensioners/new" className="btn primary">+ Add Pensioner</Link>
         }

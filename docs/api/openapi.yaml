@@ -547,6 +547,204 @@ paths:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # HRMS Self-Service (Employee Portal)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/hrms/me/profile:
+    get:
+      operationId: getMyProfile
+      tags: [HRMS]
+      summary: Get current employee's profile (self-service)
+      description: |
+        Returns the employee record linked to the authenticated user. Resolution
+        strategy:
+        1. Primary lookup by `userRef` matching the JWT `sub` claim (actorId).
+        2. Fallback: if no `userRef` match, attempts to match by email from JWT
+           claims. On success, auto-links the `userRef` for future fast lookups
+           (solves the bootstrap problem where employees are seeded without
+           `user_ref` populated).
+
+        Any authenticated user can call this endpoint — no specific role required
+        beyond a valid JWT. Returns the employee's own record only (tenant-scoped).
+      responses:
+        "200":
+          description: Employee profile found and returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeProfile"
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: |
+            No employee record linked to the authenticated user (`NOT_FOUND`).
+            Neither `userRef` nor email matched any employee in the tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/me/leave-balance:
+    get:
+      operationId: getMyLeaveBalance
+      tags: [HRMS]
+      summary: Get current employee's leave balance
+      description: |
+        Returns leave allocations for the authenticated employee, showing total,
+        used, and remaining balance per leave type and financial year.
+      responses:
+        "200":
+          description: Leave balance breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        leaveTypeId:
+                          type: string
+                          format: uuid
+                        fy:
+                          type: string
+                          description: Financial year (e.g. "2025-26")
+                        total:
+                          type: integer
+                          description: Total days allocated
+                        balance:
+                          type: integer
+                          description: Remaining days
+                        used:
+                          type: integer
+                          description: Days consumed
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: No employee record linked to user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/me/attendance:
+    get:
+      operationId: getMyAttendance
+      tags: [HRMS]
+      summary: Get current employee's attendance records
+      description: |
+        Returns attendance records for the authenticated employee. Supports
+        pagination via `limit` and `offset` query parameters (defaults: limit=31,
+        offset=0).
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 31
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        status:
+                          type: string
+                          enum: [present, absent, half_day, leave, holiday, weekly_off]
+                        inTime:
+                          type: string
+                          format: time
+                          nullable: true
+                        outTime:
+                          type: string
+                          format: time
+                          nullable: true
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: No employee record linked to user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  /v1/hrms/me/leave-applications:
+    get:
+      operationId: getMyLeaveApplications
+      tags: [HRMS]
+      summary: Get current employee's leave applications
+      description: |
+        Returns all leave applications submitted by the authenticated employee,
+        including pending, approved, and rejected applications.
+      responses:
+        "200":
+          description: Leave applications list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        leaveTypeId:
+                          type: string
+                          format: uuid
+                        fromDate:
+                          type: string
+                          format: date
+                        toDate:
+                          type: string
+                          format: date
+                        days:
+                          type: integer
+                          description: Number of days applied
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected, cancelled]
+        "401":
+          description: Missing or invalid bearer token
+        "404":
+          description: No employee record linked to user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Recruitment — New Endpoints (PRs #263–#286)
   # ═══════════════════════════════════════════════════════════════════════════
 
@@ -22444,3 +22642,71 @@ components:
         - createdAt
         - updatedAt
         - version
+
+    # ─── HRMS Self-Service ─────────────────────────────────────────────────────
+
+    EmployeeProfile:
+      type: object
+      description: |
+        Employee record returned by the self-service profile endpoint. Contains
+        the employee's basic details as stored in hrms_employees. PII fields
+        (email, phone, aadhaar, pan) are encrypted at rest and decrypted for
+        the owning user only.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        employeeNo:
+          type: string
+          description: Organisation-level employee number
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        departmentId:
+          type: string
+          format: uuid
+          nullable: true
+        designationId:
+          type: string
+          format: uuid
+          nullable: true
+        dateOfJoining:
+          type: string
+          format: date
+          nullable: true
+        status:
+          type: string
+          enum: [active, on_leave, suspended, resigned, retired, terminated]
+        engagementType:
+          type: string
+          enum: [regular, contractual, deputation, consultant, third_party, apprenticeship]
+          nullable: true
+        userRef:
+          type: string
+          format: uuid
+          nullable: true
+          description: Linked identity user ID (auto-populated on email fallback match)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+      required:
+        - id
+        - tenantId
+        - firstName
+        - lastName
+        - status

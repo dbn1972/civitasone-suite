@@ -5,7 +5,7 @@ import { Avatar } from "./ds/Avatar";
 import { performLogout } from "@/lib/sync/logout";
 
 /** Account avatar with a sign-out that wipes the local encrypted cache (08-T4). */
-export function AccountMenu({ name = "D Nayak" }: { name?: string }) {
+export function AccountMenu({ name = "User" }: { name?: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 

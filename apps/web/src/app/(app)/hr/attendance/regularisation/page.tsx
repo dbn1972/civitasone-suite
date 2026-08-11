@@ -11,6 +11,7 @@ export default async function AttendanceRegularisationPage() {
       <PageHeader
         title="Attendance Regularisation"
         subtitle="Employee requests to correct attendance records."
+        back="/hr/attendance"
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <Card title="Regularisation Requests">

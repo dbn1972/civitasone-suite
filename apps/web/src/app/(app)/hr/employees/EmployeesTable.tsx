@@ -4,10 +4,10 @@ import Link from "next/link";
 import { DataTable } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
-export type EmpRow = { id: string; name: string; department: string; status: string } & Record<string, unknown>;
+export type EmpRow = { id: string; employeeNo?: string; name: string; department: string; status: string } & Record<string, unknown>;
 
 const columns: { key: keyof EmpRow & string; label: string; cellType?: "status" }[] = [
-  { key: "id", label: "Emp Code" },
+  { key: "employeeNo", label: "Emp Code" },
   { key: "name", label: "Name" },
   { key: "department", label: "Department" },
   { key: "status", label: "Status", cellType: "status" },
@@ -47,8 +47,8 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         emptyTitle="No people added yet"
         emptyMessage="Add the people who work in your office so you can manage their leave, attendance and pay."
         emptyAction={
-          <Link href="/help/hr" className="btn ghost" style={{ marginTop: 10 }}>
-            How HR works
+          <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
+            + Add Employee
           </Link>
         }
       />

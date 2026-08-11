@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { PageHeader } from "../../../../_components/ds";
 
 type Application = {
   id: string;
@@ -128,10 +129,12 @@ export default function ApplicationDetailPage() {
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
-      <div className="mb-4 flex items-center justify-between">
-        <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline">
-          ← Back to Recruitment
-        </button>
+      <PageHeader
+        title={application.applicantName}
+        subtitle="Application detail"
+        back="/hr/recruitment"
+      />
+      <div className="mb-4 flex items-center justify-end">
         {canHire && (
           <button
             onClick={() => setShowHireDialog(true)}
