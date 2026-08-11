@@ -65,6 +65,9 @@ export default async function TrainingPage() {
           filterable
           filterPlaceholder="Filter by title, category or trainer…"
           pageSize={15}
+          emptyIcon="📚"
+          emptyTitle="No training programmes"
+          emptyMessage="Training programmes appear here once created. Click '+ New Program' to schedule a training."
         />
       </Card>
     </main>

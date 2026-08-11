@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiStructure = {
   id: string;
@@ -36,7 +37,7 @@ function mapStructures(apiItems: ApiStructure[]): Row[] {
   }));
 }
 
-async function getStructures(): Promise<Row[]> {
+async function getStructures(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
     telemetryKey: "hr.salary-structures",
     mapResponse: (p) => {
@@ -44,11 +45,11 @@ async function getStructures(): Promise<Row[]> {
       return Array.isArray(arr) ? mapStructures(arr as ApiStructure[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function SalaryStructurePage() {
-  const items = await getStructures();
+  const { data: items, source } = await getStructures();
 
   const active = items.filter((i) => i.status === "active").length;
   const totalEmployees = items.reduce((sum, i) => {
@@ -75,10 +76,14 @@ export default async function SalaryStructurePage() {
         <StatCard icon="👥" iconBg="#fffbe6" label="Employees Covered" value={totalEmployees.toLocaleString("en-IN")} />
         <StatCard icon="📅" iconBg="#f5f5f5" label="Last Revision" value="Jan 2024" />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Salary Structures</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, grade or status…" pageSize={15} />
-      </div>
+      <Card title="Salary Structures">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, grade or status…"
+          pageSize={15}
+          emptyIcon="💼"
+          emptyTitle="No salary structures"
+          emptyMessage="Pay structure definitions by grade and level appear here. Structures define the component breakdown for each employee category."
+        />
+      </Card>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { PageHeader, Card } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type FeedItem = {
   type: string;
@@ -24,7 +25,7 @@ const BADGE_EMOJI: Record<string, string> = {
   star: "⭐", rocket: "🚀", heart: "❤️", trophy: "🏆", fire: "🔥", lightning: "⚡", thumbsup: "👍",
 };
 
-async function getData(): Promise<FeedItem[]> {
+async function getData(): Promise<LoaderResult<FeedItem[]>> {
   const r = await fetchJson<unknown, FeedItem[]>("/api/v1/hrms/social/feed", [], {
     telemetryKey: "hr.social-feed",
     mapResponse: (p) => {
@@ -32,11 +33,11 @@ async function getData(): Promise<FeedItem[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function SocialFeedPage() {
-  const feed = await getData();
+  const { data: feed, source } = await getData();
 
   const kudosCount = feed.filter((f) => f.type === "kudos").length;
   const birthdayCount = feed.filter((f) => f.type === "birthday").length;

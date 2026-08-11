@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiShift = {
   id: string;
@@ -47,7 +48,7 @@ function mapShifts(apiItems: ApiShift[]): Row[] {
   }));
 }
 
-async function getShifts(): Promise<Row[]> {
+async function getShifts(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/shifts", [], {
     telemetryKey: "hr.shifts",
     mapResponse: (p) => {
@@ -55,11 +56,11 @@ async function getShifts(): Promise<Row[]> {
       return Array.isArray(arr) ? mapShifts(arr as ApiShift[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function ShiftsPage() {
-  const items = await getShifts();
+  const { data: items, source } = await getShifts();
 
   const active = items.filter((i) => i.status === "active").length;
   const departments = new Set(
@@ -85,10 +86,14 @@ export default async function ShiftsPage() {
         <StatCard icon="👥" iconBg="#fffbe6" label="Departments" value={departments} />
         <StatCard icon="⏰" iconBg="#f5f5f5" label="Avg Hours" value="—" />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Shift Schedule</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by shift name or department…" pageSize={15} />
-      </div>
+      <Card title="Shift Definitions">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by shift name or department…"
+          pageSize={15}
+          emptyIcon="🕐"
+          emptyTitle="No shifts defined"
+          emptyMessage="Shift schedules (Morning, Evening, Night, General) appear here. Define shifts and assign departments to enable attendance tracking."
+        />
+      </Card>
     </main>
   );
 }

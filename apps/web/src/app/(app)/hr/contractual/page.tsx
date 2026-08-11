@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiEmployee = {
   id: string;
@@ -56,7 +57,7 @@ function mapContractual(apiItems: ApiEmployee[]): Row[] {
     }));
 }
 
-async function getContractual(): Promise<Row[]> {
+async function getContractual(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=50", [], {
     telemetryKey: "hr.contractual",
     mapResponse: (p) => {
@@ -64,11 +65,11 @@ async function getContractual(): Promise<Row[]> {
       return Array.isArray(arr) ? mapContractual(arr as ApiEmployee[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function ContractualPage() {
-  const items = await getContractual();
+  const { data: items, source } = await getContractual();
 
   const active = items.filter((i) => i.status === "active").length;
   const completed = items.filter((i) => i.status === "completed" || i.status === "expired").length;
@@ -93,10 +94,14 @@ export default async function ContractualPage() {
         <StatCard icon="📁" iconBg="#fffbe6" label="Expired" value={completed} />
         <StatCard icon="🏢" iconBg="#f5f5f5" label="Agencies" value={agencies} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Contractual Staff</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, agency or department…" pageSize={15} />
-      </div>
+      <Card title="Contractual Staff">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, agency or department…"
+          pageSize={15}
+          emptyIcon="📑"
+          emptyTitle="No contractual staff"
+          emptyMessage="Contractual employees appear here, showing their engagement terms and contract expiry dates."
+        />
+      </Card>
     </main>
   );
 }

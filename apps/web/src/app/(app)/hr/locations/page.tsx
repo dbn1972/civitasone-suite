@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Location = {
   id: string;
@@ -13,15 +14,15 @@ type Location = {
   parentId?: string;
 } & Record<string, unknown>;
 
-async function getLocations(): Promise<Location[]> {
+async function getLocations(): Promise<LoaderResult<Location[]>> {
   try {
     const r = await fetchJson<unknown, Location[]>("/api/v1/locations", [], {
       telemetryKey: "config.locations",
       mapResponse: (p) => (p as { data: Location[] })?.data ?? null,
     });
-    return r.data;
+    return r;
   } catch {
-    return [];
+    return { data: [], source: "error" as const };
   }
 }
 
@@ -39,7 +40,7 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function LocationsPage() {
-  const locations = await getLocations();
+  const { data: locations, source } = await getLocations();
 
   return (
     <main className="page-main" aria-labelledby="page-heading">

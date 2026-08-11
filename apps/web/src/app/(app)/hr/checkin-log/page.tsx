@@ -45,7 +45,12 @@ export default async function CheckinLogPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📍"
+          emptyTitle="No check-in records"
+          emptyMessage="Employee check-ins from the mobile app appear here, with location and timestamp."
+        />
       </div>
     </main>
   );

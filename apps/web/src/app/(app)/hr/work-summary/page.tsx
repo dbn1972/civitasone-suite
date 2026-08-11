@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiWorkSummary = {
   id: string;
@@ -57,7 +58,7 @@ function mapWorkSummaries(apiItems: ApiWorkSummary[]): Row[] {
   }));
 }
 
-async function getWorkSummaries(): Promise<Row[]> {
+async function getWorkSummaries(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/work-summaries", [], {
     telemetryKey: "hr.work-summaries",
     mapResponse: (p) => {
@@ -65,11 +66,11 @@ async function getWorkSummaries(): Promise<Row[]> {
       return Array.isArray(arr) ? mapWorkSummaries(arr as ApiWorkSummary[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function WorkSummaryPage() {
-  const items = await getWorkSummaries();
+  const { data: items, source } = await getWorkSummaries();
 
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -94,10 +95,14 @@ export default async function WorkSummaryPage() {
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Review" value={pending} />
         <StatCard icon="📅" iconBg="#f5f5f5" label="Weekly" value={weekly} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Work Summaries</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, period or status…" pageSize={15} />
-      </div>
+      <Card title="Work Summaries">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, period or status…"
+          pageSize={15}
+          emptyIcon="📝"
+          emptyTitle="No work summaries yet"
+          emptyMessage="Employee work summaries appear here once submitted. Summaries record tasks completed and receive a supervisor rating."
+        />
+      </Card>
     </main>
   );
 }

@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -16,7 +17,7 @@ type Row = {
   issued_by_name: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/id-cards", [], {
     telemetryKey: "hr.id-cards",
     mapResponse: (p) => {
@@ -24,11 +25,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function IdCardsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const active = items.filter((i) => i.status === "active").length;
   const suspended = items.filter((i) => i.status === "suspended").length;
