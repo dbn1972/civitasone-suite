@@ -10,8 +10,8 @@ export const createEmployeeBody = z.object({
   gender:        z.enum(["male", "female", "other"]).optional(),
   pan:           z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "must be a valid PAN (AAAAA9999A)").optional(),
   aadhaarRef:    z.string().optional(),
-  mobile:        z.string().max(20).optional(),
-  email:         z.string().email().optional(),
+  mobile:        z.string().min(7).max(20),
+  email:         z.string().email(),
   bankAccountNo: z.string().optional(),
   bankIfsc:      z.string().max(16).optional(),
   // Any code; membership (canonical category / tenant type-master / legacy) is
@@ -25,6 +25,7 @@ export const createEmployeeBody = z.object({
   legalEntityId:  z.string().uuid().optional(),
   costCenterId:   z.string().uuid().optional(),
   locationId:     z.string().uuid().optional(),
+  photoDataUrl:   z.string().regex(/^data:image\/(jpeg|png|webp);base64,/).optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
   pran:           z.string().max(12).optional(),

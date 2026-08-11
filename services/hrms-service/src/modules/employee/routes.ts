@@ -81,9 +81,9 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const emp = await queries.getEmployee(id, ctx.tenantId);
-    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
-    return reply.send(emp);
+    const detail = await queries.getEmployeeDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    return reply.send(detail);
   });
 
   app.patch("/v1/hrms/employees/:id", async (req, reply) => {

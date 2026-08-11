@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
-import { hrmsDepartments } from "./schema.js";
+import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 import type { EmployeeRow } from "./schema.js";
 
 export async function getEmployee(id: string, tenantId: string): Promise<EmployeeRow | null> {
@@ -10,6 +10,58 @@ export async function getEmployee(id: string, tenantId: string): Promise<Employe
     cache.makeKey(tenantId, "employee", id),
     () => repo.findById(id, tenantId)
   );
+}
+
+export type EmployeeDetailShape = {
+  id: string;
+  employeeId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  department: string;
+  designation: string;
+  grade?: string;
+  joiningDate: string;
+  status: string;
+  reportingTo?: string;
+  postingLocation?: string;
+};
+
+/** Returns a shaped response matching EmployeeDetailSchema (web). */
+export async function getEmployeeDetail(id: string, tenantId: string): Promise<EmployeeDetailShape | null> {
+  const emp = await cache.getOrLoad<EmployeeRow>(
+    cache.makeKey(tenantId, "employee", id),
+    () => repo.findById(id, tenantId),
+  );
+  if (!emp) return null;
+
+  const [dept] = await scopedRead((tx) =>
+    tx.select({ name: hrmsDepartments.name })
+      .from(hrmsDepartments)
+      .where(eq(hrmsDepartments.id, emp.departmentId))
+      .limit(1),
+  );
+
+  const [desig] = await scopedRead((tx) =>
+    tx.select({ name: hrmsDesignations.name, payGrade: hrmsDesignations.payGrade })
+      .from(hrmsDesignations)
+      .where(eq(hrmsDesignations.id, emp.designationId))
+      .limit(1),
+  );
+
+  return {
+    id: emp.id,
+    employeeId: emp.employeeNo,
+    name: emp.fullName,
+    department: dept?.name ?? "Unknown Department",
+    designation: desig?.name ?? "Unknown Designation",
+    joiningDate: emp.dateOfJoining,
+    status: emp.status,
+    ...(emp.email        ? { email: emp.email }             : {}),
+    ...(emp.mobile       ? { phone: emp.mobile }             : {}),
+    ...(desig?.payGrade  ? { grade: desig.payGrade }         : {}),
+    ...(emp.station      ? { postingLocation: emp.station }  : {}),
+  };
 }
 
 export async function listEmployees(tenantId: string, limit: number, offset: number): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
@@ -22,7 +74,7 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
         id: r.id,
         employeeNo: r.employeeNo,
         name: r.fullName,
-        department: deptNameById.get(r.departmentId) ?? r.departmentId.slice(0, 8),
+        department: deptNameById.get(r.departmentId) ?? "Unknown Department",
         employeeType: r.employeeType,
         basicMinor: Number(r.basicMinor ?? 0),
         status: r.status, // P1-5: canonical lowercase (see employee/status.ts)

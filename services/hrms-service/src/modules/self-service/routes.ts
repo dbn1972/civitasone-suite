@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext } from "../../shared/context.js";
@@ -7,18 +7,48 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
 
+/** Extract email from the decoded JWT payload attached by authPlugin. */
+function extractEmail(req: FastifyRequest): string | undefined {
+  const raw = (req as unknown as { jwtPayload?: { email?: string } }).jwtPayload;
+  if (raw?.email) return raw.email;
+  // Fallback: check x-user-email header forwarded by gateway
+  const hdr = req.headers["x-user-email"];
+  return typeof hdr === "string" ? hdr : undefined;
+}
+
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(31),
   offset: z.coerce.number().int().min(0).default(0),
 }).partial();
 
 export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
-  // My profile — employee sees their own data linked by actorId → userRef
+  // My profile — employee sees their own data linked by actorId → userRef.
+  // Fallback: if no userRef match, try matching by email from JWT claims and
+  // auto-link for next time (solves the bootstrap problem where employees are
+  // seeded without user_ref populated).
   app.get("/v1/hrms/me/profile", async (req, reply) => {
     const ctx = resolveContext(req);
-    const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+    // Primary lookup: userRef = actorId
+    let rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
       .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.userRef, ctx.actorId))));
-    const emp = rows[0];
+    let emp = rows[0];
+
+    // Fallback: match by email from JWT if userRef is not linked yet
+    if (!emp) {
+      const email = extractEmail(req);
+      if (email) {
+        rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+          .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.email, email))));
+        emp = rows[0];
+        if (emp) {
+          // Auto-link userRef so future lookups are fast
+          await db.update(hrmsEmployees)
+            .set({ userRef: ctx.actorId })
+            .where(and(eq(hrmsEmployees.id, emp.id), eq(hrmsEmployees.tenantId, ctx.tenantId)));
+        }
+      }
+    }
+
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record linked to your user" });
     return reply.send(emp);
   });
