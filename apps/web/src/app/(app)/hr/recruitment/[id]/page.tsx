@@ -1,328 +1,120 @@
-"use client";
-
-import { useEffect, useId, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
 
 type Application = {
   id: string;
   applicantName: string;
   email?: string;
-  mobile?: string;
+  qualification?: string;
+  experienceYears?: number;
+  source: string;
   stage: string;
   status: string;
-  jobOpeningId: string;
+  appliedAt: string;
+} & Record<string, unknown>;
+
+type Opening = {
+  id: string;
+  title: string;
+  refNo: string;
+  departmentId: string;
+  vacancies: number;
+  status: string;
+  vacancyType: string;
+  location?: string;
+  qualification?: string;
+  payRange?: string;
+  closesAt?: string;
+  isPublished: string;
+  applications: Application[];
 };
 
-export default function ApplicationDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+async function getOpening(id: string): Promise<Opening | null> {
+  const r = await fetchJson<unknown, Opening | null>(`/api/v1/hrms/job-openings/${id}`, null, {
+    telemetryKey: "recruitment.opening",
+    mapResponse: (p) => (p && typeof p === "object" ? (p as Opening) : null),
+  });
+  return r.data;
+}
 
-  const [application, setApplication] = useState<Application | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function JobOpeningDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const opening = await getOpening(params.id);
 
-  // Hire dialog state
-  const [showHireDialog, setShowHireDialog] = useState(false);
-  const [employeeNo, setEmployeeNo] = useState("");
-  const [dateOfJoining, setDateOfJoining] = useState("");
-  const [basicMinor, setBasicMinor] = useState(0);
-  const [departmentId, setDepartmentId] = useState("");
-  const [designationId, setDesignationId] = useState("");
-  const [employeeType, setEmployeeType] = useState<"permanent" | "temporary" | "contract" | "deputation">("permanent");
-  const [hireStatus, setHireStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [hireMessage, setHireMessage] = useState("");
-
-  const empNoId = useId();
-  const dojId = useId();
-  const basicId = useId();
-  const deptId = useId();
-  const desigId = useId();
-  const typeId = useId();
-  const statusMsgId = useId();
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/proxy/v1/hrms/applications/${id}`);
-        if (!res.ok) {
-          setError(res.status === 404 ? "Application not found." : `Failed to load (${res.status})`);
-          return;
-        }
-        const data = await res.json();
-        setApplication(data.payload ?? data);
-      } catch {
-        setError("Network error loading application.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [id]);
-
-  async function handleHire(e: React.FormEvent) {
-    e.preventDefault();
-    if (!employeeNo.trim() || !dateOfJoining || !departmentId.trim() || !designationId.trim()) {
-      setHireStatus("error");
-      setHireMessage("All fields are required.");
-      return;
-    }
-
-    setHireStatus("submitting");
-    setHireMessage("");
-
-    try {
-      const res = await fetch(`/api/proxy/v1/hrms/applications/${id}/hire`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          employeeNo: employeeNo.trim(),
-          dateOfJoining,
-          basicMinor,
-          departmentId: departmentId.trim(),
-          designationId: designationId.trim(),
-          employeeType,
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        setHireStatus("error");
-        setHireMessage(text || `Request failed (${res.status})`);
-        return;
-      }
-
-      setHireStatus("success");
-      setHireMessage("Hire initiated successfully. Employee record is being created.");
-      setShowHireDialog(false);
-      router.refresh();
-    } catch (err) {
-      setHireStatus("error");
-      setHireMessage(err instanceof Error ? err.message : "Network error");
-    }
-  }
-
-  if (loading) {
+  if (!opening) {
     return (
-      <main className="page-main" aria-labelledby="page-heading">
-        <p className="text-center text-slate-500 py-12">Loading application…</p>
-      </main>
-    );
-  }
-
-  if (error || !application) {
-    return (
-      <main className="page-main" aria-labelledby="page-heading">
-        <div className="mb-4">
-          <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline">
-            ← Back to Recruitment
-          </button>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-center text-slate-400">{error ?? "Application not found."}</p>
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Job Opening" subtitle="Not found" back="/hr/recruitment" />
+        <div className="card" style={{ padding: 32, textAlign: "center" }}>
+          <p style={{ color: "var(--mut)" }}>Job opening not found or you do not have access.</p>
         </div>
       </main>
     );
   }
 
-  const canHire = application.stage === "selected" || application.stage === "offered";
+  const applications = opening.applications ?? [];
+  const applied = applications.length;
+  const shortlisted = applications.filter((a) => a.stage === "shortlisted").length;
+  const selected = applications.filter((a) => ["selected", "offered"].includes(a.stage)).length;
+
+  const columns: { key: keyof Application & string; label: string; cellType?: "status" }[] = [
+    { key: "applicantName", label: "Applicant" },
+    { key: "qualification", label: "Qualification" },
+    { key: "experienceYears", label: "Exp (yrs)" },
+    { key: "source", label: "Source" },
+    { key: "stage", label: "Stage", cellType: "status" },
+    { key: "appliedAt", label: "Applied" },
+  ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={application.applicantName}
-        subtitle="Application detail"
+        title={opening.title}
+        subtitle={`Ref: ${opening.refNo} · ${opening.vacancies} post${opening.vacancies > 1 ? "s" : ""} · ${opening.vacancyType}`}
         back="/hr/recruitment"
+        actions={
+          <Link href="/hr/recruitment/new" className="btn ghost">+ New Vacancy</Link>
+        }
       />
-      <div className="mb-4 flex items-center justify-end">
-        {canHire && (
-          <button
-            onClick={() => setShowHireDialog(true)}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
-          >
-            Hire
-          </button>
+
+      <StatGrid>
+        <StatCard icon="📨" iconBg="#e6f0ff" label="Applied" value={applied} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Shortlisted" value={shortlisted} />
+        <StatCard icon="🎉" iconBg="#fef9e7" label="Selected / Offered" value={selected} />
+      </StatGrid>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h"><h3>Vacancy Details</h3></div>
+        <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Status</span><strong style={{ textTransform: "capitalize" }}>{opening.status}</strong></div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Published</span><strong>{opening.isPublished === "true" ? "Yes" : "No"}</strong></div>
+          {opening.location && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Location</span>{opening.location}</div>}
+          {opening.closesAt && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Closing</span>{opening.closesAt}</div>}
+          {opening.payRange && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Pay Range</span>{opening.payRange}</div>}
+          {opening.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Qualification</span>{opening.qualification}</div>}
+        </div>
+      </div>
+
+      <Card title="Applications">
+        {applications.length === 0 ? (
+          <p style={{ padding: "24px 20px", color: "var(--mut)", textAlign: "center" }}>No applications received yet.</p>
+        ) : (
+          <DataTable<Application>
+            columns={columns}
+            rows={applications}
+            rowLinkKey="id"
+            rowLinkPrefix={`/hr/recruitment/${params.id}/applications/`}
+            sortable
+            filterable
+            filterPlaceholder="Filter by name, stage…"
+            pageSize={15}
+          />
         )}
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-3xl">
-        <h1 id="page-heading" className="text-xl font-bold text-slate-800 mb-4">
-          {application.applicantName}
-        </h1>
-        <div className="fields">
-          <div className="field">
-            <span className="lbl">Application ID</span>
-            <span className="val font-mono text-sm">{application.id}</span>
-          </div>
-          <div className="field">
-            <span className="lbl">Stage</span>
-            <span className="val capitalize">{application.stage}</span>
-          </div>
-          <div className="field">
-            <span className="lbl">Status</span>
-            <span className="val capitalize">{application.status}</span>
-          </div>
-          {application.email && (
-            <div className="field">
-              <span className="lbl">Email</span>
-              <span className="val">{application.email}</span>
-            </div>
-          )}
-          {application.mobile && (
-            <div className="field">
-              <span className="lbl">Mobile</span>
-              <span className="val">{application.mobile}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {hireStatus === "success" && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-3"
-        >
-          <span className="font-semibold">Success: </span>{hireMessage}
-        </p>
-      )}
-
-      {/* Hire Dialog */}
-      {showHireDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="hire-dialog-title"
-        >
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 mx-4">
-            <h2 id="hire-dialog-title" className="text-lg font-bold text-slate-800 mb-4">
-              Hire — {application.applicantName}
-            </h2>
-            <form onSubmit={handleHire} className="space-y-4">
-              <div>
-                <label htmlFor={empNoId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Employee No
-                </label>
-                <input
-                  id={empNoId}
-                  type="text"
-                  value={employeeNo}
-                  onChange={(e) => setEmployeeNo(e.target.value)}
-                  placeholder="e.g. EMP-2024-001"
-                  maxLength={32}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor={dojId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Date of Joining
-                </label>
-                <input
-                  id={dojId}
-                  type="date"
-                  value={dateOfJoining}
-                  onChange={(e) => setDateOfJoining(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor={basicId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Basic Pay (in minor units, e.g. paise)
-                </label>
-                <input
-                  id={basicId}
-                  type="number"
-                  min={0}
-                  value={basicMinor}
-                  onChange={(e) => setBasicMinor(Number(e.target.value))}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor={deptId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Department ID
-                </label>
-                <input
-                  id={deptId}
-                  type="text"
-                  value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
-                  placeholder="UUID of department"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor={desigId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Designation ID
-                </label>
-                <input
-                  id={desigId}
-                  type="text"
-                  value={designationId}
-                  onChange={(e) => setDesignationId(e.target.value)}
-                  placeholder="UUID of designation"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor={typeId} className="block text-sm font-medium text-slate-700 mb-1">
-                  Employee Type
-                </label>
-                <select
-                  id={typeId}
-                  value={employeeType}
-                  onChange={(e) => setEmployeeType(e.target.value as typeof employeeType)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="permanent">Permanent</option>
-                  <option value="temporary">Temporary</option>
-                  <option value="contract">Contract</option>
-                  <option value="deputation">Deputation</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={hireStatus === "submitting"}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-                >
-                  {hireStatus === "submitting" ? "Processing…" : "Confirm Hire"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowHireDialog(false)}
-                  className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {hireMessage && hireStatus === "error" && (
-                <p
-                  id={statusMsgId}
-                  role="alert"
-                  aria-live="assertive"
-                  className="text-sm text-red-600"
-                >
-                  <span className="font-semibold">Error: </span>{hireMessage}
-                </p>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
+      </Card>
     </main>
   );
 }

@@ -131,7 +131,10 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       const currentBasicN = Number(emp.basicMinor);
       // Find current cell: exact match preferred, then nearest-upper-bound for imported data.
       let currentIdx = cells.indexOf(currentBasicN);
-      if (currentIdx < 0) currentIdx = cells.findLastIndex((c) => c <= currentBasicN);
+      if (currentIdx < 0) {
+        // floor-cell search (compatible with TS targets below ES2023)
+        for (let i = cells.length - 1; i >= 0; i--) { if ((cells[i] as number) <= currentBasicN) { currentIdx = i; break; } }
+      }
       if (currentIdx < 0) currentIdx = 0; // below entry pay — treat as cell 1
 
       const nextIdx = Math.min(currentIdx + 1, cells.length - 1);

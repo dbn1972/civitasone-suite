@@ -124,6 +124,29 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
   });
 
+
+  // GET /v1/hrms/applications/:id — fetch a single application by ID (PPL-D2 fix)
+  app.get("/v1/hrms/applications/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const application = await repo.findApplicationById(id, ctx.tenantId);
+    if (!application) throw new HttpError(404, "NOT_FOUND", "Application not found");
+    return reply.send(application);
+  });
+
+  // GET /v1/hrms/job-openings/:id — job opening detail with its applications list
+  app.get("/v1/hrms/job-openings/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const opening = await repo.findJobOpeningById(id);
+    if (!opening || opening.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "Job opening not found");
+    const allApps = await repo.searchApplications(ctx.tenantId, {}, 500);
+    const applications = allApps.filter((a) => a.jobOpeningId === id);
+    return reply.send({ ...opening, applications });
+  });
+
   app.setErrorHandler(errorHandler);
 }
 
