@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { AddHolidayForm } from "./AddHolidayForm";
 
 type ApiHoliday = {
   id: string;
@@ -64,11 +65,13 @@ async function getHolidays(): Promise<Row[]> {
   return res.data;
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export default async function HolidaysPage() {
   const items = await getHolidays();
 
-  const gazetted = items.filter((i) => i.type === "Gazetted").length;
-  const restricted = items.filter((i) => i.type === "Restricted").length;
+  const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
+  const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "date", label: "Date" },
@@ -81,16 +84,30 @@ export default async function HolidaysPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Holiday Calendar" subtitle="Gazetted, restricted, and optional holidays for the year." back="/hr" />
+      <PageHeader
+        title="Holiday Calendar"
+        subtitle="Gazetted, restricted, and optional holidays for the year."
+        back="/hr"
+      />
       <StatGrid>
         <StatCard icon="📅" iconBg="#e6f0ff" label="Total Holidays" value={items.length} />
         <StatCard icon="🏛️" iconBg="#e6f7f0" label="Gazetted" value={gazetted} />
         <StatCard icon="📋" iconBg="#fffbe6" label="Restricted" value={restricted} />
-        <StatCard icon="🗓️" iconBg="#f5f5f5" label="Year" value="2024" />
+        <StatCard icon="🗓️" iconBg="#f5f5f5" label="Year" value={CURRENT_YEAR} />
       </StatGrid>
+
+      <AddHolidayForm />
+
       <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Holiday List 2024</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by holiday name or type…" pageSize={15} />
+        <div className="card-h"><h3>Holiday List {CURRENT_YEAR}</h3></div>
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by holiday name or type…"
+          pageSize={15}
+        />
       </div>
     </main>
   );
