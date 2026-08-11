@@ -40,7 +40,7 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 }
 
 export default async function PayStructuresPage() {
-  const [{ data: structures, source }, { data: rawComponents }] = await Promise.all([
+  const [{ data: structures, source: structuresSource }, { data: rawComponents, source: componentsSource }] = await Promise.all([
     getData(),
     getComponents(),
   ]);
@@ -77,7 +77,7 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {(structuresSource === "error" || componentsSource === "error") && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🧱" iconBg="#e6f0ff" label="Total Structures" value={structures.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />

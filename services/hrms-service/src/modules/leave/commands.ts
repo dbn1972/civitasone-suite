@@ -3,6 +3,8 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateLeaveTypeBody, AllocateLeaveBody, ApplyLeaveBody } from "./validators.js";
+import * as repo from "./repo.js";
+import { HttpError } from "../../shared/context.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -37,6 +39,11 @@ export async function applyLeave(ctx: RequestContext, body: ApplyLeaveBody): Pro
 }
 
 export async function approveLeave(ctx: RequestContext, id: string): Promise<Accepted> {
+  const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
+  if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");
+  if (leaveApp.createdBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot approve your own leave application.");
+  }
   const messageId = randomUUID();
   await queue.publish(COMMANDS.leaveApprove, {
     messageId, type: COMMANDS.leaveApprove,
