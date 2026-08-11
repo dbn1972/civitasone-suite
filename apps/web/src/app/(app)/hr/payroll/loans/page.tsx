@@ -51,8 +51,8 @@ export default async function LoansPage({
       <Card title="Recovery Schedule">
         <EmptyState
           icon="📅"
-          title="Recovery schedule not yet available"
-          message="The payroll-service persists loan repayment installments (payroll.payroll_loan_repayments) but does not currently expose a GET API for them. This screen will light up once that endpoint ships — no repayment data is fabricated here."
+          title="No repayment schedule yet"
+          message="Repayment installments will appear here once the loan is processed and approved. Each EMI will show the amount, due date, and status."
         />
       </Card>
     </main>

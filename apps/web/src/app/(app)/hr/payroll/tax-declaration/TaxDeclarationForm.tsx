@@ -37,6 +37,7 @@ export function TaxDeclarationForm() {
 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
 
@@ -69,7 +70,7 @@ export function TaxDeclarationForm() {
           }
         }
       } catch {
-        // Silent — form starts blank if fetch fails
+        setLoadFailed(true);
       } finally {
         setLoading(false);
       }
@@ -126,6 +127,15 @@ export function TaxDeclarationForm() {
   }
 
   return (
+    <>
+    {loadFailed && (
+      <div role="alert" style={{ background: "#3d1c1c", border: "1px solid #f85149",
+        borderRadius: 6, padding: "10px 14px", marginBottom: 16,
+        color: "#f85149", fontSize: 13, lineHeight: 1.4 }}>
+        ⚠ Could not load your existing declaration — blank amounts will overwrite previous values if you save.
+        Refresh the page to retry.
+      </div>
+    )}
     <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
         <h3>FY {fy} — Income Tax Declaration</h3>
@@ -274,5 +284,6 @@ export function TaxDeclarationForm() {
         </p>
       </div>
     </form>
+    </>
   );
 }
