@@ -28,7 +28,7 @@ export async function insertAttendance(tx: Writer, row: AttendanceInsert): Promi
 }
 
 export async function upsertAttendance(tx: Writer, row: AttendanceInsert): Promise<void> {
-  await (tx as typeof db).insert(hrmsAttendance).values(row)
+  await (tx as typeof db).insert(hrmsAttendance).values(row) // tx may be a transaction or the db pool
     .onConflictDoUpdate({
       target: [hrmsAttendance.tenantId, hrmsAttendance.employeeId, hrmsAttendance.attendanceDate],
       set: {
@@ -55,16 +55,16 @@ export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanc
 export async function updateRegularisationStatus(
   tenantId: string, id: string, status: "approved" | "rejected", actorId: string, reason?: string,
 ): Promise<boolean> {
-  const rows = await scopedRead((tx) =>
-    tx.select({ id: hrmsAttendanceRegularisations.id, status: hrmsAttendanceRegularisations.status })
-      .from(hrmsAttendanceRegularisations)
-      .where(and(eq(hrmsAttendanceRegularisations.tenantId, tenantId), eq(hrmsAttendanceRegularisations.id, id)))
-  );
-  if (!rows.length || rows[0]!.status !== "pending") return false;
-  await (db as typeof db).update(hrmsAttendanceRegularisations)
+  // Atomic: WHERE status='pending' guards against concurrent approve/reject races.
+  const updated = await db.update(hrmsAttendanceRegularisations)
     .set({ status, updatedBy: actorId, updatedAt: new Date(), ...(reason ? { reason } : {}) })
-    .where(and(eq(hrmsAttendanceRegularisations.tenantId, tenantId), eq(hrmsAttendanceRegularisations.id, id)));
-  return true;
+    .where(and(
+      eq(hrmsAttendanceRegularisations.tenantId, tenantId),
+      eq(hrmsAttendanceRegularisations.id, id),
+      eq(hrmsAttendanceRegularisations.status, "pending"),
+    ))
+    .returning({ id: hrmsAttendanceRegularisations.id });
+  return updated.length > 0;
 }
 
 /** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */
@@ -143,7 +143,7 @@ export async function upsertLock(
     reason: string | null; actorId: string; at: Date;
   },
 ): Promise<void> {
-  await (tx as typeof db).insert(hrmsAttendanceLocks).values({
+  await (tx as typeof db).insert(hrmsAttendanceLocks).values({ // tx may be a transaction or the db pool
     id: row.id, tenantId: row.tenantId, period: row.period, status: row.status,
     reason: row.reason, lockedBy: row.actorId, lockedAt: row.at,
     createdBy: row.actorId, updatedBy: row.actorId,
