@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { TravelRequestForm } from "./TravelRequestForm";
 
 type Row = {
   id: string;
@@ -7,10 +8,8 @@ type Row = {
   destination: string;
   from_date: string;
   to_date: string;
-  advance_required: number;
   mode: string;
   status: string;
-  created_at: string;
 } & Record<string, unknown>;
 
 async function getData(): Promise<Row[]> {
@@ -41,12 +40,8 @@ export default async function TravelRequestsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Travel Requests"
-        subtitle="Submit and track official travel approvals"
-      />
-
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader title="Travel Requests" subtitle="Submit and track official travel approvals." back="/hr" />
       <StatGrid>
         <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
@@ -54,7 +49,12 @@ export default async function TravelRequestsPage() {
         <StatCard icon="❌" iconBg="#fef2f2" label="Rejected" value={rejected} />
       </StatGrid>
 
-      <DataTable columns={columns} rows={items} exportable />
-    </div>
+      <TravelRequestForm />
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h"><h3>Travel Requests</h3></div>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by destination or purpose…" pageSize={15} />
+      </div>
+    </main>
   );
 }
