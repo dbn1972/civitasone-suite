@@ -14,6 +14,7 @@ type ReportRow = {
 type DisplayRow = {
   employeeGroup: string;
   costCenterId: string;
+  costCenterCode: string;
   splitPct: number;
   allocatedMinor: string | number;
 } & Record<string, unknown>;
@@ -27,6 +28,7 @@ async function getReport(period: string): Promise<LoaderResult<DisplayRow[]>> {
       return arr.map((r) => ({
         employeeGroup: r.employee_group,
         costCenterId: r.cost_center_id,
+        costCenterCode: `CC-${r.cost_center_id.split('-')[0]}`,
         splitPct: r.split_pct,
         allocatedMinor: r.allocated_minor,
       }));
@@ -46,6 +48,7 @@ type RuleRow = {
 type RuleDisplayRow = {
   employeeGroup: string;
   costCenterId: string;
+  costCenterCode: string;
   splitPct: number;
   status: string;
 } & Record<string, unknown>;
@@ -59,6 +62,7 @@ async function getRules(): Promise<LoaderResult<RuleDisplayRow[]>> {
       return arr.map((r) => ({
         employeeGroup: r.employee_group,
         costCenterId: r.cost_center_id,
+        costCenterCode: `CC-${r.cost_center_id.split('-')[0]}`,
         splitPct: r.split_pct,
         status: r.status,
       }));
@@ -80,14 +84,14 @@ export default async function CostingPage({
 
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterId", label: "Cost Center" },
+    { key: "costCenterCode", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "allocatedMinor", label: "Allocated Amount", align: "right", cellType: "amount" },
   ];
 
   const ruleColumns: { key: keyof RuleDisplayRow & string; label: string; align?: "left" | "right" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterId", label: "Cost Center" },
+    { key: "costCenterCode", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "status", label: "Status" },
   ];
