@@ -57,7 +57,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsTransfers).where(eq(hrmsTransfers.tenantId, ctx.tenantId)).limit(500),
+      tx.select().from(hrmsTransfers).where(eq(hrmsTransfers.tenantId, ctx.tenantId)).orderBy(hrmsTransfers.effectiveDate, hrmsTransfers.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
@@ -71,7 +71,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
       relievingDate: r.relievedDate ?? "—",
       status: r.status,
     }));
-    return reply.send({ data });
+    return reply.send({ data, hasMore: rows.length === 500 });
   });
 
   // Promotion list — frontend calls GET /api/v1/hrms/promotions (no /lifecycle/ prefix)
@@ -79,7 +79,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsPromotions).where(eq(hrmsPromotions.tenantId, ctx.tenantId)).limit(500),
+      tx.select().from(hrmsPromotions).where(eq(hrmsPromotions.tenantId, ctx.tenantId)).orderBy(hrmsPromotions.effectiveDate, hrmsPromotions.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empIds = [...new Set(rows.map((r) => r.employeeId))];
@@ -106,7 +106,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         status: r.status,
       };
     });
-    return reply.send({ data });
+    return reply.send({ data, hasMore: rows.length === 500 });
   });
 
   // Service book tenant-wide list — frontend calls GET /api/v1/hrms/service-book
@@ -114,7 +114,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId)).limit(1000),
+      tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId)).orderBy(hrmsServiceBookEntries.effectiveDate, hrmsServiceBookEntries.id).limit(1000),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
@@ -128,7 +128,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
       orderNo: r.documentRef ?? "—",
       status: r.attested ? "attested" : "recorded",
     }));
-    return reply.send({ data });
+    return reply.send({ data, hasMore: rows.length === 1000 });
   });
 
   // Deputation list — frontend calls GET /api/v1/hrms/deputation (singular, no employee scope)
@@ -136,7 +136,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsDeputations).where(eq(hrmsDeputations.tenantId, ctx.tenantId)).limit(500),
+      tx.select().from(hrmsDeputations).where(eq(hrmsDeputations.tenantId, ctx.tenantId)).orderBy(hrmsDeputations.tenureFrom, hrmsDeputations.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
@@ -157,7 +157,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         status: r.status,
       };
     });
-    return reply.send({ data });
+    return reply.send({ data, hasMore: rows.length === 500 });
   });
 
   // Probation confirmations — employees on probation whose confirmation is due
@@ -176,6 +176,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         })
         .from(hrmsEmployees)
         .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.status, "probation")))
+        .orderBy(hrmsEmployees.dateOfJoining, hrmsEmployees.id)
         .limit(500),
     );
     if (employees.length === 0) return reply.send({ data: [] });
@@ -199,7 +200,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         status: "probation",
       };
     });
-    return reply.send({ data });
+    return reply.send({ data, hasMore: employees.length === 500 });
   });
 
   // Retirement / separation queue — hrmsSeparations joined with employee data
@@ -207,7 +208,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsSeparations).where(eq(hrmsSeparations.tenantId, ctx.tenantId)).limit(500),
+      tx.select().from(hrmsSeparations).where(eq(hrmsSeparations.tenantId, ctx.tenantId)).orderBy(hrmsSeparations.effectiveDate, hrmsSeparations.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empIds = [...new Set(rows.map((r) => r.employeeId))];
@@ -228,6 +229,6 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         status: r.status,
       };
     });
-    return reply.send({ data });
+    return reply.send({ data, hasMore: rows.length === 500 });
   });
 }
