@@ -1,12 +1,27 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveTypeOption = { id: string; code: string; name: string };
 
-const CURRENT_FY = "2026-27";
+const inputStyle: CSSProperties = {
+  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
+  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
+};
+const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
+const fieldErrStyle: CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+
+function getCurrentFY(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const start = month >= 4 ? year : year - 1;
+  const end = (start + 1) % 100;
+  return `${start}-${String(end).padStart(2, "0")}`;
+}
 
 export function AllocateLeaveForm() {
   const router = useRouter();
@@ -14,8 +29,9 @@ export function AllocateLeaveForm() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
   const [employeeId, setEmployeeId] = useState("");
   const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [fy, setFy] = useState(CURRENT_FY);
+  const [fy, setFy] = useState(getCurrentFY);
   const [totalDays, setTotalDays] = useState("");
+  const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -30,10 +46,8 @@ export function AllocateLeaveForm() {
       fetch("/api/proxy/v1/hrms/leave-types").then((r) => r.json()),
     ])
       .then(([empBody, ltBody]) => {
-        const empRows: { id: string; name: string; employeeNo: string }[] =
-          Array.isArray(empBody) ? empBody : empBody.data ?? [];
-        const ltRows: { id: string; code: string; name: string }[] =
-          Array.isArray(ltBody) ? ltBody : ltBody.data ?? [];
+        const empRows: EmployeeOption[] = Array.isArray(empBody) ? empBody : (empBody.data ?? []);
+        const ltRows: LeaveTypeOption[] = Array.isArray(ltBody) ? ltBody : (ltBody.data ?? []);
         setEmployees(empRows);
         setLeaveTypes(ltRows);
         if (empRows[0]) setEmployeeId(empRows[0].id);
@@ -45,21 +59,27 @@ export function AllocateLeaveForm() {
       });
   }, []);
 
+  function clearErr(field: string) {
+    setInvalid((s) => { const n = new Set(s); n.delete(field); return n; });
+  }
+
+  function validate(): boolean {
+    const errs = new Set<string>();
+    if (!employeeId) errs.add("employee");
+    if (!leaveTypeId) errs.add("leaveType");
+    if (!fy || !/^\d{4}-\d{2}$/.test(fy)) errs.add("fy");
+    const days = parseInt(totalDays, 10);
+    if (!totalDays || isNaN(days) || days <= 0 || days > 365) errs.add("days");
+    setInvalid(errs);
+    return errs.size === 0;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const days = parseInt(totalDays, 10);
-    if (!employeeId || !leaveTypeId || !fy || !days || days <= 0) {
-      setStatus("error");
-      setMessage("All fields are required and days must be a positive integer.");
-      return;
-    }
-    if (!/^\d{4}-\d{2}$/.test(fy)) {
-      setStatus("error");
-      setMessage("Financial year must be in YYYY-YY format (e.g. 2026-27).");
-      return;
-    }
+    if (!validate()) return;
     setStatus("submitting");
     setMessage("");
+    const days = parseInt(totalDays, 10);
     try {
       const res = await fetch("/api/proxy/v1/hrms/leave-allocations", {
         method: "POST",
@@ -81,69 +101,86 @@ export function AllocateLeaveForm() {
     }
   }
 
-  const inputCls = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500";
-
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-      style={{ maxWidth: 560 }}
-    >
+    <form onSubmit={handleSubmit} noValidate style={{ display: "grid", gap: 14 }}>
+      {message && (
+        <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"}
+          className={`pill ${status === "error" ? "bad" : "good"}`} style={{ margin: 0 }}>
+          {message}
+        </p>
+      )}
+
       <div>
-        <label htmlFor={empId} className="block text-sm font-medium text-slate-700 mb-1">
-          Employee <span aria-hidden style={{ color: "#b91c1c" }}>*</span>
+        <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500 }}>
+          Employee <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
         </label>
-        <select id={empId} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={inputCls} required>
-          {employees.length === 0 ? (
-            <option value="">Loading…</option>
-          ) : (
-            employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.name} ({emp.employeeNo})
-              </option>
-            ))
-          )}
+        <select
+          id={empId}
+          value={employeeId}
+          onChange={(e) => { setEmployeeId(e.target.value); clearErr("employee"); }}
+          style={invalid.has("employee") ? inputErrStyle : inputStyle}
+          aria-invalid={invalid.has("employee")}
+          aria-describedby={invalid.has("employee") ? `${empId}-err` : undefined}
+        >
+          {employees.length === 0
+            ? <option value="">Loading…</option>
+            : employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
+              ))}
         </select>
+        {invalid.has("employee") && (
+          <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>Please select an employee.</p>
+        )}
       </div>
 
       <div>
-        <label htmlFor={ltId} className="block text-sm font-medium text-slate-700 mb-1">
-          Leave Type <span aria-hidden style={{ color: "#b91c1c" }}>*</span>
+        <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
+          Leave Type <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
         </label>
-        <select id={ltId} value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)} className={inputCls} required>
-          {leaveTypes.length === 0 ? (
-            <option value="">Loading…</option>
-          ) : (
-            leaveTypes.map((lt) => (
-              <option key={lt.id} value={lt.id}>
-                {lt.name} ({lt.code})
-              </option>
-            ))
-          )}
+        <select
+          id={ltId}
+          value={leaveTypeId}
+          onChange={(e) => { setLeaveTypeId(e.target.value); clearErr("leaveType"); }}
+          style={invalid.has("leaveType") ? inputErrStyle : inputStyle}
+          aria-invalid={invalid.has("leaveType")}
+          aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
+        >
+          {leaveTypes.length === 0
+            ? <option value="">Loading…</option>
+            : leaveTypes.map((lt) => (
+                <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
+              ))}
         </select>
+        {invalid.has("leaveType") && (
+          <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>Please select a leave type.</p>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
-          <label htmlFor={fyId} className="block text-sm font-medium text-slate-700 mb-1">
-            Financial Year <span aria-hidden style={{ color: "#b91c1c" }}>*</span>
+          <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
+            Financial Year <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={fyId}
             type="text"
             value={fy}
-            onChange={(e) => setFy(e.target.value)}
-            placeholder="2026-27"
+            onChange={(e) => { setFy(e.target.value); clearErr("fy"); }}
+            placeholder={getCurrentFY()}
             maxLength={7}
-            pattern="\d{4}-\d{2}"
-            className={inputCls}
-            required
+            style={invalid.has("fy") ? inputErrStyle : inputStyle}
+            aria-invalid={invalid.has("fy")}
+            aria-describedby={invalid.has("fy") ? `${fyId}-err` : `${fyId}-hint`}
           />
-          <p className="mt-1 text-xs text-slate-500">Format: YYYY-YY</p>
+          {invalid.has("fy") ? (
+            <p id={`${fyId}-err`} role="alert" style={fieldErrStyle}>Must be YYYY-YY format (e.g. {getCurrentFY()}).</p>
+          ) : (
+            <p id={`${fyId}-hint`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>Format: YYYY-YY</p>
+          )}
         </div>
         <div>
-          <label htmlFor={daysId} className="block text-sm font-medium text-slate-700 mb-1">
-            Total Days <span aria-hidden style={{ color: "#b91c1c" }}>*</span>
+          <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
+            Total Days <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={daysId}
@@ -151,40 +188,26 @@ export function AllocateLeaveForm() {
             min={1}
             max={365}
             value={totalDays}
-            onChange={(e) => setTotalDays(e.target.value)}
+            onChange={(e) => { setTotalDays(e.target.value); clearErr("days"); }}
             placeholder="e.g. 15"
-            className={inputCls}
-            required
+            style={invalid.has("days") ? inputErrStyle : inputStyle}
+            aria-invalid={invalid.has("days")}
+            aria-describedby={invalid.has("days") ? `${daysId}-err` : undefined}
           />
+          {invalid.has("days") && (
+            <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>Enter a number between 1 and 365.</p>
+          )}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          type="submit"
-          disabled={status === "submitting" || employees.length === 0}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
-        >
+      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+        <button type="submit" className="btn primary" disabled={status === "submitting" || employees.length === 0} style={{ minHeight: 44, minWidth: 140 }}>
           {status === "submitting" ? "Allocating…" : "Allocate Leave"}
         </button>
-        <button
-          type="button"
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          onClick={() => router.push("/hr/leave")}
-        >
+        <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
           Cancel
         </button>
       </div>
-
-      {message && (
-        <p
-          role={status === "error" ? "alert" : "status"}
-          aria-live={status === "error" ? "assertive" : "polite"}
-          className={`text-sm font-medium ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
-        >
-          {status === "error" ? "Error: " : ""}{message}
-        </p>
-      )}
     </form>
   );
 }
