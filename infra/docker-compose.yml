@@ -125,6 +125,7 @@ services:
       KC_HOSTNAME: civitasone.65-2-205-201.nip.io
       KC_HOSTNAME_PATH: /auth
       KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: "true"
       KC_HTTP_ENABLED: true
       KC_HTTP_RELATIVE_PATH: /auth
       KC_PROXY_HEADERS: xforwarded

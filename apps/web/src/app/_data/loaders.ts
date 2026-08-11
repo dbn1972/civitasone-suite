@@ -472,11 +472,12 @@ function mapEmployees(payload: unknown): EmployeeSummary[] | null {
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const id = toText(row.id) ?? toText(row.empCode);
+    const empNo = toText(row.employeeNo) ?? toText(row.empCode);
     const name = toText(row.name);
     const department = toText(row.department) ?? toText(row.dept) ?? "—";
     const status = toEmployeeStatus(row.status);
     if (!id || !name) continue;
-    mapped.push({ id, name, department, status });
+    mapped.push({ id, name, department, status, ...(empNo ? { employeeNo: empNo } : {}) });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -1040,6 +1041,30 @@ export async function getEmployees(): Promise<LoaderResult<EmployeeSummary[]>> {
     responseSchema: employeesListSchema,
     mapResponse: mapEmployees,
   });
+}
+
+/** Self-service profile for the logged-in employee (no admin role needed). */
+export async function getMyProfile(): Promise<LoaderResult<{ id: string; name: string; department: string; employeeNo: string; status: string; designation: string } | null>> {
+  return fetchJson<Record<string, unknown>, { id: string; name: string; department: string; employeeNo: string; status: string; designation: string } | null>(
+    "/api/v1/hrms/me/profile",
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.me.profile",
+      mapResponse: (raw) => {
+        if (!raw || typeof raw !== "object") return null;
+        const r = raw as Record<string, unknown>;
+        return {
+          id: String(r.id ?? ""),
+          name: String(r.fullName ?? r.name ?? ""),
+          department: String(r.departmentId ?? ""),
+          employeeNo: String(r.employeeNo ?? ""),
+          status: String(r.status ?? "active"),
+          designation: String(r.designationId ?? ""),
+        };
+      },
+    },
+  );
 }
 
 export async function getLeaveRequests(): Promise<LoaderResult<LeaveRequestSummary[]>> {

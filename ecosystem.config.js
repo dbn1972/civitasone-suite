@@ -60,7 +60,7 @@ const JWT_ALGORITHM = process.env.JWT_ALGORITHM ?? "RS256";
 // Setting it to a non-production value (with JWT_ALGORITHM=HS256) enables the
 // dev-login HS256 path for end-to-end golden-path validation.
 const RUNTIME_NODE_ENV = process.env.RUNTIME_NODE_ENV ?? "production";
-const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://civitasone-keycloak:8080";
+const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "https://civitasone.65-2-205-201.nip.io/auth";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "civitasone";
 const INTERNAL_SERVICE_SECRET = requireSecret("INTERNAL_SERVICE_SECRET");
 // SEC-3 device trust: identity mints/validates device trust tokens with this.
@@ -76,6 +76,8 @@ const AUTH_ENV = {
   KEYCLOAK_URL,
   KEYCLOAK_REALM,
   DEVICE_TRUST_SECRET,
+  JWT_AUDIENCE: process.env.JWT_AUDIENCE ?? "account",
+  NODE_TLS_REJECT_UNAUTHORIZED: "0",
   ...(JWT_SECRET ? { JWT_SECRET } : {}),
 };
 
@@ -510,6 +512,11 @@ module.exports = {
         SAMPLE_DATA_ENABLED: process.env.SAMPLE_DATA_ENABLED ?? "",
         CIVITASONE_API_BASE_URL: "http://127.0.0.1:8080",
         NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8080",
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io",
+        KEYCLOAK_URL,
+        KEYCLOAK_REALM,
+        KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID ?? "civitasone-web",
+        NODE_TLS_REJECT_UNAUTHORIZED: "0",
       },
     },
   ],

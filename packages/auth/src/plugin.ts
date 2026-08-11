@@ -15,7 +15,7 @@
 
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { verifyJwt, toRequestContext } from "./index.js";
+import { verifyJwt, verifyToken, toRequestContext } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
@@ -146,6 +146,22 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
         (req.headers["x-tenant-id"] as string | undefined),
       );
     } catch (err) {
+      // In non-production, try HS256 dev token as fallback before rejecting.
+      const hs256Secret = process.env.JWT_SECRET;
+      if (process.env.NODE_ENV !== "production" && hs256Secret) {
+        try {
+          const devPayload = verifyToken(token, hs256Secret);
+          req.ctx = toRequestContext(
+            devPayload,
+            correlationId,
+            (req.headers["x-tenant-id"] as string | undefined),
+          );
+          return;
+        } catch (hs256Err) {
+          req.log.warn({ hs256Err }, "HS256 fallback also failed");
+          // fall through to 401
+        }
+      }
       req.log.warn({ err }, "JWT verification failed");
       return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });
     }

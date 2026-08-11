@@ -10,9 +10,10 @@ import { VoiceNav } from "../VoiceNav";
 
 interface TopBarProps {
   crumb?: ReactNode;
+  userName?: string;
 }
 
-export function TopBar({ crumb }: TopBarProps) {
+export function TopBar({ crumb, userName }: TopBarProps) {
   return (
     <header className="tb">
       <nav className="crumb" aria-label="Breadcrumb">
@@ -37,7 +38,7 @@ export function TopBar({ crumb }: TopBarProps) {
         <DarkModeToggle />
         <button className="iconbtn" title="Analytics" type="button">📊</button>
         <NotificationBell />
-        <AccountMenu />
+        <AccountMenu name={userName} />
       </div>
       <GlobalSearch />
     </header>
