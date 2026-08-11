@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog } from "../../../_components/ds";
+import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
 
 type Policy = {
   id: string;
