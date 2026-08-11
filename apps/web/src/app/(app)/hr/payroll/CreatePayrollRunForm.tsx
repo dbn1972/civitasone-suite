@@ -27,6 +27,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{runNo?: string; structureId?: string; month?: string}>({});
   const [dialogError, setDialogError] = useState<string | undefined>();
 
   const monthId = useId();
@@ -54,7 +55,10 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       });
       const text = await res.text();
       if (!res.ok) {
-        setDialogError(text || `Create failed (${res.status})`);
+        let errMsg: string;
+        try { const pErr = JSON.parse(text); errMsg = pErr.message || pErr.error || text; }
+        catch { errMsg = text; }
+        setDialogError(errMsg || `Create failed (${res.status})`);
         return;
       }
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
@@ -78,11 +82,17 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (!structureId || !runNo.trim() || !month) {
+    const errors: {runNo?: string; structureId?: string; month?: string} = {};
+    if (!runNo.trim()) errors.runNo = "Run number is required.";
+    if (!structureId) errors.structureId = "Pay structure is required.";
+    if (!month) errors.month = "Month is required.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage("Please complete all fields before creating a run.");
       return;
     }
+    setFieldErrors({});
     setDialogError(undefined);
     setConfirmOpen(true);
   }

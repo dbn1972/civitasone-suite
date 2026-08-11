@@ -220,7 +220,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8 }}>
       {showConnectionStatus && sseEnabled && (
-        <SSEConnectionStatus connectionState={sseConnectionState} />
+        <SSEConnectionStatus connectionState={sseConnectionState} showDelay={7000} />
       )}
       <button
         onClick={() => setOpen(!open)}

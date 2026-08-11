@@ -58,7 +58,13 @@ export function LeaveApprovalsPanel() {
         fetch("/api/proxy/v1/hrms/leave-requests").catch(() => null),
       ]);
 
-      if (!taskRes.ok) throw new Error((await taskRes.text()) || `Failed to load tasks (${taskRes.status})`);
+      if (!taskRes.ok) {
+        const rawText = await taskRes.text();
+        let msg: string;
+        try { const parsed = JSON.parse(rawText); msg = parsed.message || parsed.error || rawText; }
+        catch { msg = rawText; }
+        throw new Error(msg || `Failed to load tasks (${taskRes.status})`);
+      }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
       const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
       setTasks(taskRows.filter((t) => t.refType === "leave_app" && t.status === "pending"));
@@ -109,7 +115,10 @@ export function LeaveApprovalsPanel() {
       });
       const text = await res.text();
       if (!res.ok) {
-        setDialogError(text || `${decision} failed (${res.status})`);
+        let errMsg: string;
+        try { const p = JSON.parse(text); errMsg = p.message || p.error || text; }
+        catch { errMsg = text; }
+        setDialogError(errMsg || `${decision} failed (${res.status})`);
         return;
       }
       setPending(null);
@@ -173,13 +182,6 @@ export function LeaveApprovalsPanel() {
 
   return (
     <>
-      <PageHeader
-        title="Leave Approvals"
-        subtitle="Pending workflow tasks for leave applications. Completing a task runs the policy check and records the decision."
-        back="/hr/leave"
-        backLabel="Leave"
-      />
-
       {toast && (
         <p role="status" aria-live="polite" className={`pill ${toast.tone}`} style={{ margin: "0 0 12px" }}>
           {toast.text}
