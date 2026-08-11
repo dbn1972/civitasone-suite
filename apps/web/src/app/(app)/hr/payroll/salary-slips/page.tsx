@@ -17,6 +17,7 @@ export default async function SalarySlipsPage() {
       <PageHeader
         title="Salary Slips"
         subtitle="Individual employee salary statements."
+        back="/hr/payroll"
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>

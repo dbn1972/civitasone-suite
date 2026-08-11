@@ -23,7 +23,7 @@ export default async function GpfStatementsPage() {
 
   return (
     <>
-      <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." />
+      <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." back="/hr/payroll" />
       {source === "error" && <DataSourceBadge source="error" />}
       <Card title="GPF Ledger">
         {tableRows.length === 0 ? (

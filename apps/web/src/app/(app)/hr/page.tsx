@@ -123,6 +123,17 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Interns", href: "/hr/interns", description: "Interns and apprentices" },
 		],
 	},
+	{
+		title: "Setup & Configuration",
+		icon: "⚙️",
+		tiles: [
+			{ title: "Departments", href: "/hr/departments", description: "Add and manage departments" },
+			{ title: "Designations", href: "/hr/designations", description: "Job titles and pay levels" },
+			{ title: "Locations", href: "/hr/locations", description: "Office and facility locations" },
+      { title: "Leave Policies", href: "/hr/leave-policies", description: "Leave rules and entitlements" },
+			{ title: "Holidays", href: "/hr/holidays", description: "Gazetted and restricted holidays" },
+		],
+	},
 ];
 
 export default function Page() {

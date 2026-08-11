@@ -1,7 +1,21 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getEmployees } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
+
+const newBtnStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 16px",
+  display: "flex",
+  alignItems: "center",
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 14,
+  background: "var(--primary)",
+  color: "#fff",
+  textDecoration: "none",
+};
 
 export default async function EmployeeDirectoryPage() {
   const { data: rawEmployees, source } = await getEmployees();
@@ -19,6 +33,11 @@ export default async function EmployeeDirectoryPage() {
       <PageHeader
         title="Employee Directory"
         subtitle="All staff, grades and posting locations."
+        actions={
+          <Link href="/hr/employees/new" style={newBtnStyle}>
+            + Add Employee
+          </Link>
+        }
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>

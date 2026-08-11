@@ -9,7 +9,7 @@ export const metadata = {
 export default function TaxDeclarationPage() {
   return (
     <main className="page-main" aria-labelledby="page-heading">
-      <PageHeader title="Tax Declaration" subtitle="Submit your income tax investment proofs for the current financial year." />
+      <PageHeader title="Tax Declaration" subtitle="Submit your income tax investment proofs for the current financial year." back="/hr/payroll" />
       <TaxDeclarationForm />
     </main>
   );

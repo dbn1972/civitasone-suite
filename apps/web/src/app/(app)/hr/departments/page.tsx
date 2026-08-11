@@ -1,15 +1,34 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, Card, EmptyState } from "../../../_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
+import { DepartmentsTable } from "./DepartmentsTable";
 
 type Dept = { id: string; code: string; name: string; parentId: string | null } & Record<string, unknown>;
 
 async function getDepartments(): Promise<Dept[]> {
-  const r = await fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
-    telemetryKey: "config.departments",
-    mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
-  });
-  return r.data;
+  try {
+    const r = await fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
+      telemetryKey: "config.departments",
+      mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
+    });
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
 }
+
+const newBtnStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 16px",
+  display: "flex",
+  alignItems: "center",
+  borderRadius: 8,
+  fontWeight: 600,
+  fontSize: 14,
+  background: "var(--primary)",
+  color: "#fff",
+  textDecoration: "none",
+};
 
 export default async function DepartmentsPage() {
   const depts = await getDepartments();
@@ -22,6 +41,11 @@ export default async function DepartmentsPage() {
         back="/hr"
         backLabel="HR"
         help="hr"
+        actions={
+          <Link href="/hr/departments/new" style={newBtnStyle}>
+            + New Department
+          </Link>
+        }
       />
 
       <Card title={`Departments (${depts.length})`}>
@@ -32,25 +56,9 @@ export default async function DepartmentsPage() {
             message="Create your first department so employees can be assigned to teams."
           />
         ) : (
-          <DataTable<Dept>
-            columns={[
-              { key: "code", label: "Code" },
-              { key: "name", label: "Department Name" },
-            ]}
-            rows={depts}
-            sortable
-            filterable
-            filterPlaceholder="Search departments…"
-            emptyIcon="🗂️"
-            emptyTitle="No match"
-            emptyMessage="Try a different search."
-          />
+          <DepartmentsTable depts={depts} />
         )}
       </Card>
-
-      <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
-        Add departments via <code>POST /v1/hrms/departments</code> with <code>code</code> and <code>name</code>. A full form is being built.
-      </p>
     </main>
   );
 }
