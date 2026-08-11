@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsTrainings, hrmsNominations, type NominationRow } from "./schema.js";
 import { trainingSessions } from "../training-admin/schema.js";
@@ -61,6 +61,21 @@ export async function insertNomination(tx: Writer, row: typeof hrmsNominations.$
 export async function listTrainingsByTenant(tenantId: string, limit = 100) {
   return scopedRead((tx) => tx.select().from(hrmsTrainings)
     .where(eq(hrmsTrainings.tenantId, tenantId))
+    .limit(limit));
+}
+
+
+export async function listNominationsForAdmin(tenantId: string, limit = 500): Promise<NominationRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsNominations)
+    .where(eq(hrmsNominations.tenantId, tenantId))
+    .orderBy(desc(hrmsNominations.createdAt))
+    .limit(limit));
+}
+
+export async function listCompletedNominationsForAdmin(tenantId: string, limit = 500): Promise<NominationRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsNominations)
+    .where(and(eq(hrmsNominations.tenantId, tenantId), eq(hrmsNominations.status, "completed")))
+    .orderBy(desc(hrmsNominations.updatedAt))
     .limit(limit));
 }
 

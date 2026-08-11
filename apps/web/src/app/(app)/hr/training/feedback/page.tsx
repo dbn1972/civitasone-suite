@@ -6,9 +6,6 @@ type Row = {
   employee: string;
   program: string;
   rating: string;
-  contentRating: string;
-  trainerRating: string;
-  comments: string;
   submittedOn: string;
 } & Record<string, unknown>;
 
@@ -30,9 +27,6 @@ export default async function TrainingFeedbackPage() {
     { key: "employee", label: "Employee" },
     { key: "program", label: "Program" },
     { key: "rating", label: "Overall Rating" },
-    { key: "contentRating", label: "Content" },
-    { key: "trainerRating", label: "Trainer" },
-    { key: "comments", label: "Comments" },
     { key: "submittedOn", label: "Submitted" },
   ];
 

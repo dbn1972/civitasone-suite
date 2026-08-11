@@ -9,6 +9,10 @@ import { createTrainingBody, createNominationBody, completeNominationBody, myNom
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { and, eq, inArray } from "drizzle-orm";
+import { hrmsTrainings } from "./schema.js";
+import { scopedRead } from "../../shared/db.js";
+import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -62,6 +66,95 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
       ...(body.score !== undefined ? { score: body.score } : {}),
       ...(body.certificateRef !== undefined ? { certificateRef: body.certificateRef } : {}),
     }));
+  });
+
+  // HR admin: all nominations for the tenant, joined with training programs and employees
+  app.get("/v1/hrms/training/nominations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+
+    const nominations = await repo.listNominationsForAdmin(ctx.tenantId);
+    if (nominations.length === 0) return reply.send({ data: [] });
+
+    const trainingIds = [...new Set(nominations.map((n) => n.trainingId))];
+    const employeeIds = [...new Set(nominations.map((n) => n.employeeId))];
+
+    const [trainings, employees] = await Promise.all([
+      scopedRead((tx) => tx
+        .select({ id: hrmsTrainings.id, title: hrmsTrainings.title, fromDate: hrmsTrainings.fromDate })
+        .from(hrmsTrainings)
+        .where(and(eq(hrmsTrainings.tenantId, ctx.tenantId), inArray(hrmsTrainings.id, trainingIds)))),
+      scopedRead((tx) => tx
+        .select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, employeeIds)))),
+    ]);
+
+    const deptIds = [...new Set(employees.map((e) => e.departmentId))];
+    const departments = deptIds.length > 0
+      ? await scopedRead((tx) => tx
+          .select({ id: hrmsDepartments.id, name: hrmsDepartments.name })
+          .from(hrmsDepartments)
+          .where(and(eq(hrmsDepartments.tenantId, ctx.tenantId), inArray(hrmsDepartments.id, deptIds))))
+      : [];
+
+    const trainingMap = new Map(trainings.map((t) => [t.id, t]));
+    const employeeMap = new Map(employees.map((e) => [e.id, e]));
+    const deptMap = new Map(departments.map((d) => [d.id, d]));
+
+    const data = nominations.map((n) => {
+      const emp = employeeMap.get(n.employeeId);
+      const dept = emp ? deptMap.get(emp.departmentId) : undefined;
+      const training = trainingMap.get(n.trainingId);
+      return {
+        id: n.id,
+        employee: emp?.fullName ?? "—",
+        department: dept?.name ?? "—",
+        program: training?.title ?? "—",
+        nominatedBy: n.nominatedBy ?? "—",
+        nominationDate: n.createdAt.toISOString().slice(0, 10),
+        programDate: training?.fromDate ?? "—",
+        status: n.status,
+      };
+    });
+
+    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
+  });
+
+  // HR admin: completed nominations shaped as post-training feedback records
+  app.get("/v1/hrms/training/feedback", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+
+    const nominations = await repo.listCompletedNominationsForAdmin(ctx.tenantId);
+    if (nominations.length === 0) return reply.send({ data: [] });
+
+    const trainingIds = [...new Set(nominations.map((n) => n.trainingId))];
+    const employeeIds = [...new Set(nominations.map((n) => n.employeeId))];
+
+    const [trainings, employees] = await Promise.all([
+      scopedRead((tx) => tx
+        .select({ id: hrmsTrainings.id, title: hrmsTrainings.title })
+        .from(hrmsTrainings)
+        .where(and(eq(hrmsTrainings.tenantId, ctx.tenantId), inArray(hrmsTrainings.id, trainingIds)))),
+      scopedRead((tx) => tx
+        .select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, employeeIds)))),
+    ]);
+
+    const trainingMap = new Map(trainings.map((t) => [t.id, t]));
+    const employeeMap = new Map(employees.map((e) => [e.id, e]));
+
+    const data = nominations.map((n) => ({
+      id: n.id,
+      employee: employeeMap.get(n.employeeId)?.fullName ?? "—",
+      program: trainingMap.get(n.trainingId)?.title ?? "—",
+      rating: n.score != null ? String(n.score) : "—",
+      submittedOn: (n.completedDate ?? n.updatedAt.toISOString()).slice(0, 10),
+    }));
+
+    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
   });
 
   app.setErrorHandler(errorHandler);
