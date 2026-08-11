@@ -84,7 +84,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
 
   // 7th CPC annual increment run (statutory 1 July). Advances each active
   // employee one cell within their pay level and records it in the service book.
-  // Level is derived from current basic (designations are optional/unseeded).
+  // Level is derived from the employee's designation; basic from hrmsEmployees.basicMinor.
   const HR_WRITE_ROLES = ["hr_admin", "super_admin"];
   app.post("/v1/hrms/pay-matrix/annual-increment", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -94,17 +94,13 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       dryRun: z.boolean().default(false),
     }).parse(req.body ?? {});
     const effectiveDate = body.effectiveDate ?? `${new Date().getFullYear()}-07-01`;
-    const sortedLevels = Object.keys(ENTRY_PAY_PAISE).map(Number).sort((a, b) => a - b);
 
     const emps = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(and(
       eq(hrmsEmployees.tenantId, ctx.tenantId),
       eq(hrmsEmployees.status, "confirmed"),
     )));
 
-    // Idempotency guard: an increment run is keyed on effectiveDate. Employees
-    // who already carry an `increment` service-book entry for this date were
-    // processed by a prior run and MUST be skipped so a re-fire cannot
-    // double-advance pay. Makes the run idempotent per effectiveDate.
+    // Idempotency guard: skip employees already incremented on this effectiveDate.
     const priorRows = await scopedRead((tx) => tx.select({ employeeId: hrmsServiceBookEntries.employeeId })
       .from(hrmsServiceBookEntries)
       .where(and(
@@ -114,10 +110,66 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       )));
     const alreadyIncremented = new Set(priorRows.map((r) => r.employeeId));
 
+    // Build designation → level map for this tenant.
+    const designations = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id, level: hrmsDesignations.level })
+      .from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, ctx.tenantId)));
+    const designationLevelMap = new Map<string, number>(designations.map((d) => [d.id, d.level]));
+
     const results: Array<Record<string, unknown>> = [];
     let skipped = 0;
-    await publishF3Write(ctx, "pay_matrix_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    const incremented = results.filter((r) => r.toMinor).length;
+
+    for (const emp of emps) {
+      if (alreadyIncremented.has(emp.id)) { skipped++; continue; }
+
+      const level = designationLevelMap.get(emp.designationId) ?? 0;
+      const cells = level > 0 ? (PAY_MATRIX[level] ?? []) : [];
+      if (cells.length === 0) {
+        results.push({ employeeId: emp.id, skipped: true, reason: "no valid pay level for designation" });
+        continue;
+      }
+
+      const currentBasicN = Number(emp.basicMinor);
+      // Find current cell: exact match preferred, then nearest-upper-bound for imported data.
+      let currentIdx = cells.indexOf(currentBasicN);
+      if (currentIdx < 0) currentIdx = cells.findLastIndex((c) => c <= currentBasicN);
+      if (currentIdx < 0) currentIdx = 0; // below entry pay — treat as cell 1
+
+      const nextIdx = Math.min(currentIdx + 1, cells.length - 1);
+      const nextBasic = cells[nextIdx] ?? currentBasicN;
+
+      if (!body.dryRun) {
+        if (nextBasic > currentBasicN) {
+          await db.update(hrmsEmployees)
+            .set({ basicMinor: BigInt(nextBasic), updatedBy: ctx.actorId, updatedAt: new Date() })
+            .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, emp.id)));
+        }
+        await db.insert(hrmsServiceBookEntries).values({
+          id: randomUUID(),
+          tenantId: ctx.tenantId,
+          employeeId: emp.id,
+          entryType: "increment",
+          effectiveDate,
+          description: `Annual increment: Level ${level} Cell ${currentIdx + 1} → Cell ${nextIdx + 1}. Basic ₹${(currentBasicN / 100).toLocaleString("en-IN")} → ₹${(nextBasic / 100).toLocaleString("en-IN")}.`,
+          recordedBy: ctx.actorId,
+          attested: false,
+        });
+      }
+
+      results.push({
+        employeeId: emp.id,
+        level,
+        fromCell: currentIdx + 1,
+        toCell: nextIdx + 1,
+        fromMinor: currentBasicN.toString(),
+        toMinor: nextBasic.toString(),
+        fromDisplay: `₹${(currentBasicN / 100).toLocaleString("en-IN")}`,
+        toDisplay: `₹${(nextBasic / 100).toLocaleString("en-IN")}`,
+        incremented: nextBasic !== currentBasicN,
+      });
+    }
+
+    await publishF3Write(ctx, "pay_matrix_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    const incremented = results.filter((r) => r.incremented === true).length;
     req.log.info({ event: "pay.annual_increment.run", effectiveDate, dryRun: body.dryRun, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment run");
     return reply.send({
       effectiveDate, dryRun: body.dryRun,
