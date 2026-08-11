@@ -124,6 +124,30 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
   });
 
+
+  // GET /v1/hrms/applications/:id — fetch a single application by ID (PPL-D2 fix)
+  app.get("/v1/hrms/applications/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const application = await repo.findApplicationById(id, ctx.tenantId);
+    if (!application) throw new HttpError(404, "NOT_FOUND", "Application not found");
+    return reply.send(application);
+  });
+
+  // GET /v1/hrms/job-openings/:id — job opening detail with its applications list
+  app.get("/v1/hrms/job-openings/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    // Use tenant-scoped lookup (repo.findJobOpeningById has no tenant filter)
+    const opening = await repo.findJobOpeningByTenant(id, ctx.tenantId);
+    if (!opening) throw new HttpError(404, "NOT_FOUND", "Job opening not found");
+    // Fetch applications specifically for this opening (avoids cross-opening truncation)
+    const applications = await repo.listApplicationsByJobOpening(ctx.tenantId, id, 500);
+    return reply.send({ ...opening, applications });
+  });
+
   app.setErrorHandler(errorHandler);
 }
 

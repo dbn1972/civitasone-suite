@@ -11,10 +11,11 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsOnboardingTasks, hrmsBuddyAssignments } from "./schema.js";
+import { hrmsEmployees } from "../employee/schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -67,6 +68,63 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     const rows = await scopedRead((tx) => tx.select().from(hrmsBuddyAssignments)
       .where(and(eq(hrmsBuddyAssignments.tenantId, ctx.tenantId), eq(hrmsBuddyAssignments.employeeId, id))));
     return reply.send({ data: rows });
+  });
+
+
+  // GET /v1/hrms/onboarding — tenant-wide onboarding summary (one row per employee with tasks)
+  app.get("/v1/hrms/onboarding", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+
+    const tasks = await scopedRead((tx) => tx.select().from(hrmsOnboardingTasks)
+      .where(eq(hrmsOnboardingTasks.tenantId, ctx.tenantId)).limit(2000));
+
+    if (tasks.length === 0) return reply.send({ data: [] });
+
+    const empIds = [...new Set(tasks.map((t) => t.employeeId))];
+    const employees = await scopedRead((tx) => tx
+      .select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId, dateOfJoining: hrmsEmployees.dateOfJoining })
+      .from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, empIds))));
+
+    const empMap = new Map(employees.map((e) => [e.id, e]));
+    const grouped = new Map<string, typeof tasks>();
+    for (const t of tasks) {
+      if (!grouped.has(t.employeeId)) grouped.set(t.employeeId, []);
+      grouped.get(t.employeeId)!.push(t);
+    }
+
+    const now = new Date();
+    const data = empIds.map((empId) => {
+      const emp = empMap.get(empId);
+      const empTasks = grouped.get(empId) ?? [];
+      const total = empTasks.length;
+      const completed = empTasks.filter((t) => t.status === "completed").length;
+      const todayStr = now.toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
+      const overdue = empTasks.filter((t) => {
+        if (t.status === "completed" || !emp?.dateOfJoining) return false;
+        // Both sides are date-only strings or Date objects from a date column;
+        // compute due date in UTC to avoid local-tz midnight hazard.
+        const join = new Date(emp.dateOfJoining + "T00:00:00Z");
+        const due = new Date(join);
+        due.setUTCDate(due.getUTCDate() + t.dueByDay);
+        return due.toISOString().slice(0, 10) < todayStr;
+      }).length;
+      const status = completed === total ? "completed" : overdue > 0 ? "overdue" : "in_progress";
+      return {
+        id: empId,
+        employee: emp?.fullName ?? "—",
+        employeeNo: emp?.employeeNo ?? "—",
+        department: emp?.departmentId ?? "—",
+        joiningDate: emp?.dateOfJoining ?? "—",
+        stepsCompleted: `${completed}/${total}`,
+        totalSteps: String(total),
+        progress: total > 0 ? `${Math.round((completed / total) * 100)}%` : "0%",
+        status,
+      };
+    });
+
+    return reply.send({ data });
   });
 
   app.setErrorHandler((err, req, reply) => {

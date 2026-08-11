@@ -50,6 +50,21 @@ export async function countApplicationsByJob(tenantId: string, jobIds: string[])
 
 // --- Interviews (P0-2: persisted in recruitment.hrms_interviews) ---
 
+
+export async function findJobOpeningByTenant(id: string, tenantId: string): Promise<JobOpeningRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+export async function listApplicationsByJobOpening(tenantId: string, jobOpeningId: string, limit = 500): Promise<ApplicationRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsApplications)
+    .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.jobOpeningId, jobOpeningId)))
+    .orderBy(desc(hrmsApplications.appliedAt))
+    .limit(limit));
+}
+
 export async function insertInterview(tx: Writer, row: typeof hrmsInterviews.$inferInsert): Promise<void> {
   await tx.insert(hrmsInterviews).values(row);
 }
