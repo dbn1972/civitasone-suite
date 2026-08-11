@@ -130,6 +130,11 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
+    const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
+    if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");
+    if (leaveApp.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot approve your own leave application.");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
   });
 
@@ -148,6 +153,11 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...HR_ROLES, "manager"]);
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
+    const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
+    if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");
+    if (leaveApp.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot approve your own leave application.");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveLeave(ctx, id));
   });
 
