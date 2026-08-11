@@ -10,7 +10,7 @@ import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 
-const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
+const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 export async function locationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/locations", async (req, reply) => {

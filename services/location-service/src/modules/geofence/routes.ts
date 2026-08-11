@@ -8,7 +8,7 @@ import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
 import { RESOURCES } from "../../topics.js";
 
-const GEOFENCE_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
+const GEOFENCE_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 export async function geofenceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/geofences", async (req, reply) => {

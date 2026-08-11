@@ -26,6 +26,7 @@ const btnBase: React.CSSProperties = {
 
 export function DepartmentsTable({ depts }: { depts: Dept[] }) {
   const router = useRouter();
+  const [localDepts, setLocalDepts] = useState<Dept[]>(depts);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
@@ -63,11 +64,12 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
       if (!res.ok) throw new Error("Save failed");
       setRowError(null);
       setEditingId(null);
-      router.refresh();
+      setLocalDepts(prev => prev.map(d => d.id === id ? { ...d, code: editCode, name: editName } : d));
     } catch {
       setRowError("Save failed. Please try again.");
     } finally {
       setSaving(false);
+      try { router.refresh(); } catch {}
     }
   }
 
@@ -78,11 +80,12 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
       const res = await fetch(`/api/proxy/v1/hrms/departments/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       setDeleteConfirmId(null);
-      router.refresh();
+      setLocalDepts(prev => prev.filter(d => d.id !== id));
     } catch {
       setDeleteError("Delete failed. Please try again.");
     } finally {
       setDeletingId(null);
+      try { router.refresh(); } catch {}
     }
   }
 
@@ -96,7 +99,7 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
         </tr>
       </thead>
       <tbody>
-        {depts.map((dept) => (
+        {localDepts.map((dept) => (
           <tr key={dept.id} style={{ borderBottom: "1px solid var(--line, #f1f5f9)" }}>
             {editingId === dept.id ? (
               <>

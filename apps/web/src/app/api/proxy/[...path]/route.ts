@@ -26,6 +26,9 @@ export async function DELETE(req: Request, ctx: { params: { path: string[] } }) 
   return proxy(req, ctx.params.path, "DELETE");
 }
 
+// Status codes that must not carry a body (undici constraint)
+const NO_BODY_STATUSES = new Set([204, 205, 304]);
+
 async function proxy(req: Request, segments: string[], method: string) {
   const token = cookies().get(COOKIE.ACCESS)?.value;
   if (!token) return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
@@ -44,6 +47,9 @@ async function proxy(req: Request, segments: string[], method: string) {
   const body = hasBody ? await req.text() : undefined;
 
   const upstream = await fetch(target, { method, headers, body });
+  if (NO_BODY_STATUSES.has(upstream.status)) {
+    return new NextResponse(null, { status: upstream.status });
+  }
   const text = await upstream.text();
   return new NextResponse(text, {
     status: upstream.status,
