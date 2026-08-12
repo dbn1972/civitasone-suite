@@ -19,6 +19,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const body = generateBody.parse(req.body);
+    if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice generation is not permitted");
     return sendAccepted(reply, acceptedResponseSchema, await commands.generateInvoice(ctx, body.tenantId, body.periodMonth));
   });
 
@@ -27,6 +28,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     const body = createInvoiceBody.parse(req.body);
+    if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice creation is not permitted");
     return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items));
   });
 
