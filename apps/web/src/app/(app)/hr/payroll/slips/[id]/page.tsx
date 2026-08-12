@@ -47,22 +47,24 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
         subtitle={slip.employeeName}
         back="/hr/payroll/salary-slips"
         actions={
-          <Link
-            href={`/hr/payroll/salary-slips/${slip.id}`}
-            className="btn secondary"
-            style={{ minHeight: 44 }}
-          >
-            🖨 Printable Slip
-          </Link>
-          <a
-            href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn primary"
-            style={{ minHeight: 44 }}
-          >
-            ⬇ Download PDF
-          </a>
+          <>
+            <Link
+              href={`/hr/payroll/salary-slips/${slip.id}`}
+              className="btn secondary"
+              style={{ minHeight: 44 }}
+            >
+              🖨 Printable Slip
+            </Link>
+            <a
+              href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary"
+              style={{ minHeight: 44 }}
+            >
+              ⬇ Download PDF
+            </a>
+          </>
         }
       />
 
