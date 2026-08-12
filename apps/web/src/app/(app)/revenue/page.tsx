@@ -17,6 +17,9 @@ const revenueTiles: NavTile[] = [
 	{ title: "Recovery Referrals", href: "/revenue/recovery", description: "Refer defaulting demands for recovery action." },
 	{ title: "Analytics", href: "/revenue/analytics", description: "Arrears ageing, defaulters, efficiency, trends and forecast." },
 	{ title: "BBPS Bill Fetch & Pay", href: "/revenue/bbps", description: "Fetch and pay assessee bills via Bharat Bill Payment System." },
+	{ title: "Trade Licenses", href: "/revenue/trade-licenses", description: "Issue, renew, and cancel municipal trade licenses." },
+	{ title: "Collection Report", href: "/revenue/analytics", description: "Demand-collection-balance and defaulters report." },
+	{ title: "Waivers", href: "/revenue/waivers", description: "Raise and decide penalty/interest waivers (maker-checker)." },
 ];
 
 export default function RevenueHubPage() {

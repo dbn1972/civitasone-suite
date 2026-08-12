@@ -22,3 +22,17 @@ export const createRecoveryReferralBody = z.object({
   assesseeId: z.string().uuid(),
   reason: z.string().min(1).max(500),
 });
+
+export const createWaiverBody = z.object({
+  assesseeId:  z.string().uuid(),
+  demandId:    z.string().uuid(),
+  waiverType:  z.enum(["penalty", "interest", "both"]),
+  amountMinor: z.string().regex(/^\d+$/),
+  reason:      z.string().min(1).max(500),
+});
+
+export const waiverDecideBody = z.object({
+  approvalId: z.string().uuid(),
+  approve:    z.boolean(),
+  reason:     z.string().max(500).optional(),
+});

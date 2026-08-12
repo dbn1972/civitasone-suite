@@ -49,9 +49,9 @@ export default async function ScheduledReportsPage() {
       />
 
       <StatGrid>
-        <StatCard label="Total Schedules" value={schedules.length} />
-        <StatCard label="Enabled" value={enabled} up={enabled > 0} />
-        <StatCard label="Disabled" value={disabled} />
+        <StatCard icon="📅" iconBg="var(--panel)" label="Total Schedules" value={schedules.length} />
+        <StatCard icon="✅" iconBg="var(--panel)" label="Enabled" value={enabled} up={enabled > 0} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label="Disabled" value={disabled} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: "18px" }}>

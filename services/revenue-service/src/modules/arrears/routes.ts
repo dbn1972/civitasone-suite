@@ -9,6 +9,8 @@ import {
   createWriteOffBody,
   writeOffDecideBody,
   createRecoveryReferralBody,
+  createWaiverBody,
+  waiverDecideBody,
 } from "./validators.js";
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
@@ -93,5 +95,24 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
       data: rows.slice(q.offset, q.offset + q.limit),
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total: rows.length },
     });
+  });
+
+  // ── POST /v1/revenue/waivers ────────────────────────────────────────────────
+
+  app.post("/v1/revenue/waivers", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const body = createWaiverBody.parse(req.body);
+    return reply.code(202).send({ data: await commands.createWaiver(ctx, body as unknown as Record<string, unknown>) });
+  });
+
+  // ── POST /v1/revenue/waivers/:id/decide ─────────────────────────────────────
+
+  app.post("/v1/revenue/waivers/:id/decide", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const body = waiverDecideBody.parse(req.body);
+    return reply.code(202).send({ data: await commands.decideWaiver(ctx, id, body as unknown as Record<string, unknown>) });
   });
 }
