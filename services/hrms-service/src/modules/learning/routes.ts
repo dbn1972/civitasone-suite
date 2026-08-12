@@ -151,6 +151,126 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await repo.listMyEnrollments(ctx.tenantId, employeeId));
   });
 
+
+  // ── LMS Dashboard stats ─────────────────────────────────────────
+  // Returns enrolled/in_progress/completed/overdue counts, optionally scoped
+  // to a single employee (add ?employeeId=<uuid>).
+  app.get("/v1/hrms/learning/dashboard", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    const [statusCounts, overdueCount] = await Promise.all([
+      repo.countEnrollmentsByStatus(ctx.tenantId, employeeId),
+      repo.countOverdueEnrollments(ctx.tenantId, employeeId),
+    ]);
+    const byStatus = Object.fromEntries(statusCounts.map((r) => [r.status, r.count]));
+    return reply.send({
+      enrolled:    byStatus["enrolled"]    ?? 0,
+      in_progress: byStatus["in_progress"] ?? 0,
+      completed:   byStatus["completed"]   ?? 0,
+      overdue:     overdueCount,
+      total:       statusCounts.reduce((s, r) => s + r.count, 0),
+    });
+  });
+
+  // ── Update course metadata ──────────────────────────────────────
+  app.patch("/v1/hrms/learning/courses/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({
+      title:       z.string().min(1).max(256).optional(),
+      description: z.string().max(2048).nullable().optional(),
+      category:    z.string().max(64).optional(),
+      creditHours: z.string().max(10).optional(),
+    }).parse(req.body);
+    const course = await repo.getCourse(ctx.tenantId, id);
+    if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
+    const updateData = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) as Parameters<typeof repo.updateCourse>[3];
+    const updated = await db.transaction(async (tx) => repo.updateCourse(tx, ctx.tenantId, id, updateData));
+    if (!updated) throw new HttpError(409, "INVALID_STATE", "course could not be updated");
+    return reply.send({ id: updated.id, title: updated.title, status: updated.status });
+  });
+
+  // ── Course completion report (HR admin) ─────────────────────────
+  app.get("/v1/hrms/learning/courses/:id/enrollments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const course = await repo.getCourse(ctx.tenantId, id);
+    if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
+    const rows = await repo.listEnrollmentsByCourse(ctx.tenantId, id);
+    return reply.send({
+      courseId: id,
+      courseTitle: course.title,
+      total: rows.length,
+      data: rows.map((r) => ({
+        id: r.id, employeeId: r.employeeId, status: r.status,
+        progressPct: r.progressPct, enrolledAt: r.enrolledAt, completedAt: r.completedAt ?? null,
+      })),
+    });
+  });
+
+  // ── Training Plans ──────────────────────────────────────────────
+  app.get("/v1/hrms/learning/training-plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    return reply.send(await repo.listTrainingPlans(ctx.tenantId));
+  });
+
+  app.post("/v1/hrms/learning/training-plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = z.object({
+      title:        z.string().min(1).max(256),
+      planYear:     z.number().int().min(2020).max(2100),
+      departmentId: z.string().uuid().optional(),
+      roleCode:     z.string().max(64).optional(),
+    }).parse(req.body);
+    const { randomUUID } = await import("node:crypto");
+    const id = randomUUID();
+    const row = await db.transaction(async (tx) => repo.insertTrainingPlan(tx, {
+      id, tenantId: ctx.tenantId, title: body.title,
+      planYear: body.planYear,
+      departmentId: body.departmentId ?? null,
+      roleCode: body.roleCode ?? null,
+      status: "draft", createdBy: ctx.actorId,
+    }));
+    return reply.code(201).send({ id: row.id, status: row.status });
+  });
+
+  app.get("/v1/hrms/learning/training-plans/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const plan = await repo.getTrainingPlan(ctx.tenantId, id);
+    if (!plan) throw new HttpError(404, "NOT_FOUND", "training plan not found");
+    const items = await repo.listTrainingPlanItems(ctx.tenantId, id);
+    return reply.send({ ...plan, items });
+  });
+
+  app.post("/v1/hrms/learning/training-plans/:id/items", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({
+      courseId:   z.string().uuid().optional(),
+      trainingId: z.string().uuid().optional(),
+      targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      mandatory:  z.boolean().default(false),
+    }).parse(req.body);
+    const plan = await repo.getTrainingPlan(ctx.tenantId, id);
+    if (!plan) throw new HttpError(404, "NOT_FOUND", "training plan not found");
+    const { randomUUID } = await import("node:crypto");
+    const itemId = randomUUID();
+    const row = await db.transaction(async (tx) => repo.insertTrainingPlanItem(tx, {
+      id: itemId, tenantId: ctx.tenantId, planId: id,
+      courseId: body.courseId ?? null, trainingId: body.trainingId ?? null,
+      targetDate: body.targetDate ?? null, mandatory: body.mandatory ? 1 : 0,
+    }));
+    return reply.code(201).send({ id: row.id, planId: id });
+  });
+
   app.setErrorHandler(errorHandler);
 }
 

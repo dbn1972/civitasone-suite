@@ -69,11 +69,39 @@ export const lessonProgress = learningSchema.table("lesson_progress", {
   completedAt:  timestamp("completed_at", { withTimezone: true }),
 });
 
-export type CourseRow = typeof courses.$inferSelect;
-export type ModuleRow = typeof modules.$inferSelect;
-export type LessonRow = typeof lessons.$inferSelect;
+export type CourseRow     = typeof courses.$inferSelect;
+export type ModuleRow     = typeof modules.$inferSelect;
+export type LessonRow     = typeof lessons.$inferSelect;
 export type EnrollmentRow = typeof enrollments.$inferSelect;
 
 export const schema = {
   courses, coursePrerequisites, modules, lessons, enrollments, lessonProgress,
 };
+
+// Training Plans (annual, per dept/role)
+export const trainingPlans = learningSchema.table("training_plans", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  title:        text("title").notNull(),
+  planYear:     integer("plan_year").notNull(),
+  departmentId: uuid("department_id"),
+  roleCode:     varchar("role_code", { length: 64 }),
+  status:       varchar("status", { length: 16 }).notNull().default("draft"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:    uuid("created_by").notNull(),
+});
+
+export const trainingPlanItems = learningSchema.table("training_plan_items", {
+  id:         uuid("id").primaryKey().defaultRandom(),
+  tenantId:   uuid("tenant_id").notNull(),
+  planId:     uuid("plan_id").notNull(),
+  courseId:   uuid("course_id"),
+  trainingId: uuid("training_id"),
+  targetDate: text("target_date"),
+  mandatory:  integer("mandatory").notNull().default(0),
+  createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TrainingPlanRow     = typeof trainingPlans.$inferSelect;
+export type TrainingPlanItemRow = typeof trainingPlanItems.$inferSelect;

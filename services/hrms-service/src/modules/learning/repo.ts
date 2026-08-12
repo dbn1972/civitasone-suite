@@ -1,8 +1,10 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   courses, coursePrerequisites, modules, lessons, enrollments, lessonProgress,
+  trainingPlans, trainingPlanItems,
   type CourseRow, type ModuleRow, type LessonRow, type EnrollmentRow,
+  type TrainingPlanRow, type TrainingPlanItemRow,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -150,4 +152,119 @@ export async function listMyEnrollments(tenantId: string, employeeId: string): P
     .from(enrollments)
     .innerJoin(courses, eq(courses.id, enrollments.courseId))
     .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.employeeId, employeeId)))) as never;
+}
+
+// ── dashboard stats ───────────────────────────────────────────────
+/** Counts of enrollments grouped by status, optionally scoped to an employee. */
+export async function countEnrollmentsByStatus(
+  tenantId: string,
+  employeeId?: string,
+): Promise<{ status: string; count: number }[]> {
+  const filters = [eq(enrollments.tenantId, tenantId)];
+  if (employeeId) filters.push(eq(enrollments.employeeId, employeeId));
+  const rows = await scopedRead((t) =>
+    t.select({
+      status: enrollments.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(enrollments)
+    .where(and(...filters))
+    .groupBy(enrollments.status),
+  );
+  return rows;
+}
+
+/** Overdue: enrolled or in_progress with no updatedAt in last 30 days (proxy). */
+export async function countOverdueEnrollments(
+  tenantId: string,
+  employeeId?: string,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const filters = [
+    eq(enrollments.tenantId, tenantId),
+    inArray(enrollments.status, ["enrolled", "in_progress"]),
+    lte(enrollments.updatedAt, cutoff),
+  ];
+  if (employeeId) filters.push(eq(enrollments.employeeId, employeeId));
+  const rows = await scopedRead((t) =>
+    t.select({ count: sql<number>`count(*)::int` })
+    .from(enrollments)
+    .where(and(...filters)),
+  );
+  return rows[0]?.count ?? 0;
+}
+
+// ── course update ─────────────────────────────────────────────────
+export async function updateCourse(
+  tx: Writer, tenantId: string, id: string,
+  data: { title?: string; description?: string | null; category?: string; creditHours?: string },
+): Promise<CourseRow | null> {
+  const set: Partial<typeof courses.$inferInsert> = { updatedAt: new Date() };
+  if (data.title !== undefined) set.title = data.title;
+  if (data.description !== undefined) set.description = data.description;
+  if (data.category !== undefined) set.category = data.category;
+  if (data.creditHours !== undefined) set.creditHours = data.creditHours;
+  const rows = await tx.update(courses)
+    .set(set)
+    .where(and(eq(courses.id, id), eq(courses.tenantId, tenantId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+// ── enrollment listing for a course (completion report) ───────────
+export async function listEnrollmentsByCourse(
+  tenantId: string,
+  courseId: string,
+  limit = 500,
+): Promise<(EnrollmentRow & { employeeId: string })[]> {
+  return scopedRead((t) =>
+    t.select().from(enrollments)
+    .where(and(eq(enrollments.tenantId, tenantId), eq(enrollments.courseId, courseId)))
+    .orderBy(enrollments.enrolledAt)
+    .limit(limit),
+  ) as never;
+}
+
+// ── training plans ────────────────────────────────────────────────
+
+
+export async function insertTrainingPlan(
+  tx: Writer,
+  row: typeof trainingPlans.$inferInsert,
+): Promise<TrainingPlanRow> {
+  const rows = await tx.insert(trainingPlans).values(row).returning();
+  return rows[0]!;
+}
+
+export async function listTrainingPlans(tenantId: string, limit = 100): Promise<TrainingPlanRow[]> {
+  return scopedRead((t) =>
+    t.select().from(trainingPlans)
+    .where(eq(trainingPlans.tenantId, tenantId))
+    .orderBy(trainingPlans.planYear)
+    .limit(limit),
+  );
+}
+
+export async function getTrainingPlan(tenantId: string, id: string): Promise<TrainingPlanRow | undefined> {
+  const rows = await scopedRead((t) =>
+    t.select().from(trainingPlans)
+    .where(and(eq(trainingPlans.id, id), eq(trainingPlans.tenantId, tenantId)))
+    .limit(1),
+  );
+  return rows[0];
+}
+
+export async function listTrainingPlanItems(tenantId: string, planId: string): Promise<TrainingPlanItemRow[]> {
+  return scopedRead((t) =>
+    t.select().from(trainingPlanItems)
+    .where(and(eq(trainingPlanItems.tenantId, tenantId), eq(trainingPlanItems.planId, planId))),
+  );
+}
+
+export async function insertTrainingPlanItem(
+  tx: Writer,
+  row: typeof trainingPlanItems.$inferInsert,
+): Promise<TrainingPlanItemRow> {
+  const rows = await tx.insert(trainingPlanItems).values(row).returning();
+  return rows[0]!;
 }
