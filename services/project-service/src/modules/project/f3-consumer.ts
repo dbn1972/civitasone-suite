@@ -38,8 +38,8 @@ export function registerF3ProjectConsumers(queue: Queue): void {
         switch (op) {
           case "risk_create": {
             const rows = await tx.execute(sql`
-              INSERT INTO project.project_risks (tenant_id, project_id, title, description, category, probability, impact, risk_score, mitigation_plan, owner_id, status, created_by)
-              VALUES (${p.tenantId}, ${p.projectId}, ${p.title}, ${p.description ?? null}, ${p.category}, ${p.probability}, ${p.impact}, ${p.riskScore}, ${p.mitigationPlan ?? null}, ${p.ownerId ?? null}, ${p.status}, ${msg.actorId})
+              INSERT INTO project.project_risks (id, tenant_id, project_id, title, description, category, probability, impact, risk_score, mitigation_plan, owner_id, status, created_by)
+              VALUES (${p.id}, ${p.tenantId}, ${p.projectId}, ${p.title}, ${p.description ?? null}, ${p.category}, ${p.probability}, ${p.impact}, ${p.riskScore}, ${p.mitigationPlan ?? null}, ${p.ownerId ?? null}, ${p.status}, ${msg.actorId})
               RETURNING id
             `);
             const rid = (rows[0] as { id: string }).id;
