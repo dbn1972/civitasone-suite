@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { PageHeader } from "../../../../../_components/ds";
@@ -44,7 +45,10 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
     <main className="page-main wrap" style={{ maxWidth: 800 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
-        <PrintButton />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link href={`/hr/payroll/slips/${params.id}`} className="btn secondary" style={{ minHeight: 44 }}>📊 Dashboard View</Link>
+          <PrintButton />
+        </div>
       </div>
       <DataSourceBadge source={source} />
 
@@ -52,7 +56,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid #0f172a", paddingBottom: 16 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>SALARY SLIP</h1>
-          <p style={{ margin: "4px 0 0", fontSize: 14, color: "#475569" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--color-text-muted)" }}>
             Pay Period: <strong>{slip.payPeriod}</strong>
           </p>
         </div>
@@ -123,7 +127,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         </div>
 
         {/* Footer */}
-        <p style={{ marginTop: 20, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+        <p style={{ marginTop: 20, fontSize: 11, color: "var(--color-text-muted)", textAlign: "center" }}>
           This is a system-generated salary slip. No signature required.
         </p>
       </div>
