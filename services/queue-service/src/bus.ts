@@ -396,6 +396,22 @@ export class SqsQueue implements Queue {
     if (cached) return cached;
     const name = perServiceQueueName(topic, this.service);
     const fifo = isFifoTopic(topic);
+    // BOOT-FAST: Try GetQueueUrl first — on every restart the queues already exist.
+    // One call instead of six (Create + GetUrl + CreateDlq + GetDlqUrl + GetAttrs +
+    // SetAttrs) cuts warm-up time by ~83% on a heavily-loaded LocalStack/SQS
+    // where each round-trip takes seconds (63 topics × 6 calls × 3.5s ≈ 22 min →
+    // 63 × 1 call × 3.5s ≈ 4 min). Creation path still runs first time or when
+    // a queue is deleted.
+    try {
+      const existing = await this.client.send(new GetQueueUrlCommand({ QueueName: name }));
+      if (existing.QueueUrl) {
+        this.queueUrls.set(topic, existing.QueueUrl);
+        return existing.QueueUrl;
+      }
+    } catch {
+      // Queue does not exist — fall through to create it.
+    }
+    // Creation path: first-time setup or queue was deleted.
     await this.client.send(new CreateQueueCommand({
       QueueName: name,
       // 05-T4: FIFO topics create FIFO queues. ContentBasedDeduplication stays
@@ -406,7 +422,7 @@ export class SqsQueue implements Queue {
     const url = res.QueueUrl!;
     // QUE-2: attach a native SQS RedrivePolicy (DLQ + maxReceiveCount) and a
     // tuned visibility timeout so the broker itself dead-letters poison messages.
-    // Idempotent: SetQueueAttributes is safe to re-apply on every cold start.
+    // Only applies on first creation — existing queues already carry the policy.
     try {
       const dlqUrl = await this.getOrCreateDlq(topic);
       const dlqAttrs = await this.client.send(
@@ -442,6 +458,16 @@ export class SqsQueue implements Queue {
     const name = fifo
       ? `${base.slice(0, -".fifo".length).slice(0, 71)}-dlq.fifo`
       : `${base.slice(0, 76)}-dlq`;
+    // BOOT-FAST: fast-path for existing DLQs (same logic as getOrCreateQueue).
+    try {
+      const existing = await this.client.send(new GetQueueUrlCommand({ QueueName: name }));
+      if (existing.QueueUrl) {
+        this.dlqUrls.set(topic, existing.QueueUrl);
+        return existing.QueueUrl;
+      }
+    } catch {
+      // DLQ does not exist — fall through to create it.
+    }
     await this.client.send(new CreateQueueCommand({
       QueueName: name,
       ...(fifo ? { Attributes: { FifoQueue: "true", ContentBasedDeduplication: "false" } } : {}),

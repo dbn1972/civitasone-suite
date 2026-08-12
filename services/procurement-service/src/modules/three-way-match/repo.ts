@@ -5,6 +5,7 @@ import { threeWayMatch, type ThreeWayMatchRow } from "./schema.js";
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export interface DerivedMatch {
+  id: string;
   tenantId: string;
   poId: string;
   grnId: string;
@@ -23,9 +24,9 @@ export interface DerivedMatch {
 export async function upsertDerivedMatch(tx: Writer, m: DerivedMatch): Promise<void> {
   await (tx as typeof db).execute(sql`
     INSERT INTO procurement.three_way_match
-      (tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, match_status)
+      (id, tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, match_status)
     VALUES (
-      ${m.tenantId}::uuid, ${m.poId}::uuid, ${m.grnId}::uuid,
+      ${m.id}::uuid, ${m.tenantId}::uuid, ${m.poId}::uuid, ${m.grnId}::uuid,
       ${m.invoiceId ?? null}, ${m.poAmountMinor.toString()}::bigint, ${m.grnAmountMinor.toString()}::bigint,
       ${(m.invoiceAmountMinor ?? 0n).toString()}::bigint, ${m.matchStatus}
     )

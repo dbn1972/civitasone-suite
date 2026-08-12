@@ -93,6 +93,7 @@ export function registerGrnConsumers(queue: Queue): void {
           const matchStatus = variancePct <= 2 ? "matched" : variancePct <= 5 ? "matched" : "mismatch";
           const { upsertDerivedMatch } = await import("../three-way-match/repo.js");
           await upsertDerivedMatch(tx, {
+            id: randomUUID(),
             tenantId: p.tenantId, poId, grnId: p.id,
             poAmountMinor, grnAmountMinor, matchStatus,
           });
