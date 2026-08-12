@@ -27,7 +27,8 @@ export async function custodianRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const body = createCustodianBody.parse(req.body);
     const id = randomUUID();
-    await db.insert(custodians).values({
+    // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS WITH CHECK).
+    await db.transaction(async (tx) => (tx as unknown as typeof db).insert(custodians).values({
       id,
       tenantId:      ctx.tenantId,
       storeId:       body.storeId,
@@ -38,7 +39,7 @@ export async function custodianRoutes(app: FastifyInstance): Promise<void> {
       status:        "active",
       createdBy:     ctx.actorId,
       updatedBy:     ctx.actorId,
-    });
+    }));
     return reply.code(201).send({ id, status: "created" });
   });
 

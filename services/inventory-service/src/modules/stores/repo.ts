@@ -26,10 +26,13 @@ export async function updateStore(
   patch: Partial<Omit<StoreInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
 ): Promise<StoreRow | null> {
-  const updated = await db.update(stores)
-    .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${stores.version} + 1` })
-    .where(and(eq(stores.id, id), eq(stores.tenantId, tenantId)))
-    .returning();
-  return updated[0] ?? null;
+  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) =>
+    (tx as unknown as typeof db).update(stores)
+      .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${stores.version} + 1` })
+      .where(and(eq(stores.id, id), eq(stores.tenantId, tenantId)))
+      .returning(),
+  );
+  return rows[0] ?? null;
 }
 

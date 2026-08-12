@@ -139,12 +139,15 @@ export async function updateCategory(
   patch: Partial<Omit<CategoryInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
 ): Promise<CategoryRow> {
-  const updated = await db.update(categories)
-    .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${categories.version} + 1` })
-    .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId)))
-    .returning();
-  if (updated.length === 0) throw new DomainError("NOT_FOUND", `category ${id} not found for tenant`);
-  return updated[0]!;
+  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) =>
+    (tx as unknown as typeof db).update(categories)
+      .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${categories.version} + 1` })
+      .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId)))
+      .returning(),
+  );
+  if (rows.length === 0) throw new DomainError("NOT_FOUND", `category ${id} not found for tenant`);
+  return rows[0]!;
 }
 
 // ── UoMs ──────────────────────────────────────────────────────────────────
@@ -171,12 +174,15 @@ export async function updateUom(
   patch: Partial<Omit<UomInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
   actorId: string,
 ): Promise<UomRow> {
-  const updated = await db.update(uoms)
-    .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${uoms.version} + 1` })
-    .where(and(eq(uoms.id, id), eq(uoms.tenantId, tenantId)))
-    .returning();
-  if (updated.length === 0) throw new DomainError("NOT_FOUND", `uom ${id} not found for tenant`);
-  return updated[0]!;
+  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) =>
+    (tx as unknown as typeof db).update(uoms)
+      .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${uoms.version} + 1` })
+      .where(and(eq(uoms.id, id), eq(uoms.tenantId, tenantId)))
+      .returning(),
+  );
+  if (rows.length === 0) throw new DomainError("NOT_FOUND", `uom ${id} not found for tenant`);
+  return rows[0]!;
 }
 
 // ── Substitutes (SVC-051) ──────────────────────────────────────────────────
