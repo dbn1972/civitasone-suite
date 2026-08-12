@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -47,6 +48,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           outcome: "success",
         },
       });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.confirmed",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { confirmationDate: p.confirmationDate },
+        }),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
     log.info({ messageId: msg.messageId }, "employee confirmation processed");
@@ -92,6 +103,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           outcome: "success",
         },
       });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.separated",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { separationType: p.separationType, effectiveDate: p.effectiveDate },
+        }),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
     log.info({ messageId: msg.messageId }, "employee separation processed");
@@ -131,6 +152,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           outcome: "success",
         },
       });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.reinstated",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { reinstatementDate: p.reinstatementDate },
+        }),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
     log.info({ messageId: msg.messageId }, "employee reinstatement processed");
@@ -164,6 +195,16 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "hrms", action: "lifecycle_promotion", resourceType: "promotion", resourceId: p.id, outcome: "success" },
+      });
+      await enqueue(tx as any, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.promoted",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { effectiveDate: p.effectiveDate, toDesigId: p.toDesigId },
+        }),
       });
     });
   });
@@ -220,6 +261,16 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
         effectiveDate: p.joinedDate,
         description: `Transferred and joined at ${row.toStation ?? "new station"} (dept ${row.toDeptId})`,
         recordedBy: msg.actorId, documentRef: row.orderNo ?? row.orderRef ?? null,
+      });
+      await enqueue(tx as any, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.transfer_joined",
+          recipient: row.employeeId,
+          recipientId: row.employeeId,
+          variables: { joinedDate: p.joinedDate, toDeptId: row.toDeptId },
+        }),
       });
     });
   });
