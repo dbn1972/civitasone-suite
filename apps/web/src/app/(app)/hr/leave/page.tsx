@@ -42,7 +42,7 @@ export default async function LeaveManagementPage() {
           </>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       {/* Pending approval nudge */}
       {pending > 0 && (

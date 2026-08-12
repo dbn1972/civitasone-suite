@@ -43,7 +43,7 @@ export default async function DeputationPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Deputation" subtitle="Officers on deputation to other organisations." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e6f0ff" label="Total Deputations" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />

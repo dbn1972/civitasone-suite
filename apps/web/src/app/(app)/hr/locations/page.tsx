@@ -43,7 +43,7 @@ export default async function LocationsPage() {
   const { data: locations, source } = await getLocations();
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Locations"
         subtitle="Offices, branches, and facilities registered in the system. Add locations so employees and operations can be correctly assigned."
@@ -56,7 +56,7 @@ export default async function LocationsPage() {
           </Link>
         }
       />
-
+      <DataSourceBadge source={source} />
       <Card title={`Locations (${locations.length})`}>
         {locations.length === 0 ? (
           <EmptyState

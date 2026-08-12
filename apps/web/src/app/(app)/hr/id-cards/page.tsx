@@ -28,42 +28,52 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
+const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  { key: "card_number",        label: "Card #" },
+  { key: "holder_name",        label: "Holder" },
+  { key: "designation",        label: "Designation" },
+  { key: "department",         label: "Department" },
+  { key: "card_type",          label: "Type" },
+  { key: "valid_until",        label: "Valid Until" },
+  { key: "verification_count", label: "Verifications" },
+  { key: "status",             label: "Status", cellType: "status" },
+];
+
 export default async function IdCardsPage() {
   const { data: items, source } = await getData();
 
-  const active = items.filter((i) => i.status === "active").length;
-  const suspended = items.filter((i) => i.status === "suspended").length;
-  const employees = items.filter((i) => i.card_type === "employee").length;
-  const vendor = items.filter((i) => i.card_type === "vendor_staff" || i.card_type === "project_team").length;
-
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "card_number", label: "Card #" },
-    { key: "holder_name", label: "Holder" },
-    { key: "designation", label: "Designation" },
-    { key: "department", label: "Department" },
-    { key: "card_type", label: "Type" },
-    { key: "vendor_name", label: "Vendor" },
-    { key: "valid_until", label: "Valid Until" },
-    { key: "verification_count", label: "Verifications" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
+  const active      = items.filter((i) => i.status === "active").length;
+  const suspended   = items.filter((i) => i.status === "suspended").length;
+  const employee    = items.filter((i) => i.card_type === "employee").length;
+  const vendor      = items.filter((i) => i.card_type === "vendor_staff" || i.card_type === "project_team").length;
 
   return (
-    <div className="space-y-6">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="ID Card Management"
-        subtitle="Issue, manage, and verify digital identity cards for employees and vendor staff"
+        subtitle="Issue, manage, and verify digital identity cards for employees and vendor staff."
+        back="/hr"
       />
-
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🪪" iconBg="#e6f0ff" label="Total Cards" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="⏸️" iconBg="#fffbe6" label="Suspended" value={suspended} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label="Employees" value={employees} />
-        <StatCard icon="🏢" iconBg="#fef2f2" label="Vendor/Project" value={vendor} />
+        <StatCard icon="🆔" iconBg="#e6f0ff" label="Total Cards"    value={items.length} />
+        <StatCard icon="✅"          iconBg="#e6f7f0" label="Active"         value={active} />
+        <StatCard icon="⏸️"          iconBg="#fffbe6" label="Suspended"      value={suspended} />
+        <StatCard icon="👥"          iconBg="#f5f5f5" label="Vendor / Project" value={vendor} />
       </StatGrid>
-
-      <DataTable columns={columns} rows={items} exportable />
-    </div>
+      <Card title="ID Cards">
+        <DataTable<Row>
+          columns={COLUMNS}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by holder, card number, type or department…"
+          pageSize={20}
+          emptyIcon="🆔"
+          emptyTitle="No ID cards issued"
+          emptyMessage="ID cards for employees and vendor staff appear here once issued. Use the card management portal to issue cards."
+        />
+      </Card>
+    </main>
   );
 }

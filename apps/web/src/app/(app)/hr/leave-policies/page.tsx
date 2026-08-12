@@ -122,7 +122,7 @@ export default function LeavePoliciesPage() {
   const rows: PolicyRow[] = policies as PolicyRow[];
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Leave Policy Configuration"
         subtitle="Configure leave entitlements for each employee type. Changes take effect immediately."
@@ -424,6 +424,6 @@ export default function LeavePoliciesPage() {
         onConfirm={() => void saveEdit()}
         onCancel={() => !saving && setConfirmOpen(false)}
       />
-    </>
+    </main>
   );
 }

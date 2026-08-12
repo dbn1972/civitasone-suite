@@ -48,7 +48,7 @@ export default async function DepartmentsPage() {
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <Card title={`Departments (${depts.length})`}>
         {depts.length === 0 ? (

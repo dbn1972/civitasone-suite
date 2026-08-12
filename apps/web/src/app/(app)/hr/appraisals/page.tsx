@@ -30,7 +30,7 @@ export default async function AppraisalsPage() {
           <Link href="/hr/appraisals/new" className="btn primary">+ New Appraisal</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />

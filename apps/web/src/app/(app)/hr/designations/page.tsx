@@ -48,7 +48,7 @@ export default async function DesignationsPage() {
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <Card title={`Designations (${items.length})`}>
         {items.length === 0 ? (

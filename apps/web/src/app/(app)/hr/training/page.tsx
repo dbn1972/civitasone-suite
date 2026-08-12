@@ -50,7 +50,7 @@ export default async function TrainingPage() {
           <Link href="/hr/training/new" className="btn primary">+ New Program</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
         <StatCard icon="📅" iconBg="#e6f0ff" label="Upcoming" value={upcoming} />

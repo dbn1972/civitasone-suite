@@ -50,7 +50,7 @@ export default async function EmployeeTypesPage() {
         backLabel="HR"
         help="hr"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={types.length} />

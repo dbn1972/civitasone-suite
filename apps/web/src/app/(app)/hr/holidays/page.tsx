@@ -90,7 +90,7 @@ export default async function HolidaysPage() {
         subtitle="Gazetted, restricted, and optional holidays for the year."
         back="/hr"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📅" iconBg="#e6f0ff" label="Total Holidays" value={items.length} />
         <StatCard icon="🏛️" iconBg="#e6f7f0" label="Gazetted" value={gazetted} />

@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -9,7 +9,7 @@ type Row = {
   date: string;
   checkIn: string;
   checkOut: string;
-  source: string;
+  checkinSource: string;
   totalHours: string;
 } & Record<string, unknown>;
 
@@ -25,7 +25,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function CheckinLogPage() {
-  const { data: items, source: apiSource } = await getData();
+  const { data: items, source } = await getData();
+
+  const biometric = items.filter((i) => {
+    const s = String(i.checkinSource ?? "").toLowerCase();
+    return s === "biometric" || s === "bio" || s === "hardware";
+  }).length;
+  const missingCheckout = items.filter((i) => !i.checkOut || i.checkOut === "—" || i.checkOut === "").length;
 
   const columns: { key: keyof Row & string; label: string }[] = [
     { key: "employee", label: "Employee" },
@@ -34,24 +40,36 @@ export default async function CheckinLogPage() {
     { key: "checkIn", label: "Check-In" },
     { key: "checkOut", label: "Check-Out" },
     { key: "totalHours", label: "Total Hours" },
-    { key: "source", label: "Source" },
+    { key: "checkinSource", label: "Source" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Check-In Log" subtitle="Daily attendance check-in/out records with source tracking." back="/hr" />
-      {apiSource === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Check-In Log"
+        subtitle="Daily attendance check-in/out records with source tracking (mobile, biometric, manual)."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Records" value={items.length} />
+        <StatCard icon="🔒" iconBg="#e6f7f0" label="Biometric" value={biometric} />
+        <StatCard icon="⚠️" iconBg="#fff7e6" label="Missing Checkout" value={missingCheckout} />
+        <StatCard icon="📱" iconBg="#f5f5f5" label="Mobile / Manual" value={items.length - biometric} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
-          pageSize={15}
+      <Card title="Check-In Log">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, department or date…"
+          pageSize={20}
           emptyIcon="📍"
           emptyTitle="No check-in records"
-          emptyMessage="Employee check-ins from the mobile app appear here, with location and timestamp."
+          emptyMessage="Employee check-ins from the mobile app or biometric device appear here, with location and timestamp."
         />
-      </div>
+      </Card>
     </main>
   );
 }

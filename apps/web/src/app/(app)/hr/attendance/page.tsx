@@ -17,7 +17,7 @@ export default async function AttendancePage() {
         title="Attendance"
         subtitle="Daily presence and punctuality records."
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label="Total Records" value={total} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Present" value={present} />
