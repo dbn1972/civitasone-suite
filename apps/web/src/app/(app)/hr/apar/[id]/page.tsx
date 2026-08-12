@@ -140,7 +140,8 @@ export default async function AparDetailPage({
         )}
       </Card>
 
-      <Card title="Scores by Attribute" style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
+      <Card title="Scores by Attribute">
         {scores.length === 0 ? (
           <EmptyState icon="📊" title="No scores yet" message="Scores are recorded by the Reporting Officer during their review stage." />
         ) : (
@@ -151,8 +152,10 @@ export default async function AparDetailPage({
           />
         )}
       </Card>
+      </div>
 
-      <Card title="Stage History" style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
+      <Card title="Stage History">
         {history.length === 0 ? (
           <EmptyState icon="🕓" title="No stage transitions yet" message="History is recorded as each authority completes their review." />
         ) : (
@@ -163,6 +166,7 @@ export default async function AparDetailPage({
           />
         )}
       </Card>
+      </div>
 
       <div style={{ marginTop: 16, padding: "12px 20px", background: "var(--bg2)", borderRadius: 8, fontSize: 13, color: "var(--mut)" }}>
         Stage actions (self-appraisal, reporting officer review, etc.) are performed via the APAR workflow API.
