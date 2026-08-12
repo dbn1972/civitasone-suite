@@ -15,8 +15,8 @@ import {
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
 
-const READ_ROLES = ["analytics_user", "analytics_admin", "super_admin"];
-const WRITE_ROLES = ["analytics_user", "analytics_admin", "super_admin"];
+const READ_ROLES = ["analytics_user", "analytics_admin", "report_admin", "report_viewer", "super_admin", "tenant_admin"];
+const WRITE_ROLES = ["analytics_user", "analytics_admin", "report_admin", "super_admin", "tenant_admin"];
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/analytics/dashboards", async (req, reply) => {

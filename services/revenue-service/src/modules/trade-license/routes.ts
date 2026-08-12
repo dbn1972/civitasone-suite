@@ -18,7 +18,7 @@ import {
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
-const ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
+const ROLES = ["revenue_admin", "revenue_officer", "revenue_collector", "finance_admin", "super_admin", "tenant_admin"];
 
 export async function tradeLicenseRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((error, _req, reply) => {

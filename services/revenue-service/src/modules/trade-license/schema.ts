@@ -35,3 +35,22 @@ export const tradeLicenses = tradeLicenseSchema.table("trade_licenses", {
 export type TradeLicenseRow = typeof tradeLicenses.$inferSelect;
 export type TradeLicenseInsert = typeof tradeLicenses.$inferInsert;
 export const schema = { tradeLicenses };
+
+// ── revenue.waivers ───────────────────────────────────────────────────────────
+export const waivers = tradeLicenseSchema.table('waivers', {
+  id:              uuid('id').primaryKey().defaultRandom(),
+  tenantId:        uuid('tenant_id').notNull(),
+  demandId:        uuid('demand_id').notNull(),
+  amountMinor:     text('amount_minor').notNull(),
+  reason:          text('reason').notNull(),
+  status:          varchar('status', { length: 32 }).notNull().default('pending'),
+  requestedBy:     uuid('requested_by').notNull(),
+  decidedBy:       uuid('decided_by'),
+  decidedAt:       timestamp('decided_at', { withTimezone: true }),
+  decisionRemarks: text('decision_remarks'),
+  createdAt:       timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type WaiverRow = typeof waivers.$inferSelect;
+export type WaiverInsert = typeof waivers.$inferInsert;

@@ -36,6 +36,17 @@ export async function listDemands(tenantId: string, assesseeId: string) {
   });
 }
 
+
+export async function listAllDemands(tenantId: string, pagination: { limit: number; offset: number }) {
+  const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:demands:all`, async () => {
+    return db.select().from(demands).where(eq(demands.tenantId, tenantId));
+  });
+  const all = rows ?? [];
+  return {
+    data: all.slice(pagination.offset, pagination.offset + pagination.limit),
+    meta: { total: all.length },
+  };
+}
 export async function getDcbSummary(tenantId: string, assesseeId: string) {
   return cache.getOrLoad(`${SERVICE}:${tenantId}:dcb:${assesseeId}`, async () => {
     const entries = await db
