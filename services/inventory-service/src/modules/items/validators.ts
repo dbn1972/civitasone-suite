@@ -62,6 +62,7 @@ export const updateItemBody = z.object({
   shelfLifeDays:   z.number().int().positive().nullable().optional(),
   requiresBatchTracking:  z.boolean().optional(),
   requiresSerialTracking: z.boolean().optional(),
+  isActive: z.boolean().optional(),
 });
 export type UpdateItemBody = z.infer<typeof updateItemBody>;
 
@@ -179,3 +180,19 @@ export const qcInspectionPayload = qcInspectionBody.extend({
   tenantId:     z.string().uuid(),
   inspectedBy:  z.string().uuid(),
 });
+
+// ── Patch schemas (master-data direct-update, no CQRS) ──────────────────────
+
+export const patchCategoryBody = z.object({
+  name:     z.string().min(1).max(200).optional(),
+  code:     z.string().min(1).max(64).optional(),
+  parentId: z.string().uuid().nullable().optional(),
+});
+export type PatchCategoryBody = z.infer<typeof patchCategoryBody>;
+
+export const patchUomBody = z.object({
+  name:   z.string().min(1).max(120).optional(),
+  symbol: z.string().min(1).max(16).optional(),
+});
+export type PatchUomBody = z.infer<typeof patchUomBody>;
+
