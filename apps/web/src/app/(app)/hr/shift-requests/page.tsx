@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/shift-requests", [], {
     telemetryKey: "hr.shift-requests",
     mapResponse: (p) => {
@@ -20,11 +21,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function ShiftRequestsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -39,12 +40,18 @@ export default async function ShiftRequestsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Shift Change Requests" subtitle="Employee requests to change assigned shifts." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="Shift Change Requests">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, shift or department…"
+          pageSize={15}
+          emptyIcon="🔄"
+          emptyTitle="No shift change requests"
+          emptyMessage="Requests appear here when employees apply to change their assigned shift. Approved by reporting officers."
+        />
+      </Card>
     </main>
   );
 }
