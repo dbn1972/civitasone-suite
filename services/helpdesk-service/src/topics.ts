@@ -1,6 +1,8 @@
 /** Topic + event names owned by helpdesk-service. */
 export const COMMANDS = {
   createTicket: "helpdesk.ticket.create",
+  /** PATCH /tickets/:id — update mutable ticket fields (subject, description, priority, category, type). */
+  updateTicket: "helpdesk.ticket.update",
   assignTicket: "helpdesk.ticket.assign",
   transitionTicket: "helpdesk.ticket.transition",
   /** TKT-04 — add internal/public note to a ticket. */
@@ -44,6 +46,19 @@ export const COMMANDS = {
   slaExtend: "helpdesk.ticket.sla_extend",
   cesSubmit: "helpdesk.ces.submit",
   detectDuplicates: "helpdesk.ticket.detect_duplicates",
+
+  // Road hotspot module (BRD 5.14 ROAD-004)
+  roadHotspotCreate: "helpdesk.road_hotspot.create",
+  roadHotspotLinkTicket: "helpdesk.road_hotspot.link_ticket",
+  roadHotspotPlanMaintenance: "helpdesk.road_hotspot.plan_maintenance",
+  roadHotspotResolve: "helpdesk.road_hotspot.resolve",
+  // Sanitation complaints module
+  sanitationComplaintCreate: "helpdesk.sanitation.complaint_create",
+  sanitationComplaintAcknowledge: "helpdesk.sanitation.complaint_acknowledge",
+  sanitationComplaintAssign: "helpdesk.sanitation.complaint_assign",
+  sanitationComplaintResolve: "helpdesk.sanitation.complaint_resolve",
+  sanitationComplaintReopen: "helpdesk.sanitation.complaint_reopen",
+  sanitationFieldActionCreate: "helpdesk.sanitation.field_action_create",
 } as const;
 
 /** TKT-11 — saved-views command topics (moved here from views-routes.ts so

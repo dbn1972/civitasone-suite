@@ -36,10 +36,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#eef2ff" label="Offerings" value={offerings.length.toLocaleString("en-IN")} />
-        <StatCard icon="🗂️" iconBg="#ecfeff" label="Categories" value={categories.size.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#f0fdf4" label="Approval Required" value={needsApproval.toLocaleString("en-IN")} />
-        <StatCard icon="📥" iconBg="#fffbeb" label="My Requests" value="—" />
+        <StatCard icon="🧾" label="Offerings" value={offerings.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗂️" label="Categories" value={categories.size.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Approval Required" value={needsApproval.toLocaleString("en-IN")} />
+        <StatCard icon="📥" label="My Requests" value="—" />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, margin: "12px 0" }}>
         <Link href="/helpdesk/catalogue/my-requests" className="btn ghost" style={{ minHeight: 40 }}>My requests</Link>

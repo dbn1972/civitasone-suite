@@ -1,4 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { isValidCsatRating } from "./domain.js";
@@ -86,6 +89,35 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "ticket not found");
     }
     return reply.code(202).send(await commands.escalateTicket(ctx, id, body));
+  });
+
+
+  // SLA-PAUSE/RESUME — pause and resume the SLA clock on a ticket.
+  app.post("/v1/helpdesk/tickets/:id/sla/pause", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+    const cmdId = randomUUID();
+    await queue.publish(COMMANDS.slaPause, {
+      messageId: cmdId, type: COMMANDS.slaPause, tenantId: ctx.tenantId,
+      actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id: cmdId, tenantId: ctx.tenantId, ticketId: id, reason: body.reason, pausedBy: ctx.actorId },
+    });
+    return reply.code(202).send({ id: cmdId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/helpdesk/tickets/:id/sla/resume", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const cmdId = randomUUID();
+    await queue.publish(COMMANDS.slaResume, {
+      messageId: cmdId, type: COMMANDS.slaResume, tenantId: ctx.tenantId,
+      actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id: cmdId, tenantId: ctx.tenantId, ticketId: id, resumedBy: ctx.actorId },
+    });
+    return reply.code(202).send({ id: cmdId, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.setErrorHandler((err, req, reply) => {
