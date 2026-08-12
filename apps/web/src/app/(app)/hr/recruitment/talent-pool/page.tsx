@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -37,6 +37,10 @@ export default async function TalentPoolPage({
 }) {
   const { data: candidates, source } = await getCandidates(searchParams.skill, searchParams.minExp);
 
+  const withSkills  = candidates.filter((c) => c.skills && c.skills.length > 0).length;
+  const experienced = candidates.filter((c) => (c.experienceYears ?? 0) >= 5).length;
+  const activeStage = candidates.filter((c) => !["rejected","not_selected","withdrawn"].includes(c.stage)).length;
+
   const rows = candidates.map((c) => ({
     ...c,
     skillsDisplay: c.skills?.join(", ") ?? "—",
@@ -54,6 +58,12 @@ export default async function TalentPoolPage({
         help="hr"
       />
       <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="\U0001f465" iconBg="#e6f0ff" label="Total Candidates"   value={candidates.length} />
+        <StatCard icon="\U0001f4a1" iconBg="#e6f7f0" label="With Skills"        value={withSkills} />
+        <StatCard icon="\U0001f9e0" iconBg="#fff7e6" label="Experienced (5+ yr)" value={experienced} />
+        <StatCard icon="\u2705"       iconBg="#f5f5f5" label="Active Stages"     value={activeStage} />
+      </StatGrid>
 
       {/* Filters */}
       <Card padding>

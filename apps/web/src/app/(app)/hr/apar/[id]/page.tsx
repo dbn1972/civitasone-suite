@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -97,7 +97,11 @@ export default async function AparDetailPage({
   }
 
   const { appraisal, scores, history } = detail;
-  const stageLabel = STAGE_LABELS[appraisal.status] ?? appraisal.status;
+  const stageLabel  = STAGE_LABELS[appraisal.status] ?? appraisal.status;
+  const scoredCount = scores.filter((s) => !!s.score).length;
+  const avgScore    = scoredCount > 0
+    ? (scores.reduce((sum, s) => sum + (parseFloat(String(s.score ?? "0")) || 0), 0) / scoredCount).toFixed(1)
+    : "—";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -107,6 +111,12 @@ export default async function AparDetailPage({
         back="/hr/apar"
       />
       <DataSourceBadge source={result.source} />
+      <StatGrid>
+        <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Criteria" value={scores.length} />
+        <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Scored"         value={scoredCount} />
+        <StatCard icon="\U0001f4ca" iconBg="#fff7e6" label="Avg Score"      value={avgScore} />
+        <StatCard icon="\U0001f4dc" iconBg="#f5f5f5" label="Stage Changes"  value={history.length} />
+      </StatGrid>
 
       <Card title="Appraisal Details">
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
