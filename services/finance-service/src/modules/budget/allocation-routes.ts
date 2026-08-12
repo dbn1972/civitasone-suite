@@ -50,6 +50,18 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
     return reply.send({ data: rows.map(serialize) });
   });
 
+
+  // GET /v1/finance/budget-allocations/:id — get a specific allocation by UUID
+  app.get("/v1/finance/budget-allocations/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const rows = await allocRepo.listAllocations(ctx.tenantId, undefined, 500);
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "allocation not found");
+    return reply.send({ data: serialize(row) });
+  });
+
   app.post("/v1/finance/budget-allocations/re-appropriate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

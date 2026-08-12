@@ -1712,6 +1712,43 @@ export async function getFinanceAllocations(): Promise<LoaderResult<Record<strin
   });
 }
 
+
+export async function getFinanceBudgetMonitoring(fy?: string): Promise<LoaderResult<Record<string, unknown>>> {
+  const url = fy
+    ? `/api/v1/finance/budget-monitoring/summary?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/budget-monitoring/summary";
+  return fetchJson<unknown, Record<string, unknown>>(url, {}, {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.budget-monitoring",
+    mapResponse: (p) => (p as Record<string, unknown>) ?? null,
+  });
+}
+
+export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  const url = fy
+    ? `/api/v1/finance/budget-monitoring?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/budget-monitoring";
+  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.budget-monitoring-lines",
+    mapResponse: (p) => {
+      const obj = p as Record<string, unknown>;
+      return Array.isArray(obj.lines) ? obj.lines as Record<string, unknown>[] : null;
+    },
+  });
+}
+
+export async function getFinanceFundReleases(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  const url = fy
+    ? `/api/v1/finance/allocation-distributions?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/allocation-distributions";
+  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+    revalidateSeconds: 120,
+    telemetryKey: "finance.fund-releases",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
 export async function getFinanceFundAccounting(): Promise<LoaderResult<Record<string, unknown>[]>> {
   return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/funds", [], {
     revalidateSeconds: 300,

@@ -73,6 +73,53 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ fiscalYear: fy, rows: rows as unknown[] });
   });
 
+
+  // GET /v1/finance/reports/variance — variance report: budgeted vs actual, per head
+  app.get("/v1/finance/reports/variance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { fiscalYear } = z.object({ fiscalYear: z.string().optional() }).parse(req.query);
+    const fy = fiscalYear ?? deriveFYFromDate();
+
+    const rows = await scopedRead((tx) => tx.execute(sql`
+      SELECT fh.code, fh.name,
+        COALESCE(hu.allocated_minor, 0)::bigint         AS budgeted_minor,
+        COALESCE(hu.expended_minor,  0)::bigint         AS actual_minor,
+        COALESCE(hu.allocated_minor, 0) -
+          COALESCE(hu.expended_minor, 0)                AS variance_minor,
+        ROUND(
+          COALESCE(hu.expended_minor, 0)::numeric /
+          NULLIF(hu.allocated_minor, 0) * 100, 2
+        )                                               AS utilisation_pct
+      FROM budget.finance_heads fh
+      LEFT JOIN budget.head_utilisation hu
+        ON  hu.tenant_id = fh.tenant_id
+        AND hu.head_id   = fh.id
+        AND hu.fy        = ${fy}::bpchar
+      WHERE fh.tenant_id = ${ctx.tenantId}::uuid
+      ORDER BY fh.code
+    `));
+
+    const result = rows as unknown as Array<{
+      code: string; name: string;
+      budgeted_minor: string; actual_minor: string;
+      variance_minor: string; utilisation_pct: string | null;
+    }>;
+
+    return reply.send({
+      fiscalYear: fy,
+      rows: result.map((r) => ({
+        code: r.code,
+        name: r.name,
+        budgetedMinor:   r.budgeted_minor,
+        actualMinor:     r.actual_minor,
+        varianceMinor:   r.variance_minor,
+        utilisationPct:  r.utilisation_pct !== null ? parseFloat(r.utilisation_pct) : null,
+        status: r.variance_minor.startsWith("-") ? "overspent" : "within_budget",
+      })),
+    });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
