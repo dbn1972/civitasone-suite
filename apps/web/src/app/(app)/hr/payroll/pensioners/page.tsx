@@ -15,6 +15,7 @@ export default async function PensionersPage() {
   const pensionPayableMinor = pensioners
     .filter((p) => p.status === "active")
     .reduce((sum, p) => sum + p.basicPensionMinor, 0);
+  const inactivePensioners = pensioners.filter((p) => p.status !== "active").length;
 
   const rows: Row[] = pensioners.map((p) => ({
     ...p,
@@ -44,6 +45,7 @@ export default async function PensionersPage() {
         <StatCard icon="👴" iconBg="#f5f5f5" label="Total Pensioners" value={total} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
         <StatCard icon="💰" iconBg="#fffbe6" label="Pension Payable This Month" value={formatMoney(pensionPayableMinor)} />
+        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactivePensioners} />
       </StatGrid>
       <Card title="Pensioner Records">
         <DataTable<Row>

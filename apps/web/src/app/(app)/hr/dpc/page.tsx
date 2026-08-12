@@ -38,6 +38,7 @@ export default async function DpcPage() {
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
   };
+  const totalOfficers = (eligibleCount ?? 0) + (ineligibleCount ?? 0);
 
   const columns: { key: keyof EligibleRow & string; label: string; align?: "left" | "right" }[] = [
     { key: "eligibilityRank", label: "Rank", align: "right" },
@@ -62,6 +63,7 @@ export default async function DpcPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers" value={eligibleCount} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Not Yet Eligible" value={ineligibleCount} />
         <StatCard icon="📅" iconBg="#f5f5f5" label="As On Date" value={asOf} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label="Total Officers" value={totalOfficers} />
       </StatGrid>
       <Card title="Eligible Officers — Seniority List">
         <DataTable<EligibleRow>

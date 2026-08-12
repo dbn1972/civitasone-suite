@@ -55,6 +55,7 @@ export default async function CorrectionsPage() {
 
   const pendingCount = items.filter((r) => r.status === "pending").length;
   const totalArrearsMinor = items.reduce((sum, r) => sum + Number(r.arrears_minor ?? 0), 0);
+  const approvedCount = items.filter((r) => r.status === "approved").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -69,6 +70,7 @@ export default async function CorrectionsPage() {
         <StatCard icon="✏️" iconBg="#e6f0ff" label="Total Corrections" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pendingCount} />
         <StatCard icon="💰" iconBg="#e6f7f0" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approvedCount} />
       </StatGrid>
 
       <CreateCorrectionForm />

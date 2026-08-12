@@ -28,6 +28,7 @@ export default async function DirectoryPage() {
 
   const depts = new Set(items.map((i) => i.department).filter(Boolean)).size;
   const locations = new Set(items.map((i) => i.location).filter(Boolean)).size;
+  const designations = new Set(items.map((i) => i.designation).filter(Boolean)).size;
 
   const columns: { key: keyof Row & string; label: string }[] = [
     { key: "name", label: "Name" },
@@ -52,6 +53,7 @@ export default async function DirectoryPage() {
         <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={items.length} />
         <StatCard icon="🏢" iconBg="#f5f5f5" label="Departments" value={depts} />
         <StatCard icon="📍" iconBg="#fffbe6" label="Locations" value={locations} />
+        <StatCard icon="📛" iconBg="#e6f7f0" label="Designations" value={designations} />
       </StatGrid>
       <Card title="Directory">
         <DataTable<Row>

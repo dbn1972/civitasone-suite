@@ -28,6 +28,7 @@ export default async function PfStatutoryPage() {
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
+  const totalPfMinor = totalEmpContribMinor + totalErContribMinor;
 
   const columns: { key: keyof PfRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -49,6 +50,7 @@ export default async function PfStatutoryPage() {
         <StatCard icon="🏦" iconBg="#e6f0ff" label="PF Records" value={rows.length} />
         <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />
         <StatCard icon="🏢" iconBg="#fffbe6" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="#f5f5f5" label="Total PF Outflow" value={formatMoney(totalPfMinor)} />
       </StatGrid>
 
       <EcrGeneratorForm />

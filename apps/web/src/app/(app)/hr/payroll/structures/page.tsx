@@ -82,6 +82,7 @@ export default async function PayStructuresPage() {
         <StatCard icon="🧱" iconBg="#e6f0ff" label="Total Structures" value={structures.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
         <StatCard icon="⭐" iconBg="#fffbe6" label="Default" value={defaultCount} />
+        <StatCard icon="🧩" iconBg="#f5f5f5" label="Components" value={rawComponents.length} />
       </StatGrid>
 
       <CreateStructureForm />

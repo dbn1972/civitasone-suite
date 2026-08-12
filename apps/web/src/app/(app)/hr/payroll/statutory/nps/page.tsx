@@ -29,6 +29,7 @@ export default async function NpsStatutoryPage() {
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
+  const totalNpsMinor = totalEmpContribMinor + totalErContribMinor;
 
   const columns: { key: keyof NpsRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -52,6 +53,7 @@ export default async function NpsStatutoryPage() {
         <StatCard icon="📊" iconBg="#e6f0ff" label="NPS Records" value={rows.length} />
         <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution (10%)" value={formatMoney(totalEmpContribMinor)} />
         <StatCard icon="🏛️" iconBg="#fffbe6" label="Total Employer Contribution (14%)" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="#f5f5f5" label="Total NPS Outflow" value={formatMoney(totalNpsMinor)} />
       </StatGrid>
       <Card title="NPS Contribution Ledger">
         <DataTable<NpsRow>

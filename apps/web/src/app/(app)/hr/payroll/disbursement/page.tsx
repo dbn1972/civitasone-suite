@@ -123,6 +123,7 @@ export default async function DisbursementPage() {
           value={sponsorConfig ? "Configured" : "Not configured"}
         />
         <StatCard icon="✍️" iconBg="#e6f7f0" label="DSC Status" value={dscConfig ? "Active" : "Not configured"} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label="Total Payroll Runs" value={runs.length} />
       </StatGrid>
 
       <Card title="Payroll Runs">

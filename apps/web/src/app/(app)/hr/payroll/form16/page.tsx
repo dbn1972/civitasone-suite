@@ -94,6 +94,7 @@ export default async function Form16Page({
                 <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={lookup.job.totalEmployees} />
                 <StatCard icon="✅" iconBg="#e6f7f0" label="Generated" value={lookup.job.generated} />
                 <StatCard icon="⚠️" iconBg="#fdecea" label="Failed" value={lookup.job.failed} />
+                <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={Math.max(0, lookup.job.totalEmployees - lookup.job.generated - lookup.job.failed)} />
               </StatGrid>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
                 <span style={{ fontSize: 13 }}>

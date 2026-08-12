@@ -27,6 +27,7 @@ export default async function EsiStatutoryPage() {
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
+  const totalEsiMinor = totalEmpContribMinor + totalErContribMinor;
 
   const columns: { key: keyof EsiRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -48,6 +49,7 @@ export default async function EsiStatutoryPage() {
         <StatCard icon="🩺" iconBg="#e6f0ff" label="ESI Records" value={rows.length} />
         <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />
         <StatCard icon="🏢" iconBg="#fffbe6" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="#f5f5f5" label="Total ESI Liability" value={formatMoney(totalEsiMinor)} />
       </StatGrid>
       <Card title="ESI Contribution Ledger">
         <DataTable<EsiRow>

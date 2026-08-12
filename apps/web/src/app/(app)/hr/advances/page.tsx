@@ -62,6 +62,7 @@ export default async function AdvancesPage() {
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
+  const rejected = items.filter((i) => i.status === "rejected").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -81,6 +82,7 @@ export default async function AdvancesPage() {
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="❌" iconBg="#fdecea" label="Rejected" value={rejected} />
       </StatGrid>
 
       <RequestAdvanceForm />

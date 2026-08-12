@@ -27,6 +27,7 @@ export default async function FnfPage() {
 
   const pending = settlements.filter((s) => s.status === "pending" || s.status === "computed").length;
   const settled = settlements.filter((s) => s.status === "settled" || s.status === "paid").length;
+  const separationTypes = new Set(settlements.map((s) => s.separationType).filter(Boolean)).size;
 
   const columns: { key: keyof SettlementRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
     { key: "employeeId", label: "Employee ID" },
@@ -49,6 +50,7 @@ export default async function FnfPage() {
         <StatCard icon="🧮" iconBg="#e6f0ff" label="Total Settlements" value={settlements.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending / Computed" value={pending} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Settled" value={settled} />
+        <StatCard icon="📊" iconBg="#f5f5f5" label="Separation Types" value={separationTypes} />
       </StatGrid>
 
       <ComputeFnfForm />

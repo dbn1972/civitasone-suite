@@ -100,6 +100,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
           value={reconciliation?.perPeriod[0]?.status ?? "unknown"}
         />
         <StatCard icon="📉" iconBg="#fffbe6" label="Variance" value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
+        <StatCard icon="💰" iconBg="#e6f7f0" label="TDS Deposited" value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
       </StatGrid>
 
       <IngestChallanForm period={period} />

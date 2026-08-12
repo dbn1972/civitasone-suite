@@ -30,6 +30,7 @@ export default async function EmployeeTypesPage() {
   const { data: types, source } = await getTypes();
   const active = types.filter((t) => t.isActive).length;
   const withPayroll = types.filter((t) => t.eligibleForPayroll).length;
+  const inactive = types.filter((t) => !t.isActive).length;
 
   const rows = types.map((t) => ({
     ...t,
@@ -56,6 +57,7 @@ export default async function EmployeeTypesPage() {
         <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={types.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
         <StatCard icon="💰" iconBg="#fffaeb" label="On Payroll" value={withPayroll} />
+        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactive} />
       </StatGrid>
 
       <Card title="Employee Type Master">
