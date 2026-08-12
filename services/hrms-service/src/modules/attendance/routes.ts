@@ -8,6 +8,9 @@ import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { db } from "../../shared/db.js";
+import { hrmsOvertimeRequests } from "./schema.js";
+import { eq, and, desc } from "drizzle-orm";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
@@ -137,6 +140,63 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     return reply.send({ data: [] });
+  });
+
+  // ── Overtime requests ───────────────────────────────────────────────────
+  app.post("/v1/hrms/overtime-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "employee"]);
+    const body = z.object({
+      employeeId:     z.string().uuid(),
+      requestDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      hoursRequested: z.number().min(0.5).max(24),
+      reason:         z.string().max(500).optional(),
+    }).parse(req.body);
+    const rows = await db.insert(hrmsOvertimeRequests).values({
+      tenantId: ctx.tenantId, employeeId: body.employeeId,
+      requestDate: body.requestDate, hoursRequested: String(body.hoursRequested),
+      reason: body.reason ?? null, createdBy: ctx.actorId, updatedBy: ctx.actorId,
+    }).returning();
+    const row = rows[0];
+    if (!row) throw new HttpError(500, "INSERT_FAILED", "overtime insert returned no row");
+    return reply.code(201).send({ id: row.id, status: row.status });
+  });
+
+  app.get("/v1/hrms/overtime-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "employee", "manager"]);
+    const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
+    const rows = await db.select().from(hrmsOvertimeRequests)
+      .where(and(
+        eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
+        q.empId ? eq(hrmsOvertimeRequests.employeeId, q.empId) : undefined,
+      ))
+      .orderBy(desc(hrmsOvertimeRequests.requestDate))
+      .limit(200);
+    return reply.send({ data: rows });
+  });
+
+  app.patch("/v1/hrms/overtime-requests/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await db.update(hrmsOvertimeRequests)
+      .set({ status: "approved", approvedBy: ctx.actorId, approvedAt: new Date(),
+             updatedBy: ctx.actorId, updatedAt: new Date() })
+      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)));
+    return reply.send({ id, status: "approved" });
+  });
+
+  app.patch("/v1/hrms/overtime-requests/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body);
+    await db.update(hrmsOvertimeRequests)
+      .set({ status: "rejected", rejectionReason: reason ?? null,
+             updatedBy: ctx.actorId, updatedAt: new Date() })
+      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)));
+    return reply.send({ id, status: "rejected" });
   });
 
   app.setErrorHandler(errorHandler);

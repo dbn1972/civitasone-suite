@@ -24,7 +24,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status to confirmed, set confirmationDate
+      await tx.update(hrmsEmployees)
+        .set({ status: "confirmed", confirmationDate: p.confirmationDate, updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "confirmation",
+        effectiveDate: p.confirmationDate,
+        description: "Employee confirmed after probation period",
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -56,7 +64,20 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status to separated, record separation details
+      await repo.insertSeparation(tx, {
+        id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
+        separationType: p.separationType, effectiveDate: p.effectiveDate,
+        remarks: p.remarks ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await tx.update(hrmsEmployees)
+        .set({ status: "separated", updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "separation",
+        effectiveDate: p.effectiveDate,
+        description: `Separation: ${p.separationType}${p.remarks ? ` — ${p.remarks}` : ""}`,
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -87,7 +108,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status back to active, clear separation fields
+      await tx.update(hrmsEmployees)
+        .set({ status: "active", updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "reinstatement",
+        effectiveDate: p.reinstatementDate,
+        description: `Reinstated to active service${p.remarks ? ` — ${p.remarks}` : ""}`,
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,

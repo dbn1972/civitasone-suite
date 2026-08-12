@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, char, varchar, date, time, timestamp,
+  pgSchema, uuid, text, integer, char, numeric, varchar, date, time, timestamp,
 } from "drizzle-orm/pg-core";
 
 export const attendanceSchema = pgSchema("attendance");
@@ -90,4 +90,25 @@ export type RegularisationRow = typeof hrmsAttendanceRegularisations.$inferSelec
 export type RegularisationInsert = typeof hrmsAttendanceRegularisations.$inferInsert;
 export type AttendanceLockRow = typeof hrmsAttendanceLocks.$inferSelect;
 
-export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks };
+export const hrmsOvertimeRequests = attendanceSchema.table("hrms_overtime_requests", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  employeeId:       uuid("employee_id").notNull(),
+  requestDate:      date("request_date").notNull(),
+  hoursRequested:   numeric("hours_requested", { precision: 4, scale: 2 }).notNull(),
+  reason:           text("reason"),
+  status:           varchar("status", { length: 24 }).notNull().default("pending"),
+  approvedBy:       uuid("approved_by"),
+  approvedAt:       timestamp("approved_at", { withTimezone: true }),
+  rejectionReason:  text("rejection_reason"),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
+  version:          integer("version").notNull().default(1),
+});
+
+export type OvertimeRequestRow = typeof hrmsOvertimeRequests.$inferSelect;
+export type OvertimeRequestInsert = typeof hrmsOvertimeRequests.$inferInsert;
+
+export const schema = { hrmsShifts, hrmsShiftAssignments, hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks, hrmsOvertimeRequests };

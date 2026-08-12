@@ -43,6 +43,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Leave Management", href: "/hr/leave", description: "Review and process requests" },
 			{ title: "Apply Leave", href: "/hr/leave/apply", description: "Submit a new application" },
 			{ title: "Leave Policies", href: "/hr/leave-policies", description: "Rules and quotas" },
+			{ title: "Overtime", href: "/hr/overtime", description: "Overtime requests and approvals" },
 		],
 	},
 	{
@@ -86,7 +87,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 		title: "Performance & Development",
 		icon: "⭐",
 		tiles: [
-			{ title: "Appraisals (APAR)", href: "/hr/appraisals", description: "Performance review" },
+			{ title: "Appraisals (APAR)", href: "/hr/apar", description: "SPARROW multi-authority appraisal workflow" },
 			{ title: "Goals / KRA", href: "/hr/goals", description: "Targets and tracking" },
 			{ title: "Training", href: "/hr/training", description: "Programs and capacity building" },
 			{ title: "Skills", href: "/hr/skills", description: "Skill matrix" },
