@@ -52,6 +52,10 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function BenefitsPage() {
   const { data: items, source } = await getData();
 
+  const active = items.filter((i) => i.status === "active").length;
+  const processing = items.filter((i) => ["processing", "pending", "submitted"].includes(i.status)).length;
+  const closed = items.filter((i) => ["closed", "lapsed", "expired"].includes(i.status)).length;
+
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "plan_name", label: "Plan" },
     { key: "fy", label: "Financial Year" },
@@ -62,14 +66,25 @@ export default async function BenefitsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Benefits Enrollment" subtitle="HRA, LTC, medical, and flex-benefit elections for the financial year." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Benefits Enrollment"
+        subtitle="HRA, LTC, medical, and flex-benefit elections for the financial year."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Active Elections" value={items.length} />
+        <StatCard icon="🏥" iconBg="#e6f0ff" label="Total Enrollments" value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Processing" value={processing} />
+        <StatCard icon="📁" iconBg="#f5f5f5" label="Closed / Expired" value={closed} />
       </StatGrid>
-      <Card title="Benefits Enrollments">
-        <div className="card-h"><h3>My Benefit Elections</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by plan or FY…"
+      <Card title="Benefit Elections">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by plan, FY or status…"
           pageSize={15}
           emptyIcon="🏥"
           emptyTitle="No benefits enrolled"

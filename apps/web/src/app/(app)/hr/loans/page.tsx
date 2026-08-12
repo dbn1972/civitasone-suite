@@ -76,7 +76,7 @@ export default async function LoansPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Employee Loans" subtitle="Loans sanctioned, EMI recovery, and outstanding balances." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Loans" value={items.length} />
         <StatCard icon="▶️" iconBg="#e6f7f0" label="Active" value={active} />

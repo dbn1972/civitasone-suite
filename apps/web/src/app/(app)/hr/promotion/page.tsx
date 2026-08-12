@@ -45,7 +45,7 @@ export default async function PromotionPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Promotions" subtitle="Promotion orders with grade progression details." back="/hr" actions={<PromoteWithApproval />} />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="⬆️" iconBg="#e6f7f0" label="Total Promotions" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f0ff" label="Approved" value={approved} />

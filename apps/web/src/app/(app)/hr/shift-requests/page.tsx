@@ -27,6 +27,10 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function ShiftRequestsPage() {
   const { data: items, source } = await getData();
 
+  const approved = items.filter((i) => i.status === "approved").length;
+  const pending = items.filter((i) => i.status === "pending").length;
+  const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
+
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
     { key: "department", label: "Department" },
@@ -39,13 +43,25 @@ export default async function ShiftRequestsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Shift Change Requests" subtitle="Employee requests to change assigned shifts." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Shift Change Requests"
+        subtitle="Employees requesting a change to their assigned shift pattern."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
       </StatGrid>
       <Card title="Shift Change Requests">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, shift or department…"
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, shift or department…"
           pageSize={15}
           emptyIcon="🔄"
           emptyTitle="No shift change requests"

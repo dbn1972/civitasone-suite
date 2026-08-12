@@ -27,6 +27,10 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function WfhPage() {
   const { data: items, source } = await getData();
 
+  const approved = items.filter((i) => i.status === "approved").length;
+  const pending = items.filter((i) => i.status === "pending").length;
+  const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
+
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
     { key: "department", label: "Department" },
@@ -39,13 +43,25 @@ export default async function WfhPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Work From Home Requests" subtitle="WFH requests and approval status." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Work From Home Requests"
+        subtitle="Submit and track remote work days — approved by reporting officers."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
       </StatGrid>
       <Card title="WFH Requests">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or department…"
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, department or status…"
           pageSize={15}
           emptyIcon="🏠"
           emptyTitle="No WFH requests"

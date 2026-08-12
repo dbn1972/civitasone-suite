@@ -32,12 +32,12 @@ export default async function OrgChartPage() {
   const { data: nodes, source } = await getOrgChart();
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Organisation Chart"
-        subtitle="Reporting hierarchy across departments."
+        subtitle="Reporting hierarchy across departments." back="/hr"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       {nodes.length === 0 ? (
         <Card padding>
           <p className="text-center text-slate-400">No organisation chart data available.</p>
@@ -63,6 +63,6 @@ export default async function OrgChartPage() {
           ))}
         </div>
       )}
-    </>
+    </main>
   );
 }

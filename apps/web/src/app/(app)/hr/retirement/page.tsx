@@ -43,7 +43,7 @@ export default async function RetirementPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Retirement & Separation" subtitle="Upcoming retirements and separation queue." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="👴" iconBg="#e6f0ff" label="Total" value={items.length} />
         <StatCard icon="📅" iconBg="#fffbe6" label="Upcoming" value={upcoming} />
