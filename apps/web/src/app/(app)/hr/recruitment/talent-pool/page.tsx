@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Candidate = {
   id: string;
@@ -15,7 +16,7 @@ type Candidate = {
   appliedAt: string;
 } & Record<string, unknown>;
 
-async function getCandidates(skill?: string, minExp?: string): Promise<Candidate[]> {
+async function getCandidates(skill?: string, minExp?: string): Promise<LoaderResult<Candidate[]>> {
   let path = "/api/v1/hrms/talent-pool?limit=200";
   if (skill) path += `&skill=${encodeURIComponent(skill)}`;
   if (minExp) path += `&minExp=${encodeURIComponent(minExp)}`;
@@ -26,7 +27,7 @@ async function getCandidates(skill?: string, minExp?: string): Promise<Candidate
       return Array.isArray(d) ? d as Candidate[] : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function TalentPoolPage({
@@ -34,7 +35,7 @@ export default async function TalentPoolPage({
 }: {
   searchParams: { skill?: string; minExp?: string };
 }) {
-  const candidates = await getCandidates(searchParams.skill, searchParams.minExp);
+  const { data: candidates, source } = await getCandidates(searchParams.skill, searchParams.minExp);
 
   const rows = candidates.map((c) => ({
     ...c,
@@ -52,6 +53,7 @@ export default async function TalentPoolPage({
         backLabel="Recruitment"
         help="hr"
       />
+      {source === "error" && <DataSourceBadge source="error" />}
 
       {/* Filters */}
       <Card padding>
@@ -96,6 +98,9 @@ export default async function TalentPoolPage({
             sortable
             filterable
         filterPlaceholder="Filter by name, email, skills…"
+          emptyIcon="🧑‍💼"
+          emptyTitle="No candidates in talent pool"
+          emptyMessage="Candidates appear here once they apply to a vacancy. Use the Recruitment module to post a job."
             pageSize={20}
             exportable
           />

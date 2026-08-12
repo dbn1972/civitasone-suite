@@ -18,7 +18,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function TrainingFeedbackPage() {

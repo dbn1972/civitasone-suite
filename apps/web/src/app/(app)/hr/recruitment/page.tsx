@@ -57,7 +57,6 @@ export default async function RecruitmentPage() {
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">Talent Pool</Link>
             <Link href="/hr/recruitment/new" className="btn primary">+ New Vacancy</Link>
           </>
-      {source === "error" && <DataSourceBadge source="error" />}
         }
       />
 
