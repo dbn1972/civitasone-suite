@@ -84,7 +84,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         {/* Earnings & Deductions side by side */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           <div>
-            <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "#166534", borderBottom: "1px solid #bbf7d0", paddingBottom: 4, marginBottom: 8 }}>Earnings</h3>
+            <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--good)", borderBottom: "1px solid var(--goodbd)", paddingBottom: 4, marginBottom: 8 }}>Earnings</h3>
             <table style={{ width: "100%", fontSize: 13 }}>
               <tbody>
                 {earnings.map((c) => (
@@ -102,7 +102,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           </div>
 
           <div>
-            <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "#b91c1c", borderBottom: "1px solid #fecaca", paddingBottom: 4, marginBottom: 8 }}>Deductions</h3>
+            <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--bad)", borderBottom: "1px solid var(--badbd)", paddingBottom: 4, marginBottom: 8 }}>Deductions</h3>
             <table style={{ width: "100%", fontSize: 13 }}>
               <tbody>
                 {deductions.map((c) => (
@@ -121,9 +121,9 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         </div>
 
         {/* Net Pay */}
-        <div style={{ marginTop: 24, padding: "12px 16px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#166534" }}>NET PAY (Take Home)</span>
-          <span style={{ fontSize: 20, fontWeight: 800, color: "#166534", fontFamily: "monospace" }}>{fmt(slip.netMinor)}</span>
+        <div style={{ marginTop: 24, padding: "12px 16px", background: "var(--goodbg)", borderRadius: 8, border: "1px solid var(--goodbd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--good)" }}>NET PAY (Take Home)</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--good)", fontFamily: "monospace" }}>{fmt(slip.netMinor)}</span>
         </div>
 
         {/* Footer */}

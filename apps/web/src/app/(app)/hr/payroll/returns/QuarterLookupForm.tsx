@@ -46,7 +46,7 @@ export function QuarterLookupForm({
       <button type="submit" className="btn ghost" style={{ minHeight: 44 }}>
         View returns
       </button>
-      <span id="ret-fy-hint" style={{ fontSize: 12, color: "#667085" }}>
+      <span id="ret-fy-hint" style={{ fontSize: 12, color: "var(--mut)" }}>
         Format YYYY-YY, e.g. 2025-26
       </span>
     </form>

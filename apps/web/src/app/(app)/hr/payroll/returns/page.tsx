@@ -147,6 +147,8 @@ export default async function ReturnsPage({
     getForm26Q(fy, quarter),
   ]);
 
+  const overallSource: "api" | "error" = (f24Lookup.state === "error" || src26 === "error") ? "error" : "api";
+
   const rows24 = f24Lookup.state === "ok" ? f24Lookup.data.deductees.map((d) => ({ ...d })) : [];
   const cols24: { key: keyof Deductee24Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "name", label: "Employee" },
@@ -155,8 +157,10 @@ export default async function ReturnsPage({
     { key: "tdsDepositedMinor", label: "TDS Deposited", align: "right", cellType: "amount" },
   ];
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
+  const totalTdsDepositedMinor24 = totalTdsDeductedMinor24; // deposited == deducted in current model
 
   const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
+  const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
   const cols26: { key: keyof Deductee26Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "name", label: "Deductee" },
     { key: "pan", label: "PAN" },
@@ -172,6 +176,8 @@ export default async function ReturnsPage({
         subtitle="Form-24Q (salary) and Form-26Q (non-salary) quarterly e-TDS returns."
         back="/hr/payroll"
       />
+
+      <DataSourceBadge source={overallSource} />
 
       {/* Strips a one-time ?force=1 from the visible URL (browser history API only —
           no navigation/refetch) so a page refresh can't silently replay the
@@ -211,6 +217,7 @@ export default async function ReturnsPage({
                   label="Challan Reconciliation"
                   value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
+                <StatCard icon="🏦" iconBg="#fff0e6" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -230,7 +237,7 @@ export default async function ReturnsPage({
                   emptyMessage="No approved/disbursed payroll runs contributed TDS in this quarter yet."
                 />
               </div>
-              <p style={{ fontSize: "12.5px", color: "#475467", marginTop: 10 }}>{f24Lookup.data.note}</p>
+              <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f24Lookup.data.note}</p>
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"
@@ -276,6 +283,7 @@ export default async function ReturnsPage({
                   label="Challan Reconciliation"
                   value={f26.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
+                <StatCard icon="💳" iconBg="#fff0e6" label="Amount Paid" value={formatMoney(totalAmountPaidMinor26)} />
               </StatGrid>
               <div style={{ marginTop: 12 }}>
                 <DataTable
@@ -289,7 +297,7 @@ export default async function ReturnsPage({
                   emptyTitle="No non-salary deductees this quarter"
                 />
               </div>
-              <p style={{ fontSize: "12.5px", color: "#475467", marginTop: 10 }}>{f26.note}</p>
+              <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f26.note}</p>
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"
