@@ -54,6 +54,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Salary Slips", href: "/hr/payroll/salary-slips", description: "Individual statements" },
 			{ title: "Pay Structures", href: "/hr/payroll/structures", description: "Earning/deduction components" },
 			{ title: "Pay Matrix", href: "/hr/pay-matrix", description: "7th CPC pay band matrix" },
+			{ title: "Salary Structures", href: "/hr/salary-structure", description: "Pay structure component definitions" },
 			{ title: "GPF", href: "/hr/payroll/gpf", description: "General Provident Fund" },
 			{ title: "NPS", href: "/hr/payroll/nps", description: "National Pension System" },
 			{ title: "Pensioners", href: "/hr/payroll/pensioners", description: "PPO management" },
@@ -73,6 +74,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Advances", href: "/hr/advances", description: "Salary advance requests" },
 			{ title: "Expenses", href: "/hr/expenses", description: "Expense claims" },
 			{ title: "Travel / TA-DA", href: "/hr/travel", description: "Travel allowance claims" },
+			{ title: "Medical Claims", href: "/hr/medical", description: "CGHS / CS(MA) reimbursement" },
 		],
 	},
 	{
@@ -92,6 +94,8 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Training", href: "/hr/training", description: "Programs and capacity building" },
 			{ title: "Skills", href: "/hr/skills", description: "Skill matrix" },
 			{ title: "Certifications", href: "/hr/certifications", description: "Certification tracker" },
+			{ title: "Competency Framework", href: "/hr/competency", description: "Competencies and frameworks" },
+			{ title: "Work Summaries", href: "/hr/work-summary", description: "Employee task and performance records" },
 		],
 	},
 	{
@@ -104,6 +108,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Deputation", href: "/hr/deputation", description: "Deputation to other orgs" },
 			{ title: "Confirmation", href: "/hr/confirmation", description: "Probation confirmations" },
 			{ title: "Retirement", href: "/hr/retirement", description: "Superannuation and separation" },
+			{ title: "DPC Eligibility", href: "/hr/dpc", description: "Promotion seniority list" },
 		],
 	},
 	{
@@ -112,6 +117,8 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 		tiles: [
 			{ title: "Grievance", href: "/hr/grievance", description: "Grievance redressal" },
 			{ title: "Vigilance", href: "/hr/vigilance", description: "Disciplinary cases" },
+			{ title: "Disciplinary Cases", href: "/hr/disciplinary", description: "All proceedings — major & minor" },
+			{ title: "ICC Complaints (POSH)", href: "/hr/icc", description: "Internal complaints under POSH Act" },
 		],
 	},
 	{
@@ -122,6 +129,15 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Contractual", href: "/hr/contractual", description: "Contractual employees" },
 			{ title: "Outsourced", href: "/hr/outsourced", description: "Vendor-supplied workforce" },
 			{ title: "Interns", href: "/hr/interns", description: "Interns and apprentices" },
+			{ title: "Workforce Analytics", href: "/hr/workforce", description: "Headcount and retirement forecast" },
+			{ title: "Succession Planning", href: "/hr/succession", description: "Critical role coverage" },
+		],
+	},
+	{
+		title: "Compliance & Transparency",
+		icon: "⚖️",
+		tiles: [
+			{ title: "RTI Requests", href: "/hr/rti", description: "Right to Information tracking" },
 		],
 	},
 	{

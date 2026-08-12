@@ -31,7 +31,7 @@ async function getDashboard(): Promise<DashboardStats> {
   return res.data;
 }
 
-async function getOpenings(): Promise<Opening[]> {
+async function getOpenings(): Promise<LoaderResult<Opening[]>> {
   const res = await fetchJson<unknown, Opening[]>("/api/v1/hrms/job-openings?limit=100", [], {
     telemetryKey: "recruitment.openings",
     mapResponse: (p) => {
@@ -39,11 +39,11 @@ async function getOpenings(): Promise<Opening[]> {
       return Array.isArray(arr) ? arr as Opening[] : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function RecruitmentPage() {
-  const [stats, openings] = await Promise.all([getDashboard(), getOpenings()]);
+  const [stats, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
 
   return (
@@ -60,6 +60,7 @@ export default async function RecruitmentPage() {
         }
       />
 
+      <DataSourceBadge source={openingSource} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e7edfd" label="Total Vacancies" value={stats.totalOpenings} />
         <StatCard icon="🟢" iconBg="#ecfdf3" label="Open Now" value={stats.openVacancies} />
