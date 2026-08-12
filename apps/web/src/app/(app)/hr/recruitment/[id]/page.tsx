@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 
 type Application = {
   id: string;
@@ -40,21 +41,21 @@ const PIPELINE_STAGES: { key: string; label: string; colour: string }[] = [
   { key: "rejected",    label: "Not Selected",   colour: "#fff1f0" },
 ];
 
-async function getOpening(id: string): Promise<Opening | null> {
-  const r = await fetchJson<unknown, Opening | null>(`/api/v1/hrms/job-openings/${id}`, null, {
+async function getOpening(id: string): Promise<LoaderResult<Opening | null>> {
+  return fetchJson<unknown, Opening | null>(`/api/v1/hrms/job-openings/${id}`, null, {
     telemetryKey: "recruitment.opening",
     mapResponse: (p) => (p && typeof p === "object" ? (p as Opening) : null),
   });
-  return r.data;
 }
 
 export default async function JobOpeningDetailPage({ params }: { params: { id: string } }) {
-  const opening = await getOpening(params.id);
+  const { data: opening, source } = await getOpening(params.id);
 
   if (!opening) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Job Opening" subtitle="Not found" back="/hr/recruitment" />
+        <DataSourceBadge source={source} />
         <Card title="Error">
           <p style={{ padding: "24px 20px", color: "var(--mut)", textAlign: "center" }}>
             Job opening not found or you do not have access.
@@ -96,6 +97,7 @@ export default async function JobOpeningDetailPage({ params }: { params: { id: s
         back="/hr/recruitment"
         actions={<Link href="/hr/recruitment/new" className="btn ghost">+ New Vacancy</Link>}
       />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📨" iconBg="#e6f0ff" label="Applied" value={applied} />
         <StatCard icon="🔍" iconBg="#fffbe6" label="Screened / Shortlisted" value={shortlisted} />

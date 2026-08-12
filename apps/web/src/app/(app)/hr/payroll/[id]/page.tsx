@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, StatGrid, StatCard } from "../../../../_components/ds";
 import { getPayrollRunById } from "../../../../_data/loaders";
 import { formatRupees, formatIndianDate } from "@/lib/formatters";
 import { PayrollRunActions } from "./PayrollRunActions";
@@ -55,6 +55,12 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         backLabel="Payroll Runs"
       />
       <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="👥" iconBg="#e6f0ff" label="Employees"  value={run.employeeCount.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="#e6f7f0" label="Gross"      value={formatRupees(run.grossAmount)} />
+        <StatCard icon="📉" iconBg="#fff7e6" label="Deductions" value={formatRupees(run.deductions)} />
+        <StatCard icon="✅" iconBg="#f5f5f5" label="Net Pay"    value={formatRupees(run.netAmount)} />
+      </StatGrid>
       <PayrollRunActions
         runId={run.id}
         status={run.status}

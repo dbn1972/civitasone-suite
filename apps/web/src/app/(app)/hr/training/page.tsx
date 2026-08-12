@@ -42,7 +42,7 @@ export default async function TrainingPage() {
   ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Training Programs"
         subtitle="Capacity building and skill development initiatives."

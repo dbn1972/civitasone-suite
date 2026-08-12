@@ -38,7 +38,7 @@ export default async function HRDashboardPage() {
   if (openRoles > 0) actionItems.push({ label: `${openRoles} open role${openRoles > 1 ? "s" : ""} awaiting candidates`, href: "/hr/recruitment", urgency: "medium" });
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="HR Dashboard"
         subtitle="People operations overview."

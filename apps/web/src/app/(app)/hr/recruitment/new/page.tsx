@@ -3,7 +3,7 @@ import { NewJobOpeningForm } from "./NewJobOpeningForm";
 
 export default function NewJobOpeningPage() {
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="New Job Opening"
         subtitle="Post a new vacancy for recruitment."

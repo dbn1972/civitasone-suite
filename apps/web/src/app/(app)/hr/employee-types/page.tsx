@@ -42,7 +42,7 @@ export default async function EmployeeTypesPage() {
   }));
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Employee Types"
         subtitle="Define the categories of people in your organisation — permanent staff, contractors, interns, volunteers, and any custom type you need."

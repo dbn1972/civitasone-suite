@@ -23,7 +23,7 @@ export default async function PayrollPage() {
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Payroll Runs"
         subtitle="Monthly salary processing and statutory run status."

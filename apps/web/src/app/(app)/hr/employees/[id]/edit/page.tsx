@@ -15,7 +15,7 @@ export default async function EditEmployeePage({
   }
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Edit Employee"
         subtitle="Update employee contact and assignment details."

@@ -24,7 +24,7 @@ export default async function LeaveManagementPage() {
   ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("leave.title")}
         subtitle={t("leave.subtitle")}

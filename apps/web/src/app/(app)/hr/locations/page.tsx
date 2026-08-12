@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -42,6 +42,10 @@ const newBtnStyle: React.CSSProperties = {
 export default async function LocationsPage() {
   const { data: locations, source } = await getLocations();
 
+  const stateCount    = locations.filter((l) => l.type === "state").length;
+  const districtCount = locations.filter((l) => l.type === "district").length;
+  const blockCount    = locations.filter((l) => !["state","district"].includes(l.type)).length;
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -57,6 +61,12 @@ export default async function LocationsPage() {
         }
       />
       <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="🌍" iconBg="#e6f0ff" label="Total Locations" value={locations.length} />
+        <StatCard icon="🏛️" iconBg="#e6f7f0" label="State-level"     value={stateCount} />
+        <StatCard icon="🏙️" iconBg="#fff7e6" label="District-level"  value={districtCount} />
+        <StatCard icon="🏘️" iconBg="#f5f5f5" label="Block / Other"   value={blockCount} />
+      </StatGrid>
       <Card title={`Locations (${locations.length})`}>
         {locations.length === 0 ? (
           <EmptyState

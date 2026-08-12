@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, EmptyState } from "../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DesignationsTable } from "./DesignationsTable";
@@ -34,8 +34,12 @@ const newBtnStyle: React.CSSProperties = {
 export default async function DesignationsPage() {
   const { data: items, source } = await getDesignations();
 
+  const withPayGrade    = items.filter((d) => !!d.payGrade).length;
+  const withoutPayGrade = items.filter((d) => !d.payGrade).length;
+  const uniqueLevels    = new Set(items.map((d) => String(d.level))).size;
+
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Designations"
         subtitle="Job titles and pay levels used across your office — Clerk, Officer, DDO, etc."
@@ -49,6 +53,12 @@ export default async function DesignationsPage() {
         }
       />
       <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="🏅" iconBg="#e6f0ff" label="Total Designations" value={items.length} />
+        <StatCard icon="💰" iconBg="#e6f7f0" label="With Pay Grade"     value={withPayGrade} />
+        <StatCard icon="—" iconBg="#fff7e6" label="Without Pay Grade"  value={withoutPayGrade} />
+        <StatCard icon="🎚️" iconBg="#f5f5f5" label="Unique Levels"      value={uniqueLevels} />
+      </StatGrid>
 
       <Card title={`Designations (${items.length})`}>
         {items.length === 0 ? (

@@ -45,7 +45,7 @@ export default async function TalentPoolPage({
   }));
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Talent Pool"
         subtitle="All candidates who applied — search by skills, experience, or source to find the right fit for a new vacancy."
