@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool } from "../../shared/db.js";
+import { sqlPool, sqlClient } from "../../shared/db.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -308,6 +308,117 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/benefits/my-elections", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const { rows } = await sqlPool.query(`SELECT be.id, bp.name AS plan_name, be.fy, be.elections, be.total_elected_minor, be.status FROM employee.benefit_elections be JOIN employee.benefit_plans bp ON bp.id = be.plan_id WHERE be.tenant_id = $1 AND be.employee_id = $2 ORDER BY be.fy DESC LIMIT 10`, [ctx.tenantId, ctx.actorId]);
+    return reply.send({ data: rows });
+  });
+
+
+  // ── Gap: Certifications ────────────────────────────────────────────────────
+  app.get("/v1/hrms/certifications", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    const { rows } = await sqlPool.query(`
+      SELECT n.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+             t.title AS certification, COALESCE(t.facilitator,'Internal') AS "issuingBody",
+             n.completed_date AS "issuedDate", NULL::date AS "expiryDate", 'valid' AS status
+      FROM training.hrms_nominations n
+      JOIN training.hrms_trainings t ON t.id = n.training_id AND t.tenant_id = $1
+      JOIN employee.hrms_employees e ON e.id = n.employee_id AND e.tenant_id = $1
+      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+      WHERE n.tenant_id = $1 AND n.status = 'completed' AND n.certificate_ref IS NOT NULL
+      ORDER BY n.completed_date DESC NULLS LAST LIMIT 200
+    `, [ctx.tenantId]);
+    return reply.send({ data: rows });
+  });
+
+  // ── Gap: Grievances (minor disciplinary cases) ─────────────────────────────
+  app.get("/v1/hrms/grievances", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    const { rows } = await sqlPool.query(`
+      SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+             c.allegation AS category, c.charge_memo_date AS "filedDate",
+             COALESCE(c.inquiry_officer_name,'Unassigned') AS "assignedTo",
+             c.allegation AS description, c.status
+      FROM disciplinary.hrms_disciplinary_cases c
+      JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
+      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+      WHERE c.tenant_id = $1 AND c.proceeding_type = 'minor'
+      ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+    `, [ctx.tenantId]);
+    return reply.send({ data: rows });
+  });
+
+  // ── Gap: Skills (employee competency assessments) ──────────────────────────
+  app.get("/v1/hrms/skills", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    const { rows } = await sqlPool.query(`
+      SELECT sa.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+             c.name AS skill, c.category, sa.assessed_level AS proficiency,
+             COALESCE(ae.full_name,'—') AS "assessedBy", sa.assessed_at AS "lastAssessed"
+      FROM employee.skill_assessments sa
+      JOIN employee.competencies c ON c.id = sa.competency_id AND c.tenant_id = $1
+      JOIN employee.hrms_employees e ON e.id = sa.employee_id AND e.tenant_id = $1
+      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+      LEFT JOIN employee.hrms_employees ae ON ae.id = sa.assessed_by AND ae.tenant_id = $1
+      WHERE sa.tenant_id = $1
+      ORDER BY sa.assessed_at DESC LIMIT 500
+    `, [ctx.tenantId]);
+    return reply.send({ data: rows });
+  });
+
+  // ── Gap: Staffing Plan (manpower vacancy analysis) ─────────────────────────
+  app.get("/v1/hrms/staffing-plan", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    // manpower.current_tenant_id() requires app.tenant_id; use a transaction with SET LOCAL
+    const rows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe(`SET LOCAL app.tenant_id = '${ctx.tenantId}'`);
+      return sql.unsafe(`
+        SELECT p.id, COALESCE(d.name, p.cadre) AS department, p.cadre,
+               p.sanctioned_strength AS "sanctionedPosts", p.filled_strength AS filled,
+               GREATEST(p.sanctioned_strength - p.filled_strength, 0) AS vacant,
+               CASE WHEN p.sanctioned_strength > 0
+                 THEN ROUND((p.filled_strength::numeric / p.sanctioned_strength) * 100, 1)
+                 ELSE 0 END AS "fillPercentage",
+               p.updated_at AS "lastReview", p.status
+        FROM manpower.plans p
+        LEFT JOIN employee.hrms_departments d ON d.id = p.unit_id AND d.tenant_id = $1
+        WHERE p.tenant_id = $1
+        ORDER BY p.plan_year DESC, "fillPercentage" ASC LIMIT 200
+      `, [ctx.tenantId]);
+    });
+    return reply.send({ data: rows });
+  });
+
+  // ── Gap: Vigilance (major disciplinary cases) ──────────────────────────────
+  app.get("/v1/hrms/vigilance", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    const { rows } = await sqlPool.query(`
+      SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+             c.allegation AS charges, c.charge_memo_date AS "filedDate",
+             COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
+             c.inquiry_appointed_date AS "nextHearing", c.status
+      FROM disciplinary.hrms_disciplinary_cases c
+      JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
+      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+      WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
+      ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+    `, [ctx.tenantId]);
+    return reply.send({ data: rows });
+  });
+
+  // ── Gap: Work Summaries (derived from appraisals) ─────────────────────────
+  app.get("/v1/hrms/work-summaries", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    const { rows } = await sqlPool.query(`
+      SELECT a.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+             a.appraisal_period AS period, 'annual' AS "periodType",
+             COALESCE(ROUND(a.overall_grade)::int, 0) AS "tasksCompleted",
+             10 AS "totalTasks",
+             COALESCE(a.rating, 0)::numeric AS rating, a.status
+      FROM appraisal.hrms_appraisals a
+      JOIN employee.hrms_employees e ON e.id = a.employee_id AND e.tenant_id = $1
+      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+      WHERE a.tenant_id = $1
+      ORDER BY a.appraisal_period DESC, e.full_name LIMIT 500
+    `, [ctx.tenantId]);
     return reply.send({ data: rows });
   });
 

@@ -2,7 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
-type Row = {
+type RawRow = {
   id: string;
   employee: string;
   department: string;
@@ -13,25 +13,35 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<LoaderResult<Row[]>> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/vigilance", [], {
+type Row = RawRow & { caseRef: string };
+
+async function getData(): Promise<LoaderResult<RawRow[]>> {
+  return fetchJson<unknown, RawRow[]>("/api/v1/hrms/vigilance", [], {
     telemetryKey: "hr.vigilance",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      const arr = Array.isArray(p) ? p : (p as { data?: RawRow[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r;
+}
+
+function shortId(id: string): string {
+  return "VIG/" + id.slice(0, 8).toUpperCase();
 }
 
 export default async function VigilancePage() {
-  const { data: items, source } = await getData();
+  const { data: rawItems, source } = await getData();
+  const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
+
+  const opened = items.filter((i) => i.status === "opened").length;
+  const inquiry = items.filter((i) => i.status === "inquiry" || i.status === "under_inquiry").length;
+  const closed = items.filter((i) => ["closed", "disposed", "finalised"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "id", label: "Case No." },
+    { key: "caseRef", label: "Case Ref" },
     { key: "employee", label: "Employee" },
     { key: "department", label: "Department" },
-    { key: "charges", label: "Charges" },
+    { key: "charges", label: "Charge Summary" },
     { key: "inquiryOfficer", label: "Inquiry Officer" },
     { key: "nextHearing", label: "Next Hearing" },
     { key: "status", label: "Status", cellType: "status" },
@@ -39,17 +49,30 @@ export default async function VigilancePage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Vigilance & Disciplinary" subtitle="Vigilance cases and disciplinary proceedings." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Vigilance & Disciplinary"
+        subtitle="Major proceedings under CCS (CCA) Rules — charge memos, inquiry, penalty and appeal."
+        back="/hr"
+        actions={<span />}
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label="Charge Memo Stage" value={opened} />
+        <StatCard icon="🔍" iconBg="#fffbe6" label="Under Inquiry" value={inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Disposed / Closed" value={closed} />
       </StatGrid>
-      <Card title="Vigilance Cases">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or inquiry officer…"
+      <Card title="Vigilance Cases Register">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, department or inquiry officer…"
           pageSize={15}
           emptyIcon="⚖️"
-          emptyTitle="No vigilance cases"
-          emptyMessage="Vigilance and disciplinary cases appear here, registered by the Vigilance Department and tracked through inquiry, hearing, and disposal."
+          emptyTitle="No vigilance cases on record"
+          emptyMessage="Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules."
         />
       </Card>
     </main>
