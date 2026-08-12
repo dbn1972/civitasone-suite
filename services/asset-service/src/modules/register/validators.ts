@@ -28,8 +28,20 @@ export const assetQueryParams = z.object({
   category: z.string().uuid().optional(),
   status:   z.string().optional(),
   type:     z.enum(["fixed", "infra", "movable", "it", "vehicle", "other"]).optional(),
+  search:   z.string().optional(),
   limit:    z.coerce.number().int().positive().max(200).default(50),
   offset:   z.coerce.number().int().nonnegative().default(0),
 });
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const createCategoryBody = z.object({
+  name:            z.string().min(1).max(256),
+  code:            z.string().min(1).max(64),
+  depMethod:       z.enum(["SLM", "WDV"]).default("SLM"),
+  depRate:         z.number().positive().default(20),
+  usefulLifeYears: z.number().int().positive().default(5),
+});
+export const updateCategoryBody = createCategoryBody.partial();
+export type CreateCategoryBody = z.infer<typeof createCategoryBody>;
+export type UpdateCategoryBody = z.infer<typeof updateCategoryBody>;

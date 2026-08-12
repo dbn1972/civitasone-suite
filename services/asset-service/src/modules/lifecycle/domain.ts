@@ -6,7 +6,8 @@ export class DomainError extends Error {
 }
 
 export function assertAssetTransferable(status: string): void {
-  if (status !== "active") {
+  const transferableStatuses = ["active", "under_maintenance"];
+  if (!transferableStatuses.includes(status)) {
     throw new DomainError("ASSET_NOT_TRANSFERABLE", `asset with status '${status}' cannot be transferred`);
   }
 }

@@ -17,6 +17,10 @@ import { dashboardRoutes }   from "./modules/dashboard/routes.js";
 import { verificationRoutes } from "./modules/verification/routes.js";
 import { enterpriseRoutes } from "./modules/enterprise/routes.js";
 import { condemnationRoutes } from "./modules/condemnation/routes.js";
+import { waterConnectionRoutes } from "./modules/water-connections/routes.js";
+import { waterMeteringRoutes } from "./modules/water-metering/routes.js";
+import { waterTankerRoutes } from "./modules/water-tanker/routes.js";
+import { streetlightRoutes } from "./modules/streetlight/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -56,6 +60,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(verificationRoutes);
   await app.register(enterpriseRoutes);
   await app.register(condemnationRoutes);
+  await app.register(waterConnectionRoutes);
+  await app.register(waterMeteringRoutes);
+  await app.register(waterTankerRoutes);
+  await app.register(streetlightRoutes);
 
   const { fleetRoutes } = await import("./modules/fleet/routes.js");
   await app.register(fleetRoutes);

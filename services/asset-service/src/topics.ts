@@ -33,6 +33,34 @@ export const COMMANDS = {
   verificationApprove:       "asset.verification.approve",
   writeoffRequest:           "asset.writeoff.request",
   writeoffApprove:           "asset.writeoff.approve",
+  // Water connections
+  waterApplicationCreate:    "asset.water.application.create",
+  waterApplicationSubmit:    "asset.water.application.submit",
+  waterFeasibilityRecord:    "asset.water.feasibility.record",
+  waterApplicationApprove:   "asset.water.application.approve",
+  waterApplicationReject:    "asset.water.application.reject",
+  waterConnectionInstall:    "asset.water.connection.install",
+  waterConnectionActivate:   "asset.water.connection.activate",
+  // Water metering
+  waterMeterReadingRecord:   "asset.water.meter_reading.record",
+  waterBillGenerate:         "asset.water.bill.generate",
+  waterServiceRequestCreate: "asset.water.service_request.create",
+  waterServiceRequestResolve:"asset.water.service_request.resolve",
+  // Water tanker
+  waterTankerBookingCreate:  "asset.water_tanker.booking.create",
+  waterTankerBookingSchedule:"asset.water_tanker.booking.schedule",
+  waterTankerBookingDispatch:"asset.water_tanker.booking.dispatch",
+  waterTankerBookingDeliver: "asset.water_tanker.booking.deliver",
+  waterTankerBookingCancel:  "asset.water_tanker.booking.cancel",
+  // Streetlight
+  streetlightCreate:         "asset.streetlight.create",
+  streetlightStatusUpdate:   "asset.streetlight.status.update",
+  streetlightFaultReport:    "asset.streetlight.fault.report",
+  streetlightFaultAssign:    "asset.streetlight.fault.assign",
+  streetlightFaultResolve:   "asset.streetlight.fault.resolve",
+  streetlightRequestCreate:  "asset.streetlight.request.create",
+  streetlightRequestSurvey:  "asset.streetlight.request.survey",
+  streetlightRequestApprove: "asset.streetlight.request.approve",
 } as const;
 
 export const EVENTS = {

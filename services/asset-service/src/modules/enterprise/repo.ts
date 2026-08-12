@@ -121,3 +121,8 @@ export async function insertInterOrgTransfer(tx: Writer, row: typeof interOrgTra
 export async function bulkInsertAssets(tx: Writer, rows: (typeof assetAssets.$inferInsert)[]) {
   if (rows.length) await tx.insert(assetAssets).values(rows);
 }
+
+export async function listPendingDisposals(tenantId: string, limit = 200) {
+  return scopedRead((tx) => tx.select().from(pendingDisposals)
+    .where(eq(pendingDisposals.tenantId, tenantId)).limit(limit));
+}

@@ -73,3 +73,8 @@ export async function approveWriteoff(tx: Writer, id: string, tenantId: string, 
     eq(writeoffApprovals.status, "pending"),
   ));
 }
+
+export async function listItemsByVerification(verificationId: string) {
+  return scopedRead((tx) => tx.select().from(physicalVerificationItems)
+    .where(eq(physicalVerificationItems.verificationId, verificationId)));
+}
