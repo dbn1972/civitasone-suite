@@ -18,4 +18,17 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       summary: items.length > 0 ? `${items.length} KPIs tracked` : "Reports dashboard ready",
     });
   });
+  app.get("/v1/reports/executive-summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const kpis = await kpiQueries.listDashboardItems(ctx.tenantId, 10);
+    return reply.send({
+      data: {
+        kpiHighlights: kpis.slice(0, 5),
+        totalKpis: kpis.length,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  });
+
 }

@@ -25,3 +25,9 @@ export const jobViewSchema = z.object({
 });
 
 export const jobsListSchema = paginatedSchema(jobViewSchema);
+
+export const shareJobBody = z.object({
+  recipients: z.array(z.string().email()).min(1).max(50),
+  message: z.string().max(500).optional(),
+});
+export type ShareJobBody = z.infer<typeof shareJobBody>;

@@ -10,6 +10,8 @@ export default function Page() {
         { href: "/reports/list", label: "Report Jobs", note: "All generated reports" },
         { href: "/reports/kpi", label: "KPI Tracker", note: "Performance vs targets" },
         { href: "/reports/mis", label: "MIS Dashboard", note: "Management information system" },
+        { href: "/reports/scheduled", label: "Scheduled Reports", note: "Manage automated report delivery schedules." },
+        { href: "/reports/executive-summary", label: "Executive Summary", note: "Cross-module KPI highlights for leadership." },
       ]}
     />
   );

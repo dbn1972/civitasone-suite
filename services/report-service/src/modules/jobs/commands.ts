@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
-import type { CreateJobBody } from "./validators.js";
+import type { CreateJobBody, ShareJobBody } from "./validators.js";
 import type { JobView } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -39,4 +39,22 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function shareJob(
+  ctx: RequestContext,
+  id: string,
+  payload: { recipients: string[]; message?: string; downloadUrl: string },
+): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.shareJob, {
+    messageId,
+    type: COMMANDS.shareJob,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { jobId: id, ...payload },
+  });
+  return { id: messageId, status: "accepted", correlationId: ctx.correlationId };
 }
