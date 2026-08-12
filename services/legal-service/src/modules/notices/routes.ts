@@ -1,10 +1,11 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createNoticeBody, respondNoticeBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];
 
@@ -22,6 +23,26 @@ export async function noticeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = respondNoticeBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.respondNotice(ctx, id, body));
+  });
+
+
+  // GET /v1/legal/notices — list notices for the tenant
+  app.get("/v1/legal/notices", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEGAL_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const items = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
+    return reply.send({ items });
+  });
+
+  // GET /v1/legal/notices/:id — fetch a single notice
+  app.get("/v1/legal/notices/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEGAL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const notice = await repo.getById(ctx.tenantId, id);
+    if (!notice) throw new HttpError(404, "NOT_FOUND", "notice not found");
+    return reply.send(notice);
   });
 
   app.setErrorHandler((err, req, reply) => {

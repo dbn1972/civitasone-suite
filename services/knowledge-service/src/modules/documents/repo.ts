@@ -57,3 +57,35 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export async function insert(tx: Writer, row: DocumentInsert): Promise<void> {
   await tx.insert(documents).values(row);
 }
+
+export async function getById(tenantId: string, id: string): Promise<DocumentView | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(documents)
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)))
+      .limit(1)
+  );
+  return rows[0] ? toView(rows[0]) : null;
+}
+
+export async function listByCategory(tenantId: string, categoryId: string, limit: number, offset: number): Promise<DocumentView[]> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(documents)
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.category, categoryId)))
+      .orderBy(desc(documents.updatedAt))
+      .limit(limit)
+      .offset(offset)
+  );
+  return rows.map(toView);
+}
+
+export async function updateStatus(tx: Writer, tenantId: string, id: string, status: string): Promise<void> {
+  await tx.update(documents)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)));
+}
+
+export async function updateStatusDirect(tenantId: string, id: string, status: string): Promise<void> {
+  await db.update(documents)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)));
+}

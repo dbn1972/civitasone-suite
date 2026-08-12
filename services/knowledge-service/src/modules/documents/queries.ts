@@ -30,3 +30,16 @@ export async function listDocuments(
     };
   });
 }
+
+export async function getDocumentById(tenantId: string, id: string): Promise<DocumentView | null> {
+  return repo.getById(tenantId, id);
+}
+
+export async function listDocumentsByCategory(tenantId: string, categoryId: string, limit: number, offset: number): Promise<DocumentView[]> {
+  return repo.listByCategory(tenantId, categoryId, limit, offset);
+}
+
+
+export async function setDocumentStatus(tenantId: string, id: string, status: string): Promise<void> {
+  await repo.updateStatusDirect(tenantId, id, status);
+}

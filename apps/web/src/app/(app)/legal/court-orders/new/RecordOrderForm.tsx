@@ -114,7 +114,7 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role="alert" style={{ marginTop: 12, color: "#b91c1c", fontSize: "0.875rem" }}>
+          <p role="alert" style={{ marginTop: 12, color: "var(--bad)", fontSize: "0.875rem" }}>
             {message}
           </p>
         ) : null}
