@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   location: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=200", [], {
     telemetryKey: "hr.employees_limit_200",
     mapResponse: (p) => {
@@ -24,7 +25,7 @@ async function getData(): Promise<Row[]> {
 }
 
 export default async function DirectoryPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string }[] = [
     { key: "name", label: "Name" },
@@ -39,11 +40,17 @@ export default async function DirectoryPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Employee Directory" subtitle="Search employees by name, department, designation, or extension." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📋"
+          emptyTitle="No employees in directory"
+          emptyMessage="The employee directory is empty. Employees appear here once onboarded and their records are activated."
+        />
       </div>
     </main>
   );

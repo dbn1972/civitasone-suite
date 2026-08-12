@@ -45,7 +45,12 @@ export default async function ServiceBookPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📒"
+          emptyTitle="No service book entries"
+          emptyMessage="Service book entries appear here once recorded. The service book is the official record of an employee's entire service history."
+        />
       </div>
     </main>
   );

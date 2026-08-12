@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -9,7 +10,7 @@ type Row = {
   submittedOn: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/training/feedback", [], {
     telemetryKey: "hr.training_feedback",
     mapResponse: (p) => {
@@ -21,7 +22,7 @@ async function getData(): Promise<Row[]> {
 }
 
 export default async function TrainingFeedbackPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string }[] = [
     { key: "employee", label: "Employee" },
@@ -33,11 +34,17 @@ export default async function TrainingFeedbackPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Training Feedback" subtitle="Post-training feedback and program ratings." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📝"
+          emptyTitle="No training feedback"
+          emptyMessage="Employee feedback on completed training programmes appears here. Feedback is collected at programme closure."
+        />
       </div>
     </main>
   );

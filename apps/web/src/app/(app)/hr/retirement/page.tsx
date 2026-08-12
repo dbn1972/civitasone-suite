@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/retirements", [], {
     telemetryKey: "hr.retirement",
     mapResponse: (p) => {
@@ -20,11 +21,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function RetirementPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const upcoming = items.filter((i) => i.status === "pending").length;
   const completed = items.filter((i) => i.status === "completed").length;
@@ -42,16 +43,21 @@ export default async function RetirementPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Retirement & Separation" subtitle="Upcoming retirements and separation queue." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="👴" iconBg="#e6f0ff" label="Total" value={items.length} />
         <StatCard icon="📅" iconBg="#fffbe6" label="Upcoming" value={upcoming} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Processed" value={completed} />
         <StatCard icon="📝" iconBg="#f5f5f5" label="VRS" value={vrs} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Retirement Queue</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or date…" pageSize={15} />
-      </div>
+      <Card title="Retirement & Separation">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or date…"
+          pageSize={15}
+          emptyIcon="🎓"
+          emptyTitle="No retirement or separation records"
+          emptyMessage="Superannuation, VRS, and resignation records appear here. These are auto-populated from the employee service book on separation."
+        />
+      </Card>
     </main>
   );
 }

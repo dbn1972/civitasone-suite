@@ -46,7 +46,12 @@ export default async function IncomeTaxPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📊"
+          emptyTitle="No income tax declarations"
+          emptyMessage="Employee income tax declarations appear here once submitted during the declaration window."
+        />
       </div>
     </main>
   );

@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/training/nominations", [], {
     telemetryKey: "hr.training_nominations",
     mapResponse: (p) => {
@@ -24,7 +25,7 @@ async function getData(): Promise<Row[]> {
 }
 
 export default async function TrainingNominationsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -38,11 +39,17 @@ export default async function TrainingNominationsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Training Nominations" subtitle="Nominations for upcoming training programs." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="🎓"
+          emptyTitle="No training nominations"
+          emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
+        />
       </div>
     </main>
   );

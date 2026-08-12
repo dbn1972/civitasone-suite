@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiElection = {
   id: string;
@@ -37,7 +38,7 @@ function mapElections(rows: ApiElection[]): Row[] {
   }));
 }
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/benefits/my-elections", [], {
     telemetryKey: "hr.benefits",
     mapResponse: (p) => {
@@ -45,11 +46,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? mapElections(arr as ApiElection[]) : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function BenefitsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "plan_name", label: "Plan" },
@@ -62,13 +63,19 @@ export default async function BenefitsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Benefits Enrollment" subtitle="HRA, LTC, medical, and flex-benefit elections for the financial year." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Active Elections" value={items.length} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Benefits Enrollments">
         <div className="card-h"><h3>My Benefit Elections</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by plan or FY…" pageSize={15} />
-      </div>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by plan or FY…"
+          pageSize={15}
+          emptyIcon="🏥"
+          emptyTitle="No benefits enrolled"
+          emptyMessage="Employee benefits enrollments (HRA, LTC, medical) appear here once elections are submitted during the benefit window."
+        />
+      </Card>
     </main>
   );
 }

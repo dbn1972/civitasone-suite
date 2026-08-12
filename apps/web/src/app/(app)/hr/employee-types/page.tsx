@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type EmpType = {
   id: string; code: string; name: string; description: string | null;
@@ -9,12 +10,12 @@ type EmpType = {
   payMode: string; isActive: boolean; sortOrder: number;
 } & Record<string, unknown>;
 
-async function getTypes(): Promise<EmpType[]> {
+async function getTypes(): Promise<LoaderResult<EmpType[]>> {
   const r = await fetchJson<unknown, EmpType[]>("/api/v1/hrms/employee-types", [], {
     telemetryKey: "config.employee_types",
     mapResponse: (p) => (p as { data: EmpType[] })?.data ?? null,
   });
-  return r.data;
+  return r;
 }
 
 const PAY_MODE_LABELS: Record<string, string> = {
@@ -26,7 +27,7 @@ const PAY_MODE_LABELS: Record<string, string> = {
 };
 
 export default async function EmployeeTypesPage() {
-  const types = await getTypes();
+  const { data: types, source } = await getTypes();
   const active = types.filter((t) => t.isActive).length;
   const withPayroll = types.filter((t) => t.eligibleForPayroll).length;
 
@@ -49,6 +50,7 @@ export default async function EmployeeTypesPage() {
         backLabel="HR"
         help="hr"
       />
+      {source === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
         <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={types.length} />

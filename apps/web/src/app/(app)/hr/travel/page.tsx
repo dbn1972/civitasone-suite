@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TravelRequestForm } from "./TravelRequestForm";
 
 type Row = {
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/travel-requests", [], {
     telemetryKey: "hr.travel",
     mapResponse: (p) => {
@@ -20,11 +21,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function TravelRequestsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
@@ -42,6 +43,7 @@ export default async function TravelRequestsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Travel Requests" subtitle="Submit and track official travel approvals." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
@@ -51,10 +53,15 @@ export default async function TravelRequestsPage() {
 
       <TravelRequestForm />
 
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Travel Requests">
         <div className="card-h"><h3>Travel Requests</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by destination or purpose…" pageSize={15} />
-      </div>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by destination or purpose…"
+          pageSize={15}
+          emptyIcon="✈️"
+          emptyTitle="No travel requests"
+          emptyMessage="Official travel requests appear here once employees raise them. Requests go through departmental approval before booking."
+        />
+      </Card>
     </main>
   );
 }

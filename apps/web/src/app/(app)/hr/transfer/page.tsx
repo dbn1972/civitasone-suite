@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TransferWithApproval } from "./TransferWithApproval";
 
 type Row = {
@@ -13,7 +14,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/transfers", [], {
     telemetryKey: "hr.transfer",
     mapResponse: (p) => {
@@ -21,11 +22,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function TransferPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const completed = items.filter((i) => i.status === "completed").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -50,10 +51,14 @@ export default async function TransferPage() {
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="👍" iconBg="#f0f5ff" label="Approved" value={approved} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Transfer Orders</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, office or order no…" pageSize={15} />
-      </div>
+      <Card title="Transfer Orders">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, office or order no…"
+          pageSize={15}
+          emptyIcon="📍"
+          emptyTitle="No transfer orders"
+          emptyMessage="Transfer orders appear here once issued. Use '+ Initiate Transfer' to move an employee to another office or department."
+        />
+      </Card>
     </main>
   );
 }

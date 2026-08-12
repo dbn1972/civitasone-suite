@@ -1,0 +1,75 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
+import * as commands from "./commands.js";
+import * as permitRepo from "../permits/repo.js";
+import { canRequestRenewal } from "./domain.js";
+
+const BUILDING_ROLES = ["building_user", "building_admin", "super_admin"];
+const OFFICER_ROLES = ["building_admin", "building_officer", "super_admin"];
+
+const issueCertBody = z.object({ permitId: z.string().uuid(), certType: z.enum(["commencement", "completion", "occupancy"]), inspectionReport: z.record(z.unknown()).optional() });
+const requestBody = z.object({ permitId: z.string().uuid(), renewalType: z.enum(["renewal", "extension", "amendment"]), details: z.record(z.unknown()).optional() });
+const decideBody = z.object({ decision: z.enum(["approved", "rejected"]), reason: z.string().optional() });
+const idParam = z.object({ id: z.string().uuid() });
+const permitIdQuery = z.object({ permitId: z.string().uuid() });
+const listQuery = z.object({ status: z.string().optional(), page: z.coerce.number().int().positive().optional(), pageSize: z.coerce.number().int().positive().max(100).optional() });
+
+export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/v1/building/certificates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const body = issueCertBody.parse(req.body);
+    const permit = await permitRepo.findById(body.permitId, ctx.tenantId);
+    if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "Permit not found");
+    if (permit.status !== "active") throw new HttpError(422, "INVALID_STATUS", `Cannot issue certificate for permit in status '${permit.status}'`);
+    return reply.code(202).send(await commands.issueCertificate(ctx, body.permitId, body.certType, body.inspectionReport));
+  });
+
+  app.get("/v1/building/certificates", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BUILDING_ROLES);
+    const q = permitIdQuery.parse(req.query);
+    const certs = await repo.listCertificatesByPermit(q.permitId, ctx.tenantId);
+    return reply.send({ data: certs, meta: { page: 1, pageSize: certs.length, total: certs.length } });
+  });
+
+  app.post("/v1/building/renewals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BUILDING_ROLES);
+    const body = requestBody.parse(req.body);
+    const permit = await permitRepo.findById(body.permitId, ctx.tenantId);
+    if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "Permit not found");
+    if (!canRequestRenewal(permit.status)) throw new HttpError(422, "INVALID_STATUS", `Cannot request renewal for permit in status '${permit.status}'`);
+    return reply.code(202).send(await commands.requestRenewal(ctx, body.permitId, body.renewalType, body.details));
+  });
+
+  app.get("/v1/building/renewals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BUILDING_ROLES);
+    const q = listQuery.parse(req.query);
+    const { rows, total } = await repo.listRenewals(ctx.tenantId, q);
+    return reply.send({ data: rows, meta: { page: q.page ?? 1, pageSize: q.pageSize ?? 20, total } });
+  });
+
+  app.get("/v1/building/renewals/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BUILDING_ROLES);
+    const { id } = idParam.parse(req.params);
+    const row = await repo.findRenewalById(id, ctx.tenantId);
+    if (!row) throw new HttpError(404, "RENEWAL_NOT_FOUND", "Renewal request not found");
+    return reply.send({ data: row });
+  });
+
+  app.post("/v1/building/renewals/:id/decide", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = decideBody.parse(req.body);
+    const existing = await repo.findRenewalById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "RENEWAL_NOT_FOUND", "Renewal request not found");
+    if (existing.status !== "submitted" && existing.status !== "under_review") throw new HttpError(422, "ALREADY_DECIDED", `Renewal already in status '${existing.status}'`);
+    return reply.code(202).send(await commands.decideRenewal(ctx, id, body.decision, body.reason));
+  });
+}

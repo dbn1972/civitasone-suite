@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { PageHeader, Card, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DesignationsTable } from "./DesignationsTable";
 
 type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
 
-async function getDesignations(): Promise<Designation[]> {
+async function getDesignations(): Promise<LoaderResult<Designation[]>> {
   try {
     const r = await fetchJson<unknown, Designation[]>("/api/v1/hrms/designations", [], {
       telemetryKey: "config.designations",
       mapResponse: (p) => (p as { data: Designation[] })?.data ?? null,
     });
-    return r.data ?? [];
+    return r;
   } catch {
-    return [];
+    return { data: [], source: "error" as const };
   }
 }
 
@@ -31,7 +32,7 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DesignationsPage() {
-  const items = await getDesignations();
+  const { data: items, source } = await getDesignations();
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -47,6 +48,7 @@ export default async function DesignationsPage() {
           </Link>
         }
       />
+      {source === "error" && <DataSourceBadge source="error" />}
 
       <Card title={`Designations (${items.length})`}>
         {items.length === 0 ? (

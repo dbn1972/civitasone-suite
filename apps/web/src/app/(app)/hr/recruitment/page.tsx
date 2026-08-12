@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type DashboardStats = {
   totalOpenings: number;
@@ -56,6 +57,7 @@ export default async function RecruitmentPage() {
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">Talent Pool</Link>
             <Link href="/hr/recruitment/new" className="btn primary">+ New Vacancy</Link>
           </>
+      {source === "error" && <DataSourceBadge source="error" />}
         }
       />
 

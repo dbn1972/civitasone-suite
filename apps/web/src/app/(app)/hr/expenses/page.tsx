@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiExpense = {
   id: string;
@@ -37,7 +38,7 @@ function mapExpenses(rows: ApiExpense[]): Row[] {
   }));
 }
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expenses", [], {
     telemetryKey: "hr.expenses",
     mapResponse: (p) => {
@@ -45,11 +46,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? mapExpenses(arr as ApiExpense[]) : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function ExpensesPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -66,16 +67,22 @@ export default async function ExpensesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Expense Claims" subtitle="Employee expense claims with approval tracking." back="/hr" />
+      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🧾" iconBg="#e6f0ff" label="Total Claims" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Expense Claims">
         <div className="card-h"><h3>Expense Claims</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by category or status…" pageSize={15} />
-      </div>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by category or status…"
+          pageSize={15}
+          emptyIcon="🧾"
+          emptyTitle="No expense claims"
+          emptyMessage="Expense claims appear here once employees submit bills for travel, medical, or official expenses."
+        />
+      </Card>
     </main>
   );
 }

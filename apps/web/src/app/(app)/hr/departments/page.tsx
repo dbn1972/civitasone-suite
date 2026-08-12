@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { PageHeader, Card, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 type Dept = { id: string; code: string; name: string; parentId: string | null } & Record<string, unknown>;
 
-async function getDepartments(): Promise<Dept[]> {
+async function getDepartments(): Promise<LoaderResult<Dept[]>> {
   try {
     const r = await fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
       telemetryKey: "config.departments",
       mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
     });
-    return r.data ?? [];
+    return r;
   } catch {
-    return [];
+    return { data: [], source: "error" as const };
   }
 }
 
@@ -31,7 +32,7 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DepartmentsPage() {
-  const depts = await getDepartments();
+  const { data: depts, source } = await getDepartments();
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -47,6 +48,7 @@ export default async function DepartmentsPage() {
           </Link>
         }
       />
+      {source === "error" && <DataSourceBadge source="error" />}
 
       <Card title={`Departments (${depts.length})`}>
         {depts.length === 0 ? (
