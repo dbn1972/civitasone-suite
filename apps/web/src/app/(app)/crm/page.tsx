@@ -21,6 +21,8 @@ const crmTiles: NavTile[] = [
 	{ title: "Campaign Performance", href: "/crm/campaigns" },
 	{ title: "Website Lead Forms", href: "/crm/lead-forms" },
 	{ title: "Control Tower", href: "/crm/control-tower" },
+	{ title: "Grievances", href: "/crm/grievances" },
+	{ title: "Service Requests", href: "/crm/service-requests" },
 	{ title: "Voice of Customer", href: "/crm/voice-of-customer" },
 	{ title: "Data Quality", href: "/crm/data-quality" },
 	{ title: "Documents", href: "/crm/documents" },

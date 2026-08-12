@@ -74,6 +74,8 @@ import { flagRoutes } from "./modules/contacts/flags-routes.js";
 import { subscriptionRoutes } from "./modules/subscriptions/routes.js";
 import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-routes.js";
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
+import { grievanceRoutes } from "./modules/grievances/routes.js";
+import { serviceRequestRoutes } from "./modules/service-requests/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -194,6 +196,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(subscriptionRoutes);
   await app.register(volumeVsActualRoutes);
   await app.register(sponsorRoutes);
+  // ── Citizen Relationship Management — grievances + service requests ──
+  await app.register(grievanceRoutes);
+  await app.register(serviceRequestRoutes);
 
   return app;
 }

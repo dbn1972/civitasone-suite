@@ -1286,6 +1286,8 @@ export async function getCrmActivities(): Promise<LoaderResult<ActivitySummary[]
   });
 }
 
+export const getCrmGrievances = moduleLoader("/api/v1/crm/grievances", "crm.grievances");
+export const getCrmServiceRequests = moduleLoader("/api/v1/crm/service-requests", "crm.service-requests");
 function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
