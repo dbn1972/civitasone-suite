@@ -55,6 +55,9 @@ export default async function PensionersPage() {
           filterable
           filterPlaceholder="Filter by PPO number, name or DDO code…"
           pageSize={15}
+          emptyIcon="👴"
+          emptyTitle="No pensioners found"
+          emptyMessage="No pensioner records match your filter. Try a different search term."
         />
       </Card>
     </main>

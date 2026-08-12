@@ -1,4 +1,4 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CostingPeriodForm } from "./CostingPeriodForm";
@@ -81,6 +81,9 @@ export default async function CostingPage({
 
   const rulesResult = await getRules();
   const ruleRows = rulesResult.data;
+  const activeRules = ruleRows.filter((r) => r.status === "active").length;
+  const uniqueCostCenters = new Set(ruleRows.map((r) => r.costCenterId)).size;
+  const uniqueEmpGroups = new Set(ruleRows.map((r) => r.employeeGroup)).size;
 
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
@@ -105,6 +108,13 @@ export default async function CostingPage({
       />
       {period && <DataSourceBadge source={result.source} />}
       <DataSourceBadge source={rulesResult.source} />
+
+      <StatGrid>
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Rules" value={ruleRows.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Rules" value={activeRules} />
+        <StatCard icon="🏢" iconBg="#fff7e6" label="Cost Centers" value={uniqueCostCenters} />
+        <StatCard icon="👥" iconBg="#f0fff4" label="Employee Groups" value={uniqueEmpGroups} />
+      </StatGrid>
 
       <CreateCostingRuleForm />
 

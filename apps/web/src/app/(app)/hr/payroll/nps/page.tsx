@@ -60,6 +60,9 @@ export default async function NpsStatementsPage() {
             filterable
             filterPlaceholder="Filter by employee or period…"
             pageSize={20}
+            emptyIcon="🏦"
+            emptyTitle="No NPS statements found"
+            emptyMessage="No National Pension System records match your filter."
           />
         )}
       </Card>

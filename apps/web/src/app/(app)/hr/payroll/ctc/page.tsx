@@ -63,6 +63,8 @@ export default async function CtcConfigPage() {
   ];
 
   const employerComponents = config.filter((c) => c.is_employer_cost).length;
+  const activeComponents = config.filter((c) => c.is_active).length;
+  const pctComponents = config.filter((c) => c.calc_type.startsWith("pct_")).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -74,7 +76,9 @@ export default async function CtcConfigPage() {
       <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="⚙️" iconBg="#e6f0ff" label="Configured Components" value={config.length} />
-        <StatCard icon="🏛️" iconBg="#fffbe6" label="Employer-Cost Components" value={employerComponents} />
+        <StatCard icon="🏛️" iconBg="#fffbe6" label="Employer-Cost" value={employerComponents} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Components" value={activeComponents} />
+        <StatCard icon="📊" iconBg="#f0fff4" label="Percentage-Based" value={pctComponents} />
       </StatGrid>
 
       <Card title="CTC Component Configuration">

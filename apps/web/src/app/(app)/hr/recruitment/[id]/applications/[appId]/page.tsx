@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PageHeader } from "../../../../../../_components/ds";
+import { PageHeader, Card } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 
 const inputStyle: CSSProperties = {
@@ -116,9 +116,9 @@ export default function ApplicationDetailPage() {
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Application" subtitle="Not found" back=".." />
         <DataSourceBadge source={source} />
-        <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <p style={{ color: "var(--mut)" }}>{error ?? "Application not found."}</p>
-        </div>
+        <Card padding>
+          <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? "Application not found."}</p>
+        </Card>
       </main>
     );
   }
@@ -147,8 +147,7 @@ export default function ApplicationDetailPage() {
         </p>
       )}
 
-      <div className="card">
-        <div className="card-h"><h3>Application Summary</h3></div>
+      <Card title="Application Summary">
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Application ID</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Stage</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
@@ -159,7 +158,7 @@ export default function ApplicationDetailPage() {
           {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Experience</span>{application.experienceYears} yr{application.experienceYears !== 1 ? "s" : ""}</div>}
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Applied</span>{application.appliedAt}</div>
         </div>
-      </div>
+      </Card>
 
       {showHireDialog && (
         <div

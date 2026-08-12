@@ -56,6 +56,9 @@ export default async function GpfStatementsPage() {
             filterable
             filterPlaceholder="Filter by employee or period…"
             pageSize={20}
+            emptyIcon="🏦"
+            emptyTitle="No GPF statements found"
+            emptyMessage="No General Provident Fund records match your filter."
           />
         )}
       </Card>

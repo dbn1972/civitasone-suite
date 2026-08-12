@@ -26,6 +26,8 @@ export default async function GpfStatutoryPage() {
   const { data: rows, source } = await getData();
 
   const totalContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
+  const uniqueEmployees = new Set(rows.map((r) => r.employeeId)).size;
+  const uniquePeriods = new Set(rows.map((r) => r.period)).size;
 
   const columns: { key: keyof GpfRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -46,6 +48,8 @@ export default async function GpfStatutoryPage() {
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e6f0ff" label="GPF Records" value={rows.length} />
         <StatCard icon="💰" iconBg="#e6f7f0" label="Total GPF Subscription" value={formatMoney(totalContribMinor)} />
+        <StatCard icon="👥" iconBg="#fff7e6" label="Unique Employees" value={uniqueEmployees} />
+        <StatCard icon="📅" iconBg="#f0fff4" label="Periods Covered" value={uniquePeriods} />
       </StatGrid>
       <Card title="GPF Subscription Ledger">
         <DataTable<GpfRow>

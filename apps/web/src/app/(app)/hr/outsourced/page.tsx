@@ -37,11 +37,18 @@ export default async function OutsourcedPage() {
     { key: "status", label: "Status", cellType: "status" },
   ];
 
+  const uniqueVendors = new Set(items.map((i) => i.vendor).filter(Boolean)).size;
+  const activeContracts = items.filter((i) => String(i.status).toLowerCase() === "active").length;
+  const totalHeadcount = items.reduce((s, i) => s + Number(i.headcount || 0), 0);
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Outsourced Workforce" subtitle="Vendor-wise outsourced staff, headcount, and contract details." back="/hr" />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Records" value={items.length} />
+        <StatCard icon="🏭" iconBg="#f0fff4" label="Unique Vendors" value={uniqueVendors} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Contracts" value={activeContracts} />
+        <StatCard icon="👷" iconBg="#fff7e6" label="Total Headcount" value={totalHeadcount} />
       </StatGrid>
       <Card title="Outsourced Workforce">
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"

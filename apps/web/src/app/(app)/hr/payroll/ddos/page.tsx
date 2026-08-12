@@ -20,6 +20,9 @@ export default async function DdosPage() {
   const { data: ddos, source } = await getDdos();
 
   const rows = ddos.map((d) => ({ ...d, departmentCount: d.departmentIds?.length ?? 0 }));
+  const multiDeptDdos = ddos.filter((d) => (d.departmentIds?.length ?? 0) > 1).length;
+  const totalDeptMappings = ddos.reduce((s, d) => s + (d.departmentIds?.length ?? 0), 0);
+  const avgDepts = ddos.length > 0 ? (totalDeptMappings / ddos.length).toFixed(1) : "0";
 
   const columns: { key: (keyof DdoRow & string) | "departmentCount"; label: string; align?: "left" | "right" }[] = [
     { key: "ddoCode", label: "DDO Code" },
@@ -38,6 +41,9 @@ export default async function DdosPage() {
 
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e6f0ff" label="Total DDOs" value={ddos.length} />
+        <StatCard icon="🏢" iconBg="#e6f7f0" label="Multi-Dept DDOs" value={multiDeptDdos} />
+        <StatCard icon="🔗" iconBg="#fff7e6" label="Total Dept Mappings" value={totalDeptMappings} />
+        <StatCard icon="📊" iconBg="#f0fff4" label="Avg Depts / DDO" value={avgDepts} />
       </StatGrid>
 
       <CreateDdoForm />

@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatMoney } from "@/lib/formatters";
 import { LwfConfigForm } from "./LwfConfigForm";
 
 type LwfRow = {
@@ -22,6 +23,10 @@ async function getData(): Promise<LoaderResult<LwfRow[]>> {
 export default async function LwfPage() {
   const { data: rows, source } = await getData();
 
+  const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.employee_contrib_minor || 0), 0);
+  const totalErContribMinor = rows.reduce((s, r) => s + Number(r.employer_contrib_minor || 0), 0);
+  const uniqueFrequencies = new Set(rows.map((r) => r.frequency).filter(Boolean)).size;
+
   const columns: { key: keyof LwfRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "state_code", label: "State" },
     { key: "employee_contrib_minor", label: "Employee Contribution", align: "right", cellType: "amount" },
@@ -39,6 +44,9 @@ export default async function LwfPage() {
       <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🤝" iconBg="#e6f0ff" label="States Configured" value={rows.length} />
+        <StatCard icon="👤" iconBg="#e6f7f0" label="Total Emp Contribution" value={formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="#fff7e6" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="📅" iconBg="#f0fff4" label="Unique Frequencies" value={uniqueFrequencies} />
       </StatGrid>
 
       <LwfConfigForm />

@@ -1,4 +1,4 @@
-import { PageHeader, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -96,6 +96,15 @@ export default async function PayrollComparisonPage({
         back="/hr/payroll"
       />
       <DataSourceBadge source={source === "error" ? "error" : "api"} />
+
+      {canCompare && data && (
+        <StatGrid>
+          <StatCard icon="💰" iconBg="#e6f0ff" label={`${data.period1.period} Gross`} value={formatMoney(data.period1.gross)} />
+          <StatCard icon="💰" iconBg="#e6f7f0" label={`${data.period2.period} Gross`} value={formatMoney(data.period2.gross)} />
+          <StatCard icon="👥" iconBg="#fff7e6" label="Headcount Δ" value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
+          <StatCard icon="📊" iconBg="#f0fff4" label="Net Pay Δ" value={delta(Number(data.period1.net), Number(data.period2.net))} />
+        </StatGrid>
+      )}
 
       {filterForm}
 

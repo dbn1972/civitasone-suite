@@ -38,6 +38,8 @@ export default async function FlexBenefitsPage() {
   ];
 
   const totalElectedMinor = elections.reduce((sum, r) => sum + Number(r.total_elected_minor ?? 0), 0);
+  const approvedElections = elections.filter((e) => e.status === "approved").length;
+  const uniqueFYs = new Set(elections.map((e) => e.fy).filter(Boolean)).size;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -50,6 +52,8 @@ export default async function FlexBenefitsPage() {
       <StatGrid>
         <StatCard icon="🧩" iconBg="#e6f0ff" label="My Elections" value={elections.length} />
         <StatCard icon="💰" iconBg="#e6f7f0" label="Total Elected" value={formatMoney(totalElectedMinor)} />
+        <StatCard icon="✅" iconBg="#fffbe6" label="Approved" value={approvedElections} />
+        <StatCard icon="📅" iconBg="#f0fff4" label="Financial Years" value={uniqueFYs} />
       </StatGrid>
 
       <CreateFlexPlanForm />

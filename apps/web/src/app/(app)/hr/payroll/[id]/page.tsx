@@ -115,6 +115,9 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           pageSize={15}
           rowLinkKey="employeeId"
           rowLinkPrefix="/hr/employees/"
+          emptyIcon="📋"
+          emptyTitle="No salary slips"
+          emptyMessage="No salary slips are available for this payroll run."
         />
       </Card>
     </main>

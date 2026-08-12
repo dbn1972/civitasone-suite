@@ -24,6 +24,8 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
 export default async function GratuityPage() {
   const { data: rows, source } = await getData();
   const totalGratuityMinor = rows.reduce((s, r) => s + Number(r.gratuityMinor ?? 0), 0);
+  const settledRecords = rows.filter((r) => r.status === "settled" || r.status === "paid").length;
+  const avgYears = rows.length > 0 ? (rows.reduce((s, r) => s + Number(r.yearsOfService || 0), 0) / rows.length).toFixed(1) : "0";
 
   const columns: { key: keyof GratuityRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -43,6 +45,8 @@ export default async function GratuityPage() {
       <StatGrid>
         <StatCard icon="🎖️" iconBg="#e6f0ff" label="Gratuity Records" value={rows.length} />
         <StatCard icon="💰" iconBg="#fffbe6" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Settled / Paid" value={settledRecords} />
+        <StatCard icon="📅" iconBg="#f0fff4" label="Avg Years of Service" value={avgYears} />
       </StatGrid>
       <Card title="Gratuity Register">
         <DataTable<GratuityRow>

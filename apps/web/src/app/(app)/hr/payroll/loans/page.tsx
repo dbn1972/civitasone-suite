@@ -1,6 +1,7 @@
-import { PageHeader, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatMoney } from "@/lib/formatters";
 import { LoanSearchForm } from "./LoanSearchForm";
 import { CreateLoanForm } from "./CreateLoanForm";
 import { LoansTable, type LoanRow } from "./LoansTable";
@@ -20,6 +21,9 @@ export default async function LoansPage({
   const empId = searchParams?.empId?.trim() || "";
   const result: LoaderResult<LoanRow[]> = empId ? await getLoans(empId) : { data: [], source: "api" };
   const loans = result.data;
+  const activeLoans = loans.filter((l) => ["applied", "disbursed", "active"].includes(l.status)).length;
+  const totalOutstandingMinor = loans.reduce((s, l) => s + Number(l.outstandingMinor || 0), 0);
+  const totalEmiMinor = loans.reduce((s, l) => s + Number(l.emiMinor || 0), 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -29,6 +33,15 @@ export default async function LoansPage({
         back="/hr/payroll"
       />
       {empId && <DataSourceBadge source={result.source} />}
+
+      {empId && (
+        <StatGrid>
+          <StatCard icon="💳" iconBg="#e6f0ff" label="Total Loans" value={loans.length} />
+          <StatCard icon="✅" iconBg="#e6f7f0" label="Active / Disbursed" value={activeLoans} />
+          <StatCard icon="💰" iconBg="#fff7e6" label="Total Outstanding" value={formatMoney(totalOutstandingMinor)} />
+          <StatCard icon="📅" iconBg="#f0fff4" label="Monthly EMI Total" value={formatMoney(totalEmiMinor)} />
+        </StatGrid>
+      )}
 
       <Card title="Search Loans by Employee">
         <LoanSearchForm initialEmpId={empId} />

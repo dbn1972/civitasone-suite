@@ -83,6 +83,9 @@ export default async function EmployeeTypesPage() {
             sortable
             filterable
             filterPlaceholder="Search employee types…"
+            emptyIcon="👥"
+            emptyTitle="No employee types found"
+            emptyMessage="No employee types match your filter. Try a different search term."
           />
         )}
       </Card>
