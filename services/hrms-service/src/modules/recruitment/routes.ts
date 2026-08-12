@@ -11,6 +11,7 @@ import { isApplicationOpen, applicationClosedReason } from "./job-publication.js
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { tenantStorage } from "@civitasone/db";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
@@ -92,7 +93,7 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const openings = await repo.listJobOpeningsByTenant(ctx.tenantId, 500);
     const sourceCounts = await repo.countApplicationsBySource(ctx.tenantId);
     const open = openings.filter((o) => o.status === "open").length;
-    const published = openings.filter((o) => o.isPublished === "true").length;
+    const published = openings.filter((o) => o.isPublished === true).length;
     const internships = openings.filter((o) => o.vacancyType === "internship" || o.vacancyType === "apprenticeship").length;
     return reply.send({
       totalOpenings: openings.length,
@@ -108,6 +109,9 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
+    // Validate application belongs to this tenant before queuing (same as hire route)
+    const existingApp = await repo.findApplicationById(id, ctx.tenantId);
+    if (!existingApp) throw new HttpError(404, "NOT_FOUND", "Application not found");
     const body = offerApplicationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.offerApplication(ctx, id, body));
   });
@@ -197,16 +201,23 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
 
   // Apply to a published vacancy (public, no auth). Source = "public_portal".
   app.post("/v1/careers/apply", { config: { public: true } }, async (req, reply) => {
+    // Set RLS tenant context from body before repo lookup (public route has no JWT)
+    const rawTenantId = (req.body as Record<string, unknown>)?.tenantId;
+    let publicTenantId: string | null = null;
+    if (typeof rawTenantId === "string" && /^[0-9a-f-]{36}$/i.test(rawTenantId)) {
+      publicTenantId = rawTenantId;
+      tenantStorage.enterWith({ tenantId: rawTenantId });
+    }
     const body = publicApplicationBody.parse(req.body);
-    // Resolve tenant from the vacancy
-    const vacancy = await repo.findJobOpeningById(body.jobOpeningId);
+    // Use published-only lookup: unpublished jobs surface as 404, not 409 (no existence leak)
+    const vacancy = publicTenantId ? await repo.findPublishedOpening(body.jobOpeningId, publicTenantId) : null;
     if (!vacancy) throw new HttpError(404, "NOT_FOUND", "This vacancy is not accepting applications");
-    // R-RA-0069: no applications after closure (status/publish + closing deadline).
+    // R-RA-0069: no applications after closure (deadline / max-applicants etc.)
     if (!isApplicationOpen(vacancy as never, Date.now())) {
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
     const result = await commands.createPublicApplication(vacancy.tenantId, body);
-    return reply.code(201).send(result);
+    return reply.code(202).send(result);
   });
 
   app.setErrorHandler(errorHandler);
