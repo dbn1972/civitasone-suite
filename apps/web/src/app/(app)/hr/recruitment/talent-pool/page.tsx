@@ -59,25 +59,25 @@ export default async function TalentPoolPage({
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\U0001f465" iconBg="#e6f0ff" label="Total Candidates"   value={candidates.length} />
-        <StatCard icon="\U0001f4a1" iconBg="#e6f7f0" label="With Skills"        value={withSkills} />
-        <StatCard icon="\U0001f9e0" iconBg="#fff7e6" label="Experienced (5+ yr)" value={experienced} />
-        <StatCard icon="\u2705"       iconBg="#f5f5f5" label="Active Stages"     value={activeStage} />
+        <StatCard icon="\U0001f465" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
+        <StatCard icon="\U0001f4a1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
+        <StatCard icon="\U0001f9e0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
+        <StatCard icon="\u2705"       iconBg="var(--line2)" label="Active Stages"     value={activeStage} />
       </StatGrid>
 
       {/* Filters */}
       <Card padding>
         <form method="GET" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
           <div>
-            <label htmlFor="tp-skill" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Skill</label>
+            <label htmlFor="tp-skill" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>Skill</label>
             <input id="tp-skill" name="skill" defaultValue={searchParams.skill ?? ""} placeholder="e.g. Excel, Python, Tally" className="input" style={{ minWidth: 180 }} />
           </div>
           <div>
-            <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Min. experience (years)</label>
+            <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>Min. experience (years)</label>
             <input id="tp-exp" name="minExp" type="number" min="0" defaultValue={searchParams.minExp ?? ""} placeholder="e.g. 2" className="input" style={{ width: 100 }} />
           </div>
-          <button type="submit" className="btn primary" style={{ minHeight: 40 }}>Search</button>
-          <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 40 }}>Clear</Link>
+          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>Search</button>
+          <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 44 }}>Clear</Link>
         </form>
       </Card>
 

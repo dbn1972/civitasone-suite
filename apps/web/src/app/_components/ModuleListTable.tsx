@@ -30,21 +30,21 @@ export function ModuleListTable({
   return (
     <Card title="Records">
       {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No records" message="Nothing to show yet for this module." />
       ) : (
-        <table className="tbl">
+        <div className="tbl-wrap"><table className="tbl">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Detail</th>
-              <th>Status</th>
-              <th>Meta</th>
+              <th scope="col">ID</th>
+              <th scope="col">Name</th>
+              <th scope="col">Detail</th>
+              <th scope="col">Status</th>
+              <th scope="col">Meta</th>
             </tr>
           </thead>
           <tbody>
@@ -58,7 +58,7 @@ export function ModuleListTable({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Card>
   );

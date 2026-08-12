@@ -16,3 +16,14 @@ export async function createRfq(ctx: RequestContext, body: CreateRfqBody): Promi
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/** Queue-first vendor response to an RFQ. */
+export async function respondToRfq(ctx: RequestContext, rfqId: string, body: import("./validators.js").RfqRespondBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.rfqRespond, {
+    messageId: id, type: COMMANDS.rfqRespond,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, rfqId, vendorId: ctx.actorId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

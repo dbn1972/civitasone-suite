@@ -118,10 +118,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       {invoiceSource === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#eff6ff" label="Status" value={invoice.status} />
-        <StatCard icon="💰" iconBg="#ecfdf5" label="Total" value={formatMoney(invoice.totalMinor)} />
-        <StatCard icon="✅" iconBg="#f0fdf4" label="Paid" value={formatMoney(invoice.paidMinor)} />
-        <StatCard icon="⚠️" iconBg="#fffbe6" label="Outstanding" value={formatMoney(invoice.outstandingMinor)} />
+        <StatCard icon="🧾" label="Status" value={invoice.status} />
+        <StatCard icon="💰" label="Total" value={formatMoney(invoice.totalMinor)} />
+        <StatCard icon="✅" label="Paid" value={formatMoney(invoice.paidMinor)} />
+        <StatCard icon="⚠️" label="Outstanding" value={formatMoney(invoice.outstandingMinor)} />
       </StatGrid>
 
       <Card title="Invoice details" padding>

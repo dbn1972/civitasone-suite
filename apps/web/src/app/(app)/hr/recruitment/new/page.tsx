@@ -1,4 +1,4 @@
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, Card } from "../../../../_components/ds";
 import { NewJobOpeningForm } from "./NewJobOpeningForm";
 
 export default function NewJobOpeningPage() {
@@ -9,7 +9,9 @@ export default function NewJobOpeningPage() {
         subtitle="Post a new vacancy for recruitment."
         back="/hr/recruitment"
       />
-      <NewJobOpeningForm />
+      <Card>
+        <NewJobOpeningForm />
+      </Card>
     </main>
   );
 }

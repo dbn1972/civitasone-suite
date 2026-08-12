@@ -128,12 +128,12 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       ) : null}
 
       {message ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" style={{ fontSize: 13, color: "#b91c1c", margin: 0 }}>
+        <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>
           {error}
         </p>
       ) : null}

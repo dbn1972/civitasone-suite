@@ -57,3 +57,10 @@ export async function findLatestForPoGrn(tenantId: string, poId: string, grnId: 
     .limit(1));
   return rows[0] ?? null;
 }
+
+export async function findMatchById(id: string, tenantId: string): Promise<ThreeWayMatchRow | null> {
+  const rows = await db.transaction((tx) => tx.select().from(threeWayMatch)
+    .where(and(eq(threeWayMatch.id, id), eq(threeWayMatch.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}

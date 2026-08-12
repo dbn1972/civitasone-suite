@@ -32,13 +32,13 @@ type Opening = {
 };
 
 const PIPELINE_STAGES: { key: string; label: string; colour: string }[] = [
-  { key: "applied",     label: "Applied",       colour: "#e6f0ff" },
-  { key: "screened",    label: "Screened",       colour: "#fffbe6" },
-  { key: "shortlisted", label: "Shortlisted",    colour: "#f5f5f5" },
-  { key: "interview",   label: "Interview",      colour: "#e6f7f0" },
-  { key: "offered",     label: "Offered",        colour: "#fef9e7" },
-  { key: "selected",    label: "Selected / Hired",colour: "#e6f7f0" },
-  { key: "rejected",    label: "Not Selected",   colour: "#fff1f0" },
+  { key: "applied",     label: "Applied",          colour: "var(--line2)" },
+  { key: "screened",    label: "Screened",          colour: "var(--line2)" },
+  { key: "shortlisted", label: "Shortlisted",       colour: "var(--line2)" },
+  { key: "interview",   label: "Interview",         colour: "var(--goodbg)" },
+  { key: "offered",     label: "Offered",           colour: "var(--goodbg)" },
+  { key: "selected",    label: "Selected / Hired",  colour: "var(--goodbg)" },
+  { key: "rejected",    label: "Not Selected",      colour: "var(--badbg)" },
 ];
 
 async function getOpening(id: string): Promise<LoaderResult<Opening | null>> {
@@ -99,10 +99,10 @@ export default async function JobOpeningDetailPage({ params }: { params: { id: s
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📨" iconBg="#e6f0ff" label="Applied" value={applied} />
-        <StatCard icon="🔍" iconBg="#fffbe6" label="Screened / Shortlisted" value={shortlisted} />
-        <StatCard icon="💬" iconBg="#f5f5f5" label="Interview" value={interview} />
-        <StatCard icon="🎉" iconBg="#e6f7f0" label="Selected / Hired" value={selected} />
+        <StatCard icon="📨" iconBg="var(--infobg)" label="Applied" value={applied} />
+        <StatCard icon="🔍" iconBg="var(--warnbg)" label="Screened / Shortlisted" value={shortlisted} />
+        <StatCard icon="💬" iconBg="var(--line2)" label="Interview" value={interview} />
+        <StatCard icon="🎉" iconBg="var(--primary-soft)" label="Selected / Hired" value={selected} />
       </StatGrid>
 
       {/* ── Application Pipeline (Kanban) ─────────────────────────────── */}

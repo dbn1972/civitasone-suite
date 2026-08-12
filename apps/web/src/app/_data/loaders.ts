@@ -4536,3 +4536,108 @@ export async function getRequestBreachReport(): Promise<LoaderResult<RequestBrea
     },
   });
 }
+
+
+// ---- Procurement: Vendor Scorecard ----------------------------------------
+export type VendorScorecard = {
+  vendorId: string;
+  overallRating: number;
+  ratingBand: string;
+  totalOrders: number;
+  onTimeDeliveries: number;
+  lateDeliveries: number;
+  qualityRejections: number;
+  slaBreaches: number;
+  deliveryScore: number;
+  qualityScore: number;
+  slaScore: number;
+  lastUpdated: string | null;
+};
+
+export async function getProcurementVendorScorecard(vendorId: string): Promise<LoaderResult<VendorScorecard | null>> {
+  return fetchJson<unknown, VendorScorecard | null>(
+    "/api/v1/procurement/vendors/" + encodeURIComponent(vendorId) + "/scorecard",
+    null,
+    {
+      revalidateSeconds: 120,
+      telemetryKey: "procurement.vendor.scorecard",
+      mapResponse: (p) => ((p as { data?: VendorScorecard } | null)?.data ?? null),
+    }
+  );
+}
+
+// ---- Procurement: Annual Plans --------------------------------------------
+export type AnnualPlanSummary = {
+  id: string;
+  planYear: number;
+  title: string;
+  department: string;
+  status: string;
+  totalEstimatedMinor: number;
+  itemCount: number;
+  createdAt: string;
+};
+
+export async function getProcurementAnnualPlans(query?: { department?: string; year?: number }): Promise<LoaderResult<AnnualPlanSummary[]>> {
+  const params = new URLSearchParams();
+  if (query?.department) params.set("department", query.department);
+  if (query?.year) params.set("year", String(query.year));
+  const qs = params.toString() ? "?" + params.toString() : "";
+  return fetchJson<unknown, AnnualPlanSummary[]>(
+    "/api/v1/procurement/plans" + qs,
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.plans",
+      mapResponse: (p) => getArrayPayload(p) as AnnualPlanSummary[] | null,
+    }
+  );
+}
+
+// ---- Procurement: Tender Documents ----------------------------------------
+export type TenderDocumentSummary = {
+  id: string;
+  tenderId: string;
+  docType: string;
+  title: string;
+  storageRef: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string;
+};
+
+export async function getProcurementTenderDocuments(tenderId: string): Promise<LoaderResult<TenderDocumentSummary[]>> {
+  return fetchJson<unknown, TenderDocumentSummary[]>(
+    "/api/v1/procurement/tenders/" + encodeURIComponent(tenderId) + "/documents",
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.tender.documents",
+      mapResponse: (p) => getArrayPayload(p) as TenderDocumentSummary[] | null,
+    }
+  );
+}
+
+// ---- Procurement: PO Amendments -------------------------------------------
+export type POAmendmentSummary = {
+  id: string;
+  poId: string;
+  amendmentType: string;
+  effectiveDate: string | null;
+  deltaAmountMinor: number | null;
+  reason: string;
+  status: string;
+  createdAt: string;
+};
+
+export async function getProcurementPOAmendments(poId: string): Promise<LoaderResult<POAmendmentSummary[]>> {
+  return fetchJson<unknown, POAmendmentSummary[]>(
+    "/api/v1/procurement/pos/" + encodeURIComponent(poId) + "/amendments",
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.po.amendments",
+      mapResponse: (p) => getArrayPayload(p) as POAmendmentSummary[] | null,
+    }
+  );
+}

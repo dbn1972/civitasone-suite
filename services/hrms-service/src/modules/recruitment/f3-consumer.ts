@@ -853,7 +853,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                     vacancies: r.vacancies, description: r.reason ?? null,
                     vacancyType: toVacancyType(r.recruitmentMode, r.campaignType), location: r.location ?? null,
                     qualification: r.qualification ?? null,
-                    isPublished: "true", status: "open",
+                    isPublished: true, status: "open",
                     postedAt: new Date().toISOString().slice(0, 10),
                     createdBy: msg.actorId, updatedBy: msg.actorId,
                   });

@@ -62,12 +62,10 @@ export default async function RecruitmentPage() {
 
       <DataSourceBadge source={openingSource} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label="Total Vacancies" value={stats.totalOpenings} />
-        <StatCard icon="🟢" iconBg="#ecfdf3" label="Open Now" value={stats.openVacancies} />
-        <StatCard icon="🌐" iconBg="#eff6ff" label="Published (Public)" value={stats.publishedVacancies} />
-        <StatCard icon="🎓" iconBg="#fffaeb" label="Internships / Apprenticeships" value={stats.internshipsApprenticeships} />
-        <StatCard icon="📨" iconBg="#f5f3ff" label="Applications Received" value={totalApps} />
-        <StatCard icon="🌍" iconBg="#fef3f2" label="From Public Portal" value={stats.applicationsPublic} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Vacancies" value={stats.totalOpenings} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label="Open Now" value={stats.openVacancies} />
+        <StatCard icon="📨" iconBg="var(--line2)" label="Applications Received" value={totalApps} />
+        <StatCard icon="🌐" iconBg="var(--infobg)" label="Published (Public)" value={stats.publishedVacancies} />
       </StatGrid>
 
       <Card title="All vacancies">

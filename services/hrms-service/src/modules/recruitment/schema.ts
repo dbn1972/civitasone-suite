@@ -18,7 +18,7 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   location:      varchar("location", { length: 200 }),
   qualification: varchar("qualification", { length: 500 }),
   payRange:      varchar("pay_range", { length: 120 }),
-  isPublished:   varchar("is_published", { length: 5 }).notNull().default("false"),
+  isPublished:   boolean("is_published").notNull().default(false),
   eligibility:   jsonb("eligibility").notNull().default({}),
   applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
   minExperienceYears: integer("min_experience_years"),
