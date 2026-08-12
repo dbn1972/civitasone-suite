@@ -7,8 +7,8 @@ import { db } from "../../shared/db.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import { findProjectByIdTx } from "./repo.js";
 import {
-  projectIdParam, billParam, extParam,
-  createRiskBody, computeEvmBody, createRaBillBody, createTimeExtBody,
+  projectIdParam, billParam, extParam, riskParam,
+  createRiskBody, updateRiskBody, computeEvmBody, createRaBillBody, createTimeExtBody,
   createPenaltyBody, createResourceBody,
 } from "./world-class-validators.js";
 
@@ -355,6 +355,73 @@ export async function worldClassProjectRoutes(app: FastifyInstance): Promise<voi
       toDate: b.toDate,
     });
     return reply.code(202).send({ id: newId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // ─── Risk update ────────────────────────────────────────────────────────────
+
+  app.patch("/v1/projects/:id/risks/:riskId", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROJ_ROLES);
+    const { id, riskId } = riskParam.parse(req.params);
+    const b = updateRiskBody.parse(req.body);
+    // verify parent under tenant
+    await db.transaction(async (tx) => { await assertParent(tx, id, ctx.tenantId); });
+    // Verify risk exists
+    const existing = await db.transaction((tx) => tx.execute(sql`
+      SELECT id, status FROM project.project_risks
+      WHERE id = ${riskId} AND tenant_id = ${ctx.tenantId} AND project_id = ${id}
+    `));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "risk not found");
+    await publishF3Write(ctx, "risk_update", riskId, {
+      projectId: id, riskId,
+      ...b,
+    });
+    return reply.code(202).send({ id: riskId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // ─── Budget Summary ──────────────────────────────────────────────────────────
+
+  app.get("/v1/projects/:id/budget", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = projectIdParam.parse(req.params);
+    const project = await db.transaction((tx) => tx.execute(sql`
+      SELECT
+        id, name, dpr_cost_minor, sanctioned_minor, financial_pct,
+        physical_pct, rag, status
+      FROM project.project_projects
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+    `));
+    if (!project[0]) throw new HttpError(404, "NOT_FOUND", "project not found");
+    const p = project[0] as {
+      id: string; name: string; dpr_cost_minor: string; sanctioned_minor: string;
+      financial_pct: string; physical_pct: string; rag: string; status: string;
+    };
+    const sanctioned = BigInt(p.sanctioned_minor ?? 0);
+    const dprCost    = BigInt(p.dpr_cost_minor ?? 0);
+    const financialPct = Number(p.financial_pct ?? 0);
+    const spentMinor = BigInt(Math.round(Number(sanctioned) * financialPct / 100));
+    const remainingMinor = sanctioned - spentMinor;
+    // RA Bills totals
+    const raBills = await db.transaction((tx) => tx.execute(sql`
+      SELECT COALESCE(SUM(net_amount_minor), 0)::bigint AS committed_minor
+      FROM project.project_ra_bills
+      WHERE project_id = ${id} AND tenant_id = ${ctx.tenantId}
+    `));
+    const committedMinor = BigInt((raBills[0] as any)?.committed_minor ?? 0);
+    return reply.send({
+      projectId: id,
+      currency: "INR",
+      sanctionedMinor: sanctioned.toString(),
+      dprCostMinor: dprCost.toString(),
+      spentMinor: spentMinor.toString(),
+      committedMinor: committedMinor.toString(),
+      remainingMinor: remainingMinor.toString(),
+      financialPct: Number(p.financial_pct),
+      physicalPct: Number(p.physical_pct),
+      rag: p.rag,
+      status: p.status,
+    });
   });
 
   // ─── Baselines ──────────────────────────────────────────────────────────────

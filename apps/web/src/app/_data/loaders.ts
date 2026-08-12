@@ -4327,6 +4327,87 @@ export async function getProjectDelayAnalysis(): Promise<LoaderResult<ProjectDel
     mapResponse: (p) => getArrayPayload(p) as ProjectDelayRow[] | null,
   });
 }
+// ── Project Task loader (per-project) ─────────────────────────────────────────
+
+export type ProjectTaskRow = {
+  id: string;
+  projectId: string;
+  parentTaskId: string | null;
+  name: string;
+  description: string | null;
+  status: string;
+  progressPct: number;
+  weightPct: number;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+};
+
+export async function getProjectTasks(projectId: string): Promise<LoaderResult<ProjectTaskRow[]>> {
+  return fetchJson<unknown, ProjectTaskRow[]>(`/api/v1/projects/${projectId}/tasks`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "projects.tasks",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectTaskRow[];
+      }
+      return getArrayPayload(p) as ProjectTaskRow[] | null;
+    },
+  });
+}
+
+// ── Project Member loader (per-project) ──────────────────────────────────────
+
+export type ProjectMemberRow = {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: string;
+  createdAt: string;
+};
+
+export async function getProjectMembers(projectId: string): Promise<LoaderResult<ProjectMemberRow[]>> {
+  return fetchJson<unknown, ProjectMemberRow[]>(`/api/v1/projects/${projectId}/members`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.members",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectMemberRow[];
+      }
+      return getArrayPayload(p) as ProjectMemberRow[] | null;
+    },
+  });
+}
+
+// ── Project Risk loader (per-project) ────────────────────────────────────────
+
+export type ProjectRiskRow = {
+  id: string;
+  projectId: string;
+  title: string;
+  category: string;
+  probability: string;
+  impact: string;
+  riskScore: number;
+  status: string;
+  mitigationPlan: string | null;
+  createdAt: string;
+};
+
+export async function getProjectRisks(projectId: string): Promise<LoaderResult<ProjectRiskRow[]>> {
+  return fetchJson<unknown, ProjectRiskRow[]>(`/api/v1/projects/${projectId}/risks`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.risks",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectRiskRow[];
+      }
+      return getArrayPayload(p) as ProjectRiskRow[] | null;
+    },
+  });
+}
+
 
 // ── Analytics sub-resource loaders ────────────────────────────────────────────
 

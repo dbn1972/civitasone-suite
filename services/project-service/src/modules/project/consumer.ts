@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { projectMembers, type ProjectInsert } from "./schema.js";
 import { assertTaskTransitionAllowed, assertMilestoneCanComplete } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -127,6 +128,91 @@ export function registerProjectConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "project", p.projectId));
   });
+
+  // ─── Project Update ────────────────────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.projectUpdate, async (msg) => {
+    const p = msg.payload as {
+      projectId: string; tenantId: string;
+      name?: string; agencyRef?: string; startDate?: string; endDate?: string;
+      sanctionedMinor?: number; dprCostMinor?: number; sanctionRef?: string; status?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const patch: Partial<ProjectInsert> = { updatedBy: msg.actorId };
+      if (p.name !== undefined)            patch.name = p.name;
+      if (p.agencyRef !== undefined)       patch.agencyRef = p.agencyRef;
+      if (p.startDate !== undefined)       patch.startDate = p.startDate;
+      if (p.endDate !== undefined)         patch.endDate = p.endDate;
+      if (p.sanctionedMinor !== undefined) patch.sanctionedMinor = BigInt(p.sanctionedMinor);
+      if (p.dprCostMinor !== undefined)    patch.dprCostMinor = BigInt(p.dprCostMinor);
+      if (p.sanctionRef !== undefined)     patch.sanctionRef = p.sanctionRef;
+      if (p.status !== undefined)          patch.status = p.status;
+      await repo.updateProjectTx(tx, p.projectId, p.tenantId, patch);
+      await audit(tx, msg, "update", "project", p.projectId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "project", p.projectId));
+  });
+
+  // ─── Task Update (full, not just status) ──────────────────────────────────
+
+  queue.subscribe(COMMANDS.taskUpdate, async (msg) => {
+    const p = msg.payload as {
+      taskId: string; projectId: string; tenantId: string;
+      name?: string; description?: string; parentTaskId?: string | null;
+      weightPct?: number; plannedStart?: string; plannedEnd?: string;
+      assigneeId?: string | null; progressPct?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const task = await repo.findTaskByIdTx(tx, p.taskId, p.tenantId);
+      if (!task) throw new Error("task " + p.taskId + " not found");
+      const patch: Partial<Parameters<typeof repo.updateTaskTx>[2]> = { updatedBy: msg.actorId };
+      if (p.name !== undefined)         patch.name = p.name;
+      if (p.description !== undefined)  patch.description = p.description;
+      if (p.parentTaskId !== undefined) patch.parentTaskId = p.parentTaskId;
+      if (p.weightPct !== undefined)    patch.weightPct = String(p.weightPct);
+      if (p.plannedStart !== undefined) patch.plannedStart = p.plannedStart;
+      if (p.plannedEnd !== undefined)   patch.plannedEnd = p.plannedEnd;
+      if (p.progressPct !== undefined)  patch.progressPct = String(p.progressPct);
+      patch.version = (task.version ?? 1) + 1;
+      await repo.updateTaskTx(tx, p.taskId, patch);
+      await enqueue(tx, {
+        topic: EVENTS.taskUpdated, eventType: EVENTS.taskUpdated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { taskId: p.taskId, projectId: p.projectId },
+      });
+      await audit(tx, msg, "update", "task", p.taskId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "project", p.projectId));
+  });
+
+  // ─── Member Add ─────────────────────────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.memberAdd, async (msg) => {
+    const p = msg.payload as { id: string; projectId: string; tenantId: string; userId: string; role: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertMember(tx, {
+        id: p.id, projectId: p.projectId, tenantId: p.tenantId,
+        userId: p.userId, role: p.role,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "add", "member", p.id);
+    });
+  });
+
+  // ─── Member Remove ──────────────────────────────────────────────────────────
+
+  queue.subscribe(COMMANDS.memberRemove, async (msg) => {
+    const p = msg.payload as { memberId: string; projectId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.deleteMemberTx(tx, p.memberId, p.tenantId);
+      await audit(tx, msg, "remove", "member", p.memberId);
+    });
+  });
+
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
