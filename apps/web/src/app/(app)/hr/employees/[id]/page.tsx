@@ -11,11 +11,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Employee Profile" back="/hr/employees" />
-        {source === "error" && (
-          <div aria-live="assertive" aria-atomic="true">
-            <DataSourceBadge source="error" />
-          </div>
-        )}
+        <DataSourceBadge source={source} />
         <Card padding>
           <p className="text-center text-slate-400">Employee not found.</p>
         </Card>
@@ -32,11 +28,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
         back="/hr/employees"
         actions={<EditEmployeeToggle employee={employee} />}
       />
-      {source === "error" && (
-        <div aria-live="assertive" aria-atomic="true">
-          <DataSourceBadge source="error" />
-        </div>
-      )}
+      <DataSourceBadge source={source} />
 
       {/* Quick Actions — contextual things you can do for this employee */}
       {isActive && (

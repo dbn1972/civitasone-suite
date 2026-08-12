@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "../../../../../../_components/ds";
+import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -31,6 +32,7 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<"api" | "error">("api");
 
   const [showHireDialog, setShowHireDialog] = useState(false);
   const [employeeNo, setEmployeeNo] = useState("");
@@ -54,12 +56,14 @@ export default function ApplicationDetailPage() {
       try {
         const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}`);
         if (!res.ok) {
+          setSource("error");
           setError(res.status === 404 ? "Application not found." : `Failed to load (${res.status})`);
           return;
         }
         const data = await res.json() as { payload?: Application } & Application;
         setApplication(data.payload ?? data);
       } catch {
+        setSource("error");
         setError("Network error loading application.");
       } finally {
         setLoading(false);
@@ -111,6 +115,7 @@ export default function ApplicationDetailPage() {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Application" subtitle="Not found" back=".." />
+        <DataSourceBadge source={source} />
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
           <p style={{ color: "var(--mut)" }}>{error ?? "Application not found."}</p>
         </div>
@@ -134,6 +139,7 @@ export default function ApplicationDetailPage() {
           ) : undefined
         }
       />
+      <DataSourceBadge source={source} />
 
       {hireStatus === "success" && (
         <p role="status" aria-live="polite" className="pill good" style={{ marginBottom: 12 }}>

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { fetchJson } from "@/app/_data/apiClient";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PrintButton } from "./PrintButton";
 
 type SlipComponent = { code: string; name: string; type: string; amountMinor: number };
@@ -20,12 +21,11 @@ type Slip = {
   paidDate?: string;
 };
 
-async function getSlip(id: string): Promise<Slip | null> {
-  const r = await fetchJson<unknown, Slip | null>(`/api/v1/payroll/slips/${id}`, null, {
+async function getSlip(id: string): Promise<LoaderResult<Slip | null>> {
+  return fetchJson<unknown, Slip | null>(`/api/v1/payroll/slips/${id}`, null, {
     telemetryKey: "payroll.slip",
     mapResponse: (p) => (p && typeof p === "object" ? p as Slip : null),
   });
-  return r.data;
 }
 
 function fmt(minor: number): string {
@@ -33,7 +33,7 @@ function fmt(minor: number): string {
 }
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
-  const slip = await getSlip(params.id);
+  const { data: slip, source } = await getSlip(params.id);
   if (!slip) notFound();
 
   const earnings = slip.components.filter((c) => c.type === "earning");
@@ -45,6 +45,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         <a href="/hr/payroll/salary-slips" style={{ fontSize: 13, color: "#4f46e5" }}>← Back to salary slips</a>
         <PrintButton />
       </div>
+      <DataSourceBadge source={source} />
 
       <div id="salary-slip" style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
         {/* Header */}

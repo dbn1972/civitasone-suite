@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 
 type WorkflowTask = {
@@ -42,6 +43,7 @@ export function LeaveApprovalsPanel() {
   const [leaveById, setLeaveById] = useState<Record<string, LeaveDetail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<"api" | "error">("api");
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
 
   // Dialog state
@@ -63,6 +65,7 @@ export function LeaveApprovalsPanel() {
         let msg: string;
         try { const parsed = JSON.parse(rawText); msg = parsed.message || parsed.error || rawText; }
         catch { msg = rawText; }
+        setSource("error");
         throw new Error(msg || `Failed to load tasks (${taskRes.status})`);
       }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
@@ -78,6 +81,7 @@ export function LeaveApprovalsPanel() {
         setLeaveById(map);
       }
     } catch (err) {
+      setSource("error");
       setError(err instanceof Error ? err.message : "Failed to load workflow tasks.");
     } finally {
       setLoading(false);
@@ -188,6 +192,7 @@ export function LeaveApprovalsPanel() {
         </p>
       )}
 
+      <DataSourceBadge source={source} />
       <Card title="Pending Leave Approvals">
         {loading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
