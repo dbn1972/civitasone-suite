@@ -40,10 +40,10 @@ export default async function DdosPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e6f0ff" label="Total DDOs" value={ddos.length} />
-        <StatCard icon="🏢" iconBg="#e6f7f0" label="Multi-Dept DDOs" value={multiDeptDdos} />
-        <StatCard icon="🔗" iconBg="#fff7e6" label="Total Dept Mappings" value={totalDeptMappings} />
-        <StatCard icon="📊" iconBg="#f0fff4" label="Avg Depts / DDO" value={avgDepts} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label="Total DDOs" value={ddos.length} />
+        <StatCard icon="🏢" iconBg="var(--goodbg)" label="Multi-Dept DDOs" value={multiDeptDdos} />
+        <StatCard icon="🔗" iconBg="var(--warnbg)" label="Total Dept Mappings" value={totalDeptMappings} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg Depts / DDO" value={avgDepts} />
       </StatGrid>
 
       <CreateDdoForm />

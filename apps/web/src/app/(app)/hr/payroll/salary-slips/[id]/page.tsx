@@ -54,7 +54,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
 
       <div id="salary-slip" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid #0f172a", paddingBottom: 16 }}>
+        <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid var(--ink)", paddingBottom: 16 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>SALARY SLIP</h1>
           <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--color-text-muted)" }}>
             Pay Period: <strong>{slip.payPeriod}</strong>

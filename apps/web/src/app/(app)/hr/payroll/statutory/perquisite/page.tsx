@@ -61,10 +61,10 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
 
       {canLookup && form12ba && (
         <StatGrid>
-          <StatCard icon="📋" iconBg="#e6f0ff" label="Perquisite Items" value={perqCount} />
-          <StatCard icon="💰" iconBg="#e6f7f0" label="Total Taxable Value" value={formatMoney(totalPerqMinor)} />
-          <StatCard icon="📈" iconBg="#fff7e6" label="Largest Perquisite" value={formatMoney(maxPerqMinor)} />
-          <StatCard icon="📅" iconBg="#f0fff4" label="Financial Year" value={form12ba.fy} />
+          <StatCard icon="📋" iconBg="var(--infobg)" label="Perquisite Items" value={perqCount} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Taxable Value" value={formatMoney(totalPerqMinor)} />
+          <StatCard icon="📈" iconBg="var(--warnbg)" label="Largest Perquisite" value={formatMoney(maxPerqMinor)} />
+          <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Year" value={form12ba.fy} />
         </StatGrid>
       )}
 

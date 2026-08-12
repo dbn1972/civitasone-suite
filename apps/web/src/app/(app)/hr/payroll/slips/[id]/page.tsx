@@ -72,12 +72,12 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
       {/* Summary cards */}
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Gross Pay" value={formatMoney(slip.gross)} />
-        <StatCard icon="📉" iconBg="#fff0f0" label="Total Deductions" value={formatMoney(slip.deductions)} />
-        <StatCard icon="✅" iconBg="#e6f0ff" label="Net Pay" value={formatMoney(slip.net)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross Pay" value={formatMoney(slip.gross)} />
+        <StatCard icon="📉" iconBg="var(--badbg)" label="Total Deductions" value={formatMoney(slip.deductions)} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label="Net Pay" value={formatMoney(slip.net)} />
         <StatCard
           icon="📋"
-          iconBg="#fffbe6"
+          iconBg="var(--warnbg)"
           label="Status"
           value={slip.status.charAt(0).toUpperCase() + slip.status.slice(1)}
         />

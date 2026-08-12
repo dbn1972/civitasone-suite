@@ -43,10 +43,10 @@ export default async function GratuityPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎖️" iconBg="#e6f0ff" label="Gratuity Records" value={rows.length} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Settled / Paid" value={settledRecords} />
-        <StatCard icon="📅" iconBg="#f0fff4" label="Avg Years of Service" value={avgYears} />
+        <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={rows.length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Paid" value={settledRecords} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Avg Years of Service" value={avgYears} />
       </StatGrid>
       <Card title="Gratuity Register">
         <DataTable<GratuityRow>

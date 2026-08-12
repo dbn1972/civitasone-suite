@@ -43,10 +43,10 @@ export default async function IncomeTaxPage() {
       <PageHeader title="Income Tax Computation" subtitle="Annual IT computation summary for FY 2024-25." back="/hr" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label="Departments" value={new Set(items.map((i) => i.department)).size} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
+        <StatCard icon="🏢" iconBg="var(--panel)" label="Departments" value={new Set(items.map((i) => i.department)).size} />
       </StatGrid>
       <Card title="Income Tax Declarations">
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"

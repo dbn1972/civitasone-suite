@@ -46,10 +46,10 @@ export default async function EsiStatutoryPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🩺" iconBg="#e6f0ff" label="ESI Records" value={rows.length} />
-        <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏢" iconBg="#fffbe6" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="💵" iconBg="#f5f5f5" label="Total ESI Liability" value={formatMoney(totalEsiMinor)} />
+        <StatCard icon="🩺" iconBg="var(--infobg)" label="ESI Records" value={rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="var(--panel)" label="Total ESI Liability" value={formatMoney(totalEsiMinor)} />
       </StatGrid>
       <Card title="ESI Contribution Ledger">
         <DataTable<EsiRow>

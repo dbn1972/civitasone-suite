@@ -79,10 +79,10 @@ export default async function PayStructuresPage() {
       />
       {(structuresSource === "error" || componentsSource === "error") && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🧱" iconBg="#e6f0ff" label="Total Structures" value={structures.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="⭐" iconBg="#fffbe6" label="Default" value={defaultCount} />
-        <StatCard icon="🧩" iconBg="#f5f5f5" label="Components" value={rawComponents.length} />
+        <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structures.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)" label="Default" value={defaultCount} />
+        <StatCard icon="🧩" iconBg="var(--panel)" label="Components" value={rawComponents.length} />
       </StatGrid>
 
       <CreateStructureForm />

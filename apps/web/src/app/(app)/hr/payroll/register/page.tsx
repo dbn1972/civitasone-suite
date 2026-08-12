@@ -100,10 +100,10 @@ export default async function PayrollRegisterPage({
       </Card>
 
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#e6f0ff" label="Departments" value={items.length} />
-        <StatCard icon="👥" iconBg="#f0e6ff" label="Employees" value={totalEmployees} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Gross" value={formatMoney(totalGrossMinor)} />
-        <StatCard icon="🧾" iconBg="#fffbe6" label="Total Net Pay" value={formatMoney(totalNetMinor)} />
+        <StatCard icon="🏢" iconBg="var(--infobg)" label="Departments" value={items.length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees" value={totalEmployees} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={formatMoney(totalGrossMinor)} />
+        <StatCard icon="🧾" iconBg="var(--warnbg)" label="Total Net Pay" value={formatMoney(totalNetMinor)} />
       </StatGrid>
 
       <Card title="Register Lines">

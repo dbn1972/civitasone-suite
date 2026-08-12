@@ -43,10 +43,10 @@ export default async function ProfessionalTaxPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e6f0ff" label="PT Slabs Configured" value={rows.length} />
-        <StatCard icon="🗺️" iconBg="#e6f7f0" label="States Covered" value={statesCovered} />
-        <StatCard icon="📈" iconBg="#fff7e6" label="Highest PT Amount" value={formatMoney(maxPtMinor)} />
-        <StatCard icon="📊" iconBg="#f0fff4" label="Avg PT per Slab" value={formatMoney(Math.round(avgPtMinor))} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label="PT Slabs Configured" value={rows.length} />
+        <StatCard icon="🗺️" iconBg="var(--goodbg)" label="States Covered" value={statesCovered} />
+        <StatCard icon="📈" iconBg="var(--warnbg)" label="Highest PT Amount" value={formatMoney(maxPtMinor)} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg PT per Slab" value={formatMoney(Math.round(avgPtMinor))} />
       </StatGrid>
 
       <PtSlabForm />

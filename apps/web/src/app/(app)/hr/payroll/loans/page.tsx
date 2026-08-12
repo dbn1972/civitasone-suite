@@ -36,10 +36,10 @@ export default async function LoansPage({
 
       {empId && (
         <StatGrid>
-          <StatCard icon="💳" iconBg="#e6f0ff" label="Total Loans" value={loans.length} />
-          <StatCard icon="✅" iconBg="#e6f7f0" label="Active / Disbursed" value={activeLoans} />
-          <StatCard icon="💰" iconBg="#fff7e6" label="Total Outstanding" value={formatMoney(totalOutstandingMinor)} />
-          <StatCard icon="📅" iconBg="#f0fff4" label="Monthly EMI Total" value={formatMoney(totalEmiMinor)} />
+          <StatCard icon="💳" iconBg="var(--infobg)" label="Total Loans" value={loans.length} />
+          <StatCard icon="✅" iconBg="var(--goodbg)" label="Active / Disbursed" value={activeLoans} />
+          <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Outstanding" value={formatMoney(totalOutstandingMinor)} />
+          <StatCard icon="📅" iconBg="var(--goodbg)" label="Monthly EMI Total" value={formatMoney(totalEmiMinor)} />
         </StatGrid>
       )}
 

@@ -67,10 +67,10 @@ export default async function CorrectionsPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="✏️" iconBg="#e6f0ff" label="Total Corrections" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approvedCount} />
+        <StatCard icon="✏️" iconBg="var(--infobg)" label="Total Corrections" value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedCount} />
       </StatGrid>
 
       <CreateCorrectionForm />

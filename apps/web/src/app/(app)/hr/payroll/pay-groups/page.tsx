@@ -56,10 +56,10 @@ export default async function PayGroupsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Pay Groups" value={groups.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={groups.filter((g) => g.status === "active").length} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Monthly Groups" value={monthlyGroups} />
-        <StatCard icon="⏸️" iconBg="#f5f5f5" label="Inactive" value={inactiveGroups} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={groups.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={groups.filter((g) => g.status === "active").length} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyGroups} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveGroups} />
       </StatGrid>
 
       <CreatePayGroupForm />

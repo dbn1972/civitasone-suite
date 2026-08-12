@@ -42,10 +42,10 @@ export default async function PensionersPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👴" iconBg="#f5f5f5" label="Total Pensioners" value={total} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Pension Payable This Month" value={formatMoney(pensionPayableMinor)} />
-        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactivePensioners} />
+        <StatCard icon="👴" iconBg="var(--panel)" label="Total Pensioners" value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Pension Payable This Month" value={formatMoney(pensionPayableMinor)} />
+        <StatCard icon="🚫" iconBg="var(--badbg)" label="Inactive" value={inactivePensioners} />
       </StatGrid>
       <Card title="Pensioner Records">
         <DataTable<Row>

@@ -50,10 +50,10 @@ export default async function FlexBenefitsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🧩" iconBg="#e6f0ff" label="My Elections" value={elections.length} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Elected" value={formatMoney(totalElectedMinor)} />
-        <StatCard icon="✅" iconBg="#fffbe6" label="Approved" value={approvedElections} />
-        <StatCard icon="📅" iconBg="#f0fff4" label="Financial Years" value={uniqueFYs} />
+        <StatCard icon="🧩" iconBg="var(--infobg)" label="My Elections" value={elections.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Elected" value={formatMoney(totalElectedMinor)} />
+        <StatCard icon="✅" iconBg="var(--warnbg)" label="Approved" value={approvedElections} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Years" value={uniqueFYs} />
       </StatGrid>
 
       <CreateFlexPlanForm />

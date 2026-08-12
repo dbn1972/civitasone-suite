@@ -33,10 +33,10 @@ export default async function NpsStatementsPage() {
       <PageHeader title="NPS Statements" subtitle="National Pension System contributions — 10% employee + 14% employer." back="/hr/payroll" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Statements"   value={tableRows.length} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Employees"    value={uniqueEmps} />
-        <StatCard icon="🧑" iconBg="#fff7e6" label="Emp (10%)"    value={`₹${(totalEmp / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="🏛️" iconBg="#f5f5f5" label="Employer (14%)" value={`₹${(totalEr / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements"   value={tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees"    value={uniqueEmps} />
+        <StatCard icon="🧑" iconBg="var(--warnbg)" label="Emp (10%)"    value={`₹${(totalEmp / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="🏛️" iconBg="var(--panel)" label="Employer (14%)" value={`₹${(totalEr / 100).toLocaleString("en-IN")}`} />
       </StatGrid>
       <Card title="NPS Ledger">
         {tableRows.length === 0 ? (

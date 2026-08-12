@@ -64,10 +64,10 @@ export default async function SalaryRevisionsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📈" iconBg="#e6f0ff" label="Total Revisions" value={items.length} />
-        <StatCard icon="🏅" iconBg="#e6f7f0" label="Increments" value={items.filter((i) => i.revision_type === "annual_increment").length} />
-        <StatCard icon="🎯" iconBg="#fffbe6" label="Promotions" value={items.filter((i) => i.revision_type === "promotion").length} />
-        <StatCard icon="🏛" iconBg="#f5f5f5" label="Pay Commission" value={items.filter((i) => i.revision_type === "pay_commission").length} />
+        <StatCard icon="📈" iconBg="var(--infobg)" label="Total Revisions" value={items.length} />
+        <StatCard icon="🏅" iconBg="var(--goodbg)" label="Increments" value={items.filter((i) => i.revision_type === "annual_increment").length} />
+        <StatCard icon="🎯" iconBg="var(--warnbg)" label="Promotions" value={items.filter((i) => i.revision_type === "promotion").length} />
+        <StatCard icon="🏛" iconBg="var(--panel)" label="Pay Commission" value={items.filter((i) => i.revision_type === "pay_commission").length} />
       </StatGrid>
 
       <Card>

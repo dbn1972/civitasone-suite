@@ -50,10 +50,10 @@ export default async function NpsStatutoryPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label="NPS Records" value={rows.length} />
-        <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution (10%)" value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏛️" iconBg="#fffbe6" label="Total Employer Contribution (14%)" value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="💵" iconBg="#f5f5f5" label="Total NPS Outflow" value={formatMoney(totalNpsMinor)} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label="NPS Records" value={rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Employee Contribution (10%)" value={formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Total Employer Contribution (14%)" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="var(--panel)" label="Total NPS Outflow" value={formatMoney(totalNpsMinor)} />
       </StatGrid>
       <Card title="NPS Contribution Ledger">
         <DataTable<NpsRow>

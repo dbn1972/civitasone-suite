@@ -47,10 +47,10 @@ export default async function FnfPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🧮" iconBg="#e6f0ff" label="Total Settlements" value={settlements.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending / Computed" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Settled" value={settled} />
-        <StatCard icon="📊" iconBg="#f5f5f5" label="Separation Types" value={separationTypes} />
+        <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={settlements.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending / Computed" value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled} />
+        <StatCard icon="📊" iconBg="var(--panel)" label="Separation Types" value={separationTypes} />
       </StatGrid>
 
       <ComputeFnfForm />

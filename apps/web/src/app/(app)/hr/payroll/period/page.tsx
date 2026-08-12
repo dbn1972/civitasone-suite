@@ -42,10 +42,10 @@ export default async function PayrollPeriodPage() {
       <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed" value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Processing" value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Completed" value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Processing" value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
       </StatGrid>
       <Card title="Payroll Periods">
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by period or status…" pageSize={15} emptyIcon="📅" emptyTitle="No payroll periods yet" emptyMessage="Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll Runs page to generate a period record." />

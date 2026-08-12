@@ -92,15 +92,15 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#e6f0ff" label="Challans for Period" value={challans.length} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label="Challans for Period" value={challans.length} />
         <StatCard
           icon={reconciliation?.matched ? "✅" : "⚠️"}
           iconBg={reconciliation?.matched ? "#e6f7f0" : "#fdecea"}
           label="Reconciliation Status"
           value={reconciliation?.perPeriod[0]?.status ?? "unknown"}
         />
-        <StatCard icon="📉" iconBg="#fffbe6" label="Variance" value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="TDS Deposited" value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label="Variance" value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="TDS Deposited" value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
       </StatGrid>
 
       <IngestChallanForm period={period} />

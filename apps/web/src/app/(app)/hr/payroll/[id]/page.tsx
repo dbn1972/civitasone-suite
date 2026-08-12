@@ -56,10 +56,10 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Employees"  value={run.employeeCount.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Gross"      value={formatRupees(run.grossAmount)} />
-        <StatCard icon="📉" iconBg="#fff7e6" label="Deductions" value={formatRupees(run.deductions)} />
-        <StatCard icon="✅" iconBg="#f5f5f5" label="Net Pay"    value={formatRupees(run.netAmount)} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees"  value={run.employeeCount.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross"      value={formatRupees(run.grossAmount)} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label="Deductions" value={formatRupees(run.deductions)} />
+        <StatCard icon="✅" iconBg="var(--panel)" label="Net Pay"    value={formatRupees(run.netAmount)} />
       </StatGrid>
       <PayrollRunActions
         runId={run.id}

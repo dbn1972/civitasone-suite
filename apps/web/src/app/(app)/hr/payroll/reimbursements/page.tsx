@@ -50,10 +50,10 @@ export default async function ReimbursementsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#e6f0ff" label="Total Claims" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Claimed" value={formatMoney(totalMinor)} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approvedReimb} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Claimed" value={formatMoney(totalMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedReimb} />
       </StatGrid>
 
       <CreateReimbursementForm />

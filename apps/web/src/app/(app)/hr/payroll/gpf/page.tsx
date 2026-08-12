@@ -30,10 +30,10 @@ export default async function GpfStatementsPage() {
       <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." back="/hr/payroll" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Statements"    value={tableRows.length} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Employees"     value={uniqueEmps} />
-        <StatCard icon="💰" iconBg="#fff7e6" label="Total Contrib." value={`₹${(totalContrib / 100).toLocaleString("en-IN")}`} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="Periods"       value={uniquePeriods} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements"    value={tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees"     value={uniqueEmps} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Contrib." value={`₹${(totalContrib / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📅" iconBg="var(--panel)" label="Periods"       value={uniquePeriods} />
       </StatGrid>
       <Card title="GPF Ledger">
         {tableRows.length === 0 ? (

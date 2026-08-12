@@ -43,10 +43,10 @@ export default async function PayrollPage() {
         <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} />
       )}
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Runs" value={totalRuns} />
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Employees Paid" value={totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="#fffbe6" label="Total Gross" value={formatRupees(totalGross)} />
-        <StatCard icon="📄" iconBg="#f5f5f5" label="Pending" value={pending} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Runs" value={totalRuns} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees Paid" value={totalEmployeesPaid.toLocaleString("en-IN")} />
+        <StatCard icon="🏛" iconBg="var(--warnbg)" label="Total Gross" value={formatRupees(totalGross)} />
+        <StatCard icon="📄" iconBg="var(--panel)" label="Pending" value={pending} />
       </StatGrid>
       <Card title="Payroll Runs">
         <PayrollRunsTable runs={runs} source={source} />

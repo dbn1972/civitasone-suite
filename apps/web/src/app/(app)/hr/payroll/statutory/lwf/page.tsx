@@ -43,10 +43,10 @@ export default async function LwfPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🤝" iconBg="#e6f0ff" label="States Configured" value={rows.length} />
-        <StatCard icon="👤" iconBg="#e6f7f0" label="Total Emp Contribution" value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏛️" iconBg="#fff7e6" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="📅" iconBg="#f0fff4" label="Unique Frequencies" value={uniqueFrequencies} />
+        <StatCard icon="🤝" iconBg="var(--infobg)" label="States Configured" value={rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Emp Contribution" value={formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Total Employer Contribution" value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Unique Frequencies" value={uniqueFrequencies} />
       </StatGrid>
 
       <LwfConfigForm />

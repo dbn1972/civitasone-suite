@@ -75,10 +75,10 @@ export default async function CtcConfigPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="⚙️" iconBg="#e6f0ff" label="Configured Components" value={config.length} />
-        <StatCard icon="🏛️" iconBg="#fffbe6" label="Employer-Cost" value={employerComponents} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Components" value={activeComponents} />
-        <StatCard icon="📊" iconBg="#f0fff4" label="Percentage-Based" value={pctComponents} />
+        <StatCard icon="⚙️" iconBg="var(--infobg)" label="Configured Components" value={config.length} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Employer-Cost" value={employerComponents} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Components" value={activeComponents} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Percentage-Based" value={pctComponents} />
       </StatGrid>
 
       <Card title="CTC Component Configuration">

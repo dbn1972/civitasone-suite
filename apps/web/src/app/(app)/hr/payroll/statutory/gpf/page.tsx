@@ -46,10 +46,10 @@ export default async function GpfStatutoryPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e6f0ff" label="GPF Records" value={rows.length} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total GPF Subscription" value={formatMoney(totalContribMinor)} />
-        <StatCard icon="👥" iconBg="#fff7e6" label="Unique Employees" value={uniqueEmployees} />
-        <StatCard icon="📅" iconBg="#f0fff4" label="Periods Covered" value={uniquePeriods} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label="GPF Records" value={rows.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total GPF Subscription" value={formatMoney(totalContribMinor)} />
+        <StatCard icon="👥" iconBg="var(--warnbg)" label="Unique Employees" value={uniqueEmployees} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Periods Covered" value={uniquePeriods} />
       </StatGrid>
       <Card title="GPF Subscription Ledger">
         <DataTable<GpfRow>

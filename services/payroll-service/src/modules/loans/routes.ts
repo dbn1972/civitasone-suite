@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createLoanBody, idParam, loanQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "employee"];
@@ -31,6 +32,67 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const { empId } = loanQueryParams.parse(req.query);
     if (!empId) throw new HttpError(400, "VALIDATION_FAILED", "empId is required");
     return reply.send(await queries.getLoansByEmployee(ctx.tenantId, empId));
+  });
+
+  // ─── Gap: loan detail ────────────────────────────────────────────────────
+  app.get("/v1/payroll/loans/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const loan = await repo.findLoanById(id, ctx.tenantId);
+    if (!loan) throw new HttpError(404, "NOT_FOUND", "loan not found");
+    return reply.send(loan);
+  });
+
+  // ─── Gap: loan repayment schedule (amortisation) ────────────────────────
+  app.get("/v1/payroll/loans/:id/schedule", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const loan = await repo.findLoanById(id, ctx.tenantId);
+    if (!loan) throw new HttpError(404, "NOT_FOUND", "loan not found");
+
+    const principal = Number(loan.principalMinor);
+    const emiMinor  = Number(loan.emiMinor);
+    const annualRate = Number(loan.interestRatePct);
+    const tenure = loan.tenureMonths;
+    const monthlyRate = annualRate / 100 / 12;
+
+    const schedule: Array<{
+      installmentNo: number;
+      openingMinor: number;
+      emiMinor: number;
+      principalMinor: number;
+      interestMinor: number;
+      closingMinor: number;
+    }> = [];
+
+    let balance = principal;
+    for (let i = 1; i <= tenure; i++) {
+      const interest = monthlyRate > 0 ? Math.round(balance * monthlyRate) : 0;
+      const principalPart = Math.min(emiMinor - interest, balance);
+      const closing = Math.max(0, balance - principalPart);
+      schedule.push({
+        installmentNo: i,
+        openingMinor: balance,
+        emiMinor,
+        principalMinor: principalPart,
+        interestMinor: interest,
+        closingMinor: closing,
+      });
+      balance = closing;
+      if (balance === 0) break;
+    }
+
+    return reply.send({
+      loanId: id,
+      loanNo: loan.loanNo,
+      tenureMonths: tenure,
+      principalMinor: principal,
+      emiMinor,
+      interestRatePct: annualRate,
+      schedule,
+    });
   });
 
   app.setErrorHandler(errorHandler);

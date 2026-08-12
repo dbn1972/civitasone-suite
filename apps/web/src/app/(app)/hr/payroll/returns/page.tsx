@@ -209,15 +209,15 @@ export default async function ReturnsPage({
           ) : (
             <>
               <StatGrid>
-                <StatCard icon="👥" iconBg="#e6f0ff" label="Deductees" value={f24Lookup.data.deducteeCount} />
-                <StatCard icon="💰" iconBg="#e6f7f0" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f24Lookup.data.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
                 <StatCard
                   icon={f24Lookup.data.reconciliation.matched ? "✅" : "⚠️"}
                   iconBg={f24Lookup.data.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
                   label="Challan Reconciliation"
                   value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
-                <StatCard icon="🏦" iconBg="#fff0e6" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
+                <StatCard icon="🏦" iconBg="var(--warnbg)" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -275,15 +275,15 @@ export default async function ReturnsPage({
             <>
               <DataSourceBadge source={src26 === "error" ? "error" : "api"} />
               <StatGrid>
-                <StatCard icon="👥" iconBg="#e6f0ff" label="Deductees" value={f26.deducteeCount} />
-                <StatCard icon="💰" iconBg="#e6f7f0" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f26.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
                 <StatCard
                   icon={f26.reconciliation.matched ? "✅" : "⚠️"}
                   iconBg={f26.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
                   label="Challan Reconciliation"
                   value={f26.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
-                <StatCard icon="💳" iconBg="#fff0e6" label="Amount Paid" value={formatMoney(totalAmountPaidMinor26)} />
+                <StatCard icon="💳" iconBg="var(--warnbg)" label="Amount Paid" value={formatMoney(totalAmountPaidMinor26)} />
               </StatGrid>
               <div style={{ marginTop: 12 }}>
                 <DataTable
