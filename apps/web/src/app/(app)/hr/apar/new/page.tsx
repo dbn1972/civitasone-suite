@@ -1,7 +1,7 @@
 "use client";
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, Card } from "../../../../_components/ds";
 
 export default function AparNewPage() {
   const router = useRouter();
@@ -43,41 +43,36 @@ export default function AparNewPage() {
     }
   }
 
-  const inp: React.CSSProperties = {
-    width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-    borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-  };
-
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Initiate APAR" subtitle="Start a new Annual Performance Appraisal for an employee." back="/hr/apar" />
 
-      <div className="card" style={{ maxWidth: 600, marginTop: 20 }}>
-        <div className="card-h"><h3>APAR Details</h3></div>
+      <div style={{ maxWidth: 600, marginTop: 20 }}>
+      <Card title="APAR Details">
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Employee ID (UUID)</label>
-            <input id={empId} style={inp} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
+            <input id={empId} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
               placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000" required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
             <label htmlFor={periodId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Appraisal Period</label>
-            <input id={periodId} style={inp} value={appraisalPeriod} onChange={(e) => setAppraisalPeriod(e.target.value)}
+            <input id={periodId} value={appraisalPeriod} onChange={(e) => setAppraisalPeriod(e.target.value)}
               placeholder="e.g. 2025-26" required maxLength={16} />
           </div>
           <div>
             <label htmlFor={roId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Reporting Officer ID (UUID)</label>
-            <input id={roId} style={inp} value={reportingOfficerId} onChange={(e) => setReportingOfficerId(e.target.value)}
+            <input id={roId} value={reportingOfficerId} onChange={(e) => setReportingOfficerId(e.target.value)}
               placeholder="UUID of Reporting Officer" required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
             <label htmlFor={rvId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Reviewing Officer ID (UUID)</label>
-            <input id={rvId} style={inp} value={reviewingOfficerId} onChange={(e) => setReviewingOfficerId(e.target.value)}
+            <input id={rvId} value={reviewingOfficerId} onChange={(e) => setReviewingOfficerId(e.target.value)}
               placeholder="UUID of Reviewing Officer" required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
             <label htmlFor={aaId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Accepting Authority ID (UUID)</label>
-            <input id={aaId} style={inp} value={acceptingAuthorityId} onChange={(e) => setAcceptingAuthorityId(e.target.value)}
+            <input id={aaId} value={acceptingAuthorityId} onChange={(e) => setAcceptingAuthorityId(e.target.value)}
               placeholder="UUID of Accepting Authority" required pattern="[0-9a-f-]{36}" />
           </div>
           {msg && (
@@ -92,6 +87,7 @@ export default function AparNewPage() {
             </button>
           </div>
         </form>
+      </Card>
       </div>
     </main>
   );

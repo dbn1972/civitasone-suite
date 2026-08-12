@@ -159,6 +159,10 @@ export default async function AparDetailPage({
             columns={SCORE_COLS}
             rows={scores}
             sortable
+            filterable
+            emptyIcon="📊"
+            emptyTitle="No scores yet"
+            emptyMessage="Scores are recorded by the Reporting Officer during their review stage."
           />
         )}
       </Card>
@@ -173,6 +177,10 @@ export default async function AparDetailPage({
             columns={HISTORY_COLS}
             rows={history}
             sortable
+            filterable
+            emptyIcon="🕓"
+            emptyTitle="No stage transitions yet"
+            emptyMessage="History is recorded as each authority completes their review."
           />
         )}
       </Card>

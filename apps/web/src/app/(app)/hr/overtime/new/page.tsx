@@ -1,7 +1,7 @@
 "use client";
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, Card } from "../../../../_components/ds";
 
 export default function OvertimeNewPage() {
   const router = useRouter();
@@ -45,34 +45,29 @@ export default function OvertimeNewPage() {
     }
   }
 
-  const inp: React.CSSProperties = {
-    width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-    borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-  };
-
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="New Overtime Request" subtitle="Submit an overtime claim for HR approval." back="/hr/overtime" />
-      <div className="card" style={{ maxWidth: 520, marginTop: 20 }}>
-        <div className="card-h"><h3>Request Details</h3></div>
+      <div style={{ maxWidth: 520, marginTop: 20 }}>
+      <Card title="Request Details">
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Employee ID (UUID)</label>
-            <input id={empId} style={inp} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
+            <input id={empId} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
               placeholder="Employee UUID" required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
             <label htmlFor={dateId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Date of Overtime</label>
-            <input id={dateId} type="date" style={inp} value={requestDate} onChange={(e) => setRequestDate(e.target.value)} required />
+            <input id={dateId} type="date" value={requestDate} onChange={(e) => setRequestDate(e.target.value)} required />
           </div>
           <div>
             <label htmlFor={hrsId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Hours Requested</label>
-            <input id={hrsId} type="number" step="0.5" min="0.5" max="24" style={inp}
+            <input id={hrsId} type="number" step="0.5" min="0.5" max="24"
               value={hours} onChange={(e) => setHours(e.target.value)} placeholder="e.g. 2.5" required />
           </div>
           <div>
             <label htmlFor={reasonId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Reason</label>
-            <textarea id={reasonId} rows={3} style={{ ...inp, resize: "vertical" }}
+            <textarea id={reasonId} rows={3} style={{ resize: "vertical" }}
               value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Brief reason for overtime…" />
           </div>
           {msg && (
@@ -87,6 +82,7 @@ export default function OvertimeNewPage() {
             </button>
           </div>
         </form>
+      </Card>
       </div>
     </main>
   );

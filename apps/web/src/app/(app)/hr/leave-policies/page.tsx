@@ -404,6 +404,9 @@ export default function LeavePoliciesPage() {
               },
             ]}
             rows={rows}
+            sortable
+            filterable
+            pageSize={20}
           />
         )}
       </Card>

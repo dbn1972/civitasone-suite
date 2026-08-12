@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -42,15 +42,18 @@ export default async function TrainingNominationsPage() {
       <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={items.filter((i) => i.status === "pending").length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={items.filter((i) => i.status === "approved").length} />
+        <StatCard icon="📚" iconBg="#f5f5f5" label="Programs" value={new Set(items.map((i) => i.program)).size} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Training Nominations">
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
           pageSize={15}
           emptyIcon="🎓"
           emptyTitle="No training nominations"
           emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
         />
-      </div>
+      </Card>
     </main>
   );
 }

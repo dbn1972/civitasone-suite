@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -37,15 +37,18 @@ export default async function TrainingFeedbackPage() {
       <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="📚" iconBg="#e6f7f0" label="Programs" value={new Set(items.map((i) => i.program)).size} />
+        <StatCard icon="👥" iconBg="#fffbe6" label="Employees" value={new Set(items.map((i) => i.employee)).size} />
+        <StatCard icon="⭐" iconBg="#f5f5f5" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => s + (Number(i.rating) || 0), 0) / items.length).toFixed(1) : "—"} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Training Feedback">
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
           pageSize={15}
           emptyIcon="📝"
           emptyTitle="No training feedback"
           emptyMessage="Employee feedback on completed training programmes appears here. Feedback is collected at programme closure."
         />
-      </div>
+      </Card>
     </main>
   );
 }

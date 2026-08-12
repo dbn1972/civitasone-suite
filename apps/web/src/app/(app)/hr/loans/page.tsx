@@ -83,8 +83,7 @@ export default async function LoansPage() {
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="✅" iconBg="#f5f5f5" label="Closed" value={completed} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Loans Register</h3></div>
+      <Card title="Loans Register">
         <DataTable<Row> columns={columns} rows={items} sortable filterable exportable
         filterPlaceholder="Filter by employee, loan type or status…"
           pageSize={15}
@@ -92,7 +91,7 @@ export default async function LoansPage() {
           emptyTitle="No employee loans"
           emptyMessage="Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module."
         />
-      </div>
+      </Card>
     </main>
   );
 }

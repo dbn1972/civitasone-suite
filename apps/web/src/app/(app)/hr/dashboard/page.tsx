@@ -66,8 +66,8 @@ export default async function HRDashboardPage() {
                     gap: 10,
                     padding: "10px 14px",
                     borderRadius: 8,
-                    background: item.urgency === "high" ? "#fef2f2" : "#fffbeb",
-                    border: `1px solid ${item.urgency === "high" ? "#fecaca" : "#fde68a"}`,
+                    background: item.urgency === "high" ? "var(--error-bg, #fef2f2)" : "var(--warn-bg, #fffbeb)",
+                    border: `1px solid ${item.urgency === "high" ? "var(--error-border, #fecaca)" : "var(--warn-border, #fde68a)"}`,
                     textDecoration: "none",
                     color: "inherit",
                     fontSize: 13,
@@ -94,6 +94,11 @@ export default async function HRDashboardPage() {
           rows={recentEmployees}
           rowLinkPrefix="/hr/employees/"
           rowLinkKey="id"
+          sortable
+          filterable
+          emptyIcon="👥"
+          emptyTitle="No employees"
+          emptyMessage="No employee records found."
         />
       </Card>
     </main>

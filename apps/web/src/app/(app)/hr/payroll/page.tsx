@@ -31,16 +31,14 @@ export default async function PayrollPage() {
       />
       <DataSourceBadge source={source} />
       {structures.length === 0 ? (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="pad">
-            <p style={{ color: "var(--ink2)", fontSize: 14 }}>
+        <Card>
+          <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
               No pay structures configured — create one first.{" "}
               <Link href="/hr/payroll/structures" style={{ color: "var(--primary-d)" }}>
                 Go to pay structures →
               </Link>
             </p>
-          </div>
-        </div>
+        </Card>
       ) : (
         <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} />
       )}

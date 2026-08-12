@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { PageHeader } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PrintButton } from "./PrintButton";
 
@@ -42,7 +43,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
   return (
     <main className="page-main wrap" style={{ maxWidth: 800 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <a href="/hr/payroll/salary-slips" style={{ fontSize: 13, color: "#4f46e5" }}>← Back to salary slips</a>
+        <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
         <PrintButton />
       </div>
       <DataSourceBadge source={source} />
