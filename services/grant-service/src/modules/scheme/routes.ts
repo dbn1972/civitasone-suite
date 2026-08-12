@@ -9,7 +9,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 
 const SCHEME_ROLES  = ["grant_officer", "grant_admin", "super_admin"];
-const READER_ROLES  = [...SCHEME_ROLES, "audit_officer", "finance_officer"];
+const READER_ROLES  = [...SCHEME_ROLES, "audit_officer", "finance_officer", "grant_viewer"];
 
 export async function schemeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/grants/schemes", async (req, reply) => {
