@@ -48,7 +48,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
       </div>
       <DataSourceBadge source={source} />
 
-      <div id="salary-slip" style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
+      <div id="salary-slip" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid #0f172a", paddingBottom: 16 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>SALARY SLIP</h1>
@@ -89,7 +89,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
                     <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(c.amountMinor)}</td>
                   </tr>
                 ))}
-                <tr style={{ borderTop: "1px solid #e2e8f0", fontWeight: 700 }}>
+                <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>
                   <td style={{ padding: "6px 0 0" }}>Gross Earnings</td>
                   <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(slip.grossMinor)}</td>
                 </tr>
@@ -107,7 +107,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
                     <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(c.amountMinor)}</td>
                   </tr>
                 ))}
-                <tr style={{ borderTop: "1px solid #e2e8f0", fontWeight: 700 }}>
+                <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>
                   <td style={{ padding: "6px 0 0" }}>Total Deductions</td>
                   <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(slip.totalDeductionsMinor)}</td>
                 </tr>

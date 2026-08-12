@@ -122,7 +122,7 @@ export default function LeaveBalancePage() {
         </p>
       )}
       {error && (
-        <p role="alert" style={{ color: "#dc2626", fontSize: 14, fontWeight: 500 }}>
+        <p role="alert" style={{ color: "var(--color-error)", fontSize: 14, fontWeight: 500 }}>
           {error}
         </p>
       )}
@@ -153,7 +153,7 @@ export default function LeaveBalancePage() {
                         <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 15 }}>{alloc.leaveTypeName}</p>
                         <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>FY {alloc.fy} · Code: {alloc.leaveTypeCode}</p>
                       </div>
-                      <p style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: balance <= 0 ? "#dc2626" : "#166534" }}>
+                      <p style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: balance <= 0 ? "var(--color-error)" : "#166534" }}>
                         {balance}
                         <span style={{ fontSize: 14, fontWeight: 400, color: "var(--mut)" }}> / {total} days</span>
                       </p>
@@ -164,7 +164,7 @@ export default function LeaveBalancePage() {
                           height: "100%",
                           width: `${p}%`,
                           borderRadius: 4,
-                          background: p >= 90 ? "#dc2626" : p >= 60 ? "#f59e0b" : "#22c55e",
+                          background: p >= 90 ? "var(--color-error)" : p >= 60 ? "#f59e0b" : "#22c55e",
                           transition: "width 0.4s ease",
                         }}
                         aria-label={`${p}% used`}

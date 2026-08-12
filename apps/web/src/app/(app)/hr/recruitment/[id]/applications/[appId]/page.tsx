@@ -172,12 +172,12 @@ export default function ApplicationDetailPage() {
             </h2>
             <form onSubmit={handleHire} style={{ display: "grid", gap: 14 }}>
               <div>
-                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>Employee No <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>Employee No <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                 <input id={empNoId} type="text" value={employeeNo} onChange={(e) => setEmployeeNo(e.target.value)} placeholder="e.g. EMP-2025-001" maxLength={32} style={inputStyle} required />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>Date of Joining <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>Date of Joining <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={dojId} type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} style={inputStyle} required />
                 </div>
                 <div>
@@ -187,11 +187,11 @@ export default function ApplicationDetailPage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>Department ID <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>Department ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder="UUID" style={inputStyle} required />
                 </div>
                 <div>
-                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>Designation ID <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>Designation ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder="UUID" style={inputStyle} required />
                 </div>
               </div>

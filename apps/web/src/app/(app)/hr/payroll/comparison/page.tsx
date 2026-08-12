@@ -57,7 +57,7 @@ export default async function PayrollComparisonPage({
       <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period1" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 1 <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            Period 1 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period1"
@@ -70,7 +70,7 @@ export default async function PayrollComparisonPage({
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period2" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 2 <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            Period 2 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period2"

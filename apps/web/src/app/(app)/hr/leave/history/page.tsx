@@ -22,7 +22,7 @@ type LeaveApp = {
 const STATUS_CHIP: Record<string, { bg: string; color: string; label: string }> = {
   pending:   { bg: "#fffbeb", color: "#b45309", label: "Pending" },
   approved:  { bg: "#f0fdf4", color: "#166534", label: "Approved" },
-  rejected:  { bg: "#fef2f2", color: "#991b1b", label: "Rejected" },
+  rejected:  { bg: "#fef2f2", color: "var(--color-error-dark)", label: "Rejected" },
   cancelled: { bg: "#f8fafc", color: "#64748b", label: "Cancelled" },
 };
 
@@ -141,7 +141,7 @@ export default function LeaveHistoryPage() {
       </Card>
 
       {cancelError && (
-        <p role="alert" style={{ color: "#991b1b", fontSize: 14, fontWeight: 500 }}>{cancelError}</p>
+        <p role="alert" style={{ color: "var(--color-error-dark)", fontSize: 14, fontWeight: 500 }}>{cancelError}</p>
       )}
       {loading && (
         <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0", fontSize: 14 }}>
@@ -149,7 +149,7 @@ export default function LeaveHistoryPage() {
         </p>
       )}
       {error && (
-        <p role="alert" style={{ color: "#dc2626", fontSize: 14, fontWeight: 500 }}>{error}</p>
+        <p role="alert" style={{ color: "var(--color-error)", fontSize: 14, fontWeight: 500 }}>{error}</p>
       )}
 
       {!loading && !error && (
@@ -216,7 +216,7 @@ export default function LeaveHistoryPage() {
                                 borderRadius: 6,
                                 border: "1px solid #fca5a5",
                                 background: cancelling === app.id ? "var(--bg2)" : "#fef2f2",
-                                color: "#991b1b",
+                                color: "var(--color-error-dark)",
                                 fontSize: 12,
                                 fontWeight: 500,
                                 cursor: cancelling === app.id ? "not-allowed" : "pointer",

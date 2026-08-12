@@ -21,6 +21,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Employees", href: "/hr/employees", description: "Workforce directory and profiles" },
 			{ title: "Directory", href: "/hr/directory", description: "Search by name, dept, or designation" },
 			{ title: "Org Chart", href: "/hr/orgchart", description: "Reporting hierarchy" },
+			{ title: "ID Cards", href: "/hr/id-cards", description: "Issue and manage employee ID cards" },
 		],
 	},
 	{
@@ -141,6 +142,13 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 		],
 	},
 	{
+		title: "Communication & Engagement",
+		icon: "💬",
+		tiles: [
+			{ title: "Social Feed", href: "/hr/social-feed", description: "Team updates, kudos, and office announcements" },
+		],
+	},
+	{
 		title: "Setup & Configuration",
 		icon: "⚙️",
 		tiles: [
@@ -149,6 +157,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Locations", href: "/hr/locations", description: "Office and facility locations" },
       { title: "Leave Policies", href: "/hr/leave-policies", description: "Leave rules and entitlements" },
 			{ title: "Holidays", href: "/hr/holidays", description: "Gazetted and restricted holidays" },
+			{ title: "Employee Types", href: "/hr/employee-types", description: "Define regular, contractual, and deputation employee types" },
 		],
 	},
 ];
