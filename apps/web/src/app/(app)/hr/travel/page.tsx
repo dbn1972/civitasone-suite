@@ -14,14 +14,13 @@ type Row = {
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/travel-requests", [], {
+  return fetchJson<unknown, Row[]>("/api/v1/hrms/travel-requests", [], {
     telemetryKey: "hr.travel",
     mapResponse: (p) => {
       const arr = (p as { data?: Row[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r;
 }
 
 export default async function TravelRequestsPage() {
@@ -42,26 +41,35 @@ export default async function TravelRequestsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Travel Requests" subtitle="Submit and track official travel approvals." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <PageHeader
+        title="Travel Requests"
+        subtitle="Submit and track official travel approvals — LTC, tour advance, and TA/DA settlement."
+        back="/hr"
+        actions={<span />}
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
         <StatCard icon="❌" iconBg="#fef2f2" label="Rejected" value={rejected} />
       </StatGrid>
-
       <TravelRequestForm />
-
-      <Card title="Travel Requests">
-        <div className="card-h"><h3>Travel Requests</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by destination or purpose…"
-          pageSize={15}
-          emptyIcon="✈️"
-          emptyTitle="No travel requests"
-          emptyMessage="Official travel requests appear here once employees raise them. Requests go through departmental approval before booking."
-        />
-      </Card>
+      <div style={{ marginTop: 16 }}>
+        <Card title="Travel Requests">
+          <DataTable<Row>
+            columns={columns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder="Filter by destination or purpose…"
+            pageSize={15}
+            emptyIcon="✈️"
+            emptyTitle="No travel requests"
+            emptyMessage="Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking."
+          />
+        </Card>
+      </div>
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -23,53 +23,55 @@ async function getApars(): Promise<LoaderResult<Apar[]>> {
   });
 }
 
-const COLUMNS = [
-  { key: "employeeId" as const,      label: "Employee ID" },
-  { key: "appraisalPeriod" as const, label: "Period" },
-  { key: "status" as const,          label: "Stage", cellType: "status" as const },
-  { key: "overallBand" as const,     label: "Band" },
-  { key: "updatedAt" as const,       label: "Last Updated" },
+const COLUMNS: { key: keyof Apar & string; label: string; cellType?: "status" }[] = [
+  { key: "employeeId", label: "Employee ID" },
+  { key: "appraisalPeriod", label: "Period" },
+  { key: "overallBand", label: "Band" },
+  { key: "overallGrade", label: "Grade" },
+  { key: "status", label: "Stage", cellType: "status" },
+  { key: "updatedAt", label: "Last Updated" },
 ];
 
 export default async function AparListPage() {
   const result = await getApars();
   const apars = result.data;
 
+  const pending = apars.filter((a) => a.status === "pending" || a.status === "initiated").length;
+  const inReview = apars.filter((a) => a.status === "ro_submitted" || a.status === "rv_submitted" || a.status === "under_review").length;
+  const completed = apars.filter((a) => a.status === "closed" || a.status === "accepted").length;
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="APAR / Annual Performance Appraisal"
-        subtitle="Manage SPARROW-style multi-authority appraisal workflow for all employees."
+        title="APAR — Annual Performance Appraisal"
+        subtitle="SPARROW-style multi-authority appraisal workflow: Reporting Officer → Reviewing Officer → Accepting Authority."
+        back="/hr"
         help="hr"
         actions={
           <Link href="/hr/apar/new" className="btn primary">+ Initiate APAR</Link>
         }
       />
-      {result.source === "error" && <DataSourceBadge source="error" />}
-
-      <Card title="All APARs">
-        {apars.length === 0 ? (
-          <EmptyState
-            icon="📋"
-            title="No APARs initiated yet"
-            message="Initiate an APAR to start the annual performance appraisal cycle for an employee."
-            action={<Link href="/hr/apar/new" className="btn primary">+ Initiate APAR</Link>}
-          />
-        ) : (
-          <DataTable<Apar>
-            columns={COLUMNS}
-            rows={apars}
-            rowLinkKey="id"
-            rowLinkPrefix="/hr/apar/"
-            sortable
-            filterable
-            filterPlaceholder="Filter by period, stage…"
-            pageSize={20}
-            emptyIcon="📋"
-            emptyTitle="No matching APARs"
-            emptyMessage="Adjust your filter to find the appraisal you need."
-          />
-        )}
+      <DataSourceBadge source={result.source} />
+      <StatGrid>
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Total APARs" value={apars.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Initiated / Pending" value={pending} />
+        <StatCard icon="🔍" iconBg="#e6f0ff" label="Under Review" value={inReview} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Closed / Accepted" value={completed} />
+      </StatGrid>
+      <Card title="APAR Records">
+        <DataTable<Apar>
+          columns={COLUMNS}
+          rows={apars}
+          rowLinkKey="id"
+          rowLinkPrefix="/hr/apar/"
+          sortable
+          filterable
+          filterPlaceholder="Filter by period or stage…"
+          pageSize={20}
+          emptyIcon="📋"
+          emptyTitle="No APARs initiated yet"
+          emptyMessage="Initiate an APAR to start the annual performance appraisal cycle. Each APAR moves through Reporting Officer → Reviewing Officer → Accepting Authority sign-off per SPARROW norms."
+        />
       </Card>
     </main>
   );
