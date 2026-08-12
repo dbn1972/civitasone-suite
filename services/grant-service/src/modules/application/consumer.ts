@@ -170,6 +170,43 @@ export function registerApplicationConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
+  queue.subscribe(COMMANDS.applicationWithdraw, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; withdrawnBy: string; reason?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
+      if (!app) return;
+      assertTransition(app.status, "withdrawn");
+      await repo.updateApplication(tx, p.id, {
+        status: "withdrawn",
+        withdrawnAt: new Date(),
+        updatedBy: p.withdrawnBy,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.applicationWithdrawn, eventType: EVENTS.applicationWithdrawn,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { applicationId: p.id, reason: p.reason ?? null },
+      });
+      await audit(tx, msg, "withdraw", "grant_application", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
+  });
+
+  queue.subscribe(COMMANDS.applicationAssignReviewer, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; assignedBy: string; reviewerRef: string; reviewerName?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
+      if (!app) return;
+      await repo.updateApplication(tx, p.id, {
+        reviewerRef: p.reviewerRef,
+        assignedAt: new Date(),
+        updatedBy: p.assignedBy,
+      });
+      await audit(tx, msg, "assign_reviewer", "grant_application", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success"): Promise<void> {

@@ -61,6 +61,52 @@ export function registerSchemeConsumers(rawQueue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "scheme_criteria", p.schemeId));
   });
+  queue.subscribe(COMMANDS.schemeUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; updatedBy: string;
+      name?: string; sanctionRef?: string; budgetMinor?: number;
+      maxAmountMinor?: number; openAt?: string; closeAt?: string;
+      reportingFrequencyDays?: number;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const patch: Parameters<typeof repo.updateScheme>[2] = { updatedBy: p.updatedBy };
+      if (p.name !== undefined)                   patch.name = p.name;
+      if (p.sanctionRef !== undefined)            patch.sanctionRef = p.sanctionRef;
+      if (p.budgetMinor !== undefined)            patch.budgetMinor = BigInt(p.budgetMinor);
+      if (p.maxAmountMinor !== undefined)         patch.maxAmountMinor = BigInt(p.maxAmountMinor);
+      if (p.reportingFrequencyDays !== undefined) patch.reportingFrequencyDays = p.reportingFrequencyDays;
+      if (p.openAt !== undefined)                 patch.openAt = new Date(p.openAt);
+      if (p.closeAt !== undefined)                patch.closeAt = new Date(p.closeAt);
+      await repo.updateScheme(tx, p.id, patch);
+      await enqueue(tx, {
+        topic: EVENTS.schemeUpdated, eventType: EVENTS.schemeUpdated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { schemeId: p.id },
+      });
+      await audit(tx, msg, "update", "grant_scheme", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "scheme", p.id));
+  });
+
+  queue.subscribe(COMMANDS.schemeClose, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; closedBy: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.updateScheme(tx, p.id, {
+        status: "closed",
+        closeAt: new Date(),
+        updatedBy: p.closedBy,
+      });
+      await enqueue(tx, {
+        topic: EVENTS.schemeClosed, eventType: EVENTS.schemeClosed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { schemeId: p.id },
+      });
+      await audit(tx, msg, "close", "grant_scheme", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "scheme", p.id));
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
