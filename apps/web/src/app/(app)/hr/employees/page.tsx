@@ -4,29 +4,40 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getEmployees } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 
-const newBtnStyle: React.CSSProperties = {
-  minHeight: 40,
-  padding: "0 16px",
-  display: "flex",
-  alignItems: "center",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 14,
-  background: "var(--primary)",
-  color: "#fff",
-  textDecoration: "none",
+const TYPE_LABELS: Record<string, string> = {
+  permanent: "Permanent",
+  probation: "On Probation",
+  contractual: "Contractual",
+  deputation: "Deputation",
+  consultant: "Consultant",
+  intern: "Intern / Trainee",
 };
 
-export default async function EmployeeDirectoryPage() {
+export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
   const { data: rawEmployees, source } = await getEmployees();
   const employees = rawEmployees as EmpRow[];
 
-  const total = employees.length;
-  // P1-5: canonical lowercase status contract (see hrms employee/status.ts).
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
+  const total = employees.length;
   const active = employees.filter((e) => SERVING.has(e.status)).length;
   const onLeave = employees.filter((e) => e.status === "on_leave").length;
   const others = total - active - onLeave;
+
+  const typeFilter = searchParams?.type ?? "all";
+  const filtered = typeFilter === "all"
+    ? employees
+    : employees.filter((e) => {
+        const raw = e as Record<string, unknown>;
+        return (raw.employeeTypeCode ?? raw.status ?? "") === typeFilter;
+      });
+
+  const TYPE_TABS = [
+    { key: "all", label: `All (${total})` },
+    { key: "permanent", label: "Permanent" },
+    { key: "contractual", label: "Contractual" },
+    { key: "deputation", label: "Deputation" },
+    { key: "consultant", label: "Consultant" },
+  ];
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -34,20 +45,36 @@ export default async function EmployeeDirectoryPage() {
         title="Employee Directory"
         subtitle="All staff, grades and posting locations."
         actions={
-          <Link href="/hr/employees/new" style={newBtnStyle}>
-            + Add Employee
-          </Link>
+          <Link href="/hr/employees/new" className="btn primary">+ Add Employee</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="👥" iconBg="#e6f7f0" label="Total" value={total} />
-        <StatCard icon="✅" iconBg="#e6f0ff" label="Active" value={active} />
+        <StatCard icon="✅" iconBg="#e6f0ff" label="Active (Serving)" value={active} />
         <StatCard icon="🌴" iconBg="#fffbe6" label="On Leave" value={onLeave} />
         <StatCard icon="📋" iconBg="#f5f5f5" label="Others" value={others} />
       </StatGrid>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {TYPE_TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={t.key === "all" ? "/hr/employees" : `/hr/employees?type=${t.key}`}
+            className={typeFilter === t.key ? "chip chip-active" : "chip"}
+            style={{
+              fontSize: 13, padding: "5px 12px", borderRadius: 20,
+              background: typeFilter === t.key ? "var(--primary)" : "var(--bg2)",
+              color: typeFilter === t.key ? "#fff" : "var(--ink)",
+              textDecoration: "none", fontWeight: typeFilter === t.key ? 600 : 400,
+              border: "1px solid var(--line)",
+            }}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </div>
       <Card title="All Employees">
-        <EmployeesTable employees={employees} source={source} />
+        <EmployeesTable employees={filtered} source={source} />
       </Card>
     </main>
   );

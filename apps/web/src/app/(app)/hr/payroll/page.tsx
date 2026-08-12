@@ -29,7 +29,7 @@ export default async function PayrollPage() {
         subtitle="Monthly salary processing and statutory run status."
         help="payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       {structures.length === 0 ? (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="pad">
