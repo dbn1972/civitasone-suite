@@ -47,7 +47,7 @@ export default async function NpsStatutoryPage() {
         subtitle="NPS contribution records for employees enrolled under the National Pension System (post-2004 recruits)."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e6f0ff" label="NPS Records" value={rows.length} />
         <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution (10%)" value={formatMoney(totalEmpContribMinor)} />

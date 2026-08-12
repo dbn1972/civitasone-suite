@@ -24,7 +24,7 @@ export default async function GpfStatementsPage() {
   return (
     <>
       <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." back="/hr/payroll" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <Card title="GPF Ledger">
         {tableRows.length === 0 ? (
           <EmptyState

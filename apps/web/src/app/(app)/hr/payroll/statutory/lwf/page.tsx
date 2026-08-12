@@ -36,7 +36,7 @@ export default async function LwfPage() {
         subtitle="State-wise LWF employee/employer contribution configuration."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🤝" iconBg="#e6f0ff" label="States Configured" value={rows.length} />
       </StatGrid>

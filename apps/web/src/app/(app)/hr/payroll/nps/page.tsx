@@ -26,7 +26,7 @@ export default async function NpsStatementsPage() {
   return (
     <>
       <PageHeader title="NPS Statements" subtitle="National Pension System contributions — 10% employee + 14% employer." back="/hr/payroll" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <Card title="NPS Ledger">
         {tableRows.length === 0 ? (
           <EmptyState

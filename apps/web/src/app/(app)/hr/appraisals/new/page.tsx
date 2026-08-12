@@ -13,7 +13,7 @@ export default async function NewAppraisalPage() {
         subtitle="Create a performance review record."
         back="/hr/appraisals"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <NewAppraisalForm employees={employees} />
     </main>
   );

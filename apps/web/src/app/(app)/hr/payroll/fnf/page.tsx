@@ -43,7 +43,7 @@ export default async function FnfPage() {
         subtitle="Compute and track full-and-final (F&F) separation settlements."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="🧮" iconBg="#e6f0ff" label="Total Settlements" value={settlements.length} />

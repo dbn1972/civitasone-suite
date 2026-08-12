@@ -21,7 +21,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
     return (
       <>
         <PageHeader title="Payroll Run" back="/hr/payroll" backLabel="Payroll Runs" />
-        {source === "error" && <DataSourceBadge source="error" />}
+        <DataSourceBadge source={source} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
             Payroll run not found. It may have been removed or you may not have access.
@@ -54,7 +54,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         back="/hr/payroll"
         backLabel="Payroll Runs"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <PayrollRunActions
         runId={run.id}
         status={run.status}

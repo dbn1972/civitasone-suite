@@ -39,7 +39,7 @@ export default async function PensionersPage() {
           <Link href="/hr/payroll/pensioners/new" className="btn primary">+ Add Pensioner</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="👴" iconBg="#f5f5f5" label="Total Pensioners" value={total} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />

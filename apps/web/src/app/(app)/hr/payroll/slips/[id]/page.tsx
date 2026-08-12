@@ -12,7 +12,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
       <>
         <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
         <div aria-live="assertive" aria-atomic="true">
-          {source === "error" && <DataSourceBadge source="error" />}
+          <DataSourceBadge source={source} />
         </div>
         <Card padding>
           <p style={{ textAlign: "center", color: "#94a3b8" }}>
@@ -62,7 +62,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
       />
 
       <div aria-live="assertive" aria-atomic="true">
-        {source === "error" && <DataSourceBadge source="error" />}
+        <DataSourceBadge source={source} />
       </div>
 
       {/* Summary cards */}

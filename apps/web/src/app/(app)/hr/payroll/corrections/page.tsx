@@ -63,7 +63,7 @@ export default async function CorrectionsPage() {
         subtitle="Retroactive salary component corrections and resulting arrears."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="✏️" iconBg="#e6f0ff" label="Total Corrections" value={items.length} />

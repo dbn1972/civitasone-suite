@@ -62,7 +62,7 @@ export default async function SalaryRevisionsPage() {
         subtitle="Basic and gross salary revision history — increments, promotions, and pay-commission fixation."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📈" iconBg="#e6f0ff" label="Total Revisions" value={items.length} />
       </StatGrid>

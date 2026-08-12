@@ -88,7 +88,7 @@ export default async function AparDetailPage({
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="APAR Detail" subtitle="Not found" back="/hr/apar" />
-        {result.source === "error" && <DataSourceBadge source="error" />}
+        <DataSourceBadge source={result.source} />
         <Card title="">
           <EmptyState icon="📋" title="APAR not found" message="This appraisal record does not exist or you do not have access." />
         </Card>
@@ -106,7 +106,7 @@ export default async function AparDetailPage({
         subtitle={`Employee ${appraisal.employeeId} · ${stageLabel}`}
         back="/hr/apar"
       />
-      {result.source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={result.source} />
 
       <Card title="Appraisal Details">
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>

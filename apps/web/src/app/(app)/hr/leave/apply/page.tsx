@@ -32,7 +32,7 @@ export default async function ApplyLeavePage() {
         subtitle="Submit a leave request for approval."
         back="/hr/leave"
       />
-      {resolvedSource === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={resolvedSource} />
       <ApplyLeaveForm employees={resolvedEmployees} />
     </>
   );

@@ -69,7 +69,7 @@ export default async function PayrollRegisterPage({
         subtitle="Department-wise payroll summary for a run or period."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <Card title="Filter Register" padding>
         <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>

@@ -53,7 +53,7 @@ export default async function TalentPoolPage({
         backLabel="Recruitment"
         help="hr"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       {/* Filters */}
       <Card padding>

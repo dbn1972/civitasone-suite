@@ -44,7 +44,7 @@ export default async function PfStatutoryPage() {
         subtitle="Employee/employer PF contributions and EPFO ECR file generation."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🏦" iconBg="#e6f0ff" label="PF Records" value={rows.length} />
         <StatCard icon="👤" iconBg="#e6f7f0" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />

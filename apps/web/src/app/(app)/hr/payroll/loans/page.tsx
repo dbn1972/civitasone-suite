@@ -28,7 +28,7 @@ export default async function LoansPage({
         subtitle="Search, create and disburse employee loans and view the sanctioned amount, EMI and outstanding balance."
         back="/hr/payroll"
       />
-      {empId && result.source === "error" && <DataSourceBadge source="error" />}
+      {empId && <DataSourceBadge source={result.source} />}
 
       <Card title="Search Loans by Employee">
         <LoanSearchForm initialEmpId={empId} />

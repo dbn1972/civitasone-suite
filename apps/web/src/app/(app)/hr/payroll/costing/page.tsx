@@ -103,8 +103,8 @@ export default async function CostingPage({
         subtitle="Define cost-center allocation rules and view the monthly costing report."
         back="/hr/payroll"
       />
-      {period && result.source === "error" && <DataSourceBadge source="error" />}
-      {rulesResult.source === "error" && <DataSourceBadge source="error" />}
+      {period && <DataSourceBadge source={result.source} />}
+      <DataSourceBadge source={rulesResult.source} />
 
       <CreateCostingRuleForm />
 

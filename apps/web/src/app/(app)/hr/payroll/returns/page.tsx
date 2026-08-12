@@ -266,7 +266,7 @@ export default async function ReturnsPage({
             />
           ) : (
             <>
-              {src26 === "error" && <DataSourceBadge source="error" />}
+              <DataSourceBadge source={src26 === "error" ? "error" : "api"} />
               <StatGrid>
                 <StatCard icon="👥" iconBg="#e6f0ff" label="Deductees" value={f26.deducteeCount} />
                 <StatCard icon="💰" iconBg="#e6f7f0" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />

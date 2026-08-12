@@ -36,7 +36,7 @@ export default async function ProfessionalTaxPage() {
         subtitle="State-wise professional tax slabs (monthly deduction by gross-salary band)."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e6f0ff" label="PT Slabs Configured" value={rows.length} />
       </StatGrid>

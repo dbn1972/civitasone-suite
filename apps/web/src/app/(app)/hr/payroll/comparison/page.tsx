@@ -95,7 +95,7 @@ export default async function PayrollComparisonPage({
         subtitle="Month-on-month comparison of payroll register totals."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source === "error" ? "error" : "api"} />
 
       {filterForm}
 

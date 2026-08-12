@@ -46,7 +46,7 @@ export default async function FlexBenefitsPage() {
         subtitle="Flexible-benefit plans and employee component elections."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🧩" iconBg="#e6f0ff" label="My Elections" value={elections.length} />
         <StatCard icon="💰" iconBg="#e6f7f0" label="Total Elected" value={formatMoney(totalElectedMinor)} />

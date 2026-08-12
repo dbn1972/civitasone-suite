@@ -45,7 +45,7 @@ export default async function BonusPage() {
         subtitle="Statutory bonus computation (Payment of Bonus Act) and bonus history."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🎁" iconBg="#e6f0ff" label="Bonus Records" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved/Paid" value={items.filter((r) => r.status === "approved" || r.status === "paid").length} />

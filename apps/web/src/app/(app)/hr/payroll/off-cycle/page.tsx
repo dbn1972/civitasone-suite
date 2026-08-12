@@ -29,7 +29,7 @@ export default async function OffCyclePage() {
         subtitle="Bonus, incentive, and ad-hoc off-cycle payment runs."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Runs" value={items.length} />
