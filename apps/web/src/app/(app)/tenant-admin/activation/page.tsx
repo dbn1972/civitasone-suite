@@ -100,10 +100,10 @@ export default async function ActivationPage() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Step</th>
-                  <th style={{ textAlign: "right" }}>Offices reached</th>
-                  <th style={{ textAlign: "right" }}>Dropped here</th>
-                  <th style={{ textAlign: "right" }}>Kept from previous</th>
+                  <th scope="col">Step</th>
+                  <th scope="col" style={{ textAlign: "right" }}>Offices reached</th>
+                  <th scope="col" style={{ textAlign: "right" }}>Dropped here</th>
+                  <th scope="col" style={{ textAlign: "right" }}>Kept from previous</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,7 +113,7 @@ export default async function ActivationPage() {
                     <tr key={step}>
                       <td>{STEP_LABELS[step] ?? step}</td>
                       <td className="num">{stage.reached}</td>
-                      <td className="num" style={{ color: stage.droppedFromPrev > 0 ? "#b91c1c" : "var(--mut)" }}>
+                      <td className="num" style={{ color: stage.droppedFromPrev > 0 ? "var(--bad)" : "var(--mut)" }}>
                         {stage.droppedFromPrev > 0 ? `−${stage.droppedFromPrev}` : "—"}
                       </td>
                       <td className="num">{Math.round(stage.retention * 100)}%</td>

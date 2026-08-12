@@ -45,7 +45,7 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
       >
         {busy ? "Revoking…" : "Revoke"}
       </button>
-      {error ? <span role="alert" aria-live="assertive" style={{ fontSize: 11, color: "#b91c1c", marginLeft: 6 }}>{error}</span> : null}
+      {error ? <span role="alert" aria-live="assertive" style={{ fontSize: 11, color: "var(--bad)", marginLeft: 6 }}>{error}</span> : null}
     </>
   );
 }

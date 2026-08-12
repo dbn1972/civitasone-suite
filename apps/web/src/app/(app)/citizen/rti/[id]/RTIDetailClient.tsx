@@ -168,7 +168,7 @@ export function RTIDetailClient({ id }: { id: string }) {
         }
       />
 
-      {notice ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", marginBottom: 12 }}>{notice}</p> : null}
+      {notice ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginBottom: 12 }}>{notice}</p> : null}
 
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

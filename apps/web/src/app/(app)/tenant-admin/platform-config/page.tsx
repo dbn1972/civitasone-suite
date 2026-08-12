@@ -60,7 +60,7 @@ export default async function PlatformConfigPage() {
         {/* Cache TTL */}
         <Card title="Cache TTL (seconds per module)" padding>
           <table className="tbl" style={{ fontSize: 13 }}>
-            <thead><tr><th>Module</th><th style={{ textAlign: "right" }}>TTL (s)</th></tr></thead>
+            <thead><tr><th scope="col">Module</th><th scope="col" style={{ textAlign: "right" }}>TTL (s)</th></tr></thead>
             <tbody>
               {Object.entries(ctrl.cacheTtl).map(([mod, ttl]) => (
                 <tr key={mod}><td style={{ textTransform: "capitalize" }}>{mod}</td><td className="num">{ttl}</td></tr>

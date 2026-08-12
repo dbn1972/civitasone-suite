@@ -144,7 +144,7 @@ export default function RegisterGrievancePage() {
               role={status === "error" ? "alert" : undefined}
               style={{
                 marginTop: 12,
-                color: status === "error" ? "#b91c1c" : "#047857",
+                color: status === "error" ? "var(--bad)" : "var(--good)",
                 fontSize: "0.875rem",
               }}
             >

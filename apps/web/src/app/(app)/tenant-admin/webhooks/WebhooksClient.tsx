@@ -97,11 +97,11 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
           <table className="data-table" role="table" aria-label="Webhooks list">
             <thead>
               <tr>
-                <th>URL</th>
-                <th>Events</th>
-                <th>Status</th>
-                <th>Last Delivery</th>
-                <th>Actions</th>
+                <th scope="col">URL</th>
+                <th scope="col">Events</th>
+                <th scope="col">Status</th>
+                <th scope="col">Last Delivery</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -151,11 +151,11 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
             <table className="data-table" role="table" aria-label="Webhook delivery log">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
-                  <th>Event Type</th>
-                  <th>Status</th>
-                  <th>Attempt</th>
-                  <th>Response</th>
+                  <th scope="col">Timestamp</th>
+                  <th scope="col">Event Type</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Attempt</th>
+                  <th scope="col">Response</th>
                 </tr>
               </thead>
               <tbody>

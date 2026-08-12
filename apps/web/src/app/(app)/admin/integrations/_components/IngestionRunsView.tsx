@@ -113,12 +113,12 @@ export function IngestionRunsView({ provider, env }: { provider: string; env: st
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }} aria-labelledby={headingId}>
               <thead>
                 <tr style={{ textAlign: "left", color: "var(--ink2)" }}>
-                  <th style={thStyle}>Status</th>
-                  <th style={thStyle}>Files</th>
-                  <th style={thStyle}>Created</th>
-                  <th style={thStyle}>Failed</th>
-                  <th style={thStyle}>Started</th>
-                  <th style={thStyle}>Finished</th>
+                  <th scope="col" style={thStyle}>Status</th>
+                  <th scope="col" style={thStyle}>Files</th>
+                  <th scope="col" style={thStyle}>Created</th>
+                  <th scope="col" style={thStyle}>Failed</th>
+                  <th scope="col" style={thStyle}>Started</th>
+                  <th scope="col" style={thStyle}>Finished</th>
                 </tr>
               </thead>
               <tbody>

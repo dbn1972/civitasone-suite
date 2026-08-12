@@ -113,12 +113,12 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
           <table className="data-table" role="table" aria-label="Past data exports">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Format</th>
-                <th>Size</th>
-                <th>Status</th>
-                <th>Action</th>
+                <th scope="col">Date</th>
+                <th scope="col">Type</th>
+                <th scope="col">Format</th>
+                <th scope="col">Size</th>
+                <th scope="col">Status</th>
+                <th scope="col">Action</th>
               </tr>
             </thead>
             <tbody>

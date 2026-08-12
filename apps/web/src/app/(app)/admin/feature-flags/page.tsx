@@ -98,13 +98,13 @@ export default function FeatureFlagsPage() {
           <table className="data-table" role="table" aria-label="Feature flags list">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Key</th>
-                <th>Status</th>
-                <th>Rollout</th>
-                <th>Segments</th>
-                <th>Enabled</th>
-                <th>Kill Switch</th>
+                <th scope="col">Name</th>
+                <th scope="col">Key</th>
+                <th scope="col">Status</th>
+                <th scope="col">Rollout</th>
+                <th scope="col">Segments</th>
+                <th scope="col">Enabled</th>
+                <th scope="col">Kill Switch</th>
               </tr>
             </thead>
             <tbody>

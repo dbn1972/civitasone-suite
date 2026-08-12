@@ -54,7 +54,7 @@ export function UserSecurityActions({ userId }: Props) {
         {busy === "revokeAll" ? "Revoking…" : "Revoke all sessions"}
       </button>
       <span role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", alignSelf: "center" }}>{status}</span>
-      <span role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", alignSelf: "center" }}>{error}</span>
+      <span role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", alignSelf: "center" }}>{error}</span>
     </>
   );
 }
