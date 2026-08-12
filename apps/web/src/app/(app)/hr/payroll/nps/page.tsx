@@ -24,7 +24,7 @@ export default async function NpsStatementsPage() {
   }));
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="NPS Statements" subtitle="National Pension System contributions — 10% employee + 14% employer." back="/hr/payroll" />
       <DataSourceBadge source={source} />
       <Card title="NPS Ledger">
@@ -52,6 +52,6 @@ export default async function NpsStatementsPage() {
           />
         )}
       </Card>
-    </>
+    </main>
   );
 }

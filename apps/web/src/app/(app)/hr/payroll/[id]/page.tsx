@@ -19,7 +19,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
   if (!run) {
     return (
-      <>
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Payroll Run" back="/hr/payroll" backLabel="Payroll Runs" />
         <DataSourceBadge source={source} />
         <Card padding>
@@ -27,7 +27,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
             Payroll run not found. It may have been removed or you may not have access.
           </p>
         </Card>
-      </>
+      </main>
     );
   }
 
@@ -47,7 +47,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   const slipRows = run.salarySlips as SalarySlipRow[];
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Payroll Run — ${run.payPeriod}`}
         subtitle={`Run dated ${formatIndianDate(run.runDate)}`}
@@ -111,6 +111,6 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           rowLinkPrefix="/hr/employees/"
         />
       </Card>
-    </>
+    </main>
   );
 }

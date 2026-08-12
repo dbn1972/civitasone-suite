@@ -26,7 +26,7 @@ export default async function ApplyLeavePage() {
   }
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Apply for Leave"
         subtitle="Submit a leave request for approval."
@@ -34,6 +34,6 @@ export default async function ApplyLeavePage() {
       />
       <DataSourceBadge source={resolvedSource} />
       <ApplyLeaveForm employees={resolvedEmployees} />
-    </>
+    </main>
   );
 }

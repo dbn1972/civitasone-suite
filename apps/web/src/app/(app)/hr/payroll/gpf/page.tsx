@@ -22,7 +22,7 @@ export default async function GpfStatementsPage() {
   }));
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." back="/hr/payroll" />
       <DataSourceBadge source={source} />
       <Card title="GPF Ledger">
@@ -49,6 +49,6 @@ export default async function GpfStatementsPage() {
           />
         )}
       </Card>
-    </>
+    </main>
   );
 }

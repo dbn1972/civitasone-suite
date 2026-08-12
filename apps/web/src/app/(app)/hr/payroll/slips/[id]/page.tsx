@@ -9,7 +9,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
   if (!slip) {
     return (
-      <>
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
         <div aria-live="assertive" aria-atomic="true">
           <DataSourceBadge source={source} />
@@ -19,7 +19,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             Salary slip not found or could not be loaded.
           </p>
         </Card>
-      </>
+      </main>
     );
   }
 
@@ -43,7 +43,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   const stat = richSlip.statutory;
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Salary Slip — ${slip.payPeriod}`}
         subtitle={slip.employeeName}
@@ -212,6 +212,6 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
           </p>
         )}
       </Card>
-    </>
+    </main>
   );
 }

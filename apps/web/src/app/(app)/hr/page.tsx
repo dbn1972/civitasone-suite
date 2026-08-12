@@ -155,7 +155,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 
 export default function Page() {
 	return (
-		<main className="page-main" aria-labelledby="page-heading">
+		<main className="page-main wrap" aria-labelledby="page-heading">
 			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." help="hr" />
 			<HRHubNavigation categories={hrCategories} />
 		</main>

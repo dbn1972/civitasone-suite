@@ -13,7 +13,7 @@ export default async function SalarySlipsPage() {
   const draftCount = slips.filter((s) => s.status === "draft").length;
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Salary Slips"
         subtitle="Individual employee salary statements."
@@ -27,6 +27,6 @@ export default async function SalarySlipsPage() {
         <StatCard icon="📄" iconBg="#fffbe6" label="Pending (Draft)" value={draftCount} />
       </StatGrid>
       <SalarySlipsTable slips={slips} />
-    </>
+    </main>
   );
 }

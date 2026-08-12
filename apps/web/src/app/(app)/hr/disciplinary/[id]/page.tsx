@@ -17,14 +17,14 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
 
   if (!dcase) {
     return (
-      <>
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
           <a href="/hr/vigilance">Disciplinary</a> <span aria-hidden="true">›</span> Not found
         </nav>
         <PageHeader title="Disciplinary Case" back="/hr/vigilance" />
         <EmptyState icon="📁" title="Case not found" message="This disciplinary case may have been removed or the ID is invalid." />
-      </>
+      </main>
     );
   }
 
@@ -37,7 +37,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
   const caseLabel = caseNo !== "—" ? caseNo : params.id;
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
         <a href="/hr/vigilance">Disciplinary</a> <span aria-hidden="true">›</span>{" "}
@@ -48,13 +48,9 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
         title={`Disciplinary case ${caseLabel}`}
         subtitle={proceedingType !== "—" ? `${proceedingType} proceeding` : undefined}
         back="/hr/vigilance"
-        actions={
-          <>
-            <StatusPill status={status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
-          </>
-        }
+        actions={<StatusPill status={status} />}
       />
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={status.replace(/_/g, " ")} />
@@ -87,6 +83,6 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
         defaultApprovalChain="file_noting"
         notifyPath={`/api/proxy/v1/hrms/disciplinary/${params.id}/submit-approval`}
       />
-    </>
+    </main>
   );
 }
