@@ -7,6 +7,7 @@ import { schema as boqModule } from "../modules/boq/schema.js";
 import { schema as tenderModule } from "../modules/tender/schema.js";
 import { schema as executionModule } from "../modules/execution/schema.js";
 import { schema as billingModule } from "../modules/billing/schema.js";
+import { schema as contractorModule } from "../modules/contractor/schema.js";
 
 export const worksSchemaMap = {
   ...mastersModule,
@@ -16,6 +17,7 @@ export const worksSchemaMap = {
   ...tenderModule,
   ...executionModule,
   ...billingModule,
+  ...contractorModule,
   ...outboxSchema,
 };
 

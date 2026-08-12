@@ -49,6 +49,9 @@ export const COMMANDS = {
   billCreate:                  "works.bill.create",
   billFinalize:                "works.bill.finalize",
   accountCompile:              "works.account.compile",
+  // Contractor
+  contractorCreate:            "works.contractor.create",
+  contractorRate:              "works.contractor.rate",
 } as const;
 
 export const EVENTS = {

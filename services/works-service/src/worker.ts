@@ -13,6 +13,7 @@ import { registerBoqConsumers } from "./modules/boq/consumer.js";
 import { registerTenderConsumers } from "./modules/tender/consumer.js";
 import { registerExecutionConsumers } from "./modules/execution/consumer.js";
 import { registerBillingConsumers } from "./modules/billing/consumer.js";
+import { registerContractorConsumers } from "./modules/contractor/consumer.js";
 
 const log = pino({ name: "works-worker" });
 
@@ -51,6 +52,7 @@ registerBoqConsumers(queue);
 registerTenderConsumers(queue);
 registerExecutionConsumers(queue);
 registerBillingConsumers(queue);
+registerContractorConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on

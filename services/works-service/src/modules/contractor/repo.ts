@@ -1,0 +1,51 @@
+import { eq, and, desc, sql } from "drizzle-orm";
+import { scopedRead } from "../../shared/db.js";
+import { contractors, type ContractorInsert, type ContractorRow } from "./schema.js";
+
+export type Writer = { insert: Function; update: Function; select: Function };
+
+export async function insertContractor(tx: Writer, row: ContractorInsert): Promise<void> {
+  await (tx as any).insert(contractors).values(row);
+}
+
+export async function findContractorById(tenantId: string, id: string): Promise<ContractorRow | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(contractors)
+      .where(and(eq(contractors.tenantId, tenantId), eq(contractors.id, id)))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
+export async function listContractors(
+  tenantId: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<ContractorRow[]> {
+  return scopedRead((tx) =>
+    tx.select().from(contractors)
+      .where(and(eq(contractors.tenantId, tenantId), eq(contractors.active, true)))
+      .orderBy(desc(contractors.createdAt))
+      .limit(opts?.limit ?? 50)
+      .offset(opts?.offset ?? 0),
+  );
+}
+
+export async function updateContractorRating(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  newRating: number,
+): Promise<void> {
+  // incremental average: new_avg = (old_avg * n + rating) / (n + 1)
+  await (tx as any)
+    .update(contractors)
+    .set({
+      performanceRating: sql`
+        case when rating_count = 0 then ${newRating}
+             else cast(round((performance_rating * rating_count + ${newRating})::numeric / (rating_count + 1)) as int)
+        end`,
+      ratingCount: sql`rating_count + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
+}
