@@ -351,18 +351,8 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ── Gap: Grievances (minor disciplinary cases) ─────────────────────────────
   app.get("/v1/hrms/grievances", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const { rows } = await sqlPool.query(`
-      SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-             c.allegation AS category, c.charge_memo_date AS "filedDate",
-             COALESCE(c.inquiry_officer_name,'Unassigned') AS "assignedTo",
-             c.allegation AS description, c.status
-      FROM disciplinary.hrms_disciplinary_cases c
-      JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
-      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-      WHERE c.tenant_id = $1 AND c.proceeding_type = 'minor'
-      ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
-    `, [ctx.tenantId]);
-    return reply.send({ data: rows });
+    // Grievance table pending dedicated migration — stub until hrms_grievances is created
+    return reply.send({ data: [], meta: { note: "Grievance table pending — coming in next migration" } });
   });
 
   // ── Gap: Skills (employee competency assessments) ──────────────────────────

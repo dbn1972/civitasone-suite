@@ -60,7 +60,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     // Get receiver name for feed display
     const receiverRow = await sqlClient.query(
-      `SELECT first_name, last_name, employee_code FROM hrms.employees WHERE id = $1 AND tenant_id = $2`,
+      `SELECT first_name, last_name, employee_code FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
       [body.receiverId, ctx.tenantId],
     );
     const receiver = receiverRow.rows[0];
@@ -70,7 +70,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     // Get giver name
     const giverRow = await sqlClient.query(
-      `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     const giverName = giverRow.rows[0]
@@ -173,7 +173,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const dd = String(today.getDate()).padStart(2, "0");
     const birthdays = await sqlClient.query(
       `SELECT id, first_name, last_name, department, designation, photo_url
-       FROM hrms.employees
+       FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
          AND EXTRACT(MONTH FROM date_of_birth) = $2
          AND EXTRACT(DAY FROM date_of_birth) = $3`,
@@ -194,7 +194,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // 3. New joinees (last 30 days)
     const newJoinees = await sqlClient.query(
       `SELECT id, first_name, last_name, department, designation, joining_date, photo_url
-       FROM hrms.employees
+       FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
          AND joining_date > NOW() - INTERVAL '30 days'
        ORDER BY joining_date DESC LIMIT 5`,
@@ -251,7 +251,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     // Get author name
     const authorRow = await sqlClient.query(
-      `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     const authorName = authorRow.rows[0]
@@ -293,7 +293,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = await sqlClient.query(
       `SELECT id, first_name, last_name, department, designation, photo_url
-       FROM hrms.employees
+       FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
          AND EXTRACT(MONTH FROM date_of_birth) = $2
          AND EXTRACT(DAY FROM date_of_birth) = $3`,
@@ -356,7 +356,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     // Queue for reporting manager approval notification
     const manager = await sqlClient.query(
-      `SELECT reporting_to FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     if (manager.rows[0]?.reporting_to) {
@@ -543,7 +543,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = await sqlClient.query(
       `SELECT id, first_name, last_name, designation, department, reporting_to, photo_url, employee_code
-       FROM hrms.employees
+       FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
        ORDER BY designation`,
       [ctx.tenantId],

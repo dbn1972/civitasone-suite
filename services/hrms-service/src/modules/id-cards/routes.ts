@@ -87,7 +87,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
     // Get issuer name
     const issuerRow = await sqlClient.query(
-      `SELECT first_name, last_name FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     const issuerName = issuerRow.rows[0]
@@ -174,7 +174,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
 
     // Find employee ID for current user
     const empRow = await sqlClient.query(
-      `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1`,
+      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1`,
       [ctx.actorId, ctx.tenantId],
     );
     const employeeId = empRow.rows[0]?.id;

@@ -173,7 +173,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
               d.flagged_reason, d.first_seen_at, d.last_seen_at, d.last_ip, d.login_count,
               e.first_name, e.last_name, e.employee_code, e.department
        FROM hrms.trusted_devices d
-       LEFT JOIN hrms.employees e ON e.user_id = d.user_id AND e.tenant_id = d.tenant_id
+       LEFT JOIN employee.hrms_employees e ON e.user_id = d.user_id AND e.tenant_id = d.tenant_id
        ${where}
        ORDER BY d.last_seen_at DESC LIMIT 200`,
       params,

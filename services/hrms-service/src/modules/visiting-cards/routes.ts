@@ -54,7 +54,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
               vc.website, vc.linkedin, vc.twitter, vc.address, vc.tagline,
               vc.show_personal_phone, vc.card_tier, vc.share_count, vc.scan_count,
               t.name AS org_name
-       FROM hrms.employees e
+       FROM employee.hrms_employees e
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
        LEFT JOIN public.tenants t ON t.id = e.tenant_id
        WHERE e.user_id = $1 AND e.tenant_id = $2`,
@@ -125,7 +125,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
     // Get employee ID
     const empRow = await sqlClient.query(
-      `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     if (empRow.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
@@ -172,7 +172,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
       `SELECT e.first_name, e.last_name, e.designation, e.department, e.email, e.phone, e.photo_url,
               vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.alt_email,
               vc.website, vc.address, vc.tagline, vc.show_personal_phone, e.id AS emp_id, e.tenant_id
-       FROM hrms.employees e
+       FROM employee.hrms_employees e
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
        WHERE e.employee_code = $1 AND e.status = 'active'`,
       [code],
@@ -219,7 +219,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     const { method } = (req.body as any) ?? {}; // whatsapp, email, qr, nfc, copy
 
     const empRow = await sqlClient.query(
-      `SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
     if (empRow.rowCount === 0) return reply.send({ status: "ok" });
@@ -241,7 +241,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     const emp = await sqlClient.query(
       `SELECT e.first_name, e.last_name, e.designation, e.department, e.email, e.phone, e.photo_url,
               vc.display_name, vc.suffix, vc.title_override, vc.website, vc.linkedin, vc.tagline
-       FROM hrms.employees e
+       FROM employee.hrms_employees e
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
        WHERE e.user_id = $1 AND e.tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
