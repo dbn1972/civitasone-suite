@@ -5,7 +5,7 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { submitApplicationBody, scoreApplicationBody, approveApplicationBody, rejectApplicationBody, idParam } from "./validators.js";
+import { submitApplicationBody, scoreApplicationBody, approveApplicationBody, rejectApplicationBody, withdrawApplicationBody, assignReviewerBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -46,13 +46,31 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectApplication(ctx, id, body));
   });
 
+  /** Withdraw an application (applicant or officer). Terminal states are blocked. */
+  app.patch("/v1/grants/applications/:id/withdraw", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, GRANT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = withdrawApplicationBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.withdrawApplication(ctx, id, body));
+  });
+
+  /** Assign a reviewer to an application before scoring. */
+  app.patch("/v1/grants/applications/:id/assign-reviewer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, GRANT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = assignReviewerBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.assignReviewer(ctx, id, body));
+  });
+
   app.get("/v1/grants/applications/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const app = await queries.getApplication(ctx.tenantId, id);
-    if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
-    return reply.send(app);
+    const application = await queries.getApplication(ctx.tenantId, id);
+    if (!application) throw new HttpError(404, "NOT_FOUND", "application not found");
+    return reply.send(application);
   });
 
   /** List all grant applications for the tenant (paginated). */

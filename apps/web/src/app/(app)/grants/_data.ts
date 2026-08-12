@@ -165,3 +165,115 @@ export async function getGrantApplications(): Promise<LoaderResult<GrantApplicat
     mapResponse: mapGrantApplicationSummaries,
   });
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Additional types added for detail pages
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type GrantApplicationDetail = {
+  id: string;
+  grantNo: string | null;
+  schemeId: string;
+  beneficiaryId: string;
+  status: string;
+  purpose: string;
+  amountRequestedMinor: number;
+  amountApprovedMinor: number | null;
+  submittedBy: string | null;
+  approvedBy: string | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+};
+
+export type GrantSchemeDetail = {
+  id: string;
+  code: string;
+  name: string;
+  budgetMinor: number;
+  minAmountMinor: number;
+  maxAmountMinor: number;
+  currency: string;
+  status: string;
+  openAt?: string | null;
+  closeAt?: string | null;
+  reportingFrequencyDays?: number | null;
+  sanctionRef?: string | null;
+  tenantId?: string;
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Additional mappers
+// ──────────────────────────────────────────────────────────────────────────────
+
+function mapApplicationDetail(payload: unknown): GrantApplicationDetail | null {
+  if (!isRecord(payload)) return null;
+  const id = toText(payload.id);
+  if (!id) return null;
+  return {
+    id,
+    grantNo: toText(payload.grantNo ?? payload.grant_no),
+    schemeId: toText(payload.schemeId ?? payload.scheme_id) ?? "",
+    beneficiaryId: toText(payload.beneficiaryId ?? payload.beneficiary_id) ?? "",
+    status: toText(payload.status) ?? "draft",
+    purpose: toText(payload.purpose) ?? "",
+    amountRequestedMinor: toNumber(payload.amountRequestedMinor ?? payload.amount_requested_minor),
+    amountApprovedMinor: payload.amountApprovedMinor != null ? toNumber(payload.amountApprovedMinor) : null,
+    submittedBy: toText(payload.submittedBy ?? payload.submitted_by),
+    approvedBy: toText(payload.approvedBy ?? payload.approved_by),
+    submittedAt: toText(payload.submittedAt ?? payload.submitted_at),
+    approvedAt: toText(payload.approvedAt ?? payload.approved_at),
+    createdAt: toText(payload.createdAt ?? payload.created_at) ?? new Date().toISOString(),
+  };
+}
+
+function mapSchemeDetail(payload: unknown): GrantSchemeDetail | null {
+  if (!isRecord(payload)) return null;
+  const id = toText(payload.id);
+  const code = toText(payload.code);
+  const name = toText(payload.name);
+  if (!id || !code || !name) return null;
+  return {
+    id, code, name,
+    budgetMinor: toNumber(payload.budgetMinor ?? payload.budget_minor),
+    minAmountMinor: toNumber(payload.minAmountMinor ?? payload.min_amount_minor),
+    maxAmountMinor: toNumber(payload.maxAmountMinor ?? payload.max_amount_minor),
+    currency: toText(payload.currency) ?? "INR",
+    status: toText(payload.status) ?? "draft",
+    openAt: toText(payload.openAt ?? payload.open_at),
+    closeAt: toText(payload.closeAt ?? payload.close_at),
+    reportingFrequencyDays: payload.reportingFrequencyDays != null ? toNumber(payload.reportingFrequencyDays) : null,
+    sanctionRef: toText(payload.sanctionRef ?? payload.sanction_ref),
+    tenantId: toText(payload.tenantId ?? payload.tenant_id) ?? undefined,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Additional loaders
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Fetch a single application by its UUID (raw ApplicationRow from the service). */
+export async function getApplicationById(id: string): Promise<LoaderResult<GrantApplicationDetail | null>> {
+  return fetchJson<unknown, GrantApplicationDetail | null>(
+    `/api/v1/grants/applications/${id}`,
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "grants.application.detail",
+      mapResponse: mapApplicationDetail,
+    }
+  );
+}
+
+/** Fetch a single scheme by its UUID. */
+export async function getSchemeById(id: string): Promise<LoaderResult<GrantSchemeDetail | null>> {
+  return fetchJson<unknown, GrantSchemeDetail | null>(
+    `/api/v1/grants/schemes/${id}`,
+    null,
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "grants.scheme.detail",
+      mapResponse: mapSchemeDetail,
+    }
+  );
+}

@@ -4,7 +4,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import type { SubmitApplicationBody, ScoreApplicationBody, ApproveApplicationBody, RejectApplicationBody } from "./validators.js";
+import type { SubmitApplicationBody, ScoreApplicationBody, ApproveApplicationBody, RejectApplicationBody, WithdrawApplicationBody, AssignReviewerBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -52,6 +52,37 @@ export async function rejectApplication(ctx: RequestContext, id: string, body: R
     type: COMMANDS.applicationReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "application", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function withdrawApplication(ctx: RequestContext, id: string, body: WithdrawApplicationBody): Promise<Accepted> {
+  const app = await repo.findApplicationById(id, ctx.tenantId);
+  if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
+  const terminal = ["approved", "rejected", "completed", "cancelled"];
+  if (terminal.includes(app.status)) {
+    throw new HttpError(409, "INVALID_STATE", `cannot withdraw an application in status '${app.status}'`);
+  }
+  await queue.publish(COMMANDS.applicationWithdraw, {
+    type: COMMANDS.applicationWithdraw,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, withdrawnBy: ctx.actorId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "application", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function assignReviewer(ctx: RequestContext, id: string, body: AssignReviewerBody): Promise<Accepted> {
+  const app = await repo.findApplicationById(id, ctx.tenantId);
+  if (!app) throw new HttpError(404, "NOT_FOUND", "application not found");
+  if (app.status !== "submitted" && app.status !== "under_review") {
+    throw new HttpError(409, "INVALID_STATE", `cannot assign reviewer to application in status '${app.status}'`);
+  }
+  await queue.publish(COMMANDS.applicationAssignReviewer, {
+    type: COMMANDS.applicationAssignReviewer,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, assignedBy: ctx.actorId, ...body },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "application", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

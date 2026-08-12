@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { submitUcBody, complianceReportBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const GRANT_ROLES  = ["grant_officer", "grant_admin", "super_admin", "finance_officer"];
 const READER_ROLES = [...GRANT_ROLES, "audit_officer"];
@@ -34,6 +35,17 @@ export async function utilisationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const { id: applicationId } = idParam.parse(req.params);
     return reply.send({ data: await queries.getUcStatements(ctx.tenantId, applicationId) });
+  });
+
+  /** Get a single UC by ID with its latest validation status. */
+  app.get("/v1/grants/utilization-certs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id: ucId } = idParam.parse(req.params);
+    const uc = await repo.findUcById(ucId, ctx.tenantId);
+    if (!uc) throw new HttpError(404, "NOT_FOUND", "utilisation certificate not found");
+    const validation = await repo.findLatestUcValidation(ucId, ctx.tenantId);
+    return reply.send({ data: { ...uc, latestValidation: validation ?? null } });
   });
 
   app.get("/v1/grants/utilization-certs", async (req, reply) => {
