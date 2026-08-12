@@ -8,8 +8,9 @@ import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import * as employeeRepo from "../employee/repo.js";
 import { db } from "../../shared/db.js";
-import { hrmsOvertimeRequests } from "./schema.js";
+import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests } from "./schema.js";
 import { eq, and, desc } from "drizzle-orm";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -129,17 +130,47 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: await repo.listShifts(ctx.tenantId) });
   });
 
-  // Shift-requests and WFH-requests: return empty until DB tables are built
   app.get("/v1/hrms/shift-requests", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    return reply.send({ data: [] });
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const rows = await db.select().from(hrmsShiftChangeRequests)
+      .where(eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId))
+      .orderBy(desc(hrmsShiftChangeRequests.createdAt))
+      .limit(200);
+    const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
+    const empMap = new Map(employees.map((e) => [e.id, e]));
+    return reply.send({ data: rows.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      currentShift: r.currentShift,
+      requestedShift: r.requestedShift,
+      effectiveDate: r.effectiveDate,
+      reason: r.reason ?? null,
+      status: r.status,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+    })) });
   });
 
   app.get("/v1/hrms/wfh-requests", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    return reply.send({ data: [] });
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const rows = await db.select().from(hrmsWfhRequests)
+      .where(eq(hrmsWfhRequests.tenantId, ctx.tenantId))
+      .orderBy(desc(hrmsWfhRequests.createdAt))
+      .limit(200);
+    const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
+    const empMap = new Map(employees.map((e) => [e.id, e]));
+    return reply.send({ data: rows.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      fromDate: r.fromDate,
+      toDate: r.toDate,
+      reason: r.reason ?? null,
+      status: r.status,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+    })) });
   });
 
   // ── Overtime requests ───────────────────────────────────────────────────
