@@ -180,10 +180,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await db.update(hrmsOvertimeRequests)
+    const [updated] = await db.update(hrmsOvertimeRequests)
       .set({ status: "approved", approvedBy: ctx.actorId, approvedAt: new Date(),
              updatedBy: ctx.actorId, updatedAt: new Date() })
-      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)));
+      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
+      .returning({ id: hrmsOvertimeRequests.id });
+    if (!updated) return reply.code(404).send({ error: "Overtime request not found" });
     return reply.send({ id, status: "approved" });
   });
 
@@ -192,10 +194,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body);
-    await db.update(hrmsOvertimeRequests)
+    const [updated] = await db.update(hrmsOvertimeRequests)
       .set({ status: "rejected", rejectionReason: reason ?? null,
              updatedBy: ctx.actorId, updatedAt: new Date() })
-      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)));
+      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
+      .returning({ id: hrmsOvertimeRequests.id });
+    if (!updated) return reply.code(404).send({ error: "Overtime request not found" });
     return reply.send({ id, status: "rejected" });
   });
 

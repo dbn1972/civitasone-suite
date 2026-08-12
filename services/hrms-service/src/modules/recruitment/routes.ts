@@ -3,7 +3,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { JobOpeningSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createJobOpeningBody, createApplicationBody, publicApplicationBody, offerApplicationBody, hireApplicationBody, idParam } from "./validators.js";
 import { assertKnownEngagementType } from "../employee/engagement-policy.js";
@@ -56,7 +56,13 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/talent-pool", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const q = req.query as { skill?: string; minExp?: string; source?: string; limit?: string };
+    const talentPoolQuerySchema = z.object({
+      skill: z.string().optional(),
+      minExp: z.string().regex(/^\d+$/).optional().transform(Number),
+      source: z.string().optional(),
+      limit: z.string().regex(/^\d+$/).optional().transform(Number),
+    });
+    const q = talentPoolQuerySchema.parse(req.query);
     const rows = await repo.searchApplications(ctx.tenantId, {
       skill: q.skill || undefined,
       minExp: q.minExp ? Number(q.minExp) : undefined,

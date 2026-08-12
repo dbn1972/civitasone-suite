@@ -388,7 +388,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     // manpower.current_tenant_id() requires app.tenant_id; use a transaction with SET LOCAL
     const rows = await sqlClient.begin(async (sql) => {
-      await sql.unsafe(`SET LOCAL app.tenant_id = '${ctx.tenantId}'`);
+      await sql.unsafe('SET LOCAL app.tenant_id = $1', [ctx.tenantId]);
       return sql.unsafe(`
         SELECT p.id, COALESCE(d.name, p.cadre) AS department, p.cadre,
                p.sanctioned_strength AS "sanctionedPosts", p.filled_strength AS filled,

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
-import { resolveContext } from "../../shared/context.js";
+import { resolveContext, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
@@ -85,5 +85,13 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     const apps = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
       .where(and(eq(hrmsLeaveApps.tenantId, ctx.tenantId), eq(hrmsLeaveApps.employeeId, emps[0]!.id))));
     return reply.send({ data: apps.map(a => ({ id: a.id, leaveTypeId: a.leaveTypeId, fromDate: a.fromDate, toDate: a.toDate, days: a.daysApplied, status: a.status })) });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) { return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) }); }
+    if (err instanceof HttpError) { return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false }); }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }
