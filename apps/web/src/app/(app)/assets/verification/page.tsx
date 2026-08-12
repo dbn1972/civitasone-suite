@@ -65,7 +65,7 @@ export default function AssetVerificationPage() {
         actions={<button type="button" className="btn primary" onClick={create.trigger}>+ New verification</button>}
       />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div role="status" aria-live="polite" className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       <div className="card">
         {loading ? (

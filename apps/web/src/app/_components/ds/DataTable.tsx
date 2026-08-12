@@ -198,6 +198,7 @@ export function DataTable<T extends Record<string, unknown>>({
       {visible.length === 0 ? (
         <EmptyState icon={emptyIcon} title={emptyTitle} message={emptyMessage} action={emptyAction} />
       ) : (
+        <div className="tbl-wrap">
         <table className="tbl">
           <thead>
             <tr>
@@ -206,6 +207,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 return (
                   <th
                     key={col.key}
+                    scope="col"
                     style={{ textAlign: col.align ?? "left" }}
                     aria-sort={canSort ? ariaSortFor(col.key) : undefined}
                     className={canSort ? "sortable" : undefined}
@@ -273,6 +275,7 @@ export function DataTable<T extends Record<string, unknown>>({
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       {usePaging && sorted.length > 0 && (

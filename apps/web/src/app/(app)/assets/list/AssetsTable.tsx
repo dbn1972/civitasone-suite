@@ -61,7 +61,7 @@ export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; sourc
         <Segmented options={[...TABS]} value={tab} onChange={setTab} />
       </div>
       {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}

@@ -36,9 +36,9 @@ export default async function FixedAssetsPage() {
       <div
         className="banner"
         style={{
-          background: "#fdf0e3",
-          border: "1px solid #fcd9b6",
-          color: "#9a3412",
+          background: "var(--panel)",
+          border: "1px solid var(--warn)",
+          color: "var(--warn)",
           borderRadius: 12,
           padding: "13px 16px",
           marginBottom: 18,
