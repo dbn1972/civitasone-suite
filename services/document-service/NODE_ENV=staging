@@ -1,0 +1,11 @@
+Error: FATAL: QUEUE_DRIVER is required outside test environments. Set QUEUE_DRIVER=sqs (AWS) or QUEUE_DRIVER=rabbitmq (on-prem) or QUEUE_DRIVER=memory (explicit local dev).
+    at resolveQueueDriver (/home/ec2-user/CivitasOne/civitasone-suite/services/queue-service/src/bus.ts:768:11)
+    at createQueue (/home/ec2-user/CivitasOne/civitasone-suite/services/queue-service/src/bus.ts:780:18)
+    at <anonymous> (/home/ec2-user/CivitasOne/civitasone-suite/services/document-service/src/shared/infra.ts:6:22)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+Error: createTenantDb: DATABASE_URL is required (or pass poolDsn)
+    at createTenantDb (/home/ec2-user/CivitasOne/civitasone-suite/packages/db/src/create-tenant-db.ts:107:23)
+    at <anonymous> (/home/ec2-user/CivitasOne/civitasone-suite/services/document-service/src/shared/db.ts:16:67)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
