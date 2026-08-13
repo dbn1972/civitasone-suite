@@ -75,7 +75,7 @@ export function FileAttachments({ fileId, attachments: initial }: Props) {
           />
           <button type="submit" className="btn ghost" disabled={busy}>Add attachment</button>
         </form>
-        {message ? <p style={{ fontSize: 13, color: "#047857", margin: "8px 0 0" }}>{message}</p> : null}
+        {message ? <p style={{ fontSize: 13, color: "var(--good)", margin: "8px 0 0" }}>{message}</p> : null}
       </div>
     </div>
   );

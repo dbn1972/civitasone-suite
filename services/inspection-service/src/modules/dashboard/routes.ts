@@ -31,9 +31,9 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
           tx.select({ count: sql<number>`count(*)::int` })
             .from(inspections).where(eq(inspections.tenantId, tid)),
           tx.select({ count: sql<number>`count(*)::int` })
-            .from(inspections).where(and(eq(inspections.tenantId, tid), eq(inspections.status, "finalized"))),
+            .from(inspections).where(and(eq(inspections.tenantId, tid), eq(inspections.state, "finalized"))),
           tx.select({ count: sql<number>`count(*)::int` })
-            .from(findings).where(and(eq(findings.tenantId, tid), eq(findings.status, "open"))),
+            .from(findings).where(and(eq(findings.tenantId, tid), eq(findings.state, "open"))),
           tx.select({ count: sql<number>`count(*)::int` })
             .from(inspectionAssignments)
             .where(and(eq(inspectionAssignments.tenantId, tid), eq(inspectionAssignments.status, "assigned"))),

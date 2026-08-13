@@ -51,8 +51,8 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, READ_ROLES);
     const q = listQuery.parse(req.query);
     const data = await repo.listReports(ctx.tenantId, {
-      inspectionId: q.inspectionId,
-      status: q.status,
+      inspectionId: q.inspectionId ?? undefined,
+      status: q.status ?? undefined,
       page: q.page,
       pageSize: q.pageSize,
     });
@@ -64,7 +64,14 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     const ctx = resolveContext(req);
     requireRole(ctx, INSPECTOR_ROLES);
     const body = createBody.parse(req.body);
-    const result = await commands.createReport(ctx, body);
+    const result = await commands.createReport(ctx, {
+      inspectionId:    body.inspectionId,
+      entityId:        body.entityId,
+      reportType:      body.reportType    ?? undefined,
+      summary:         body.summary       ?? undefined,
+      recommendations: body.recommendations ?? undefined,
+      overallGrade:    body.overallGrade  ?? undefined,
+    });
     return reply.code(202).send({ data: result });
   });
 
@@ -90,7 +97,13 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       throw new HttpError(409, "CONFLICT", "cannot add observations to a finalized report");
     }
     const body = observationBody.parse(req.body);
-    const result = await commands.addObservation(ctx, id, body);
+    const result = await commands.addObservation(ctx, id, {
+      category:    body.category,
+      severity:    body.severity,
+      description: body.description,
+      location:    body.location    ?? undefined,
+      evidenceIds: body.evidenceIds ?? undefined,
+    });
     return reply.code(202).send({ data: result });
   });
 

@@ -8,7 +8,7 @@ import type { InspectionReportRow, ObservationRow } from "./schema.js";
 
 export async function listReports(
   tenantId: string,
-  opts: { inspectionId?: string; status?: string; page: number; pageSize: number },
+  opts: { inspectionId?: string | undefined; status?: string | undefined; page: number; pageSize: number },
 ): Promise<InspectionReportRow[]> {
   const conds: SQL[] = [eq(inspectionReports.tenantId, tenantId)];
   if (opts.inspectionId) conds.push(eq(inspectionReports.inspectionId, opts.inspectionId));

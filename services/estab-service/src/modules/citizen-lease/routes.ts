@@ -11,6 +11,7 @@ const READER_ROLES = [...ADMIN_ROLES, "audit_officer", "citizen", "employee"];
 
 const idParam = z.object({ id: z.string().uuid() });
 const listQuery = z.object({
+  status: z.string().optional(),
   limit:  z.coerce.number().int().positive().max(200).default(50),
   offset: z.coerce.number().int().nonnegative().default(0),
 });
@@ -68,7 +69,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listProperties(ctx.tenantId, q) });
+    return reply.send({ data: await queries.listProperties(ctx.tenantId, { status: q.status ?? undefined }) });
   });
 
   app.get("/v1/estab/citizen-lease/properties/:id", async (req, reply) => {
@@ -92,7 +93,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listLeases(ctx.tenantId, q) });
+    return reply.send({ data: await queries.listLeases(ctx.tenantId, { status: q.status ?? undefined }) });
   });
 
   app.get("/v1/estab/citizen-lease/leases/:id", async (req, reply) => {
@@ -116,7 +117,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send({ data: await queries.listPayments(ctx.tenantId, id) });
+    return reply.send({ data: await queries.listLeasePayments(ctx.tenantId, id) });
   });
 
   app.post("/v1/estab/citizen-lease/leases/:id/payments", async (req, reply) => {
@@ -132,7 +133,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listRequests(ctx.tenantId, q) });
+    return reply.send({ data: await queries.listRequests(ctx.tenantId, { status: q.status ?? undefined }) });
   });
 
   app.get("/v1/estab/citizen-lease/requests/:id", async (req, reply) => {
@@ -164,6 +165,6 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = completeBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.completeLeaseRequest(ctx, id, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.completeLeaseRequest(ctx, id));
   });
 }

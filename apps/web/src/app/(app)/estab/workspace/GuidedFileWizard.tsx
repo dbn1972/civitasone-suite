@@ -151,11 +151,11 @@ export function GuidedFileWizard() {
         {STEPS.map((s, i) => (
           <div key={s} style={{
             display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem",
-            color: i === step ? "#0f172a" : i < step ? "#047857" : "#94a3b8", fontWeight: i === step ? 600 : 400,
+            color: i === step ? "#0f172a" : i < step ? "var(--good)" : "#94a3b8", fontWeight: i === step ? 600 : 400,
           }}>
             <span style={{
               width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 12,
-              background: i < step ? "#047857" : i === step ? "#4f46e5" : "#e2e8f0",
+              background: i < step ? "var(--good)" : i === step ? "#4f46e5" : "#e2e8f0",
               color: i <= step ? "#fff" : "#64748b",
             }}>{i < step ? "✓" : i + 1}</span>
             {s}{i < STEPS.length - 1 ? <span aria-hidden="true" style={{ color: "#cbd5e1" }}>›</span> : null}
@@ -163,7 +163,7 @@ export function GuidedFileWizard() {
         ))}
       </div>
 
-      {error ? <p style={{ color: "#b91c1c", fontSize: "0.875rem" }}>{error}</p> : null}
+      {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
 
       {/* Step 1 — Receipt */}
       {step === 0 ? (

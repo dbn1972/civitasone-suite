@@ -24,7 +24,7 @@ export interface CreateCasePayload {
 export interface InspectCasePayload {
   caseId: string;
   inspectionFindings: Record<string, unknown>;
-  violationChecklist: unknown;
+  violationChecklist?: unknown | undefined;
 }
 
 export interface ConfirmViolationPayload {

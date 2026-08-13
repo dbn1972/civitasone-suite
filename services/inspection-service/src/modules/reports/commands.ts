@@ -10,18 +10,18 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export interface CreateReportBody {
   inspectionId: string;
   entityId: string;
-  reportType?: string;
-  summary?: string;
-  recommendations?: string;
-  overallGrade?: string;
+  reportType?: string | undefined;
+  summary?: string | undefined;
+  recommendations?: string | undefined;
+  overallGrade?: string | undefined;
 }
 
 export interface AddObservationBody {
   category: string;
   severity: "critical" | "major" | "minor" | "observation";
   description: string;
-  location?: string;
-  evidenceIds?: string[];
+  location?: string | undefined;
+  evidenceIds?: string[] | undefined;
 }
 
 export interface SubmitReportBody {

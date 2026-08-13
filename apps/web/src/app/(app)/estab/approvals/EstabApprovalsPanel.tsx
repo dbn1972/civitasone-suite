@@ -68,7 +68,7 @@ export function EstabApprovalsPanel() {
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h"><h3>File noting approval queue</h3></div>
       <div role="status" aria-live="polite">
-        {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
+        {message ? <p className="pad" style={{ color: "var(--good)", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
       </div>
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
