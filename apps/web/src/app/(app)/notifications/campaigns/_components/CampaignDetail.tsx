@@ -107,7 +107,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
         </div>
 
         {message ? (
-          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>
+          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", padding: "0 12px" }}>
             {message}
           </p>
         ) : null}

@@ -23,3 +23,13 @@ export async function getDelivery(tenantId: string, id: string): Promise<typeof 
     () => repo.findById(tenantId, id),
   );
 }
+
+/** Mark a single inbox notification as read (recipient-scoped). */
+export async function markAsRead(tenantId: string, actorId: string, id: string): Promise<boolean> {
+  return repo.markOneRead(tenantId, actorId, actorId, id);
+}
+
+/** Mark all inbox notifications as read for the calling user. Returns count. */
+export async function markAllAsRead(tenantId: string, actorId: string): Promise<number> {
+  return repo.markAllRead(tenantId, actorId, actorId);
+}

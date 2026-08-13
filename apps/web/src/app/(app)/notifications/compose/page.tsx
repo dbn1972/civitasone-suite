@@ -118,7 +118,7 @@ export default function ComposeNotificationPage() {
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <Card title="Compose" padding>
           {templatesError ? (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", margin: "0 0 12px" }}>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", margin: "0 0 12px" }}>
               {templatesError}
             </p>
           ) : null}
