@@ -42,7 +42,7 @@ export function NotificationsPanel() {
 
   return (
     <div style={{ marginTop: 18 }}>
-      {error ? <p style={{ color: "#b91c1c", fontSize: "0.875rem" }}>{error}</p> : null}
+      {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
       ) : items.length === 0 ? (

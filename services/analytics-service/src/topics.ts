@@ -9,6 +9,7 @@ export const COMMANDS = {
   updateDashboard: "analytics.dashboard.update",
   shareDashboard: "analytics.dashboard.share",
   addWidget: "analytics.widget.add",
+  deleteDashboard: "analytics.dashboard.delete",
   // metrics (tenant-scoped saved definitions)
   saveMetric: "analytics.metric.save",
 } as const;

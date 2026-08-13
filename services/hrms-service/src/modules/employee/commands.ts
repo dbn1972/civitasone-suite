@@ -139,6 +139,7 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       payStructureId: body.payStructureId,
       managerId: body.managerId,
       esicIpNumber: body.esicIpNumber,
+      uanNumber: body.uanNumber,
       pran: body.pran,
       gstin: body.gstin,
       sacCode: body.sacCode,

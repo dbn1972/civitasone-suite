@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type DashboardStats = {
   totalOpenings: number;
@@ -30,7 +31,7 @@ async function getDashboard(): Promise<DashboardStats> {
   return res.data;
 }
 
-async function getOpenings(): Promise<Opening[]> {
+async function getOpenings(): Promise<LoaderResult<Opening[]>> {
   const res = await fetchJson<unknown, Opening[]>("/api/v1/hrms/job-openings?limit=100", [], {
     telemetryKey: "recruitment.openings",
     mapResponse: (p) => {
@@ -38,15 +39,15 @@ async function getOpenings(): Promise<Opening[]> {
       return Array.isArray(arr) ? arr as Opening[] : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function RecruitmentPage() {
-  const [stats, openings] = await Promise.all([getDashboard(), getOpenings()]);
+  const [stats, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Recruitment"
         subtitle="Publish vacancies, track applications, and hire — for regular positions, internships, and apprenticeships."
@@ -59,13 +60,12 @@ export default async function RecruitmentPage() {
         }
       />
 
+      <DataSourceBadge source={openingSource} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label="Total Vacancies" value={stats.totalOpenings} />
-        <StatCard icon="🟢" iconBg="#ecfdf3" label="Open Now" value={stats.openVacancies} />
-        <StatCard icon="🌐" iconBg="#eff6ff" label="Published (Public)" value={stats.publishedVacancies} />
-        <StatCard icon="🎓" iconBg="#fffaeb" label="Internships / Apprenticeships" value={stats.internshipsApprenticeships} />
-        <StatCard icon="📨" iconBg="#f5f3ff" label="Applications Received" value={totalApps} />
-        <StatCard icon="🌍" iconBg="#fef3f2" label="From Public Portal" value={stats.applicationsPublic} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Vacancies" value={stats.totalOpenings} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label="Open Now" value={stats.openVacancies} />
+        <StatCard icon="📨" iconBg="var(--line2)" label="Applications Received" value={totalApps} />
+        <StatCard icon="🌐" iconBg="var(--infobg)" label="Published (Public)" value={stats.publishedVacancies} />
       </StatGrid>
 
       <Card title="All vacancies">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type EmpType = {
   id: string; code: string; name: string; description: string | null;
@@ -9,12 +10,12 @@ type EmpType = {
   payMode: string; isActive: boolean; sortOrder: number;
 } & Record<string, unknown>;
 
-async function getTypes(): Promise<EmpType[]> {
+async function getTypes(): Promise<LoaderResult<EmpType[]>> {
   const r = await fetchJson<unknown, EmpType[]>("/api/v1/hrms/employee-types", [], {
     telemetryKey: "config.employee_types",
     mapResponse: (p) => (p as { data: EmpType[] })?.data ?? null,
   });
-  return r.data;
+  return r;
 }
 
 const PAY_MODE_LABELS: Record<string, string> = {
@@ -26,9 +27,10 @@ const PAY_MODE_LABELS: Record<string, string> = {
 };
 
 export default async function EmployeeTypesPage() {
-  const types = await getTypes();
+  const { data: types, source } = await getTypes();
   const active = types.filter((t) => t.isActive).length;
   const withPayroll = types.filter((t) => t.eligibleForPayroll).length;
+  const inactive = types.filter((t) => !t.isActive).length;
 
   const rows = types.map((t) => ({
     ...t,
@@ -41,7 +43,7 @@ export default async function EmployeeTypesPage() {
   }));
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Employee Types"
         subtitle="Define the categories of people in your organisation — permanent staff, contractors, interns, volunteers, and any custom type you need."
@@ -49,11 +51,13 @@ export default async function EmployeeTypesPage() {
         backLabel="HR"
         help="hr"
       />
+      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={types.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
         <StatCard icon="💰" iconBg="#fffaeb" label="On Payroll" value={withPayroll} />
+        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactive} />
       </StatGrid>
 
       <Card title="Employee Type Master">
@@ -79,6 +83,9 @@ export default async function EmployeeTypesPage() {
             sortable
             filterable
             filterPlaceholder="Search employee types…"
+            emptyIcon="👥"
+            emptyTitle="No employee types found"
+            emptyMessage="No employee types match your filter. Try a different search term."
           />
         )}
       </Card>

@@ -9,12 +9,14 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, registerErrorHandler, HttpError } from "../../shared/context.js";
 import {
   createItemBody, updateItemBody, createCategoryBody, createUomBody,
+  patchCategoryBody, patchUomBody,
   createSubstituteBody, createBinBody, createReservationBody, releaseReservationBody,
   createGoodsReturnBody, qcInspectionBody,
   itemQueryParams, idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const WRITE_ROLES  = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];
 const READER_ROLES = [...WRITE_ROLES, "audit_officer", "finance_officer"];
@@ -70,6 +72,22 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const q = itemQueryParams.parse(req.query);
     return reply.send({ data: await queries.listCategories(ctx.tenantId, q.limit, q.offset) });
   });
+  // ── Categories PATCH ──────────────────────────────────────────────────
+  app.patch("/v1/inventory/categories/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = patchCategoryBody.parse(req.body);
+    const existing = await repo.findCategory(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "category not found");
+    const patch: { name?: string; code?: string; parentId?: string | null } = {};
+    if (body.name !== undefined) patch.name = body.name;
+    if (body.code !== undefined) patch.code = body.code;
+    if (body.parentId !== undefined) patch.parentId = body.parentId;
+    const updated = await repo.updateCategory(id, ctx.tenantId, patch, ctx.actorId);
+    return reply.send(updated);
+  });
+
 
   // ── Units of measure ─────────────────────────────────────────────────────
   app.post("/v1/inventory/uoms", async (req, reply) => {
@@ -85,6 +103,21 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const q = itemQueryParams.parse(req.query);
     return reply.send({ data: await queries.listUoms(ctx.tenantId, q.limit, q.offset) });
   });
+  // ── Units of measure PATCH ──────────────────────────────────────────────
+  app.patch("/v1/inventory/uoms/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = patchUomBody.parse(req.body);
+    const existing = await repo.findUom(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "uom not found");
+    const patch: { name?: string; symbol?: string } = {};
+    if (body.name !== undefined) patch.name = body.name;
+    if (body.symbol !== undefined) patch.symbol = body.symbol;
+    const updated = await repo.updateUom(id, ctx.tenantId, patch, ctx.actorId);
+    return reply.send(updated);
+  });
+
 
   // ── Substitutes (SVC-051) ─────────────────────────────────────────────
   app.post("/v1/inventory/substitutes", async (req, reply) => {

@@ -50,7 +50,7 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       <DataTable<Row>
         columns={columns}
         rows={rows}
-        rowLinkPrefix="/hr/payroll/slips/"
+        rowLinkPrefix="/hr/payroll/salary-slips/"
         rowLinkKey="id"
         sortable
         filterable

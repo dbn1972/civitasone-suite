@@ -25,10 +25,10 @@ export default async function AuditDashboardPage() {
         subtitle="Overview of audit observations, risk register, and compliance status."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="📋" iconBg="#fef2f2" label="Open Observations" value={data.openObservations} />
-        <StatCard icon="⚠️" iconBg="#fff7ed" label="Risk Register Items" value={data.riskRegisterItems} />
-        <StatCard icon="📑" iconBg="#f5f3ff" label="CAG Paras" value={data.cagParas} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Compliance" value={`${data.compliancePct.toFixed(1)}%`} />
+        <StatCard icon="📋" iconBg="var(--badbg)" label="Open Observations" value={data.openObservations} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg)" label="Risk Register Items" value={data.riskRegisterItems} />
+        <StatCard icon="📑" iconBg="var(--infobg)" label="CAG Paras" value={data.cagParas} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Compliance" value={`${data.compliancePct.toFixed(1)}%`} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">

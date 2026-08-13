@@ -82,15 +82,16 @@ export function CampaignList() {
             message="Create a campaign to reach an audience segment and track its ROI."
           />
         ) : (
+          <div style={{ overflowX: "auto" }}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Objective</th>
-                <th>Status</th>
-                <th className="num">Budget</th>
-                <th>ROI</th>
-                <th>
+                <th scope="col">Name</th>
+                <th scope="col">Objective</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="num">Budget</th>
+                <th scope="col">ROI</th>
+                <th scope="col">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -120,6 +121,7 @@ export function CampaignList() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

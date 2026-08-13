@@ -1,4 +1,4 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CostingPeriodForm } from "./CostingPeriodForm";
@@ -14,6 +14,7 @@ type ReportRow = {
 type DisplayRow = {
   employeeGroup: string;
   costCenterId: string;
+  costCenterCode: string;
   splitPct: number;
   allocatedMinor: string | number;
 } & Record<string, unknown>;
@@ -27,6 +28,7 @@ async function getReport(period: string): Promise<LoaderResult<DisplayRow[]>> {
       return arr.map((r) => ({
         employeeGroup: r.employee_group,
         costCenterId: r.cost_center_id,
+        costCenterCode: `CC-${r.cost_center_id.split('-')[0]}`,
         splitPct: r.split_pct,
         allocatedMinor: r.allocated_minor,
       }));
@@ -46,6 +48,7 @@ type RuleRow = {
 type RuleDisplayRow = {
   employeeGroup: string;
   costCenterId: string;
+  costCenterCode: string;
   splitPct: number;
   status: string;
 } & Record<string, unknown>;
@@ -59,6 +62,7 @@ async function getRules(): Promise<LoaderResult<RuleDisplayRow[]>> {
       return arr.map((r) => ({
         employeeGroup: r.employee_group,
         costCenterId: r.cost_center_id,
+        costCenterCode: `CC-${r.cost_center_id.split('-')[0]}`,
         splitPct: r.split_pct,
         status: r.status,
       }));
@@ -77,17 +81,20 @@ export default async function CostingPage({
 
   const rulesResult = await getRules();
   const ruleRows = rulesResult.data;
+  const activeRules = ruleRows.filter((r) => r.status === "active").length;
+  const uniqueCostCenters = new Set(ruleRows.map((r) => r.costCenterId)).size;
+  const uniqueEmpGroups = new Set(ruleRows.map((r) => r.employeeGroup)).size;
 
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterId", label: "Cost Center" },
+    { key: "costCenterCode", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "allocatedMinor", label: "Allocated Amount", align: "right", cellType: "amount" },
   ];
 
   const ruleColumns: { key: keyof RuleDisplayRow & string; label: string; align?: "left" | "right" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterId", label: "Cost Center" },
+    { key: "costCenterCode", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "status", label: "Status" },
   ];
@@ -99,8 +106,15 @@ export default async function CostingPage({
         subtitle="Define cost-center allocation rules and view the monthly costing report."
         back="/hr/payroll"
       />
-      {period && result.source === "error" && <DataSourceBadge source="error" />}
-      {rulesResult.source === "error" && <DataSourceBadge source="error" />}
+      {period && <DataSourceBadge source={result.source} />}
+      <DataSourceBadge source={rulesResult.source} />
+
+      <StatGrid>
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Rules" value={ruleRows.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Rules" value={activeRules} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers" value={uniqueCostCenters} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups" value={uniqueEmpGroups} />
+      </StatGrid>
 
       <CreateCostingRuleForm />
 

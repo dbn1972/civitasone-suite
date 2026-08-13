@@ -49,10 +49,44 @@ export async function insertSlip(tx: Writer, row: typeof payrollSlips.$inferInse
   await tx.insert(payrollSlips).values(row);
 }
 
-export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<PayrollSlipRow[]> {
-  return scopedRead((tx) => tx.select().from(payrollSlips)
+export type SlipWithRun = PayrollSlipRow & { month: string; runDeptId: string | null };
+
+export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<SlipWithRun[]> {
+  const rows = await scopedRead((tx) =>
+    tx.select({
+      id: payrollSlips.id,
+      tenantId: payrollSlips.tenantId,
+      runId: payrollSlips.runId,
+      employeeId: payrollSlips.employeeId,
+      employeeNo: payrollSlips.employeeNo,
+      grossMinor: payrollSlips.grossMinor,
+      totalDeductionsMinor: payrollSlips.totalDeductionsMinor,
+      netPayMinor: payrollSlips.netPayMinor,
+      status: payrollSlips.status,
+      createdAt: payrollSlips.createdAt,
+      updatedAt: payrollSlips.updatedAt,
+      basicMinor: payrollSlips.basicMinor,
+      currency: payrollSlips.currency,
+      components: payrollSlips.components,
+      pfEmployeeMinor: payrollSlips.pfEmployeeMinor,
+      pfEmployerMinor: payrollSlips.pfEmployerMinor,
+      gpfMinor: payrollSlips.gpfMinor,
+      npsEmployeeMinor: payrollSlips.npsEmployeeMinor,
+      npsEmployerMinor: payrollSlips.npsEmployerMinor,
+      esiMinor: payrollSlips.esiMinor,
+      tdsMinor: payrollSlips.tdsMinor,
+      createdBy: payrollSlips.createdBy,
+      updatedBy: payrollSlips.updatedBy,
+      version: payrollSlips.version,
+      month: payrollRuns.month,
+      runDeptId: payrollRuns.departmentId,
+    })
+    .from(payrollSlips)
+    .leftJoin(payrollRuns, eq(payrollSlips.runId, payrollRuns.id))
     .where(eq(payrollSlips.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit)
+  );
+  return rows.map(r => ({ ...r, month: r.month ?? "", runDeptId: r.runDeptId ?? null }));
 }
 
 export async function findRunByIdTx(tx: Writer, id: string): Promise<PayrollRunRow | null> {

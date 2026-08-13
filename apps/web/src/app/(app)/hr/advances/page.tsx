@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
 
 type ApiAdvance = {
@@ -45,7 +46,7 @@ function mapAdvances(rows: ApiAdvance[]): Row[] {
   }));
 }
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
     telemetryKey: "hr.advances",
     mapResponse: (p) => {
@@ -53,14 +54,15 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? mapAdvances(arr as ApiAdvance[]) : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function AdvancesPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
+  const rejected = items.filter((i) => i.status === "rejected").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -75,18 +77,25 @@ export default async function AdvancesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="❌" iconBg="#fdecea" label="Rejected" value={rejected} />
       </StatGrid>
 
       <RequestAdvanceForm />
 
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Salary Advances">
         <div className="card-h"><h3>Advance Requests</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or status…" pageSize={15} />
-      </div>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or status…"
+          pageSize={15}
+          emptyIcon="💰"
+          emptyTitle="No salary advances"
+          emptyMessage="Salary advance requests appear here once employees raise them. Advances are approved by HR and adjusted against subsequent salary."
+        />
+      </Card>
     </main>
   );
 }

@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/wfh-requests", [], {
     telemetryKey: "hr.wfh-requests",
     mapResponse: (p) => {
@@ -20,11 +21,15 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function WfhPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
+
+  const approved = items.filter((i) => i.status === "approved").length;
+  const pending = items.filter((i) => i.status === "pending").length;
+  const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -38,13 +43,31 @@ export default async function WfhPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Work From Home Requests" subtitle="WFH requests and approval status." back="/hr" />
+      <PageHeader
+        title="Work From Home Requests"
+        subtitle="Submit and track remote work days — approved by reporting officers."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="WFH Requests">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, department or status…"
+          pageSize={15}
+          emptyIcon="🏠"
+          emptyTitle="No WFH requests"
+          emptyMessage="Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer."
+        />
+      </Card>
     </main>
   );
 }

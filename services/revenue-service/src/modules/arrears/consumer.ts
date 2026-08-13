@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
+import { waivers } from "../trade-license/schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { generateInstalmentSchedule, validateWriteOff, assertMakerChecker } from "./domain.js";
 
@@ -249,4 +250,75 @@ export function registerArrearsConsumers(queue: Queue): void {
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:instalments:${assesseeId}`);
   });
+
+  // ── waiverCreate ────────────────────────────────────────────────────────────
+  queue.subscribe("revenue.waiver.create", async (msg) => {
+    const { demandId, amountMinor, reason } = msg.payload as {
+      demandId: string;
+      amountMinor: string;
+      reason: string;
+    };
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      await tx.insert(waivers).values({
+        tenantId:    msg.tenantId,
+        demandId,
+        amountMinor: String(amountMinor),
+        reason,
+        status:      "pending",
+        requestedBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic:         "audit.event.record",
+        eventType:     "audit.event.record",
+        tenantId:      msg.tenantId,
+        actorId:       msg.actorId,
+        correlationId: msg.correlationId,
+        payload:       { service: SERVICE, action: "create", resourceType: "waiver", outcome: "success" },
+      });
+    });
+
+    await cache.invalidate(`${SERVICE}:${msg.tenantId}:waivers`);
+  });
+
+  // ── waiverDecide ─────────────────────────────────────────────────────────────
+  queue.subscribe("revenue.waiver.decide", async (msg) => {
+    const { waiverId, approve, reason } = msg.payload as {
+      waiverId: string;
+      approve: boolean;
+      reason?: string;
+    };
+
+    const newStatus = approve ? "approved" : "rejected";
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      await tx
+        .update(waivers)
+        .set({
+          status:          newStatus,
+          decidedBy:       msg.actorId,
+          decidedAt:       new Date(),
+          decisionRemarks: reason ?? null,
+          updatedAt:       new Date(),
+        })
+        .where(and(eq(waivers.tenantId, msg.tenantId), eq(waivers.id, waiverId)));
+
+      await enqueue(tx, {
+        topic:         "audit.event.record",
+        eventType:     "audit.event.record",
+        tenantId:      msg.tenantId,
+        actorId:       msg.actorId,
+        correlationId: msg.correlationId,
+        payload:       { service: SERVICE, action: "decide", resourceType: "waiver", outcome: newStatus },
+      });
+    });
+
+    await cache.invalidate(`${SERVICE}:${msg.tenantId}:waivers`);
+  });
+
 }

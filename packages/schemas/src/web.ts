@@ -639,9 +639,12 @@ export const FinancialStatementSummaryListSchema = z.array(FinancialStatementSum
 // HR schemas
 export const HRDashboardSchema = z.object({
   headcount: z.number().default(0),
+  headcountLastMonth: z.number().default(0),
   attendanceTodayPct: z.number().default(0),
   pendingLeaves: z.number().default(0),
+  onLeave: z.number().default(0),
   payrollDue: z.number().default(0),
+  departmentBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
 });
 
 export const AttendanceSummaryItemSchema = z.object({

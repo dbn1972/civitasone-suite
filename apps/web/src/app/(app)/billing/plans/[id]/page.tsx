@@ -42,10 +42,10 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
       {source === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
-        <StatCard icon="💰" iconBg="#ecfdf5" label="Amount" value={`${currency} ${amount}`} />
-        <StatCard icon="🔄" iconBg="#eff6ff" label="Interval" value={interval} />
-        <StatCard icon="📊" iconBg="#faf5ff" label="Status" value={status} />
-        {createdAt && <StatCard icon="📅" iconBg="#fff7ed" label="Created" value={createdAt.slice(0, 10)} />}
+        <StatCard icon="💰" label="Amount" value={`${currency} ${amount}`} />
+        <StatCard icon="🔄" label="Interval" value={interval} />
+        <StatCard icon="📊" label="Status" value={status} />
+        {createdAt && <StatCard icon="📅" label="Created" value={createdAt.slice(0, 10)} />}
       </StatGrid>
 
       <Card title="Plan details" padding>

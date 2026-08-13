@@ -22,8 +22,8 @@ export default async function CagPage() {
 
       <StatGrid>
         <StatCard icon="📜" iconBg="#eef2ff" label="Total Paras" value={totalParas} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Settled" value={settled} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending} />
         <StatCard icon="🏛️" iconBg="#fce7ee" label="Departments" value={departments} />
       </StatGrid>
 

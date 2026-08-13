@@ -12,6 +12,9 @@ import {
   approveRecommendationBody, createAuctionBody, completeAuctionBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
+import { db, scopedRead } from "../../shared/db.js";
+import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
+import { eq } from "drizzle-orm";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const AUDIT_ROLES = [...ASSET_ROLES, "audit_officer"];
@@ -63,6 +66,42 @@ export async function condemnationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = completeAuctionBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeAuction(ctx, id, body));
+  });
+
+  // ── GET list/read routes ─────────────────────────────────────────────────
+  app.get("/v1/assets/condemnation-surveys", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const rows = await scopedRead((tx) => tx.select().from(condemnationSurveys)
+      .where(eq(condemnationSurveys.tenantId, ctx.tenantId)));
+    return reply.send({ data: rows });
+  });
+
+  app.get("/v1/assets/condemnation-surveys/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const rows = await scopedRead((tx) => tx.select().from(condemnationSurveys)
+      .where(eq(condemnationSurveys.id, id)).limit(1));
+    const survey = rows[0] ?? null;
+    if (!survey || survey.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "survey not found");
+    return reply.send(survey);
+  });
+
+  app.get("/v1/assets/condemnation-recommendations", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const rows = await scopedRead((tx) => tx.select().from(condemnationRecommendations)
+      .where(eq(condemnationRecommendations.tenantId, ctx.tenantId)));
+    return reply.send({ data: rows });
+  });
+
+  app.get("/v1/assets/auctions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const rows = await scopedRead((tx) => tx.select().from(assetAuctions)
+      .where(eq(assetAuctions.tenantId, ctx.tenantId)));
+    return reply.send({ data: rows });
   });
 
   app.setErrorHandler((err, req, reply) => {

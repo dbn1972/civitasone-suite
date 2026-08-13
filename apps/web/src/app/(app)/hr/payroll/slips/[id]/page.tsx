@@ -9,17 +9,15 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
   if (!slip) {
     return (
-      <>
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
-        <div aria-live="assertive" aria-atomic="true">
-          {source === "error" && <DataSourceBadge source="error" />}
-        </div>
+        <DataSourceBadge source={source} />
         <Card padding>
-          <p style={{ textAlign: "center", color: "#94a3b8" }}>
+          <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
             Salary slip not found or could not be loaded.
           </p>
         </Card>
-      </>
+      </main>
     );
   }
 
@@ -43,36 +41,43 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   const stat = richSlip.statutory;
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Salary Slip — ${slip.payPeriod}`}
         subtitle={slip.employeeName}
         back="/hr/payroll/salary-slips"
         actions={
-          <a
-            href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn primary"
-            style={{ minHeight: 44 }}
-          >
-            ⬇ Download PDF
-          </a>
+          <>
+            <Link
+              href={`/hr/payroll/salary-slips/${slip.id}`}
+              className="btn secondary"
+              style={{ minHeight: 44 }}
+            >
+              🖨 Printable Slip
+            </Link>
+            <a
+              href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary"
+              style={{ minHeight: 44 }}
+            >
+              ⬇ Download PDF
+            </a>
+          </>
         }
       />
 
-      <div aria-live="assertive" aria-atomic="true">
-        {source === "error" && <DataSourceBadge source="error" />}
-      </div>
+      <DataSourceBadge source={source} />
 
       {/* Summary cards */}
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Gross Pay" value={formatMoney(slip.gross)} />
-        <StatCard icon="📉" iconBg="#fff0f0" label="Total Deductions" value={formatMoney(slip.deductions)} />
-        <StatCard icon="✅" iconBg="#e6f0ff" label="Net Pay" value={formatMoney(slip.net)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross Pay" value={formatMoney(slip.gross)} />
+        <StatCard icon="📉" iconBg="var(--badbg)" label="Total Deductions" value={formatMoney(slip.deductions)} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label="Net Pay" value={formatMoney(slip.net)} />
         <StatCard
           icon="📋"
-          iconBg="#fffbe6"
+          iconBg="var(--warnbg)"
           label="Status"
           value={slip.status.charAt(0).toUpperCase() + slip.status.slice(1)}
         />
@@ -131,7 +136,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
         </Card>
       ) : (
         <Card title="Earnings" padding>
-          <p style={{ color: "#94a3b8", fontSize: 14 }}>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
             Detailed earnings breakdown not available for this slip.
           </p>
         </Card>
@@ -165,7 +170,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
         </Card>
       ) : (
         <Card title="Deductions" padding>
-          <p style={{ color: "#94a3b8", fontSize: 14 }}>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
             Detailed deductions breakdown not available for this slip.
           </p>
         </Card>
@@ -207,11 +212,11 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             )}
           </div>
         ) : (
-          <p style={{ color: "#94a3b8", fontSize: 14 }}>
+          <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
             Statutory breakdown not available for this slip.
           </p>
         )}
       </Card>
-    </>
+    </main>
   );
 }

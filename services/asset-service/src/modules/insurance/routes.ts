@@ -5,6 +5,10 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { policyBody, claimBody, idParam, policyQueryParams, claimQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
+import { db, scopedRead } from "../../shared/db.js";
+import { assetPolicies, assetClaims } from "./schema.js";
+import { eq, and } from "drizzle-orm";
+import { z as z2 } from "zod";
 import * as queries from "./queries.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
@@ -63,6 +67,73 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
     const claim = await queries.getClaim(ctx.tenantId, id);
     if (!claim) throw new HttpError(404, "NOT_FOUND", "claim not found");
     return reply.send(claim);
+  });
+
+  // ── Policy update/cancel ─────────────────────────────────────────────────
+  app.patch("/v1/assets/insurance/policies/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const body = z2.object({
+      status: z2.enum(["active", "expired", "cancelled"]).optional(),
+      expiryDate: z2.string().optional(),
+      premiumMinor: z2.number().int().nonnegative().optional(),
+    }).parse(req.body);
+    const existing = await queries.getPolicy(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "policy not found");
+    const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.actorId };
+    if (body.status !== undefined) patch.status = body.status;
+    if (body.expiryDate !== undefined) patch.endDate = body.expiryDate;
+    if (body.premiumMinor !== undefined) patch.premiumMinor = BigInt(body.premiumMinor);
+    await db.update(assetPolicies).set(patch).where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, ctx.tenantId)));
+    return reply.send({ id });
+  });
+
+  // ── Claim lifecycle ──────────────────────────────────────────────────────
+  app.patch("/v1/assets/insurance/claims/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const existing = await queries.getClaim(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
+    await db.update(assetClaims)
+      .set({ status: "approved", updatedAt: new Date(), updatedBy: ctx.actorId })
+      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    return reply.send({ id });
+  });
+
+  app.patch("/v1/assets/insurance/claims/:id/settle", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const body = z2.object({
+      settlementAmountMinor: z2.number().int().nonnegative(),
+      currency: z2.string().length(3).default("INR"),
+    }).parse(req.body);
+    const existing = await queries.getClaim(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
+    await db.update(assetClaims)
+      .set({
+        status: "settled",
+        settledAmountMinor: BigInt(body.settlementAmountMinor),
+        updatedAt: new Date(),
+        updatedBy: ctx.actorId,
+      })
+      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    return reply.send({ id });
+  });
+
+  app.patch("/v1/assets/insurance/claims/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_admin", "super_admin"]);
+    const { id } = idParam.parse(req.params);
+    const body = z2.object({ reason: z2.string() }).parse(req.body);
+    const existing = await queries.getClaim(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
+    await db.update(assetClaims)
+      .set({ status: "rejected", notes: body.reason, updatedAt: new Date(), updatedBy: ctx.actorId })
+      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    return reply.send({ id });
   });
 
   app.setErrorHandler((err, req, reply) => {

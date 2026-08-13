@@ -11,6 +11,7 @@ import { schema as arrearsModule }     from "../modules/arrears/schema.js";
 import { schema as bbpsModule }        from "../modules/bbps/schema.js";
 import { schema as analyticsModule }   from "../modules/analytics/schema.js";
 import { outboxSchema }                from "./outbox.js";
+import { schema as tradeLicenseModule } from "../modules/trade-license/schema.js";
 
 const SCHEMA = {
   ...rateEngineModule,
@@ -21,6 +22,7 @@ const SCHEMA = {
   ...arrearsModule,
   ...bbpsModule,
   ...analyticsModule,
+  ...tradeLicenseModule,
   ...outboxSchema,
 };
 

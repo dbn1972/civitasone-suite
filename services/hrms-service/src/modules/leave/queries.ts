@@ -18,11 +18,22 @@ export async function getLeaveApp(id: string, tenantId: string): Promise<LeaveAp
   );
 }
 
-export async function getLeaveApplicationsByEmp(tenantId: string, employeeId: string): Promise<LeaveAppRow[]> {
-  return cache.getOrLoad<LeaveAppRow[]>(
-    cache.makeKey(tenantId, "leave_apps_emp", employeeId),
-    () => repo.findLeaveAppsByEmp(tenantId, employeeId)
-  ) as Promise<LeaveAppRow[]>;
+export async function getLeaveApplicationsByEmp(
+  tenantId: string,
+  employeeId: string,
+): Promise<(LeaveAppRow & { leaveTypeName: string })[]> {
+  const [rows, leaveTypes] = await Promise.all([
+    cache.getOrLoad<LeaveAppRow[]>(
+      cache.makeKey(tenantId, "leave_apps_emp", employeeId),
+      () => repo.findLeaveAppsByEmp(tenantId, employeeId),
+    ) as Promise<LeaveAppRow[]>,
+    repo.listLeaveTypesByTenant(tenantId),
+  ]);
+  const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
+  return rows.map((r) => ({
+    ...r,
+    leaveTypeName: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+  }));
 }
 
 export async function listLeaveApplications(tenantId: string, limit: number): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {

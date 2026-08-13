@@ -127,6 +127,29 @@ export async function listCategories(tenantId: string, limit: number, offset: nu
     .limit(limit).offset(offset));
 }
 
+export async function findCategory(tenantId: string, id: string): Promise<CategoryRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(categories)
+    .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function updateCategory(
+  id: string,
+  tenantId: string,
+  patch: Partial<Omit<CategoryInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
+  actorId: string,
+): Promise<CategoryRow> {
+  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) =>
+    (tx as unknown as typeof db).update(categories)
+      .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${categories.version} + 1` })
+      .where(and(eq(categories.id, id), eq(categories.tenantId, tenantId)))
+      .returning(),
+  );
+  if (rows.length === 0) throw new DomainError("NOT_FOUND", `category ${id} not found for tenant`);
+  return rows[0]!;
+}
+
 // ── UoMs ──────────────────────────────────────────────────────────────────
 
 export async function insertUom(tx: Writer, row: UomInsert): Promise<void> {
@@ -137,6 +160,29 @@ export async function listUoms(tenantId: string, limit: number, offset: number):
   return scopedRead((tx) => tx.select().from(uoms)
     .where(eq(uoms.tenantId, tenantId))
     .limit(limit).offset(offset));
+}
+
+export async function findUom(tenantId: string, id: string): Promise<UomRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(uoms)
+    .where(and(eq(uoms.id, id), eq(uoms.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function updateUom(
+  id: string,
+  tenantId: string,
+  patch: Partial<Omit<UomInsert, "id" | "tenantId" | "createdAt" | "createdBy">>,
+  actorId: string,
+): Promise<UomRow> {
+  // Wrap in db.transaction() so wrapWithTenantGuc sets app.tenant_id GUC (required by FORCE RLS).
+  const rows = await db.transaction(async (tx) =>
+    (tx as unknown as typeof db).update(uoms)
+      .set({ ...patch, updatedBy: actorId, updatedAt: new Date(), version: sql`${uoms.version} + 1` })
+      .where(and(eq(uoms.id, id), eq(uoms.tenantId, tenantId)))
+      .returning(),
+  );
+  if (rows.length === 0) throw new DomainError("NOT_FOUND", `uom ${id} not found for tenant`);
+  return rows[0]!;
 }
 
 // ── Substitutes (SVC-051) ──────────────────────────────────────────────────

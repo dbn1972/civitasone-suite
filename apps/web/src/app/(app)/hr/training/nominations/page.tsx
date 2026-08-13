@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/training/nominations", [], {
     telemetryKey: "hr.training_nominations",
     mapResponse: (p) => {
@@ -20,11 +21,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function TrainingNominationsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -38,12 +39,21 @@ export default async function TrainingNominationsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Training Nominations" subtitle="Nominations for upcoming training programs." back="/hr" />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={items.filter((i) => i.status === "pending").length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={items.filter((i) => i.status === "approved").length} />
+        <StatCard icon="📚" iconBg="#f5f5f5" label="Programs" value={new Set(items.map((i) => i.program)).size} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="Training Nominations">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="🎓"
+          emptyTitle="No training nominations"
+          emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
+        />
+      </Card>
     </main>
   );
 }

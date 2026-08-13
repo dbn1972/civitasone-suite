@@ -63,3 +63,17 @@ export type TenantQuotaRow = typeof tenantQuotas.$inferSelect;
 export type TenantQuotaInsert = typeof tenantQuotas.$inferInsert;
 
 export const schema = { tenants, tenantQuotas };
+
+export const tenantConfigs = tenantSchema.table("tenant_configs", {
+  tenantId:     uuid("tenant_id").primaryKey(),
+  modules:      jsonb("modules").$type<Record<string, boolean>>().notNull().default({}),
+  featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().notNull().default({}),
+  billing:      jsonb("billing").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:    uuid("updated_by"),
+});
+
+export type TenantConfigRow = typeof tenantConfigs.$inferSelect;
+
+// update named export to include new table
+export const schemaAll = { tenants, tenantQuotas, tenantConfigs };

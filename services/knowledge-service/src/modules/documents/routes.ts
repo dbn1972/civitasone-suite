@@ -97,6 +97,38 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+
+  // GET /v1/knowledge/articles/:id — fetch a single article/document by ID
+  app.get("/v1/knowledge/articles/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = req.params as { id: string };
+    const doc = await queries.getDocumentById(ctx.tenantId, id);
+    if (!doc) throw new HttpError(404, "NOT_FOUND", "article not found");
+    return reply.send(doc);
+  });
+
+  // PATCH /v1/knowledge/articles/:id/publish — publish or unpublish an article
+  app.patch("/v1/knowledge/articles/:id/publish", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = req.params as { id: string };
+    const body = z.object({ published: z.boolean() }).parse(req.body);
+    const status = body.published ? "approved" : "draft";
+    await queries.setDocumentStatus(ctx.tenantId, id, status);
+    return reply.send({ id, status, correlationId: ctx.correlationId });
+  });
+
+  // GET /v1/knowledge/categories/:id/articles — list articles in a category
+  app.get("/v1/knowledge/categories/:id/articles", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = req.params as { id: string };
+    const q = listQuerySchema.parse(req.query);
+    const docs = await queries.listDocumentsByCategory(ctx.tenantId, id, q.limit, q.offset);
+    return reply.send({ data: docs, meta: { pageSize: q.limit, total: docs.length } });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

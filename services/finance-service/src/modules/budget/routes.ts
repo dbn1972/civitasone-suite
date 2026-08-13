@@ -6,9 +6,12 @@ import {
   SanctionDetailSchema,
 } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { randomUUID } from "node:crypto";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
+import * as repo from "./repo.js";
+import { db } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -132,6 +135,106 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = submitReappropriationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitReappropriationForApproval(ctx, id, body));
+  });
+
+
+  // ── Budget heads (accounts) CRUD ─────────────────────────────────────────────
+  // GET /v1/finance/accounts/:id — get a single budget head by UUID
+  app.get("/v1/finance/accounts/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const head = await repo.findHeadByIdAndTenant(id, ctx.tenantId);
+    if (!head) throw new HttpError(404, "NOT_FOUND", "budget head not found");
+    return reply.send({
+      id: head.id, code: head.code, hoaCode: head.hoaCode ?? null,
+      name: head.name, level: head.level, classification: head.classification,
+    });
+  });
+
+  // POST /v1/finance/accounts — create a budget head (major/minor/sub-minor)
+  app.post("/v1/finance/accounts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const body = z.object({
+      code:           z.string().min(1).max(20),
+      name:           z.string().min(2).max(200),
+      level:          z.number().int().min(0).max(2),   // 0=major 1=minor 2=sub-minor
+      hoaCode:        z.string().length(18).optional(),
+      classification: z.enum(["asset", "liability", "equity", "income", "expense"]).optional(),
+    }).parse(req.body);
+    const id = randomUUID();
+    await db.transaction(async (tx) => {
+      await repo.insertHead(tx, {
+        id, tenantId: ctx.tenantId,
+        code: body.code, name: body.name, level: body.level,
+        hoaCode: body.hoaCode ?? null, classification: body.classification ?? null,
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
+    });
+    return reply.code(201).send({ id, code: body.code, name: body.name, level: body.level, status: "created" });
+  });
+
+  // PATCH /v1/finance/accounts/:id — update head name / classification
+  app.patch("/v1/finance/accounts/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({
+      name:           z.string().min(2).max(200).optional(),
+      classification: z.enum(["asset", "liability", "equity", "income", "expense"]).optional(),
+    }).parse(req.body);
+    const head = await repo.findHeadByIdAndTenant(id, ctx.tenantId);
+    if (!head) throw new HttpError(404, "NOT_FOUND", "budget head not found");
+    const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
+    if (body.name) patch.name = body.name;
+    if (body.classification) patch.classification = body.classification;
+    await db.transaction(async (tx) => {
+      await repo.updateHead(tx, id, patch as Parameters<typeof repo.updateHead>[2]);
+    });
+    return reply.send({ id, status: "updated" });
+  });
+
+  // ── Budget estimates ─────────────────────────────────────────────────────────
+  // GET /v1/finance/budgets/:id — get a specific budget estimate by UUID
+  app.get("/v1/finance/budgets/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const budget = await repo.findBudgetById(id);
+    if (!budget || budget.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "budget not found");
+    return reply.send({
+      id: budget.id, headId: budget.headId, fy: budget.fy,
+      beMinor: budget.beMinor.toString(),
+      reMinor: budget.reMinor.toString(),
+      allocatedMinor: budget.allocatedMinor.toString(),
+      utilisedMinor: budget.utilisedMinor.toString(),
+      balanceMinor: (budget.allocatedMinor - budget.utilisedMinor).toString(),
+      currency: budget.currency,
+    });
+  });
+
+  // ── Balance enquiry ──────────────────────────────────────────────────────────
+  // GET /v1/finance/balance?headId=X&fy=Y — remaining available balance by head and FY
+  app.get("/v1/finance/balance", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = z.object({
+      headId: z.string().uuid(),
+      fy:     z.string().regex(/^\d{4}-\d{2}$/),
+    }).parse(req.query);
+    const budget = await queries.getBudget(ctx.tenantId, q.headId, q.fy);
+    if (!budget) throw new HttpError(404, "NOT_FOUND", "no budget for this head/FY");
+    const allocated = budget.allocatedMinor ?? 0n;
+    const utilised  = budget.utilisedMinor  ?? 0n;
+    return reply.send({
+      headId: q.headId, fy: q.fy,
+      allocatedMinor: allocated.toString(),
+      utilisedMinor:  utilised.toString(),
+      balanceMinor:   (allocated - utilised).toString(),
+      balancePct:     allocated > 0n ? Number((allocated - utilised) * 10000n / allocated) / 100 : 0,
+      currency: budget.currency,
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -5,13 +5,14 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createRfqBody } from "./validators.js";
+import { createRfqBody, rfqRespondBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 const idParam      = z.object({ id: z.string().uuid() });
+const VENDOR_ROLES = ["vendor", ...PROC_ROLES];
 
 export async function rfqRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/rfqs", async (req, reply) => {
@@ -35,6 +36,17 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
     const detail = await queries.getRfqDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "RFQ not found");
     sendValidated(reply, RFQDetailSchema, detail);
+  });
+
+
+  app.post("/v1/procurement/rfqs/:id/respond", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, VENDOR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const detail = await queries.getRfqDetail(id, ctx.tenantId);
+    if (!detail) throw new HttpError(404, "NOT_FOUND", "RFQ not found");
+    const body = rfqRespondBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.respondToRfq(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);

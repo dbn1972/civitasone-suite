@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, StatGrid, StatCard } from "../../../../_components/ds";
 import { getPayrollRunById } from "../../../../_data/loaders";
 import { formatRupees, formatIndianDate } from "@/lib/formatters";
 import { PayrollRunActions } from "./PayrollRunActions";
@@ -19,15 +19,15 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
   if (!run) {
     return (
-      <>
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Payroll Run" back="/hr/payroll" backLabel="Payroll Runs" />
-        {source === "error" && <DataSourceBadge source="error" />}
+        <DataSourceBadge source={source} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
             Payroll run not found. It may have been removed or you may not have access.
           </p>
         </Card>
-      </>
+      </main>
     );
   }
 
@@ -47,14 +47,20 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   const slipRows = run.salarySlips as SalarySlipRow[];
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Payroll Run — ${run.payPeriod}`}
         subtitle={`Run dated ${formatIndianDate(run.runDate)}`}
         back="/hr/payroll"
         backLabel="Payroll Runs"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees"  value={run.employeeCount.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross"      value={formatRupees(run.grossAmount)} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label="Deductions" value={formatRupees(run.deductions)} />
+        <StatCard icon="✅" iconBg="var(--panel)" label="Net Pay"    value={formatRupees(run.netAmount)} />
+      </StatGrid>
       <PayrollRunActions
         runId={run.id}
         status={run.status}
@@ -109,8 +115,11 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           pageSize={15}
           rowLinkKey="employeeId"
           rowLinkPrefix="/hr/employees/"
+          emptyIcon="📋"
+          emptyTitle="No salary slips"
+          emptyMessage="No salary slips are available for this payroll run."
         />
       </Card>
-    </>
+    </main>
   );
 }

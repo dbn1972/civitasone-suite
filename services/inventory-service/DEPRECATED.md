@@ -1,1 +1,6 @@
-DEPRECATED: inventory-service is superseded by stock-service. Use /api/v1/stock for all inventory operations.
+# Inventory Service — NOT DEPRECATED
+
+This service IS the canonical inventory implementation. `stock-service` is the legacy
+service in maintenance mode and will be decommissioned after client migration.
+
+Do NOT add new features to stock-service. All new work goes here.

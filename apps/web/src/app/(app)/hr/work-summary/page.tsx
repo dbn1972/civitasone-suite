@@ -1,18 +1,17 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
-type ApiWorkSummary = {
+type ApiRow = {
   id: string;
-  employeeId?: string;
+  employee?: string;
   employeeName?: string;
   department?: string;
   period?: string;
-  periodFrom?: string;
-  periodTo?: string;
   periodType?: string;
   tasksCompleted?: number;
   totalTasks?: number;
-  rating?: number;
+  rating?: number | string;
   status: string;
 };
 
@@ -22,82 +21,81 @@ type Row = {
   department: string;
   period: string;
   periodType: string;
-  tasksCompleted: string;
+  tasks: string;
   rating: string;
   status: string;
 } & Record<string, unknown>;
 
-function formatDateRange(from?: string, to?: string): string {
-  if (!from && !to) return "—";
-  try {
-    const fmtDate = (s: string) => {
-      const d = new Date(s);
-      if (isNaN(d.getTime())) return s;
-      return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
-    };
-    if (from && to) return `${fmtDate(from)} – ${fmtDate(to)}`;
-    return from ? fmtDate(from) : fmtDate(to!);
-  } catch {
-    return `${from ?? ""} – ${to ?? ""}`;
-  }
-}
-
-function mapWorkSummaries(apiItems: ApiWorkSummary[]): Row[] {
+function mapRows(apiItems: ApiRow[]): Row[] {
   return apiItems.map((s) => ({
     id: s.id,
-    employee: s.employeeName ?? s.employeeId ?? "—",
+    employee: s.employee ?? s.employeeName ?? "—",
     department: s.department ?? "—",
-    period: s.period ?? formatDateRange(s.periodFrom, s.periodTo),
+    period: s.period ?? "—",
     periodType: s.periodType ?? "—",
-    tasksCompleted: s.tasksCompleted != null && s.totalTasks != null
-      ? `${s.tasksCompleted}/${s.totalTasks}`
+    tasks: s.tasksCompleted != null && s.totalTasks != null
+      ? `${s.tasksCompleted} / ${s.totalTasks}`
       : "—",
-    rating: s.rating != null ? `${s.rating}/5` : "—",
+    rating: s.rating != null ? `${Number(s.rating).toFixed(1)} / 5` : "—",
     status: s.status,
   }));
 }
 
-async function getWorkSummaries(): Promise<Row[]> {
-  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/work-summaries", [], {
+async function getData(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/hrms/work-summaries", [], {
     telemetryKey: "hr.work-summaries",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiWorkSummary[] })?.data;
-      return Array.isArray(arr) ? mapWorkSummaries(arr as ApiWorkSummary[]) : null;
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiRow[] })?.data;
+      return Array.isArray(arr) ? mapRows(arr as ApiRow[]) : null;
     },
   });
-  return res.data;
 }
 
 export default async function WorkSummaryPage() {
-  const items = await getWorkSummaries();
+  const { data: items, source } = await getData();
 
-  const approved = items.filter((i) => i.status === "approved").length;
-  const pending = items.filter((i) => i.status === "pending").length;
-  const weekly = items.filter((i) => i.periodType.toLowerCase() === "weekly").length;
+  const reviewed = items.filter((i) => ["approved", "accepted", "finalised"].includes(i.status)).length;
+  const pending = items.filter((i) => ["pending", "submitted"].includes(i.status)).length;
+  const employees = new Set(items.map((i) => i.employee).filter((e) => e !== "—")).size;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
     { key: "department", label: "Department" },
     { key: "period", label: "Period" },
     { key: "periodType", label: "Type" },
-    { key: "tasksCompleted", label: "Tasks" },
+    { key: "tasks", label: "Tasks" },
     { key: "rating", label: "Rating" },
     { key: "status", label: "Status", cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Work Summaries" subtitle="Weekly and monthly work summary submissions with supervisor ratings." back="/hr" />
+      <PageHeader
+        title="Work Summaries"
+        subtitle="Annual appraisal period work summaries, task completions, and supervisor ratings."
+        back="/hr"
+        actions={<span />}
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e6f0ff" label="Total Summaries" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Reviewed" value={approved} />
+        <StatCard icon="📝" iconBg="#e6f0ff" label="Total Records" value={items.length} />
+        <StatCard icon="👤" iconBg="#f5f5f5" label="Employees" value={employees} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Reviewed" value={reviewed} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Review" value={pending} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="Weekly" value={weekly} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Work Summaries</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, period or status…" pageSize={15} />
-      </div>
+      <Card title="Work Summary Records">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, period or status…"
+          pageSize={15}
+          emptyIcon="📝"
+          emptyTitle="No work summaries yet"
+          emptyMessage="Work summaries are derived from APAR appraisal records. Each annual appraisal cycle generates a summary of tasks completed and supervisor ratings."
+        />
+      </Card>
     </main>
   );
 }

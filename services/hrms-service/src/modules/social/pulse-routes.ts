@@ -253,7 +253,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sqlClient.query(
       `SELECT e.id, e.first_name, e.last_name, e.department, e.designation, e.photo_url,
               COALESCE(SUM(lp.points), 0)::int AS total_points
-       FROM hrms.employees e
+       FROM employee.hrms_employees e
        LEFT JOIN hrms.leaderboard_points lp ON lp.employee_id = e.id AND lp.tenant_id = e.tenant_id ${dateFilter}
        WHERE e.tenant_id = $1 AND e.status = 'active'
        GROUP BY e.id, e.first_name, e.last_name, e.department, e.designation, e.photo_url
@@ -333,7 +333,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       const bal = await sqlClient.query(
         `SELECT leave_type_code, leave_type_name, total_days, balance_days
          FROM hrms.leave_allocations
-         WHERE tenant_id = $1 AND employee_id = (SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
+         WHERE tenant_id = $1 AND employee_id = (SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
         [ctx.actorId, ctx.tenantId],
       );
       if (bal.rowCount && bal.rowCount > 0) {
@@ -369,12 +369,12 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     // ─── Manager / reporting ──────────────────────────────────────────
     else if (query.includes("manager") || query.includes("reporting to") || query.includes("who is my")) {
       const emp = await sqlClient.query(
-        `SELECT reporting_to FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2`,
+        `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
         [ctx.actorId, ctx.tenantId],
       );
       if (emp.rows[0]?.reporting_to) {
         const mgr = await sqlClient.query(
-          `SELECT first_name, last_name, designation FROM hrms.employees WHERE id = $1`,
+          `SELECT first_name, last_name, designation FROM employee.hrms_employees WHERE id = $1`,
           [emp.rows[0].reporting_to],
         );
         if (mgr.rows[0]) {

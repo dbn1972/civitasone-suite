@@ -58,6 +58,11 @@ import { registerContractExpiryConsumers } from "./modules/contracts/expiry-cons
 import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
 import { runWithTenant } from "@civitasone/db";
+import EventEmitter from "node:events";
+
+// Bump global listener ceiling before queue subscriptions open sockets;
+// 60+ consumers x timer listeners per connection otherwise triggers the warning.
+EventEmitter.defaultMaxListeners = 64;
 
 const log = pino({ name: "hrms-worker" });
 

@@ -11,6 +11,7 @@ const RISK_LEVEL = z.enum(["low", "medium", "high", "critical"]);
 export const projectIdParam = z.object({ id: z.string().uuid() });
 export const billParam = z.object({ id: z.string().uuid(), billId: z.string().uuid() });
 export const extParam  = z.object({ id: z.string().uuid(), extId: z.string().uuid() });
+export const riskParam = z.object({ id: z.string().uuid(), riskId: z.string().uuid() });
 
 // ─── Risks ─────────────────────────────────────────────────────────────────
 export const createRiskBody = z.object({
@@ -23,6 +24,17 @@ export const createRiskBody = z.object({
   ownerId:        z.string().uuid().optional(),
   status:         z.enum(["open", "mitigated", "occurred", "closed"]).default("open"),
 });
+
+export const updateRiskBody = z.object({
+  title:          z.string().min(1).max(256).optional(),
+  description:    z.string().max(4000).optional(),
+  category:       z.enum(["technical", "financial", "environmental", "social", "regulatory", "resource", "schedule"]).optional(),
+  probability:    RISK_LEVEL.optional(),
+  impact:         RISK_LEVEL.optional(),
+  mitigationPlan: z.string().max(4000).optional(),
+  ownerId:        z.string().uuid().optional(),
+  status:         z.enum(["open", "mitigated", "occurred", "closed"]).optional(),
+}).strict();
 
 // ─── EVM ───────────────────────────────────────────────────────────────────
 export const computeEvmBody = z.object({

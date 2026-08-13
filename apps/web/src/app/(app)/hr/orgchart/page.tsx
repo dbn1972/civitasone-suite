@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, Card } from "../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard } from "../../../_components/ds";
 import { getOrgChart } from "../../../_data/loaders";
 import type { OrgChartNode } from "@civitasone/types";
 
@@ -28,16 +28,32 @@ function OrgNodeCard({ node }: { node: OrgChartNode }) {
   );
 }
 
+
+function countAll(nodes: OrgChartNode[]): number {
+  return nodes.reduce((sum, n) => sum + 1 + countAll((n.children ?? []) as OrgChartNode[]), 0);
+}
+
 export default async function OrgChartPage() {
   const { data: nodes, source } = await getOrgChart();
 
+  const managers    = nodes.filter((n) => n.children && n.children.length > 0).length;
+  const uniqueDepts = new Set(nodes.map((n) => n.department)).size;
+  const roots       = nodes.filter((n) => !n.reportsTo).length;
+  const totalCount  = countAll(nodes);
+
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Organisation Chart"
-        subtitle="Reporting hierarchy across departments."
+        subtitle="Reporting hierarchy across departments." back="/hr"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees"    value={totalCount} />
+        <StatCard icon="📋" iconBg="#e6f7f0" label="Departments"        value={uniqueDepts} />
+        <StatCard icon="💼" iconBg="#fff7e6" label="Managers"           value={managers} />
+        <StatCard icon="🌟" iconBg="#f5f5f5" label="Root / Heads"       value={roots} />
+      </StatGrid>
       {nodes.length === 0 ? (
         <Card padding>
           <p className="text-center text-slate-400">No organisation chart data available.</p>
@@ -63,6 +79,6 @@ export default async function OrgChartPage() {
           ))}
         </div>
       )}
-    </>
+    </main>
   );
 }

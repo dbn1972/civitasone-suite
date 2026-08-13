@@ -37,6 +37,7 @@ export default async function BonusPage() {
   ];
 
   const totalBonusMinor = items.reduce((sum, r) => sum + Number(r.bonus_amount_minor ?? 0), 0);
+  const pendingBonus = items.filter((r) => r.status === "pending").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -45,11 +46,12 @@ export default async function BonusPage() {
         subtitle="Statutory bonus computation (Payment of Bonus Act) and bonus history."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎁" iconBg="#e6f0ff" label="Bonus Records" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved/Paid" value={items.filter((r) => r.status === "approved" || r.status === "paid").length} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Total Computed" value={formatMoney(totalBonusMinor)} />
+        <StatCard icon="🎁" iconBg="var(--infobg)" label="Bonus Records" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved/Paid" value={items.filter((r) => r.status === "approved" || r.status === "paid").length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Computed" value={formatMoney(totalBonusMinor)} />
+        <StatCard icon="⏳" iconBg="var(--badbg)" label="Pending" value={pendingBonus} />
       </StatGrid>
 
       <ComputeBonusForm />

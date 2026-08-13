@@ -231,7 +231,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           </button>
         </div>
         <div role="status" aria-live="polite">
-          {message ? <p style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
+          {message ? <p style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
         </div>
       </div>
       <ConfirmDialog

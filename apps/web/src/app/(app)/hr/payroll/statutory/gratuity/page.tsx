@@ -24,6 +24,8 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
 export default async function GratuityPage() {
   const { data: rows, source } = await getData();
   const totalGratuityMinor = rows.reduce((s, r) => s + Number(r.gratuityMinor ?? 0), 0);
+  const settledRecords = rows.filter((r) => r.status === "settled" || r.status === "paid").length;
+  const avgYears = rows.length > 0 ? (rows.reduce((s, r) => s + Number(r.yearsOfService || 0), 0) / rows.length).toFixed(1) : "0";
 
   const columns: { key: keyof GratuityRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" }[] = [
     { key: "employeeId", label: "Employee" },
@@ -39,10 +41,12 @@ export default async function GratuityPage() {
         subtitle="Gratuity computation on separation (Payment of Gratuity Act, 1972)."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎖️" iconBg="#e6f0ff" label="Gratuity Records" value={rows.length} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
+        <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={rows.length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Paid" value={settledRecords} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Avg Years of Service" value={avgYears} />
       </StatGrid>
       <Card title="Gratuity Register">
         <DataTable<GratuityRow>

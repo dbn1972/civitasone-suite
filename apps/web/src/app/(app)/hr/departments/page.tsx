@@ -1,19 +1,20 @@
 import Link from "next/link";
-import { PageHeader, Card, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 type Dept = { id: string; code: string; name: string; parentId: string | null } & Record<string, unknown>;
 
-async function getDepartments(): Promise<Dept[]> {
+async function getDepartments(): Promise<LoaderResult<Dept[]>> {
   try {
     const r = await fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
       telemetryKey: "config.departments",
       mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
     });
-    return r.data ?? [];
+    return r;
   } catch {
-    return [];
+    return { data: [], source: "error" as const };
   }
 }
 
@@ -31,10 +32,14 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DepartmentsPage() {
-  const depts = await getDepartments();
+  const { data: depts, source } = await getDepartments();
+
+  const rootDepts = depts.filter((d) => !d.parentId).length;
+  const subDepts  = depts.filter((d) => !!d.parentId).length;
+  const withCode  = depts.filter((d) => !!d.code).length;
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Departments"
         subtitle="The teams in your office — Finance, HR, Establishment and others. Add departments so people and work can be sorted correctly."
@@ -47,6 +52,13 @@ export default async function DepartmentsPage() {
           </Link>
         }
       />
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Departments" value={depts.length} />
+        <StatCard icon="🌳" iconBg="#e6f7f0" label="Root Departments"  value={rootDepts} />
+        <StatCard icon="🌿" iconBg="#fff7e6" label="Sub-Departments"   value={subDepts} />
+        <StatCard icon="🏷️" iconBg="#f5f5f5" label="With Code"         value={withCode} />
+      </StatGrid>
 
       <Card title={`Departments (${depts.length})`}>
         {depts.length === 0 ? (

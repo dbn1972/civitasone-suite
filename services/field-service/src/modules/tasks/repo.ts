@@ -1,7 +1,7 @@
 /**
  * tasks/repo.ts — Database operations for field tasks.
  */
-import { eq, and, sql, desc, type SQL, lte, gte } from "drizzle-orm";
+import { eq, and, sql, desc, type SQL, lte, gte, isNotNull } from "drizzle-orm";
 import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert } from "./schema.js";
 
@@ -96,4 +96,37 @@ export async function update(
     .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId), eq(tasks.version, currentVersion)))
     .returning({ id: tasks.id });
   return result.length > 0;
+}
+
+// ─── Agent roster (distinct assignees across all tasks) ─────────────────────
+
+export async function listAgents(
+  tenantId: string,
+): Promise<{ agentId: string; taskCount: number }[]> {
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({
+        agentId: tasks.assigneeId,
+        taskCount: sql<number>`count(*)::int`,
+      })
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), isNotNull(tasks.assigneeId)))
+      .groupBy(tasks.assigneeId),
+  );
+  return rows
+    .filter((r): r is { agentId: string; taskCount: number } => r.agentId !== null)
+    .map((r) => ({ agentId: r.agentId, taskCount: r.taskCount }));
+}
+
+// ─── Dashboard KPIs (task counts by status) ─────────────────────────────────
+
+export async function getKpis(tenantId: string): Promise<{ status: string; count: number }[]> {
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({ status: tasks.status, count: sql<number>`count(*)::int` })
+      .from(tasks)
+      .where(eq(tasks.tenantId, tenantId))
+      .groupBy(tasks.status),
+  );
+  return rows.map((r) => ({ status: r.status, count: r.count }));
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Location = {
   id: string;
@@ -13,15 +14,15 @@ type Location = {
   parentId?: string;
 } & Record<string, unknown>;
 
-async function getLocations(): Promise<Location[]> {
+async function getLocations(): Promise<LoaderResult<Location[]>> {
   try {
     const r = await fetchJson<unknown, Location[]>("/api/v1/locations", [], {
       telemetryKey: "config.locations",
       mapResponse: (p) => (p as { data: Location[] })?.data ?? null,
     });
-    return r.data;
+    return r;
   } catch {
-    return [];
+    return { data: [], source: "error" as const };
   }
 }
 
@@ -39,10 +40,14 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function LocationsPage() {
-  const locations = await getLocations();
+  const { data: locations, source } = await getLocations();
+
+  const stateCount    = locations.filter((l) => l.type === "state").length;
+  const districtCount = locations.filter((l) => l.type === "district").length;
+  const blockCount    = locations.filter((l) => !["state","district"].includes(l.type)).length;
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Locations"
         subtitle="Offices, branches, and facilities registered in the system. Add locations so employees and operations can be correctly assigned."
@@ -55,7 +60,13 @@ export default async function LocationsPage() {
           </Link>
         }
       />
-
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="🌍" iconBg="#e6f0ff" label="Total Locations" value={locations.length} />
+        <StatCard icon="🏛️" iconBg="#e6f7f0" label="State-level"     value={stateCount} />
+        <StatCard icon="🏙️" iconBg="#fff7e6" label="District-level"  value={districtCount} />
+        <StatCard icon="🏘️" iconBg="#f5f5f5" label="Block / Other"   value={blockCount} />
+      </StatGrid>
       <Card title={`Locations (${locations.length})`}>
         {locations.length === 0 ? (
           <EmptyState

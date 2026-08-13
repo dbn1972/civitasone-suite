@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/shift-requests", [], {
     telemetryKey: "hr.shift-requests",
     mapResponse: (p) => {
@@ -20,11 +21,15 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function ShiftRequestsPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
+
+  const approved = items.filter((i) => i.status === "approved").length;
+  const pending = items.filter((i) => i.status === "pending").length;
+  const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "employee", label: "Employee" },
@@ -38,13 +43,31 @@ export default async function ShiftRequestsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Shift Change Requests" subtitle="Employee requests to change assigned shifts." back="/hr" />
+      <PageHeader
+        title="Shift Change Requests"
+        subtitle="Employees requesting a change to their assigned shift pattern."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="Shift Change Requests">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, shift or department…"
+          pageSize={15}
+          emptyIcon="🔄"
+          emptyTitle="No shift change requests"
+          emptyMessage="Requests appear here when employees apply to change their assigned shift. Approved by reporting officers."
+        />
+      </Card>
     </main>
   );
 }

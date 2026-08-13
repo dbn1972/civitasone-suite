@@ -4,7 +4,7 @@ import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import * as queries from "./queries.js";
 
-const ROLES = ["store_officer", "store_admin", "super_admin"];
+const ROLES = ["stock_manager", "stock_admin", "super_admin"];
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/stock/dashboard", async (req, reply) => {

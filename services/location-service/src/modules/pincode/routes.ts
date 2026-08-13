@@ -7,6 +7,15 @@ import * as repo from "./repo.js";
 const PINCODE_ROLES = ["location_user", "location_admin", "super_admin", "admin"];
 
 export async function pincodeRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/v1/pincodes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PINCODE_ROLES);
+    const rawQ = (req.query as Record<string, string>).q ?? "";
+    // If q provided use search; otherwise return an empty data set with a hint.
+    const results = rawQ.length >= 1 ? await repo.search(rawQ) : [];
+    return reply.send({ data: results, hint: rawQ ? undefined : "Pass ?q= to search pincodes" });
+  });
+
   app.get("/v1/pincodes/:code", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PINCODE_ROLES);

@@ -100,7 +100,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
           <EmptyState icon="🧩" title="No modules" message="Modules will appear here once configured." />
         )}
         <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
-        <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{error}</div>
+        <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>
       </div>
     </div>
   );

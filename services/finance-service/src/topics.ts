@@ -21,6 +21,7 @@ export const COMMANDS = {
   // payments
   billCreate:           "finance.bill.create",
   billApprove:          "finance.bill.approve",
+  billReject:           "finance.bill.reject",
   paymentInitiate:      "finance.payment.initiate",
   paymentSubmitApproval: "finance.payment.submit_approval",
   gemInvoiceMatch:      "finance.gem.einvoice.match",

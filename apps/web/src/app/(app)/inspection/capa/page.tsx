@@ -24,10 +24,10 @@ export default async function Page() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Status</th>
-                <th>Summary</th>
-                <th>Action</th>
+                <th scope="col">ID</th>
+                <th scope="col">Status</th>
+                <th scope="col">Summary</th>
+                <th scope="col">Action</th>
               </tr>
             </thead>
             <tbody>

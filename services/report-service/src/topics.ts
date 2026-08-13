@@ -1,6 +1,7 @@
 /** Topic + event names owned by report-service. {service}.{entity}.{action} */
 export const COMMANDS = {
   createJob: "reports.job.create",
+  shareJob: "reports.job.share",
   renderJob: "reports.job.render",
   createTemplate: "reports.template.create",
   updateTemplate: "reports.template.update",

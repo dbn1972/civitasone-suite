@@ -5,11 +5,12 @@ import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSum
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createBillBody, approveBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
+import { createBillBody, approveBillBody, rejectBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
-import { cache } from "../../shared/infra.js";
+import { queue, cache } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -124,6 +125,22 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitPaymentForApproval(ctx, id));
+  });
+
+
+  // PATCH /v1/finance/bills/:id/reject — reject a pending bill (finance_admin/super_admin)
+  app.patch("/v1/finance/bills/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectBillBody.parse(req.body);
+    await queue.publish(COMMANDS.billReject, {
+      type: COMMANDS.billReject,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id, tenantId: ctx.tenantId, reason: body.reason },
+    });
+    await cache.invalidate(cache.makeKey(ctx.tenantId, "bill", id));
+    return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
   app.post("/v1/finance/gem/einvoice/match", async (req, reply) => {

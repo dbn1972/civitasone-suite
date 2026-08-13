@@ -60,4 +60,25 @@ export async function reportingRoutes(app: FastifyInstance): Promise<void> {
       },
     });
   });
+
+  // Works dashboard — live KPI snapshot: total, active, closed, by-status.
+  app.get("/v1/works/dashboard", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const [totalWorks, statusCounts, closedWorks] = await Promise.all([
+      countProposals(ctx.tenantId),
+      proposalStatusCounts(ctx.tenantId),
+      countClosures(ctx.tenantId),
+    ]);
+    const byStatus: Record<string, number> = {};
+    for (const row of statusCounts) byStatus[row.status] = row.count;
+    return reply.send({
+      data: {
+        totalWorks,
+        activeWorks: Math.max(totalWorks - closedWorks, 0),
+        closedWorks,
+        byStatus,
+      },
+    });
+  });
 }

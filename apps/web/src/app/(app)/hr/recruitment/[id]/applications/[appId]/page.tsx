@@ -3,7 +3,8 @@
 import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PageHeader } from "../../../../../../_components/ds";
+import { PageHeader, Card } from "../../../../../../_components/ds";
+import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -31,6 +32,7 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<"api" | "error">("api");
 
   const [showHireDialog, setShowHireDialog] = useState(false);
   const [employeeNo, setEmployeeNo] = useState("");
@@ -54,12 +56,14 @@ export default function ApplicationDetailPage() {
       try {
         const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}`);
         if (!res.ok) {
+          setSource("error");
           setError(res.status === 404 ? "Application not found." : `Failed to load (${res.status})`);
           return;
         }
         const data = await res.json() as { payload?: Application } & Application;
         setApplication(data.payload ?? data);
       } catch {
+        setSource("error");
         setError("Network error loading application.");
       } finally {
         setLoading(false);
@@ -111,9 +115,10 @@ export default function ApplicationDetailPage() {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Application" subtitle="Not found" back=".." />
-        <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <p style={{ color: "var(--mut)" }}>{error ?? "Application not found."}</p>
-        </div>
+        <DataSourceBadge source={source} />
+        <Card padding>
+          <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? "Application not found."}</p>
+        </Card>
       </main>
     );
   }
@@ -134,6 +139,7 @@ export default function ApplicationDetailPage() {
           ) : undefined
         }
       />
+      <DataSourceBadge source={source} />
 
       {hireStatus === "success" && (
         <p role="status" aria-live="polite" className="pill good" style={{ marginBottom: 12 }}>
@@ -141,8 +147,7 @@ export default function ApplicationDetailPage() {
         </p>
       )}
 
-      <div className="card">
-        <div className="card-h"><h3>Application Summary</h3></div>
+      <Card title="Application Summary">
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Application ID</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Stage</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
@@ -153,7 +158,7 @@ export default function ApplicationDetailPage() {
           {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Experience</span>{application.experienceYears} yr{application.experienceYears !== 1 ? "s" : ""}</div>}
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Applied</span>{application.appliedAt}</div>
         </div>
-      </div>
+      </Card>
 
       {showHireDialog && (
         <div
@@ -166,12 +171,12 @@ export default function ApplicationDetailPage() {
             </h2>
             <form onSubmit={handleHire} style={{ display: "grid", gap: 14 }}>
               <div>
-                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>Employee No <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>Employee No <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                 <input id={empNoId} type="text" value={employeeNo} onChange={(e) => setEmployeeNo(e.target.value)} placeholder="e.g. EMP-2025-001" maxLength={32} style={inputStyle} required />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>Date of Joining <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>Date of Joining <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={dojId} type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} style={inputStyle} required />
                 </div>
                 <div>
@@ -181,11 +186,11 @@ export default function ApplicationDetailPage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>Department ID <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>Department ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder="UUID" style={inputStyle} required />
                 </div>
                 <div>
-                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>Designation ID <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span></label>
+                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>Designation ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder="UUID" style={inputStyle} required />
                 </div>
               </div>

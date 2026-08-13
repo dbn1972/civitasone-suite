@@ -373,7 +373,7 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
           </button>
         </div>
 
-        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
+        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
       </div>
 
       <ConfirmDialog

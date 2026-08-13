@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { locations, type LocationRow, type LocationInsert, type LocationView } from "./schema.js";
@@ -169,3 +169,10 @@ export async function findNearby(
 }
 
 export { toView };
+
+export type LocationPatch = Partial<Pick<LocationInsert, "name" | "addressLine" | "city" | "postalCode" | "type" | "lgdCode" | "parentId" | "latitude" | "longitude" | "status">>;
+
+export async function updateById(tx: Writer, id: string, tenantId: string, patch: LocationPatch & { updatedBy: string }): Promise<void> {
+  const { updatedBy, ...fields } = patch;
+  await tx.update(locations).set({ ...fields, updatedAt: new Date(), updatedBy, version: sql`${locations.version} + 1` }).where(and(eq(locations.id, id), eq(locations.tenantId, tenantId)));
+}

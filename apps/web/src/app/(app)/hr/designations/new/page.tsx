@@ -7,7 +7,7 @@ import { AddDesignationForm } from "./AddDesignationForm";
 export default function NewDesignationPage() {
   const router = useRouter();
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Add Designation"
         subtitle="Add a new job title or pay level to use across your office."

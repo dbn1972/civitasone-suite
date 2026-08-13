@@ -132,9 +132,9 @@ export function TaxDeclarationForm() {
   return (
     <>
     {loadFailed && (
-      <div role="alert" style={{ background: "#3d1c1c", border: "1px solid #f85149",
+      <div role="alert" style={{ background: "var(--badbg)", border: "1px solid #f85149",
         borderRadius: 6, padding: "10px 14px", marginBottom: 16,
-        color: "#f85149", fontSize: 13, lineHeight: 1.4 }}>
+        color: "var(--bad)", fontSize: 13, lineHeight: 1.4 }}>
         ⚠ Could not load your existing declaration — blank amounts will overwrite previous values if you save.
         Refresh the page to retry.
       </div>

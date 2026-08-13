@@ -70,6 +70,74 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(view);
   });
 
+
+  // Gap-fix: v1-prefixed detail route — the gateway strips /api/v1/audit and
+  // forwards /events/:id, so this path must exist alongside the legacy /audit/events/:id.
+  app.get("/v1/audit/events/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const view = await queries.getEvent(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "event not found");
+    return reply.send({
+      id: view.id,
+      actor: typeof view.actor === "object" && view.actor !== null && "email" in view.actor
+        ? String(view.actor.email)
+        : typeof view.actor === "object" && view.actor !== null && "name" in view.actor
+          ? String(view.actor.name)
+          : "system",
+      action: view.type,
+      resource: view.target ?? undefined,
+      outcome: view.severity === "error" || view.severity === "critical" ? "failure" : "success",
+      timestamp: view.occurredAt,
+      severity: view.severity,
+      correlationId: view.correlationId,
+    });
+  });
+
+
+  // AU-GAP-1: entity audit trail — events for a specific resource (type + id).
+  // The target column stores resourceId; resourceType is queried from payload JSONB.
+  app.get("/v1/audit/entities/:type/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    const { type, id } = z.object({
+      type: z.string().min(1).max(128),
+      id:   z.string().min(1).max(256),
+    }).parse(req.params);
+    const q = listQuerySchema.parse(req.query);
+    const events = await queries.listEventsByEntity(ctx.tenantId, type, id, q.limit, q.offset);
+    return reply.send(events);
+  });
+
+  // AU-GAP-2: write an audit event directly via API (admin / internal use).
+  // The async queue path is preferred for cross-service events; this is the
+  // synchronous API path for internal tooling and compliance workflows.
+  app.post("/v1/audit/events", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["audit_admin", "super_admin", "platform_admin"]);
+    const body = z.object({
+      type:         z.string().min(1).max(128),
+      resourceType: z.string().min(1).max(128),
+      resourceId:   z.string().min(1).max(256),
+      severity:     z.enum(["info", "warning", "error", "critical"]).default("info"),
+      payload:      z.record(z.unknown()).optional().default({}),
+    }).parse(req.body);
+    const id = await queries.writeEvent(
+      ctx.tenantId,
+      ctx.actorId,
+      body.type,
+      body.resourceType,
+      body.resourceId,
+      body.severity,
+      body.payload as Record<string, unknown>,
+      ctx.correlationId,
+      (req.headers["x-forwarded-for"] as string | undefined) ?? req.ip,
+      req.headers["user-agent"] as string | undefined,
+    );
+    return reply.status(201).send({ id });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });

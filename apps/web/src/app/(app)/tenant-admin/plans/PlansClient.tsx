@@ -121,7 +121,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
           ) : (
             <table className="data-table" role="table" aria-label="Invoice history">
               <thead>
-                <tr><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr>
+                <tr><th scope="col">Date</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr>
               </thead>
               <tbody>
                 {invoices.map((inv) => (

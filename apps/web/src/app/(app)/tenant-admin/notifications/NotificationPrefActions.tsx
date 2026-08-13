@@ -146,7 +146,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
           <EmptyState icon="⚙️" title="No channels" message="Channel settings will appear here." />
         )}
         <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
-        <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{error}</div>
+        <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>
       </div>
     </div>
   );

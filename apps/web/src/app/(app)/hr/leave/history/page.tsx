@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
@@ -20,7 +22,7 @@ type LeaveApp = {
 const STATUS_CHIP: Record<string, { bg: string; color: string; label: string }> = {
   pending:   { bg: "#fffbeb", color: "#b45309", label: "Pending" },
   approved:  { bg: "#f0fdf4", color: "#166534", label: "Approved" },
-  rejected:  { bg: "#fef2f2", color: "#991b1b", label: "Rejected" },
+  rejected:  { bg: "#fef2f2", color: "var(--color-error-dark)", label: "Rejected" },
   cancelled: { bg: "#f8fafc", color: "#64748b", label: "Cancelled" },
 };
 
@@ -31,23 +33,24 @@ function fmt(d: string) {
 }
 
 export default function LeaveHistoryPage() {
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [empId, setEmpId] = useState("");
-  const [apps, setApps] = useState<LeaveApp[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [employees, setEmployees]   = useState<EmployeeOption[]>([]);
+  const [empId, setEmpId]           = useState("");
+  const [apps, setApps]             = useState<LeaveApp[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [source, setSource]         = useState<"api" | "error">("api");
 
   useEffect(() => {
     fetch("/api/proxy/v1/hrms/employees?limit=500")
       .then((r) => r.json())
       .then((body) => {
-        const rows: EmployeeOption[] = Array.isArray(body) ? body : body.data ?? [];
+        const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch(() => setError("Failed to load employees."));
+      .catch(() => { setError("Failed to load employees."); setSource("error"); });
   }, []);
 
   useEffect(() => {
@@ -57,10 +60,10 @@ export default function LeaveHistoryPage() {
     fetch(`/api/proxy/v1/hrms/leave/applications?empId=${encodeURIComponent(empId)}&limit=50`)
       .then((r) => r.json())
       .then((body) => {
-        const rows: LeaveApp[] = Array.isArray(body) ? body : body.data ?? [];
+        const rows: LeaveApp[] = Array.isArray(body) ? body : (body.data ?? []);
         setApps(rows);
       })
-      .catch(() => setError("Failed to load leave history."))
+      .catch(() => { setError("Failed to load leave history."); setSource("error"); })
       .finally(() => setLoading(false));
   }, [empId]);
 
@@ -86,126 +89,153 @@ export default function LeaveHistoryPage() {
     }
   }
 
+  const approved  = apps.filter((a) => a.status === "approved").length;
+  const pending   = apps.filter((a) => a.status === "pending").length;
+  const rejected  = apps.filter((a) => a.status === "rejected").length;
+
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-4xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/hr" className="hover:text-slate-900">HR</Link>
-          <span className="mx-2">/</span>
-          <Link href="/hr/leave" className="hover:text-slate-900">Leave</Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">History</span>
-        </nav>
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Leave History"
+        subtitle="View and manage leave applications by employee."
+        back="/hr/leave"
+        actions={<Link href="/hr/leave/apply" className="btn primary">+ Apply Leave</Link>}
+      />
+      <DataSourceBadge source={source} />
 
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">Leave History</h1>
-            <p className="mt-1 text-sm text-slate-600">View and manage leave applications by employee.</p>
-          </div>
-          <Link href="/hr/leave/apply" className="btn primary">+ Apply Leave</Link>
-        </header>
+      <StatGrid>
+        <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Applications" value={apps.length} />
+        <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Approved"           value={approved} />
+        <StatCard icon="\u23f3"       iconBg="#fffbe6" label="Pending"            value={pending} />
+        <StatCard icon="\u274c"       iconBg="#fff1f0" label="Rejected"           value={rejected} />
+      </StatGrid>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <label htmlFor="emp-select" className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
+      <Card title="Select Employee">
+        <div style={{ padding: "16px 20px" }}>
+          <label
+            htmlFor="emp-select"
+            style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--ink2)", marginBottom: 6 }}
+          >
+            Employee
+          </label>
           <select
             id="emp-select"
             value={empId}
             onChange={(e) => setEmpId(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--line)",
+              fontSize: 14,
+              background: "var(--bg)",
+              color: "var(--ink)",
+            }}
           >
             {employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name} ({e.employeeNo})
-              </option>
+              <option key={e.id} value={e.id}>{e.name} ({e.employeeNo})</option>
             ))}
           </select>
         </div>
+      </Card>
 
-        {cancelError && (
-          <p role="alert" className="text-sm text-red-600 font-medium">{cancelError}</p>
-        )}
+      {cancelError && (
+        <p role="alert" style={{ color: "var(--color-error-dark)", fontSize: 14, fontWeight: 500 }}>{cancelError}</p>
+      )}
+      {loading && (
+        <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0", fontSize: 14 }}>
+          Loading leave history…
+        </p>
+      )}
+      {error && (
+        <p role="alert" style={{ color: "var(--color-error)", fontSize: 14, fontWeight: 500 }}>{error}</p>
+      )}
 
-        {loading && (
-          <p className="text-center text-sm text-slate-500 py-6">Loading leave history…</p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-red-600 font-medium">{error}</p>
-        )}
-
-        {!loading && !error && (
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            {apps.length === 0 ? (
-              <div className="p-10 text-center text-slate-500">
-                <p className="text-2xl mb-2">🌴</p>
-                <p className="font-medium text-slate-700">No leave applications</p>
-                <p className="text-sm mt-1">This employee has not applied for any leave yet.</p>
-                <Link href="/hr/leave/apply" className="btn primary" style={{ marginTop: 12, display: "inline-block" }}>
-                  Apply Leave
-                </Link>
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                      {["Leave Type", "From", "To", "Days", "Reason", "Status", ""].map((h) => (
-                        <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#475569", whiteSpace: "nowrap" }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {apps.map((app) => {
-                      const chip = STATUS_CHIP[app.status] ?? { bg: "#f8fafc", color: "#475569", label: app.status };
-                      const days = app.days ?? app.daysApplied ?? "—";
-                      const leaveName = app.leaveTypeName ?? app.leaveType ?? "—";
-                      return (
-                        <tr key={app.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={{ padding: "10px 14px", fontWeight: 500 }}>{leaveName}</td>
-                          <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.fromDate)}</td>
-                          <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.toDate)}</td>
-                          <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{days}</td>
-                          <td style={{ padding: "10px 14px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {app.reason ?? "—"}
-                          </td>
-                          <td style={{ padding: "10px 14px" }}>
-                            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: chip.bg, color: chip.color }}>
-                              {chip.label}
-                            </span>
-                          </td>
-                          <td style={{ padding: "10px 14px" }}>
-                            {app.status === "pending" && (
-                              <button
-                                type="button"
-                                onClick={() => void handleCancel(app.id)}
-                                disabled={cancelling === app.id}
-                                style={{
-                                  padding: "4px 12px",
-                                  borderRadius: 6,
-                                  border: "1px solid #fca5a5",
-                                  background: cancelling === app.id ? "#f8fafc" : "#fef2f2",
-                                  color: "#991b1b",
-                                  fontSize: 12,
-                                  fontWeight: 500,
-                                  cursor: cancelling === app.id ? "not-allowed" : "pointer",
-                                  minHeight: 36,
-                                }}
-                              >
-                                {cancelling === app.id ? "Cancelling…" : "Cancel"}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {!loading && !error && (
+        apps.length === 0 ? (
+          <Card title="Applications">
+            <EmptyState
+              icon="\U0001f334"
+              title="No leave applications"
+              message="This employee has not applied for any leave yet."
+            />
+          </Card>
+        ) : (
+          <Card title="Leave Applications">
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "var(--bg2)", borderBottom: "1px solid var(--line)" }}>
+                    {["Leave Type", "From", "To", "Days", "Reason", "Status", ""].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "10px 14px",
+                          textAlign: "left",
+                          fontWeight: 600,
+                          color: "var(--ink2)",
+                          whiteSpace: "nowrap",
+                          fontSize: 12,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {apps.map((app) => {
+                    const chip = STATUS_CHIP[app.status] ?? { bg: "var(--bg2)", color: "var(--ink2)", label: app.status };
+                    const days = app.days ?? app.daysApplied ?? "—";
+                    const leaveName = app.leaveTypeName ?? app.leaveType ?? "—";
+                    return (
+                      <tr key={app.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                        <td style={{ padding: "10px 14px", fontWeight: 500 }}>{leaveName}</td>
+                        <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.fromDate)}</td>
+                        <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.toDate)}</td>
+                        <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{days}</td>
+                        <td style={{ padding: "10px 14px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {app.reason ?? "—"}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: chip.bg, color: chip.color }}>
+                            {chip.label}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          {app.status === "pending" && (
+                            <button
+                              type="button"
+                              onClick={() => void handleCancel(app.id)}
+                              disabled={cancelling === app.id}
+                              style={{
+                                padding: "4px 12px",
+                                borderRadius: 6,
+                                border: "1px solid #fca5a5",
+                                background: cancelling === app.id ? "var(--bg2)" : "#fef2f2",
+                                color: "var(--color-error-dark)",
+                                fontSize: 12,
+                                fontWeight: 500,
+                                cursor: cancelling === app.id ? "not-allowed" : "pointer",
+                                minHeight: 32,
+                              }}
+                            >
+                              {cancelling === app.id ? "Cancelling…" : "Cancel"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
+      )}
     </main>
   );
 }

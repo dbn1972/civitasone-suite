@@ -111,12 +111,12 @@ export function NewContractForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
+      style={{ display:"flex", flexDirection:"column", gap:16, padding:24, maxWidth:672, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:"var(--r)", boxShadow:"var(--sh-md)" }}
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
       <div>
-        <label htmlFor={contractNoId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={contractNoId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Contract No <span aria-hidden="true">*</span>
         </label>
         <input
@@ -125,7 +125,7 @@ export function NewContractForm() {
           value={contractNo}
           onChange={(e) => setContractNo(e.target.value)}
           placeholder="e.g. CON-2024-0007"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           required
           aria-required="true"
           aria-invalid={invalidField === "contractNo"}
@@ -134,7 +134,7 @@ export function NewContractForm() {
       </div>
 
       <div>
-        <label htmlFor={titleId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={titleId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Title <span aria-hidden="true">*</span>
         </label>
         <input
@@ -143,7 +143,7 @@ export function NewContractForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Annual IT Maintenance"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           required
           aria-required="true"
           aria-invalid={invalidField === "title"}
@@ -152,7 +152,7 @@ export function NewContractForm() {
       </div>
 
       <div>
-        <label htmlFor={vendorId_} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={vendorId_} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Vendor ID (UUID) <span aria-hidden="true">*</span>
         </label>
         <input
@@ -161,7 +161,7 @@ export function NewContractForm() {
           value={vendorId}
           onChange={(e) => setVendorId(e.target.value)}
           placeholder="e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           required
           aria-required="true"
           aria-invalid={invalidField === "vendorId"}
@@ -171,7 +171,7 @@ export function NewContractForm() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div>
-          <label htmlFor={startId} className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor={startId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
             Start Date <span aria-hidden="true">*</span>
           </label>
           <input
@@ -179,14 +179,14 @@ export function NewContractForm() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
             required
             aria-required="true"
             aria-invalid={invalidField === "startDate"}
           />
         </div>
         <div>
-          <label htmlFor={expiryId} className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor={expiryId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
             Expiry Date <span aria-hidden="true">*</span>
           </label>
           <input
@@ -194,7 +194,7 @@ export function NewContractForm() {
             type="date"
             value={expiry}
             onChange={(e) => setExpiry(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
             required
             aria-required="true"
             aria-invalid={invalidField === "expiry"}
@@ -203,7 +203,7 @@ export function NewContractForm() {
       </div>
 
       <div>
-        <label htmlFor={valueId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={valueId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Value (₹) <span aria-hidden="true">*</span>
         </label>
         <input
@@ -214,7 +214,7 @@ export function NewContractForm() {
           placeholder="e.g. 500000"
           min="0"
           step="0.01"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           inputMode="decimal"
           required
           aria-required="true"
@@ -225,7 +225,7 @@ export function NewContractForm() {
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+        className="btn primary"
         style={{ minHeight: 44, minWidth: 44 }}
       >
         {status === "submitting" ? "Creating…" : "Create Contract"}

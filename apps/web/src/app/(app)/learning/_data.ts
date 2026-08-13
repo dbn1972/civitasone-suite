@@ -99,3 +99,44 @@ export function getMyNominations(employeeId: string): Promise<LoaderResult<MyNom
     mapResponse: (x) => (Array.isArray(x) ? (x as MyNomination[]) : []),
   });
 }
+
+export type LmsDashboardStats = {
+  enrolled: number;
+  in_progress: number;
+  completed: number;
+  overdue: number;
+  total: number;
+};
+export function getLmsDashboard(employeeId?: string): Promise<LoaderResult<LmsDashboardStats>> {
+  const qs = employeeId ? `?employeeId=${encodeURIComponent(employeeId)}` : "";
+  return fetchJson<LmsDashboardStats, LmsDashboardStats>(
+    `/api/v1/hrms/learning/dashboard${qs}`,
+    { enrolled: 0, in_progress: 0, completed: 0, overdue: 0, total: 0 },
+    { telemetryKey: "learning.dashboard", revalidateSeconds: 15, mapResponse: (x) => (x as LmsDashboardStats) },
+  );
+}
+
+export type TrainingPlan = {
+  id: string; title: string; planYear: number;
+  departmentId?: string | null; roleCode?: string | null; status: string;
+};
+export function getTrainingPlans(): Promise<LoaderResult<TrainingPlan[]>> {
+  return fetchJson("/api/v1/hrms/learning/training-plans", [] as TrainingPlan[], {
+    telemetryKey: "learning.training_plans_lms", revalidateSeconds: 30,
+    mapResponse: (x) => (Array.isArray(x) ? (x as TrainingPlan[]) : []),
+  });
+}
+
+export type TrainingPlanDetail = TrainingPlan & {
+  items: Array<{
+    id: string; courseId?: string | null; trainingId?: string | null;
+    targetDate?: string | null; mandatory: number;
+  }>;
+};
+export function getTrainingPlanDetail(id: string): Promise<LoaderResult<TrainingPlanDetail | null>> {
+  return fetchJson<TrainingPlanDetail, TrainingPlanDetail | null>(
+    `/api/v1/hrms/learning/training-plans/${encodeURIComponent(id)}`,
+    null,
+    { telemetryKey: "learning.training_plan_detail", revalidateSeconds: 30, mapResponse: (x) => (x ?? null) },
+  );
+}

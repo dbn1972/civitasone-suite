@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   fleetVehicles, fleetMaintenance, fleetDevices, fleetDeviceTelemetry,
@@ -103,4 +103,127 @@ export async function latestTelemetryForDevice(deviceId: string, tenantId: strin
     .orderBy(desc(fleetDeviceTelemetry.recordedAt))
     .limit(1));
   return rows[0] ?? null;
+}
+
+// ── vehicle update / assign-driver ───────────────────────────────────────
+
+export async function updateVehicleFields(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  fields: {
+    registrationNo?: string;
+    make?: string;
+    model?: string;
+    year?: number | null;
+    fuelType?: string;
+    odometerKm?: number | null;
+    status?: string;
+  },
+): Promise<void> {
+  const clean = Object.fromEntries(
+    Object.entries(fields).filter(([, v]) => v !== undefined),
+  ) as Partial<typeof fields>;
+  if (Object.keys(clean).length === 0) return;
+  await (tx as typeof db).update(fleetVehicles)
+    .set(clean)
+    .where(and(eq(fleetVehicles.id, id), eq(fleetVehicles.tenantId, tenantId)));
+}
+
+export async function assignDriverToVehicle(
+  tx: Writer,
+  vehicleId: string,
+  tenantId: string,
+  driverId: string | null,
+): Promise<void> {
+  await (tx as typeof db).update(fleetVehicles)
+    .set({ assignedDriverId: driverId })
+    .where(and(eq(fleetVehicles.id, vehicleId), eq(fleetVehicles.tenantId, tenantId)));
+}
+
+// ── maintenance ──────────────────────────────────────────────────────────
+
+export async function findMaintenanceById(
+  id: string,
+  tenantId: string,
+): Promise<typeof fleetMaintenance.$inferSelect | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(fleetMaintenance)
+      .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId)))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateMaintenanceStatus(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  status: string,
+  costMinor?: bigint | null,
+): Promise<void> {
+  const update: Record<string, unknown> = { status };
+  if (costMinor !== undefined) update.costMinor = costMinor;
+  await (tx as typeof db).update(fleetMaintenance)
+    .set(update)
+    .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId)));
+}
+
+// ── fleet dashboard ──────────────────────────────────────────────────────
+
+export async function getFleetDashboard(tenantId: string): Promise<{
+  totalVehicles: number;
+  availableVehicles: number;
+  scheduledMaintenance: number;
+  overdueMaintenance: number;
+}> {
+  const [vehicleCounts, maintenanceCounts] = await Promise.all([
+    scopedRead((tx) =>
+      tx.select({ status: fleetVehicles.status, cnt: sql`cast(count(*) as int)` })
+        .from(fleetVehicles)
+        .where(eq(fleetVehicles.tenantId, tenantId))
+        .groupBy(fleetVehicles.status),
+    ),
+    scopedRead((tx) =>
+      tx.select({
+        scheduledDate: fleetMaintenance.scheduledDate,
+        cnt: sql`cast(count(*) as int)`,
+      })
+        .from(fleetMaintenance)
+        .where(
+          and(
+            eq(fleetMaintenance.tenantId, tenantId),
+            eq(fleetMaintenance.status, 'scheduled'),
+          ),
+        )
+        .groupBy(fleetMaintenance.scheduledDate),
+    ),
+  ]);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const soonMs = today.getTime() + 7 * 24 * 60 * 60 * 1000;
+
+  let totalVehicles = 0;
+  let availableVehicles = 0;
+  for (const row of vehicleCounts) {
+    const c = Number(row.cnt ?? 0);
+    totalVehicles += c;
+    if (row.status === 'active') availableVehicles += c;
+  }
+
+  let scheduledMaintenance = 0;
+  let overdueMaintenance = 0;
+  for (const row of maintenanceCounts) {
+    const d = row.scheduledDate ? new Date(row.scheduledDate) : null;
+    const c = Number(row.cnt ?? 0);
+    if (!d) { scheduledMaintenance += c; continue; }
+    if (d.getTime() < today.getTime()) {
+      overdueMaintenance += c;
+    } else if (d.getTime() <= soonMs) {
+      scheduledMaintenance += c;
+    }
+  }
+
+  return { totalVehicles, availableVehicles, scheduledMaintenance, overdueMaintenance };
 }

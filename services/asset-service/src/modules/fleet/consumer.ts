@@ -132,6 +132,62 @@ export function registerFleetConsumers(rawQueue: Queue): void {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetDeviceTelemetry }, "Consumer processing failed");
     }
   });
+  // asset.fleet.vehicle_update → patch fleet_vehicles fields
+  queue.subscribe(COMMANDS.fleetVehicleUpdate, async (msg) => {
+    try {
+      const p = msg.payload as {
+        id: string; tenantId: string;
+        registrationNo?: string; make?: string; model?: string;
+        year?: number; fuelType?: string; odometerKm?: number; status?: string;
+      };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const fields: Parameters<typeof repo.updateVehicleFields>[3] = {};
+        if (p.registrationNo !== undefined) fields.registrationNo = p.registrationNo;
+        if (p.make !== undefined)           fields.make = p.make;
+        if (p.model !== undefined)          fields.model = p.model;
+        if (p.year !== undefined)           fields.year = p.year;
+        if (p.fuelType !== undefined)       fields.fuelType = p.fuelType;
+        if (p.odometerKm !== undefined)     fields.odometerKm = p.odometerKm;
+        if (p.status !== undefined)         fields.status = p.status;
+        await repo.updateVehicleFields(tx, p.id, p.tenantId, fields);
+        await audit(tx, msg, "update", "fleet_vehicle", p.id);
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetVehicleUpdate }, "Consumer processing failed");
+    }
+  });
+
+  // asset.fleet.assign_driver → update fleet_vehicles.assigned_driver_id
+  queue.subscribe(COMMANDS.fleetAssignDriver, async (msg) => {
+    try {
+      const p = msg.payload as { vehicleId: string; tenantId: string; driverId: string | null };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.assignDriverToVehicle(tx, p.vehicleId, p.tenantId, p.driverId);
+        await audit(tx, msg, "assign_driver", "fleet_vehicle", p.vehicleId);
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetAssignDriver }, "Consumer processing failed");
+    }
+  });
+
+  // asset.fleet.maintenance_complete → update fleet_maintenance.status = completed
+  queue.subscribe(COMMANDS.fleetMaintenanceComplete, async (msg) => {
+    try {
+      const p = msg.payload as { id: string; tenantId: string; costMinor?: number | null };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.updateMaintenanceStatus(
+          tx, p.id, p.tenantId, "completed",
+          p.costMinor != null ? BigInt(p.costMinor) : null,
+        );
+        await audit(tx, msg, "complete", "fleet_maintenance", p.id);
+      });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.fleetMaintenanceComplete }, "Consumer processing failed");
+    }
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

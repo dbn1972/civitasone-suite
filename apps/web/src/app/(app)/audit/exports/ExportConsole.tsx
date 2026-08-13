@@ -234,8 +234,8 @@ export function ExportConsole() {
                 padding: "8px 12px",
                 borderRadius: 8,
                 fontSize: 13,
-                background: toast.kind === "ok" ? "#ecfdf3" : toast.kind === "err" ? "#fef3f2" : "#eff6ff",
-                color: toast.kind === "ok" ? "#067647" : toast.kind === "err" ? "#b42318" : "#175cd3",
+                background: toast.kind === "ok" ? "var(--goodbg)" : toast.kind === "err" ? "var(--badbg)" : "var(--infobg)",
+                color: toast.kind === "ok" ? "var(--good)" : toast.kind === "err" ? "var(--bad)" : "var(--info)",
                 border: `1px solid ${toast.kind === "ok" ? "#abefc6" : toast.kind === "err" ? "#fecdca" : "#b2ddff"}`,
               }}
             >
@@ -278,7 +278,7 @@ export function ExportConsole() {
               </div>
 
               {job.error && (
-                <div style={{ color: "#b42318", fontSize: 13 }}>{job.error}</div>
+                <div style={{ color: "var(--bad)", fontSize: 13 }}>{job.error}</div>
               )}
 
               {job.status === "completed" && (

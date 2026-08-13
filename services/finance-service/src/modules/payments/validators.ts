@@ -85,3 +85,8 @@ export const adjustAdvanceBody = z.object({
 export type AdjustAdvanceBody = z.infer<typeof adjustAdvanceBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const rejectBillBody = z.object({
+  reason: z.string().min(3).max(500),
+});
+export type RejectBillBody = z.infer<typeof rejectBillBody>;

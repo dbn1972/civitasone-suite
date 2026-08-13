@@ -48,6 +48,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(codeListRoutes);
   const { positionRoutes } = await import("./modules/positions/routes.js");
   await app.register(positionRoutes);
+  const { tenantExtensionRoutes } = await import("./modules/tenant-extensions/routes.js");
+  await app.register(tenantExtensionRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

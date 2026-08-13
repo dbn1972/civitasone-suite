@@ -135,8 +135,8 @@ export function DfaPanel() {
       </div>
 
       <div role="status" aria-live="polite">
-        {message ? <p style={{ color: "#047857", fontSize: "0.875rem" }}>{message}</p> : null}
-        {error ? <p style={{ color: "#b91c1c", fontSize: "0.875rem" }}>{error}</p> : null}
+        {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
+        {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
 
       {showForm ? (

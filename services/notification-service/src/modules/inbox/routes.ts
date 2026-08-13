@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import {
   NotificationItemListSchema,
@@ -46,6 +46,44 @@ export async function inboxRoutes(app: FastifyInstance): Promise<void> {
       inAppEnabled: p.inApp,
       webhookEnabled: false,
     })));
+  });
+
+
+  // GET /notifications/notifications/:id — single inbox item (recipient-scoped)
+  app.get("/notifications/notifications/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const row = await deliveryQueries.getDelivery(ctx.tenantId, id);
+    if (!row || row.recipientId !== ctx.actorId) throw new HttpError(404, "NOT_FOUND", "notification not found");
+    return reply.code(200).send({
+      data: {
+        id: row.id,
+        title: row.templateId,
+        message: row.errorDetail ?? row.error ?? "",
+        module: "notification",
+        eventType: row.channel,
+        recipient: row.recipient,
+        channel: (row.channel === "email" ? "email" : row.channel === "sms" ? "sms" : row.channel === "webhook" ? "webhook" : "in_app"),
+        status: (row.status === "read" ? "read" : row.status === "failed" ? "failed" : row.status === "delivered" || row.status === "sent" ? "sent" : "pending"),
+        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+      },
+    });
+  });
+
+  // PATCH /notifications/notifications/:id/read — mark single notification as read
+  app.patch("/notifications/notifications/:id/read", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const updated = await deliveryQueries.markAsRead(ctx.tenantId, ctx.actorId, id);
+    if (!updated) throw new HttpError(404, "NOT_FOUND", "notification not found or already read");
+    return reply.code(204).send();
+  });
+
+  // POST /notifications/notifications/read-all — mark all inbox items as read
+  app.post("/notifications/notifications/read-all", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const count = await deliveryQueries.markAllAsRead(ctx.tenantId, ctx.actorId);
+    return reply.code(200).send({ ok: true, count });
   });
 
   app.setErrorHandler((err, req, reply) => {

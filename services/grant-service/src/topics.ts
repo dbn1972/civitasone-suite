@@ -3,12 +3,16 @@
 export const COMMANDS = {
   // scheme
   schemeCreate:           "grant.scheme.create",
+  schemeUpdate:           "grant.scheme.update",
+  schemeClose:            "grant.scheme.close",
   eligibilityCreate:      "grant.eligibility.create",
   // application
   applicationSubmit:      "grant.application.submit",
   applicationScore:       "grant.application.score",
   applicationApprove:     "grant.application.approve",
   applicationReject:      "grant.application.reject",
+  applicationWithdraw:    "grant.application.withdraw",
+  applicationAssignReviewer: "grant.application.assign_reviewer",
   // disbursement
   installmentCreate:      "grant.installment.create",
   disbursementInitiate:   "grant.disbursement.initiate",
@@ -27,8 +31,11 @@ export const COMMANDS = {
 
 export const EVENTS = {
   schemeCreated:              "grant.scheme.created",
+  schemeUpdated:              "grant.scheme.updated",
+  schemeClosed:               "grant.scheme.closed",
   applicationApproved:        "grant.application.approved",
   applicationRejected:        "grant.application.rejected",
+  applicationWithdrawn:       "grant.application.withdrawn",
   disbursementCompleted:      "grant.disbursement.completed",
   disbursementFailed:         "grant.disbursement.failed",
   ucSubmitted:                "grant.uc.submitted",

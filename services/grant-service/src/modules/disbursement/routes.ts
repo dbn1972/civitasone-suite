@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createInstallmentsBody, disburseBody, pfmsReconcileBody, idParam, appIdQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const GRANT_ROLES  = ["grant_officer", "grant_admin", "super_admin", "finance_officer"];
 const READER_ROLES = [...GRANT_ROLES, "audit_officer"];
@@ -44,6 +45,16 @@ export async function disbursementRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, GRANT_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitDisbursementForApproval(ctx, id));
+  });
+
+  /** Get a single installment by ID. */
+  app.get("/v1/grants/installments/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const installment = await repo.findInstallmentById(id, ctx.tenantId);
+    if (!installment) throw new HttpError(404, "NOT_FOUND", "installment not found");
+    return reply.send(installment);
   });
 
   app.get("/v1/grants/installments", async (req, reply) => {

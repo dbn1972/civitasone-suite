@@ -26,7 +26,7 @@ function buildSubtree(empId: string, active: Awaited<ReturnType<typeof employeeR
 
 export async function getOrgChart(tenantId: string): Promise<OrgNode[]> {
   return cache.listOrLoad(tenantId, "org_chart", "tree", async () => {
-    const rows = await employeeRepo.listByTenant(tenantId, 500, 0);
+    const rows = await employeeRepo.listByTenant(tenantId, 2000, 0);
     const active = rows.filter((e) => e.status !== "separated");
     const idSet = new Set(active.map((e) => e.id));
     const roots = active.filter((e) => !e.managerId || !idSet.has(e.managerId));

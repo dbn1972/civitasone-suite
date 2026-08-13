@@ -15,7 +15,7 @@ import {
   remitDecideBody,
 } from "./validators.js";
 
-const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin"];
+const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "revenue_collector", "finance_admin", "super_admin", "tenant_admin"];
 
 export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /v1/revenue/assessments → 202 ──────────────────────────────────
@@ -67,6 +67,15 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       data,
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
+  });
+
+  // ── GET /v1/revenue/demands → tenant-scoped flat list ───────────────────────
+  app.get("/v1/revenue/demands", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const q = paginationQuery.parse(req.query);
+    const result = await repo.listAllDemands(ctx.tenantId, q);
+    return reply.send(result);
   });
 
   // ── GET /v1/revenue/assessees/:id/demands → demands list ────────────────

@@ -73,6 +73,7 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
     });
 
     let result: DemandForecastResult;
+    let modelSource: "ml" | "sma";
 
     if (mlResponse && !mlResponse.fallback && mlResponse.dailyForecast && mlResponse.dailyForecast.length > 0) {
       // ML-service returned a trained model forecast — use it
@@ -92,9 +93,11 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
         reorderPoint,
         confidence: mlResponse.confidence,
       };
+      modelSource = "ml";
     } else {
       // Fallback: compute SMA forecast
       result = smaFallbackForecast(features, horizon as Horizon);
+      modelSource = "sma";
     }
 
     // 5. Check if reorder point is crossed → emit stockout risk event
@@ -127,7 +130,7 @@ export async function forecastRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    return reply.send(result);
+    return reply.send({ ...result, modelSource });
   });
 
   registerErrorHandler(app);

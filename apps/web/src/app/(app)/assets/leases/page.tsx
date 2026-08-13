@@ -86,7 +86,7 @@ export default function LeasesPage() {
         backLabel="Assets"
       />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div role="status" aria-live="polite" className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       <div className="card" style={{ marginBottom: 16 }}>
         <form onSubmit={submit} className="pad">

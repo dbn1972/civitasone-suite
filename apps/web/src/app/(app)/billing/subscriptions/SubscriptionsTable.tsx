@@ -38,22 +38,22 @@ export function SubscriptionsTable({
   return (
     <Card title="Subscriptions">
       {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No subscriptions" message="No subscriptions have been created yet." />
       ) : (
-        <table className="tbl">
+        <div className="tbl-wrap"><table className="tbl">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Detail</th>
-              <th>Status</th>
-              <th>Churn Risk</th>
-              <th>Meta</th>
+              <th scope="col">ID</th>
+              <th scope="col">Name</th>
+              <th scope="col">Detail</th>
+              <th scope="col">Status</th>
+              <th scope="col">Churn Risk</th>
+              <th scope="col">Meta</th>
             </tr>
           </thead>
           <tbody>
@@ -79,7 +79,7 @@ export function SubscriptionsTable({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Card>
   );

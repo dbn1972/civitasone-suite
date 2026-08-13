@@ -1,4 +1,4 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getGpfStatements } from "../../../../_data/loaders";
 
@@ -21,10 +21,20 @@ export default async function GpfStatementsPage() {
     contrib: r.empContribMinor ?? 0,
   }));
 
+  const uniqueEmps  = new Set(tableRows.map((r) => r.employeeId)).size;
+  const uniquePeriods = new Set(tableRows.map((r) => r.period)).size;
+  const totalContrib  = tableRows.reduce((s, r) => s + (Number(r.contrib) || 0), 0);
+
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="GPF Statements" subtitle="General Provident Fund contributions (eHRMS / PFMS)." back="/hr/payroll" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements"    value={tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees"     value={uniqueEmps} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Contrib." value={`₹${(totalContrib / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="📅" iconBg="var(--panel)" label="Periods"       value={uniquePeriods} />
+      </StatGrid>
       <Card title="GPF Ledger">
         {tableRows.length === 0 ? (
           <EmptyState
@@ -46,9 +56,12 @@ export default async function GpfStatementsPage() {
             filterable
             filterPlaceholder="Filter by employee or period…"
             pageSize={20}
+            emptyIcon="🏦"
+            emptyTitle="No GPF statements found"
+            emptyMessage="No General Provident Fund records match your filter."
           />
         )}
       </Card>
-    </>
+    </main>
   );
 }

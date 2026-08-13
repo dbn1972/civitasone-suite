@@ -22,7 +22,7 @@ export default async function AppraisalsPage() {
   ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Appraisals"
         subtitle="Employee performance review cycle."
@@ -30,7 +30,7 @@ export default async function AppraisalsPage() {
           <Link href="/hr/appraisals/new" className="btn primary">+ New Appraisal</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
@@ -44,6 +44,9 @@ export default async function AppraisalsPage() {
           sortable
           filterable
           filterPlaceholder="Filter by employee, period or reviewer…"
+          emptyIcon="📊"
+          emptyTitle="No appraisals yet"
+          emptyMessage="Use '+ New Appraisal' to start a performance review cycle. Each appraisal records ratings, reviewer comments, and links to the employee's goals and KRAs."
           pageSize={15}
         />
       </Card>

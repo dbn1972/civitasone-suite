@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiEmployee = {
   id: string;
@@ -58,7 +59,7 @@ function mapInterns(apiItems: ApiEmployee[]): Row[] {
     }));
 }
 
-async function getInterns(): Promise<Row[]> {
+async function getInterns(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=50", [], {
     telemetryKey: "hr.interns",
     mapResponse: (p) => {
@@ -66,11 +67,11 @@ async function getInterns(): Promise<Row[]> {
       return Array.isArray(arr) ? mapInterns(arr as ApiEmployee[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function InternsPage() {
-  const items = await getInterns();
+  const { data: items, source } = await getInterns();
 
   const active = items.filter((i) => i.status === "active").length;
   const interns = items.filter((i) => i.type.toLowerCase() === "intern" || i.type.toLowerCase() === "internship").length;
@@ -96,10 +97,14 @@ export default async function InternsPage() {
         <StatCard icon="📚" iconBg="#fffbe6" label="Interns" value={interns} />
         <StatCard icon="🔧" iconBg="#f5f5f5" label="Apprentices" value={apprentices} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Interns & Apprentices</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, institution or mentor…" pageSize={15} />
-      </div>
+      <Card title="Interns & Apprentices">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, institution or mentor…"
+          pageSize={15}
+          emptyIcon="🎓"
+          emptyTitle="No interns or apprentices"
+          emptyMessage="Intern and apprenticeship engagements appear here with stipend, mentor, and duration details."
+        />
+      </Card>
     </main>
   );
 }

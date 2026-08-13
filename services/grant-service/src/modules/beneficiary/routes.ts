@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createBeneficiaryBody, linkBankBody, seedAadhaarBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const GRANT_ROLES  = ["grant_officer", "grant_admin", "super_admin"];
 const READER_ROLES = [...GRANT_ROLES, "audit_officer"];
@@ -43,6 +44,15 @@ export async function beneficiaryRoutes(app: FastifyInstance): Promise<void> {
     const ben = await queries.getBeneficiary(ctx.tenantId, id);
     if (!ben) throw new HttpError(404, "NOT_FOUND", "beneficiary not found");
     return reply.send(ben);
+  });
+
+  /** List all beneficiaries for the tenant. */
+  app.get("/v1/grants/beneficiaries", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listBeneficiariesByTenant(ctx.tenantId, q.limit);
+    return reply.send({ data: rows ?? [], meta: { pageSize: q.limit, total: (rows ?? []).length } });
   });
 
   app.get("/v1/grants/grantees", async (req, reply) => {

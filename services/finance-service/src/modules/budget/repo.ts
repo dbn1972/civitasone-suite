@@ -192,3 +192,15 @@ export async function transferBudgetReMinorGuarded(
   }
   return true;
 }
+
+/** Insert a new budget head (finance account). Called directly from route in a transaction. */
+export async function insertHead(tx: Writer, row: import('./schema.js').HeadInsert): Promise<void> {
+  await tx.insert(financeHeads).values(row);
+}
+
+/** Tenant-scoped single-head read. */
+export async function findHeadByIdAndTenant(id: string, tenantId: string): Promise<HeadRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeHeads)
+    .where(and(eq(financeHeads.id, id), eq(financeHeads.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}

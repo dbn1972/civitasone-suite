@@ -3,7 +3,7 @@ import { NewTrainingForm } from "./NewTrainingForm";
 
 export default function NewTrainingPage() {
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="New Training Program"
         subtitle="Schedule a new capacity building initiative."

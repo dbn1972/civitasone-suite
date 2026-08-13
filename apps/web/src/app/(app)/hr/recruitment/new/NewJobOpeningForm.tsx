@@ -5,6 +5,31 @@ import { useRouter } from "next/navigation";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--ink2)",
+  marginBottom: 4,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  fontSize: 14,
+  border: "1.5px solid var(--line)",
+  borderRadius: "var(--r-sm)",
+  background: "var(--panel)",
+  color: "var(--ink)",
+  minHeight: 44,
+};
+
+const inputInvalidStyle: React.CSSProperties = {
+  ...inputStyle,
+  borderColor: "var(--bad)",
+};
+
 export function NewJobOpeningForm() {
   const router = useRouter();
 
@@ -96,12 +121,12 @@ export function NewJobOpeningForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
+      style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640 }}
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
       <div>
-        <label htmlFor={refNoId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={refNoId} style={labelStyle}>
           Reference No <span aria-hidden="true">*</span>
         </label>
         <input
@@ -110,7 +135,7 @@ export function NewJobOpeningForm() {
           value={refNo}
           onChange={(e) => setRefNo(e.target.value)}
           placeholder="e.g. JOB-2024-0042"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={invalidField === "refNo" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
           aria-invalid={invalidField === "refNo"}
@@ -119,7 +144,7 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={titleId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={titleId} style={labelStyle}>
           Title <span aria-hidden="true">*</span>
         </label>
         <input
@@ -128,7 +153,7 @@ export function NewJobOpeningForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Senior Software Engineer"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={invalidField === "title" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
           aria-invalid={invalidField === "title"}
@@ -136,7 +161,7 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={deptId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={deptId} style={labelStyle}>
           Department ID (UUID) <span aria-hidden="true">*</span>
         </label>
         <input
@@ -145,7 +170,7 @@ export function NewJobOpeningForm() {
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}
           placeholder="e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
           aria-invalid={invalidField === "departmentId"}
@@ -153,7 +178,7 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={vacanciesId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={vacanciesId} style={labelStyle}>
           Vacancies
         </label>
         <input
@@ -162,14 +187,14 @@ export function NewJobOpeningForm() {
           min={1}
           value={vacancies}
           onChange={(e) => setVacancies(Number(e.target.value))}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={invalidField === "vacancies" ? inputInvalidStyle : inputStyle}
           required
           aria-invalid={invalidField === "vacancies"}
         />
       </div>
 
       <div>
-        <label htmlFor={descId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={descId} style={labelStyle}>
           Description
         </label>
         <textarea
@@ -178,12 +203,12 @@ export function NewJobOpeningForm() {
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
           placeholder="Job responsibilities, requirements, and qualifications"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          style={{ ...inputStyle, resize: "none", minHeight: 96 }}
         />
       </div>
 
       <div>
-        <label htmlFor={closesAtId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={closesAtId} style={labelStyle}>
           Closing Date
         </label>
         <input
@@ -191,14 +216,15 @@ export function NewJobOpeningForm() {
           type="date"
           value={closesAt}
           onChange={(e) => setClosesAt(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={inputStyle}
         />
       </div>
 
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+        className="btn primary"
+        style={{ minHeight: 44, alignSelf: "flex-start" }}
       >
         {status === "submitting" ? "Creating…" : "Create Job Opening"}
       </button>
@@ -208,9 +234,13 @@ export function NewJobOpeningForm() {
           id={statusMsgId}
           role={status === "error" ? "alert" : "status"}
           aria-live={status === "error" ? "assertive" : "polite"}
-          className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
+          style={{
+            fontSize: 14,
+            color: status === "error" ? "var(--bad)" : "var(--good)",
+            margin: 0,
+          }}
         >
-          <span className="font-semibold">{status === "error" ? "Error: " : "Success: "}</span>
+          <strong>{status === "error" ? "Error: " : "Success: "}</strong>
           {message}
         </p>
       )}

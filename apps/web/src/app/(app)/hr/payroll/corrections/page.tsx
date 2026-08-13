@@ -55,6 +55,7 @@ export default async function CorrectionsPage() {
 
   const pendingCount = items.filter((r) => r.status === "pending").length;
   const totalArrearsMinor = items.reduce((sum, r) => sum + Number(r.arrears_minor ?? 0), 0);
+  const approvedCount = items.filter((r) => r.status === "approved").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -63,12 +64,13 @@ export default async function CorrectionsPage() {
         subtitle="Retroactive salary component corrections and resulting arrears."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="✏️" iconBg="#e6f0ff" label="Total Corrections" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✏️" iconBg="var(--infobg)" label="Total Corrections" value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedCount} />
       </StatGrid>
 
       <CreateCorrectionForm />
@@ -89,9 +91,7 @@ export default async function CorrectionsPage() {
 
       <Card title="Loss-of-Pay (LOP) Ledger" padding>
         <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-          LOP days are maintained automatically from leave and attendance events and applied during payroll
-          processing. The payroll service does not currently expose a read endpoint for the LOP ledger, so it
-          cannot be shown here — this screen intentionally omits it rather than showing fabricated figures.
+          Loss-of-pay adjustments are calculated automatically from approved leave and attendance records and applied during each payroll run. The adjusted amounts appear in the payroll register after processing.
         </p>
       </Card>
     </main>

@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
+import { randomUUID } from "node:crypto";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -63,6 +66,30 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       acceptedResponseSchema,
       await commands.transitionTicket(ctx, id, ticket.ticketType as TicketType, ticket.status, body),
     );
+  });
+
+  // HD-UPDATE — update mutable ticket fields.
+  app.patch("/v1/helpdesk/tickets/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HELPDESK_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({
+      subject: z.string().min(1).max(500).optional(),
+      description: z.string().optional(),
+      priority: z.enum(["Low", "Medium", "High", "Critical"]).optional(),
+      categoryId: z.string().uuid().nullable().optional(),
+      ticketType: z.enum(["incident", "problem", "change"]).nullable().optional(),
+      channel: z.string().max(24).optional(),
+    }).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" }).parse(req.body);
+    const ticket = await queries.getTicketRaw(id, ctx.tenantId);
+    if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    const updateId = randomUUID();
+    await queue.publish(COMMANDS.updateTicket, {
+      messageId: updateId, type: COMMANDS.updateTicket, tenantId: ctx.tenantId,
+      actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { id: updateId, tenantId: ctx.tenantId, ticketId: id, updates: body, updatedBy: ctx.actorId },
+    });
+    return reply.code(202).send({ id: updateId, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.setErrorHandler((err, req, reply) => {

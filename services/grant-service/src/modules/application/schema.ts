@@ -22,6 +22,10 @@ export const grantApplications = applicationSchema.table("grant_applications", {
   // 0003 hardening (P0-4 SoD): maker/checker actors
   submittedBy:          uuid("submitted_by"),
   approvedBy:           uuid("approved_by"),
+  // 0013: withdraw and reviewer-assignment columns
+  withdrawnAt:          timestamp("withdrawn_at", { withTimezone: true }),
+  reviewerRef:          text("reviewer_ref"),
+  assignedAt:           timestamp("assigned_at", { withTimezone: true }),
   createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:            uuid("created_by").notNull(),

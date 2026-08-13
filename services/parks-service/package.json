@@ -1,0 +1,38 @@
+{
+  "name": "@civitasone/parks-service",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "worker": "tsx src/worker.ts",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@civitasone/auth": "workspace:*",
+    "@civitasone/cache": "workspace:*",
+    "@civitasone/db": "workspace:*",
+    "@civitasone/events": "workspace:*",
+    "@civitasone/observability": "workspace:*",
+    "@civitasone/outbox": "workspace:*",
+    "@civitasone/queue": "workspace:*",
+    "@civitasone/schemas": "workspace:*",
+    "@civitasone/types": "workspace:*",
+    "@fastify/cors": "^9",
+    "drizzle-orm": "^0.30",
+    "fastify": "^4.27",
+    "pino": "^8.21",
+    "postgres": "^3.4",
+    "zod": "^3.23"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.16",
+    "typescript": "^5.4",
+    "vitest": "^2.0"
+  }
+}

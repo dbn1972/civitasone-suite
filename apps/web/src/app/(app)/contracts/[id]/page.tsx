@@ -70,9 +70,9 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     <main className="wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/contracts" className="lnk">Contracts</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <Link href="/contracts/list" className="lnk">List</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <span aria-current="page">{contractNo !== "—" ? contractNo : title}</span>
       </nav>
 
@@ -123,7 +123,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
         <div className="card-h"><h3>Milestones</h3></div>
         <div className="pad">
           {milestonesRes.data.length === 0 ? (
-            <p style={{ margin: 0, color: "var(--ink2)", fontSize: 13 }}>No milestones on this contract.</p>
+            <EmptyState icon="📋" title="No milestones" message="No milestones on this contract." />
           ) : (
             <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
               {milestonesRes.data.map((m) => (

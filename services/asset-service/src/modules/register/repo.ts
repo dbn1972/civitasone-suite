@@ -1,6 +1,6 @@
-import { eq, and, SQL } from "drizzle-orm";
+import { eq, and, SQL, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { assetCategories, assetAssets, type CategoryInsert, type AssetInsert, type AssetRow } from "./schema.js";
+import { assetCategories, assetAssets, type CategoryInsert, type CategoryRow, type AssetInsert, type AssetRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -15,11 +15,12 @@ export async function findAssetById(id: string, tenantId: string): Promise<Asset
   return rows[0] ?? null;
 }
 
-export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
+export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
   const conditions: SQL[] = [eq(assetAssets.tenantId, tenantId)];
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));
   if (opts?.status)   conditions.push(eq(assetAssets.status, opts.status));
   if (opts?.type)     conditions.push(eq(assetAssets.assetType, opts.type));
+  if (opts?.search)   conditions.push(sql`to_tsvector('simple', ${assetAssets.name} || ' ' || ${assetAssets.code}) @@ plainto_tsquery('simple', ${opts.search})`);
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
   return scopedRead((tx) => tx.select().from(assetAssets)
@@ -61,4 +62,21 @@ export async function updateAssetBarcode(tx: Writer, id: string, tenantId: strin
   await (tx as typeof db).update(assetAssets)
     .set({ barcode, updatedAt: new Date(), updatedBy: actorId })
     .where(and(eq(assetAssets.id, id), eq(assetAssets.tenantId, tenantId)));
+}
+
+export async function findCategoriesByTenant(tenantId: string): Promise<CategoryRow[]> {
+  return scopedRead((tx) => tx.select().from(assetCategories)
+    .where(eq(assetCategories.tenantId, tenantId)));
+}
+
+export async function findCategoryById(id: string, tenantId: string): Promise<CategoryRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(assetCategories)
+    .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function updateCategory(id: string, tenantId: string, patch: Partial<CategoryInsert>, actorId: string): Promise<void> {
+  await db.update(assetCategories)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: actorId })
+    .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId)));
 }

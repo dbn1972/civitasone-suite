@@ -5,9 +5,10 @@
  * the /lifecycle/ prefix the frontend doesn't include.
  */
 import type { FastifyInstance } from "fastify";
+import { ZodError } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../employee/schema.js";
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations } from "../lifecycle/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
@@ -230,5 +231,13 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
       };
     });
     return reply.send({ data, hasMore: rows.length === 500 });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) { return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) }); }
+    if (err instanceof HttpError) { return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false }); }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

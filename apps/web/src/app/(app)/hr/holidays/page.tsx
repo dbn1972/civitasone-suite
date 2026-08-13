@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddHolidayForm } from "./AddHolidayForm";
 
 type ApiHoliday = {
@@ -54,7 +55,7 @@ function mapHolidays(apiHolidays: ApiHoliday[]): Row[] {
   }));
 }
 
-async function getHolidays(): Promise<Row[]> {
+async function getHolidays(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/holidays", [], {
     telemetryKey: "hr.holidays",
     mapResponse: (p) => {
@@ -62,13 +63,13 @@ async function getHolidays(): Promise<Row[]> {
       return Array.isArray(arr) ? mapHolidays(arr as ApiHoliday[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default async function HolidaysPage() {
-  const items = await getHolidays();
+  const { data: items, source } = await getHolidays();
 
   const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
   const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
@@ -89,6 +90,7 @@ export default async function HolidaysPage() {
         subtitle="Gazetted, restricted, and optional holidays for the year."
         back="/hr"
       />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📅" iconBg="#e6f0ff" label="Total Holidays" value={items.length} />
         <StatCard icon="🏛️" iconBg="#e6f7f0" label="Gazetted" value={gazetted} />
@@ -98,7 +100,7 @@ export default async function HolidaysPage() {
 
       <AddHolidayForm />
 
-      <div className="card" style={{ marginTop: 18 }}>
+      <Card title="Holiday Calendar">
         <div className="card-h"><h3>Holiday List {CURRENT_YEAR}</h3></div>
         <DataTable<Row>
           columns={columns}
@@ -107,8 +109,11 @@ export default async function HolidaysPage() {
           filterable
           filterPlaceholder="Filter by holiday name or type…"
           pageSize={15}
+          emptyIcon="📅"
+          emptyTitle="No holidays configured"
+          emptyMessage="National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll."
         />
-      </div>
+      </Card>
     </main>
   );
 }

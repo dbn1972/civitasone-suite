@@ -125,4 +125,41 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     const data = await auctionQueries.listAuctions(ctx.tenantId, q.limit, q.offset);
     return reply.send({ data, meta: pageMeta(q.limit, q.offset, data.length) });
   });
+  /**
+   * GFR 2017 procurement mode bands by estimated value.
+   * Returns the full band table. If ?estimatedValueMinor= is supplied,
+   * also returns the applicableMode for that value.
+   */
+  app.get("/v1/procurement/gfr/mode-bands", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { estimatedValueMinor } = z.object({
+      estimatedValueMinor: z.coerce.bigint().optional(),
+    }).parse(req.query);
+
+    const bands = [
+      { id: "LS",  name: "Local Shopping",        rule: "GFR Rule 154",     thresholdMaxMinor: 500000n,       requiresTender: false, minBidders: null, notes: "Spot purchase up to Rs 5,000 without tender" },
+      { id: "DP",  name: "Direct Purchase",        rule: "GFR Rule 154",     thresholdMaxMinor: 2500000n,      requiresTender: false, minBidders: 1,    notes: "Direct purchase up to Rs 25,000; single quotation" },
+      { id: "LTR", name: "Limited Tender Request", rule: "GFR Rule 152a",    thresholdMaxMinor: 100000000n,    requiresTender: true,  minBidders: 3,    notes: "Rs 25,001 to Rs 10,00,000; minimum 3 quotations" },
+      { id: "LTE", name: "Limited Tender Enquiry", rule: "GFR Rule 152b",    thresholdMaxMinor: 2500000000n,   requiresTender: true,  minBidders: 10,   notes: "Rs 10,00,001 to Rs 25,00,000; minimum 10 vendors invited" },
+      { id: "OT",  name: "Open Tender",            rule: "GFR Rule 149",     thresholdMaxMinor: 500000000000n, requiresTender: true,  minBidders: null, notes: "Rs 25,00,001 to Rs 5,00,00,000; advertised tender" },
+      { id: "GT",  name: "Global Tender",          rule: "GFR Rule 160",     thresholdMaxMinor: null,          requiresTender: true,  minBidders: null, notes: "Above Rs 5,00,00,000 or for specialised unavailable items" },
+      { id: "ST",  name: "Single Tender",          rule: "GFR Rule 160a",    thresholdMaxMinor: null,          requiresTender: true,  minBidders: 1,    notes: "Single source; requires committee justification" },
+    ];
+
+    const apiSafe = bands.map(function(b) { return Object.assign({}, b, { thresholdMaxMinor: b.thresholdMaxMinor != null ? String(b.thresholdMaxMinor) : null }); });
+
+    let applicableMode: string | null = null;
+    if (estimatedValueMinor != null) {
+      for (const b of bands) {
+        if (b.id === "ST") continue;
+        if (b.thresholdMaxMinor == null || estimatedValueMinor <= b.thresholdMaxMinor) {
+          applicableMode = b.id;
+          break;
+        }
+      }
+    }
+
+    return reply.send({ data: apiSafe, ...(applicableMode ? { applicableMode } : {}) });
+  });
 }

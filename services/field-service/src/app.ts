@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -24,6 +24,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
 
   app.addHook("onRequest", createTenantTxHook(db));
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, { service: "field-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
   registerSchemaErrorHandler(app, HttpError);

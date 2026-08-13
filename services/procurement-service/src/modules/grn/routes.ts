@@ -4,12 +4,13 @@ import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createGrnBody, idParam } from "./validators.js";
+import { createGrnBody, idParam, rejectGrnBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin", "store_officer"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
+const WAREHOUSE_ROLES = ["warehouse_officer", "procurement_admin", "super_admin"];
 
 export async function grnRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/grns", async (req, reply) => {
@@ -33,6 +34,26 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
     const grn = await queries.getGrn(id, ctx.tenantId);
     if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
     return reply.send(grn);
+  });
+
+
+  app.patch("/v1/procurement/grns/:id/accept", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WAREHOUSE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const grn = await queries.getGrn(id, ctx.tenantId);
+    if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.acceptGrn(ctx, id));
+  });
+
+  app.patch("/v1/procurement/grns/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WAREHOUSE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const { reason } = rejectGrnBody.parse(req.body);
+    const grn = await queries.getGrn(id, ctx.tenantId);
+    if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectGrn(ctx, id, reason));
   });
 
   app.setErrorHandler(errorHandler);

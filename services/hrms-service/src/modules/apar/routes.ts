@@ -97,6 +97,14 @@ function trueActorRole(ctx: RequestContext, functionalRole: string, override: bo
 }
 
 export async function aparRoutes(app: FastifyInstance): Promise<void> {
+  // --- list APARs for tenant (HR sees all; employee sees own) -----------------
+  app.get("/v1/hrms/apar", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ACTOR_ROLES);
+    const rows = await repo.listAppraisals(ctx.tenantId);
+    return reply.send({ data: rows });
+  });
+
   // --- create APAR with the full officer chain assigned ---------------------
   app.post("/v1/hrms/apar", async (req, reply) => {
     const ctx = resolveContext(req);

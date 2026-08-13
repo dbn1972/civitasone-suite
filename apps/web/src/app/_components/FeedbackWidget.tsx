@@ -71,6 +71,14 @@ export function FeedbackWidget() {
     [pathname],
   );
 
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(`${STORAGE_PREFIX}${pathname}`, String(Date.now()));
+    } catch { /* ignore */ }
+    setVisible(false);
+  };
+
   const handleThumb = (type: "positive" | "negative") => {
     setRating(type);
     setExpanded(true);
@@ -123,6 +131,13 @@ export function FeedbackWidget() {
             style={{ border: "none", background: "none", cursor: "pointer", fontSize: 20, padding: 4 }}
           >
             👎
+          </button>
+          <button
+            onClick={dismiss}
+            aria-label="Dismiss feedback prompt"
+            style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af", padding: "0 0 0 4px", lineHeight: 1 }}
+          >
+            ×
           </button>
         </div>
       ) : (

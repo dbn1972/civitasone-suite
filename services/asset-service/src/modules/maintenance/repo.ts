@@ -44,3 +44,9 @@ export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?:
     .limit(opts?.limit ?? 50)
     .offset(opts?.offset ?? 0));
 }
+
+export async function listMaintenancePlans(tenantId: string, opts?: { assetId?: string }) {
+  const conditions: ReturnType<typeof eq>[] = [eq(assetMaintenancePlans.tenantId, tenantId)];
+  if (opts?.assetId) conditions.push(eq(assetMaintenancePlans.assetId, opts.assetId));
+  return scopedRead((tx) => tx.select().from(assetMaintenancePlans).where(and(...conditions)));
+}

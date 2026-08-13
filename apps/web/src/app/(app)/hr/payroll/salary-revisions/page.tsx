@@ -62,19 +62,20 @@ export default async function SalaryRevisionsPage() {
         subtitle="Basic and gross salary revision history — increments, promotions, and pay-commission fixation."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📈" iconBg="#e6f0ff" label="Total Revisions" value={items.length} />
+        <StatCard icon="📈" iconBg="var(--infobg)" label="Total Revisions" value={items.length} />
+        <StatCard icon="🏅" iconBg="var(--goodbg)" label="Increments" value={items.filter((i) => i.revision_type === "annual_increment").length} />
+        <StatCard icon="🎯" iconBg="var(--warnbg)" label="Promotions" value={items.filter((i) => i.revision_type === "promotion").length} />
+        <StatCard icon="🏛" iconBg="var(--panel)" label="Pay Commission" value={items.filter((i) => i.revision_type === "pay_commission").length} />
       </StatGrid>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="pad">
-          <p style={{ color: "var(--ink2)", fontSize: 14 }}>
+      <Card>
+        <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
             Salary revisions are recorded upstream in HRMS pay-fixation and applied here automatically —
             this screen is read-only. Contact HRMS if a revision is missing.
           </p>
-        </div>
-      </div>
+      </Card>
 
       <Card title="Salary Revision History">
         <DataTable<Row2>

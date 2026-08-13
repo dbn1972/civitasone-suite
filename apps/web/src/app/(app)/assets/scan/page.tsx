@@ -65,7 +65,7 @@ export default function MobileScanPage() {
 
       <div aria-live="polite" role="status">
         {error ? (
-          <div className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginTop: 16, fontSize: 13 }}>{error}</div>
+          <div className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginTop: 16, fontSize: 13 }}>{error}</div>
         ) : null}
         {result ? (
           <div className="card" style={{ marginTop: 16 }}>

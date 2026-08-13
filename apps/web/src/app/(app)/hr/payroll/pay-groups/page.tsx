@@ -36,6 +36,8 @@ export default async function PayGroupsPage() {
     frequencyLabel: FREQUENCY_LABEL[g.frequency] ?? g.frequency,
   }));
   type Row2 = (typeof rows)[number];
+  const monthlyGroups = groups.filter((g) => g.frequency === "monthly").length;
+  const inactiveGroups = groups.filter((g) => g.status !== "active").length;
 
   const columns: { key: keyof Row2 & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "name", label: "Pay Group" },
@@ -52,10 +54,12 @@ export default async function PayGroupsPage() {
         subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Pay Groups" value={groups.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={groups.filter((g) => g.status === "active").length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={groups.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={groups.filter((g) => g.status === "active").length} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyGroups} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveGroups} />
       </StatGrid>
 
       <CreatePayGroupForm />

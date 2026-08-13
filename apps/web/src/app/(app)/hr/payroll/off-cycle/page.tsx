@@ -29,13 +29,13 @@ export default async function OffCyclePage() {
         subtitle="Bonus, incentive, and ad-hoc off-cycle payment runs."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Runs" value={items.length} />
-        <StatCard icon="📝" iconBg="#fffbe6" label="Draft (Unprocessed)" value={draftCount} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Amount" value={formatMoney(totalAmountMinor)} />
-        <StatCard icon="🧾" iconBg="#f0e6ff" label="Total Net (Processed)" value={formatMoney(totalNetMinor)} />
+        <StatCard icon="🗂️" iconBg="var(--infobg)" label="Total Runs" value={items.length} />
+        <StatCard icon="📝" iconBg="var(--warnbg)" label="Draft (Unprocessed)" value={draftCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Amount" value={formatMoney(totalAmountMinor)} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Net (Processed)" value={formatMoney(totalNetMinor)} />
       </StatGrid>
 
       <CreateOffCycleForm />

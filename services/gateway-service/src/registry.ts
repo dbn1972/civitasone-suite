@@ -80,6 +80,8 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "recommendations", prefix: "/api/v1/recommendations", upstream: upstream("recommendation", 3040) },
   { name: "ai",              prefix: "/api/v1/ai",              upstream: upstream("ai-agent", 3041) },
   { name: "loyalty",         prefix: "/api/v1/loyalty",         upstream: upstream("loyalty", 3048) },
+  { name: "documents",       prefix: "/api/v1/documents",       upstream: upstream("document", 3049) },
+  { name: "eoffice",         prefix: "/api/v1/eoffice",         upstream: upstream("document", 3049), upstreamPath: "/v1/documents" },
   { name: "locations",      prefix: "/api/v1/locations",     upstream: upstream("location", 4012) },
   { name: "geofences",     prefix: "/api/v1/geofences",    upstream: upstream("location", 4012) },
   { name: "jurisdictions", prefix: "/api/v1/jurisdictions", upstream: upstream("location", 4012) },

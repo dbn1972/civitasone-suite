@@ -12,6 +12,7 @@ import { registerCollectionConsumers } from "./modules/collection/consumer.js";
 import { registerArrearsConsumers } from "./modules/arrears/consumer.js";
 import { registerBbpsConsumers } from "./modules/bbps/consumer.js";
 import { registerReconConsumers } from "./modules/collection/recon-consumer.js";
+import { registerTradeLicenseConsumers } from "./modules/trade-license/consumer.js";
 
 const log = pino({ name: "revenue-worker" });
 
@@ -36,6 +37,7 @@ registerCollectionConsumers(queue);
 registerArrearsConsumers(queue);
 registerBbpsConsumers(queue);
 registerReconConsumers(queue);
+registerTradeLicenseConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

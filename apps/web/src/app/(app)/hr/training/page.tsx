@@ -42,7 +42,7 @@ export default async function TrainingPage() {
   ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Training Programs"
         subtitle="Capacity building and skill development initiatives."
@@ -50,7 +50,7 @@ export default async function TrainingPage() {
           <Link href="/hr/training/new" className="btn primary">+ New Program</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
         <StatCard icon="📅" iconBg="#e6f0ff" label="Upcoming" value={upcoming} />
@@ -65,6 +65,9 @@ export default async function TrainingPage() {
           filterable
           filterPlaceholder="Filter by title, category or trainer…"
           pageSize={15}
+          emptyIcon="📚"
+          emptyTitle="No training programmes"
+          emptyMessage="Training programmes appear here once created. Click '+ New Program' to schedule a training."
         />
       </Card>
     </main>

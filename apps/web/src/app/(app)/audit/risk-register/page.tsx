@@ -17,7 +17,7 @@ export default async function RiskRegisterPage() {
     <main className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <span aria-current="page">Risk Register</span>
       </nav>
       <PageHeader
@@ -26,10 +26,10 @@ export default async function RiskRegisterPage() {
         actions={<AddRiskButton />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="⚠️" iconBg="#fef2f2" label="Total Risks" value={total} />
-        <StatCard icon="🔴" iconBg="#fff7ed" label="High" value={high} />
-        <StatCard icon="🟡" iconBg="#fffaeb" label="Medium" value={medium} />
-        <StatCard icon="🟢" iconBg="#ecfdf3" label="Low / Controlled" value={low} />
+        <StatCard icon="⚠️" iconBg="var(--badbg)" label="Total Risks" value={total} />
+        <StatCard icon="🔴" iconBg="var(--warnbg)" label="High" value={high} />
+        <StatCard icon="🟡" iconBg="var(--warnbg)" label="Medium" value={medium} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label="Low / Controlled" value={low} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <RiskTable items={items} />

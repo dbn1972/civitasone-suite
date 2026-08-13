@@ -1,4 +1,4 @@
-import { PageHeader, Card, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -44,6 +44,11 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
   const result = canLookup ? await getForm12BA(employeeId!, fy!) : null;
   const source = result?.source ?? "api";
   const form12ba = result?.data ?? null;
+  const perqCount = form12ba?.perquisites?.length ?? 0;
+  const totalPerqMinor = form12ba?.totalPerquisitesMinor ?? 0;
+  const maxPerqMinor = form12ba && form12ba.perquisites.length > 0
+    ? Math.max(...form12ba.perquisites.map((p) => p.taxableValueMinor))
+    : 0;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -52,7 +57,16 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
         subtitle="Itemised perquisite components (Sec 17(2)) and the statutory Form 12BA statement."
         back="/hr/payroll/statutory"
       />
-      {canLookup && source === "error" && <DataSourceBadge source="error" />}
+      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} />}
+
+      {canLookup && form12ba && (
+        <StatGrid>
+          <StatCard icon="📋" iconBg="var(--infobg)" label="Perquisite Items" value={perqCount} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Taxable Value" value={formatMoney(totalPerqMinor)} />
+          <StatCard icon="📈" iconBg="var(--warnbg)" label="Largest Perquisite" value={formatMoney(maxPerqMinor)} />
+          <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Year" value={form12ba.fy} />
+        </StatGrid>
+      )}
 
       <EmployeeFyLookup employeeId={employeeId ?? ""} fy={fy ?? ""} />
 

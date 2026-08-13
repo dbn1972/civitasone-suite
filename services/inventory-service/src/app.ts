@@ -16,6 +16,7 @@ import { batchRoutes } from "./modules/batches/routes.js";
 import { cycleCountRoutes } from "./modules/cycle-count/routes.js";
 import { matchingRoutes } from "./modules/matching/routes.js";
 import { forecastRoutes } from "./modules/forecast/routes.js";
+import { custodianRoutes } from "./modules/custodians/routes.js";
 
 /**
  * inventory-service HTTP app — government store/inventory domain.
@@ -44,6 +45,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cycleCountRoutes);
   await app.register(matchingRoutes);
   await app.register(forecastRoutes);
+  await app.register(custodianRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

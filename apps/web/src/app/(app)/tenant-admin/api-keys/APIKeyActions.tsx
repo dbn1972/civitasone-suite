@@ -200,7 +200,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         )}
       </div>
 
-      {message ? <p role="alert" style={{ color: "#b91c1c", fontSize: 12, padding: "0 16px 16px" }}>{message}</p> : null}
+      {message ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, padding: "0 16px 16px" }}>{message}</p> : null}
 
       <ConfirmDialog
         open={pending !== null}

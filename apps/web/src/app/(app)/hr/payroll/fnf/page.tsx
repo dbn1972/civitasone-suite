@@ -27,6 +27,7 @@ export default async function FnfPage() {
 
   const pending = settlements.filter((s) => s.status === "pending" || s.status === "computed").length;
   const settled = settlements.filter((s) => s.status === "settled" || s.status === "paid").length;
+  const separationTypes = new Set(settlements.map((s) => s.separationType).filter(Boolean)).size;
 
   const columns: { key: keyof SettlementRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
     { key: "employeeId", label: "Employee ID" },
@@ -43,12 +44,13 @@ export default async function FnfPage() {
         subtitle="Compute and track full-and-final (F&F) separation settlements."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🧮" iconBg="#e6f0ff" label="Total Settlements" value={settlements.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending / Computed" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Settled" value={settled} />
+        <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={settlements.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending / Computed" value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled} />
+        <StatCard icon="📊" iconBg="var(--panel)" label="Separation Types" value={separationTypes} />
       </StatGrid>
 
       <ComputeFnfForm />

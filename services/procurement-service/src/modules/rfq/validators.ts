@@ -21,3 +21,19 @@ export const createRfqBody = z.object({
 export type CreateRfqBody = z.infer<typeof createRfqBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+const rfqRespondItemSchema = z.object({
+  itemId:       z.string().uuid().optional(),
+  itemName:     z.string().max(256).optional(),
+  unitPrice:    z.number().nonnegative(),
+  leadTimeDays: z.number().int().nonnegative().default(0),
+  notes:        z.string().max(500).optional(),
+});
+
+export const rfqRespondBody = z.object({
+  items:         z.array(rfqRespondItemSchema).min(1),
+  validUntil:    z.string().optional(),
+  termsAccepted: z.boolean().default(false),
+  remarks:       z.string().max(1000).optional(),
+});
+export type RfqRespondBody = z.infer<typeof rfqRespondBody>;

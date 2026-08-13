@@ -7,13 +7,13 @@ export default async function NewAppraisalPage() {
   const { data: employees, source } = await getEmployees();
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="New Appraisal"
         subtitle="Create a performance review record."
         back="/hr/appraisals"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <NewAppraisalForm employees={employees} />
     </main>
   );

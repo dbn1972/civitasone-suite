@@ -76,7 +76,27 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(po);
   });
 
+
+  // Alias: POST /v1/procurement/purchase-orders -> same as POST /pos (REST compat)
+  app.post("/v1/procurement/purchase-orders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const body = createPoBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
+  });
+
+  // Alias: GET /v1/procurement/purchase-orders/:id -> same as GET /pos/:id (REST compat)
+  app.get("/v1/procurement/purchase-orders/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const po = await queries.getPo(id, ctx.tenantId);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    return reply.send(po);
+  });
+
   app.setErrorHandler(errorHandler);
+
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

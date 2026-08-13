@@ -12,7 +12,7 @@ import {
   MISSummaryListSchema,
 } from "@civitasone/schemas/web";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createJobBody, jobsListSchema, idParam, downloadQuerySchema } from "./validators.js";
+import { createJobBody, jobsListSchema, idParam, downloadQuerySchema, shareJobBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as kpiQueries from "../kpis/queries.js";
@@ -86,6 +86,30 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       rows: [],
       totalCount: job.rowCount ?? 0,
     });
+  });
+
+
+  app.get("/v1/reports/jobs/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const job = await queries.getJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    return reply.send({ data: job });
+  });
+
+  app.post("/v1/reports/jobs/:id/share", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = idParam.parse(req.params);
+    const { recipients, message } = shareJobBody.parse(req.body);
+    const job = await queries.getJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    if (job.status !== "completed" || !job.downloadUrl) {
+      throw new HttpError(409, "NOT_READY", "report not yet completed");
+    }
+    const result = await commands.shareJob(ctx, id, { recipients, ...(message !== undefined ? { message } : {}), downloadUrl: job.downloadUrl });
+    return reply.code(202).send({ data: result });
   });
 
   /** Download redirect — returns the presigned download URL for a completed job.

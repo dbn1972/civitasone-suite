@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiStructure = {
   id: string;
@@ -36,25 +37,30 @@ function mapStructures(apiItems: ApiStructure[]): Row[] {
   }));
 }
 
-async function getStructures(): Promise<Row[]> {
-  const res = await fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
+async function getStructures(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/payroll/structures", [], {
     telemetryKey: "hr.salary-structures",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiStructure[] })?.data;
       return Array.isArray(arr) ? mapStructures(arr as ApiStructure[]) : null;
     },
   });
-  return res.data;
 }
 
 export default async function SalaryStructurePage() {
-  const items = await getStructures();
+  const { data: items, source } = await getStructures();
 
   const active = items.filter((i) => i.status === "active").length;
   const totalEmployees = items.reduce((sum, i) => {
     const n = parseInt(i.employees);
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
+
+  const lastRevision = items
+    .map((i) => i.effectiveDate)
+    .filter((d) => d && d !== "—")
+    .sort()
+    .at(-1) ?? "—";
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "name", label: "Structure Name" },
@@ -68,17 +74,32 @@ export default async function SalaryStructurePage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Salary Structures" subtitle="Pay structure definitions by grade and level." back="/hr" />
+      <PageHeader
+        title="Salary Structures"
+        subtitle="Pay structure definitions by grade and level — component breakdown, allowances, and revision history."
+        back="/hr"
+        actions={<span />}
+      />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e6f0ff" label="Structures" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
         <StatCard icon="👥" iconBg="#fffbe6" label="Employees Covered" value={totalEmployees.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="Last Revision" value="Jan 2024" />
+        <StatCard icon="📅" iconBg="#f5f5f5" label="Last Revision" value={lastRevision} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Salary Structures</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, grade or status…" pageSize={15} />
-      </div>
+      <Card title="Salary Structures">
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder="Filter by name, grade or status…"
+          pageSize={15}
+          emptyIcon="💼"
+          emptyTitle="No salary structures defined"
+          emptyMessage="Pay structure definitions by grade and level appear here. Structures define the component breakdown — basic pay, DA, HRA, transport, and special allowances — for each employee category."
+        />
+      </Card>
     </main>
   );
 }

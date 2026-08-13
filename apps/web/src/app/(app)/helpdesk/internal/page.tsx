@@ -23,10 +23,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🎫" iconBg="#fff3e0" label="Total Tickets" value={tickets.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔵" iconBg="#eff6ff" label="Open" value={open.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Resolved" value={resolved.toLocaleString("en-IN")} />
-        <StatCard icon="🔴" iconBg="#fef2f2" label="Critical" value={critical.toLocaleString("en-IN")} />
+        <StatCard icon="🎫" label="Total Tickets" value={tickets.length.toLocaleString("en-IN")} />
+        <StatCard icon="🔵" label="Open" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Resolved" value={resolved.toLocaleString("en-IN")} />
+        <StatCard icon="🔴" label="Critical" value={critical.toLocaleString("en-IN")} />
       </StatGrid>
       <InternalTicketsTable tickets={tickets} />
     </>

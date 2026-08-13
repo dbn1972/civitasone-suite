@@ -118,8 +118,8 @@ export function VerifyForm16Form() {
               style={{
                 borderRadius: 8,
                 padding: 12,
-                border: `1px solid ${result.valid ? "#abefc6" : "#fecdca"}`,
-                background: result.valid ? "#f6fef9" : "#fffbfa",
+                border: `1px solid ${result.valid ? "var(--goodbd)" : "var(--badbd)"}`,
+                background: result.valid ? "var(--goodbg)" : "var(--badbg)",
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 6 }}>

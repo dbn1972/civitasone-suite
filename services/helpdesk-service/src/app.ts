@@ -24,6 +24,8 @@ import { routingRoutes } from "./modules/routing/index.js";
 import { calendarRoutes } from "./modules/sla/calendar-routes.js";
 import { viewsRoutes } from "./modules/tickets/views-routes.js";
 import { knowledgeRoutes } from "./modules/knowledge/routes.js";
+import { roadHotspotRoutes } from "./modules/road-hotspot/routes.js";
+import { cannedResponsesRoutes } from "./modules/canned-responses/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -69,6 +71,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(calendarRoutes);
   await app.register(viewsRoutes);
   await app.register(knowledgeRoutes);
+  await app.register(roadHotspotRoutes);
+  await app.register(cannedResponsesRoutes);
   const { slaEngineRoutes } = await import("./modules/sla-engine/routes.js");
   await app.register(slaEngineRoutes);
   registerSchemaErrorHandler(app, HttpError);

@@ -29,11 +29,11 @@ export default async function AppealsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th style={{ padding: 8 }}>Type</th>
-                  <th style={{ padding: 8 }}>Grounds</th>
-                  <th style={{ padding: 8 }}>Deadline</th>
-                  <th style={{ padding: 8 }}>Status</th>
-                  <th style={{ padding: 8 }}>Outcome</th>
+                  <th scope="col" style={{ padding: 8 }}>Type</th>
+                  <th scope="col" style={{ padding: 8 }}>Grounds</th>
+                  <th scope="col" style={{ padding: 8 }}>Deadline</th>
+                  <th scope="col" style={{ padding: 8 }}>Status</th>
+                  <th scope="col" style={{ padding: 8 }}>Outcome</th>
                 </tr>
               </thead>
               <tbody>

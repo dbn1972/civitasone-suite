@@ -35,6 +35,7 @@ import type {
   EmployeeDetail,
   EmployeeSummary,
   HRDashboard,
+  LeaveInboxItem,
   JobOpeningSummary,
   LeaveRequestDetail,
   ModuleRowSummary,
@@ -1034,8 +1035,8 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson("/api/v1/hrms/employees", [] as EmployeeSummary[], {
+export async function getEmployees(limit = 500): Promise<LoaderResult<EmployeeSummary[]>> {
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -1286,6 +1287,8 @@ export async function getCrmActivities(): Promise<LoaderResult<ActivitySummary[]
   });
 }
 
+export const getCrmGrievances = moduleLoader("/api/v1/crm/grievances", "crm.grievances");
+export const getCrmServiceRequests = moduleLoader("/api/v1/crm/service-requests", "crm.service-requests");
 function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -1710,6 +1713,43 @@ export async function getFinanceAllocations(): Promise<LoaderResult<Record<strin
   });
 }
 
+
+export async function getFinanceBudgetMonitoring(fy?: string): Promise<LoaderResult<Record<string, unknown>>> {
+  const url = fy
+    ? `/api/v1/finance/budget-monitoring/summary?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/budget-monitoring/summary";
+  return fetchJson<unknown, Record<string, unknown>>(url, {}, {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.budget-monitoring",
+    mapResponse: (p) => (p as Record<string, unknown>) ?? null,
+  });
+}
+
+export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  const url = fy
+    ? `/api/v1/finance/budget-monitoring?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/budget-monitoring";
+  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.budget-monitoring-lines",
+    mapResponse: (p) => {
+      const obj = p as Record<string, unknown>;
+      return Array.isArray(obj.lines) ? obj.lines as Record<string, unknown>[] : null;
+    },
+  });
+}
+
+export async function getFinanceFundReleases(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  const url = fy
+    ? `/api/v1/finance/allocation-distributions?fy=${encodeURIComponent(fy)}`
+    : "/api/v1/finance/allocation-distributions";
+  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+    revalidateSeconds: 120,
+    telemetryKey: "finance.fund-releases",
+    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+  });
+}
+
 export async function getFinanceFundAccounting(): Promise<LoaderResult<Record<string, unknown>[]>> {
   return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/funds", [], {
     revalidateSeconds: 300,
@@ -1808,19 +1848,46 @@ export async function getFinanceDebt(): Promise<LoaderResult<Record<string, unkn
 
 const HR_DASHBOARD_EMPTY: HRDashboard = {
   headcount: 0,
+  headcountLastMonth: 0,
   attendanceTodayPct: 0,
   pendingLeaves: 0,
   payrollDue: 0,
+  departmentBreakdown: [],
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
   if (!isRecord(payload)) return null;
+  const raw = payload as Record<string, unknown>;
   return {
-    headcount: typeof payload.headcount === "number" ? payload.headcount : 0,
-    attendanceTodayPct: typeof payload.attendanceTodayPct === "number" ? payload.attendanceTodayPct : 0,
-    pendingLeaves: typeof payload.pendingLeaves === "number" ? payload.pendingLeaves : 0,
-    payrollDue: typeof payload.payrollDue === "number" ? payload.payrollDue : 0,
+    headcount: typeof raw.headcount === "number" ? raw.headcount : 0,
+    headcountLastMonth: typeof raw.headcountLastMonth === "number" ? raw.headcountLastMonth : 0,
+    attendanceTodayPct: typeof raw.attendanceTodayPct === "number" ? raw.attendanceTodayPct : 0,
+    pendingLeaves: typeof raw.pendingLeaves === "number" ? raw.pendingLeaves : 0,
+    payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
+    departmentBreakdown: Array.isArray(raw.departmentBreakdown)
+      ? (raw.departmentBreakdown as { name: string; count: number }[])
+      : [],
   };
+}
+
+export async function getDashboardLeaveInbox(): Promise<{ data: LeaveInboxItem[] }> {
+  try {
+    const res = await fetchJson<unknown, { data: LeaveInboxItem[] }>(
+      "/api/v1/hrms/dashboard/pending-leaves",
+      { data: [] as LeaveInboxItem[] },
+      {
+        revalidateSeconds: 30,
+        telemetryKey: "hr.dashboard.pending_leaves",
+        mapResponse: (p) => {
+          if (!isRecord(p) || !Array.isArray(p.data)) return { data: [] as LeaveInboxItem[] };
+          return { data: p.data as LeaveInboxItem[] };
+        },
+      }
+    );
+    return res.data;
+  } catch {
+    return { data: [] };
+  }
 }
 
 export async function getHRDashboard(): Promise<LoaderResult<HRDashboard>> {
@@ -4327,6 +4394,87 @@ export async function getProjectDelayAnalysis(): Promise<LoaderResult<ProjectDel
     mapResponse: (p) => getArrayPayload(p) as ProjectDelayRow[] | null,
   });
 }
+// ── Project Task loader (per-project) ─────────────────────────────────────────
+
+export type ProjectTaskRow = {
+  id: string;
+  projectId: string;
+  parentTaskId: string | null;
+  name: string;
+  description: string | null;
+  status: string;
+  progressPct: number;
+  weightPct: number;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+};
+
+export async function getProjectTasks(projectId: string): Promise<LoaderResult<ProjectTaskRow[]>> {
+  return fetchJson<unknown, ProjectTaskRow[]>(`/api/v1/projects/${projectId}/tasks`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "projects.tasks",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectTaskRow[];
+      }
+      return getArrayPayload(p) as ProjectTaskRow[] | null;
+    },
+  });
+}
+
+// ── Project Member loader (per-project) ──────────────────────────────────────
+
+export type ProjectMemberRow = {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: string;
+  createdAt: string;
+};
+
+export async function getProjectMembers(projectId: string): Promise<LoaderResult<ProjectMemberRow[]>> {
+  return fetchJson<unknown, ProjectMemberRow[]>(`/api/v1/projects/${projectId}/members`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.members",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectMemberRow[];
+      }
+      return getArrayPayload(p) as ProjectMemberRow[] | null;
+    },
+  });
+}
+
+// ── Project Risk loader (per-project) ────────────────────────────────────────
+
+export type ProjectRiskRow = {
+  id: string;
+  projectId: string;
+  title: string;
+  category: string;
+  probability: string;
+  impact: string;
+  riskScore: number;
+  status: string;
+  mitigationPlan: string | null;
+  createdAt: string;
+};
+
+export async function getProjectRisks(projectId: string): Promise<LoaderResult<ProjectRiskRow[]>> {
+  return fetchJson<unknown, ProjectRiskRow[]>(`/api/v1/projects/${projectId}/risks`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.risks",
+    mapResponse: (p) => {
+      if (p && typeof p === "object" && "data" in p && Array.isArray((p as any).data)) {
+        return (p as any).data as ProjectRiskRow[];
+      }
+      return getArrayPayload(p) as ProjectRiskRow[] | null;
+    },
+  });
+}
+
 
 // ── Analytics sub-resource loaders ────────────────────────────────────────────
 
@@ -4535,4 +4683,109 @@ export async function getRequestBreachReport(): Promise<LoaderResult<RequestBrea
       return { data: r.data ?? [], summary: r.summary };
     },
   });
+}
+
+
+// ---- Procurement: Vendor Scorecard ----------------------------------------
+export type VendorScorecard = {
+  vendorId: string;
+  overallRating: number;
+  ratingBand: string;
+  totalOrders: number;
+  onTimeDeliveries: number;
+  lateDeliveries: number;
+  qualityRejections: number;
+  slaBreaches: number;
+  deliveryScore: number;
+  qualityScore: number;
+  slaScore: number;
+  lastUpdated: string | null;
+};
+
+export async function getProcurementVendorScorecard(vendorId: string): Promise<LoaderResult<VendorScorecard | null>> {
+  return fetchJson<unknown, VendorScorecard | null>(
+    "/api/v1/procurement/vendors/" + encodeURIComponent(vendorId) + "/scorecard",
+    null,
+    {
+      revalidateSeconds: 120,
+      telemetryKey: "procurement.vendor.scorecard",
+      mapResponse: (p) => ((p as { data?: VendorScorecard } | null)?.data ?? null),
+    }
+  );
+}
+
+// ---- Procurement: Annual Plans --------------------------------------------
+export type AnnualPlanSummary = {
+  id: string;
+  planYear: number;
+  title: string;
+  department: string;
+  status: string;
+  totalEstimatedMinor: number;
+  itemCount: number;
+  createdAt: string;
+};
+
+export async function getProcurementAnnualPlans(query?: { department?: string; year?: number }): Promise<LoaderResult<AnnualPlanSummary[]>> {
+  const params = new URLSearchParams();
+  if (query?.department) params.set("department", query.department);
+  if (query?.year) params.set("year", String(query.year));
+  const qs = params.toString() ? "?" + params.toString() : "";
+  return fetchJson<unknown, AnnualPlanSummary[]>(
+    "/api/v1/procurement/plans" + qs,
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.plans",
+      mapResponse: (p) => getArrayPayload(p) as AnnualPlanSummary[] | null,
+    }
+  );
+}
+
+// ---- Procurement: Tender Documents ----------------------------------------
+export type TenderDocumentSummary = {
+  id: string;
+  tenderId: string;
+  docType: string;
+  title: string;
+  storageRef: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string;
+};
+
+export async function getProcurementTenderDocuments(tenderId: string): Promise<LoaderResult<TenderDocumentSummary[]>> {
+  return fetchJson<unknown, TenderDocumentSummary[]>(
+    "/api/v1/procurement/tenders/" + encodeURIComponent(tenderId) + "/documents",
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.tender.documents",
+      mapResponse: (p) => getArrayPayload(p) as TenderDocumentSummary[] | null,
+    }
+  );
+}
+
+// ---- Procurement: PO Amendments -------------------------------------------
+export type POAmendmentSummary = {
+  id: string;
+  poId: string;
+  amendmentType: string;
+  effectiveDate: string | null;
+  deltaAmountMinor: number | null;
+  reason: string;
+  status: string;
+  createdAt: string;
+};
+
+export async function getProcurementPOAmendments(poId: string): Promise<LoaderResult<POAmendmentSummary[]>> {
+  return fetchJson<unknown, POAmendmentSummary[]>(
+    "/api/v1/procurement/pos/" + encodeURIComponent(poId) + "/amendments",
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "procurement.po.amendments",
+      mapResponse: (p) => getArrayPayload(p) as POAmendmentSummary[] | null,
+    }
+  );
 }

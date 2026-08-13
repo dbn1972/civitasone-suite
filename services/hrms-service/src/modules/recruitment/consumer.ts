@@ -1,4 +1,6 @@
 import type { Queue } from "@civitasone/queue";
+import { randomUUID } from "node:crypto";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -21,7 +23,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         location: p.location ?? null,
         qualification: p.qualification ?? null,
         payRange: p.payRange ?? null,
-        isPublished: p.isPublished ? "true" : "false",
+        isPublished: p.isPublished ?? false,
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -119,6 +121,34 @@ export function registerRecruitmentConsumers(queue: Queue): void {
       }
 
       await audit(tx, msg, "hire", "application", p.applicationId);
+
+      // Notify the newly hired employee and trigger onboarding workflow
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.recruitment.hire_confirmed",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { employeeNo: p.employeeNo, employeeId: p.employeeId },
+        }),
+      });
+      await enqueue(tx, {
+        topic: "workflow.instance.create", eventType: "workflow.instance.create",
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          id: randomUUID(),
+          tenantId: msg.tenantId,
+          name: `Employee Onboarding — ${p.employeeId.slice(0, 8)}`,
+          status: "active",
+          definitionCode: "employee_onboarding",
+          initialTaskName: "Document Submission",
+          version: 1,
+          refType: "employee",
+          refId: p.employeeId,
+          triggeredBy: msg.actorId ?? "system",
+        },
+      });
     });
 
     // Invalidate caches

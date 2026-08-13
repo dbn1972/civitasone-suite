@@ -26,4 +26,15 @@ export const rejectApplicationBody = z.object({
 });
 export type RejectApplicationBody = z.infer<typeof rejectApplicationBody>;
 
+export const withdrawApplicationBody = z.object({
+  reason: z.string().min(5).max(1000),
+});
+export type WithdrawApplicationBody = z.infer<typeof withdrawApplicationBody>;
+
+export const assignReviewerBody = z.object({
+  reviewerRef:  z.string().min(1).max(128),
+  reviewerName: z.string().min(1).max(256).optional(),
+});
+export type AssignReviewerBody = z.infer<typeof assignReviewerBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });

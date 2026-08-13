@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { maintenancePlanBody, workOrderBody, completeWorkOrderBody, idParam } from "./validators.js";
+import { maintenancePlanBody, workOrderBody, completeWorkOrderBody, idParam, meterReadingBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { z } from "zod";
@@ -43,6 +43,14 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createMaintenancePlan(ctx, id, body));
   });
 
+  app.post("/v1/assets/assets/:id/meter-readings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSET_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = meterReadingBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createMeterReading(ctx, id, body));
+  });
+
   app.post("/v1/assets/work-orders", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
@@ -56,6 +64,17 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = completeWorkOrderBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeWorkOrder(ctx, id, body));
+  });
+
+  // G17: Maintenance plans list
+  app.get("/v1/assets/maintenance/plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_manager", "asset_admin", "super_admin"]);
+    const q = req.query as { assetId?: string };
+    const opts: { assetId?: string } = {};
+    if (q.assetId) opts.assetId = q.assetId;
+    const rows = await queries.listMaintenancePlans(ctx.tenantId, opts);
+    return reply.send({ data: rows });
   });
 
   app.setErrorHandler((err, req, reply) => {

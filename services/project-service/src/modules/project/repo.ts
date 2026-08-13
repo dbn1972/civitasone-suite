@@ -2,7 +2,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { db } from "../../shared/db.js";
 import {
-  projectProjects, projectTasks, projectMilestones,
+  projectProjects, projectTasks, projectMilestones, projectMembers,
   type ProjectRow, type ProjectInsert, type TaskInsert,
 } from "./schema.js";
 
@@ -136,4 +136,68 @@ export async function updateProjectRagStatusTx(
   await tx.update(projectProjects)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(projectProjects.id, id));
+}
+
+// ─── Project Update ──────────────────────────────────────────────────────────
+
+export async function updateProjectTx(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  patch: Partial<ProjectInsert>,
+): Promise<void> {
+  await tx.update(projectProjects)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(projectProjects.id, id), eq(projectProjects.tenantId, tenantId)));
+}
+
+// ─── Project Members ─────────────────────────────────────────────────────────
+
+export async function insertMember(
+  tx: Writer,
+  row: typeof projectMembers.$inferInsert,
+): Promise<void> {
+  await tx.insert(projectMembers).values(row);
+}
+
+export async function listMembersByProject(
+  projectId: string,
+  tenantId: string,
+): Promise<(typeof projectMembers.$inferSelect)[]> {
+  // db.transaction() injects the tenant GUC so RLS is enforced on read.
+  return db.transaction((tx) =>
+    tx.select().from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.tenantId, tenantId))),
+  );
+}
+
+export async function findMemberByIdTx(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+): Promise<typeof projectMembers.$inferSelect | null> {
+  const rows = await (tx as typeof db).select().from(projectMembers)
+    .where(and(eq(projectMembers.id, id), eq(projectMembers.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function deleteMemberTx(tx: Writer, id: string, tenantId: string): Promise<void> {
+  await tx.delete(projectMembers)
+    .where(and(eq(projectMembers.id, id), eq(projectMembers.tenantId, tenantId)));
+}
+
+export async function findMemberByUserAndProject(
+  projectId: string,
+  userId: string,
+  tenantId: string,
+): Promise<typeof projectMembers.$inferSelect | null> {
+  const rows = await db.transaction((tx) =>
+    tx.select().from(projectMembers)
+      .where(and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.userId, userId),
+        eq(projectMembers.tenantId, tenantId),
+      )).limit(1),
+  );
+  return rows[0] ?? null;
 }

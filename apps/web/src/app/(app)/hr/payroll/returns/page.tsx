@@ -147,6 +147,8 @@ export default async function ReturnsPage({
     getForm26Q(fy, quarter),
   ]);
 
+  const overallSource: "api" | "error" = (f24Lookup.state === "error" || src26 === "error") ? "error" : "api";
+
   const rows24 = f24Lookup.state === "ok" ? f24Lookup.data.deductees.map((d) => ({ ...d })) : [];
   const cols24: { key: keyof Deductee24Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "name", label: "Employee" },
@@ -155,8 +157,10 @@ export default async function ReturnsPage({
     { key: "tdsDepositedMinor", label: "TDS Deposited", align: "right", cellType: "amount" },
   ];
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
+  const totalTdsDepositedMinor24 = totalTdsDeductedMinor24; // deposited == deducted in current model
 
   const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
+  const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
   const cols26: { key: keyof Deductee26Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "name", label: "Deductee" },
     { key: "pan", label: "PAN" },
@@ -172,6 +176,8 @@ export default async function ReturnsPage({
         subtitle="Form-24Q (salary) and Form-26Q (non-salary) quarterly e-TDS returns."
         back="/hr/payroll"
       />
+
+      <DataSourceBadge source={overallSource} />
 
       {/* Strips a one-time ?force=1 from the visible URL (browser history API only —
           no navigation/refetch) so a page refresh can't silently replay the
@@ -197,20 +203,21 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load Form-24Q for FY ${fy} ${quarter}`}
-                message="This is not the same as “no return yet” — the request failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : (
             <>
               <StatGrid>
-                <StatCard icon="👥" iconBg="#e6f0ff" label="Deductees" value={f24Lookup.data.deducteeCount} />
-                <StatCard icon="💰" iconBg="#e6f7f0" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f24Lookup.data.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
                 <StatCard
                   icon={f24Lookup.data.reconciliation.matched ? "✅" : "⚠️"}
                   iconBg={f24Lookup.data.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
                   label="Challan Reconciliation"
                   value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
+                <StatCard icon="🏦" iconBg="var(--warnbg)" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -230,7 +237,7 @@ export default async function ReturnsPage({
                   emptyMessage="No approved/disbursed payroll runs contributed TDS in this quarter yet."
                 />
               </div>
-              <p style={{ fontSize: "12.5px", color: "#475467", marginTop: 10 }}>{f24Lookup.data.note}</p>
+              <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f24Lookup.data.note}</p>
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"
@@ -255,7 +262,7 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load Form-26Q for FY ${fy} ${quarter}`}
-                message="This is not the same as “no data” — the request failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : !f26.populated ? (
@@ -266,16 +273,17 @@ export default async function ReturnsPage({
             />
           ) : (
             <>
-              {src26 === "error" && <DataSourceBadge source="error" />}
+              <DataSourceBadge source={src26 === "error" ? "error" : "api"} />
               <StatGrid>
-                <StatCard icon="👥" iconBg="#e6f0ff" label="Deductees" value={f26.deducteeCount} />
-                <StatCard icon="💰" iconBg="#e6f7f0" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f26.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
                 <StatCard
                   icon={f26.reconciliation.matched ? "✅" : "⚠️"}
                   iconBg={f26.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
                   label="Challan Reconciliation"
                   value={f26.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
+                <StatCard icon="💳" iconBg="var(--warnbg)" label="Amount Paid" value={formatMoney(totalAmountPaidMinor26)} />
               </StatGrid>
               <div style={{ marginTop: 12 }}>
                 <DataTable
@@ -289,7 +297,7 @@ export default async function ReturnsPage({
                   emptyTitle="No non-salary deductees this quarter"
                 />
               </div>
-              <p style={{ fontSize: "12.5px", color: "#475467", marginTop: 10 }}>{f26.note}</p>
+              <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f26.note}</p>
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"

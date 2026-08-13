@@ -39,6 +39,7 @@ export default async function ReimbursementsPage() {
 
   const totalMinor = items.reduce((sum, r) => sum + Number(r.amount_minor ?? 0), 0);
   const pendingCount = items.filter((r) => r.status === "submitted").length;
+  const approvedReimb = items.filter((r) => r.status === "approved").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -47,11 +48,12 @@ export default async function ReimbursementsPage() {
         subtitle="Employee expense reimbursement claims (medical, travel, LTA, and more)."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#e6f0ff" label="Total Claims" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="Total Claimed" value={formatMoney(totalMinor)} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Claimed" value={formatMoney(totalMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedReimb} />
       </StatGrid>
 
       <CreateReimbursementForm />

@@ -1,5 +1,6 @@
-import { PageHeader, Card } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type FeedItem = {
   type: string;
@@ -24,7 +25,7 @@ const BADGE_EMOJI: Record<string, string> = {
   star: "⭐", rocket: "🚀", heart: "❤️", trophy: "🏆", fire: "🔥", lightning: "⚡", thumbsup: "👍",
 };
 
-async function getData(): Promise<FeedItem[]> {
+async function getData(): Promise<LoaderResult<FeedItem[]>> {
   const r = await fetchJson<unknown, FeedItem[]>("/api/v1/hrms/social/feed", [], {
     telemetryKey: "hr.social-feed",
     mapResponse: (p) => {
@@ -32,114 +33,109 @@ async function getData(): Promise<FeedItem[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function SocialFeedPage() {
-  const feed = await getData();
+  const { data: feed, source } = await getData();
 
-  const kudosCount = feed.filter((f) => f.type === "kudos").length;
-  const birthdayCount = feed.filter((f) => f.type === "birthday").length;
-  const newJoineeCount = feed.filter((f) => f.type === "new_joinee").length;
+  const kudosCount        = feed.filter((f) => f.type === "kudos").length;
+  const birthdayCount     = feed.filter((f) => f.type === "birthday").length;
+  const newJoineeCount    = feed.filter((f) => f.type === "new_joinee").length;
   const announcementCount = feed.filter((f) => f.type === "announcement").length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Social Feed" subtitle="Kudos, birthdays, new joinees, and announcements" />
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Social Feed"
+        subtitle="Kudos, birthdays, new joinees, and office announcements."
+        back="/hr"
+      />
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="🌟" iconBg="#fffbe6" label="Kudos"         value={kudosCount} />
+        <StatCard icon="🎂" iconBg="#fff0f6" label="Birthdays"    value={birthdayCount} />
+        <StatCard icon="👋" iconBg="#e6f7f0" label="New Joinees"   value={newJoineeCount} />
+        <StatCard icon="📢" iconBg="#e6f0ff" label="Announcements" value={announcementCount} />
+      </StatGrid>
 
-      <div className="grid grid-cols-4 gap-4">
-        <div className="rounded-lg border p-4 text-center">
-          <p className="text-2xl font-bold text-amber-500">{kudosCount}</p>
-          <p className="text-xs text-gray-500">Kudos This Week</p>
-        </div>
-        <div className="rounded-lg border p-4 text-center">
-          <p className="text-2xl font-bold text-pink-500">{birthdayCount}</p>
-          <p className="text-xs text-gray-500">Birthdays Today</p>
-        </div>
-        <div className="rounded-lg border p-4 text-center">
-          <p className="text-2xl font-bold text-green-500">{newJoineeCount}</p>
-          <p className="text-xs text-gray-500">New Joinees</p>
-        </div>
-        <div className="rounded-lg border p-4 text-center">
-          <p className="text-2xl font-bold text-indigo-500">{announcementCount}</p>
-          <p className="text-xs text-gray-500">Announcements</p>
-        </div>
-      </div>
-
-      <div className="space-y-4 max-w-2xl">
-        {feed.length === 0 && (
-          <div className="rounded-lg border p-8 text-center text-gray-400">
-            <p className="text-4xl mb-3">🎉</p>
-            <p>No updates yet. Give kudos to a colleague to start the feed!</p>
+      {feed.length === 0 ? (
+        <Card title="Feed">
+          <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>No updates yet</p>
+            <p style={{ fontSize: 14 }}>Give kudos to a colleague to start the feed!</p>
           </div>
-        )}
-
-        {feed.map((item) => {
-          if (item.type === "kudos") {
-            return (
-              <div key={item.id} className="rounded-lg border bg-white p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">{BADGE_EMOJI[item.badge ?? "star"]}</span>
-                  <div>
-                    <p className="text-sm">
-                      <span className="font-semibold">{item.giver_name}</span>
-                      {" appreciated "}
-                      <span className="font-semibold">{item.receiver_name}</span>
-                    </p>
-                    {item.message && (
-                      <p className="mt-1 text-sm text-gray-600 italic bg-gray-50 rounded p-2">{item.message}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          if (item.type === "birthday") {
-            return (
-              <div key={item.id} className="rounded-lg border p-4 bg-gradient-to-r from-pink-50 to-yellow-50">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">🎂</span>
-                  <div>
-                    <p className="font-semibold text-pink-700">Happy Birthday, {item.name}!</p>
-                    <p className="text-sm text-gray-600">{item.designation} • {item.department}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          if (item.type === "new_joinee") {
-            return (
-              <div key={item.id} className="rounded-lg border p-4 bg-gradient-to-r from-green-50 to-emerald-50">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">👋</span>
-                  <div>
-                    <p className="font-semibold text-green-700">Welcome {item.name}!</p>
-                    <p className="text-sm text-gray-600">Joined as {item.designation} in {item.department}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          if (item.type === "announcement") {
-            return (
-              <div key={item.id} className={`rounded-lg border p-4 bg-white shadow-sm ${item.pinned ? "border-indigo-200" : ""}`}>
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">{item.pinned ? "📌" : "📢"}</span>
-                  <div>
-                    <p className="font-semibold">{item.title}</p>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-3">{item.body}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{item.category}</span>
-                      <span className="text-xs text-gray-400">by {item.author}</span>
+        </Card>
+      ) : (
+        <Card title="Latest Updates">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
+            {feed.map((item) => {
+              if (item.type === "kudos") {
+                return (
+                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ fontSize: 28, flexShrink: 0 }}>{BADGE_EMOJI[item.badge ?? "star"]}</span>
+                    <div>
+                      <p style={{ fontSize: 14, lineHeight: 1.5 }}>
+                        <strong>{item.giver_name}</strong>{" appreciated "}<strong>{item.receiver_name}</strong>
+                      </p>
+                      {item.message && (
+                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
+                          {item.message}
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })}
-      </div>
-    </div>
+                );
+              }
+              if (item.type === "birthday") {
+                return (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#fff9f0", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ fontSize: 32 }}>🎂</span>
+                    <div>
+                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>Happy Birthday, {item.name}!</p>
+                      <p style={{ fontSize: 12, color: "var(--mut)" }}>{item.designation} · {item.department}</p>
+                    </div>
+                  </div>
+                );
+              }
+              if (item.type === "new_joinee") {
+                return (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#f0fff8", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ fontSize: 32 }}>👋</span>
+                    <div>
+                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>Welcome {item.name}!</p>
+                      <p style={{ fontSize: 12, color: "var(--mut)" }}>Joined as {item.designation} in {item.department}</p>
+                    </div>
+                  </div>
+                );
+              }
+              if (item.type === "announcement") {
+                return (
+                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "#f5f8ff" : "transparent" }}>
+                    <span style={{ fontSize: 24 }}>{item.pinned ? "📌" : "📢"}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</p>
+                      <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 4 }}>{item.body}</p>
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        {item.category && (
+                          <span style={{ fontSize: 11, background: "var(--primary-l)", color: "var(--primary-d)", padding: "2px 8px", borderRadius: 20 }}>
+                            {item.category}
+                          </span>
+                        )}
+                        {item.author && (
+                          <span style={{ fontSize: 11, color: "var(--mut)" }}>by {item.author}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
+          </div>
+        </Card>
+      )}
+    </main>
   );
 }

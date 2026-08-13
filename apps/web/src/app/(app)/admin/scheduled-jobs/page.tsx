@@ -119,12 +119,12 @@ export default function ScheduledJobsPage() {
           <table className="data-table" role="table" aria-label="Scheduled jobs list">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Schedule</th>
-                <th>Next Run</th>
-                <th>Last Status</th>
-                <th>Enabled</th>
-                <th>Actions</th>
+                <th scope="col">Name</th>
+                <th scope="col">Schedule</th>
+                <th scope="col">Next Run</th>
+                <th scope="col">Last Status</th>
+                <th scope="col">Enabled</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -224,7 +224,7 @@ export default function ScheduledJobsPage() {
             ) : (
               <table className="data-table" role="table" aria-label="Execution history">
                 <thead>
-                  <tr><th>Timestamp</th><th>Duration</th><th>Status</th><th>Error</th></tr>
+                  <tr><th scope="col">Timestamp</th><th scope="col">Duration</th><th scope="col">Status</th><th scope="col">Error</th></tr>
                 </thead>
                 <tbody>
                   {historyRecords.map((rec) => (

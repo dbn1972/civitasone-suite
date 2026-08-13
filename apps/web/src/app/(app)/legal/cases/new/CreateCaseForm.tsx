@@ -83,7 +83,7 @@ export function CreateCaseForm() {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "#b91c1c" : "#047857", fontSize: "0.875rem" }}>
+          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: "0.875rem" }}>
             {message}
           </p>
         ) : null}

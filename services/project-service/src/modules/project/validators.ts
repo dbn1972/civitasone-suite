@@ -47,3 +47,40 @@ export const listProjectsQuery = z.object({
   limit:    z.coerce.number().int().positive().max(100).default(20),
 });
 export type ListProjectsQuery = z.infer<typeof listProjectsQuery>;
+
+export const updateProjectBody = z.object({
+  name:            z.string().min(1).max(255).optional(),
+  agencyRef:       z.string().optional(),
+  startDate:       z.string().optional(),
+  endDate:         z.string().optional(),
+  sanctionedMinor: z.number().int().nonnegative().optional(),
+  dprCostMinor:    z.number().int().nonnegative().optional(),
+  sanctionRef:     z.string().optional(),
+  status:          z.enum(["planned", "active", "on_hold", "completed", "cancelled", "archived"]).optional(),
+}).strict();
+export type UpdateProjectBody = z.infer<typeof updateProjectBody>;
+
+export const updateTaskBody = z.object({
+  name:          z.string().min(1).max(255).optional(),
+  description:   z.string().max(1000).optional(),
+  parentTaskId:  z.string().uuid().optional().nullable(),
+  weightPct:     z.number().min(0).max(100).optional(),
+  plannedStart:  z.string().optional(),
+  plannedEnd:    z.string().optional(),
+  assigneeId:    z.string().uuid().optional().nullable(),
+  progressPct:   z.number().min(0).max(100).optional(),
+}).strict();
+export type UpdateTaskBody = z.infer<typeof updateTaskBody>;
+
+export const addMemberBody = z.object({
+  userId: z.string().uuid(),
+  role:   z.enum(["project_manager", "project_officer", "engineer", "finance_officer", "viewer"]).default("viewer"),
+});
+export type AddMemberBody = z.infer<typeof addMemberBody>;
+
+export const memberParam   = z.object({ id: z.string().uuid(), memberId: z.string().uuid() });
+export const listTasksQuery = z.object({
+  status:   z.string().optional(),
+  parentId: z.string().uuid().optional(),
+  limit:    z.coerce.number().int().positive().max(200).default(100),
+});

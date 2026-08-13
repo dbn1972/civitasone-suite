@@ -1,4 +1,4 @@
-import { PageHeader, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -57,7 +57,7 @@ export default async function PayrollComparisonPage({
       <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period1" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 1 <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            Period 1 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period1"
@@ -70,7 +70,7 @@ export default async function PayrollComparisonPage({
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period2" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 2 <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            Period 2 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period2"
@@ -95,7 +95,16 @@ export default async function PayrollComparisonPage({
         subtitle="Month-on-month comparison of payroll register totals."
         back="/hr/payroll"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source === "error" ? "error" : "api"} />
+
+      {canCompare && data && (
+        <StatGrid>
+          <StatCard icon="💰" iconBg="var(--infobg)" label={`${data.period1.period} Gross`} value={formatMoney(data.period1.gross)} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label={`${data.period2.period} Gross`} value={formatMoney(data.period2.gross)} />
+          <StatCard icon="👥" iconBg="var(--warnbg)" label="Headcount Δ" value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
+          <StatCard icon="📊" iconBg="var(--goodbg)" label="Net Pay Δ" value={delta(Number(data.period1.net), Number(data.period2.net))} />
+        </StatGrid>
+      )}
 
       {filterForm}
 

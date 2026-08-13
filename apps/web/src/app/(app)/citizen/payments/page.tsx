@@ -26,10 +26,10 @@ export default async function PaymentsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th style={{ padding: 8 }}>Name</th>
-                  <th style={{ padding: 8 }}>Base amount</th>
-                  <th style={{ padding: 8 }}>Currency</th>
-                  <th style={{ padding: 8 }}>Exemptions</th>
+                  <th scope="col" style={{ padding: 8 }}>Name</th>
+                  <th scope="col" style={{ padding: 8 }}>Base amount</th>
+                  <th scope="col" style={{ padding: 8 }}>Currency</th>
+                  <th scope="col" style={{ padding: 8 }}>Exemptions</th>
                 </tr>
               </thead>
               <tbody>

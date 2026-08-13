@@ -53,6 +53,8 @@ export default async function Form16Page({
   const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : currentFy();
   const lookup = await getBulkStatus(fy);
 
+  const source: "api" | "error" = lookup.state === "error" ? "error" : "api";
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -60,6 +62,7 @@ export default async function Form16Page({
         subtitle="Generate, track, and verify statutory Form-16 (Sec 203) certificates for a financial year."
         back="/hr/payroll"
       />
+      <DataSourceBadge source={source} />
 
       {/* Single-employee generate reuses the same async bulk-generate/bulk-status job
           machinery as a whole-run bulk job (with employeeIds:[id]) — there is no separate
@@ -85,22 +88,23 @@ export default async function Form16Page({
               <EmptyState
                 icon="⚠️"
                 title={`Could not load the Form-16 filing run for FY ${fy}`}
-                message="This is not the same as “no run exists” — the status check failed (permission or a temporary service issue). Reload, or contact an administrator if this persists."
+                message="The status check failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : (
             <>
               <StatGrid>
-                <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={lookup.job.totalEmployees} />
-                <StatCard icon="✅" iconBg="#e6f7f0" label="Generated" value={lookup.job.generated} />
-                <StatCard icon="⚠️" iconBg="#fdecea" label="Failed" value={lookup.job.failed} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={lookup.job.totalEmployees} />
+                <StatCard icon="✅" iconBg="var(--goodbg)" label="Generated" value={lookup.job.generated} />
+                <StatCard icon="⚠️" iconBg="var(--badbg)" label="Failed" value={lookup.job.failed} />
+                <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={Math.max(0, lookup.job.totalEmployees - lookup.job.generated - lookup.job.failed)} />
               </StatGrid>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
                 <span style={{ fontSize: 13 }}>
                   <strong>Job:</strong> <span className="mono">{lookup.job.jobId}</span>
                 </span>
                 <StatusPill status={lookup.job.status} />
-                <span style={{ fontSize: 13, color: "#667085" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-muted)" }}>
                   Created {formatIndianDate(lookup.job.createdAt)}
                   {lookup.job.completedAt ? ` · Completed ${formatIndianDate(lookup.job.completedAt)}` : ""}
                 </span>
@@ -118,7 +122,7 @@ export default async function Form16Page({
               {lookup.job.failed > 0 && lookup.job.errorDetails != null && (
                 <details style={{ marginTop: 10, fontSize: 13 }}>
                   <summary>Failure details ({lookup.job.failed})</summary>
-                  <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f8fafc", padding: 10, borderRadius: 8 }}>
+                  <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "var(--line2)", padding: 10, borderRadius: 8 }}>
                     {JSON.stringify(lookup.job.errorDetails, null, 2)}
                   </pre>
                 </details>

@@ -25,3 +25,6 @@ export const createGrnBody = z.object({
 export type CreateGrnBody = z.infer<typeof createGrnBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+export const rejectGrnBody = z.object({ reason: z.string().min(1).max(500) });
+export type RejectGrnBody = z.infer<typeof rejectGrnBody>;

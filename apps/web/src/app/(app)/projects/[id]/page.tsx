@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjectById } from "../../../_data/loaders";
 import { PageHeader, Card, StatusPill, EmptyState } from "@/app/_components/ds";
@@ -46,6 +47,19 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           <div className="fld"><div className="l">Budget</div><div className="v">{formatMoney(project.totalBudget)}</div></div>
           <div className="fld"><div className="l">Expenditure</div><div className="v">{formatMoney(project.expenditure)}</div></div>
           <div className="fld"><div className="l">Completion %</div><div className="v">{project.completionPct.toFixed(1)}%</div></div>
+        </div>
+      </Card>
+      <Card padding>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href={`/projects/${params.id}/tasks`} className="btn">
+            Tasks
+          </Link>
+          <Link href={`/projects/${params.id}/members`} className="btn">
+            Team
+          </Link>
+          <Link href={`/projects/${params.id}/risks`} className="btn">
+            Risks
+          </Link>
         </div>
       </Card>
       <Card title="Milestones">

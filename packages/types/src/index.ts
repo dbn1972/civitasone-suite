@@ -716,9 +716,24 @@ export type FinancialStatementSummary = {
 // HR types
 export type HRDashboard = {
   headcount: number;
+  headcountLastMonth: number;
   attendanceTodayPct: number;
   pendingLeaves: number;
   payrollDue: number;
+  departmentBreakdown: { name: string; count: number }[];
+};
+
+export type LeaveInboxItem = {
+  id: string;
+  employeeName: string;
+  employeeNo: string;
+  departmentName: string;
+  leaveTypeName: string;
+  leaveTypeCode: string;
+  fromDate: string;
+  toDate: string;
+  daysApplied: number;
+  status: string;
 };
 
 export type AttendanceSummaryItem = {

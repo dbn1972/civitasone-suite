@@ -54,6 +54,7 @@ export function registerItemConsumers(rawQueue: Queue): void {
       if (p.reorderQty !== undefined) patch.reorderQty = p.reorderQty;
       if (p.valuationMethod !== undefined) patch.valuationMethod = p.valuationMethod;
       if (p.unitCostMinor !== undefined) patch.unitCostMinor = BigInt(p.unitCostMinor);
+      if (p.isActive !== undefined) patch.isActive = p.isActive;
       // Optimistic lock: throws VERSION_CONFLICT / NOT_FOUND (handled by worker).
       const row = await repo.updateItemChecked(tx, p.id, p.tenantId, p.version, patch, msg.actorId);
       await emit(tx, msg, EVENTS.itemUpdated, { itemId: p.id, version: row.version }, "update", "item", p.id);

@@ -75,6 +75,17 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveWriteoffRequest(ctx, id));
   });
 
+  // G14: Verification items
+  app.get("/v1/assets/verifications/:id/items", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_manager", "asset_admin", "super_admin", "audit_officer"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const session = await repo.findVerificationById(id, ctx.tenantId);
+    if (!session) throw new HttpError(404, "NOT_FOUND", "verification session not found");
+    const items = await repo.listItemsByVerification(id);
+    return reply.send({ data: items });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });

@@ -14,7 +14,7 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
       <main className="page-main wrap" aria-labelledby="page-heading">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
         <a href="/tenant-admin/roles" className="back">← Back</a>
-        <p style={{ color: "#667085", marginTop: 16 }}>Role not found.</p>
+        <p style={{ color: "var(--civitas-color-text-muted)", marginTop: 16 }}>Role not found.</p>
       </main>
     );
   }

@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -41,13 +41,21 @@ export default async function IncomeTaxPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Income Tax Computation" subtitle="Annual IT computation summary for FY 2024-25." back="/hr" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
+        <StatCard icon="🏢" iconBg="var(--panel)" label="Departments" value={new Set(items.map((i) => i.department)).size} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="Income Tax Declarations">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          pageSize={15}
+          emptyIcon="📊"
+          emptyTitle="No income tax declarations"
+          emptyMessage="Employee income tax declarations appear here once submitted during the declaration window."
+        />
+      </Card>
     </main>
   );
 }

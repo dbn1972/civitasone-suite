@@ -97,6 +97,20 @@ export const COMMANDS = {
   spaceAllotmentCancel:    "estab.space.allotment.cancel",
   spaceMaintenanceCreate:  "estab.space.maintenance.create",
   spaceMaintenanceStatus:  "estab.space.maintenance.status",
+  bookingFacilityCreate:   "estab.booking.facility.create",
+  bookingFacilityUpdate:   "estab.booking.facility.update",
+  bookingCreate:           "estab.booking.create",
+  bookingSubmit:           "estab.booking.submit",
+  bookingApprove:          "estab.booking.approve",
+  bookingRecordPayment:    "estab.booking.payment.record",
+  bookingCancel:           "estab.booking.cancel",
+  bookingComplete:         "estab.booking.complete",
+  leasePropertyCreate:     "estab.lease.property.create",
+  leaseCreate:             "estab.lease.create",
+  leasePaymentRecord:      "estab.lease.payment.record",
+  leaseRequestSubmit:      "estab.lease.request.submit",
+  leaseRequestReview:      "estab.lease.request.review",
+  leaseRequestComplete:    "estab.lease.request.complete",
 } as const;
 
 /**

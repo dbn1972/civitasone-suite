@@ -141,9 +141,9 @@ export default function RoleFeaturesPage() {
         <table className="data-table" role="table" aria-label="Role-feature matrix">
           <thead>
             <tr>
-              <th style={{ position: "sticky", left: 0, background: "#fff", zIndex: 1 }}>Feature</th>
+              <th scope="col" style={{ position: "sticky", left: 0, background: "#fff", zIndex: 1 }}>Feature</th>
               {ROLES.map((r) => (
-                <th key={r} style={{ textAlign: "center", fontSize: 11 }}>{r.replace(/_/g, " ")}</th>
+                <th scope="col" key={r} style={{ textAlign: "center", fontSize: 11 }}>{r.replace(/_/g, " ")}</th>
               ))}
             </tr>
           </thead>

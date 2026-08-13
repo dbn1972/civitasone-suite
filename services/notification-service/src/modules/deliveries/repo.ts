@@ -1,4 +1,4 @@
-import { eq, and, lte, desc } from "drizzle-orm";
+import { eq, and, lte, desc, ne } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead, readScoped } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
@@ -141,4 +141,43 @@ export async function scheduleDeliveryRetry(
     status: "queued", retryCount, nextRetryAt, errorDetail,
     updatedBy: actorId, updatedAt: new Date(), version: current.version + 1,
   }).where(eq(notificationDeliveries.id, id));
+}
+
+/** Mark a single delivery as read; scoped to recipient. Returns true if updated. */
+export async function markOneRead(
+  tenantId: string, recipientId: string, actorId: string, id: string,
+): Promise<boolean> {
+  const updated = await (runWithTenant(tenantId, () =>
+    db.transaction((tx) =>
+      tx.update(notificationDeliveries)
+        .set({ status: "read", updatedBy: actorId, updatedAt: new Date() })
+        .where(and(
+          eq(notificationDeliveries.id, id),
+          eq(notificationDeliveries.tenantId, tenantId),
+          eq(notificationDeliveries.recipientId, recipientId),
+          ne(notificationDeliveries.status, "read"),
+        ))
+        .returning({ id: notificationDeliveries.id }),
+    ),
+  ) as Promise<{ id: string }[]>);
+  return updated.length > 0;
+}
+
+/** Mark ALL unread deliveries for a recipient as read. Returns count updated. */
+export async function markAllRead(
+  tenantId: string, recipientId: string, actorId: string,
+): Promise<number> {
+  const updated = await (runWithTenant(tenantId, () =>
+    db.transaction((tx) =>
+      tx.update(notificationDeliveries)
+        .set({ status: "read", updatedBy: actorId, updatedAt: new Date() })
+        .where(and(
+          eq(notificationDeliveries.tenantId, tenantId),
+          eq(notificationDeliveries.recipientId, recipientId),
+          ne(notificationDeliveries.status, "read"),
+        ))
+        .returning({ id: notificationDeliveries.id }),
+    ),
+  ) as Promise<{ id: string }[]>);
+  return updated.length;
 }

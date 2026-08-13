@@ -24,7 +24,7 @@ export function FyLookupForm({ defaultFy }: { defaultFy: string }) {
       <button type="submit" className="btn ghost" style={{ minHeight: 44 }}>
         Check run
       </button>
-      <span id="fy-lookup-hint" style={{ fontSize: 12, color: "#667085" }}>
+      <span id="fy-lookup-hint" style={{ fontSize: 12, color: "var(--mut)" }}>
         Format YYYY-YY, e.g. 2025-26
       </span>
     </form>

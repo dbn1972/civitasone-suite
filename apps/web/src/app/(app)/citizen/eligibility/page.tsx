@@ -30,10 +30,10 @@ export default async function EligibilityPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th style={{ padding: 8 }}>Name</th>
-                  <th style={{ padding: 8 }}>Version</th>
-                  <th style={{ padding: 8 }}>Rules</th>
-                  <th style={{ padding: 8 }}>Status</th>
+                  <th scope="col" style={{ padding: 8 }}>Name</th>
+                  <th scope="col" style={{ padding: 8 }}>Version</th>
+                  <th scope="col" style={{ padding: 8 }}>Rules</th>
+                  <th scope="col" style={{ padding: 8 }}>Status</th>
                 </tr>
               </thead>
               <tbody>

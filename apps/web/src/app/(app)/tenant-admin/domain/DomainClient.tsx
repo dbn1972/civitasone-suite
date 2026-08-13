@@ -84,7 +84,7 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
         ) : (
           <table className="data-table" role="table" aria-label="Custom domains list">
             <thead>
-              <tr><th>Domain</th><th>Status</th><th>SSL</th><th>Added</th><th>Actions</th></tr>
+              <tr><th scope="col">Domain</th><th scope="col">Status</th><th scope="col">SSL</th><th scope="col">Added</th><th scope="col">Actions</th></tr>
             </thead>
             <tbody>
               {domains.map((d) => (

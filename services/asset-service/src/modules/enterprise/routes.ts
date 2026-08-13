@@ -233,6 +233,26 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, { id: batchId, status: "accepted", correlationId: ctx.correlationId });
   });
 
+  // G12: Pending disposals list
+  app.get("/v1/assets/pending-disposals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["asset_admin", "super_admin", "finance_officer"]);
+    const rows = await repo.listPendingDisposals(ctx.tenantId);
+    return reply.send({ data: rows.map((r) => ({
+      id: r.id, assetId: r.assetId, requestedBy: r.createdBy,
+      reason: r.notes, status: r.workflowStatus, createdAt: r.createdAt,
+    })) });
+  });
+
+  // G13: Impairment history for an asset
+  app.get("/v1/assets/assets/:id/impairments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const rows = await repo.listImpairments(ctx.tenantId, id);
+    return reply.send({ data: rows });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });

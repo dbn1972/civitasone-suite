@@ -85,7 +85,7 @@ export function AddRiskButton() {
               <div style={{ fontSize: 12, color: "#667085", marginTop: 2 }}>Risk score is computed server-side from likelihood × impact.</div>
               <label className="lbl" htmlFor="rk-owner">Owner (optional)</label>
               <input id="rk-owner" className="inp" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="CFO Office" />
-              {error && <div role="alert" style={{ color: "#b42318", fontSize: 13, marginTop: 4 }}>{error}</div>}
+              {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
                 <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
                 <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Adding…" : "Add risk"}</button>

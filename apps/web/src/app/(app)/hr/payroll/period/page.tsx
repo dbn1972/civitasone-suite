@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type Row = {
   id: string;
@@ -12,7 +13,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/finance/periods", [], {
     telemetryKey: "finance.periods",
     mapResponse: (p) => {
@@ -20,11 +21,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function PayrollPeriodPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
     { key: "month", label: "Month" },
@@ -39,12 +40,16 @@ export default async function PayrollPeriodPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" />
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Completed" value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Processing" value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…" pageSize={15} />
-      </div>
+      <Card title="Payroll Periods">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by period or status…" pageSize={15} emptyIcon="📅" emptyTitle="No payroll periods yet" emptyMessage="Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll Runs page to generate a period record." />
+      </Card>
     </main>
   );
 }

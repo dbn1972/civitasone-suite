@@ -184,6 +184,19 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "hrms", action: "cancel", resourceType: "leave_application", resourceId: p.id, outcome: "success" },
       });
+      // Notify the original approver that the leave was cancelled
+      if (application.approvedBy) {
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.cancelled",
+            recipient: application.approvedBy,
+            recipientId: application.approvedBy,
+            variables: { leaveAppId: p.id, employeeId: application.employeeId },
+          }),
+        });
+      }
     });
   });
 }

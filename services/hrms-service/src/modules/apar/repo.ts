@@ -1,4 +1,4 @@
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, sql } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "../appraisals/schema.js";
@@ -8,6 +8,13 @@ import {
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update">;
+
+export async function listAppraisals(tenantId: string, limit = 100): Promise<AppraisalRow[]> {
+  return scopedRead((tx) => tx.select().from(hrmsAppraisals)
+    .where(eq(hrmsAppraisals.tenantId, tenantId))
+    .orderBy(desc(hrmsAppraisals.updatedAt))
+    .limit(limit));
+}
 
 export async function findAppraisal(id: string, tenantId: string): Promise<AppraisalRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsAppraisals)

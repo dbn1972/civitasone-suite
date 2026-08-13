@@ -37,10 +37,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🎫" iconBg="#fff3e0" label="Open Tickets" value={open.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fff3e0" label="First Response" value={firstResponseDisplay} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="SLA Met" value={`${slaMetPct}%`} />
-        <StatCard icon="⭐" iconBg="#fffbeb" label="CSAT" value={csatDisplay} />
+        <StatCard icon="🎫" label="Open Tickets" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" label="First Response" value={firstResponseDisplay} />
+        <StatCard icon="✅" label="SLA Met" value={`${slaMetPct}%`} />
+        <StatCard icon="⭐" label="CSAT" value={csatDisplay} />
       </StatGrid>
       <TicketsTable tickets={tickets} source={source} />
     </>

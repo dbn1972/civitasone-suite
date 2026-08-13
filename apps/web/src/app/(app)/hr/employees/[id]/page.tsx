@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
 import { EditEmployeeToggle } from "./EditEmployeeToggle";
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
@@ -9,13 +10,9 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
   if (!employee) {
     return (
-      <main className="page-main" aria-labelledby="page-heading">
+      <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Employee Profile" back="/hr/employees" />
-        {source === "error" && (
-          <div aria-live="assertive" aria-atomic="true">
-            <DataSourceBadge source="error" />
-          </div>
-        )}
+        <DataSourceBadge source={source} />
         <Card padding>
           <p className="text-center text-slate-400">Employee not found.</p>
         </Card>
@@ -26,17 +23,13 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const isActive = employee.status?.toLowerCase() === "active" || employee.status?.toLowerCase() === "probation";
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={employee.name}
         back="/hr/employees"
         actions={<EditEmployeeToggle employee={employee} />}
       />
-      {source === "error" && (
-        <div aria-live="assertive" aria-atomic="true">
-          <DataSourceBadge source="error" />
-        </div>
-      )}
+      <DataSourceBadge source={source} />
 
       {/* Quick Actions — contextual things you can do for this employee */}
       {isActive && (
@@ -86,11 +79,11 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           )}
           <div className="fld">
             <span className="l">Joining Date</span>
-            <span className="v">{employee.joiningDate}</span>
+            <span className="v">{formatIndianDate(employee.joiningDate)}</span>
           </div>
           <div className="fld">
             <span className="l">Status</span>
-            <span className="v"><StatusPill status={employee.status} /></span>
+            <span className="v"><StatusPill status={employee.status} label={employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : "—"} /></span>
           </div>
           {employee.postingLocation && (
             <div className="fld">

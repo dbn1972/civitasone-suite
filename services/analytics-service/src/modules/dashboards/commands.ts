@@ -116,3 +116,9 @@ export async function shareDashboard(
   });
   return { id: shareId, status: "accepted", correlationId: ctx.correlationId };
 }
+
+export async function deleteDashboard(ctx: RequestContext, dashboardId: string): Promise<Accepted> {
+  await loadOr404(ctx, dashboardId);
+  await publish(ctx, COMMANDS.deleteDashboard, randomUUID(), { dashboardId });
+  return { id: dashboardId, status: "accepted", correlationId: ctx.correlationId };
+}

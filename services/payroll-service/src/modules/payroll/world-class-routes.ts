@@ -1,11 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopedRead, db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { createArrearBody, computeBonusBody, createReimbursementBody } from "./validators.js";
+import { randomUUID } from "node:crypto";
 
 const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
 
@@ -152,6 +155,131 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       period1: { period: q.period1, ...s1 },
       period2: { period: q.period2, ...s2 },
     });
+  });
+
+
+  // ─── Gap: YTD (year-to-date) summary ─────────────────────────────────────
+  app.get("/v1/payroll/ytd", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = z.object({
+      employeeId: z.string().uuid(),
+      fy:         z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }).parse(req.query);
+
+    const now = new Date();
+    const fyStr = q.fy ?? (now.getMonth() + 1 >= 4
+      ? `${now.getFullYear()}-${String(now.getFullYear() + 1).slice(-2)}`
+      : `${now.getFullYear() - 1}-${String(now.getFullYear()).slice(-2)}`);
+    const startYear = parseInt(fyStr.slice(0, 4), 10);
+    const fromPeriod = `${startYear}-04`;
+    const toPeriod   = `${startYear + 1}-03`;
+
+    const slipRows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT s.gross_minor, s.total_deductions_minor, s.net_pay_minor,
+             s.tds_minor, r.month
+      FROM payroll.payroll_slips s
+      JOIN payroll.payroll_runs r ON r.id = s.run_id
+      WHERE s.tenant_id = ${ctx.tenantId}::uuid
+        AND s.employee_id = ${q.employeeId}::uuid
+        AND r.month >= ${fromPeriod}
+        AND r.month <= ${toPeriod}
+      ORDER BY r.month
+    `))) as unknown as Array<{
+      gross_minor: string; total_deductions_minor: string;
+      net_pay_minor: string; tds_minor: string; month: string;
+    }>;
+
+    let ytdGross = 0, ytdNet = 0, ytdTds = 0, ytdDeductions = 0;
+    for (const s of slipRows) {
+      ytdGross       += Number(s.gross_minor);
+      ytdDeductions  += Number(s.total_deductions_minor);
+      ytdNet         += Number(s.net_pay_minor);
+      ytdTds         += Number(s.tds_minor);
+    }
+
+    return reply.send({
+      employeeId: q.employeeId,
+      fy: fyStr,
+      monthsProcessed: slipRows.length,
+      ytdGrossMinor:      ytdGross,
+      ytdDeductionsMinor: ytdDeductions,
+      ytdNetMinor:        ytdNet,
+      ytdTdsMinor:        ytdTds,
+      breakdown: slipRows.map((s) => ({
+        period: s.month,
+        grossMinor:      Number(s.gross_minor),
+        deductionsMinor: Number(s.total_deductions_minor),
+        netMinor:        Number(s.net_pay_minor),
+        tdsMinor:        Number(s.tds_minor),
+      })),
+    });
+  });
+
+  // ─── Gap: salary revision create ─────────────────────────────────────────
+  app.post("/v1/payroll/salary-revisions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["payroll_admin", "payroll_officer", "super_admin"]);
+    const body = z.object({
+      employeeId:    z.string().uuid(),
+      effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      oldBasicMinor: z.number().int().nonnegative(),
+      newBasicMinor: z.number().int().positive(),
+      oldGrossMinor: z.number().int().nonnegative(),
+      newGrossMinor: z.number().int().positive(),
+      revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
+      orderNo:       z.string().max(64).optional(),
+    }).parse(req.body);
+
+    const id = randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_salary_revisions
+          (id, tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor,
+           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_at)
+        VALUES
+          (${id}::uuid, ${ctx.tenantId}::uuid, ${body.employeeId}::uuid,
+           ${body.effectiveDate}::date, ${body.oldBasicMinor}, ${body.newBasicMinor},
+           ${body.oldGrossMinor}, ${body.newGrossMinor}, ${body.revisionType},
+           ${body.orderNo ?? null}, ${ctx.actorId}::uuid, NOW())
+      `);
+    });
+    return reply.code(201).send({ id, status: "created", correlationId: ctx.correlationId });
+  });
+
+  // ─── Gap: payroll settings ───────────────────────────────────────────────
+  app.get("/v1/payroll/settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT protected_net_floor_minor, updated_at
+      FROM payroll.payroll_settings
+      WHERE tenant_id = ${ctx.tenantId}::uuid
+      LIMIT 1
+    `))) as unknown as Array<{ protected_net_floor_minor: string; updated_at: string }>;
+    const s = rows[0];
+    return reply.send({
+      protectedNetFloorMinor: s ? Number(s.protected_net_floor_minor) : 0,
+      updatedAt: s?.updated_at ?? null,
+    });
+  });
+
+  app.put("/v1/payroll/settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["payroll_admin", "super_admin"]);
+    const body = z.object({
+      protectedNetFloorMinor: z.number().int().nonnegative(),
+    }).parse(req.body);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_settings (tenant_id, protected_net_floor_minor, created_at, updated_at)
+        VALUES (${ctx.tenantId}::uuid, ${body.protectedNetFloorMinor}, NOW(), NOW())
+        ON CONFLICT (tenant_id) DO UPDATE
+          SET protected_net_floor_minor = EXCLUDED.protected_net_floor_minor,
+              updated_at = NOW()
+      `);
+    });
+    return reply.send({ protectedNetFloorMinor: body.protectedNetFloorMinor, updatedAt: new Date().toISOString() });
   });
 
   app.setErrorHandler((err, req, reply) => {

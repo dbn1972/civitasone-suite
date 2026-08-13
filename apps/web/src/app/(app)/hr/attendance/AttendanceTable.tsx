@@ -43,6 +43,8 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
         filterable
         filterPlaceholder="Filter by employee, department or status…"
         pageSize={20}
+        emptyTitle="No attendance records today"
+        emptyMessage="Attendance records appear here once the check-in feed is connected and employees start marking presence."
       />
     </>
   );

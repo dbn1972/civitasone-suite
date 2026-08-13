@@ -1,4 +1,4 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getNpsStatements } from "../../../../_data/loaders";
 
@@ -23,10 +23,21 @@ export default async function NpsStatementsPage() {
     er: r.erContribMinor ?? 0,
   }));
 
+  const uniqueEmps    = new Set(tableRows.map((r) => r.employeeId)).size;
+  const uniquePeriods = new Set(tableRows.map((r) => r.period)).size;
+  const totalEmp      = tableRows.reduce((s, r) => s + (Number(r.emp) || 0), 0);
+  const totalEr       = tableRows.reduce((s, r) => s + (Number(r.er)  || 0), 0);
+
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="NPS Statements" subtitle="National Pension System contributions — 10% employee + 14% employer." back="/hr/payroll" />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
+      <StatGrid>
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements"   value={tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees"    value={uniqueEmps} />
+        <StatCard icon="🧑" iconBg="var(--warnbg)" label="Emp (10%)"    value={`₹${(totalEmp / 100).toLocaleString("en-IN")}`} />
+        <StatCard icon="🏛️" iconBg="var(--panel)" label="Employer (14%)" value={`₹${(totalEr / 100).toLocaleString("en-IN")}`} />
+      </StatGrid>
       <Card title="NPS Ledger">
         {tableRows.length === 0 ? (
           <EmptyState
@@ -49,9 +60,12 @@ export default async function NpsStatementsPage() {
             filterable
             filterPlaceholder="Filter by employee or period…"
             pageSize={20}
+            emptyIcon="🏦"
+            emptyTitle="No NPS statements found"
+            emptyMessage="No National Pension System records match your filter."
           />
         )}
       </Card>
-    </>
+    </main>
   );
 }

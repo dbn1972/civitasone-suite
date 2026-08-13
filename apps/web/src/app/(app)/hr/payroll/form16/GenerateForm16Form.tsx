@@ -199,13 +199,13 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }} role="status" aria-live="polite">
               <span><strong>Job:</strong> <span className="mono">{job.jobId}</span></span>
               <StatusPill status={job.status} />
-              {polling && <span style={{ color: "#667085" }}>Checking progress…</span>}
+              {polling && <span style={{ color: "var(--mut)" }}>Checking progress…</span>}
               {job.status === "completed" && (
-                <span style={{ color: "#166534" }}>
+                <span style={{ color: "var(--good)" }}>
                   {job.generated} generated{job.failed > 0 ? `, ${job.failed} failed` : ""}.
                 </span>
               )}
-              {job.status === "failed" && <span style={{ color: "#b91c1c" }}>Job failed — see run status below.</span>}
+              {job.status === "failed" && <span style={{ color: "var(--bad)" }}>Job failed — see run status below.</span>}
             </div>
           )}
         </div>

@@ -47,10 +47,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📥" iconBg="#eff6ff" label="Open" value={open.toLocaleString("en-IN")} />
-        <StatCard icon="🚨" iconBg="#fef2f2" label="SLA Breached" value={breached.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Fulfilled" value={fulfilled.toLocaleString("en-IN")} />
-        <StatCard icon="🧾" iconBg="#eef2ff" label="Total" value={requests.length.toLocaleString("en-IN")} />
+        <StatCard icon="📥" label="Open" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="SLA Breached" value={breached.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Fulfilled" value={fulfilled.toLocaleString("en-IN")} />
+        <StatCard icon="🧾" label="Total" value={requests.length.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>My service requests</h3></div>

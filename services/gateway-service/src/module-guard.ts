@@ -40,6 +40,8 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   helpdesk: "helpdesk",
   telephony: "telephony",
   knowledge: "knowledge",
+  documents: "documents",
+  eoffice: "documents",
   workflow: "workflow",
   analytics: "analytics",
   ml: "analytics",

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { MaintenancePlanBody, WorkOrderBody, CompleteWorkOrderBody } from "./validators.js";
+import type { MaintenancePlanBody, WorkOrderBody, CompleteWorkOrderBody, MeterReadingBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -34,4 +34,14 @@ export async function completeWorkOrder(ctx: RequestContext, workOrderId: string
     payload: { id: workOrderId, tenantId: ctx.tenantId, ...body },
   });
   return { id: workOrderId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function createMeterReading(ctx: RequestContext, assetId: string, body: MeterReadingBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.meterReadingRecord, {
+    messageId: id, type: COMMANDS.meterReadingRecord,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, assetId, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

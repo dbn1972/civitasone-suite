@@ -111,7 +111,7 @@ export function AdminConfig({
   return (
     <>
       {toast && <div className="alert" role="status" style={{ borderColor: "var(--primary)" }}>✓ {toast}</div>}
-      {error && <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>⚠ {error}</div>}
+      {error && <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>⚠ {error}</div>}
 
       <Card title="Vertical presets" padding>
         <p style={{ fontSize: 13.5, color: "var(--ink2)", marginBottom: 12 }}>

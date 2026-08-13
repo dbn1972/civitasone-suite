@@ -94,12 +94,12 @@ export function NewPlanForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
+      style={{ display:"flex", flexDirection:"column", gap:16, padding:24, maxWidth:672, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:"var(--r)", boxShadow:"var(--sh-md)" }}
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
       <div>
-        <label htmlFor={nameId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={nameId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Plan Name
         </label>
         <input
@@ -108,7 +108,7 @@ export function NewPlanForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Standard Monthly"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           required
           aria-required="true"
           aria-invalid={invalidField === "name"}
@@ -117,7 +117,7 @@ export function NewPlanForm() {
       </div>
 
       <div>
-        <label htmlFor={codeId} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={codeId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
           Plan Code
         </label>
         <input
@@ -126,7 +126,7 @@ export function NewPlanForm() {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="e.g. standard_monthly"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           required
           aria-required="true"
           aria-invalid={invalidField === "code"}
@@ -139,7 +139,7 @@ export function NewPlanForm() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <label htmlFor={amountId} className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor={amountId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
             Amount
           </label>
           <input
@@ -150,7 +150,7 @@ export function NewPlanForm() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
             required
             aria-required="true"
             aria-invalid={invalidField === "amount"}
@@ -158,14 +158,14 @@ export function NewPlanForm() {
         </div>
 
         <div>
-          <label htmlFor={currencyId} className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor={currencyId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
             Currency
           </label>
           <select
             id={currencyId}
             value={currency}
             onChange={(e) => setCurrency(e.target.value as (typeof CURRENCIES)[number])}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -176,14 +176,14 @@ export function NewPlanForm() {
         </div>
 
         <div>
-          <label htmlFor={intervalId} className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor={intervalId} style={{ display:"block", fontSize:13, fontWeight:600, color:"var(--ink2)", marginBottom:4 }}>
             Billing Interval
           </label>
           <select
             id={intervalId}
             value={interval}
             onChange={(e) => setInterval(e.target.value as (typeof INTERVALS)[number])}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ width:"100%", borderRadius:10, border:"1px solid var(--line)", padding:"10px 12px", fontSize:13, minHeight:44, background:"var(--panel)", color:"var(--ink)", outline:"none" }}
           >
             {INTERVALS.map((i) => (
               <option key={i} value={i}>
@@ -200,9 +200,9 @@ export function NewPlanForm() {
           type="checkbox"
           checked={govtExempt}
           onChange={(e) => setGovtExempt(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          className="h-4 w-4 rounded"
         />
-        <label htmlFor={govtExemptId} className="text-sm font-medium text-slate-700">
+        <label htmlFor={govtExemptId} style={{ fontSize:13, fontWeight:600, color:"var(--ink2)" }}>
           Government exempt
         </label>
       </div>
@@ -210,7 +210,7 @@ export function NewPlanForm() {
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+        className="btn primary"
         style={{ minHeight: 44 }}
       >
         {status === "submitting" ? "Creating…" : "Create Plan"}

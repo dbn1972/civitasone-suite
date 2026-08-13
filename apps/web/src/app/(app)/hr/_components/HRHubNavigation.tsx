@@ -85,10 +85,10 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
             width: "100%",
             padding: "12px 14px 12px 40px",
             borderRadius: 10,
-            border: "1px solid var(--line, #e2e8f0)",
+            border: "1px solid var(--color-border)",
             fontSize: 14,
             minHeight: 48,
-            background: "#fff",
+            background: "var(--color-bg)",
           }}
         />
         {search && (
@@ -105,7 +105,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
               border: "none",
               cursor: "pointer",
               fontSize: 16,
-              color: "#94a3b8",
+              color: "var(--color-text-muted)",
             }}
           >
             ✕
@@ -116,7 +116,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
       {/* Quick Access (shown when not searching) */}
       {!isSearching && (
         <section>
-          <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ink2, #64748b)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Quick Access
           </h2>
           <div className="grid g-3" style={{ gap: 10 }}>
@@ -138,7 +138,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
       {/* Search results or categorized navigation */}
       {isSearching ? (
         <section>
-          <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ink2, #64748b)", marginBottom: 10 }}>
+          <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: 10 }}>
             {filteredCategories.reduce((sum, c) => sum + c.tiles.length, 0)} results for &ldquo;{search}&rdquo;
           </h2>
           <div className="grid g-4" style={{ gap: 10 }}>
@@ -152,13 +152,13 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                 >
                   <h3 className="v">{tile.title}</h3>
                   {tile.description && <div className="l">{tile.description}</div>}
-                  <div className="l" style={{ fontSize: "0.6875rem", color: "#94a3b8", marginTop: 2 }}>{cat.title}</div>
+                  <div className="l" style={{ fontSize: "0.6875rem", color: "var(--color-text-muted)", marginTop: 2 }}>{cat.title}</div>
                 </Link>
               )),
             )}
           </div>
           {filteredCategories.length === 0 && (
-            <p style={{ textAlign: "center", color: "#94a3b8", padding: "32px 0" }}>
+            <p style={{ textAlign: "center", color: "var(--color-text-muted)", padding: "32px 0" }}>
               No modules match &ldquo;{search}&rdquo;. Try a different term.
             </p>
           )}
@@ -168,7 +168,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
           {categories.map((cat) => {
             const isOpen = !collapsed.has(cat.title);
             return (
-              <section key={cat.title} style={{ borderRadius: 10, border: "1px solid var(--line, #e2e8f0)", overflow: "hidden" }}>
+              <section key={cat.title} style={{ borderRadius: 10, border: "1px solid var(--color-border)", overflow: "hidden" }}>
                 <button
                   type="button"
                   onClick={() => toggleCategory(cat.title)}
@@ -180,19 +180,19 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                     alignItems: "center",
                     gap: 10,
                     padding: "12px 16px",
-                    background: isOpen ? "#f8fafc" : "#fff",
+                    background: isOpen ? "var(--color-bg-subtle)" : "var(--color-bg)",
                     border: "none",
                     cursor: "pointer",
                     fontSize: 14,
                     fontWeight: 600,
-                    color: "var(--ink, #1e293b)",
+                    color: "var(--color-text)",
                     textAlign: "left",
                   }}
                 >
                   <span aria-hidden="true">{cat.icon}</span>
                   <span style={{ flex: 1 }}>{cat.title}</span>
-                  <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>{cat.tiles.length} items</span>
-                  <span aria-hidden="true" style={{ fontSize: 12, color: "#94a3b8", transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
+                  <span style={{ fontSize: 11, color: "var(--color-text-muted)", fontWeight: 400 }}>{cat.tiles.length} items</span>
+                  <span aria-hidden="true" style={{ fontSize: 12, color: "var(--color-text-muted)", transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▼</span>
                 </button>
                 {isOpen && (
                   <div

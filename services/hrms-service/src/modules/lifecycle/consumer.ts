@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -24,7 +25,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status to confirmed, set confirmationDate
+      await tx.update(hrmsEmployees)
+        .set({ status: "confirmed", confirmationDate: p.confirmationDate, updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "confirmation",
+        effectiveDate: p.confirmationDate,
+        description: "Employee confirmed after probation period",
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -38,6 +47,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           resourceId: p.employeeId,
           outcome: "success",
         },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.confirmed",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { confirmationDate: p.confirmationDate },
+        }),
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
@@ -56,7 +75,20 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status to separated, record separation details
+      await repo.insertSeparation(tx, {
+        id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
+        separationType: p.separationType, effectiveDate: p.effectiveDate,
+        remarks: p.remarks ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await tx.update(hrmsEmployees)
+        .set({ status: "separated", updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "separation",
+        effectiveDate: p.effectiveDate,
+        description: `Separation: ${p.separationType}${p.remarks ? ` — ${p.remarks}` : ""}`,
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -70,6 +102,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           resourceId: p.employeeId,
           outcome: "success",
         },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.separated",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { separationType: p.separationType, effectiveDate: p.effectiveDate },
+        }),
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
@@ -87,7 +129,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // TODO: Update employee status back to active, clear separation fields
+      await tx.update(hrmsEmployees)
+        .set({ status: "active", updatedBy: msg.actorId })
+        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await tx.insert(hrmsServiceBookEntries).values({
+        tenantId: p.tenantId, employeeId: p.employeeId, entryType: "reinstatement",
+        effectiveDate: p.reinstatementDate,
+        description: `Reinstated to active service${p.remarks ? ` — ${p.remarks}` : ""}`,
+        recordedBy: msg.actorId, documentRef: p.orderRef ?? null,
+      });
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
@@ -101,6 +151,16 @@ export function registerLifecycleConsumers(queue: Queue): void {
           resourceId: p.employeeId,
           outcome: "success",
         },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.reinstated",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { reinstatementDate: p.reinstatementDate },
+        }),
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
@@ -135,6 +195,16 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { service: "hrms", action: "lifecycle_promotion", resourceType: "promotion", resourceId: p.id, outcome: "success" },
+      });
+      await enqueue(tx as any, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.promoted",
+          recipient: p.employeeId,
+          recipientId: p.employeeId,
+          variables: { effectiveDate: p.effectiveDate, toDesigId: p.toDesigId },
+        }),
       });
     });
   });
@@ -191,6 +261,16 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
         effectiveDate: p.joinedDate,
         description: `Transferred and joined at ${row.toStation ?? "new station"} (dept ${row.toDeptId})`,
         recordedBy: msg.actorId, documentRef: row.orderNo ?? row.orderRef ?? null,
+      });
+      await enqueue(tx as any, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.transfer_joined",
+          recipient: row.employeeId,
+          recipientId: row.employeeId,
+          variables: { joinedDate: p.joinedDate, toDeptId: row.toDeptId },
+        }),
       });
     });
   });

@@ -43,7 +43,7 @@ export function GenerateReportButton({ items }: { items: AuditComplianceItem[] }
     <>
       <button type="button" className="btn primary" onClick={generate}>Generate Report</button>
       {msg && (
-        <span role="status" aria-live="polite" style={{ position: "fixed", bottom: 18, right: 18, background: "#ecfdf3", color: "#067647", border: "1px solid #abefc6", borderRadius: 8, padding: "8px 12px", fontSize: 13, zIndex: 100 }}>
+        <span role="status" aria-live="polite" style={{ position: "fixed", bottom: 18, right: 18, background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)", borderRadius: 8, padding: "8px 12px", fontSize: 13, zIndex: 100 }}>
           {msg}
         </span>
       )}

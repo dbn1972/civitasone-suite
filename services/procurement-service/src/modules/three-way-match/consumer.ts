@@ -58,6 +58,7 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
       const matchStatus = variancePct <= 5 ? "matched" : "mismatch";
 
       await repo.upsertDerivedMatch(tx, {
+        id: p.id,
         tenantId: p.tenantId,
         poId: p.poId,
         grnId: p.grnId,

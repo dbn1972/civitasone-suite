@@ -87,12 +87,12 @@ export function InspectionRowAction({ id, status }: RowProps) {
         {action.label}
       </button>
       {message ? (
-        <span role="status" aria-live="polite" style={{ fontSize: 11, color: "#047857" }}>
+        <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
           {message}
         </span>
       ) : null}
       {error ? (
-        <span role="alert" style={{ fontSize: 11, color: "#b91c1c" }}>
+        <span role="alert" style={{ fontSize: 11, color: "var(--bad)" }}>
           {error}
         </span>
       ) : null}

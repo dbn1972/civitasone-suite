@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { formatMoney } from "@/lib/formatters";
 import { PtSlabForm } from "./PtSlabForm";
 
 type PtSlabRow = {
@@ -22,6 +23,10 @@ async function getData(): Promise<LoaderResult<PtSlabRow[]>> {
 export default async function ProfessionalTaxPage() {
   const { data: rows, source } = await getData();
 
+  const statesCovered = new Set(rows.map((r) => r.state_code).filter(Boolean)).size;
+  const maxPtMinor = rows.length > 0 ? Math.max(...rows.map((r) => Number(r.pt_amount_minor || 0))) : 0;
+  const avgPtMinor = rows.length > 0 ? rows.reduce((s, r) => s + Number(r.pt_amount_minor || 0), 0) / rows.length : 0;
+
   const columns: { key: keyof PtSlabRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "state_code", label: "State" },
     { key: "slab_from_minor", label: "Slab From", align: "right", cellType: "amount" },
@@ -36,9 +41,12 @@ export default async function ProfessionalTaxPage() {
         subtitle="State-wise professional tax slabs (monthly deduction by gross-salary band)."
         back="/hr/payroll/statutory"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e6f0ff" label="PT Slabs Configured" value={rows.length} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label="PT Slabs Configured" value={rows.length} />
+        <StatCard icon="🗺️" iconBg="var(--goodbg)" label="States Covered" value={statesCovered} />
+        <StatCard icon="📈" iconBg="var(--warnbg)" label="Highest PT Amount" value={formatMoney(maxPtMinor)} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg PT per Slab" value={formatMoney(Math.round(avgPtMinor))} />
       </StatGrid>
 
       <PtSlabForm />

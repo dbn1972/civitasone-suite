@@ -15,6 +15,7 @@ export default async function PensionersPage() {
   const pensionPayableMinor = pensioners
     .filter((p) => p.status === "active")
     .reduce((sum, p) => sum + p.basicPensionMinor, 0);
+  const inactivePensioners = pensioners.filter((p) => p.status !== "active").length;
 
   const rows: Row[] = pensioners.map((p) => ({
     ...p,
@@ -30,7 +31,7 @@ export default async function PensionersPage() {
   ];
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Pensioners"
         subtitle="Pension Payment Order management and disbursement tracking."
@@ -39,11 +40,12 @@ export default async function PensionersPage() {
           <Link href="/hr/payroll/pensioners/new" className="btn primary">+ Add Pensioner</Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👴" iconBg="#f5f5f5" label="Total Pensioners" value={total} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Pension Payable This Month" value={formatMoney(pensionPayableMinor)} />
+        <StatCard icon="👴" iconBg="var(--panel)" label="Total Pensioners" value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Pension Payable This Month" value={formatMoney(pensionPayableMinor)} />
+        <StatCard icon="🚫" iconBg="var(--badbg)" label="Inactive" value={inactivePensioners} />
       </StatGrid>
       <Card title="Pensioner Records">
         <DataTable<Row>
@@ -53,6 +55,9 @@ export default async function PensionersPage() {
           filterable
           filterPlaceholder="Filter by PPO number, name or DDO code…"
           pageSize={15}
+          emptyIcon="👴"
+          emptyTitle="No pensioners found"
+          emptyMessage="No pensioner records match your filter. Try a different search term."
         />
       </Card>
     </main>

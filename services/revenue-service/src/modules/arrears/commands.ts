@@ -17,3 +17,11 @@ export function decideWriteOff(ctx: RequestContext, writeOffId: string, payload:
 export function referRecovery(ctx: RequestContext, payload: Record<string, unknown>) {
   return publishCommand(COMMANDS.recoveryRefer, ctx, payload);
 }
+
+export function createWaiver(ctx: RequestContext, payload: Record<string, unknown>) {
+  return publishCommand("revenue.waiver.create", ctx, payload);
+}
+
+export function decideWaiver(ctx: RequestContext, waiverId: string, payload: Record<string, unknown>) {
+  return publishCommand("revenue.waiver.decide", ctx, { ...payload, waiverId });
+}

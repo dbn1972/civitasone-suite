@@ -152,6 +152,9 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
     await requirePermissionKey(ctx, "hrms.leave.approve");
+    if (!ctx.roles.some((r: string) => HR_ROLES.includes(r))) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Direct approval requires HR admin privileges. Use the workflow queue.");
+    }
     const { id } = idParam.parse(req.params);
     const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
     if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");

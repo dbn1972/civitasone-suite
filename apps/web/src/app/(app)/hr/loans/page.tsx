@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type ApiLoan = {
   id: string;
@@ -44,7 +45,7 @@ function mapLoans(apiLoans: ApiLoan[]): Row[] {
   }));
 }
 
-async function getLoans(): Promise<Row[]> {
+async function getLoans(): Promise<LoaderResult<Row[]>> {
   const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/loans", [], {
     telemetryKey: "hr.loans",
     mapResponse: (p) => {
@@ -52,11 +53,11 @@ async function getLoans(): Promise<Row[]> {
       return Array.isArray(arr) ? mapLoans(arr as ApiLoan[]) : null;
     },
   });
-  return res.data;
+  return res;
 }
 
 export default async function LoansPage() {
-  const items = await getLoans();
+  const { data: items, source } = await getLoans();
 
   const active = items.filter((i) => i.status === "active").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -75,17 +76,22 @@ export default async function LoansPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Employee Loans" subtitle="Loans sanctioned, EMI recovery, and outstanding balances." back="/hr" />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Loans" value={items.length} />
         <StatCard icon="▶️" iconBg="#e6f7f0" label="Active" value={active} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="✅" iconBg="#f5f5f5" label="Closed" value={completed} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Loans Register</h3></div>
+      <Card title="Loans Register">
         <DataTable<Row> columns={columns} rows={items} sortable filterable exportable
-        filterPlaceholder="Filter by employee, loan type or status…" pageSize={15} />
-      </div>
+        filterPlaceholder="Filter by employee, loan type or status…"
+          pageSize={15}
+          emptyIcon="💳"
+          emptyTitle="No employee loans"
+          emptyMessage="Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module."
+        />
+      </Card>
     </main>
   );
 }

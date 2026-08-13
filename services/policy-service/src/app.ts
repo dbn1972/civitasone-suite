@@ -13,6 +13,7 @@ import { bindingRoutes } from "./modules/bindings/routes.js";
 import { evaluateRoutes } from "./modules/evaluate/routes.js";
 import { abacRoutes } from "./modules/abac/routes.js";
 import { roleFeatureRoutes } from "./modules/role-features/routes.js";
+import { policyDocRoutes } from "./modules/policies/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -21,19 +22,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
-
   await app.register(authPlugin);
 
-  // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
-  // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
   app.addHook("onRequest", createTenantTxHook(db));
-
-  // Source the RLS tenant from the AUTHENTICATED token (req.ctx, populated by
-  // authPlugin's earlier onRequest hook), not the client-supplied x-tenant-id
-  // header. createTenantTxHook only enters AsyncLocalStorage when x-tenant-id is
-  // present; token-based requests omit it, so without this the app.tenant_id GUC
-  // stays unset and -- under the NOBYPASSRLS policy_svc role (#146) with
-  // fail-closed RLS -- reads return zero rows and outbox writes are rejected.
   app.addHook("onRequest", async (req) => {
     const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
     if (tid) tenantStorage.enterWith({ tenantId: tid });
@@ -41,12 +32,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerOpsRoutes(app, { service: "policy-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
-
   await app.register(roleRoutes);
   await app.register(bindingRoutes);
   await app.register(evaluateRoutes);
   await app.register(abacRoutes);
   await app.register(roleFeatureRoutes);
+  await app.register(policyDocRoutes);
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

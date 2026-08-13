@@ -174,6 +174,22 @@ export const COMMANDS = {
   alertAcknowledge: "inspection.alert.acknowledge",
   /** payload: { alertId, findingDescription? } — create finding from alert */
   alertCreateFinding: "inspection.alert.create_finding",
+  illegalConstructionRegularize: "inspection.illegal_construction.regularize",
+  illegalConstructionCaseCreate:  "inspection.illegal_construction.case.create",
+  illegalConstructionInspect:      "inspection.illegal_construction.inspect",
+  illegalConstructionConfirm:      "inspection.illegal_construction.confirm",
+  illegalConstructionActionIssue:  "inspection.illegal_construction.action.issue",
+  illegalConstructionActionEnforce: "inspection.illegal_construction.action.enforce",
+  encroachmentComplaintCreate:    "inspection.encroachment.complaint.create",
+  encroachmentComplaintVerify:    "inspection.encroachment.complaint.verify",
+  encroachmentHearingSchedule:    "inspection.encroachment.hearing.schedule",
+  encroachmentHearingComplete:    "inspection.encroachment.hearing.complete",
+  encroachmentNoticeIssue:        "inspection.encroachment.notice.issue",
+  encroachmentNoticeServe:        "inspection.encroachment.notice.serve",
+  encroachmentNoticeRespond:      "inspection.encroachment.notice.respond",
+  encroachmentRemovalOrder:       "inspection.encroachment.removal.order",
+  encroachmentRemovalAssignTeam:  "inspection.encroachment.removal.assign_team",
+  encroachmentRemovalComplete:    "inspection.encroachment.removal.complete",
 } as const;
 
 /**

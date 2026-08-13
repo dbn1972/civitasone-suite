@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
 
 type Policy = {
   id: string;
@@ -121,11 +123,20 @@ export default function LeavePoliciesPage() {
   const rows: PolicyRow[] = policies as PolicyRow[];
 
   return (
-    <>
+    <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Leave Policy Configuration"
         subtitle="Configure leave entitlements for each employee type. Changes take effect immediately."
       />
+      <DataSourceBadge source={state === "error" ? "error" : "api"} />
+      {state === "ready" && policies.length > 0 && (
+        <StatGrid>
+          <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
+          <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Active"           value={policies.filter((p) => p.isActive).length} />
+          <StatCard icon="\U0001f501" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
+          <StatCard icon="\U0001f4b0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
+        </StatGrid>
+      )}
 
       <div role="group" aria-label="Filter by employee type" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[{ value: "all", label: "All Types" }, ...EMPLOYEE_TYPES.map((t) => ({ value: t, label: t.replace("_", " ") }))].map((o) => (
@@ -393,6 +404,9 @@ export default function LeavePoliciesPage() {
               },
             ]}
             rows={rows}
+            sortable
+            filterable
+            pageSize={20}
           />
         )}
       </Card>
@@ -423,6 +437,6 @@ export default function LeavePoliciesPage() {
         onConfirm={() => void saveEdit()}
         onCancel={() => !saving && setConfirmOpen(false)}
       />
-    </>
+    </main>
   );
 }

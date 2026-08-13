@@ -88,6 +88,7 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(await commands.escalateTicket(ctx, id, body));
   });
 
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {

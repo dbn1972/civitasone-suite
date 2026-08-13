@@ -194,9 +194,9 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .li{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line2)}
 .li:last-child{border-bottom:0}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
-.fld{background:#fff;padding:13px 16px}
-.fld .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
-.fld .v{font-size:14px;font-weight:600;margin-top:3px}
+.fld{background:var(--panel);padding:13px 16px}
+.fld .l{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.fld .v{display:block;font-size:14px;font-weight:600;margin-top:3px}.field{background:var(--panel);padding:13px 16px}.field .lbl{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}.field .val{display:block;font-size:14px;font-weight:600;margin-top:3px}
 .donut-wrap{display:flex;align-items:center;gap:16px}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--line2);border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
 

@@ -22,7 +22,11 @@ export async function geofenceCreate(ctx: RequestContext, body: CreateGeofenceBo
     version: 1,
   };
 
-  await cache.put(cache.makeKey(ctx.tenantId, RESOURCES.geofence, id), projected);
+  try {
+    await cache.put(cache.makeKey(ctx.tenantId, RESOURCES.geofence, id), projected);
+  } catch {
+    // Cache unavailable (e.g. Redis down in staging) — skip warm-up, worker will populate after consume.
+  }
 
   await queue.publish(COMMANDS.geofenceCreate, {
     messageId: id,

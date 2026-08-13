@@ -30,11 +30,11 @@ export default async function CertificatesPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th style={{ padding: 8 }}>Certificate No.</th>
-                  <th style={{ padding: 8 }}>Type</th>
-                  <th style={{ padding: 8 }}>Status</th>
-                  <th style={{ padding: 8 }}>Valid to</th>
-                  <th style={{ padding: 8 }}>Verify token</th>
+                  <th scope="col" style={{ padding: 8 }}>Certificate No.</th>
+                  <th scope="col" style={{ padding: 8 }}>Type</th>
+                  <th scope="col" style={{ padding: 8 }}>Status</th>
+                  <th scope="col" style={{ padding: 8 }}>Valid to</th>
+                  <th scope="col" style={{ padding: 8 }}>Verify token</th>
                 </tr>
               </thead>
               <tbody>

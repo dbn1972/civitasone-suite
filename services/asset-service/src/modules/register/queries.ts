@@ -22,7 +22,7 @@ export async function getAsset(tenantId: string, id: string): Promise<AssetRow |
   return row ? hydrateBookValue(row) : null;
 }
 
-export async function listAssets(tenantId: string, opts?: { category?: string; status?: string; type?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
+export async function listAssets(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
   const key = cache.listKey(tenantId, "asset", JSON.stringify(opts ?? {}));
   const rows = (await cache.getOrLoad(key, () => repo.findAssetsByTenant(tenantId, opts))) ?? [];
   return rows.map(hydrateBookValue);

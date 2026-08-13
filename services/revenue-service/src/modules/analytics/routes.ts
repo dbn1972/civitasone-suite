@@ -144,4 +144,48 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
       },
     });
   });
+
+  // ── GET /v1/revenue/analytics/collection-report ────────────────────────────
+
+  app.get("/v1/revenue/analytics/collection-report", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { granularity } = granularityQuery.parse(req.query);
+    const [efficiency, aging] = await Promise.all([
+      repo.getEfficiency(ctx.tenantId, granularity),
+      repo.getArrearsAging(ctx.tenantId, new Date().toISOString().slice(0, 10)),
+    ]);
+    return reply.send({
+      data: {
+        totalDemandMinor: efficiency.totalDemandMinor.toString(),
+        totalCollectionMinor: efficiency.totalCollectionMinor.toString(),
+        balanceMinor: (efficiency.totalDemandMinor - efficiency.totalCollectionMinor).toString(),
+        efficiencyBps: efficiency.efficiencyBps,
+        arrearsAging: aging,
+        generatedAt: new Date().toISOString(),
+      },
+      meta: { granularity },
+    });
+  });
+
+  // ── GET /v1/revenue/analytics/dashboard ────────────────────────────────────
+
+  app.get("/v1/revenue/analytics/dashboard", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const kpi = await repo.getEfficiency(ctx.tenantId, "month");
+    const defaulters = await repo.getDefaulters(ctx.tenantId, 5);
+    return reply.send({
+      data: {
+        collectionEfficiencyBps: kpi.efficiencyBps,
+        totalDemandMinor: kpi.totalDemandMinor.toString(),
+        totalCollectionMinor: kpi.totalCollectionMinor.toString(),
+        topDefaulters: defaulters.map((d) => ({
+          assesseeId: d.assesseeId,
+          outstandingMinor: d.outstandingMinor.toString(),
+        })),
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  });
 }

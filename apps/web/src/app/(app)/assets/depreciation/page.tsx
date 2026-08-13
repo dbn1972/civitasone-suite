@@ -59,7 +59,7 @@ export default function DepreciationRunPage() {
           </div>
           <button type="submit" className="btn primary">Run depreciation</button>
           {message ? (
-            <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: isError ? "#b91c1c" : "#047857" }}>{message}</p>
+            <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: isError ? "var(--bad)" : "var(--good)" }}>{message}</p>
           ) : null}
         </form>
       </div>

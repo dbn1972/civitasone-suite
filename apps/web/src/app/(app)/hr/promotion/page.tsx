@@ -1,5 +1,6 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { PromoteWithApproval } from "./PromoteWithApproval";
 
 type Row = {
@@ -13,7 +14,7 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
+async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/promotions", [], {
     telemetryKey: "hr.promotion",
     mapResponse: (p) => {
@@ -21,11 +22,11 @@ async function getData(): Promise<Row[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function PromotionPage() {
-  const items = await getData();
+  const { data: items, source } = await getData();
 
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -44,16 +45,21 @@ export default async function PromotionPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Promotions" subtitle="Promotion orders with grade progression details." back="/hr" actions={<PromoteWithApproval />} />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="⬆️" iconBg="#e6f7f0" label="Total Promotions" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f0ff" label="Approved" value={approved} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
         <StatCard icon="📋" iconBg="#f5f5f5" label="Completed" value={completed} />
       </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h"><h3>Promotion Orders</h3></div>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or grade…" pageSize={15} />
-      </div>
+      <Card title="Promotions">
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or grade…"
+          pageSize={15}
+          emptyIcon="📈"
+          emptyTitle="No promotion orders"
+          emptyMessage="Promotion orders appear here once raised and approved. Use '+ Raise Promotion' to initiate a grade progression."
+        />
+      </Card>
     </main>
   );
 }

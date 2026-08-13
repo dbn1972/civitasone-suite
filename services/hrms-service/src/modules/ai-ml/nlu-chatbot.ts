@@ -157,7 +157,7 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
         const rows = await sqlClient.query(
           `SELECT leave_type_code, leave_type_name, total_days, balance_days
            FROM hrms.leave_allocations
-           WHERE tenant_id = $1 AND employee_id = (SELECT id FROM hrms.employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
+           WHERE tenant_id = $1 AND employee_id = (SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1)`,
           [ctx.actorId, ctx.tenantId],
         );
         if (rows.rowCount && rows.rowCount > 0) {
@@ -191,8 +191,8 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
       case "manager_info": {
         const emp = await sqlClient.query(
           `SELECT e2.first_name, e2.last_name, e2.designation, e2.email, e2.phone
-           FROM hrms.employees e1
-           JOIN hrms.employees e2 ON e2.id = e1.reporting_to AND e2.tenant_id = e1.tenant_id
+           FROM employee.hrms_employees e1
+           JOIN employee.hrms_employees e2 ON e2.id = e1.reporting_to AND e2.tenant_id = e1.tenant_id
            WHERE e1.user_id = $1 AND e1.tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
         );
