@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
 import { EditEmployeeToggle } from "./EditEmployeeToggle";
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
@@ -78,11 +79,11 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           )}
           <div className="fld">
             <span className="l">Joining Date</span>
-            <span className="v">{employee.joiningDate}</span>
+            <span className="v">{formatIndianDate(employee.joiningDate)}</span>
           </div>
           <div className="fld">
             <span className="l">Status</span>
-            <span className="v"><StatusPill status={employee.status} /></span>
+            <span className="v"><StatusPill status={employee.status} label={employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : "—"} /></span>
           </div>
           {employee.postingLocation && (
             <div className="fld">

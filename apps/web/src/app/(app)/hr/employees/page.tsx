@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
-import { getEmployees } from "../../../_data/loaders";
+import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -14,11 +14,14 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
-  const { data: rawEmployees, source } = await getEmployees();
+  const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
+    getEmployees(),
+    getHRDashboard(),
+  ]);
   const employees = rawEmployees as EmpRow[];
 
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
-  const total = employees.length;
+  const total = hrDashboard.headcount || employees.length;
   const active = employees.filter((e) => SERVING.has(e.status)).length;
   const onLeave = employees.filter((e) => e.status === "on_leave").length;
   const others = total - active - onLeave;

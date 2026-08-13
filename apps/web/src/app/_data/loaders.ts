@@ -35,6 +35,7 @@ import type {
   EmployeeDetail,
   EmployeeSummary,
   HRDashboard,
+  LeaveInboxItem,
   JobOpeningSummary,
   LeaveRequestDetail,
   ModuleRowSummary,
@@ -1035,7 +1036,7 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
 }
 
 export async function getEmployees(): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson("/api/v1/hrms/employees", [] as EmployeeSummary[], {
+  return fetchJson("/api/v1/hrms/employees?limit=500", [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -1847,19 +1848,46 @@ export async function getFinanceDebt(): Promise<LoaderResult<Record<string, unkn
 
 const HR_DASHBOARD_EMPTY: HRDashboard = {
   headcount: 0,
+  headcountLastMonth: 0,
   attendanceTodayPct: 0,
   pendingLeaves: 0,
   payrollDue: 0,
+  departmentBreakdown: [],
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
   if (!isRecord(payload)) return null;
+  const raw = payload as Record<string, unknown>;
   return {
-    headcount: typeof payload.headcount === "number" ? payload.headcount : 0,
-    attendanceTodayPct: typeof payload.attendanceTodayPct === "number" ? payload.attendanceTodayPct : 0,
-    pendingLeaves: typeof payload.pendingLeaves === "number" ? payload.pendingLeaves : 0,
-    payrollDue: typeof payload.payrollDue === "number" ? payload.payrollDue : 0,
+    headcount: typeof raw.headcount === "number" ? raw.headcount : 0,
+    headcountLastMonth: typeof raw.headcountLastMonth === "number" ? raw.headcountLastMonth : 0,
+    attendanceTodayPct: typeof raw.attendanceTodayPct === "number" ? raw.attendanceTodayPct : 0,
+    pendingLeaves: typeof raw.pendingLeaves === "number" ? raw.pendingLeaves : 0,
+    payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
+    departmentBreakdown: Array.isArray(raw.departmentBreakdown)
+      ? (raw.departmentBreakdown as { name: string; count: number }[])
+      : [],
   };
+}
+
+export async function getDashboardLeaveInbox(): Promise<{ data: LeaveInboxItem[] }> {
+  try {
+    const res = await fetchJson<unknown, { data: LeaveInboxItem[] }>(
+      "/api/v1/hrms/dashboard/pending-leaves",
+      { data: [] as LeaveInboxItem[] },
+      {
+        revalidateSeconds: 30,
+        telemetryKey: "hr.dashboard.pending_leaves",
+        mapResponse: (p) => {
+          if (!isRecord(p) || !Array.isArray(p.data)) return { data: [] as LeaveInboxItem[] };
+          return { data: p.data as LeaveInboxItem[] };
+        },
+      }
+    );
+    return res.data;
+  } catch {
+    return { data: [] };
+  }
 }
 
 export async function getHRDashboard(): Promise<LoaderResult<HRDashboard>> {

@@ -28,12 +28,18 @@ function OrgNodeCard({ node }: { node: OrgChartNode }) {
   );
 }
 
+
+function countAll(nodes: OrgChartNode[]): number {
+  return nodes.reduce((sum, n) => sum + 1 + countAll((n.children ?? []) as OrgChartNode[]), 0);
+}
+
 export default async function OrgChartPage() {
   const { data: nodes, source } = await getOrgChart();
 
   const managers    = nodes.filter((n) => n.children && n.children.length > 0).length;
   const uniqueDepts = new Set(nodes.map((n) => n.department)).size;
   const roots       = nodes.filter((n) => !n.reportsTo).length;
+  const totalCount  = countAll(nodes);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -43,10 +49,10 @@ export default async function OrgChartPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\U0001f465" iconBg="#e6f0ff" label="Total Employees"    value={nodes.length} />
-        <StatCard icon="\U0001f4cb" iconBg="#e6f7f0" label="Departments"        value={uniqueDepts} />
-        <StatCard icon="\U0001f4bc" iconBg="#fff7e6" label="Managers"           value={managers} />
-        <StatCard icon="\U0001f31f" iconBg="#f5f5f5" label="Root / Heads"       value={roots} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees"    value={totalCount} />
+        <StatCard icon="📋" iconBg="#e6f7f0" label="Departments"        value={uniqueDepts} />
+        <StatCard icon="💼" iconBg="#fff7e6" label="Managers"           value={managers} />
+        <StatCard icon="🌟" iconBg="#f5f5f5" label="Root / Heads"       value={roots} />
       </StatGrid>
       {nodes.length === 0 ? (
         <Card padding>

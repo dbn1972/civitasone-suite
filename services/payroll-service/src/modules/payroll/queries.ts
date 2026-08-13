@@ -1,6 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import type { PayrollSlipRow, PayrollRunRow } from "./schema.js";
+import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
+import type { SlipWithRun } from "./repo.js";
 
 function mapRunStatus(status: string): "draft" | "processing" | "completed" | "paid" {
   if (status === "disbursed") return "paid";
@@ -64,14 +65,22 @@ export async function getRunDetail(id: string, tenantId: string) {
   };
 }
 
+function formatPayPeriod(month: string): string {
+  if (!month || month.length < 7) return month || "—";
+  const [y, m] = month.split("-");
+  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const idx = parseInt(m ?? "0", 10) - 1;
+  return (names[idx] ?? m) + " " + y;
+}
+
 export async function listSalarySlips(tenantId: string, limit: number) {
   const rows = await repo.listSlipsByTenant(tenantId, limit);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
     employeeName: r.employeeNo,
-    department: "",
-    payPeriod: r.runId.slice(0, 8),
+    department: "—",
+    payPeriod: formatPayPeriod(r.month),
     gross: Number(r.grossMinor),
     deductions: Number(r.totalDeductionsMinor),
     net: Number(r.netPayMinor),
