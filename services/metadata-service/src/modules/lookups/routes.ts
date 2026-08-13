@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, readScoped } from "../../shared/db.js";
 import { kvStore, lookupTables, lookupValues, enumDefinitions } from "./schema.js";
-import { entityDefinitions, fieldDefinitions } from "../entities/schema.js";
+
 import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 
@@ -146,21 +146,15 @@ export async function lookupsRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId });
   });
 
-  // ── SCHEMAS (entity definitions summary) ─────────────────────────────
+  // ── SCHEMAS (catalog of lookup tables + enums as metadata schema) ──────
 
   app.get("/v1/metadata/schemas", async (req, reply) => {
     const ctx  = resolveContext(req);
-    const rows = await readScoped(ctx.tenantId, async (tx) => {
-      const entities = await tx.select().from(entityDefinitions)
-        .where(eq(entityDefinitions.tenantId, ctx.tenantId));
-      const fields = await tx.select().from(fieldDefinitions)
-        .where(eq(fieldDefinitions.tenantId, ctx.tenantId));
-      return entities.map((e) => ({
-        ...e,
-        fields: fields.filter((f) => f.entityDefId === e.id),
-      }));
-    });
-    return reply.send({ data: rows });
+    const [lookups, enums] = await Promise.all([
+      readScoped(ctx.tenantId, (tx) => tx.select().from(lookupTables).where(eq(lookupTables.tenantId, ctx.tenantId))),
+      readScoped(ctx.tenantId, (tx) => tx.select().from(enumDefinitions).where(eq(enumDefinitions.tenantId, ctx.tenantId))),
+    ]);
+    return reply.send({ data: [...lookups.map((l) => ({ type: 'lookup', ...l })), ...enums.map((e) => ({ type: 'enum', ...e }))] });
   });
 
   // ── ENTITY-SPECIFIC METADATA ──────────────────────────────────────────

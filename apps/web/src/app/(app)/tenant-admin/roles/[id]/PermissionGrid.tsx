@@ -159,10 +159,10 @@ export function PermissionGrid({
       </div>
 
       {notice ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "#067647", margin: 0, padding: "8px 16px 0" }}>{notice}</p>
+        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--civitas-color-primary)", margin: 0, padding: "8px 16px 0" }}>{notice}</p>
       ) : null}
       {editable ? (
-        <p style={{ fontSize: 12, color: "#667085", margin: 0, padding: "8px 16px 0" }}>
+        <p style={{ fontSize: 12, color: "var(--civitas-color-text-muted)", margin: 0, padding: "8px 16px 0" }}>
           Click a cell to cycle <b>Inherit → Allow → Deny</b>. Saving records each change in the audit log.
         </p>
       ) : null}
