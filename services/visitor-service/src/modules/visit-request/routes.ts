@@ -180,4 +180,17 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const accepted = await commands.visitRequestCancel(ctx, { requestId: id });
     return reply.code(202).send({ data: accepted });
   });
+
+
+  // GET /v1/visitor/hosts — list of employee IDs who have hosted visits (P1-3)
+  // Backs the host-lookup autocomplete on the visitor pre-registration form.
+  // Returns opaque UUIDs only — the caller resolves names from the employee
+  // directory service (no PII stored in the visitor DB for host profiles).
+  app.get("/v1/visitor/hosts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const hostIds = await repo.listDistinctHosts(ctx.tenantId);
+    return reply.send({ data: hostIds.map((hostEmployeeId) => ({ hostEmployeeId })) });
+  });
+
 }

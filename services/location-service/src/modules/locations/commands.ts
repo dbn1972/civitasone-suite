@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
-import type { CreateLocationBody } from "./validators.js";
+import type { CreateLocationBody, UpdateLocationBody } from "./validators.js";
 import type { LocationView } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -38,5 +38,19 @@ export async function createLocation(ctx: RequestContext, body: CreateLocationBo
     payload: projected,
   });
 
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateLocation(ctx: RequestContext, id: string, body: UpdateLocationBody): Promise<Accepted> {
+  const msgId = randomUUID();
+  await queue.publish(COMMANDS.locationUpdate, {
+    messageId: msgId,
+    type: COMMANDS.locationUpdate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, ...body },
+  });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

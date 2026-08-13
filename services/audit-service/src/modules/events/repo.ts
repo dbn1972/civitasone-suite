@@ -1,7 +1,9 @@
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { auditEvents, type AuditEventRow, type AuditEventInsert } from "./schema.js";
 import type { AuditEventView } from "./domain.js";
+import { computeHash } from "./domain.js";
 
 function toView(r: AuditEventRow): AuditEventView {
   return {
@@ -51,6 +53,88 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
     .orderBy(desc(auditEvents.occurredAt))
     .limit(limit).offset(offset));
   return rows.map(toView);
+}
+
+/** Return audit trail for a specific entity (identified by resourceType + resourceId). */
+export async function listEventsByEntity(
+  tenantId: string,
+  resourceType: string,
+  resourceId: string,
+  limit = 50,
+  offset = 0,
+): Promise<AuditEventView[]> {
+  const rows = await db.transaction((tx) =>
+    tx.select().from(auditEvents)
+      .where(and(
+        eq(auditEvents.tenantId, tenantId),
+        eq(auditEvents.target, resourceId),
+        sql`${auditEvents.payload}->>'resourceType' = ${resourceType}`,
+      ))
+      .orderBy(desc(auditEvents.occurredAt))
+      .limit(limit)
+      .offset(offset),
+  );
+  return rows.map(toView);
+}
+
+/**
+ * Directly write an audit event inside a transaction (API path — queue is preferred for
+ * cross-service events). Maintains the tamper-evident chain hash, mirrors the consumer logic.
+ */
+export async function writeEvent(
+  tenantId: string,
+  actorId: string,
+  type: string,
+  resourceType: string,
+  resourceId: string,
+  severity: string,
+  payload: Record<string, unknown>,
+  correlationId: string,
+  ipAddress?: string | null,
+  userAgent?: string | null,
+): Promise<string> {
+  return db.transaction(async (tx) => {
+    // Serialize per-tenant chain appends (mirrors consumer).
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${tenantId}))`);
+    const latest = await findLatestForTenant(tenantId);
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const retainUntil = new Date(Date.now() + 180 * 86400 * 1000);
+    const actor: Record<string, unknown> = { actorId, ...((payload.actor as Record<string, unknown>) ?? {}) };
+    const target = resourceId;
+    const enrichedPayload: Record<string, unknown> = {
+      ...payload,
+      resourceType,
+      resourceId,
+      _certIn: {
+        ipAddress: ipAddress ?? null,
+        userAgent: userAgent ?? null,
+        oldValue: (payload.oldValue as Record<string, unknown>) ?? null,
+        newValue: (payload.newValue as Record<string, unknown>) ?? null,
+        retainUntil: retainUntil.toISOString(),
+      },
+    };
+    const eventHash = computeHash(id, tenantId, type, latest?.eventHash ?? null, now, {
+      actor, target, payload: enrichedPayload,
+    });
+    await tx.insert(auditEvents).values({
+      id, tenantId, type,
+      actor,
+      target,
+      payload: enrichedPayload,
+      severity,
+      prevHash: latest?.eventHash ?? null,
+      eventHash,
+      correlationId,
+      createdBy: actorId,
+      ipAddress: ipAddress ?? null,
+      userAgent: userAgent ?? null,
+      oldValue: (payload.oldValue as Record<string, unknown>) ?? null,
+      newValue: (payload.newValue as Record<string, unknown>) ?? null,
+      retainUntil,
+    });
+    return id;
+  });
 }
 
 export type Writer = Pick<typeof db, "insert" | "select">;

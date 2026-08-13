@@ -91,6 +91,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { registerSyncRoutes } = await import("./modules/sync/routes.js");
   const { registerEvidenceRoutes } = await import("./modules/evidence/routes.js");
   const { registerExecutionRoutes } = await import("./modules/execution/routes.js");
+  const { registerDashboardRoutes } = await import("./modules/dashboard/routes.js");
+  const { registerReportsRoutes } = await import("./modules/reports/routes.js");
 
   await app.register(registerCapaRoutes);
   await app.register(registerEnforcementRoutes);
@@ -106,6 +108,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerSyncRoutes);
   await app.register(registerEvidenceRoutes);
   await app.register(registerExecutionRoutes);
+  await app.register(registerDashboardRoutes);
+  await app.register(registerReportsRoutes);
 
   return app;
 }

@@ -13,6 +13,7 @@ import { schema as operatorsModule }   from "../modules/operators/schema.js";
 import { schema as quartersModule }    from "../modules/quarters/schema.js";
 import { schema as fleetModule }       from "../modules/fleet/schema.js";
 import { schema as spacesModule }      from "../modules/spaces/schema.js";
+import { schema as consumablesModule } from "../modules/consumables/schema.js";
 import { outboxSchema }               from "./outbox.js";
 
 const url = process.env.DATABASE_URL;
@@ -23,7 +24,7 @@ export const sqlClient = createSqlClient(url);
 const ESTAB_SCHEMA = {
   ...filesModule, ...committeeModule, ...assetsModule, ...facilitiesModule, ...legalModule,
   ...approvalRulesModule, ...dfaModule, ...handoverModule, ...migrationModule, ...operatorsModule,
-  ...quartersModule, ...fleetModule, ...spacesModule,
+  ...quartersModule, ...fleetModule, ...spacesModule, ...consumablesModule,
   ...outboxSchema,
 };
 

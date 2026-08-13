@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
+import { createLocationBody, updateLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -77,6 +77,17 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const location = await queries.getLocation(id, ctx.tenantId);
     if (!location) throw new HttpError(404, "NOT_FOUND", "location not found");
     return reply.send(location);
+  });
+
+
+  app.patch("/v1/locations/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const { id } = idParam.parse(req.params);
+    const existing = await queries.getLocation(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "location not found");
+    const body = updateLocationBody.parse(req.body);
+    sendAccepted(reply, acceptedResponseSchema, await commands.updateLocation(ctx, id, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

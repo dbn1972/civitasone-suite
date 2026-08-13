@@ -72,3 +72,17 @@ export const nearbyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type NearbyQuery = z.infer<typeof nearbyQuerySchema>;
+
+export const updateLocationBody = z.object({
+  name: z.string().min(1).max(200).optional(),
+  addressLine: z.string().min(1).max(500).optional().nullable(),
+  city: z.string().min(1).max(120).optional().nullable(),
+  postalCode: z.string().min(1).max(16).optional().nullable(),
+  type: z.enum(LOCATION_TYPES).optional(),
+  lgdCode: z.string().min(1).max(32).regex(/^\d+$/).optional().nullable(),
+  parentId: z.string().uuid().optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  status: z.enum(["active", "inactive"]).optional(),
+});
+export type UpdateLocationBody = z.infer<typeof updateLocationBody>;

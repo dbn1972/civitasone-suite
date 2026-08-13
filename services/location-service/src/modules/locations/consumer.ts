@@ -41,6 +41,21 @@ export function registerLocationConsumers(rawQueue: Queue): void {
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
+
+  queue.subscribe<{ id: string } & Record<string, unknown>>(COMMANDS.locationUpdate, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { id, ...fields } = msg.payload as { id: string } & Record<string, unknown>;
+      const patch: Record<string, unknown> = {};
+      const allowed = ["name", "addressLine", "city", "postalCode", "type", "lgdCode", "parentId", "latitude", "longitude", "status"];
+      for (const k of allowed) {
+        if (k in fields) patch[k] = fields[k];
+      }
+      await repo.updateById(tx as Parameters<typeof repo.updateById>[0], id, msg.tenantId, { ...patch, updatedBy: msg.actorId } as Parameters<typeof repo.updateById>[3]);
+      await cache.invalidateResource(msg.tenantId, RESOURCE);
+      await emit(tx, msg, EVENTS.locationUpdated, { locationId: id }, "update", id);
+    });
+  });
 }
 
 async function emit(

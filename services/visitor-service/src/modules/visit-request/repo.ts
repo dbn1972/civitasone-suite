@@ -75,3 +75,25 @@ export async function getVisitRequestById(tenantId: string, id: string, piiCtx?:
 
   return row;
 }
+
+// ─── Host lookup (distinct host_employee_ids from visit requests) ────────────
+
+/**
+ * Returns the set of distinct host_employee_id values for a tenant —
+ * used by GET /v1/visitor/hosts to populate the host-search autocomplete.
+ * PII-safe: host_employee_id is an opaque UUID, not PII.
+ */
+export async function listDistinctHosts(
+  tenantId: string,
+): Promise<string[]> {
+  const { sql: rawSql } = await import("drizzle-orm");
+  const rows = await scopedRead((tx) =>
+    tx
+      .selectDistinct({ hostEmployeeId: visitRequests.hostEmployeeId })
+      .from(visitRequests)
+      .where(eq(visitRequests.tenantId, tenantId)),
+  );
+  return rows
+    .filter((r): r is { hostEmployeeId: string } => r.hostEmployeeId !== null && r.hostEmployeeId !== undefined)
+    .map((r) => r.hostEmployeeId);
+}

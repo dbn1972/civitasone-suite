@@ -49,6 +49,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // service is one import; see modules/forms/public-routes.ts for the threat
   // model (tenant resolution, rate limits, body/UTM bounds, no reflection).
   await app.register(publicFormRoutes);
+  const { lookupsRoutes } = await import("./modules/lookups/routes.js");
+  await app.register(lookupsRoutes);
   registerSchemaErrorHandler(app, HttpError);
   return app;
 }

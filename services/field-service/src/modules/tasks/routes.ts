@@ -270,4 +270,24 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.code(202).send(await commands.deleteTask(ctx, id, existing.version));
   });
+
+
+  // GET /v1/field/agents — field agent roster (distinct task assignees, P1-6)
+  app.get("/v1/field/agents", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FIELD_ROLES);
+    const agents = await repo.listAgents(ctx.tenantId);
+    return reply.send({ data: agents });
+  });
+
+  // GET /v1/field/dashboard/kpis — task KPI counts by status (P1-7)
+  app.get("/v1/field/dashboard/kpis", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FIELD_ROLES);
+    const kpis = await repo.getKpis(ctx.tenantId);
+    const byStatus = Object.fromEntries(kpis.map((k) => [k.status, k.count]));
+    const total = kpis.reduce((s, k) => s + k.count, 0);
+    return reply.send({ data: { byStatus, total } });
+  });
+
 }
