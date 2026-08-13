@@ -4,7 +4,15 @@ import * as repo from "./repo.js";
 import type { AuditEventView } from "./domain.js";
 
 export async function getEvent(tenantId: string, id: string): Promise<AuditEventView | null> {
-  return cache.getOrLoad<AuditEventView>(cache.makeKey(tenantId, RESOURCE.event, id), () => repo.findById(id, tenantId));
+  try {
+    return await cache.getOrLoad<AuditEventView>(
+      cache.makeKey(tenantId, RESOURCE.event, id),
+      () => repo.findById(id, tenantId),
+    );
+  } catch {
+    // Cache unavailable (e.g. Redis down in staging) — fall through to DB directly.
+    return repo.findById(id, tenantId);
+  }
 }
 
 export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0): Promise<AuditEventView[]> {

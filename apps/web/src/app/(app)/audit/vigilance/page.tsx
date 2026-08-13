@@ -22,8 +22,8 @@ export default async function VigilancePage() {
 
       <StatGrid>
         <StatCard icon="🔍" iconBg="#eef2ff" label="Total Cases" value={totalCases} />
-        <StatCard icon="⏳" iconBg="#ecfdf3" label="Under Investigation" value={underInvestigation} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Inquiry Complete" value={inquiryComplete} />
+        <StatCard icon="⏳" iconBg="var(--goodbg)" label="Under Investigation" value={underInvestigation} />
+        <StatCard icon="📋" iconBg="var(--warnbg)" label="Inquiry Complete" value={inquiryComplete} />
         <StatCard icon="⚠️" iconBg="#fce7ee" label="Penalties Imposed" value={penaltiesImposed} />
       </StatGrid>
 

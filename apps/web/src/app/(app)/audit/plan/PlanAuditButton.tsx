@@ -81,7 +81,7 @@ export function PlanAuditButton() {
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-              {error && <div role="alert" style={{ color: "#b42318", fontSize: 13, marginTop: 4 }}>{error}</div>}
+              {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
                 <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
                 <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Planning…" : "Plan audit"}</button>

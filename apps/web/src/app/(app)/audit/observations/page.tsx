@@ -18,7 +18,7 @@ export default async function AuditObservationsPage() {
     <main className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <span aria-current="page">Observations</span>
       </nav>
       <PageHeader
@@ -27,10 +27,10 @@ export default async function AuditObservationsPage() {
         actions={<LogObservationButton />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="📋" iconBg="#fef2f2" label="Open" value={open} />
-        <StatCard icon="📨" iconBg="#fffaeb" label="Under Reply" value={underReply} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Settled (FY)" value={settled} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Money Value" value={totalAmount > 0 ? formatMoney(totalAmount) : "₹0.00"} />
+        <StatCard icon="📋" iconBg="var(--badbg)" label="Open" value={open} />
+        <StatCard icon="📨" iconBg="var(--warnbg)" label="Under Reply" value={underReply} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled (FY)" value={settled} />
+        <StatCard icon="💰" iconBg="var(--infobg)" label="Money Value" value={totalAmount > 0 ? formatMoney(totalAmount) : "₹0.00"} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <ObservationsTable items={items} />

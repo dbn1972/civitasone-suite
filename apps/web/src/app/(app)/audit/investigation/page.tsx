@@ -22,8 +22,8 @@ export default async function InvestigationPage() {
 
       <StatGrid>
         <StatCard icon="🕵️" iconBg="#eef2ff" label="Active Investigations" value={active} />
-        <StatCard icon="📄" iconBg="#ecfdf3" label="Findings Submitted" value={findingsSubmitted} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Closed" value={closed} />
+        <StatCard icon="📄" iconBg="var(--goodbg)" label="Findings Submitted" value={findingsSubmitted} />
+        <StatCard icon="✅" iconBg="var(--warnbg)" label="Closed" value={closed} />
         <StatCard icon="📊" iconBg="#fce7ee" label="Total Cases" value={total} />
       </StatGrid>
 

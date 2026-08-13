@@ -17,7 +17,7 @@ export default async function AuditPlanPage() {
     <main className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <span aria-current="page">Audit Plan</span>
       </nav>
       <PageHeader
@@ -26,10 +26,10 @@ export default async function AuditPlanPage() {
         actions={<PlanAuditButton />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🗓️" iconBg="#fef2f2" label="Planned Audits" value={total} delta="FY26" />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed" value={completed} />
-        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={inProgress} />
-        <StatCard icon="🎯" iconBg="#eff6ff" label="Risk-based" value={`${riskBased}%`} delta="coverage" up />
+        <StatCard icon="🗓️" iconBg="var(--badbg)" label="Planned Audits" value={total} delta="FY26" />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Completed" value={completed} />
+        <StatCard icon="🔄" iconBg="var(--warnbg)" label="In Progress" value={inProgress} />
+        <StatCard icon="🎯" iconBg="var(--infobg)" label="Risk-based" value={`${riskBased}%`} delta="coverage" up />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <PlanTable items={items} />
