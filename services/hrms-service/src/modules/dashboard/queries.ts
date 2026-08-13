@@ -9,6 +9,7 @@ export async function getDashboard(tenantId: string): Promise<{
   headcountLastMonth: number;
   attendanceTodayPct: number;
   pendingLeaves: number;
+  onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
 }> {
@@ -16,7 +17,7 @@ export async function getDashboard(tenantId: string): Promise<{
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, deptRows } =
+  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows } =
     await db.transaction(async (tx) => {
       const [headcountRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -62,9 +63,18 @@ export async function getDashboard(tenantId: string): Promise<{
           ne(hrmsEmployees.status, "separated"),
         ))
         .groupBy(hrmsDepartments.name)
-        .orderBy(sql`count(${hrmsEmployees.id}) desc`);
+        .orderBy(sql`count(${hrmsEmployees.id}) desc`)
+        .limit(7);
 
-      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, deptRows };
+      const [onLeaveRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsEmployees)
+        .where(and(
+          eq(hrmsEmployees.tenantId, tenantId),
+          eq(hrmsEmployees.status, "on_leave"),
+        ));
+
+      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows };
     });
 
   const headcount = headcountRow?.count ?? 0;
@@ -86,6 +96,7 @@ export async function getDashboard(tenantId: string): Promise<{
     headcountLastMonth: headcountLastMonthRow?.count ?? 0,
     attendanceTodayPct: headcount > 0 ? Math.round((present / headcount) * 100) : 0,
     pendingLeaves: pendingRow?.count ?? 0,
+    onLeave: onLeaveRow?.count ?? 0,
     payrollDue: 0,
     departmentBreakdown,
   };

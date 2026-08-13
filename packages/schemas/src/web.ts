@@ -642,6 +642,7 @@ export const HRDashboardSchema = z.object({
   headcountLastMonth: z.number().default(0),
   attendanceTodayPct: z.number().default(0),
   pendingLeaves: z.number().default(0),
+  onLeave: z.number().default(0),
   payrollDue: z.number().default(0),
   departmentBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
 });

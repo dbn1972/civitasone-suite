@@ -1035,8 +1035,8 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson("/api/v1/hrms/employees?limit=500", [] as EmployeeSummary[], {
+export async function getEmployees(limit = 500): Promise<LoaderResult<EmployeeSummary[]>> {
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,

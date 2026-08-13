@@ -43,7 +43,7 @@ function statusLabel(s: string) {
 export default async function HRDashboardPage() {
   const [dashResult, empResult, inboxResult, profileResult] = await Promise.all([
     getHRDashboard(),
-    getEmployees(),
+    getEmployees(8),
     getDashboardLeaveInbox(),
     getMyProfile(),
   ]);
@@ -54,7 +54,7 @@ export default async function HRDashboardPage() {
   const profile = profileResult.data;
 
   const anyError = source === "error" || empResult.source === "error";
-  const onLeaveCount = employees.filter((e) => e.status === "on_leave").length;
+  const onLeaveCount = data.onLeave;
   const deptCount = data.departmentBreakdown.length > 0
     ? data.departmentBreakdown.filter((d) => !d.name.startsWith("Others")).length +
       (data.departmentBreakdown.some((d) => d.name.startsWith("Others")) ? 1 : 0)
@@ -64,7 +64,7 @@ export default async function HRDashboardPage() {
   const { today, dayName, monthName } = formatToday();
   const userName = profile ? profile.name.split(" ")[0] : "there";
 
-  const recentEmployees = employees.slice(0, 8);
+  const recentEmployees = employees;
 
   return (
     <main

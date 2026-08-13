@@ -23,6 +23,7 @@ interface Props { initialItems: LeaveInboxItem[] }
 export function ActionInbox({ initialItems }: Props) {
   const [items, setItems] = useState<LeaveInboxItem[]>(initialItems);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function act(id: string, action: "approve" | "reject") {
     setLoading((p) => ({ ...p, [id]: true }));
@@ -30,6 +31,9 @@ export function ActionInbox({ initialItems }: Props) {
       const res = await fetch(`/api/proxy/v1/hrms/leave-applications/${id}/${action}`, { method: "PATCH" });
       if (res.ok) {
         setItems((p) => p.filter((i) => i.id !== id));
+      } else {
+        const msg = await res.json().then((d) => d?.error ?? d?.message ?? `Error ${res.status}`).catch(() => `Error ${res.status}`);
+        setErrors((p) => ({ ...p, [id]: msg }));
       }
     } finally {
       setLoading((p) => ({ ...p, [id]: false }));
@@ -71,18 +75,24 @@ export function ActionInbox({ initialItems }: Props) {
                 </div>
               </div>
               <div className="inbox-actions">
-                <button
-                  className="btn-approve"
-                  disabled={loading[item.id]}
-                  onClick={() => act(item.id, "approve")}
-                  aria-label={`Approve leave for ${item.employeeName}`}
-                >✓ Approve</button>
-                <button
-                  className="btn-decline"
-                  disabled={loading[item.id]}
-                  onClick={() => act(item.id, "reject")}
-                  aria-label={`Decline leave for ${item.employeeName}`}
-                >✕</button>
+                {errors[item.id] ? (
+                  <span className="inbox-error" role="alert">{errors[item.id]}</span>
+                ) : (
+                  <>
+                    <button
+                      className="btn-approve"
+                      disabled={loading[item.id]}
+                      onClick={() => act(item.id, "approve")}
+                      aria-label={`Approve leave for ${item.employeeName}`}
+                    >✓ Approve</button>
+                    <button
+                      className="btn-decline"
+                      disabled={loading[item.id]}
+                      onClick={() => act(item.id, "reject")}
+                      aria-label={`Decline leave for ${item.employeeName}`}
+                    >✕</button>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -107,6 +117,7 @@ export function ActionInbox({ initialItems }: Props) {
         .btn-approve:disabled { opacity:.5;cursor:not-allowed; }
         .btn-decline { background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
         .btn-decline:disabled { opacity:.5;cursor:not-allowed; }
+        .inbox-error { font-size:11px;color:#dc2626;font-weight:600;white-space:nowrap; }
       `}</style>
     </div>
   );
