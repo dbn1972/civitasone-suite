@@ -21,7 +21,8 @@ export async function createContractor(ctx: RequestContext, body: CreateContract
 }
 
 export async function rateContractor(ctx: RequestContext, contractorId: string, rating: number): Promise<Accepted> {
-  return publish(COMMANDS.contractorRate, ctx, contractorId, {
+  const messageId = randomUUID();
+  return publish(COMMANDS.contractorRate, ctx, messageId, {
     id: contractorId, tenantId: ctx.tenantId, rating,
   });
 }

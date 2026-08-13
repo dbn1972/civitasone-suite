@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 export const LICENCE_STATUSES = ["active", "suspended", "cancelled", "expired"] as const;
 export type LicenceStatus = (typeof LICENCE_STATUSES)[number];
 
@@ -15,7 +16,7 @@ export function generateLicenceNumber(tenantShortCode: string, sequence: number)
 }
 
 export function generateVerificationCode(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return randomBytes(8).toString("hex").toUpperCase().substring(0, 8);
 }
 
 export function calculateLicenceFeeMinor(category: string): bigint {

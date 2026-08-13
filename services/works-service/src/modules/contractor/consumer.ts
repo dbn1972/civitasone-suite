@@ -23,7 +23,7 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.insertContractor(tx, {
-          id: p.id, tenantId: p.tenantId, name: p.name,
+          id: p.id, tenantId: msg.tenantId, name: p.name,
           registrationNo: p.registrationNo ?? null,
           classId: p.classId ?? null,
           pan: p.pan ?? null, gst: p.gst ?? null,
@@ -49,7 +49,7 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; rating: number };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.updateContractorRating(tx, p.id, p.tenantId, p.rating);
+        await repo.updateContractorRating(tx, p.id, msg.tenantId, p.rating);
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
