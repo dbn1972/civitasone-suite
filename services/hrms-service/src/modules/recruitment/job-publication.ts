@@ -6,12 +6,8 @@
 
 export interface VacancyView {
   status: string;
-  isPublished: boolean | string;
-  applicationDeadline?: string | Date | null;
-}
-
-function isPublished(v: VacancyView): boolean {
-  return v.isPublished === true || v.isPublished === "true";
+  isPublished: boolean;
+  applicationDeadline?: string | Date | null; // precise closing datetime
 }
 
 /** Milliseconds for a deadline value (ISO string or Date), or null. */
@@ -28,7 +24,7 @@ function deadlineMs(d: string | Date | null | undefined): number | null {
  */
 export function isApplicationOpen(v: VacancyView, nowMs: number, requirePublished = true): boolean {
   if (v.status !== "open") return false;
-  if (requirePublished && !isPublished(v)) return false;
+  if (requirePublished && !v.isPublished) return false;
   const dl = deadlineMs(v.applicationDeadline ?? null);
   return dl === null || nowMs <= dl;
 }
@@ -36,7 +32,7 @@ export function isApplicationOpen(v: VacancyView, nowMs: number, requirePublishe
 /** Reason an application is refused, for a clear candidate-facing message. */
 export function applicationClosedReason(v: VacancyView, nowMs: number): string {
   if (v.status === "cancelled") return "this vacancy has been cancelled";
-  if (v.status !== "open" || !isPublished(v)) return "this vacancy is not accepting applications";
+  if (v.status !== "open" || !v.isPublished) return "this vacancy is not accepting applications";
   const dl = deadlineMs(v.applicationDeadline ?? null);
   if (dl !== null && nowMs > dl) return "the application deadline has passed";
   return "this vacancy is not accepting applications";

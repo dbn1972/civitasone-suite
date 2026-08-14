@@ -24,7 +24,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         location: p.location ?? null,
         qualification: p.qualification ?? null,
         payRange: p.payRange ?? null,
-        isPublished: p.isPublished ? "true" : "false",
+        isPublished: p.isPublished ?? false,
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

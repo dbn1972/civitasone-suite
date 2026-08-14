@@ -108,7 +108,7 @@ export async function listPublishedOpenings(tenantId: string): Promise<JobOpenin
   return scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(and(
       eq(hrmsJobOpenings.tenantId, tenantId),
-      eq(hrmsJobOpenings.isPublished, "true"),
+      eq(hrmsJobOpenings.isPublished, true),
       eq(hrmsJobOpenings.status, "open"),
     ))
     .orderBy(desc(hrmsJobOpenings.createdAt))
@@ -120,7 +120,7 @@ export async function findPublishedOpening(id: string, tenantId: string): Promis
     .where(and(
       eq(hrmsJobOpenings.id, id),
       eq(hrmsJobOpenings.tenantId, tenantId),
-      eq(hrmsJobOpenings.isPublished, "true"),
+      eq(hrmsJobOpenings.isPublished, true),
       eq(hrmsJobOpenings.status, "open"),
     ))
     .limit(1));

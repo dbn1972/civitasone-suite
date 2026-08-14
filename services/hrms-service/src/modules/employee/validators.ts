@@ -27,6 +27,7 @@ export const createEmployeeBody = z.object({
   locationId:     z.string().uuid().optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
+  uanNumber:      z.string().max(12).optional(),
   pran:           z.string().max(12).optional(),
   gstin:          z.string().max(15).optional(),
   sacCode:        z.string().max(6).optional(),
@@ -58,6 +59,7 @@ export const updateEmployeeBody = z.object({
   managerId:      z.string().uuid().optional(),
   uanNumber:      z.string().max(12).optional(),
   esicIpNumber:   z.string().max(17).optional(),
+  uanNumber:      z.string().max(12).optional(),
   pran:           z.string().max(12).optional(),
   gstin:          z.string().max(15).optional(),
   sacCode:        z.string().max(6).optional(),

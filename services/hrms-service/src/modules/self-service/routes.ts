@@ -3,6 +3,7 @@ import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
+import { maskPii } from "../../shared/pii-mask.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
@@ -50,7 +51,7 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record linked to your user" });
-    return reply.send(emp);
+    return reply.send(maskPii(emp));
   });
 
   // My leave balance

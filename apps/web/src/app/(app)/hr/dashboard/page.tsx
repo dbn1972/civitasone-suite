@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getHRDashboard, getEmployees, getDashboardLeaveInbox } from "../../../_data/loaders";
+import { getHRDashboard, getEmployees, getDashboardLeaveInbox, getMyProfile } from "../../../_data/loaders";
 import { getSessionName } from "../../../../lib/auth/roleGuard";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
@@ -42,15 +42,17 @@ function statusLabel(s: string) {
 }
 
 export default async function HRDashboardPage() {
-  const [dashResult, empResult, inboxResult] = await Promise.all([
+  const [dashResult, empResult, inboxResult, profileResult] = await Promise.all([
     getHRDashboard(),
     getEmployees(8),
     getDashboardLeaveInbox(),
+    getMyProfile(),
   ]);
 
   const { data, source } = dashResult;
   const employees = empResult.data as EmpRow[];
   const leaveInbox = inboxResult.data;
+  const profile = profileResult.data;
 
   const anyError = source === "error" || empResult.source === "error";
   const onLeaveCount = data.onLeave;
@@ -62,7 +64,7 @@ export default async function HRDashboardPage() {
   const daysLeft = payrollDaysLeft();
   const { today, dayName, monthName } = formatToday();
   const sessionName = getSessionName();
-  const userName = sessionName ? sessionName.split(" ")[0] : "there";
+  const userName = sessionName ? sessionName.split(" ")[0] : (profile ? profile.name.split(" ")[0] : "there");
 
   const recentEmployees = employees;
 

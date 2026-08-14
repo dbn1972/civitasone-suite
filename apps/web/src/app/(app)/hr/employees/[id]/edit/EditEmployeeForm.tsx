@@ -319,7 +319,7 @@ export function EditEmployeeForm({ employee }: Props) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.bankAccountNo} style={labelStyle}>Bank Account No.</label>
-              <input id={ids.bankAccountNo} type="password" value={bankAccountNo}
+              <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
                 onChange={(e) => setBankAccountNo(e.target.value)}
                 placeholder="e.g. 0012345678901"
                 style={inputStyle} autoComplete="off" />
@@ -347,7 +347,7 @@ export function EditEmployeeForm({ employee }: Props) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.pran} style={labelStyle}>PRAN (NPS Account)</label>
-              <input id={ids.pran} type="password" value={pran}
+              <input id={ids.pran} type="text" value={pran}
                 onChange={(e) => setPran(e.target.value)}
                 placeholder="12-digit PRAN" maxLength={12}
                 style={inputStyle} autoComplete="off" />

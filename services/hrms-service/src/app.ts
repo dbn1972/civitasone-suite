@@ -281,6 +281,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { hrmsGapRoutes } = await import("./modules/gap-features/routes.js");
   await app.register(hrmsGapRoutes);
 
+  // Local audit log — records all mutating HR operations for e-Governance compliance.
+  // Supplements the central audit-service outbox events with a co-located trail.
+  const { createAuditHook } = await import("./shared/audit-log.js");
+  app.addHook("onResponse", createAuditHook());
+
   registerSchemaErrorHandler(app, HttpError);
 
   return app;

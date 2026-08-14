@@ -10,7 +10,7 @@ type EmpSummary = { id: string; name: string; designationName?: string };
 interface Props {
   departments: Dept[];
   designations: Desig[];
-  managers: EmpSummary[];
+  managers?: EmpSummary[];
 }
 
 const ACCENT = "#047857";
@@ -575,7 +575,7 @@ export function AddEmployeeForm({ departments, designations, managers }: Props) 
                   style={inputStyle}
                 >
                   <option value="">Select manager</option>
-                  {managers.map((m) => (
+                  {(managers ?? []).map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({m.id})
                     </option>
