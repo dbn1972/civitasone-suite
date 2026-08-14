@@ -14,7 +14,7 @@ test.describe('Attendance Management', () => {
 
     test('shows Total Records stat card label', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.getByText('Total Records')).toBeVisible();
+      await expect(page.getByText('Total Records', { exact: true }).first()).toBeVisible();
     });
 
     test('shows Present stat card label', async ({ page }) => {

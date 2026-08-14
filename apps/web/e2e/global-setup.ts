@@ -805,7 +805,6 @@ const FIXTURES: Record<string, unknown> = {
 
 function handler(req: http.IncomingMessage, res: http.ServerResponse) {
   const path = (req.url ?? '/').split('?')[0];
-  console.log(`[e2e-mock] ${req.method} ${path} auth=${req.headers['authorization'] ? 'yes' : 'NO'}`);
 
   // Enforce auth: all non-identity routes require a Bearer token.
   const isPublic = path.startsWith('/api/identity') || path.startsWith('/api/v1/install');

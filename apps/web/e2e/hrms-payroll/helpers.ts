@@ -100,10 +100,10 @@ export async function mockHrmsApis(page: Page): Promise<void> {
     }
     return json(route, fixtures.regularisations);
   });
-  await page.route('**/api/v1/hrms/attendance/regularisations/*/approve', (route) =>
+  await page.route('**/api/proxy/v1/hrms/attendance/regularisations/*/approve', (route) =>
     json(route, fixtures.acceptedResponse, 202),
   );
-  await page.route('**/api/v1/hrms/attendance/regularisations/*/reject', (route) =>
+  await page.route('**/api/proxy/v1/hrms/attendance/regularisations/*/reject', (route) =>
     json(route, fixtures.acceptedResponse, 202),
   );
   await page.route('**/api/v1/hrms/attendance', (route) => {
