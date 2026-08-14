@@ -176,6 +176,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
       { title: "Leave Policies", href: "/hr/leave-policies", description: "Leave rules and entitlements" },
 			{ title: "Holidays", href: "/hr/holidays", description: "Gazetted and restricted holidays" },
 			{ title: "Employee Types", href: "/hr/employee-types", description: "Define regular, contractual, and deputation employee types" },
+			{ title: "Audit Log", href: "/hr/audit-log", description: "All HR actions — approvals, edits, payroll runs (e-Governance compliance)" },
 		],
 	},
 ];

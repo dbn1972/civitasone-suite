@@ -623,6 +623,16 @@ export async function getAuditItems(): Promise<LoaderResult<AuditRowSummary[]>> 
   });
 }
 
+/** HR-scoped audit log — filters to employee, leave, payroll resource types. */
+export async function getHrAuditLog(limit = 50, offset = 0): Promise<LoaderResult<AuditRowSummary[]>> {
+  return fetchJson(`/api/audit/events?resourceType=employee,leave_app,leave_type,leave_alloc,payroll_run,payroll_structure,salary_slip&limit=${limit}&offset=${offset}`, [] as AuditRowSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "hr.audit-log",
+    responseSchema: auditEventsListSchema,
+    mapResponse: mapAuditRows,
+  });
+}
+
 export async function getHelpdeskMetrics(): Promise<LoaderResult<MetricCard[]>> {
   return fetchJson("/api/v1/citizen/analytics/metrics", [] as MetricCard[], {
     revalidateSeconds: 30,
@@ -1035,8 +1045,8 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(limit = 500): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}`, [] as EmployeeSummary[], {
+export async function getEmployees(limit = 50, offset = 0): Promise<LoaderResult<EmployeeSummary[]>> {
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -1068,8 +1078,8 @@ export async function getMyProfile(): Promise<LoaderResult<{ id: string; name: s
   );
 }
 
-export async function getLeaveRequests(): Promise<LoaderResult<LeaveRequestSummary[]>> {
-  return fetchJson("/api/v1/hrms/leave-applications", [] as LeaveRequestSummary[], {
+export async function getLeaveRequests(limit = 50, offset = 0): Promise<LoaderResult<LeaveRequestSummary[]>> {
+  return fetchJson(`/api/v1/hrms/leave-applications?limit=${limit}&offset=${offset}`, [] as LeaveRequestSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.leave",
     responseSchema: leaveListResponseSchema,
@@ -1953,8 +1963,8 @@ export async function getPayrollStructures(): Promise<LoaderResult<PayrollStruct
   });
 }
 
-export async function getSalarySlips(): Promise<LoaderResult<SalarySlipSummary[]>> {
-  return fetchJson<unknown, SalarySlipSummary[]>("/api/v1/payroll/salary-slips", [], {
+export async function getSalarySlips(limit = 50, offset = 0): Promise<LoaderResult<SalarySlipSummary[]>> {
+  return fetchJson<unknown, SalarySlipSummary[]>(`/api/v1/payroll/salary-slips?limit=${limit}&offset=${offset}`, [], {
     revalidateSeconds: 120,
     telemetryKey: "hr.salary-slips",
     responseSchema: SalarySlipSummaryListSchema,
