@@ -14,7 +14,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
         <PageHeader title="Employee Profile" back="/hr/employees" />
         <DataSourceBadge source={source} />
         <Card padding>
-          <p className="text-center text-slate-400">Employee not found.</p>
+          <p className="text-center text-slate-600">Employee not found.</p>
         </Card>
       </main>
     );

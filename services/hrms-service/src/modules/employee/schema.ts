@@ -56,7 +56,6 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   aadhaarRef:       encryptedText("aadhaar_ref"),
   mobile:           encryptedText("mobile"),
   email:            text("email"),
-  photoKey:         text("photo_key"),
   bankAccountNo:    encryptedText("bank_account_no"),
   bankIfsc:         encryptedText("bank_ifsc"),
   employeeType:     varchar("employee_type", { length: 24 }).notNull().default("permanent"),
@@ -79,6 +78,9 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   functionalManagerId: uuid("functional_manager_id"),
   projectManagerId: uuid("project_manager_id"),
   fitnessStatus:    varchar("fitness_status", { length: 16 }).default("pending"),
+  photoKey:       text("photo_key"),
+  category:         varchar("category", { length: 8 }),
+  disability:       boolean("disability").default(false),
   userRef:          text("user_ref"),
   // ERP org-structure refs (cross-service)
   legalEntityId:    uuid("legal_entity_id"),     // finance org.legal_entities

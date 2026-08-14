@@ -125,7 +125,7 @@ export function HRKPIStrip({
         .kpi-val-sm  { font-size: 20px; }
         .kpi-val-muted { font-size: 20px; color: var(--muted, #64748b); }
         .kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; }
-        .trend-up     { color: #16a34a; }
+        .trend-up     { color: #15803d; }
         .trend-down   { color: #dc2626; }
         .trend-flat   { color: var(--muted, #64748b); }
         .trend-urgent { color: #dc2626; font-weight: 700; }

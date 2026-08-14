@@ -1861,6 +1861,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   headcountLastMonth: 0,
   attendanceTodayPct: 0,
   pendingLeaves: 0,
+  onLeave: 0,
   payrollDue: 0,
   departmentBreakdown: [],
 };
@@ -1873,6 +1874,7 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
     headcountLastMonth: typeof raw.headcountLastMonth === "number" ? raw.headcountLastMonth : 0,
     attendanceTodayPct: typeof raw.attendanceTodayPct === "number" ? raw.attendanceTodayPct : 0,
     pendingLeaves: typeof raw.pendingLeaves === "number" ? raw.pendingLeaves : 0,
+    onLeave: typeof raw.onLeave === "number" ? raw.onLeave : 0,
     payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
     departmentBreakdown: Array.isArray(raw.departmentBreakdown)
       ? (raw.departmentBreakdown as { name: string; count: number }[])

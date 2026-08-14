@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useId, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -32,13 +32,33 @@ const inputInvalidStyle: React.CSSProperties = {
 
 export function NewJobOpeningForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const templateId = searchParams.get("templateId");
 
   const [refNo, setRefNo] = useState("");
   const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [vacancies, setVacancies] = useState(1);
+  const [vacancyType, setVacancyType] = useState("regular");
   const [description, setDescription] = useState("");
   const [closesAt, setClosesAt] = useState("");
+  const [templateName, setTemplateName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!templateId) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/hrms/jd-templates/${templateId}`, {
+          headers: { "content-type": "application/json" },
+        });
+        if (!res.ok) return;
+        const tmpl = await res.json() as { name?: string; vacancyType?: string; description?: string; qualification?: string; payRange?: string };
+        if (tmpl.name) { setTitle(tmpl.name); setTemplateName(tmpl.name); }
+        if (tmpl.vacancyType) setVacancyType(tmpl.vacancyType);
+        if (tmpl.description) setDescription(tmpl.description);
+      } catch { /* ignore */ }
+    })();
+  }, [templateId]);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
@@ -97,6 +117,7 @@ export function NewJobOpeningForm() {
           title: title.trim(),
           departmentId: departmentId.trim(),
           vacancies,
+          vacancyType,
           description: description.trim() || undefined,
           closesAt: closesAt || undefined,
         }),
@@ -125,6 +146,12 @@ export function NewJobOpeningForm() {
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
+      {templateName && (
+        <div style={{ padding: "10px 14px", background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "#1e40af" }}>
+          Pre-filled from template: <strong>{templateName}</strong>. You can edit any field before saving.
+        </div>
+      )}
+
       <div>
         <label htmlFor={refNoId} style={labelStyle}>
           Reference No <span aria-hidden="true">*</span>

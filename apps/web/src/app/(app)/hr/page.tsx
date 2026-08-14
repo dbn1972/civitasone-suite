@@ -1,6 +1,6 @@
 import type { NavTile } from "@civitasone/types";
+import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
-import { HRHubNavigation } from "./_components/HRHubNavigation";
 
 /**
  * Tiles grouped by category for progressive disclosure.
@@ -179,13 +179,14 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Audit Log", href: "/hr/audit-log", description: "All HR actions — approvals, edits, payroll runs (e-Governance compliance)" },
 		],
 	},
+
 ];
 
 export default function Page() {
 	return (
 		<main className="page-main wrap" aria-labelledby="page-heading">
 			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." help="hr" />
-			<HRHubNavigation categories={hrCategories} />
+			<LinkTiles tiles={hrCategories.flatMap(c => c.tiles)} columns="four" />
 		</main>
 	);
 }

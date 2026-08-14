@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { PageHeader, Card } from "../../../../_components/ds";
 import { NewJobOpeningForm } from "./NewJobOpeningForm";
 
@@ -10,7 +11,9 @@ export default function NewJobOpeningPage() {
         back="/hr/recruitment"
       />
       <Card>
-        <NewJobOpeningForm />
+        <Suspense fallback={<div className="text-sm text-slate-500">Loading form…</div>}>
+          <NewJobOpeningForm />
+        </Suspense>
       </Card>
     </main>
   );

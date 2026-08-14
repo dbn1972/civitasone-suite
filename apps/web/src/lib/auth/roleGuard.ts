@@ -7,6 +7,8 @@ interface JwtPayload {
   tid?: string;
   roles?: string[];
   exp?: number;
+  name?: string;
+  email?: string;
 }
 
 function decodeJwtPayload(token: string): JwtPayload {
@@ -34,6 +36,14 @@ export function getSessionTenantId(): string | null {
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.tid === "string" && payload.tid.length > 0 ? payload.tid : null;
+}
+
+/** Display name from the session token, or null when not signed in. */
+export function getSessionName(): string | null {
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload.name === "string" && payload.name.length > 0 ? payload.name : null;
 }
 
 export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): void {

@@ -31,6 +31,7 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   titleAlt:      varchar("title_alt", { length: 300 }),
   descriptionAlt: text("description_alt"),
   corrigendumCount: integer("corrigendum_count").notNull().default(0),
+  templateId:    uuid("template_id"),
   // R-RA-0118 policy flag: when true, a rejection notice may disclose the
   // high-level reason CATEGORY to the candidate (never scores/remarks).
   discloseRejectionReason: boolean("disclose_rejection_reason").notNull().default(false),
@@ -71,6 +72,14 @@ export const hrmsApplications = recruitmentSchema.table("hrms_applications", {
   shortlistFrozen:    boolean("shortlist_frozen").notNull().default(false),
   stage:         varchar("stage", { length: 32 }).notNull().default("applied"),
   status:        varchar("status", { length: 24 }).notNull().default("active"),
+  // Type-specific fields (populated based on vacancy_type of the job opening)
+  institutionName:          text("institution_name"),
+  graduationYear:           integer("graduation_year"),
+  semester:                 varchar("semester", { length: 20 }),
+  tradeCategory:            varchar("trade_category", { length: 100 }),
+  itiCertNo:                varchar("iti_cert_no", { length: 80 }),
+  availabilityHoursPerWeek: integer("availability_hours_per_week"),
+  stipendExpectedMinor:     bigint("stipend_expected_minor", { mode: "bigint" }),
   appliedAt:     timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -398,4 +407,27 @@ export const hrmsJobAlerts = recruitmentSchema.table("hrms_job_alerts", {
 export type JobAlertRow = typeof hrmsJobAlerts.$inferSelect;
 export type JobAlertInsert = typeof hrmsJobAlerts.$inferInsert;
 
-export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings, hrmsApplicationFees, hrmsJobAlerts };
+/** Reusable JD templates — HR creates these once, then "uses" them to pre-fill job openings. */
+export const hrmsJdTemplates = recruitmentSchema.table("hrms_jd_templates", {
+  id:               uuid("id").primaryKey().defaultRandom(),
+  tenantId:         uuid("tenant_id").notNull(),
+  name:             varchar("name", { length: 200 }).notNull(),
+  vacancyType:      varchar("vacancy_type", { length: 24 }).notNull().default("regular"),
+  description:      text("description"),
+  qualification:    varchar("qualification", { length: 500 }),
+  payRange:         varchar("pay_range", { length: 120 }),
+  selectionProcess: text("selection_process"),
+  requiredDocuments: jsonb("required_documents").notNull().default([]),
+  eligibility:      jsonb("eligibility").notNull().default({}),
+  tags:             text("tags").array(),
+  isArchived:       boolean("is_archived").notNull().default(false),
+  useCount:         integer("use_count").notNull().default(0),
+  createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:        uuid("created_by").notNull(),
+  updatedBy:        uuid("updated_by").notNull(),
+});
+export type JdTemplateRow = typeof hrmsJdTemplates.$inferSelect;
+export type JdTemplateInsert = typeof hrmsJdTemplates.$inferInsert;
+
+export const schema = { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, hrmsScreeningEvents, hrmsOfferEvents, hrmsInterviewScores, hrmsVacancyCorrigenda, hrmsInterviewPanelists, hrmsScreeningOverrides, hrmsInterviewComms, hrmsInterviewResponses, hrmsInterviewRecordings, hrmsApplicationFees, hrmsJobAlerts, hrmsJdTemplates };

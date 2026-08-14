@@ -14,10 +14,10 @@ export default async function PayrollPage() {
 
   const totalRuns = runs.length;
   const totalEmployeesPaid = runs
-    .filter((r) => r.status === "paid")
+    .filter((r) => r.status === "paid" || r.status === "completed")
     .reduce((sum, r) => sum + r.employeeCount, 0);
   const totalGross = runs
-    .filter((r) => r.status === "paid")
+    .filter((r) => r.status === "paid" || r.status === "completed")
     .reduce((sum, r) => sum + r.grossAmount, 0);
   const pending = runs.filter((r) => r.status === "draft" || r.status === "processing").length;
   const existingPeriods = runs.map((r) => r.payPeriod);
@@ -34,7 +34,7 @@ export default async function PayrollPage() {
         <Card>
           <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
               No pay structures configured — create one first.{" "}
-              <Link href="/hr/payroll/structures" style={{ color: "var(--primary-d)" }}>
+              <Link href="/hr/payroll/structures" style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
                 Go to pay structures →
               </Link>
             </p>

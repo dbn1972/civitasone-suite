@@ -8,9 +8,13 @@ type Vacancy = {
   vacancies: number; description?: string; postedAt?: string; closesAt?: string;
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  regular: "Regular Position", internship: "Internship",
-  apprenticeship: "Apprenticeship", contractual: "Contractual", deputation: "Deputation",
+const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  regular:       { label: "Regular Position",  color: "#1e40af", bg: "#dbeafe" },
+  internship:    { label: "Internship",         color: "#7c2d12", bg: "#fed7aa" },
+  apprenticeship:{ label: "Apprenticeship",     color: "#166534", bg: "#bbf7d0" },
+  volunteership: { label: "Volunteer Role",     color: "#0e7490", bg: "#cffafe" },
+  contractual:   { label: "Contractual",        color: "#6b21a8", bg: "#e9d5ff" },
+  deputation:    { label: "Deputation",         color: "#475569", bg: "#e2e8f0" },
 };
 
 async function getVacancy(id: string): Promise<Vacancy | null> {
@@ -50,12 +54,17 @@ export default async function VacancyPage({ params }: { params: { id: string } }
         </a>
 
         <article style={{ background: "#fff", borderRadius: 16, padding: "32px", border: "1px solid #e2e8f0" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", padding: "3px 8px", borderRadius: 6, color: "#4f46e5", background: "#eef2ff" }}>
-              {TYPE_LABELS[v.vacancyType] ?? v.vacancyType}
-            </span>
-            <span style={{ fontSize: 12, color: "#64748b" }}>Ref: {v.refNo}</span>
-          </div>
+          {(() => {
+            const ti = TYPE_LABELS[v.vacancyType] ?? { label: v.vacancyType, color: "#4f46e5", bg: "#eef2ff" };
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", padding: "3px 8px", borderRadius: 6, color: ti.color, background: ti.bg }}>
+                  {ti.label}
+                </span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>Ref: {v.refNo}</span>
+              </div>
+            );
+          })()}
 
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", margin: "0 0 16px", letterSpacing: "-0.3px" }}>
             {v.title}
@@ -87,7 +96,7 @@ export default async function VacancyPage({ params }: { params: { id: string } }
               <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: "0 0 16px", paddingTop: 8, borderTop: "1px solid #e2e8f0" }}>
                 Apply now
               </h2>
-              <ApplyForm jobOpeningId={v.id} />
+              <ApplyForm jobOpeningId={v.id} vacancyType={v.vacancyType} />
             </>
           )}
         </article>

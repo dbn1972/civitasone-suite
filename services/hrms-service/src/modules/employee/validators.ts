@@ -10,8 +10,8 @@ export const createEmployeeBody = z.object({
   gender:        z.enum(["male", "female", "other"]).optional(),
   pan:           z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "must be a valid PAN (AAAAA9999A)").optional(),
   aadhaarRef:    z.string().optional(),
-  mobile:        z.string().min(7).max(20),
-  email:         z.string().email(),
+  mobile:        z.string().max(20).optional(),
+  email:         z.string().email().optional(),
   bankAccountNo: z.string().optional(),
   bankIfsc:      z.string().max(16).optional(),
   // Any code; membership (canonical category / tenant type-master / legacy) is
@@ -25,7 +25,6 @@ export const createEmployeeBody = z.object({
   legalEntityId:  z.string().uuid().optional(),
   costCenterId:   z.string().uuid().optional(),
   locationId:     z.string().uuid().optional(),
-  photoDataUrl:   z.string().regex(/^data:image\/(jpeg|png|webp);base64,/).optional(),
   // Statutory + engagement-type-specific identifiers (DIC).
   esicIpNumber:   z.string().max(17).optional(),
   uanNumber:      z.string().max(12).optional(),
@@ -34,6 +33,12 @@ export const createEmployeeBody = z.object({
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
+  managerId:    z.string().uuid().optional(),
+  uanNumber:      z.string().max(12).optional(),
+  station:      z.string().max(128).optional(),
+  category:     z.enum(["UR", "SC", "ST", "OBC", "EWS"]).optional(),
+  disability:   z.boolean().default(false),
+  photoDataUrl: z.string().optional(),
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 
@@ -52,6 +57,7 @@ export const updateEmployeeBody = z.object({
   basicMinor:     z.bigint().optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
+  uanNumber:      z.string().max(12).optional(),
   esicIpNumber:   z.string().max(17).optional(),
   uanNumber:      z.string().max(12).optional(),
   pran:           z.string().max(12).optional(),

@@ -200,7 +200,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
         )}
 
         <div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || periodDuplicate}>
             Create Run
           </button>
         </div>
@@ -213,7 +213,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
 
         <p style={{ fontSize: 12, color: "var(--ink2)" }}>
           After creation, open the run to approve and disburse.{" "}
-          <Link href="/hr/leave/approvals" style={{ color: "var(--primary-d)" }}>
+          <Link href="/hr/leave/approvals" style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
             Leave approvals
           </Link>
         </p>

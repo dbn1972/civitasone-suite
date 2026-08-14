@@ -67,6 +67,14 @@ export async function createPublicApplication(tenantId: string, body: PublicAppl
       experienceYears: body.experienceYears ?? null,
       skills: body.skills ?? [],
       source: "public_portal",
+      // Type-specific fields (only present for internship/apprenticeship/volunteership)
+      institutionName: body.institutionName ?? null,
+      graduationYear: body.graduationYear ?? null,
+      semester: body.semester ?? null,
+      tradeCategory: body.tradeCategory ?? null,
+      itiCertNo: body.itiCertNo ?? null,
+      availabilityHoursPerWeek: body.availabilityHoursPerWeek ?? null,
+      stipendExpectedMinor: body.stipendExpectedMinor ?? null,
     },
   });
   return { id, status: "received" };

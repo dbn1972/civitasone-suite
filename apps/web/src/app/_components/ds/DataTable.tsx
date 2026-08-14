@@ -256,6 +256,7 @@ export function DataTable<T extends Record<string, unknown>>({
                           <a
                             href={href}
                             tabIndex={-1}
+                            aria-hidden="true"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();

@@ -3,8 +3,9 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddEmployeeForm } from "./AddEmployeeForm";
 
-type Dept = { id: string; code: string; name: string } & Record<string, unknown>;
-type Desig = { id: string; code: string; name: string } & Record<string, unknown>;
+type Dept = { id: string; name: string };
+type Desig = { id: string; name: string };
+type EmpSummary = { id: string; name: string; designationName?: string };
 
 async function getDepartments(): Promise<LoaderResult<Dept[]>> {
   return fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {

@@ -79,10 +79,10 @@ export default function LeaveBalancePage() {
 
       {ctx && (
         <StatGrid>
-          <StatCard icon="\U0001f334" iconBg="#e6f7f0" label="Leave Types"     value={totalTypes} />
-          <StatCard icon="\U0001f4c5" iconBg="#e6f0ff" label="Total Entitlement" value={`${totalEntitlement}d`} />
-          <StatCard icon="\u2705"       iconBg="#fff7e6" label="Total Used"      value={`${totalUsed}d`} />
-          <StatCard icon="\u23f3"       iconBg="#f5f5f5" label="Total Remaining" value={`${totalBalance}d`} />
+          <StatCard icon="\U0001f334" iconBg="var(--goodbg)" label="Leave Types"     value={totalTypes} />
+          <StatCard icon="\U0001f4c5" iconBg="var(--infobg)" label="Total Entitlement" value={`${totalEntitlement}d`} />
+          <StatCard icon="\u2705"       iconBg="var(--warnbg)" label="Total Used"      value={`${totalUsed}d`} />
+          <StatCard icon="\u23f3"       iconBg="var(--panel)" label="Total Remaining" value={`${totalBalance}d`} />
         </StatGrid>
       )}
 
@@ -153,7 +153,7 @@ export default function LeaveBalancePage() {
                         <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 15 }}>{alloc.leaveTypeName}</p>
                         <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>FY {alloc.fy} · Code: {alloc.leaveTypeCode}</p>
                       </div>
-                      <p style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: balance <= 0 ? "var(--color-error)" : "#166534" }}>
+                      <p style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: balance <= 0 ? "var(--bad)" : "var(--good)" }}>
                         {balance}
                         <span style={{ fontSize: 14, fontWeight: 400, color: "var(--mut)" }}> / {total} days</span>
                       </p>
@@ -164,7 +164,7 @@ export default function LeaveBalancePage() {
                           height: "100%",
                           width: `${p}%`,
                           borderRadius: 4,
-                          background: p >= 90 ? "var(--color-error)" : p >= 60 ? "#f59e0b" : "#22c55e",
+                          background: p >= 90 ? "var(--bad)" : p >= 60 ? "var(--warn)" : "var(--good)",
                           transition: "width 0.4s ease",
                         }}
                         aria-label={`${p}% used`}

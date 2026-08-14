@@ -101,4 +101,27 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });
+  // Employee summaries for payroll service (id → fullName + departmentName)
+  app.get("/v1/hrms/internal/employee-summaries", async (req, reply) => {
+    const headers = req.headers as Record<string, string>;
+    const tenantId = headers["x-tenant-id"] ?? "";
+    if (!tenantId) return reply.code(400).send({ code: "MISSING_TENANT" });
+    const { scopedRead } = await import("../../shared/db.js");
+    const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
+    const { eq, and } = await import("drizzle-orm");
+    const employees = await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
+        .from(hrmsEmployees)
+        .where(eq(hrmsEmployees.tenantId, tenantId))
+        .limit(2000),
+    );
+    const deptIds = [...new Set(employees.map((e) => e.departmentId))];
+    const depts = deptIds.length > 0
+      ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, tenantId))))
+      : [];
+    const deptMap = new Map(depts.map((d) => [d.id, d.name]));
+    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, departmentName: deptMap.get(e.departmentId) ?? "" })));
+  });
+
+
 }

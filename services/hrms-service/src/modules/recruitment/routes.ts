@@ -11,20 +11,13 @@ import { isApplicationOpen, applicationClosedReason } from "./job-publication.js
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import * as screeningRepo from "./screening-repo.js";
 import { tenantStorage } from "@civitasone/db";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
 
 export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/hrms/recruitment/jobs", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    const result = await queries.listJobOpenings(ctx.tenantId, q.limit);
-    return reply.send({ data: result, meta: { page: 1, pageSize: q.limit, total: result.length } });
-  });
-
   app.get("/v1/hrms/job-openings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
@@ -86,6 +79,30 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // Applications inbox for a specific job opening (HR review).
+  app.get("/v1/hrms/job-openings/:id/applications", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const rows = await screeningRepo.listApplicationsForVacancy(ctx.tenantId, id);
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        applicantName: r.applicantName,
+        email: r.email,
+        mobile: r.mobile,
+        qualification: r.qualification,
+        experienceYears: r.experienceYears,
+        skills: r.skills,
+        source: r.source,
+        stage: r.stage,
+        screeningDecision: r.screeningDecision,
+        appliedAt: r.appliedAt,
+      })),
+      total: rows.length,
+    });
+  });
+
   // Recruitment dashboard stats (vacancy counts, source breakdown).
   app.get("/v1/hrms/recruitment/dashboard", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -134,30 +151,6 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.hireApplication(ctx, id, body));
   });
 
-
-  // GET /v1/hrms/applications/:id — fetch a single application by ID (PPL-D2 fix)
-  app.get("/v1/hrms/applications/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    const { id } = idParam.parse(req.params);
-    const application = await repo.findApplicationById(id, ctx.tenantId);
-    if (!application) throw new HttpError(404, "NOT_FOUND", "Application not found");
-    return reply.send(application);
-  });
-
-  // GET /v1/hrms/job-openings/:id — job opening detail with its applications list
-  app.get("/v1/hrms/job-openings/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    const { id } = idParam.parse(req.params);
-    // Use tenant-scoped lookup (repo.findJobOpeningById has no tenant filter)
-    const opening = await repo.findJobOpeningByTenant(id, ctx.tenantId);
-    if (!opening) throw new HttpError(404, "NOT_FOUND", "Job opening not found");
-    // Fetch applications specifically for this opening (avoids cross-opening truncation)
-    const applications = await repo.listApplicationsByJobOpening(ctx.tenantId, id, 500);
-    return reply.send({ ...opening, applications });
-  });
-
   app.setErrorHandler(errorHandler);
 }
 
@@ -166,16 +159,6 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
  * where external candidates can browse published vacancies and apply.
  */
 export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<void> {
-  // List published jobs for a tenant (public, no auth).
-  app.get("/v1/careers/jobs", { config: { public: true } }, async (req, reply) => {
-    const tenantId = (req.query as { tenantId?: string })?.tenantId
-      || (req.headers["x-tenant-id"] as string | undefined)
-      || "";
-    if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "tenantId is required");
-    const vacancies = await queries.listPublishedVacancies(tenantId);
-    return reply.send({ data: vacancies, meta: { page: 1, pageSize: vacancies.length, total: vacancies.length } });
-  });
-
   // List published vacancies for a tenant (public, no auth).
   // Requires x-tenant-id header (set by the gateway for the custom domain or by the web proxy).
   app.get("/v1/careers/vacancies", { config: { public: true } }, async (req, reply) => {

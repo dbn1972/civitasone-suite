@@ -20,10 +20,10 @@ export default async function AttendanceRegularisationPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Requests" value={regs.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Rejected" value={rejected} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Requests" value={regs.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending Approval" value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approved} />
+        <StatCard icon="🔴" iconBg="var(--badbg)" label="Rejected" value={rejected} />
       </StatGrid>
       <Card title="Regularisation Requests">
         <RegularisationTable regs={regs} source={source} />

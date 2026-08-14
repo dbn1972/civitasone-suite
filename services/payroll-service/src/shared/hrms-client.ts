@@ -70,3 +70,18 @@ export async function fetchPendingPayrollRuns(tenantId: string): Promise<number>
   const rows = await res.json() as Array<{ status: string }>;
   return rows.filter((r) => r.status === "processing" || r.status === "draft").length;
 }
+
+export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<string, { fullName: string; departmentName: string }>> {
+  const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries`;
+  try {
+    const res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return new Map();
+    const rows = await res.json() as Array<{ id: string; fullName: string; departmentName: string }>;
+    return new Map(rows.map((r) => [r.id, { fullName: r.fullName, departmentName: r.departmentName }]));
+  } catch {
+    return new Map();
+  }
+}

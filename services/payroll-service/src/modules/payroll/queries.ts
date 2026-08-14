@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
+import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
 function mapRunStatus(status: string): "draft" | "processing" | "completed" | "paid" {
   if (status === "disbursed") return "paid";
@@ -74,12 +75,15 @@ function formatPayPeriod(month: string): string {
 }
 
 export async function listSalarySlips(tenantId: string, limit: number) {
-  const rows = await repo.listSlipsByTenant(tenantId, limit);
+  const [rows, empMap] = await Promise.all([
+    repo.listSlipsByTenant(tenantId, limit),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
-    employeeName: r.employeeNo,
-    department: "—",
+    employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeNo,
+    department: empMap.get(r.employeeId)?.departmentName ?? "—",
     payPeriod: formatPayPeriod(r.month),
     gross: Number(r.grossMinor),
     deductions: Number(r.totalDeductionsMinor),

@@ -1,181 +1,341 @@
-import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
-import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+"use client";
+
+import { useEffect, useId, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+
+type JobOpening = {
+  id: string;
+  refNo: string;
+  jobTitle: string;
+  department?: string;
+  vacancies: number;
+  status: string;
+  isPublished?: boolean | string;
+  vacancyType?: string;
+  applicationDeadline?: string;
+  postedDate?: string;
+  applicationsReceived?: number;
+};
 
 type Application = {
   id: string;
   applicantName: string;
   email?: string;
+  mobile?: string;
   qualification?: string;
   experienceYears?: number;
-  source: string;
+  skills?: string[];
+  source?: string;
   stage: string;
-  status: string;
-  appliedAt: string;
-} & Record<string, unknown>;
-
-type Opening = {
-  id: string;
-  title: string;
-  refNo: string;
-  departmentId: string;
-  vacancies: number;
-  status: string;
-  vacancyType: string;
-  location?: string;
-  qualification?: string;
-  payRange?: string;
-  closesAt?: string;
-  isPublished: string;
-  applications: Application[];
+  screeningDecision: string;
+  appliedAt?: string;
 };
 
-const PIPELINE_STAGES: { key: string; label: string; colour: string }[] = [
-  { key: "applied",     label: "Applied",          colour: "var(--line2)" },
-  { key: "screened",    label: "Screened",          colour: "var(--line2)" },
-  { key: "shortlisted", label: "Shortlisted",       colour: "var(--line2)" },
-  { key: "interview",   label: "Interview",         colour: "var(--goodbg)" },
-  { key: "offered",     label: "Offered",           colour: "var(--goodbg)" },
-  { key: "selected",    label: "Selected / Hired",  colour: "var(--goodbg)" },
-  { key: "rejected",    label: "Not Selected",      colour: "var(--badbg)" },
-];
+type DecisionState = Record<string, "idle" | "submitting" | "done" | "error">;
 
-async function getOpening(id: string): Promise<LoaderResult<Opening | null>> {
-  return fetchJson<unknown, Opening | null>(`/api/v1/hrms/job-openings/${id}`, null, {
-    telemetryKey: "recruitment.opening",
-    mapResponse: (p) => (p && typeof p === "object" ? (p as Opening) : null),
+const STAGE_COLOR: Record<string, string> = {
+  applied:     "bg-slate-100 text-slate-700",
+  shortlisted: "bg-blue-100 text-blue-700",
+  interviewing:"bg-purple-100 text-purple-700",
+  selected:    "bg-emerald-100 text-emerald-700",
+  offered:     "bg-amber-100 text-amber-700",
+  hired:       "bg-green-100 text-green-700",
+  rejected:    "bg-red-100 text-red-700",
+  withdrawn:   "bg-slate-100 text-slate-400",
+};
+
+const DECISION_COLOR: Record<string, string> = {
+  pending:      "bg-slate-100 text-slate-500",
+  shortlisted:  "bg-blue-100 text-blue-700",
+  eligible:     "bg-emerald-100 text-emerald-700",
+  ineligible:   "bg-red-100 text-red-700",
+  waitlisted:   "bg-amber-100 text-amber-700",
+  manual_review:"bg-purple-100 text-purple-700",
+};
+
+export default function JobOpeningDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+
+  const [opening, setOpening] = useState<JobOpening | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loadingOpening, setLoadingOpening] = useState(true);
+  const [loadingApps, setLoadingApps] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [decisionStates, setDecisionStates] = useState<DecisionState>({});
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+
+  const searchId = useId();
+  const stageId = useId();
+
+  const loadOpening = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings?limit=200`);
+      if (!res.ok) { setError(`Failed to load vacancy (${res.status})`); return; }
+      const data = await res.json() as unknown;
+      const arr: JobOpening[] = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.data as JobOpening[] ?? []);
+      const found = arr.find((o) => o.id === id) ?? null;
+      setOpening(found);
+    } catch {
+      setError("Network error loading vacancy.");
+    } finally {
+      setLoadingOpening(false);
+    }
+  }, [id]);
+
+  const loadApplications = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/applications`);
+      if (!res.ok) { return; }
+      const data = await res.json() as { data?: Application[] };
+      setApplications(data.data ?? []);
+    } catch {
+      // Non-fatal — applications may be empty
+    } finally {
+      setLoadingApps(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void loadOpening();
+    void loadApplications();
+  }, [loadOpening, loadApplications]);
+
+  async function makeDecision(appId: string, decision: "shortlisted" | "ineligible", reasonCode?: string) {
+    setDecisionStates((s) => ({ ...s, [appId]: "submitting" }));
+    try {
+      const body: Record<string, unknown> = { decision };
+      if (reasonCode) body.reasonCode = reasonCode;
+      const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        setDecisionStates((s) => ({ ...s, [appId]: "error" }));
+        return;
+      }
+      setDecisionStates((s) => ({ ...s, [appId]: "done" }));
+      setApplications((prev) => prev.map((a) =>
+        a.id === appId ? { ...a, screeningDecision: decision } : a
+      ));
+    } catch {
+      setDecisionStates((s) => ({ ...s, [appId]: "error" }));
+    }
+  }
+
+  const filtered = applications.filter((a) => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q
+      || a.applicantName.toLowerCase().includes(q)
+      || (a.email ?? "").toLowerCase().includes(q)
+      || (a.qualification ?? "").toLowerCase().includes(q)
+      || (a.skills ?? []).some((s) => s.toLowerCase().includes(q));
+    const matchesStage = stageFilter === "all" || a.stage === stageFilter || a.screeningDecision === stageFilter;
+    return matchesSearch && matchesStage;
   });
-}
 
-export default async function JobOpeningDetailPage({ params }: { params: { id: string } }) {
-  const { data: opening, source } = await getOpening(params.id);
-
-  if (!opening) {
+  if (loadingOpening) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Job Opening" subtitle="Not found" back="/hr/recruitment" />
-        <DataSourceBadge source={source} />
-        <Card title="Error">
-          <p style={{ padding: "24px 20px", color: "var(--mut)", textAlign: "center" }}>
-            Job opening not found or you do not have access.
-          </p>
-        </Card>
+      <main className="page-main">
+        <p className="text-center text-slate-500 py-12">Loading vacancy…</p>
       </main>
     );
   }
 
-  const applications = opening.applications ?? [];
-  const applied = applications.length;
-  const shortlisted = applications.filter((a) => a.stage === "shortlisted" || a.stage === "screened").length;
-  const interview = applications.filter((a) => a.stage === "interview").length;
-  const selected = applications.filter((a) => ["selected", "offered", "hired"].includes(a.stage)).length;
-
-  // Build kanban counts per stage
-  const stageCounts = new Map<string, Application[]>();
-  for (const stage of PIPELINE_STAGES) stageCounts.set(stage.key, []);
-  for (const app of applications) {
-    const key = app.stage ?? "applied";
-    if (!stageCounts.has(key)) stageCounts.set(key, []);
-    stageCounts.get(key)!.push(app);
+  if (error || !opening) {
+    return (
+      <main className="page-main">
+        <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-4 block">
+          ← Back to Recruitment
+        </button>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-center text-slate-400">{error ?? "Vacancy not found."}</p>
+        </div>
+      </main>
+    );
   }
 
-  const columns: { key: keyof Application & string; label: string; cellType?: "status" }[] = [
-    { key: "applicantName", label: "Applicant" },
-    { key: "qualification", label: "Qualification" },
-    { key: "experienceYears", label: "Exp (yrs)" },
-    { key: "source", label: "Source" },
-    { key: "stage", label: "Stage", cellType: "status" },
-    { key: "appliedAt", label: "Applied" },
-  ];
+  const published = opening.isPublished === true || opening.isPublished === "true";
+  const allStages = ["all", ...Array.from(new Set(applications.map((a) => a.stage)))];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title={opening.title}
-        subtitle={`Ref: ${opening.refNo} · ${opening.vacancies} post${opening.vacancies > 1 ? "s" : ""} · ${opening.vacancyType}`}
-        back="/hr/recruitment"
-        actions={<Link href="/hr/recruitment/new" className="btn ghost">+ New Vacancy</Link>}
-      />
-      <DataSourceBadge source={source} />
-      <StatGrid>
-        <StatCard icon="📨" iconBg="var(--infobg)" label="Applied" value={applied} />
-        <StatCard icon="🔍" iconBg="var(--warnbg)" label="Screened / Shortlisted" value={shortlisted} />
-        <StatCard icon="💬" iconBg="var(--line2)" label="Interview" value={interview} />
-        <StatCard icon="🎉" iconBg="var(--primary-soft)" label="Selected / Hired" value={selected} />
-      </StatGrid>
+    <main className="page-main" aria-labelledby="page-heading">
+      {/* ── Header ── */}
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-1 block">
+            ← Recruitment
+          </button>
+          <h1 id="page-heading" className="text-2xl font-bold text-slate-800">
+            {opening.jobTitle}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">{opening.refNo} · {opening.department ?? "—"}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+            {published ? "Published" : "Not published"}
+          </span>
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STAGE_COLOR[opening.status] ?? "bg-slate-100 text-slate-700"}`}>
+            {opening.status}
+          </span>
+        </div>
+      </div>
 
-      {/* ── Application Pipeline (Kanban) ─────────────────────────────── */}
-      {applied > 0 && (
-        <Card title="Application Pipeline">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-              gap: 10,
-              padding: "8px 0",
-            }}
-          >
-            {PIPELINE_STAGES.map((stage) => {
-              const count = (stageCounts.get(stage.key) ?? []).length;
+      {/* ── Vacancy meta ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: "Posts", value: opening.vacancies },
+          { label: "Type", value: opening.vacancyType ?? "Regular" },
+          { label: "Applications", value: loadingApps ? "—" : applications.length },
+          { label: "Deadline", value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : "Open" },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
+            <p className="text-2xl font-bold text-slate-800">{String(value)}</p>
+            <p className="text-xs text-slate-500 mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Applications Inbox ── */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-slate-800">
+            Applications Inbox
+            {!loadingApps && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                {filtered.length} / {applications.length}
+              </span>
+            )}
+          </h2>
+          <div className="flex items-center gap-2">
+            <label htmlFor={searchId} className="sr-only">Search</label>
+            <input
+              id={searchId}
+              type="search"
+              placeholder="Search applicants…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <label htmlFor={stageId} className="sr-only">Filter by stage</label>
+            <select
+              id={stageId}
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {allStages.map((s) => (
+                <option key={s} value={s}>{s === "all" ? "All stages" : s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {loadingApps ? (
+          <div className="px-5 py-10 text-center text-slate-500 text-sm">Loading applications…</div>
+        ) : filtered.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <p className="text-3xl mb-2">📭</p>
+            <p className="text-slate-500 text-sm">
+              {applications.length === 0
+                ? "No applications received yet."
+                : "No applications match the current filter."}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filtered.map((app) => {
+              const ds = decisionStates[app.id] ?? "idle";
               return (
-                <div
-                  key={stage.key}
-                  style={{
-                    background: stage.colour,
-                    borderRadius: 10,
-                    padding: "12px 14px",
-                    textAlign: "center",
-                    opacity: count === 0 ? 0.45 : 1,
-                  }}
-                >
-                  <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
-                    {count}
+                <div key={app.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{app.applicantName}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        {app.email}{app.mobile ? ` · ${app.mobile}` : ""}
+                      </p>
+                      {app.qualification && (
+                        <p className="text-xs text-slate-600 mt-1">{app.qualification}{app.experienceYears != null ? ` · ${app.experienceYears} yr exp` : ""}</p>
+                      )}
+                      {(app.skills ?? []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(app.skills ?? []).slice(0, 5).map((sk) => (
+                            <span key={sk} className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-700">{sk}</span>
+                          ))}
+                          {(app.skills ?? []).length > 5 && (
+                            <span className="text-xs text-slate-400">+{(app.skills ?? []).length - 5} more</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLOR[app.stage] ?? "bg-slate-100 text-slate-700"}`}>
+                          {app.stage}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${DECISION_COLOR[app.screeningDecision] ?? "bg-slate-100 text-slate-500"}`}>
+                          {app.screeningDecision}
+                        </span>
+                      </div>
+                      {app.appliedAt && (
+                        <p className="text-xs text-slate-400">{new Date(app.appliedAt).toLocaleDateString("en-IN")}</p>
+                      )}
+
+                      {/* Screening actions */}
+                      {app.screeningDecision === "pending" && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <button
+                            onClick={() => makeDecision(app.id, "shortlisted")}
+                            disabled={ds === "submitting"}
+                            className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            {ds === "submitting" ? "…" : "Shortlist"}
+                          </button>
+                          <button
+                            onClick={() => makeDecision(app.id, "ineligible", "does_not_meet_eligibility")}
+                            disabled={ds === "submitting"}
+                            className="rounded-md bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                      {ds === "error" && (
+                        <p className="text-xs text-red-500">Action failed — try again</p>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--ink2)", lineHeight: 1.3 }}>{stage.label}</div>
                 </div>
               );
             })}
           </div>
-        </Card>
-      )}
-
-      {/* ── Vacancy Details ───────────────────────────────────────────── */}
-      <Card title="Vacancy Details">
-        <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Status</span><strong style={{ textTransform: "capitalize" }}>{opening.status}</strong></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Published</span><strong>{opening.isPublished === "true" ? "Yes" : "No"}</strong></div>
-          {opening.location && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Location</span>{opening.location}</div>}
-          {opening.closesAt && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Closing</span>{opening.closesAt}</div>}
-          {opening.payRange && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Pay Range</span>{opening.payRange}</div>}
-          {opening.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Min Qualification</span>{opening.qualification}</div>}
-        </div>
-      </Card>
-
-      {/* ── Applications List ─────────────────────────────────────────── */}
-      <div style={{ marginTop: 16 }}>
-        <Card title="All Applications">
-          {applications.length === 0 ? (
-            <p style={{ padding: "24px 20px", color: "var(--mut)", textAlign: "center" }}>
-              No applications received yet. Share the vacancy on the public careers portal to begin accepting applications.
-            </p>
-          ) : (
-            <DataTable<Application>
-              columns={columns}
-              rows={applications}
-              rowLinkKey="id"
-              rowLinkPrefix={`/hr/recruitment/${params.id}/applications/`}
-              sortable
-              filterable
-              filterPlaceholder="Filter by name, stage or source…"
-              pageSize={15}
-              emptyIcon="📨"
-              emptyTitle="No matching applications"
-              emptyMessage="Try adjusting your filter."
-            />
-          )}
-        </Card>
+        )}
       </div>
+
+      {/* ── Quick actions ── */}
+      {applications.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            onClick={() => {
+              const pending = applications.filter((a) => a.screeningDecision === "pending");
+              if (pending.length === 0) return;
+              void Promise.all(pending.map((a) => makeDecision(a.id, "shortlisted")));
+            }}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+          >
+            Shortlist All Pending ({applications.filter((a) => a.screeningDecision === "pending").length})
+          </button>
+          <button
+            onClick={() => loadApplications()}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Refresh
+          </button>
+        </div>
+      )}
     </main>
   );
 }
