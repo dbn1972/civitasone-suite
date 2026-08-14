@@ -45,6 +45,13 @@ const USERS: Record<string, DevUser> = {
     roles: ["audit_officer", "audit_admin", "reader", "viewer"],
   },
 
+  // ── named project personas ──
+  dnayak: {
+    password: DEV_PASSWORD, sub: "00000000-0000-0000-0000-000000000001",
+    name: "D. Nayak", email: "dnayak@digitalindia.gov.in",
+    roles: ["super_admin", "admin", "hr_admin", "hr_officer", "estab_admin", "finance_admin", "reader", "viewer"],
+  },
+
   // ── granular government personas (mirrors scripts/demo/seed-demo.mjs) ──
   commissioner: {
     password: DEV_PASSWORD, sub: "0de00000-0000-0000-0000-000000000001",
@@ -111,7 +118,7 @@ function mint(u: DevUser, tenantId: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = b64url({ alg: "HS256", typ: "JWT" });
   const payload = b64url({
-    sub: u.sub, iss: "civitasone-dev", aud: "civitasone",
+    sub: u.sub, iss: "civitasone-dev",
     tid: tenantId, tenantId, sid: "dev-session",
     email: u.email, name: u.name, roles: u.roles,
     iat: now, exp: now + 60 * 60 * 12,
@@ -149,7 +156,9 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const token = mint(u, tenantId);
-  const res = NextResponse.redirect(new URL("/dashboard", base), { status: 303 });
+  const nextPath = String(form.get("next") ?? "").trim();
+  const safePath = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/dashboard";
+  const res = NextResponse.redirect(new URL(safePath, base), { status: 303 });
   res.cookies.set("civitasone_at", token, {
     httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12,
   });

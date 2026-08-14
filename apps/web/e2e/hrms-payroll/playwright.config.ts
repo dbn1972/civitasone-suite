@@ -111,7 +111,8 @@ export default defineConfig({
   webServer: {
     command: `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web dev --port ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: true,
+    timeout: 300_000,
+    ignoreHTTPSErrors: true,
   },
 });

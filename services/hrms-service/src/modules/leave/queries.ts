@@ -36,9 +36,9 @@ export async function getLeaveApplicationsByEmp(
   }));
 }
 
-export async function listLeaveApplications(tenantId: string, limit: number): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
+export async function listLeaveApplications(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
   const [rows, employees, leaveTypes] = await Promise.all([
-    repo.findLeaveAppsByTenant(tenantId, limit),
+    repo.findLeaveAppsByTenant(tenantId, limit, offset),
     employeeRepo.listByTenant(tenantId, 500, 0),
     repo.listLeaveTypesByTenant(tenantId),
   ]);
@@ -54,16 +54,20 @@ export async function listLeaveApplications(tenantId: string, limit: number): Pr
   };
 }
 
-export async function listLeaveRequestDetails(tenantId: string, limit: number) {
-  return cache.listOrLoad(tenantId, "leave_request_detail", `list:${limit}`, async () => {
-    const rows = await repo.findLeaveAppsByTenant(tenantId, limit);
-    const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
+export async function listLeaveRequestDetails(tenantId: string, limit: number, offset = 0) {
+  return cache.listOrLoad(tenantId, "leave_request_detail", `list:${limit}:${offset}`, async () => {
+    const rows = await repo.findLeaveAppsByTenant(tenantId, limit, offset);
+    const [employees, leaveTypes] = await Promise.all([
+      employeeRepo.listByTenant(tenantId, 500, 0),
+      repo.listLeaveTypesByTenant(tenantId),
+    ]);
     const empMap = new Map(employees.map((e) => [e.id, e]));
+    const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
     return rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
       employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
-      leaveType: r.leaveTypeId.slice(0, 8),
+      leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
       fromDate: r.fromDate,
       toDate: r.toDate,
       days: r.daysApplied,

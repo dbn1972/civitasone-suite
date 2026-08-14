@@ -58,7 +58,7 @@ export async function searchVacancies(
 ): Promise<VacancyRow[]> {
   const conds: SQL[] = [
     eq(hrmsJobOpenings.tenantId, tenantId),
-    eq(hrmsJobOpenings.isPublished, true),
+    eq(hrmsJobOpenings.isPublished, "true"),
     eq(hrmsJobOpenings.status, "open"),
   ];
   conds.push(f.internal

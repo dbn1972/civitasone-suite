@@ -23,12 +23,21 @@ type Vacancy = {
 };
 
 const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  regular: { label: "Regular", color: "#1e40af", bg: "#dbeafe" },
-  internship: { label: "Internship", color: "#7c2d12", bg: "#fed7aa" },
-  apprenticeship: { label: "Apprenticeship", color: "#166534", bg: "#bbf7d0" },
-  contractual: { label: "Contractual", color: "#6b21a8", bg: "#e9d5ff" },
-  deputation: { label: "Deputation", color: "#475569", bg: "#e2e8f0" },
+  regular:       { label: "Regular",       color: "#1e40af", bg: "#dbeafe" },
+  internship:    { label: "Internship",    color: "#7c2d12", bg: "#fed7aa" },
+  apprenticeship:{ label: "Apprenticeship",color: "#166534", bg: "#bbf7d0" },
+  volunteership: { label: "Volunteer",     color: "#0e7490", bg: "#cffafe" },
+  contractual:   { label: "Contractual",   color: "#6b21a8", bg: "#e9d5ff" },
+  deputation:    { label: "Deputation",    color: "#475569", bg: "#e2e8f0" },
 };
+
+const TYPE_FILTER_OPTIONS = [
+  { value: "", label: "All openings" },
+  { value: "regular", label: "Regular" },
+  { value: "internship", label: "Internship" },
+  { value: "apprenticeship", label: "Apprenticeship" },
+  { value: "volunteership", label: "Volunteer" },
+];
 
 async function getVacancies(): Promise<Vacancy[]> {
   const base = (process.env.CIVITASONE_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
@@ -47,22 +56,56 @@ async function getVacancies(): Promise<Vacancy[]> {
   }
 }
 
-export default async function CareersPage() {
-  const vacancies = await getVacancies();
+export default async function CareersPage({ searchParams }: { searchParams: { type?: string } }) {
+  const allVacancies = await getVacancies();
+  const activeType = searchParams.type ?? "";
+  const vacancies = activeType
+    ? allVacancies.filter((v) => v.vacancyType === activeType)
+    : allVacancies;
 
   return (
     <main style={{ minHeight: "100vh", background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 40%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       {/* Hero */}
-      <header style={{ textAlign: "center", padding: "56px 24px 40px", maxWidth: 800, margin: "0 auto" }}>
+      <header style={{ textAlign: "center", padding: "56px 24px 32px", maxWidth: 800, margin: "0 auto" }}>
         <div style={{ fontSize: 36, marginBottom: 8 }} aria-hidden="true">◈</div>
         <h1 style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", margin: "0 0 12px", letterSpacing: "-0.5px" }}>
           Join Our Team
         </h1>
         <p style={{ fontSize: 17, color: "#475569", lineHeight: 1.6, margin: 0, maxWidth: 600, marginInline: "auto" }}>
-          Browse current openings for regular positions, internships, and apprenticeships.
+          Browse current openings for regular positions, internships, apprenticeships, and volunteer roles.
           Apply online — no account needed.
         </p>
       </header>
+
+      {/* Type filter tabs */}
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 20px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }} role="navigation" aria-label="Filter by vacancy type">
+          {TYPE_FILTER_OPTIONS.map((opt) => {
+            const isActive = activeType === opt.value;
+            return (
+              <a
+                key={opt.value}
+                href={opt.value ? `/careers?type=${opt.value}` : "/careers"}
+                style={{
+                  padding: "7px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, textDecoration: "none",
+                  background: isActive ? "#154089" : "#fff",
+                  color: isActive ? "#fff" : "#475569",
+                  border: `1px solid ${isActive ? "#154089" : "#cbd5e1"}`,
+                  transition: "all 0.15s",
+                }}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {opt.label}
+                {opt.value && allVacancies.filter((v) => v.vacancyType === opt.value).length > 0 && (
+                  <span style={{ marginLeft: 6, opacity: 0.7, fontSize: 11 }}>
+                    {allVacancies.filter((v) => v.vacancyType === opt.value).length}
+                  </span>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Vacancies */}
       <section style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 64px" }} aria-label="Open positions">

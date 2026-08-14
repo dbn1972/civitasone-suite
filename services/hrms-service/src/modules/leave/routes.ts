@@ -181,8 +181,8 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       const data = await queries.getLeaveApplicationsByEmp(ctx.tenantId, q.empId);
       return reply.send({ data, meta: { page: 1, pageSize: q.limit, total: data.length } });
     }
-    const result = await queries.listLeaveApplications(ctx.tenantId, q.limit);
-    return reply.send({ data: result.data, meta: { page: 1, pageSize: q.limit, total: result.data.length } });
+    const result = await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset);
+    return reply.send({ data: result.data, meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, offset: q.offset, hasMore: result.data.length === q.limit } });
   });
 
   app.get("/v1/hrms/leave-applications", async (req, reply) => {
@@ -193,14 +193,14 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       sendValidated(reply, leaveListResponseSchema, { data: await queries.getLeaveApplicationsByEmp(ctx.tenantId, q.empId) });
       return;
     }
-    sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplications(ctx.tenantId, q.limit));
+    sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, LeaveRequestDetailListSchema, await queries.listLeaveRequestDetails(ctx.tenantId, q.limit));
+    sendValidated(reply, LeaveRequestDetailListSchema, await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset));
   });
 
   app.setErrorHandler(errorHandler);

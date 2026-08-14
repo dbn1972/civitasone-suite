@@ -55,8 +55,9 @@ const FORM_STYLES = `
   .devlogin-btn:focus-visible { outline: 2px solid #1e1b4b; outline-offset: 2px; }
 `;
 
-export default function DevLoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default function DevLoginPage({ searchParams }: { searchParams: { error?: string; next?: string } }) {
   if (!isDevLoginEnabled()) notFound();
+  const next = searchParams?.next ?? "";
   return (
     <main style={wrap}>
       <style>{FORM_STYLES}</style>
@@ -70,15 +71,17 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
         ) : null}
 
         <form method="POST" action="/api/auth/dev-login">
+          {next && <input type="hidden" name="next" value={next} />}
+
           <label htmlFor="username" style={label}>Username</label>
           <input id="username" name="username" autoComplete="username" required
-            placeholder="superadmin" className="devlogin-input" />
+            placeholder="dnayak" className="devlogin-input" />
 
           <label htmlFor="password" style={label}>Password</label>
           <input id="password" name="password" type="password" autoComplete="current-password" required
             placeholder="••••••••" className="devlogin-input" />
 
-          <label htmlFor="tenant" style={label}>Office ID <span style={{ fontWeight: 400, color: "#94a3b8" }}>(optional — for a specific test office)</span></label>
+          <label htmlFor="tenant" style={label}>Office ID <span style={{ fontWeight: 400, color: "#94a3b8" }}>(optional)</span></label>
           <input id="tenant" name="tenant" autoComplete="off"
             placeholder="leave blank for the default office" className="devlogin-input" />
 
@@ -87,7 +90,9 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
 
         <div style={hint}>
           <div style={hintTitle}>Demo accounts — password <code style={userTag}>{process.env.DEV_LOGIN_PASSWORD ?? "(set DEV_LOGIN_PASSWORD)"}</code></div>
+          <div style={row}><span style={userTag}>dnayak</span><span>D. Nayak — HR Admin (Digital India)</span></div>
           <div style={row}><span style={userTag}>superadmin</span><span>Full access · all modules</span></div>
+          <div style={row}><span style={userTag}>hrofficer</span><span>HR / Establishment Officer</span></div>
           <div style={row}><span style={userTag}>officer</span><span>Finance · HR · Procurement</span></div>
           <div style={row}><span style={userTag}>auditor</span><span>Audit · Legal</span></div>
         </div>

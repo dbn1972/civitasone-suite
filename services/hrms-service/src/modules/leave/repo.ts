@@ -38,10 +38,10 @@ export async function findLeaveAppsByEmp(tenantId: string, employeeId: string, l
     .limit(limit));
 }
 
-export async function findLeaveAppsByTenant(tenantId: string, limit = 100): Promise<LeaveAppRow[]> {
+export async function findLeaveAppsByTenant(tenantId: string, limit = 100, offset = 0): Promise<LeaveAppRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(eq(hrmsLeaveApps.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit).offset(offset));
 }
 
 export async function listLeaveTypesByTenant(tenantId: string, limit = 100): Promise<Array<typeof hrmsLeaveTypes.$inferSelect>> {

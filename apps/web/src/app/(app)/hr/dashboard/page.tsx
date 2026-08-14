@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { getHRDashboard, getEmployees, getDashboardLeaveInbox, getMyProfile } from "../../../_data/loaders";
+import { getHRDashboard, getEmployees, getDashboardLeaveInbox } from "../../../_data/loaders";
+import { getSessionName } from "../../../../lib/auth/roleGuard";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { ActionInbox } from "./_components/ActionInbox";
@@ -41,17 +42,15 @@ function statusLabel(s: string) {
 }
 
 export default async function HRDashboardPage() {
-  const [dashResult, empResult, inboxResult, profileResult] = await Promise.all([
+  const [dashResult, empResult, inboxResult] = await Promise.all([
     getHRDashboard(),
     getEmployees(8),
     getDashboardLeaveInbox(),
-    getMyProfile(),
   ]);
 
   const { data, source } = dashResult;
   const employees = empResult.data as EmpRow[];
   const leaveInbox = inboxResult.data;
-  const profile = profileResult.data;
 
   const anyError = source === "error" || empResult.source === "error";
   const onLeaveCount = data.onLeave;
@@ -62,7 +61,8 @@ export default async function HRDashboardPage() {
 
   const daysLeft = payrollDaysLeft();
   const { today, dayName, monthName } = formatToday();
-  const userName = profile ? profile.name.split(" ")[0] : "there";
+  const sessionName = getSessionName();
+  const userName = sessionName ? sessionName.split(" ")[0] : "there";
 
   const recentEmployees = employees;
 
@@ -171,11 +171,11 @@ export default async function HRDashboardPage() {
         .emp-section { margin:0 24px 32px; }
         @media (max-width:900px) { .emp-section { margin:0 16px 24px; } }
         .emp-section-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
-        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#64748b); }
+        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#475569; }
         .emp-view-all { font-size:11px;color:#2563eb;font-weight:600;text-decoration:none; }
         .emp-table-wrap { background:var(--surface,#fff);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
         .emp-table { width:100%;border-collapse:collapse;font-size:12px; }
-        .emp-table th { text-align:left;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted,#64748b);border-bottom:1px solid var(--border,#e2e8f0);background:var(--slate-100,#f1f5f9);white-space:nowrap; }
+        .emp-table th { text-align:left;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#334155;border-bottom:1px solid var(--border,#e2e8f0);background:var(--slate-100,#f1f5f9);white-space:nowrap; }
         .emp-table td { padding:10px 14px;border-bottom:1px solid var(--border,#e2e8f0);vertical-align:middle; }
         .emp-table tr:last-child td { border-bottom:none; }
         .emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }

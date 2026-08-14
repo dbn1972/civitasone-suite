@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const VACANCY_TYPES = ["regular", "internship", "apprenticeship", "contractual", "deputation"] as const;
+export const VACANCY_TYPES = ["regular", "internship", "apprenticeship", "volunteership", "contractual", "deputation"] as const;
 export type VacancyType = typeof VACANCY_TYPES[number];
 
 export const createJobOpeningBody = z.object({
@@ -41,8 +41,34 @@ export const publicApplicationBody = z.object({
   qualification:   z.string().max(500).optional(),
   experienceYears: z.number().int().nonnegative().optional(),
   skills:          z.array(z.string().max(64)).max(20).optional(),
+  // Internship-specific
+  institutionName:          z.string().max(200).optional(),
+  graduationYear:           z.number().int().min(1990).max(2040).optional(),
+  semester:                 z.string().max(20).optional(),
+  stipendExpectedMinor:     z.number().int().nonnegative().optional(),
+  // Apprenticeship-specific
+  tradeCategory:            z.string().max(100).optional(),
+  itiCertNo:                z.string().max(80).optional(),
+  // Volunteership-specific
+  availabilityHoursPerWeek: z.number().int().min(1).max(168).optional(),
 });
 export type PublicApplicationBody = z.infer<typeof publicApplicationBody>;
+
+export const createJdTemplateBody = z.object({
+  name:             z.string().min(1).max(200),
+  vacancyType:      z.enum(VACANCY_TYPES).default("regular"),
+  description:      z.string().max(5000).optional(),
+  qualification:    z.string().max(500).optional(),
+  payRange:         z.string().max(120).optional(),
+  selectionProcess: z.string().max(3000).optional(),
+  requiredDocuments: z.array(z.string().max(200)).max(30).optional(),
+  eligibility:      z.record(z.unknown()).optional(),
+  tags:             z.array(z.string().max(60)).max(10).optional(),
+});
+export type CreateJdTemplateBody = z.infer<typeof createJdTemplateBody>;
+
+export const updateJdTemplateBody = createJdTemplateBody.partial();
+export type UpdateJdTemplateBody = z.infer<typeof updateJdTemplateBody>;
 
 export const offerApplicationBody = z.object({
   ctcMinor:    z.number().int().positive(),

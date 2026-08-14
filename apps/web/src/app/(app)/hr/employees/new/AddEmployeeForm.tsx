@@ -1,43 +1,30 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Fragment } from "react";
+import Link from "next/link";
 
-interface Dept {
-  id: string;
-  code: string;
-  name: string;
-}
-
-interface Desig {
-  id: string;
-  code: string;
-  name: string;
-}
+type Dept = { id: string; name: string };
+type Desig = { id: string; name: string };
+type EmpSummary = { id: string; name: string; designationName?: string };
 
 interface Props {
   departments: Dept[];
   designations: Desig[];
+  managers: EmpSummary[];
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^[6-9]\d{9}$/;
+const ACCENT = "#047857";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "10px 12px",
   fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
   background: "#fff",
   color: "#0f172a",
   minHeight: 44,
-};
-
-const inputErrStyle: React.CSSProperties = {
-  ...inputStyle,
-  border: "1px solid #ef4444",
 };
 
 const labelStyle: React.CSSProperties = {
@@ -46,152 +33,151 @@ const labelStyle: React.CSSProperties = {
   color: "#0f172a",
 };
 
-const fieldErrStyle: React.CSSProperties = {
-  color: "#b91c1c",
-  fontSize: 12,
-  margin: "3px 0 0",
-  padding: 0,
+const fieldWrap: React.CSSProperties = { display: "grid", gap: 6 };
+
+const grid2: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 1fr)",
+  gap: "16px 24px",
 };
 
-const EMPLOYEE_TYPES = [
-  { value: "permanent",   label: "Permanent" },
-  { value: "temporary",   label: "Temporary" },
-  { value: "contract",    label: "Contract" },
-  { value: "deputation",  label: "Deputation" },
-  { value: "intern",      label: "Intern" },
-  { value: "apprentice",  label: "Apprentice" },
-  { value: "volunteer",   label: "Volunteer" },
+const cardStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  padding: 24,
+};
+
+const primaryBtn: React.CSSProperties = {
+  padding: "10px 22px",
+  background: ACCENT,
+  color: "#fff",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  minHeight: 44,
+};
+
+const ghostBtn: React.CSSProperties = {
+  padding: "10px 22px",
+  background: "transparent",
+  color: "#475569",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  fontSize: 14,
+  fontWeight: 500,
+  cursor: "pointer",
+  minHeight: 44,
+};
+
+type FormData = {
+  // Step 1
+  fullName: string;
+  dateOfBirth: string;
+  gender: "male" | "female" | "other" | "";
+  category: "UR" | "SC" | "ST" | "OBC" | "EWS" | "";
+  disability: boolean;
+  mobile: string;
+  email: string;
+  // Step 2
+  employeeNo: string;
+  departmentId: string;
+  designationId: string;
+  dateOfJoining: string;
+  station: string;
+  managerId: string;
+  employeeType: "permanent" | "contractual" | "deputation" | "apprentice";
+  // Step 3
+  pan: string;
+  aadhaarRef: string;
+  pran: string;
+  bankAccountNo: string;
+  bankIfsc: string;
+};
+
+const INIT: FormData = {
+  fullName: "",
+  dateOfBirth: "",
+  gender: "",
+  category: "",
+  disability: false,
+  mobile: "",
+  email: "",
+  employeeNo: "",
+  departmentId: "",
+  designationId: "",
+  dateOfJoining: "",
+  station: "",
+  managerId: "",
+  employeeType: "permanent",
+  pan: "",
+  aadhaarRef: "",
+  pran: "",
+  bankAccountNo: "",
+  bankIfsc: "",
+};
+
+const STEP_LABELS = [
+  "Identity & Personal",
+  "Job & Organisation",
+  "Statutory & Finance",
 ];
 
-export function AddEmployeeForm({ departments, designations }: Props) {
-  const formId = useId();
-  const router = useRouter();
-  const photoRef = useRef<HTMLInputElement>(null);
+const STRING_KEYS: (keyof FormData)[] = [
+  "fullName", "dateOfBirth", "gender", "category", "mobile", "email",
+  "employeeNo", "departmentId", "designationId", "dateOfJoining",
+  "station", "managerId", "employeeType",
+  "pan", "aadhaarRef", "pran", "bankAccountNo", "bankIfsc",
+];
 
-  const [employeeNo, setEmployeeNo] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [departmentId, setDepartmentId] = useState("");
-  const [designationId, setDesignationId] = useState("");
-  const [dateOfJoining, setDateOfJoining] = useState("");
-  const [gender, setGender] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [employeeType, setEmployeeType] = useState("permanent");
-  const [photo, setPhoto] = useState<string | null>(null);
+export function AddEmployeeForm({ departments, designations, managers }: Props) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [form, setForm] = useState<FormData>(INIT);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ id: string } | null>(null);
 
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [invalid, setInvalid] = useState<Set<string>>(new Set());
-  const [submitted, setSubmitted] = useState(false);
-
-  // Statutory & financial fields
-  const [pan, setPan] = useState("");
-  const [bankAccountNo, setBankAccountNo] = useState("");
-  const [bankIfsc, setBankIfsc] = useState("");
-  const [uanNumber, setUanNumber] = useState("");
-  const [esicIpNumber, setEsicIpNumber] = useState("");
-  const [pran, setPran] = useState("");
-
-  const ids = {
-    employeeNo: `${formId}-employeeNo`,
-    fullName: `${formId}-fullName`,
-    departmentId: `${formId}-departmentId`,
-    designationId: `${formId}-designationId`,
-    dateOfJoining: `${formId}-dateOfJoining`,
-    gender: `${formId}-gender`,
-    mobile: `${formId}-mobile`,
-    email: `${formId}-email`,
-    employeeType: `${formId}-employeeType`,
-    status: `${formId}-status`,
-    pan: `${formId}-pan`,
-    bankAccountNo: `${formId}-bankAccountNo`,
-    bankIfsc: `${formId}-bankIfsc`,
-    uanNumber: `${formId}-uanNumber`,
-    esicIpNumber: `${formId}-esicIpNumber`,
-    pran: `${formId}-pran`,
-  };
-
-  function fld(key: string): React.CSSProperties {
-    return invalid.has(key) ? inputErrStyle : inputStyle;
+  function update<K extends keyof FormData>(key: K, value: FormData[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setMessage("Only image files (JPG, PNG, WEBP) are allowed.");
-      if (photoRef.current) photoRef.current.value = "";
-      return;
+  function validate(): string | null {
+    if (step === 1 && !form.fullName.trim()) return "Full Name is required.";
+    if (step === 2) {
+      if (!form.employeeNo.trim()) return "Employee No is required.";
+      if (!form.departmentId) return "Department is required.";
+      if (!form.designationId) return "Designation is required.";
+      if (!form.dateOfJoining) return "Date of Joining is required.";
     }
-    if (file.size > 512 * 1024) {
-      setMessage("Photo must be under 500 KB. Please resize and try again.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_W = 200, MAX_H = 250;
-        let w = img.width, h = img.height;
-        if (w > MAX_W || h > MAX_H) {
-          const ratio = Math.min(MAX_W / w, MAX_H / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (ctx) ctx.drawImage(img, 0, 0, w, h);
-        setPhoto(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
+    return null;
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setMessage(null);
+  function handleNext() {
+    const err = validate();
+    if (err) { setError(err); return; }
+    setError(null);
+    setStep((s) => (s < 3 ? (s + 1) as 1 | 2 | 3 : s));
+  }
 
-    const errs = new Set<string>();
-    if (!employeeNo.trim()) errs.add("employeeNo");
-    if (!fullName.trim()) errs.add("fullName");
-    if (!departmentId) errs.add("departmentId");
-    if (!designationId) errs.add("designationId");
-    if (!dateOfJoining) errs.add("dateOfJoining");
-    if (!mobile.trim() || !PHONE_RE.test(mobile.trim())) errs.add("mobile");
-    if (!email.trim() || !EMAIL_RE.test(email.trim())) errs.add("email");
+  function handleBack() {
+    setError(null);
+    setStep((s) => (s > 1 ? (s - 1) as 1 | 2 | 3 : s));
+  }
 
-    if (errs.size > 0) {
-      setInvalid(errs);
-      setMessage("Please fix the highlighted fields.");
-      return;
+  async function handleSubmit() {
+    setError(null);
+    setSubmitting(true);
+
+    const body: Record<string, unknown> = {};
+    for (const k of STRING_KEYS) {
+      const v = form[k];
+      if (typeof v === "string" && v.trim() !== "") body[k] = v.trim();
     }
+    body.disability = form.disability;
 
-    setInvalid(new Set());
-    setBusy(true);
     try {
-      const body: Record<string, unknown> = {
-        employeeNo: employeeNo.trim(),
-        fullName: fullName.trim(),
-        departmentId,
-        designationId,
-        dateOfJoining,
-        employeeType: employeeType || "permanent",
-      };
-      if (gender) body.gender = gender;
-      body.mobile = mobile.trim();
-      body.email = email.trim();
-      if (photo) body.photoDataUrl = photo;
-      if (pan.trim()) body.pan = pan.trim().toUpperCase();
-      if (bankAccountNo.trim()) body.bankAccountNo = bankAccountNo.trim();
-      if (bankIfsc.trim()) body.bankIfsc = bankIfsc.trim().toUpperCase();
-      if (uanNumber.trim()) body.uanNumber = uanNumber.trim();
-      if (esicIpNumber.trim()) body.esicIpNumber = esicIpNumber.trim();
-      if (pran.trim()) body.pran = pran.trim();
-
       const res = await fetch("/api/proxy/v1/hrms/employees", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -199,412 +185,554 @@ export function AddEmployeeForm({ departments, designations }: Props) {
       });
 
       if (!res.ok) {
-        let detail = "";
+        let msg = `Request failed (${res.status})`;
         try {
-          const json: unknown = await res.json();
-          if (
-            typeof json === "object" &&
-            json !== null &&
-            "message" in json
-          ) {
-            detail = String((json as Record<string, unknown>).message);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const j = await res.json();
+          if (typeof j === "object" && j !== null && "message" in j) {
+            msg = String((j as Record<string, unknown>).message);
           }
         } catch {
-          // ignore
+          // ignore parse errors
         }
-        throw new Error(detail || `Failed (${res.status})`);
+        throw new Error(msg);
       }
 
-      router.refresh();
-      setSubmitted(true);
-      setTimeout(() => { router.push("/hr/employees"); }, 1500);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const result = await res.json();
+      const id =
+        typeof result === "object" &&
+        result !== null &&
+        "id" in result &&
+        typeof (result as Record<string, unknown>).id === "string"
+          ? (result as Record<string, unknown>).id as string
+          : "unknown";
+      setSuccess({ id });
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Network error. Please try again."
-      );
+      setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   }
 
-  return (
-    <form
-      onSubmit={(e) => {
-        void handleSubmit(e);
-      }}
-      aria-label="Add employee"
-      noValidate
-      className="card"
-      style={{ marginTop: 16 }}
-    >
-      <div className="card-h">
-        <h3>Employee Details</h3>
+  if (success) {
+    return (
+      <div
+        style={{
+          padding: 24,
+          background: "#dcfce7",
+          border: "1px solid #86efac",
+          borderRadius: 8,
+          color: "#166534",
+          maxWidth: 520,
+        }}
+      >
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>
+          Employee created successfully!
+        </p>
+        <p style={{ margin: "8px 0 16px", fontSize: 14 }}>
+          Employee ID: <strong>{success.id}</strong>
+        </p>
+        <Link
+          href="/hr/employees"
+          style={{ color: ACCENT, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+        >
+          ← View Employee Directory
+        </Link>
       </div>
-      <div className="pad" style={{ display: "grid", gap: 20 }}>
-        <div aria-live="polite" aria-atomic="true" id={ids.status}>
-          {message && (
-            <p
-              role="alert"
-              style={{
-                margin: 0,
-                padding: "10px 14px",
-                borderRadius: 8,
-                fontSize: 14,
-                background: "#fee2e2",
-                border: "1px solid #fca5a5",
-                color: "#b91c1c",
-              }}
-            >
-              ⚠️ {message}
-            </p>
-          )}
-        </div>
+    );
+  }
 
-        {submitted && <div style={{padding:"12px 16px", background:"#dcfce7", border:"1px solid #86efac", borderRadius:10, color:"#166534", marginBottom:16}}>Employee added successfully. Redirecting…</div>}
+  return (
+    <div style={{ maxWidth: 820 }}>
+      {/* Page heading */}
+      <div style={{ marginBottom: 24 }}>
+        <h1
+          id="page-heading"
+          style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", margin: 0 }}
+        >
+          Add New Employee
+        </h1>
+        <p style={{ fontSize: 14, color: "#64748b", margin: "4px 0 0" }}>
+          Complete all steps to create a new employee record.
+        </p>
+      </div>
 
-        {/* Photo upload */}
-        <div style={{ display: "grid", gap: 6 }}>
-          <label style={labelStyle}>Employee Photo</label>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-            <div
-              onClick={() => photoRef.current?.click()}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") photoRef.current?.click(); }}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload employee photo"
-              style={{
-                width: "clamp(64px, 22vw, 90px)",
-                aspectRatio: "9 / 11",
-                height: "auto",
-                border: photo ? "2px solid var(--primary, #0e9f6e)" : "2px dashed var(--line, #cbd5e1)",
-                borderRadius: 8,
-                background: photo ? "transparent" : "#f8fafc",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                overflow: "hidden",
-                flexShrink: 0,
-              }}
-            >
-              {photo ? (
-                <img src={photo} alt="Employee photo preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 11, padding: 6, lineHeight: 1.4 }}>
-                  <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
-                  <div>Click to upload</div>
-                  <div style={{ fontSize: 10, marginTop: 2, color: "#cbd5e1" }}>JPG / PNG</div>
-                  <div style={{ fontSize: 10, color: "#cbd5e1" }}>max 500 KB</div>
-                </div>
-              )}
-            </div>
-            <input
-              ref={photoRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handlePhotoChange}
-            />
-            {photo && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPhoto(null);
-                  if (photoRef.current) photoRef.current.value = "";
+      {/* Step bar */}
+      <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 28 }}>
+        {STEP_LABELS.map((label, i) => {
+          const n = (i + 1) as 1 | 2 | 3;
+          const done = n < step;
+          const active = n === step;
+          return (
+            <Fragment key={n}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                  minWidth: 90,
                 }}
-                style={{ fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}
               >
-                Remove photo
-              </button>
-            )}
-          </div>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: done || active ? ACCENT : "transparent",
+                    border: `2px solid ${done || active ? ACCENT : "#cbd5e1"}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: done || active ? "#fff" : "#94a3b8",
+                    fontSize: done ? 16 : 13,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {done ? "✓" : n}
+                </div>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: active ? 600 : 400,
+                    color: active ? ACCENT : "#64748b",
+                    textAlign: "center",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+              {i < 2 && (
+                <div
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    background: n < step ? ACCENT : "#e2e8f0",
+                    marginTop: 15,
+                    minWidth: 16,
+                  }}
+                />
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+
+      {/* Inline error */}
+      {error && (
+        <div
+          role="alert"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            borderRadius: 8,
+            fontSize: 14,
+            background: "#fee2e2",
+            border: "1px solid #fca5a5",
+            color: "#b91c1c",
+          }}
+        >
+          {error}
         </div>
+      )}
 
-        {/* Row 1: Employee No + Full Name */}
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.employeeNo} style={labelStyle}>
-              Employee No{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
-            </label>
-            <input
-              id={ids.employeeNo}
-              type="text"
-              value={employeeNo}
-              onChange={(e) => setEmployeeNo(e.target.value)}
-              placeholder="EMP-001"
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("employeeNo")}
-              aria-describedby={invalid.has("employeeNo") ? `${ids.employeeNo}-err` : undefined}
-              style={fld("employeeNo")}
-            />
-            {invalid.has("employeeNo") && (
-              <p id={`${ids.employeeNo}-err`} role="alert" style={fieldErrStyle}>Employee number is required.</p>
-            )}
-          </div>
+      {/* Step card */}
+      <div style={cardStyle}>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.fullName} style={labelStyle}>
-              Full Name{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
-            </label>
-            <input
-              id={ids.fullName}
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Ravi Kumar Sharma"
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("fullName")}
-              aria-describedby={invalid.has("fullName") ? `${ids.fullName}-err` : undefined}
-              style={fld("fullName")}
-            />
-            {invalid.has("fullName") && (
-              <p id={`${ids.fullName}-err`} role="alert" style={fieldErrStyle}>Full name is required.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Department + Designation */}
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.departmentId} style={labelStyle}>
-              Department{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
-            </label>
-            <select
-              id={ids.departmentId}
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("departmentId")}
-              aria-describedby={invalid.has("departmentId") ? `${ids.departmentId}-err` : undefined}
-              style={fld("departmentId")}
+        {/* ── Step 1: Identity & Personal ─────────────────────────────── */}
+        {step === 1 && (
+          <>
+            <h2
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#0f172a",
+                marginTop: 0,
+                marginBottom: 20,
+              }}
             >
-              <option value="">— Select department —</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.code} – {d.name}
-                </option>
-              ))}
-            </select>
-            {invalid.has("departmentId") && (
-              <p id={`${ids.departmentId}-err`} role="alert" style={fieldErrStyle}>Please select a department.</p>
-            )}
-          </div>
+              Step 1 — Identity &amp; Personal
+            </h2>
+            <div style={grid2}>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-fullName" style={labelStyle}>
+                  Full Name <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  id="ne-fullName"
+                  type="text"
+                  value={form.fullName}
+                  onChange={(e) => update("fullName", e.target.value)}
+                  placeholder="e.g. Priya Sharma"
+                  autoComplete="name"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-dob" style={labelStyle}>
+                  Date of Birth
+                </label>
+                <input
+                  id="ne-dob"
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(e) => update("dateOfBirth", e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-gender" style={labelStyle}>
+                  Gender
+                </label>
+                <select
+                  id="ne-gender"
+                  value={form.gender}
+                  onChange={(e) =>
+                    update("gender", e.target.value as FormData["gender"])
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-category" style={labelStyle}>
+                  Reservation Category
+                </label>
+                <select
+                  id="ne-category"
+                  value={form.category}
+                  onChange={(e) =>
+                    update("category", e.target.value as FormData["category"])
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">Select category</option>
+                  <option value="UR">UR</option>
+                  <option value="SC">SC</option>
+                  <option value="ST">ST</option>
+                  <option value="OBC">OBC</option>
+                  <option value="EWS">EWS</option>
+                </select>
+              </div>
+              <div style={{ ...fieldWrap, gridColumn: "span 2" }}>
+                <label
+                  htmlFor="ne-disability"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#0f172a",
+                  }}
+                >
+                  <input
+                    id="ne-disability"
+                    type="checkbox"
+                    checked={form.disability}
+                    onChange={(e) => update("disability", e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0 }}
+                  />
+                  PwBD — Persons with Benchmark Disability
+                </label>
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-email" style={labelStyle}>
+                  Official Email
+                </label>
+                <input
+                  id="ne-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => update("email", e.target.value)}
+                  placeholder="employee@gov.in"
+                  autoComplete="email"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-mobile" style={labelStyle}>
+                  Mobile
+                </label>
+                <input
+                  id="ne-mobile"
+                  type="tel"
+                  value={form.mobile}
+                  onChange={(e) => update("mobile", e.target.value)}
+                  placeholder="+91 98765 43210"
+                  autoComplete="tel"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.designationId} style={labelStyle}>
-              Designation{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
-            </label>
-            <select
-              id={ids.designationId}
-              value={designationId}
-              onChange={(e) => setDesignationId(e.target.value)}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("designationId")}
-              aria-describedby={invalid.has("designationId") ? `${ids.designationId}-err` : undefined}
-              style={fld("designationId")}
+        {/* ── Step 2: Job & Organisation ──────────────────────────────── */}
+        {step === 2 && (
+          <>
+            <h2
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#0f172a",
+                marginTop: 0,
+                marginBottom: 20,
+              }}
             >
-              <option value="">— Select designation —</option>
-              {designations.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.code} – {d.name}
-                </option>
-              ))}
-            </select>
-            {invalid.has("designationId") && (
-              <p id={`${ids.designationId}-err`} role="alert" style={fieldErrStyle}>Please select a designation.</p>
-            )}
-          </div>
-        </div>
+              Step 2 — Job &amp; Organisation
+            </h2>
+            <div style={grid2}>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-empNo" style={labelStyle}>
+                  Employee No <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  id="ne-empNo"
+                  type="text"
+                  value={form.employeeNo}
+                  onChange={(e) => update("employeeNo", e.target.value)}
+                  placeholder="e.g. NIC/2026/0001"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-dept" style={labelStyle}>
+                  Department <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <select
+                  id="ne-dept"
+                  value={form.departmentId}
+                  onChange={(e) => update("departmentId", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Select department</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-desig" style={labelStyle}>
+                  Designation <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <select
+                  id="ne-desig"
+                  value={form.designationId}
+                  onChange={(e) => update("designationId", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Select designation</option>
+                  {designations.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-doj" style={labelStyle}>
+                  Date of Joining <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  id="ne-doj"
+                  type="date"
+                  value={form.dateOfJoining}
+                  onChange={(e) => update("dateOfJoining", e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-station" style={labelStyle}>
+                  Station / Office Location
+                </label>
+                <input
+                  id="ne-station"
+                  type="text"
+                  value={form.station}
+                  onChange={(e) => update("station", e.target.value)}
+                  placeholder="e.g. CGO Complex, New Delhi"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-manager" style={labelStyle}>
+                  Reporting Manager
+                </label>
+                <select
+                  id="ne-manager"
+                  value={form.managerId}
+                  onChange={(e) => update("managerId", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Select manager</option>
+                  {managers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ ...fieldWrap, gridColumn: "span 2" }}>
+                <label htmlFor="ne-empType" style={labelStyle}>
+                  Employee Type
+                </label>
+                <select
+                  id="ne-empType"
+                  value={form.employeeType}
+                  onChange={(e) =>
+                    update(
+                      "employeeType",
+                      e.target.value as FormData["employeeType"],
+                    )
+                  }
+                  style={{ ...inputStyle, maxWidth: 300 }}
+                >
+                  <option value="permanent">Permanent</option>
+                  <option value="contractual">Contractual</option>
+                  <option value="deputation">Deputation</option>
+                  <option value="apprentice">Apprentice</option>
+                </select>
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Row 3: Date of Joining + Type of Employee */}
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.dateOfJoining} style={labelStyle}>
-              Date of Joining{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>*</span>
-            </label>
-            <input
-              id={ids.dateOfJoining}
-              type="date"
-              value={dateOfJoining}
-              onChange={(e) => setDateOfJoining(e.target.value)}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("dateOfJoining")}
-              aria-describedby={invalid.has("dateOfJoining") ? `${ids.dateOfJoining}-err` : undefined}
-              style={fld("dateOfJoining")}
-            />
-            {invalid.has("dateOfJoining") && (
-              <p id={`${ids.dateOfJoining}-err`} role="alert" style={fieldErrStyle}>Date of joining is required.</p>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.employeeType} style={labelStyle}>
-              Type of Employee
-            </label>
-            <select
-              id={ids.employeeType}
-              value={employeeType}
-              onChange={(e) => setEmployeeType(e.target.value)}
-              style={inputStyle}
+        {/* ── Step 3: Statutory & Finance ─────────────────────────────── */}
+        {step === 3 && (
+          <>
+            <h2
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#0f172a",
+                marginTop: 0,
+                marginBottom: 20,
+              }}
             >
-              {EMPLOYEE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Row 4: Gender + Mobile + Email */}
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.gender} style={labelStyle}>
-              Gender
-            </label>
-            <select
-              id={ids.gender}
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">— Not specified —</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.mobile} style={labelStyle}>
-              Mobile <span aria-hidden="true" style={{color:"#b91c1c"}}>*</span>
-            </label>
-            <input
-              id={ids.mobile}
-              type="tel"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              placeholder="9876543210"
-              autoComplete="tel"
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("mobile")}
-              aria-describedby={invalid.has("mobile") ? `${ids.mobile}-err` : undefined}
-              style={fld("mobile")}
-            />
-            {invalid.has("mobile") && (
-              <p id={`${ids.mobile}-err`} role="alert" style={fieldErrStyle}>Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.</p>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.email} style={labelStyle}>
-              Email <span aria-hidden="true" style={{color:"#b91c1c"}}>*</span>
-            </label>
-            <input
-              id={ids.email}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="employee@example.gov.in"
-              autoComplete="email"
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("email")}
-              aria-describedby={invalid.has("email") ? `${ids.email}-err` : undefined}
-              style={fld("email")}
-            />
-            {invalid.has("email") && (
-              <p id={`${ids.email}-err`} role="alert" style={fieldErrStyle}>Enter a valid email address.</p>
-            )}
-          </div>
-        </div>
-
-
-        {/* Statutory & Financial Details */}
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: "var(--ink1)" }}>
-            Statutory &amp; Financial Details
-          </h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.pan} style={labelStyle}>PAN Number</label>
-              <input id={ids.pan} type="text" value={pan}
-                onChange={(e) => setPan(e.target.value)}
-                placeholder="ABCDE1234F" maxLength={10}
-                style={inputStyle} autoComplete="off" />
+              Step 3 — Statutory &amp; Finance
+            </h2>
+            <div style={grid2}>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-pan" style={labelStyle}>
+                  PAN
+                </label>
+                <input
+                  id="ne-pan"
+                  type="password"
+                  autoComplete="off"
+                  value={form.pan}
+                  onChange={(e) => update("pan", e.target.value.toUpperCase())}
+                  placeholder="ABCDE1234F"
+                  maxLength={10}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-aadhaar" style={labelStyle}>
+                  Aadhaar Ref
+                </label>
+                <input
+                  id="ne-aadhaar"
+                  type="password"
+                  autoComplete="off"
+                  value={form.aadhaarRef}
+                  onChange={(e) => update("aadhaarRef", e.target.value)}
+                  placeholder="Masked reference only"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-pran" style={labelStyle}>
+                  PRAN / NPS ID
+                </label>
+                <input
+                  id="ne-pran"
+                  type="text"
+                  value={form.pran}
+                  onChange={(e) => update("pran", e.target.value)}
+                  placeholder="12-digit PRAN"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-bank" style={labelStyle}>
+                  Bank Account No
+                </label>
+                <input
+                  id="ne-bank"
+                  type="password"
+                  autoComplete="off"
+                  value={form.bankAccountNo}
+                  onChange={(e) => update("bankAccountNo", e.target.value)}
+                  placeholder="Account number"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={fieldWrap}>
+                <label htmlFor="ne-ifsc" style={labelStyle}>
+                  IFSC Code
+                </label>
+                <input
+                  id="ne-ifsc"
+                  type="text"
+                  value={form.bankIfsc}
+                  onChange={(e) => update("bankIfsc", e.target.value.toUpperCase())}
+                  placeholder="e.g. SBIN0001234"
+                  maxLength={11}
+                  style={inputStyle}
+                />
+              </div>
             </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankAccountNo} style={labelStyle}>Bank Account No.</label>
-              <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
-                onChange={(e) => setBankAccountNo(e.target.value)}
-                placeholder="e.g. 0012345678901"
-                style={inputStyle} autoComplete="off" />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankIfsc} style={labelStyle}>Bank IFSC Code</label>
-              <input id={ids.bankIfsc} type="text" value={bankIfsc}
-                onChange={(e) => setBankIfsc(e.target.value)}
-                placeholder="e.g. SBIN0001234" maxLength={11}
-                style={inputStyle} autoComplete="off" />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.uanNumber} style={labelStyle}>EPFO UAN Number</label>
-              <input id={ids.uanNumber} type="text" value={uanNumber}
-                onChange={(e) => setUanNumber(e.target.value)}
-                placeholder="12-digit UAN" maxLength={12}
-                style={inputStyle} autoComplete="off" />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.esicIpNumber} style={labelStyle}>ESIC IP Number</label>
-              <input id={ids.esicIpNumber} type="text" value={esicIpNumber}
-                onChange={(e) => setEsicIpNumber(e.target.value)}
-                placeholder="Employee ESIC insurance number"
-                style={inputStyle} autoComplete="off" />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.pran} style={labelStyle}>PRAN (NPS Account)</label>
-              <input id={ids.pran} type="text" value={pran}
-                onChange={(e) => setPran(e.target.value)}
-                placeholder="12-digit PRAN" maxLength={12}
-                style={inputStyle} autoComplete="off" />
-            </div>
-          </div>
-          <p style={{ fontSize: 12, color: "var(--ink3)", marginTop: 12 }}>
-            Required for salary disbursement and statutory compliance. Bank account and IFSC must be set before activating the employee.
-          </p>
-        </div>
+          </>
+        )}
+      </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="submit"
-            className="btn primary"
-            disabled={busy}
-            aria-busy={busy}
-            style={{ minHeight: 44, minWidth: 140 }}
-          >
-            {busy ? "Saving…" : "Add Employee"}
+      {/* Navigation buttons */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginTop: 20,
+          justifyContent: "flex-end",
+        }}
+      >
+        {step > 1 && (
+          <button type="button" onClick={handleBack} style={ghostBtn}>
+            ← Back
           </button>
+        )}
+        {step < 3 ? (
+          <button type="button" onClick={handleNext} style={primaryBtn}>
+            Next →
+          </button>
+        ) : (
           <button
             type="button"
-            className="btn"
-            onClick={() => { router.push("/hr/employees"); }}
-            disabled={busy}
-            style={{ minHeight: 44 }}
+            onClick={() => {
+              void handleSubmit();
+            }}
+            disabled={submitting}
+            aria-busy={submitting}
+            style={{
+              ...primaryBtn,
+              opacity: submitting ? 0.72 : 1,
+              cursor: submitting ? "wait" : "pointer",
+            }}
           >
-            Cancel
+            {submitting ? "Creating…" : "Create Employee Record"}
           </button>
-        </div>
+        )}
       </div>
-    </form>
+    </div>
   );
 }

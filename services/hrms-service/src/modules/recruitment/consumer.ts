@@ -6,6 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as templateRepo from "./jd-template-repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT = "audit.event.record";
@@ -23,7 +24,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         location: p.location ?? null,
         qualification: p.qualification ?? null,
         payRange: p.payRange ?? null,
-        isPublished: p.isPublished ?? false,
+        isPublished: p.isPublished ? "true" : "false",
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -32,9 +33,13 @@ export function registerRecruitmentConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string; qualification?: string; experienceYears?: number; skills?: string[]; source?: string };
+    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string; qualification?: string; experienceYears?: number; skills?: string[]; source?: string; institutionName?: string; graduationYear?: number; semester?: string; tradeCategory?: string; itiCertNo?: string; availabilityHoursPerWeek?: number; stipendExpectedMinor?: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Generate a short, human-readable application number.
+      const year = new Date().getFullYear();
+      const shortId = p.id.slice(-6).toUpperCase();
+      const applicationNo = `APP-${year}-${shortId}`;
       await repo.insertApplication(tx, {
         id: p.id, tenantId: p.tenantId, jobOpeningId: p.jobOpeningId,
         applicantName: p.applicantName, email: p.email ?? null,
@@ -43,9 +48,34 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         experienceYears: p.experienceYears ?? null,
         skills: p.skills ?? null,
         source: p.source ?? "internal",
+        applicationNo,
         stage: "applied", status: "active",
+        institutionName: p.institutionName ?? null,
+        graduationYear: p.graduationYear ?? null,
+        semester: p.semester ?? null,
+        tradeCategory: p.tradeCategory ?? null,
+        itiCertNo: p.itiCertNo ?? null,
+        availabilityHoursPerWeek: p.availabilityHoursPerWeek ?? null,
+        stipendExpectedMinor: p.stipendExpectedMinor != null ? BigInt(p.stipendExpectedMinor) : null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // Enqueue confirmation notification (email seam — picked up by notification service).
+      if (p.email && p.source === "public_portal") {
+        await enqueue(tx, {
+          topic: "hrms.candidate.application_confirmed",
+          eventType: "hrms.candidate.application_confirmed",
+          tenantId: p.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            applicationId: p.id,
+            applicationNo,
+            applicantName: p.applicantName,
+            email: p.email,
+            jobOpeningId: p.jobOpeningId,
+          },
+        });
+      }
       await audit(tx, msg, "create", "application", p.id);
     });
   });
@@ -154,6 +184,50 @@ export function registerRecruitmentConsumers(queue: Queue): void {
     // Invalidate caches
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
+  });
+
+  // JD Template create
+  queue.subscribe(COMMANDS.jdTemplateCreate, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; name: string; vacancyType?: string; description?: string; qualification?: string; payRange?: string; selectionProcess?: string; requiredDocuments?: string[]; eligibility?: Record<string, unknown>; tags?: string[] };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await templateRepo.insertTemplate(tx, {
+        id: p.id, tenantId: p.tenantId, name: p.name,
+        vacancyType: p.vacancyType ?? "regular",
+        description: p.description ?? null,
+        qualification: p.qualification ?? null,
+        payRange: p.payRange ?? null,
+        selectionProcess: p.selectionProcess ?? null,
+        requiredDocuments: p.requiredDocuments ?? [],
+        eligibility: p.eligibility ?? {},
+        tags: p.tags ?? null,
+        isArchived: false,
+        useCount: 0,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "create", "jd_template", p.id);
+    });
+  });
+
+  // JD Template update
+  queue.subscribe(COMMANDS.jdTemplateUpdate, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; [k: string]: unknown };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { id, tenantId: _t, ...patch } = p;
+      await templateRepo.updateTemplate(tx, id, { ...patch, updatedBy: msg.actorId } as any);
+      await audit(tx, msg, "update", "jd_template", id);
+    });
+  });
+
+  // JD Template archive
+  queue.subscribe(COMMANDS.jdTemplateArchive, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await templateRepo.updateTemplate(tx, p.id, { isArchived: true, updatedBy: msg.actorId });
+      await audit(tx, msg, "archive", "jd_template", p.id);
+    });
   });
 }
 

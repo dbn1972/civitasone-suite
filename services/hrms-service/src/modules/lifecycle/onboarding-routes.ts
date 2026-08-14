@@ -15,7 +15,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsOnboardingTasks, hrmsBuddyAssignments } from "./schema.js";
-import { hrmsEmployees } from "../employee/schema.js";
+import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -88,6 +88,12 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, empIds))));
 
     const empMap = new Map(employees.map((e) => [e.id, e]));
+    const deptIds = [...new Set(employees.map((e) => e.departmentId).filter(Boolean))] as string[];
+    const depts = deptIds.length > 0 ? await scopedRead((tx) => tx
+      .select({ id: hrmsDepartments.id, name: hrmsDepartments.name })
+      .from(hrmsDepartments)
+      .where(and(eq(hrmsDepartments.tenantId, ctx.tenantId), inArray(hrmsDepartments.id, deptIds)))) : [];
+    const deptMap = new Map(depts.map((d) => [d.id, d.name]));
     const grouped = new Map<string, typeof tasks>();
     for (const t of tasks) {
       if (!grouped.has(t.employeeId)) grouped.set(t.employeeId, []);
@@ -115,7 +121,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         id: empId,
         employee: emp?.fullName ?? "—",
         employeeNo: emp?.employeeNo ?? "—",
-        department: emp?.departmentId ?? "—",
+        department: emp?.departmentId ? (deptMap.get(emp.departmentId) ?? emp.departmentId) : "—",
         joiningDate: emp?.dateOfJoining ?? "—",
         stepsCompleted: `${completed}/${total}`,
         totalSteps: String(total),

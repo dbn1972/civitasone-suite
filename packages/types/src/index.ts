@@ -719,6 +719,7 @@ export type HRDashboard = {
   headcountLastMonth: number;
   attendanceTodayPct: number;
   pendingLeaves: number;
+  onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
 };

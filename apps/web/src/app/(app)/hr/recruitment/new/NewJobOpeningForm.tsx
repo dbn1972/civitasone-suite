@@ -1,44 +1,48 @@
 "use client";
 
-import { useId, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useId, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--ink2)",
-  marginBottom: 4,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  fontSize: 14,
-  border: "1.5px solid var(--line)",
-  borderRadius: "var(--r-sm)",
-  background: "var(--panel)",
-  color: "var(--ink)",
-  minHeight: 44,
-};
-
-const inputInvalidStyle: React.CSSProperties = {
-  ...inputStyle,
-  borderColor: "var(--bad)",
-};
+const VACANCY_TYPES = [
+  { value: "regular", label: "Regular Position" },
+  { value: "internship", label: "Internship" },
+  { value: "apprenticeship", label: "Apprenticeship" },
+  { value: "volunteership", label: "Volunteer Role" },
+  { value: "contractual", label: "Contractual" },
+  { value: "deputation", label: "Deputation" },
+];
 
 export function NewJobOpeningForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const templateId = searchParams.get("templateId");
 
   const [refNo, setRefNo] = useState("");
   const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [vacancies, setVacancies] = useState(1);
+  const [vacancyType, setVacancyType] = useState("regular");
   const [description, setDescription] = useState("");
   const [closesAt, setClosesAt] = useState("");
+  const [templateName, setTemplateName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!templateId) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/hrms/jd-templates/${templateId}`, {
+          headers: { "content-type": "application/json" },
+        });
+        if (!res.ok) return;
+        const tmpl = await res.json() as { name?: string; vacancyType?: string; description?: string; qualification?: string; payRange?: string };
+        if (tmpl.name) { setTitle(tmpl.name); setTemplateName(tmpl.name); }
+        if (tmpl.vacancyType) setVacancyType(tmpl.vacancyType);
+        if (tmpl.description) setDescription(tmpl.description);
+      } catch { /* ignore */ }
+    })();
+  }, [templateId]);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
@@ -97,6 +101,7 @@ export function NewJobOpeningForm() {
           title: title.trim(),
           departmentId: departmentId.trim(),
           vacancies,
+          vacancyType,
           description: description.trim() || undefined,
           closesAt: closesAt || undefined,
         }),
@@ -121,12 +126,18 @@ export function NewJobOpeningForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 640 }}
+      className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm max-w-2xl"
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
+      {templateName && (
+        <div style={{ padding: "10px 14px", background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "#1e40af" }}>
+          Pre-filled from template: <strong>{templateName}</strong>. You can edit any field before saving.
+        </div>
+      )}
+
       <div>
-        <label htmlFor={refNoId} style={labelStyle}>
+        <label htmlFor={refNoId} className="block text-sm font-medium text-slate-700 mb-1">
           Reference No <span aria-hidden="true">*</span>
         </label>
         <input
@@ -135,7 +146,7 @@ export function NewJobOpeningForm() {
           value={refNo}
           onChange={(e) => setRefNo(e.target.value)}
           placeholder="e.g. JOB-2024-0042"
-          style={invalidField === "refNo" ? inputInvalidStyle : inputStyle}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
           aria-required="true"
           aria-invalid={invalidField === "refNo"}
@@ -144,7 +155,7 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={titleId} style={labelStyle}>
+        <label htmlFor={titleId} className="block text-sm font-medium text-slate-700 mb-1">
           Title <span aria-hidden="true">*</span>
         </label>
         <input
@@ -153,7 +164,7 @@ export function NewJobOpeningForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Senior Software Engineer"
-          style={invalidField === "title" ? inputInvalidStyle : inputStyle}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
           aria-required="true"
           aria-invalid={invalidField === "title"}
@@ -161,7 +172,17 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={deptId} style={labelStyle}>
+        <label htmlFor="tpl-vtype" className="block text-sm font-medium text-slate-700 mb-1">
+          Vacancy type
+        </label>
+        <select id="tpl-vtype" value={vacancyType} onChange={(e) => setVacancyType(e.target.value)}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          {VACANCY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label htmlFor={deptId} className="block text-sm font-medium text-slate-700 mb-1">
           Department ID (UUID) <span aria-hidden="true">*</span>
         </label>
         <input
@@ -170,7 +191,7 @@ export function NewJobOpeningForm() {
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}
           placeholder="e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301"
-          style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
           aria-required="true"
           aria-invalid={invalidField === "departmentId"}
@@ -178,7 +199,7 @@ export function NewJobOpeningForm() {
       </div>
 
       <div>
-        <label htmlFor={vacanciesId} style={labelStyle}>
+        <label htmlFor={vacanciesId} className="block text-sm font-medium text-slate-700 mb-1">
           Vacancies
         </label>
         <input
@@ -187,14 +208,14 @@ export function NewJobOpeningForm() {
           min={1}
           value={vacancies}
           onChange={(e) => setVacancies(Number(e.target.value))}
-          style={invalidField === "vacancies" ? inputInvalidStyle : inputStyle}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
           aria-invalid={invalidField === "vacancies"}
         />
       </div>
 
       <div>
-        <label htmlFor={descId} style={labelStyle}>
+        <label htmlFor={descId} className="block text-sm font-medium text-slate-700 mb-1">
           Description
         </label>
         <textarea
@@ -203,12 +224,12 @@ export function NewJobOpeningForm() {
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
           placeholder="Job responsibilities, requirements, and qualifications"
-          style={{ ...inputStyle, resize: "none", minHeight: 96 }}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
         />
       </div>
 
       <div>
-        <label htmlFor={closesAtId} style={labelStyle}>
+        <label htmlFor={closesAtId} className="block text-sm font-medium text-slate-700 mb-1">
           Closing Date
         </label>
         <input
@@ -216,15 +237,14 @@ export function NewJobOpeningForm() {
           type="date"
           value={closesAt}
           onChange={(e) => setClosesAt(e.target.value)}
-          style={inputStyle}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
 
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="btn primary"
-        style={{ minHeight: 44, alignSelf: "flex-start" }}
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
       >
         {status === "submitting" ? "Creating…" : "Create Job Opening"}
       </button>
@@ -234,13 +254,9 @@ export function NewJobOpeningForm() {
           id={statusMsgId}
           role={status === "error" ? "alert" : "status"}
           aria-live={status === "error" ? "assertive" : "polite"}
-          style={{
-            fontSize: 14,
-            color: status === "error" ? "var(--bad)" : "var(--good)",
-            margin: 0,
-          }}
+          className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
         >
-          <strong>{status === "error" ? "Error: " : "Success: "}</strong>
+          <span className="font-semibold">{status === "error" ? "Error: " : "Success: "}</span>
           {message}
         </p>
       )}

@@ -19,7 +19,7 @@ const columns: {
     key: "employeeName",
     label: "Employee",
     render: (r) => (
-      <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }}>
+      <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
         {r.employeeName}
       </Link>
     ),
