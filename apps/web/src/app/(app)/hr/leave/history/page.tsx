@@ -20,9 +20,9 @@ type LeaveApp = {
 };
 
 const STATUS_CHIP: Record<string, { bg: string; color: string; label: string }> = {
-  pending:   { bg: "#fffbeb", color: "#b45309", label: "Pending" },
-  approved:  { bg: "#f0fdf4", color: "#166534", label: "Approved" },
-  rejected:  { bg: "#fef2f2", color: "var(--color-error-dark)", label: "Rejected" },
+  pending:   { bg: "var(--warnbg)", color: "var(--warn)", label: "Pending" },
+  approved:  { bg: "var(--goodbg)", color: "var(--good)", label: "Approved" },
+  rejected:  { bg: "var(--badbg)", color: "var(--bad)", label: "Rejected" },
   cancelled: { bg: "#f8fafc", color: "#64748b", label: "Cancelled" },
 };
 
@@ -104,10 +104,10 @@ export default function LeaveHistoryPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Applications" value={apps.length} />
-        <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Approved"           value={approved} />
-        <StatCard icon="\u23f3"       iconBg="#fffbe6" label="Pending"            value={pending} />
-        <StatCard icon="\u274c"       iconBg="#fff1f0" label="Rejected"           value={rejected} />
+        <StatCard icon="\U0001f4cb" iconBg="var(--infobg)" label="Total Applications" value={apps.length} />
+        <StatCard icon="\u2705"       iconBg="var(--goodbg)" label="Approved"           value={approved} />
+        <StatCard icon="\u23f3"       iconBg="var(--warnbg)" label="Pending"            value={pending} />
+        <StatCard icon="\u274c"       iconBg="var(--badbg)" label="Rejected"           value={rejected} />
       </StatGrid>
 
       <Card title="Select Employee">
@@ -141,7 +141,7 @@ export default function LeaveHistoryPage() {
       </Card>
 
       {cancelError && (
-        <p role="alert" style={{ color: "var(--color-error-dark)", fontSize: 14, fontWeight: 500 }}>{cancelError}</p>
+        <p role="alert" style={{ color: "var(--bad)", fontSize: 14, fontWeight: 500 }}>{cancelError}</p>
       )}
       {loading && (
         <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0", fontSize: 14 }}>
@@ -168,7 +168,7 @@ export default function LeaveHistoryPage() {
                 <thead>
                   <tr style={{ background: "var(--bg2)", borderBottom: "1px solid var(--line)" }}>
                     {["Leave Type", "From", "To", "Days", "Reason", "Status", ""].map((h) => (
-                      <th
+                      <th scope="col"
                         key={h}
                         style={{
                           padding: "10px 14px",

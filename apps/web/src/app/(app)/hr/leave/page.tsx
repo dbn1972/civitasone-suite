@@ -46,7 +46,7 @@ export default async function LeaveManagementPage() {
 
       {/* Pending approval nudge */}
       {pending > 0 && (
-        <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "var(--warnbg)", border: "1px solid var(--warn)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
           <span aria-hidden="true">⏳</span>
           <span><strong>{pending}</strong> request{pending > 1 ? "s" : ""} awaiting approval.</span>
           <Link href="/hr/leave/approvals" style={{ marginLeft: "auto", color: "var(--primary-d)", fontWeight: 500 }}>Review now →</Link>
@@ -54,10 +54,10 @@ export default async function LeaveManagementPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#f5f5f5" label={t("leave.total")} value={total} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("leave.pending")} value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("leave.approved")} value={approved} />
-        <StatCard icon="❌" iconBg="#fff0f0" label={t("leave.rejected")} value={rejected} />
+        <StatCard icon="📋" iconBg="var(--panel)" label={t("leave.total")} value={total} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("leave.pending")} value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("leave.approved")} value={approved} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("leave.rejected")} value={rejected} />
       </StatGrid>
       <Card title={t("leave.requests")}>
         <DataTable<LeaveRequestDetail>
