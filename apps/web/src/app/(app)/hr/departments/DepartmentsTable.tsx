@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "../../../_components/ds";
 
 type Dept = { id: string; code: string; name: string };
 
@@ -28,19 +29,18 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
   const router = useRouter();
   const [localDepts, setLocalDepts] = useState<Dept[]>(depts);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Dept | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
   const [saving, setSaving] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | undefined>();
 
   function startEdit(dept: Dept) {
     setEditingId(dept.id);
     setEditCode(dept.code);
     setEditName(dept.name);
-    setDeleteConfirmId(null);
     setRowError(null);
   }
 
@@ -64,112 +64,180 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
       if (!res.ok) throw new Error("Save failed");
       setRowError(null);
       setEditingId(null);
-      setLocalDepts(prev => prev.map(d => d.id === id ? { ...d, code: editCode, name: editName } : d));
+      setLocalDepts((prev) =>
+        prev.map((d) =>
+          d.id === id ? { ...d, code: editCode, name: editName } : d,
+        ),
+      );
     } catch {
       setRowError("Save failed. Please try again.");
     } finally {
       setSaving(false);
-      try { router.refresh(); } catch {}
+      try {
+        router.refresh();
+      } catch {}
     }
   }
 
   async function doDelete(id: string) {
     setDeletingId(id);
-    setDeleteError(null);
+    setDeleteError(undefined);
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/departments/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/proxy/v1/hrms/departments/${id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Delete failed");
-      setDeleteConfirmId(null);
-      setLocalDepts(prev => prev.filter(d => d.id !== id));
+      setDeleteTarget(null);
+      setLocalDepts((prev) => prev.filter((d) => d.id !== id));
     } catch {
       setDeleteError("Delete failed. Please try again.");
     } finally {
       setDeletingId(null);
-      try { router.refresh(); } catch {}
+      try {
+        router.refresh();
+      } catch {}
     }
   }
 
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-      <thead>
-        <tr>
-          <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, borderBottom: "1px solid var(--line, #e2e8f0)", color: "#64748b", fontSize: 12, textTransform: "uppercase" }}>Code</th>
-          <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, borderBottom: "1px solid var(--line, #e2e8f0)", color: "#64748b", fontSize: 12, textTransform: "uppercase" }}>Department Name</th>
-          <th style={{ padding: "8px 12px", borderBottom: "1px solid var(--line, #e2e8f0)" }}></th>
-        </tr>
-      </thead>
-      <tbody>
-        {localDepts.map((dept) => (
-          <tr key={dept.id} style={{ borderBottom: "1px solid var(--line, #f1f5f9)" }}>
-            {editingId === dept.id ? (
-              <>
-                <td style={{ padding: "10px 12px" }}>
-                  <input
-                    aria-label="Department code"
-                    value={editCode}
-                    onChange={(e) => setEditCode(e.target.value)}
-                    style={inputStyle}
-                  />
-                </td>
-                <td style={{ padding: "10px 12px" }}>
-                  <input
-                    aria-label="Department name"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    style={inputStyle}
-                  />
-                  {rowError && (
-                    <p style={{ color: "#b91c1c", fontSize: 12, marginTop: 4, marginBottom: 0 }}>{rowError}</p>
-                  )}
-                </td>
-                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                  <button
-                    onClick={() => saveEdit(dept.id)}
-                    disabled={saving}
-                    style={{ ...btnBase, marginRight: 6, background: "var(--primary, #2563eb)", color: "#fff", border: "none" }}
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </button>
-                  <button onClick={cancelEdit} style={btnBase}>Cancel</button>
-                </td>
-              </>
-            ) : deleteConfirmId === dept.id ? (
-              <>
-                <td colSpan={2} style={{ padding: "10px 12px", color: "#b91c1c", fontStyle: "italic" }}>
-                  Delete &ldquo;{dept.name}&rdquo;? This cannot be undone.
-                  {deleteError && (
-                    <p style={{ color: "#b91c1c", fontSize: 12, marginTop: 4, marginBottom: 0, fontStyle: "normal" }}>{deleteError}</p>
-                  )}
-                </td>
-                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                  <button
-                    onClick={() => doDelete(dept.id)}
-                    disabled={deletingId === dept.id}
-                    style={{ ...btnBase, marginRight: 6, color: "#b91c1c" }}
-                  >
-                    {deletingId === dept.id ? "Deleting…" : "Confirm"}
-                  </button>
-                  <button onClick={() => setDeleteConfirmId(null)} style={btnBase}>Cancel</button>
-                </td>
-              </>
-            ) : (
-              <>
-                <td style={{ padding: "10px 12px", color: "#0f172a" }}>{dept.code}</td>
-                <td style={{ padding: "10px 12px", color: "#0f172a" }}>{dept.name}</td>
-                <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                  <button onClick={() => startEdit(dept)} style={{ ...btnBase, marginRight: 6 }}>Edit</button>
-                  <button
-                    onClick={() => { setDeleteConfirmId(dept.id); setEditingId(null); }}
-                    style={{ ...btnBase, color: "#b91c1c" }}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </>
-            )}
+    <>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        <thead>
+          <tr>
+            <th
+              style={{
+                padding: "8px 12px",
+                textAlign: "left",
+                fontWeight: 600,
+                borderBottom: "1px solid var(--line, #e2e8f0)",
+                color: "#64748b",
+                fontSize: 12,
+                textTransform: "uppercase",
+              }}
+            >
+              Code
+            </th>
+            <th
+              style={{
+                padding: "8px 12px",
+                textAlign: "left",
+                fontWeight: 600,
+                borderBottom: "1px solid var(--line, #e2e8f0)",
+                color: "#64748b",
+                fontSize: 12,
+                textTransform: "uppercase",
+              }}
+            >
+              Department Name
+            </th>
+            <th
+              style={{ padding: "8px 12px", borderBottom: "1px solid var(--line, #e2e8f0)" }}
+            ></th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {localDepts.map((dept) => (
+            <tr
+              key={dept.id}
+              style={{ borderBottom: "1px solid var(--line, #f1f5f9)" }}
+            >
+              {editingId === dept.id ? (
+                <>
+                  <td style={{ padding: "10px 12px" }}>
+                    <input
+                      aria-label="Department code"
+                      value={editCode}
+                      onChange={(e) => setEditCode(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td style={{ padding: "10px 12px" }}>
+                    <input
+                      aria-label="Department name"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      style={inputStyle}
+                    />
+                    {rowError && (
+                      <p
+                        style={{
+                          color: "#b91c1c",
+                          fontSize: 12,
+                          marginTop: 4,
+                          marginBottom: 0,
+                        }}
+                      >
+                        {rowError}
+                      </p>
+                    )}
+                  </td>
+                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                    <button
+                      onClick={() => saveEdit(dept.id)}
+                      disabled={saving}
+                      style={{
+                        ...btnBase,
+                        marginRight: 6,
+                        background: "var(--primary, #2563eb)",
+                        color: "#fff",
+                        border: "none",
+                      }}
+                    >
+                      {saving ? "Saving…" : "Save"}
+                    </button>
+                    <button onClick={cancelEdit} style={btnBase}>
+                      Cancel
+                    </button>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td style={{ padding: "10px 12px", color: "#0f172a" }}>
+                    {dept.code}
+                  </td>
+                  <td style={{ padding: "10px 12px", color: "#0f172a" }}>
+                    {dept.name}
+                  </td>
+                  <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                    <button
+                      onClick={() => startEdit(dept)}
+                      style={{ ...btnBase, marginRight: 6 }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteError(undefined);
+                        setDeleteTarget(dept);
+                      }}
+                      style={{ ...btnBase, color: "#b91c1c" }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`Delete "${deleteTarget?.name ?? ""}"?`}
+        description="This department will be permanently removed. This action cannot be undone."
+        danger
+        confirmLabel="Delete department"
+        busy={deletingId !== null}
+        errorMessage={deleteError}
+        onConfirm={() => deleteTarget && void doDelete(deleteTarget.id)}
+        onCancel={() => {
+          if (deletingId === null) {
+            setDeleteTarget(null);
+            setDeleteError(undefined);
+          }
+        }}
+      />
+    </>
   );
 }
