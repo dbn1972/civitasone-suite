@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import type { ReactNode } from "react";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { AttendanceSummaryItem } from "@civitasone/types";
@@ -43,8 +45,14 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
         filterable
         filterPlaceholder="Filter by employee, department or status…"
         pageSize={20}
-        emptyTitle="No attendance records today"
-        emptyMessage="Attendance records appear here once the check-in feed is connected and employees start marking presence."
+        emptyIcon="🕐"
+        emptyTitle="No attendance records yet"
+        emptyMessage="Attendance records appear here once the check-in feed is active and employees start marking presence."
+        emptyAction={
+          <Link href="/hr/attendance/config" className="btn primary" style={{ marginTop: 10 }}>
+            Configure check-in
+          </Link>
+        }
       />
     </>
   );

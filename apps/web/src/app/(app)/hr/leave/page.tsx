@@ -68,9 +68,14 @@ export default async function LeaveManagementPage() {
           filterPlaceholder="Search by employee, type or status…"
           pageSize={15}
           emptyIcon="🌴"
-          emptyTitle="No leave requests yet"
-          emptyMessage="When employees apply for leave, their requests will appear here for you to review."
-          emptyAction={<Link href="/hr/leave/apply" className="btn primary" style={{ marginTop: 8 }}>+ Apply Leave</Link>}
+          emptyTitle="All clear — no leave requests"
+          emptyMessage="When employees apply for leave, their requests will appear here for review and approval."
+          emptyAction={
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <Link href="/hr/leave/apply" className="btn primary">Apply leave</Link>
+              <Link href="/hr/leave/approvals" className="btn ghost">View approvals</Link>
+            </div>
+          }
         />
       </Card>
     </main>

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import type { ReactNode } from "react";
 import { DataTable } from "../../../_components/ds";
 import type { PayrollRunDetail } from "@civitasone/types";
@@ -45,6 +47,14 @@ export function PayrollRunsTable({ runs, source = "api" }: { runs: PayrollRunDet
         filterable
         filterPlaceholder="Filter by period or status…"
         pageSize={12}
+        emptyIcon="💰"
+        emptyTitle="No payroll runs yet"
+        emptyMessage="Payroll runs process and disburse monthly salaries. Create your first run to get started."
+        emptyAction={
+          <Link href="/hr/payroll/period" className="btn primary" style={{ marginTop: 10 }}>
+            Create first run
+          </Link>
+        }
       />
     </>
   );

@@ -29,3 +29,4 @@ export { ConfidenceBar } from "./ConfidenceBar";
 export type { ConfidenceBarProps } from "./ConfidenceBar";
 export { PredictionHistory } from "./PredictionHistory";
 export type { PredictionHistoryProps, PredictionHistoryEntry } from "./PredictionHistory";
+export { SkeletonRow, SkeletonCard, SkeletonTable } from "./Skeleton";
