@@ -64,8 +64,15 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/hrms/leave-applications': { data: [] },
   '/api/v1/hrms/leave-requests': [],
   '/api/v1/hrms/attendance/summary': { data: [] },
-  '/api/v1/hrms/attendance': [],
-  '/api/v1/hrms/attendance/regularisations': [],
+  '/api/v1/hrms/attendance': [
+    { id: 'att-001', employeeId: 'emp-001', employeeName: 'Ravi Kumar', date: '2024-07-15', status: 'present', department: 'IT', checkIn: '09:00', checkOut: '18:00', hoursWorked: 9 },
+    { id: 'att-002', employeeId: 'emp-002', employeeName: 'Priya Singh', date: '2024-07-15', status: 'present', department: 'Finance', checkIn: '09:15', checkOut: '17:45', hoursWorked: 8.5 },
+    { id: 'att-003', employeeId: 'emp-003', employeeName: 'Ankit Verma', date: '2024-07-15', status: 'absent', department: 'HR', hoursWorked: 0 },
+    { id: 'att-004', employeeId: 'emp-004', employeeName: 'Meera Patel', date: '2024-07-15', status: 'on_leave', department: 'Legal', hoursWorked: 0 },
+  ],
+  '/api/v1/hrms/attendance/regularisations': [
+    { id: 'reg-001', employeeId: 'emp-003', employeeName: 'Ankit Verma', date: '2024-07-10', requestedStatus: 'present', reason: 'Was on field duty', requestedAt: '2024-07-11T09:00:00Z', status: 'pending' },
+  ],
   '/api/v1/hrms/dashboard': { headcount: 2, attendanceTodayPct: 95, pendingLeaves: 0, payrollDue: 0 },
   '/api/v1/hrms/job-openings': [],
   '/api/v1/hrms/appraisals': [],
@@ -798,6 +805,7 @@ const FIXTURES: Record<string, unknown> = {
 
 function handler(req: http.IncomingMessage, res: http.ServerResponse) {
   const path = (req.url ?? '/').split('?')[0];
+  console.log(`[e2e-mock] ${req.method} ${path} auth=${req.headers['authorization'] ? 'yes' : 'NO'}`);
 
   // Enforce auth: all non-identity routes require a Bearer token.
   const isPublic = path.startsWith('/api/identity') || path.startsWith('/api/v1/install');
@@ -821,4 +829,24 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   // Expose server to globalTeardown via shared global
   (global as Record<string, unknown>).__e2eMockServer = server;
   console.log(`[e2e] Mock gateway listening on http://127.0.0.1:${PORT}`);
+
+  // Also serve on 8080 so Next.js SSR (CIVITASONE_API_BASE_URL=http://localhost:8080) gets fixture data
+  const server8080 = http.createServer(handler);
+  let port8080Started = false;
+  await new Promise<void>((resolve, reject) => {
+    server8080.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log('[e2e] port 8080 is already in use — SSR mock will NOT start');
+        resolve();
+      } else { reject(err); }
+    });
+    server8080.listen(8080, '127.0.0.1', () => {
+      port8080Started = true;
+      console.log('[e2e] SSR mock gateway listening on http://127.0.0.1:8080');
+      resolve();
+    });
+  });
+  if (port8080Started) {
+    (global as Record<string, unknown>).__e2eMockServer8080 = server8080;
+  }
 }

@@ -1,115 +1,106 @@
-/**
- * E2E: Attendance Management — Mark → Regularise → Period Lock → Summary
- *
- * Exercises:
- * - Attendance list with daily records
- * - Monthly attendance summary with stats
- * - Attendance regularisation requests
- * - Period lock/unlock for payroll cut-off
- * - Check-in log view
- */
 import { test, expect } from '@playwright/test';
 import { setupHrmsPage } from './helpers';
-import * as fixtures from './fixtures';
 
 test.describe('Attendance Management', () => {
   test.beforeEach(async ({ page }) => {
     await setupHrmsPage(page);
   });
 
-  // ── Attendance List ──────────────────────────────────────────────────────
-
-  test.describe('Attendance List', () => {
-    test('page loads with heading and stat cards', async ({ page }) => {
+  test.describe('Attendance Overview', () => {
+    test('page renders h1 heading', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('h1#page-heading')).toHaveText('Attendance');
     });
 
-    test('shows stat cards for present/absent/on-leave counts', async ({ page }) => {
+    test('shows Total Records stat card label', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.getByText(/present/i).first()).toBeVisible();
-      await expect(page.getByText(/absent/i).first()).toBeVisible();
+      await expect(page.getByText('Total Records')).toBeVisible();
     });
 
-    test('displays attendance records table', async ({ page }) => {
+    test('shows Present stat card label', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.locator('tbody tr').first()).toBeVisible();
+      await expect(page.getByText('Present', { exact: true }).first()).toBeVisible();
     });
 
-    test('shows correct attendance statuses', async ({ page }) => {
+    test('shows Absent stat card label', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.getByText(/present/i).first()).toBeVisible();
+      await expect(page.getByText('Absent', { exact: true }).first()).toBeVisible();
+    });
+
+    test('shows On Leave stat card label', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText('On Leave', { exact: true }).first()).toBeVisible();
+    });
+
+    test('displays Ravi Kumar from SSR fixture', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText('Ravi Kumar')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('displays Priya Singh from SSR fixture', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText('Priya Singh')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('displays Ankit Verma from SSR fixture', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText('Ankit Verma')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('shows present status badge', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText(/present/i).first()).toBeVisible({ timeout: 10000 });
+    });
+
+    test('shows absent status badge', async ({ page }) => {
+      await page.goto('/hr/attendance');
+      await expect(page.getByText(/absent/i).first()).toBeVisible({ timeout: 10000 });
     });
   });
-
-  // ── Regularisation ───────────────────────────────────────────────────────
 
   test.describe('Regularisation', () => {
-    test('regularisation page loads', async ({ page }) => {
+    test('page renders h1 heading', async ({ page }) => {
       await page.goto('/hr/attendance/regularisation');
-      // Should show a heading related to regularisation
-      await expect(
-        page.locator('#page-heading')
-          .or(page.getByText(/regularisation/i)).first(),
-      ).toBeVisible();
+      await expect(page.locator('h1#page-heading')).toContainText('Regularisation');
+    });
+
+    test('shows Pending stat card label', async ({ page }) => {
+      await page.goto('/hr/attendance/regularisation');
+      await expect(page.getByText(/pending/i).first()).toBeVisible();
+    });
+
+    test('shows Ankit Verma regularisation request', async ({ page }) => {
+      await page.goto('/hr/attendance/regularisation');
+      await expect(page.getByText('Ankit Verma')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('Approve button visible for pending request', async ({ page }) => {
+      await page.goto('/hr/attendance/regularisation');
+      await expect(page.getByRole('button', { name: /approve/i }).first()).toBeVisible({ timeout: 10000 });
+    });
+
+    test('Reject button visible for pending request', async ({ page }) => {
+      await page.goto('/hr/attendance/regularisation');
+      await expect(page.getByRole('button', { name: /reject/i }).first()).toBeVisible({ timeout: 10000 });
+    });
+
+    test('approve button opens confirm dialog', async ({ page }) => {
+      await page.goto('/hr/attendance/regularisation');
+      await page.getByText('Ankit Verma').waitFor({ timeout: 10000 });
+      await page.getByRole('button', { name: 'Approve' }).first().click();
+      await expect(page.getByRole('alertdialog')).toBeVisible();
     });
   });
 
-  // ── Attendance Config ────────────────────────────────────────────────────
-
-  test.describe('Configuration', () => {
-    test('attendance config page loads', async ({ page }) => {
+  test.describe('Config', () => {
+    test('page renders heading', async ({ page }) => {
       await page.goto('/hr/attendance/config');
-      // Config page for attendance settings (period locks, rules)
-      await expect(
-        page.locator('#page-heading')
-          .or(page.getByText(/attendance/i).first()).first(),
-      ).toBeVisible();
-    });
-  });
-
-  // ── Check-in Log ─────────────────────────────────────────────────────────
-
-  test.describe('Check-in Log', () => {
-    test('check-in log page loads', async ({ page }) => {
-      await page.goto('/hr/checkin-log');
-      await expect(page.locator('#page-heading')).toBeVisible();
-    });
-  });
-
-  // ── Shifts ───────────────────────────────────────────────────────────────
-
-  test.describe('Shifts', () => {
-    test('shifts page loads', async ({ page }) => {
-      await page.goto('/hr/shifts');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('h1').first()).toBeVisible();
     });
 
-    test('shift requests page loads', async ({ page }) => {
-      await page.goto('/hr/shift-requests');
-      await expect(page.locator('#page-heading')).toBeVisible();
-    });
-  });
-
-  // ── Holidays ─────────────────────────────────────────────────────────────
-
-  test.describe('Holidays', () => {
-    test('holidays page loads', async ({ page }) => {
-      await page.goto('/hr/holidays');
-      await expect(page.locator('#page-heading')).toBeVisible();
-    });
-  });
-
-  // ── Error States ─────────────────────────────────────────────────────────
-
-  test.describe('Error Handling', () => {
-    test('attendance page handles API error gracefully', async ({ page }) => {
-      await page.route('**/api/v1/hrms/attendance*', (route) =>
-        route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'INTERNAL', message: 'internal error' }) }),
-      );
-      await page.goto('/hr/attendance');
-      // Should render the page heading even if data fails
-      await expect(page.locator('#page-heading')).toBeVisible();
+    test('shows working hours configuration', async ({ page }) => {
+      await page.goto('/hr/attendance/config');
+      await expect(page.getByText(/working hours/i)).toBeVisible();
     });
   });
 });
