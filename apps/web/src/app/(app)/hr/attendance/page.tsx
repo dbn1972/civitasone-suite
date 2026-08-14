@@ -19,10 +19,10 @@ export default async function AttendancePage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Total Records" value={total} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Present" value={present} />
-        <StatCard icon="❌" iconBg="#fff0f0" label="Absent" value={absent} />
-        <StatCard icon="🌴" iconBg="#fffbe6" label="On Leave" value={onLeave} />
+        <StatCard icon="📋" iconBg="var(--panel)" label="Total Records" value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Present" value={present} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label="Absent" value={absent} />
+        <StatCard icon="🌴" iconBg="var(--warnbg)" label="On Leave" value={onLeave} />
       </StatGrid>
       <Card title="Attendance Records">
         <AttendanceTable attendance={attendance} source={source} />

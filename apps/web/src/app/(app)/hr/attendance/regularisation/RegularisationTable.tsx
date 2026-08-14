@@ -86,7 +86,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
   return (
     <>
       {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
           {cacheNote}
         </p>
       ) : null}
