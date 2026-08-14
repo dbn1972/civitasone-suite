@@ -7,13 +7,12 @@ export const dynamic = "force-dynamic";
 export default async function HrAuditLogPage() {
   const { data: events, source } = await getHrAuditLog();
 
-  const rows = events.map((e) => ({
-    id: e.id,
-    action: e.action ?? e.eventType ?? "—",
-    resourceType: e.resourceType ?? "—",
-    resourceId: e.resourceId ?? "—",
-    actor: e.actorName ?? e.actorId ?? "—",
-    timestamp: e.timestamp ? new Date(e.timestamp).toLocaleString("en-IN") : "—",
+  const rows = events.map((e, i) => ({
+    id: String(i),
+    action: e.action ?? "—",
+    resource: e.resource ?? "—",
+    actor: e.actor ?? "—",
+    outcome: e.outcome ?? "—",
   }));
 
   return (
@@ -27,11 +26,10 @@ export default async function HrAuditLogPage() {
       <Card title="Recent HR Actions">
         <DataTable
           columns={[
-            { key: "timestamp", label: "When" },
             { key: "action", label: "Action" },
-            { key: "resourceType", label: "Resource" },
-            { key: "resourceId", label: "Resource ID" },
+            { key: "resource", label: "Resource" },
             { key: "actor", label: "Performed By" },
+            { key: "outcome", label: "Outcome" },
           ]}
           rows={rows}
           sortable
