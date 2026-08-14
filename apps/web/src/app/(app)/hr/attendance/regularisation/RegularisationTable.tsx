@@ -102,6 +102,9 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
         filterable
         filterPlaceholder="Filter by employee, reason or status…"
         pageSize={20}
+        emptyIcon="✅"
+        emptyTitle="No regularisation requests"
+        emptyMessage="Employees can request corrections to their attendance records. Pending approvals will appear here."
       />
 
       <ConfirmDialog

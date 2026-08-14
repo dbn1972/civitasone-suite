@@ -44,11 +44,11 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         pageSize={15}
         exportable
         emptyIcon="👥"
-        emptyTitle="No people added yet"
-        emptyMessage="Add the people who work in your office so you can manage their leave, attendance and pay."
+        emptyTitle="Your team starts here"
+        emptyMessage="Add your first employee to unlock leave management, attendance tracking, and payroll processing."
         emptyAction={
           <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
-            + Add Employee
+            Add first employee
           </Link>
         }
       />
