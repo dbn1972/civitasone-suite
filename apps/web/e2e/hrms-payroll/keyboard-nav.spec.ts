@@ -232,7 +232,7 @@ test.describe('Keyboard Navigation — WCAG 2.1.1 / 2.1.2 / 2.4.3', () => {
       const info = await page.evaluate(() => {
         const el = document.activeElement;
         const tag = el ? el.tagName : 'none';
-        const sub = el ? (el.type || el.getAttribute('role') || '') : '';
+        const sub = el ? ((el as HTMLInputElement).type || el.getAttribute('role') || '') : '';
         return tag + ':' + sub;
       });
       fieldTypes.push(info);
