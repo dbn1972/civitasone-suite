@@ -79,7 +79,21 @@ export function ImportForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ marginBottom: 12 }} />
+      <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+        <label htmlFor="import-csv-file" style={{ fontSize: 13, fontWeight: 500, color: "var(--fg, #0f172a)" }}>
+          CSV File <span style={{ color: "#ef4444" }}>*</span>
+        </label>
+        <input
+          ref={fileRef}
+          id="import-csv-file"
+          type="file"
+          accept=".csv,text/csv"
+          aria-describedby="import-csv-hint"
+        />
+        <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
+          Required columns: employeeNo, fullName, departmentCode, designationCode, employeeType, dateOfJoining, basicPay
+        </p>
+      </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <button type="submit" className="btn primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
           {status === "uploading" ? `Importing… (${progress.success}/${progress.total})` : "Upload & Import"}
