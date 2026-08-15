@@ -170,7 +170,7 @@ export function GlobalSearch() {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
@@ -179,9 +179,8 @@ export function GlobalSearch() {
         const params = new URLSearchParams({ q: debouncedQuery, page: "1", pageSize: "20" });
         const res = await fetch(`/api/proxy/v1/search?${params.toString()}`, {
           credentials: "same-origin",
+          signal: controller.signal,
         });
-
-        if (cancelled) return;
 
         if (res.status === 503) {
           setError("Search is temporarily unavailable");
@@ -200,24 +199,22 @@ export function GlobalSearch() {
         }
 
         const body = (await res.json()) as SearchResponse;
-        if (cancelled) return;
-
         setResults(body.data);
         setTotal(body.meta.total);
         setActiveIndex(-1);
-      } catch {
-        if (!cancelled) {
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
           setError("Unable to reach search service");
           setResults([]);
           setTotal(0);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     void fetchResults();
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [debouncedQuery, open]);
 
   // ── Keyboard navigation within the dialog ─────────────────────────────────

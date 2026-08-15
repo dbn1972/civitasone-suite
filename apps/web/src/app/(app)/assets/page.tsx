@@ -1,9 +1,11 @@
+import { getTranslations } from "next-intl/server";
 import { ModuleHub } from "../../_components/ModuleHub";
 
-export default function Page() {
+export default async function Page() {
+  const t = await getTranslations("assets");
   return (
     <ModuleHub
-      title="Assets"
+      title={t("title")}
       description="Asset lifecycle, depreciation, maintenance and disposal."
       links={[
         { href: "/assets/dashboard", label: "Dashboard", note: "Overview and quick navigation" },

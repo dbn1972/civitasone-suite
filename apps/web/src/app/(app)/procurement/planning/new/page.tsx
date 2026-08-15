@@ -114,20 +114,20 @@ export default function NewAnnualPlanPage() {
               <tbody>
                 {lines.map((l, i) => (
                   <tr key={i}>
-                    <td><input className="inp" value={l.itemCode} onChange={(e) => updateLine(i, { itemCode: e.target.value })} style={{ minWidth: 100 }} /></td>
-                    <td><input className="inp" value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} style={{ minWidth: 160 }} /></td>
-                    <td><input type="number" className="inp" value={l.quantity} onChange={(e) => updateLine(i, { quantity: Math.max(1, parseInt(e.target.value) || 1) })} style={{ width: 70, textAlign: "right" }} /></td>
-                    <td><input className="inp" value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} style={{ width: 60 }} /></td>
+                    <td><input className="inp" aria-label={`Item code, line ${i + 1}`} value={l.itemCode} onChange={(e) => updateLine(i, { itemCode: e.target.value })} style={{ minWidth: 100 }} /></td>
+                    <td><input className="inp" aria-label={`Description, line ${i + 1}`} value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} style={{ minWidth: 160 }} /></td>
+                    <td><input type="number" className="inp" aria-label={`Quantity, line ${i + 1}`} value={l.quantity} onChange={(e) => updateLine(i, { quantity: Math.max(1, parseInt(e.target.value) || 1) })} style={{ width: 70, textAlign: "right" }} /></td>
+                    <td><input className="inp" aria-label={`Unit of measure, line ${i + 1}`} value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} style={{ width: 60 }} /></td>
                     <td>
-                      <input type="number" className="inp" value={l.estimatedValueMinor / 100} onChange={(e) => updateLine(i, { estimatedValueMinor: Math.round((parseFloat(e.target.value) || 0) * 100) })} style={{ width: 120, textAlign: "right" }} step="0.01" />
+                      <input type="number" className="inp" aria-label={`Estimated value INR, line ${i + 1}`} value={l.estimatedValueMinor / 100} onChange={(e) => updateLine(i, { estimatedValueMinor: Math.round((parseFloat(e.target.value) || 0) * 100) })} style={{ width: 120, textAlign: "right" }} step="0.01" />
                     </td>
                     <td>
-                      <select className="inp" value={l.procurementMethod} onChange={(e) => updateLine(i, { procurementMethod: e.target.value })}>
+                      <select className="inp" aria-label={`Procurement method, line ${i + 1}`} value={l.procurementMethod} onChange={(e) => updateLine(i, { procurementMethod: e.target.value })}>
                         {PROCUREMENT_METHODS.map((m) => <option key={m} value={m}>{m.replace(/_/g, " ")}</option>)}
                       </select>
                     </td>
                     <td>
-                      <select className="inp" value={l.timelineQuarter} onChange={(e) => updateLine(i, { timelineQuarter: e.target.value })}>
+                      <select className="inp" aria-label={`Timeline quarter, line ${i + 1}`} value={l.timelineQuarter} onChange={(e) => updateLine(i, { timelineQuarter: e.target.value })}>
                         {QUARTERS.map((q) => <option key={q} value={q}>{q}</option>)}
                       </select>
                     </td>

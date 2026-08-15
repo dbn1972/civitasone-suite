@@ -133,43 +133,44 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
       setLocalUnreadCount(unreadCount ?? propNotifications.filter((n) => !n.read).length);
       return;
     }
-    let active = true;
+    const controller = new AbortController();
     setLoading(true);
     void (async () => {
       try {
         const res = await fetch("/api/notification/stream/unread?limit=20", {
           credentials: "same-origin",
+          signal: controller.signal,
         });
         if (!res.ok) return;
         const json = (await res.json()) as { data?: Array<{ id: string; type?: string; title: string; body?: string; metadata?: Record<string, unknown>; createdAt?: string; readAt?: string | null }> } | unknown;
         const data = Array.isArray(json) ? json : (json as { data?: unknown[] })?.data ?? [];
-        if (active) {
-          const mapped = (data as Array<{ id: string; type?: string; title: string; body?: string; metadata?: Record<string, unknown>; createdAt?: string; readAt?: string | null }>)
-            .slice(0, MAX_DROPDOWN_ITEMS)
-            .map((n) => ({
-              id: n.id,
-              title: n.title ?? "Notification",
-              body: n.body ?? undefined,
-              description: n.body ?? undefined,
-              module: n.type?.split(".")[0] ?? "notification",
-              time: n.createdAt ? formatRelativeTime(n.createdAt) : "",
-              createdAt: n.createdAt,
-              read: !!n.readAt,
-              icon: MODULE_ICONS[n.type?.split(".")[0] ?? ""] ?? "🔔",
-              actionUrl: (n.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined
-                ?? (n.type?.split(".")[0] === "leave_approval" ? "/hr/leave"
-                : n.type?.split(".")[0] === "payroll_run" ? "/payroll/runs" : undefined),
-            }));
-          setItems(mapped);
-          setLocalUnreadCount(mapped.filter((n) => !n.read).length);
+        const mapped = (data as Array<{ id: string; type?: string; title: string; body?: string; metadata?: Record<string, unknown>; createdAt?: string; readAt?: string | null }>)
+          .slice(0, MAX_DROPDOWN_ITEMS)
+          .map((n) => ({
+            id: n.id,
+            title: n.title ?? "Notification",
+            body: n.body ?? undefined,
+            description: n.body ?? undefined,
+            module: n.type?.split(".")[0] ?? "notification",
+            time: n.createdAt ? formatRelativeTime(n.createdAt) : "",
+            createdAt: n.createdAt,
+            read: !!n.readAt,
+            icon: MODULE_ICONS[n.type?.split(".")[0] ?? ""] ?? "🔔",
+            actionUrl: (n.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined
+              ?? (n.type?.split(".")[0] === "leave_approval" ? "/hr/leave"
+              : n.type?.split(".")[0] === "payroll_run" ? "/payroll/runs" : undefined),
+          }));
+        setItems(mapped);
+        setLocalUnreadCount(mapped.filter((n) => !n.read).length);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          // Silently degrade — bell shows empty
         }
-      } catch {
-        // Silently degrade — bell shows empty
       } finally {
-        if (active) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     })();
-    return () => { active = false; };
+    return () => controller.abort();
   }, [propNotifications, unreadCount]);
 
   // Mark notification as read (within 1s target)

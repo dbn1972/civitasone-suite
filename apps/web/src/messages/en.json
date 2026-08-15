@@ -102,5 +102,40 @@
     "edit": "Edit",
     "view": "View",
     "close": "Close"
+  },
+  "finance": {
+    "title": "Finance",
+    "budget": "Budget",
+    "expenditure": "Expenditure",
+    "challan": "Challan",
+    "sanctions": "Sanctions",
+    "reports": "Reports",
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected"
+  },
+  "procurement": {
+    "title": "Procurement",
+    "tenders": "Tenders",
+    "bids": "Bids",
+    "purchase": "Purchase Order",
+    "vendors": "Vendors",
+    "contracts": "Contracts"
+  },
+  "crm": {
+    "title": "Citizen Services",
+    "grievances": "Grievances",
+    "requests": "Requests",
+    "complaints": "Complaints",
+    "status": "Status",
+    "resolved": "Resolved",
+    "open": "Open"
+  },
+  "assets": {
+    "title": "Assets",
+    "inventory": "Inventory",
+    "maintenance": "Maintenance",
+    "disposal": "Disposal",
+    "transfer": "Transfer"
   }
 }
