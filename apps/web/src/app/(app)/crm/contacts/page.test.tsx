@@ -32,8 +32,23 @@ describe("Contacts list page stat gating (LQ-003)", () => {
       source: "api",
     });
     render(await Page({ searchParams: {} }));
-    // Total Contacts = 2, Hot Leads = 1, High Priority = 1, With Email = 1.
+    // Total Contacts = 2
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+  });
+
+  it("renders DPDP data protection notice", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    render(await Page({ searchParams: {} }));
+    const notice = screen.getByRole("note");
+    expect(notice).toBeInTheDocument();
+    expect(notice.textContent).toMatch(/digital personal data protection/i);
+  });
+
+  it("renders 'Priority Contacts' label (not 'High Priority Leads')", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.getByText("Priority Contacts")).toBeInTheDocument();
+    expect(screen.queryByText("High Priority Leads")).not.toBeInTheDocument();
   });
 });

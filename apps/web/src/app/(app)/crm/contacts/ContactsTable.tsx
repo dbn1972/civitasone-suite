@@ -71,7 +71,7 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
         </p>
       ) : null}
       {tableRows.length === 0 ? (
-        <EmptyState icon="👤" title="No contacts yet" message="Add your first contact to get started." />
+        <EmptyState icon="▣" title="No contacts yet" message="Add your first contact to get started." />
       ) : (
         <DataTable<ContactRow>
           columns={[
@@ -79,7 +79,7 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
             { key: "account", label: "Organisation" },
             { key: "phone", label: "Phone" },
             { key: "leadStatus", label: "Lead Status" },
-            { key: "temperature", label: "Temperature" },
+            { key: "temperature", label: "Priority Level" },
             { key: "priority", label: "Priority" },
             { key: "segment", label: "Segment" },
             { key: "expectedValue", label: "Expected Value", align: "right" },

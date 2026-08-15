@@ -54,10 +54,14 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
     <>
       <PageHeader
         title="Contacts"
-        subtitle="Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master."
+        subtitle="Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master • संपर्क पंजी"
         back="/crm"
       />
       {source === "error" && <DataSourceBadge source={source} />}
+      <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <span aria-hidden="true" className="text-base leading-snug">🛡</span>
+        <span>Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Access is role-scoped and logged.</span>
+      </div>
       <ContactToolbar />
       <LeadFilters
         initial={{
@@ -72,10 +76,10 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
       />
       {mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
       <StatGrid>
-        <StatCard icon="👤" iconBg="#eef2ff" label="Total Contacts" value={stat(contacts.length)} />
-        <StatCard icon="🔥" iconBg="#fef2f2" label="High Priority Leads" value={stat(contacts.filter(c => c.temperature === "hot").length)} />
-        <StatCard icon="⭐" iconBg="#fffbeb" label="High Priority" value={stat(contacts.filter(c => c.priority === "high").length)} />
-        <StatCard icon="✉️" iconBg="#eef2ff" label="With Email" value={stat(contacts.filter(c => c.email).length)} />
+        <StatCard icon="▣" iconBg="#eef2ff" label="Total Contacts" value={stat(contacts.length)} />
+        <StatCard icon="△" iconBg="#fef2f2" label="Priority Contacts" value={stat(contacts.filter(c => c.priority === "high").length)} />
+        <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => c.priority === "high").length)} />
+        <StatCard icon="◈" iconBg="#eef2ff" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
       <ContactsTable contacts={contacts} source={source} />
     </>

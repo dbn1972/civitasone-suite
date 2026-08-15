@@ -53,15 +53,15 @@ export function AccountsTable({
       ) : null}
       {tableRows.length === 0 ? (
         <EmptyState
-          icon="🏢"
+          icon="▣"
           title="No accounts yet"
-          message="Create an account to group contacts, deals and the reporting hierarchy for an organisation."
+          message="Create an account to group contacts and the reporting hierarchy for an organisation."
         />
       ) : (
         <DataTable<AccountRow>
           columns={[
             { key: "name", label: "Account" },
-            { key: "industry", label: "Industry" },
+            { key: "industry", label: "Sector / Ministry" },
             { key: "website", label: "Website" },
             { key: "hierarchy", label: "Hierarchy" },
             { key: "contacts", label: "Contacts", align: "right" },
