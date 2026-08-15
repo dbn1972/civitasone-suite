@@ -1,6 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
+import { PromotionBatchView } from "./_components/PromotionBatchView";
+import type { PromotionRow } from "../promotion/_components/PromotionCard";
 
 type EligibleRow = {
   employeeId: string;
@@ -33,44 +35,57 @@ async function getData() {
   });
 }
 
+async function getBatchPromotions(): Promise<PromotionRow[]> {
+  const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions", [], {
+    telemetryKey: "hr.dpc.promotions",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: PromotionRow[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+  return r.data;
+}
+
 export default async function DpcPage() {
-  const { data, source } = await getData();
+  const [{ data, source }, batchPromotions] = await Promise.all([getData(), getBatchPromotions()]);
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
   };
   const totalOfficers = (eligibleCount ?? 0) + (ineligibleCount ?? 0);
 
-  const columns: { key: keyof EligibleRow & string; label: string; align?: "left" | "right" }[] = [
-    { key: "eligibilityRank", label: "Rank", align: "right" },
-    { key: "fullName", label: "Officer Name" },
-    { key: "department", label: "Department" },
-    { key: "designation", label: "Designation" },
-    { key: "grade", label: "Pay Grade" },
-    { key: "qualifyingYears", label: "Qualifying Service", align: "right" },
-    { key: "dateOfJoining", label: "Date of Joining" },
+  const eligibleCols: { key: keyof EligibleRow & string; label: string; align?: "left" | "right" }[] = [
+    { key: "eligibilityRank",  label: "Rank",              align: "right" },
+    { key: "fullName",         label: "Officer Name"                        },
+    { key: "department",       label: "Department"                          },
+    { key: "designation",      label: "Designation"                         },
+    { key: "grade",            label: "Pay Grade"                           },
+    { key: "qualifyingYears",  label: "Qualifying Service",align: "right" },
+    { key: "dateOfJoining",    label: "Date of Joining"                     },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="DPC Eligibility"
-        subtitle={`Departmental Promotion Committee seniority list as of ${asOf}. Minimum qualifying service: 5 years.`}
+        title="DPC — Departmental Promotion Committee"
+        subtitle={`Seniority list as of ${asOf}. Minimum qualifying service: 5 years.`}
         back="/hr"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
+
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers" value={eligibleCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Not Yet Eligible" value={ineligibleCount} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="As On Date" value={asOf} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Total Officers" value={totalOfficers} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers"  value={eligibleCount} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Not Yet Eligible"   value={ineligibleCount} />
+        <StatCard icon="📅" iconBg="#f5f5f5" label="As On Date"         value={asOf} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label="Total Officers"     value={totalOfficers} />
       </StatGrid>
+
+      {/* Eligible Officers seniority list */}
       <Card title="Eligible Officers — Seniority List">
         <DataTable<EligibleRow>
-          columns={columns}
+          columns={eligibleCols}
           rows={eligible}
-          sortable
-          filterable
+          sortable filterable
           filterPlaceholder="Filter by name, department or grade…"
           pageSize={20}
           emptyIcon="📋"
@@ -78,25 +93,30 @@ export default async function DpcPage() {
           emptyMessage="Officers who complete the minimum qualifying service period appear here in seniority order for DPC consideration."
         />
       </Card>
-      {ineligible.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <Card title="Not Yet Eligible">
-            <DataTable<EligibleRow>
-              columns={[
-                { key: "fullName", label: "Officer Name" },
-                { key: "department", label: "Department" },
-                { key: "grade", label: "Pay Grade" },
-                { key: "qualifyingYears", label: "Service Years", align: "right" },
-              ]}
-              rows={ineligible}
-              sortable
-              pageSize={10}
-              emptyIcon="⏳"
-              emptyTitle="All officers are eligible"
-              emptyMessage=""
-            />
-          </Card>
+
+      {/* DPC Batch Promotion View */}
+      <Card title="DPC Batch Promotions">
+        <div className="pad">
+          <PromotionBatchView promotions={batchPromotions} />
         </div>
+      </Card>
+
+      {ineligible.length > 0 && (
+        <Card title="Not Yet Eligible" style={{ marginTop: 16 }}>
+          <DataTable<EligibleRow>
+            columns={[
+              { key: "fullName",        label: "Officer Name"           },
+              { key: "department",      label: "Department"             },
+              { key: "grade",           label: "Pay Grade"              },
+              { key: "qualifyingYears", label: "Service Years", align: "right" },
+            ]}
+            rows={ineligible}
+            sortable pageSize={10}
+            emptyIcon="⏳"
+            emptyTitle="All officers are eligible"
+            emptyMessage=""
+          />
+        </Card>
       )}
     </main>
   );

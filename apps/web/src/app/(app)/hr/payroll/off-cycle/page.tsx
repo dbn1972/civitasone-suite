@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, Tabs } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CreateOffCycleForm } from "./CreateOffCycleForm";
 import { OffCycleList, type OffCycleRow } from "./OffCycleList";
+import { OffCycleCards } from "./OffCycleCard";
 
 async function getData(): Promise<LoaderResult<OffCycleRow[]>> {
   return fetchJson<unknown, OffCycleRow[]>("/api/v1/payroll/off-cycle", [], {
@@ -26,22 +27,25 @@ export default async function OffCyclePage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Off-Cycle Payroll"
-        subtitle="Bonus, incentive, and ad-hoc off-cycle payment runs."
+        subtitle="Bonus, incentive, arrear, and ad-hoc off-cycle payment runs."
         back="/hr/payroll"
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="🗂️" iconBg="var(--infobg)" label="Total Runs" value={items.length} />
-        <StatCard icon="📝" iconBg="var(--warnbg)" label="Draft (Unprocessed)" value={draftCount} />
+        <StatCard icon="📝" iconBg="var(--warnbg)" label="Draft (Pending Process)" value={draftCount} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Amount" value={formatMoney(totalAmountMinor)} />
         <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Net (Processed)" value={formatMoney(totalNetMinor)} />
       </StatGrid>
 
       <CreateOffCycleForm />
 
+      {/* Card view — primary: shows reason, employees in scope, approval status, process action */}
       <Card title="Off-Cycle Runs">
-        <OffCycleList rows={items} />
+        <div style={{ padding: "0 4px" }}>
+          <OffCycleCards rows={items} />
+        </div>
       </Card>
     </main>
   );
