@@ -1,7 +1,7 @@
 import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import Link from "next/link";
+import { GrievanceActions } from "./GrievanceActions";
 
 interface GrievanceDetail {
   id: string;
@@ -141,16 +141,7 @@ export default async function GrievanceDetailPage({
         subtitle={g.subject}
         back="/crm/grievances"
         backLabel="Grievances"
-        actions={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link href={`/crm/grievances/${g.id}/assign`} className="btn">
-              Assign
-            </Link>
-            <Link href={`/crm/grievances/${g.id}/resolve`} className="btn primary">
-              Resolve
-            </Link>
-          </div>
-        }
+        actions={<GrievanceActions id={g.id} status={g.status} />}
       />
       {source === "error" && <DataSourceBadge source={source} />}
 
