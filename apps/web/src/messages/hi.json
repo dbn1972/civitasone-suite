@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "employees": "कर्मचारी",
+    "leave": "छुट्टी",
+    "attendance": "उपस्थिति",
+    "payroll": "वेतन",
+    "recruitment": "भर्ती",
+    "onboarding": "ओनबोर्डिंग",
+    "reports": "रिपोर्ट",
+    "settings": "सेटिंग"
+  },
+  "dashboard": {
+    "title": "मानव संसाधन डैशबोर्ड",
+    "greeting": {
+      "morning": "सुप्रभात",
+      "afternoon": "नमस्कार",
+      "evening": "शुभ संध्या"
+    },
+    "kpis": {
+      "totalEmployees": "कुल कर्मचारी",
+      "presentToday": "आज उपस्थित",
+      "onLeave": "छुट्टी पर",
+      "pendingApprovals": "लंबित अनुमोदन",
+      "payrollStatus": "वेतन स्थिति",
+      "recruitmentPipeline": "भर्ती पाइपलाइन"
+    },
+    "inbox": {
+      "title": "लंबित अनुमोदन",
+      "approve": "स्वीकृत करें",
+      "decline": "अस्वीकार करें",
+      "empty": "कोई लंबित अनुमोदन नहीं"
+    }
+  },
+  "employees": {
+    "title": "कर्मचारी",
+    "add": "कर्मचारी जोड़ें",
+    "import": "आयात",
+    "search": "कर्मचारी खोजें",
+    "name": "नाम",
+    "department": "विभाग",
+    "designation": "पद",
+    "status": "स्थिति",
+    "actions": "कार्रवाई",
+    "empty": "कोई कर्मचारी नहीं मिला"
+  },
+  "leave": {
+    "title": "छुट्टी प्रबंधन",
+    "apply": "छुट्टी के लिए आवेदन",
+    "balance": "छुट्टी शेष",
+    "pending": "लंबित अनुरोध",
+    "approved": "स्वीकृत",
+    "rejected": "अस्वीकृत",
+    "empty": "कोई छुट्टी अनुरोध नहीं"
+  },
+  "attendance": {
+    "title": "उपस्थिति",
+    "present": "उपस्थित",
+    "absent": "अनुपस्थित",
+    "onLeave": "छुट्टी पर",
+    "total": "कुल रिकॉर्ड",
+    "regularisation": "नियमितीकरण",
+    "approve": "स्वीकृत करें",
+    "reject": "अस्वीकार करें"
+  },
+  "payroll": {
+    "title": "वेतन",
+    "run": "वेतन चलाएं",
+    "slips": "वेतन पर्ची",
+    "structures": "वेतन संरचनाएं",
+    "gross": "सकल वेतन",
+    "net": "शुद्ध वेतन",
+    "total": "कुल कर्मचारी",
+    "status": "स्थिति"
+  },
+  "common": {
+    "loading": "लोड हो रहा है",
+    "error": "त्रुटि",
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "submit": "सबमिट करें",
+    "confirm": "पुष्टि करें",
+    "back": "वापस",
+    "next": "अगला",
+    "search": "खोज",
+    "filter": "फ़िल्टर",
+    "export": "निर्यात",
+    "download": "डाउनलोड",
+    "yes": "हां",
+    "no": "नहीं",
+    "delete": "हटाएं",
+    "edit": "संपादित करें",
+    "view": "देखें",
+    "close": "बंद करें"
+  }
+}

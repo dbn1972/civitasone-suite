@@ -1,0 +1,96 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "employees": "Employees",
+    "leave": "Leave",
+    "attendance": "Attendance",
+    "payroll": "Payroll",
+    "recruitment": "Recruitment",
+    "onboarding": "Onboarding",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "HR Dashboard",
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "kpis": {
+      "totalEmployees": "Total Employees",
+      "presentToday": "Present Today",
+      "onLeave": "On Leave",
+      "pendingApprovals": "Pending Approvals",
+      "payrollStatus": "Payroll Status",
+      "recruitmentPipeline": "Recruitment Pipeline"
+    },
+    "inbox": {
+      "title": "Pending Approvals",
+      "approve": "Approve",
+      "decline": "Decline",
+      "empty": "No pending approvals"
+    }
+  },
+  "employees": {
+    "title": "Employees",
+    "add": "Add Employee",
+    "import": "Import",
+    "search": "Search employees",
+    "name": "Name",
+    "department": "Department",
+    "designation": "Designation",
+    "status": "Status",
+    "actions": "Actions",
+    "empty": "No employees found"
+  },
+  "leave": {
+    "title": "Leave Management",
+    "apply": "Apply for Leave",
+    "balance": "Leave Balance",
+    "pending": "Pending Requests",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "empty": "No leave requests"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "present": "Present",
+    "absent": "Absent",
+    "onLeave": "On Leave",
+    "total": "Total Records",
+    "regularisation": "Regularisation",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "payroll": {
+    "title": "Payroll",
+    "run": "Run Payroll",
+    "slips": "Salary Slips",
+    "structures": "Pay Structures",
+    "gross": "Gross Salary",
+    "net": "Net Pay",
+    "total": "Total Employees",
+    "status": "Status"
+  },
+  "common": {
+    "loading": "Loading",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "download": "Download",
+    "yes": "Yes",
+    "no": "No",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "close": "Close"
+  }
+}
