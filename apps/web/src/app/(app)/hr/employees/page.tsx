@@ -36,12 +36,20 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         return (raw.employeeTypeCode ?? raw.status ?? "") === typeFilter;
       });
 
+  // Count employees per type for filter tab badges
+  const countByType = employees.reduce<Record<string, number>>((acc, e) => {
+    const raw = e as Record<string, unknown>;
+    const key = String(raw.employeeTypeCode ?? raw.status ?? "other");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
   const TYPE_TABS = [
     { key: "all", label: `All (${total})` },
-    { key: "permanent", label: "Permanent" },
-    { key: "contractual", label: "Contractual" },
-    { key: "deputation", label: "Deputation" },
-    { key: "consultant", label: "Consultant" },
+    { key: "permanent", label: countByType.permanent ? `Permanent (${countByType.permanent})` : "Permanent" },
+    { key: "contractual", label: countByType.contractual ? `Contractual (${countByType.contractual})` : "Contractual" },
+    { key: "deputation", label: countByType.deputation ? `Deputation (${countByType.deputation})` : "Deputation" },
+    { key: "consultant", label: countByType.consultant ? `Consultant (${countByType.consultant})` : "Consultant" },
   ];
 
   return (
@@ -61,20 +69,20 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         <StatCard icon="📋" iconBg="#f5f5f5" label="Others" value={others} />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        {TYPE_TABS.map((t) => (
+        {TYPE_TABS.map((tab) => (
           <Link
-            key={t.key}
-            href={t.key === "all" ? "/hr/employees" : `/hr/employees?type=${t.key}`}
-            className={typeFilter === t.key ? "chip chip-active" : "chip"}
+            key={tab.key}
+            href={tab.key === "all" ? "/hr/employees" : `/hr/employees?type=${tab.key}`}
+            className={typeFilter === tab.key ? "chip chip-active" : "chip"}
             style={{
               fontSize: 13, padding: "5px 12px", borderRadius: 20,
-              background: typeFilter === t.key ? "var(--primary)" : "var(--bg2)",
-              color: typeFilter === t.key ? "#fff" : "var(--ink)",
-              textDecoration: "none", fontWeight: typeFilter === t.key ? 600 : 400,
+              background: typeFilter === tab.key ? "var(--primary)" : "var(--bg2)",
+              color: typeFilter === tab.key ? "#fff" : "var(--ink)",
+              textDecoration: "none", fontWeight: typeFilter === tab.key ? 600 : 400,
               border: "1px solid var(--line)",
             }}
           >
-            {t.label}
+            {tab.label}
           </Link>
         ))}
       </div>

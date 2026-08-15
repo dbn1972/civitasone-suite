@@ -179,14 +179,37 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Audit Log", href: "/hr/audit-log", description: "All HR actions — approvals, edits, payroll runs (e-Governance compliance)" },
 		],
 	},
-
 ];
 
 export default function Page() {
 	return (
 		<main className="page-main wrap" aria-labelledby="page-heading">
-			<PageHeader title="Human Resources" subtitle="People operations — employees, leave, attendance, payroll, and more." help="hr" />
-			<LinkTiles tiles={hrCategories.flatMap(c => c.tiles)} columns="four" />
+			<PageHeader
+				title="Human Resources"
+				subtitle="People operations — employees, leave, attendance, payroll, and more."
+				help="hr"
+			/>
+			{hrCategories.map((cat) => (
+				<section key={cat.title} style={{ marginBottom: 32 }}>
+					<h2
+						style={{
+							fontSize: 13,
+							fontWeight: 600,
+							color: "var(--ink2)",
+							textTransform: "uppercase",
+							letterSpacing: "0.07em",
+							marginBottom: 12,
+							display: "flex",
+							alignItems: "center",
+							gap: 7,
+						}}
+					>
+						<span aria-hidden="true">{cat.icon}</span>
+						{cat.title}
+					</h2>
+					<LinkTiles tiles={cat.tiles} columns="four" />
+				</section>
+			))}
 		</main>
 	);
 }
