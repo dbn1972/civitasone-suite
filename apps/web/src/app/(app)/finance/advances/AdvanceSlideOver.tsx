@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 
 /**
  * AdvanceSlideOver — slide-over form to raise a government advance.
- * GFR 2017 Rule 290: advance type, amount, purpose and repayment schedule
- * must be recorded. Max repayment: 24 months.
+ * GFR 2017 Rule 290: advance type, amount, purpose, repayment schedule
+ * and sanctioning authority must be recorded at submission time.
+ * Max repayment: 24 months.
  */
 
 const ADVANCE_TYPES = ["TA", "Medical", "Festival", "HBA"] as const;
@@ -36,6 +37,7 @@ export function AdvanceSlideOver() {
     purpose: useId(),
     months: useId(),
     employee: useId(),
+    sanctionedBy: useId(),
   };
 
   const [open, setOpen] = useState(false);
@@ -44,6 +46,7 @@ export function AdvanceSlideOver() {
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState("");
   const [months, setMonths] = useState("12");
+  const [sanctionedBy, setSanctionedBy] = useState("");
   const [errs, setErrs] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,6 +64,7 @@ export function AdvanceSlideOver() {
     if (!purpose.trim() || purpose.trim().length < 5) e.add("purpose");
     const mo = parseInt(months, 10);
     if (!months || isNaN(mo) || mo < 1 || mo > 24) e.add("months");
+    if (!sanctionedBy.trim()) e.add("sanctionedBy");
     setErrs(e);
     return e.size === 0;
   }
@@ -80,6 +84,7 @@ export function AdvanceSlideOver() {
           amountMinor: Math.round(Number(amount) * 100),
           purpose: purpose.trim(),
           recoveryMonths: parseInt(months, 10),
+          sanctionedBy: sanctionedBy.trim(),
         }),
       });
       if (!res.ok) {
@@ -88,7 +93,7 @@ export function AdvanceSlideOver() {
         return;
       }
       setMessage({ tone: "good", text: "Advance request submitted successfully." });
-      setAdvanceType(""); setEmployeeId(""); setAmount(""); setPurpose(""); setMonths("12");
+      setAdvanceType(""); setEmployeeId(""); setAmount(""); setPurpose(""); setMonths("12"); setSanctionedBy("");
       router.refresh();
       setTimeout(() => setOpen(false), 1400);
     } catch (err) {
@@ -189,6 +194,25 @@ export function AdvanceSlideOver() {
                   aria-invalid={errs.has("employee")}
                 />
                 {errs.has("employee") && <p role="alert" style={fieldErr}>Enter employee ID.</p>}
+              </div>
+
+              {/* Sanctioned By — GFR Rule 290 */}
+              <div>
+                <label htmlFor={ids.sanctionedBy} style={label14}>
+                  Sanctioning Authority (GFR Rule 290) {required}
+                </label>
+                <input
+                  id={ids.sanctionedBy}
+                  type="text"
+                  value={sanctionedBy}
+                  onChange={(e) => { setSanctionedBy(e.target.value); clearErr("sanctionedBy"); }}
+                  placeholder="e.g. Joint Secretary, Ministry of Finance"
+                  required
+                  aria-required="true"
+                  style={errs.has("sanctionedBy") ? inputErr : inputBase}
+                  aria-invalid={errs.has("sanctionedBy")}
+                />
+                {errs.has("sanctionedBy") && <p role="alert" style={fieldErr}>Enter sanctioning authority.</p>}
               </div>
 
               {/* Amount + Months */}

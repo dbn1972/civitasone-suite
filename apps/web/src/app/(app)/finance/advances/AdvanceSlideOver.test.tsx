@@ -27,7 +27,7 @@ describe("AdvanceSlideOver", () => {
     expect(screen.getByText(/GFR 2017 Rule 290/i)).toBeInTheDocument();
   });
 
-  it("renders all required form fields", () => {
+  it("renders all required form fields including sanctioning authority", () => {
     render(<AdvanceSlideOver />);
     fireEvent.click(screen.getByRole("button", { name: /new advance/i }));
     expect(screen.getByLabelText(/advance type/i)).toBeInTheDocument();
@@ -35,6 +35,34 @@ describe("AdvanceSlideOver", () => {
     expect(screen.getByLabelText(/amount/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/repayment months/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/purpose/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/sanctioning authority/i)).toBeInTheDocument();
+  });
+
+  it("sanctioning authority field has aria-required and is required (GFR Rule 290)", () => {
+    render(<AdvanceSlideOver />);
+    fireEvent.click(screen.getByRole("button", { name: /new advance/i }));
+    const field = screen.getByLabelText(/sanctioning authority/i);
+    expect(field).toHaveAttribute("required");
+    expect(field).toHaveAttribute("aria-required", "true");
+  });
+
+  it("blocks submission when sanctionedBy is empty — GFR Rule 290 required field", async () => {
+    render(<AdvanceSlideOver />);
+    fireEvent.click(screen.getByRole("button", { name: /new advance/i }));
+
+    // Fill all fields except sanctionedBy
+    fireEvent.change(screen.getByLabelText(/advance type/i), { target: { value: "TA" } });
+    fireEvent.change(screen.getByLabelText(/employee id/i), { target: { value: "EMP00123" } });
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "50000" } });
+    fireEvent.change(screen.getByLabelText(/repayment months/i), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText(/purpose/i), { target: { value: "Festival advance for Diwali" } });
+    // sanctionedBy intentionally left empty
+
+    fireEvent.click(screen.getByRole("button", { name: /submit advance/i }));
+
+    const alerts = await screen.findAllByRole("alert");
+    const sanctionAlert = alerts.find((a) => /sanctioning authority/i.test(a.textContent ?? ""));
+    expect(sanctionAlert).toBeTruthy();
   });
 
   it("shows all advance type options in dropdown", () => {

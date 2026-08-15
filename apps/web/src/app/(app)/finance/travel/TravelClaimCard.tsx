@@ -6,7 +6,14 @@ import { StatusPill } from "@/app/_components/ds";
 /**
  * TravelClaimCard — displays a single TA/DA claim with route details,
  * fare class and hotel stay entitlement.
- * GFR 2017 Chapter 19 / CCS (TA) Rules — entitlement based on pay level (7th CPC).
+ * GFR 2017 Chapter 19 / CCS (TA) Rules 1988 Second Schedule —
+ * entitlement based on pay level (7th CPC).
+ *
+ * Correct fare class mapping per CCS(TA) Rules 1988 Second Schedule:
+ *   Level 1–5  : Sleeper Class (AC-III approved cases; bus/road ≤ 100 km)
+ *   Level 6–8  : AC-II Tier
+ *   Level 9–17 : AC-I Tier (First Class)
+ *   Level 18   : Business Class (domestic flights) / AC-I
  */
 
 export type FareClass = "AC-I" | "AC-II" | "AC-III" | "Sleeper" | "Economy" | "Business";
@@ -32,33 +39,37 @@ export interface TravelClaimCardProps {
   auditRemark?: string;
 }
 
+/** CCS(TA) Rules 1988 Second Schedule — 7th CPC pay levels */
 const FARE_CLASS_ENTITLEMENT: Record<number, FareClass> = {
-  1: "AC-I",
-  2: "AC-I",
-  3: "AC-I",
-  4: "AC-II",
-  5: "AC-II",
+  1: "Sleeper",
+  2: "Sleeper",
+  3: "Sleeper",
+  4: "Sleeper",
+  5: "Sleeper",
   6: "AC-II",
   7: "AC-II",
-  8: "AC-III",
-  9: "AC-III",
-  10: "AC-III",
-  11: "AC-III",
-  12: "AC-III",
-  13: "AC-III",
-  14: "AC-III",
-  15: "AC-III",
-  16: "AC-III",
-  17: "AC-III",
-  18: "AC-III",
+  8: "AC-II",
+  9: "AC-I",
+  10: "AC-I",
+  11: "AC-I",
+  12: "AC-I",
+  13: "AC-I",
+  14: "AC-I",
+  15: "AC-I",
+  16: "AC-I",
+  17: "AC-I",
+  18: "Business",
 };
 
 function fareClassLabel(payLevel: number, actualClass: FareClass): React.ReactNode {
-  const entitled = FARE_CLASS_ENTITLEMENT[payLevel] ?? "AC-III";
+  const entitled = FARE_CLASS_ENTITLEMENT[payLevel] ?? "Sleeper";
   const classOrder: FareClass[] = ["Business", "Economy", "AC-I", "AC-II", "AC-III", "Sleeper"];
   const entitledIdx = classOrder.indexOf(entitled);
   const actualIdx = classOrder.indexOf(actualClass);
   const exceeded = actualIdx < entitledIdx; // lower index = higher class
+
+  // Level 1–4: bus/road travel applicable for short distances (≤ 100 km)
+  const busRoadNote = payLevel >= 1 && payLevel <= 4;
 
   return (
     <span
@@ -72,6 +83,9 @@ function fareClassLabel(payLevel: number, actualClass: FareClass): React.ReactNo
       }}
     >
       {actualClass}
+      {busRoadNote && (
+        <span style={{ fontSize: 11, color: "var(--mut)" }}>(bus/road ≤ 100 km)</span>
+      )}
       {exceeded && (
         <span
           aria-label="Fare class exceeds entitlement"
