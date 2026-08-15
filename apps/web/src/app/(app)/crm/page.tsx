@@ -21,7 +21,7 @@ const sections = [
 			{ title: "Sales Pipelines", href: "/crm/pipelines", description: "Configure pipeline stages" },
 			{ title: "Opportunities", href: "/crm/opportunities", description: "Track opportunity funnel" },
 			{ title: "Stage Ageing", href: "/crm/opportunity-ageing", description: "Stale opportunity alerts" },
-			{ title: "Revenue Forecast", href: "/crm/forecast", description: "Pipeline revenue projections" },
+			{ title: "Procurement Pipeline Forecast", href: "/crm/forecast", description: "Pipeline procurement projections" },
 			{ title: "Quotations", href: "/crm/quotations", description: "Quotes and proposals" },
 			{ title: "Customer Onboarding", href: "/crm/onboarding", description: "Post-deal onboarding workflows" },
 		] as NavTile[],

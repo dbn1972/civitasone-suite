@@ -73,7 +73,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
       {mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
       <StatGrid>
         <StatCard icon="👤" iconBg="#eef2ff" label="Total Contacts" value={stat(contacts.length)} />
-        <StatCard icon="🔥" iconBg="#fef2f2" label="Hot Leads" value={stat(contacts.filter(c => c.temperature === "hot").length)} />
+        <StatCard icon="🔥" iconBg="#fef2f2" label="High Priority Leads" value={stat(contacts.filter(c => c.temperature === "hot").length)} />
         <StatCard icon="⭐" iconBg="#fffbeb" label="High Priority" value={stat(contacts.filter(c => c.priority === "high").length)} />
         <StatCard icon="✉️" iconBg="#eef2ff" label="With Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>

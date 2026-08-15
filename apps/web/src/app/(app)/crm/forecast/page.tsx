@@ -22,7 +22,7 @@ export default async function ForecastPage({ searchParams }: PageProps) {
   return (
     <>
       <PageHeader
-        title="Revenue Forecast"
+        title="Procurement Pipeline Forecast"
         subtitle="Weighted pipeline value — each active deal counted at its stage win probability."
         back="/crm"
         actions={<a className="btn" href="/crm/pipeline">Pipeline Board</a>}

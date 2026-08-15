@@ -24,7 +24,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     <>
       <PageHeader
         title={`Deal ${deal.dealName}`}
-        subtitle="Modern sales CRM: leads, deals and pipeline."
+        subtitle="Stakeholder Engagement System: leads, deals and pipeline."
         back="/crm/deals"
         actions={
           <DealDetailActions
@@ -57,7 +57,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="pad">
               <ul className="tl">
                 {STAGES.map((stage, i) => (
-                  <li key={stage} className={i < currentIdx ? "done" : i === currentIdx ? "cur" : "todo"}>
+                  <li key={stage} className={i < currentIdx ? "done" : i === currentIdx ? "cur" : "todo"} aria-current={i === currentIdx ? "step" : undefined}>
                     <div className="t">{stage.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
                   </li>
                 ))}

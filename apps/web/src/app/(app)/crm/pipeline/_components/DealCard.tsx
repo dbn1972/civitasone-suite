@@ -45,7 +45,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
       tabIndex={0}
       role="button"
       aria-label={`Deal: ${deal.name}, value ${deal.valueDisplay}, probability ${deal.probability}%, ${deal.contactName ? `assignee ${deal.contactName}` : "unassigned"}. Use left and right arrow keys to move between stages.`}
-      aria-grabbed={isDragging}
+      aria-roledescription="draggable deal card"
       className={`cursor-grab rounded-lg border p-3 shadow-sm transition-all select-none ${
         isDragging
           ? "border-blue-300 bg-blue-50 opacity-50"
