@@ -81,12 +81,12 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
 
       {/* Node card */}
       <div
-        role={hasChildren ? 'button' : undefined}
+        role="treeitem"
         aria-expanded={hasChildren ? isExpanded : undefined}
         aria-label={`${node.name}, ${node.designation}, ${node.department}${
           hasChildren ? (isExpanded ? ', collapse' : ', expand') : ''
         }`}
-        tabIndex={hasChildren ? 0 : undefined}
+        tabIndex={0}
         onClick={() => hasChildren && onToggle(node.id)}
         onKeyDown={handleKeyDown}
         onFocus={() => onFocus?.(node.id)}

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Avatar } from '@/app/_components/ds'
 
 type Employee = {
@@ -120,6 +120,12 @@ function EmployeeDetailModal({
   emp: Employee
   onClose: () => void
 }) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    // Move focus into modal when it opens (WCAG 2.4.3 Focus Order)
+    closeRef.current?.focus()
+  }, [])
+
   const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
@@ -187,6 +193,7 @@ function EmployeeDetailModal({
             ))}
         </dl>
         <button
+          ref={closeRef}
           onClick={onClose}
           aria-label="Close employee details"
           style={{
