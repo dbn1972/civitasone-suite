@@ -441,12 +441,32 @@ export function normaliseCalendar(raw: unknown): CalendarEntry[] {
     .filter((c): c is CalendarEntry => c !== null);
 }
 
+/**
+ * Close-date calendar.
+ *
+ * There is no `/v1/crm/deals/calendar` route, so this view was permanently
+ * empty. The calendar is a re-slice of the same deals the board shows — grouped
+ * by expected close date instead of by stage — so it is sourced from the
+ * pipeline-scoped kanban endpoint, which now returns `expectedCloseDate`.
+ * `normaliseCalendar` already drops entries without a close date, which is the
+ * right behaviour: a deal with no date cannot be placed on a calendar.
+ */
 export async function getCalendar(pipelineId?: string): Promise<LoaderResult<CalendarEntry[]>> {
   const q = pipelineId ? `?pipelineId=${encodeURIComponent(pipelineId)}` : "";
   try {
-    const res = await browserFetch(`v1/crm/deals/calendar${q}`);
+    const res = await browserFetch(`v1/crm/deals/kanban${q}`);
     if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseCalendar(await res.json()), source: "api" };
+    const body = await res.json();
+    // The kanban payload is grouped into stage columns; flatten to deal rows.
+    const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const rows = Array.isArray(rec.data) ? rec.data : Array.isArray(body) ? body : [];
+    // Accept either kanban columns (`[{ stage, deals: [...] }]`) or a flat deal
+    // array, so a cached payload from either shape still renders.
+    const deals = rows.flatMap((c) => {
+      const row = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
+      return Array.isArray(row.deals) ? row.deals : [row];
+    });
+    return { data: normaliseCalendar(deals), source: "api" };
   } catch {
     return { data: [], source: "error" };
   }

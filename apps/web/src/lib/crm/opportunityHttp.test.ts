@@ -91,10 +91,23 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     expect((await op.getOpportunities("p1")).data).toHaveLength(1);
     fetchMock.mockResolvedValueOnce(res([{ id: "d1", expectedCloseDate: "2026-09-01" }]));
     expect((await op.getCalendar()).data).toHaveLength(1);
-    fetchMock.mockResolvedValueOnce(res([{ id: "d1", name: "x", stage: "s", daysInStage: 20, limitDays: 14 }]));
+    // The ageing endpoint returns maxDays / daysOverLimit, not limitDays.
+    fetchMock.mockResolvedValueOnce(res([{ id: "d1", name: "x", stage: "s", daysInStage: 20, maxDays: 14 }]));
     expect((await op.getStageAgeing()).data[0].exceededBy).toBe(6);
-    fetchMock.mockResolvedValueOnce(res({ limits: [{ stage: "s", limitDays: 14 }] }));
+    fetchMock.mockResolvedValueOnce(res({ limits: [{ stage: "s", maxDays: 14 }] }));
     expect((await op.getStageLimits()).data).toHaveLength(1);
+  });
+
+  it("sources the calendar from the kanban endpoint and flattens its columns", async () => {
+    // /v1/crm/deals/calendar does not exist — the view was always empty.
+    fetchMock.mockResolvedValueOnce(
+      res({ data: [{ stage: "Lead", deals: [{ id: "d1", name: "x", expectedCloseDate: "2026-09-01" }] }] }),
+    );
+    const { data } = await op.getCalendar("p1");
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(String(url)).toContain("v1/crm/deals/kanban");
+    expect(String(url)).not.toContain("deals/calendar");
+    expect(data).toHaveLength(1);
   });
 
   it("stage-limit CRUD upserts and deletes against /v1/crm/stage-limits", async () => {
