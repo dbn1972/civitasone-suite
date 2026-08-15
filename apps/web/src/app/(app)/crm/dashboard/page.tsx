@@ -23,10 +23,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="👤" iconBg="#fce7ee" label="Contacts / Stakeholders" value={dash.totalContacts.toLocaleString("en-IN")} />
-        <StatCard icon="🔄" iconBg="#fce7ee" label="Active Engagements" value={dash.openDeals.toLocaleString("en-IN")} />
-        <StatCard icon="⚡" iconBg="#fce7ee" label="Interactions Today" value={dash.activitiesToday.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#fce7ee" label="Pipeline Value" value={formatMoney(dash.pipelineValue)} />
+        <StatCard icon="👤" iconBg="#eef2ff" label="Contacts / Stakeholders" value={dash.totalContacts.toLocaleString("en-IN")} />
+        <StatCard icon="🔄" iconBg="#ecfdf3" label="Active Engagements" value={dash.openDeals.toLocaleString("en-IN")} />
+        <StatCard icon="⚡" iconBg="#fffaeb" label="Interactions Today" value={dash.activitiesToday.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#f3e8ff" label="Pipeline Value" value={formatMoney(dash.pipelineValue)} />
       </StatGrid>
       <Card title="Quick links">
         <div style={{ display: "flex", gap: "12px", padding: "12px 16px", flexWrap: "wrap" }}>
@@ -38,20 +38,9 @@ export default async function Page() {
       <div
         role="note"
         aria-label="Module purpose notice"
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-          marginTop: 16,
-          padding: "12px 16px",
-          background: "#eff6ff",
-          border: "1px solid #bfdbfe",
-          borderRadius: 8,
-          fontSize: 13,
-          color: "#1e40af",
-        }}
+        className="flex items-start gap-2.5 mt-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800"
       >
-        <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1.4 }}>ℹ️</span>
+        <span aria-hidden="true" className="text-base leading-snug">ℹ️</span>
         <span>
           This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts —
           not a commercial sales pipeline.
