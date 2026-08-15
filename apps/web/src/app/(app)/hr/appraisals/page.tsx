@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { getAppraisals } from "../../../_data/loaders";
 import type { AppraisalSummary } from "@civitasone/types";
+import { AppraisalCycleProgress } from "./_components/AppraisalCycleProgress";
+import { APARRatingDistribution } from "./_components/APARRatingDistribution";
 
 export default async function AppraisalsPage() {
   const { data: appraisals, source } = await getAppraisals();
@@ -13,43 +15,68 @@ export default async function AppraisalsPage() {
   const completed = appraisals.filter((a) => a.status === "completed").length;
 
   const columns: { key: keyof AppraisalSummary & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "employeeName", label: "Employee" },
-    { key: "department", label: "Department" },
+    { key: "employeeName",    label: "Employee" },
+    { key: "department",      label: "Department" },
     { key: "appraisalPeriod", label: "Period" },
-    { key: "rating", label: "Rating", align: "right" },
-    { key: "reviewerName", label: "Reviewer" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "rating",          label: "Rating", align: "right" },
+    { key: "reviewerName",    label: "Reviewer" },
+    { key: "status",          label: "Status", cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Appraisals"
-        subtitle="Employee performance review cycle."
+        subtitle="Employee performance review cycle — APAR (Annual Performance Appraisal Report)."
         actions={
           <Link href="/hr/appraisals/new" className="btn primary">+ New Appraisal</Link>
         }
       />
       <DataSourceBadge source={source} />
-      <StatGrid>
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="🔍" iconBg="#e6f0ff" label="In Review" value={inReview} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed" value={completed} />
-      </StatGrid>
-      <Card title="Appraisal Records">
-        <DataTable<AppraisalSummary>
-          columns={columns}
-          rows={appraisals}
-          sortable
-          filterable
-          filterPlaceholder="Filter by employee, period or reviewer…"
-          emptyIcon="📊"
-          emptyTitle="No appraisals yet"
-          emptyMessage="Use '+ New Appraisal' to start a performance review cycle. Each appraisal records ratings, reviewer comments, and links to the employee's goals and KRAs."
-          pageSize={15}
-        />
-      </Card>
+
+      {total === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <EmptyState
+            icon="📊"
+            title="No active appraisal cycle"
+            message="Start an appraisal cycle to record employee performance ratings and manager reviews for the current period."
+            action={<Link href="/hr/appraisals/new" className="btn primary">Start New Cycle</Link>}
+          />
+        </div>
+      ) : (
+        <>
+          <StatGrid>
+            <StatCard icon="📋" iconBg="#f5f5f5" label="Total"     value={total} />
+            <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"   value={pending} />
+            <StatCard icon="🔍" iconBg="#e6f0ff" label="In Review" value={inReview} />
+            <StatCard icon="✅" iconBg="#e6f7f0" label="Completed" value={completed} />
+          </StatGrid>
+
+          {/* Open-cycle progress (show when there are pending/in-review appraisals) */}
+          {(pending > 0 || inReview > 0) && (
+            <AppraisalCycleProgress appraisals={appraisals} />
+          )}
+
+          {/* APAR rating distribution for closed/completed cycles */}
+          {completed > 0 && (
+            <APARRatingDistribution appraisals={appraisals} />
+          )}
+
+          <Card title="Appraisal Records">
+            <DataTable<AppraisalSummary>
+              columns={columns}
+              rows={appraisals}
+              sortable
+              filterable
+              filterPlaceholder="Filter by employee, period or reviewer…"
+              emptyIcon="📊"
+              emptyTitle="No appraisals yet"
+              emptyMessage="Use '+ New Appraisal' to start a performance review cycle."
+              pageSize={15}
+            />
+          </Card>
+        </>
+      )}
     </main>
   );
 }

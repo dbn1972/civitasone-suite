@@ -71,10 +71,10 @@ export default async function RecruitmentPage() {
       <Card title="All vacancies">
         {openings.length === 0 ? (
           <EmptyState
-            icon="📋"
-            title="No vacancies yet"
-            message="Create your first vacancy to start receiving applications from candidates."
-            action={<Link href="/hr/recruitment/new" className="btn primary">+ New Vacancy</Link>}
+            icon="💼"
+            title="No active job postings yet"
+            message="Post your first vacancy to start attracting talent. Positions appear here once published."
+            action={<Link href="/hr/recruitment/new" className="btn primary">Post First Job</Link>}
           />
         ) : (
           <DataTable<Opening>

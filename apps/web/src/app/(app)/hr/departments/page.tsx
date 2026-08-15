@@ -4,7 +4,13 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DepartmentsTable } from "./DepartmentsTable";
 
-type Dept = { id: string; code: string; name: string; parentId: string | null } & Record<string, unknown>;
+type Dept = {
+  id: string;
+  code: string;
+  name: string;
+  parentId: string | null;
+  employeeCount?: number;
+} & Record<string, unknown>;
 
 async function getDepartments(): Promise<LoaderResult<Dept[]>> {
   try {
@@ -52,6 +58,39 @@ export default async function DepartmentsPage() {
           </Link>
         }
       />
+
+      {/* Breadcrumb */}
+      <nav aria-label="Breadcrumb" style={{ marginBottom: 12 }}>
+        <ol
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            fontSize: 12,
+            color: "var(--mut,#64748b)",
+          }}
+        >
+          <li>
+            <Link href="/" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
+              Home
+            </Link>
+          </li>
+          <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
+          <li>
+            <Link href="/hr" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
+              HR
+            </Link>
+          </li>
+          <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
+          <li aria-current="page" style={{ fontWeight: 600, color: "var(--fg,#0f172a)" }}>
+            Departments
+          </li>
+        </ol>
+      </nav>
+
       <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Departments" value={depts.length} />

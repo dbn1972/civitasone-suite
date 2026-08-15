@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useId, useState, useCallback } from "react";
+import { useEffect, useId, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ApplicationPipeline } from "../_components/ApplicationPipeline";
+import { GOIReservationCard } from "../_components/GOIReservationCard";
 
 type JobOpening = {
   id: string;
@@ -34,24 +36,147 @@ type Application = {
 type DecisionState = Record<string, "idle" | "submitting" | "done" | "error">;
 
 const STAGE_COLOR: Record<string, string> = {
-  applied:     "bg-slate-100 text-slate-700",
-  shortlisted: "bg-blue-100 text-blue-700",
-  interviewing:"bg-purple-100 text-purple-700",
-  selected:    "bg-emerald-100 text-emerald-700",
-  offered:     "bg-amber-100 text-amber-700",
-  hired:       "bg-green-100 text-green-700",
-  rejected:    "bg-red-100 text-red-700",
-  withdrawn:   "bg-slate-100 text-slate-400",
+  applied:      "bg-slate-100 text-slate-700",
+  shortlisted:  "bg-blue-100 text-blue-700",
+  interviewing: "bg-purple-100 text-purple-700",
+  selected:     "bg-emerald-100 text-emerald-700",
+  offered:      "bg-amber-100 text-amber-700",
+  hired:        "bg-green-100 text-green-700",
+  rejected:     "bg-red-100 text-red-700",
+  withdrawn:    "bg-slate-100 text-slate-400",
 };
 
 const DECISION_COLOR: Record<string, string> = {
-  pending:      "bg-slate-100 text-slate-500",
-  shortlisted:  "bg-blue-100 text-blue-700",
-  eligible:     "bg-emerald-100 text-emerald-700",
-  ineligible:   "bg-red-100 text-red-700",
-  waitlisted:   "bg-amber-100 text-amber-700",
-  manual_review:"bg-purple-100 text-purple-700",
+  pending:       "bg-slate-100 text-slate-500",
+  shortlisted:   "bg-blue-100 text-blue-700",
+  eligible:      "bg-emerald-100 text-emerald-700",
+  ineligible:    "bg-red-100 text-red-700",
+  waitlisted:    "bg-amber-100 text-amber-700",
+  manual_review: "bg-purple-100 text-purple-700",
 };
+
+/** Valid next actions per application stage */
+type ActionDef = {
+  label: string;
+  key: string;
+  variant: "primary" | "danger" | "ghost";
+  disabled?: boolean;
+  disabledReason?: string;
+};
+
+const STAGE_ACTIONS: Record<string, ActionDef[]> = {
+  applied: [
+    { label: "Shortlist",         key: "shortlist",   variant: "primary" },
+    { label: "Reject",            key: "reject",      variant: "danger"  },
+  ],
+  shortlisted: [
+    { label: "Schedule Interview", key: "schedule_interview", variant: "primary", disabled: true, disabledReason: "Open Interview module to schedule" },
+    { label: "Reject",             key: "reject",             variant: "danger"  },
+  ],
+  interviewing: [
+    { label: "Send Offer", key: "send_offer", variant: "primary", disabled: true, disabledReason: "Open Offer module to send" },
+    { label: "Reject",     key: "reject",     variant: "danger"  },
+  ],
+  selected: [
+    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Use application detail to complete hire" },
+    { label: "Withdraw",    key: "withdraw",    variant: "danger"  },
+  ],
+  offered: [
+    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Use application detail to complete hire" },
+    { label: "Withdraw",    key: "withdraw",    variant: "danger"  },
+  ],
+  hired:     [],
+  rejected:  [],
+  withdrawn: [],
+};
+
+function ContextMenu({
+  app,
+  onAction,
+  actionState,
+}: {
+  app: Application;
+  onAction: (appId: string, key: string) => Promise<void>;
+  actionState: "idle" | "submitting" | "done" | "error";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const actions = STAGE_ACTIONS[app.stage] ?? [];
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  if (actions.length === 0) {
+    return (
+      <span className="text-xs text-slate-400 italic">No actions</span>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={actionState === "submitting"}
+        aria-label="Application actions"
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+      >
+        {actionState === "submitting" ? "…" : "Actions"}
+        <span aria-hidden="true" className="text-slate-400">▾</span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white shadow-lg py-1"
+        >
+          {actions.map((act) => (
+            <div key={act.key} className="relative group">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={act.disabled}
+                onClick={async () => {
+                  setOpen(false);
+                  await onAction(app.id, act.key);
+                }}
+                className={[
+                  "w-full text-left px-4 py-2 text-xs font-medium transition-colors",
+                  act.disabled
+                    ? "text-slate-300 cursor-not-allowed"
+                    : act.variant === "danger"
+                    ? "text-red-600 hover:bg-red-50"
+                    : "text-slate-700 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {act.label}
+              </button>
+              {act.disabled && act.disabledReason && (
+                <span
+                  role="tooltip"
+                  className="hidden group-hover:block absolute left-0 top-full mt-0.5 z-30 rounded-md bg-slate-800 text-white text-[10px] px-2 py-1 whitespace-nowrap shadow-lg"
+                >
+                  {act.disabledReason}
+                </span>
+              )}
+            </div>
+          ))}
+          {actionState === "error" && (
+            <p className="px-4 py-1 text-[10px] text-red-500">Action failed — try again</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function JobOpeningDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +192,6 @@ export default function JobOpeningDetailPage() {
   const [stageFilter, setStageFilter] = useState("all");
 
   const searchId = useId();
-  const stageId = useId();
 
   const loadOpening = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -78,7 +202,7 @@ export default function JobOpeningDetailPage() {
       const found = arr.find((o) => o.id === id) ?? null;
       setOpening(found);
     } catch (e) {
-      if (!(e instanceof Error && e.name === 'AbortError')) setError("Network error loading vacancy.");
+      if (!(e instanceof Error && e.name === "AbortError")) setError("Network error loading vacancy.");
     } finally {
       setLoadingOpening(false);
     }
@@ -91,41 +215,60 @@ export default function JobOpeningDetailPage() {
       const data = await res.json() as { data?: Application[] };
       setApplications(data.data ?? []);
     } catch {
-      // Non-fatal — applications may be empty
+      // Non-fatal
     } finally {
       setLoadingApps(false);
     }
   }, [id]);
 
   useEffect(() => {
-    const controller = new AbortController()
+    const controller = new AbortController();
     void loadOpening(controller.signal);
     void loadApplications(controller.signal);
-    return () => controller.abort()
+    return () => controller.abort();
   }, [loadOpening, loadApplications]);
 
-  async function makeDecision(appId: string, decision: "shortlisted" | "ineligible", reasonCode?: string) {
+  const handleAction = useCallback(async (appId: string, actionKey: string) => {
     setDecisionStates((s) => ({ ...s, [appId]: "submitting" }));
     try {
-      const body: Record<string, unknown> = { decision };
-      if (reasonCode) body.reasonCode = reasonCode;
-      const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        setDecisionStates((s) => ({ ...s, [appId]: "error" }));
+      let res: Response;
+      if (actionKey === "shortlist") {
+        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ decision: "shortlisted" }),
+        });
+        if (res.ok) {
+          setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "shortlisted", stage: "shortlisted" } : a));
+        }
+      } else if (actionKey === "reject") {
+        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ decision: "ineligible", reasonCode: "does_not_meet_eligibility" }),
+        });
+        if (res.ok) {
+          setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "ineligible", stage: "rejected" } : a));
+        }
+      } else if (actionKey === "withdraw") {
+        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/stage`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ stage: "withdrawn" }),
+        });
+        if (res.ok) {
+          setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "withdrawn" } : a));
+        }
+      } else {
+        // Unimplemented action — no-op
+        setDecisionStates((s) => ({ ...s, [appId]: "idle" }));
         return;
       }
       setDecisionStates((s) => ({ ...s, [appId]: "done" }));
-      setApplications((prev) => prev.map((a) =>
-        a.id === appId ? { ...a, screeningDecision: decision } : a
-      ));
     } catch {
       setDecisionStates((s) => ({ ...s, [appId]: "error" }));
     }
-  }
+  }, []);
 
   const filtered = applications.filter((a) => {
     const q = search.toLowerCase();
@@ -134,7 +277,7 @@ export default function JobOpeningDetailPage() {
       || (a.email ?? "").toLowerCase().includes(q)
       || (a.qualification ?? "").toLowerCase().includes(q)
       || (a.skills ?? []).some((s) => s.toLowerCase().includes(q));
-    const matchesStage = stageFilter === "all" || a.stage === stageFilter || a.screeningDecision === stageFilter;
+    const matchesStage = stageFilter === "all" || a.stage === stageFilter;
     return matchesSearch && matchesStage;
   });
 
@@ -146,7 +289,7 @@ export default function JobOpeningDetailPage() {
     );
   }
 
-  if (error || !opening) {
+  if (error ?? !opening) {
     return (
       <main className="page-main">
         <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-4 block">
@@ -160,7 +303,6 @@ export default function JobOpeningDetailPage() {
   }
 
   const published = opening.isPublished === true || opening.isPublished === "true";
-  const allStages = ["all", ...Array.from(new Set(applications.map((a) => a.stage)))];
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -188,10 +330,10 @@ export default function JobOpeningDetailPage() {
       {/* ── Vacancy meta ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Posts", value: opening.vacancies },
-          { label: "Type", value: opening.vacancyType ?? "Regular" },
-          { label: "Applications", value: loadingApps ? "—" : applications.length },
-          { label: "Deadline", value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : "Open" },
+          { label: "Posts",         value: opening.vacancies },
+          { label: "Type",          value: opening.vacancyType ?? "Regular" },
+          { label: "Applications",  value: loadingApps ? "—" : applications.length },
+          { label: "Deadline",      value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : "Open" },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
             <p className="text-2xl font-bold text-slate-800">{String(value)}</p>
@@ -199,6 +341,18 @@ export default function JobOpeningDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* ── GOI Reservation Status (GFR 2017) ── */}
+      <GOIReservationCard totalVacancies={opening.vacancies} />
+
+      {/* ── Application Pipeline tracker ── */}
+      {!loadingApps && (
+        <ApplicationPipeline
+          applications={applications}
+          activeStage={stageFilter}
+          onStageClick={(s) => setStageFilter(s)}
+        />
+      )}
 
       {/* ── Applications Inbox ── */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -212,7 +366,7 @@ export default function JobOpeningDetailPage() {
             )}
           </h2>
           <div className="flex items-center gap-2">
-            <label htmlFor={searchId} className="sr-only">Search</label>
+            <label htmlFor={searchId} className="sr-only">Search applicants</label>
             <input
               id={searchId}
               type="search"
@@ -221,17 +375,15 @@ export default function JobOpeningDetailPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
-            <label htmlFor={stageId} className="sr-only">Filter by stage</label>
-            <select
-              id={stageId}
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {allStages.map((s) => (
-                <option key={s} value={s}>{s === "all" ? "All stages" : s}</option>
-              ))}
-            </select>
+            {stageFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setStageFilter("all")}
+                className="text-xs text-indigo-600 hover:underline"
+              >
+                Clear filter
+              </button>
+            )}
           </div>
         </div>
 
@@ -245,6 +397,15 @@ export default function JobOpeningDetailPage() {
                 ? "No applications received yet."
                 : "No applications match the current filter."}
             </p>
+            {stageFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setStageFilter("all")}
+                className="mt-2 text-xs text-indigo-600 hover:underline"
+              >
+                Show all stages
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -259,7 +420,9 @@ export default function JobOpeningDetailPage() {
                         {app.email}{app.mobile ? ` · ${app.mobile}` : ""}
                       </p>
                       {app.qualification && (
-                        <p className="text-xs text-slate-600 mt-1">{app.qualification}{app.experienceYears != null ? ` · ${app.experienceYears} yr exp` : ""}</p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          {app.qualification}{app.experienceYears != null ? ` · ${app.experienceYears} yr exp` : ""}
+                        </p>
                       )}
                       {(app.skills ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
@@ -285,29 +448,12 @@ export default function JobOpeningDetailPage() {
                       {app.appliedAt && (
                         <p className="text-xs text-slate-400">{new Date(app.appliedAt).toLocaleDateString("en-IN")}</p>
                       )}
-
-                      {/* Screening actions */}
-                      {app.screeningDecision === "pending" && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <button
-                            onClick={() => makeDecision(app.id, "shortlisted")}
-                            disabled={ds === "submitting"}
-                            className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-                          >
-                            {ds === "submitting" ? "…" : "Shortlist"}
-                          </button>
-                          <button
-                            onClick={() => makeDecision(app.id, "ineligible", "does_not_meet_eligibility")}
-                            disabled={ds === "submitting"}
-                            className="rounded-md bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                      {ds === "error" && (
-                        <p className="text-xs text-red-500">Action failed — try again</p>
-                      )}
+                      {/* Context-aware action menu */}
+                      <ContextMenu
+                        app={app}
+                        onAction={handleAction}
+                        actionState={ds}
+                      />
                     </div>
                   </div>
                 </div>
@@ -321,16 +467,18 @@ export default function JobOpeningDetailPage() {
       {applications.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-3">
           <button
+            type="button"
             onClick={() => {
-              const pending = applications.filter((a) => a.screeningDecision === "pending");
+              const pending = applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied");
               if (pending.length === 0) return;
-              void Promise.all(pending.map((a) => makeDecision(a.id, "shortlisted")));
+              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist")));
             }}
             className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
           >
-            Shortlist All Pending ({applications.filter((a) => a.screeningDecision === "pending").length})
+            Shortlist All Pending ({applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length})
           </button>
           <button
+            type="button"
             onClick={() => loadApplications()}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
