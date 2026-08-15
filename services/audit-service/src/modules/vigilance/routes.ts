@@ -5,6 +5,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import {
   idParam, actionIdParam, intakeBody, screenBody, assignIoBody,
   evidenceBody, findingsBody, proposeActionBody, decideActionBody,
@@ -16,6 +17,16 @@ const READER_ROLES = ["audit_officer", "audit_admin", "super_admin", "vigilance_
 const VIGILANCE_ROLES = ["vigilance_officer", "vigilance_admin", "super_admin"];
 // Maker-checker authority: only a disciplinary authority decides an action.
 const AUTHORITY_ROLES = ["vigilance_admin", "super_admin"];
+
+/**
+ * Asserts that the vigilance case with the given id belongs to the requesting
+ * tenant.  Throws 404 (not 403) to avoid disclosing the existence of cases
+ * owned by other tenants (IDOR mitigation — S2).
+ */
+async function assertCaseOwnership(tenantId: string, caseId: string): Promise<void> {
+  const row = await repo.findVigilanceCaseById(caseId, tenantId);
+  if (!row) throw new HttpError(404, "NOT_FOUND", "vigilance case not found");
+}
 
 export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/audit/vigilance", async (req, reply) => {
@@ -46,6 +57,7 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = screenBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.screenCase(ctx, id, body));
   });
@@ -54,6 +66,7 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = assignIoBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignIo(ctx, id, body));
   });
@@ -62,6 +75,7 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = evidenceBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addEvidence(ctx, id, body));
   });
@@ -70,6 +84,7 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = findingsBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordFindings(ctx, id, body));
   });
@@ -78,6 +93,7 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = proposeActionBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.proposeAction(ctx, id, body));
   });
@@ -86,7 +102,8 @@ export async function vigilanceRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/audit/vigilance/:id/actions/:actionId/decision", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, AUTHORITY_ROLES);
-    const { actionId } = actionIdParam.parse(req.params);
+    const { id, actionId } = actionIdParam.parse(req.params);
+    await assertCaseOwnership(ctx.tenantId, id);
     const body = decideActionBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.decideAction(ctx, actionId, body));
   });
