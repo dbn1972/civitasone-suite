@@ -23,34 +23,34 @@ export default async function ForecastPage({ searchParams }: PageProps) {
     <>
       <PageHeader
         title="Procurement Pipeline Forecast"
-        subtitle="Weighted pipeline value — each active deal counted at its stage win probability."
+        subtitle="Weighted engagement value — each active procurement tracked at its stage likelihood • पाइपलाइन पूर्वानुमान"
         back="/crm"
-        actions={<a className="btn" href="/crm/pipeline">Pipeline Board</a>}
+        actions={<a className="btn" href="/crm/pipeline">Engagement Board</a>}
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <StatCard
-          icon="💰"
+          icon="▣"
           iconBg="#dcfce7"
           label="Weighted Forecast"
           value={formatMoney(forecast.totalForecastMinor)}
         />
         <StatCard
-          icon="📊"
+          icon="◉"
           iconBg="#e0f2fe"
-          label="Deals in Forecast"
+          label="Engagements in Forecast"
           value={forecast.dealCount.toLocaleString("en-IN")}
         />
         <StatCard
-          icon="📐"
+          icon="◈"
           iconBg="#fef3c7"
-          label="Avg Weighted Deal"
+          label="Avg Weighted Engagement"
           value={formatMoney(averageWeightedDealMinor(forecast))}
         />
         <StatCard
-          icon="⭐"
+          icon="△"
           iconBg="#fce7f3"
-          label="Biggest Contributor"
+          label="Top Stage"
           value={topStage ? topStage.stageName : "—"}
         />
       </StatGrid>

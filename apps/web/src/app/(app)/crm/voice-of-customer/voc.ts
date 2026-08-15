@@ -37,9 +37,9 @@ export const MOOD_LABEL: Record<Mood, string> = {
 };
 
 export const MOOD_ICON: Record<Mood, string> = {
-  positive: "🙂",
-  neutral: "😐",
-  negative: "🙁",
+  positive: "▲",
+  neutral: "○",
+  negative: "▽",
   unknown: "—",
 };
 
