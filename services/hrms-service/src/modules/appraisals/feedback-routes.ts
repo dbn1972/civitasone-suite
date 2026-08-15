@@ -40,7 +40,12 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const rows = await scopedRead((tx) => tx.select().from(hrms360Feedback)
       .where(and(eq(hrms360Feedback.tenantId, ctx.tenantId), eq(hrms360Feedback.appraisalId, id))));
-    return reply.send({ data: rows });
+    // 360-deg anonymity: mask reviewerId unless requester holds hr_admin (PASS_WITH_NOTES S9 fix)
+    const isPrivileged = ctx.roles.some((r: string) => ["hr_admin", "super_admin"].includes(r));
+    const data = isPrivileged
+      ? rows
+      : rows.map((row) => ({ ...row, reviewerId: null }));
+    return reply.send({ data });
   });
 
   app.post("/v1/hrms/appraisals/:id/disclosure", async (req, reply) => {
