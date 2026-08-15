@@ -1,11 +1,18 @@
 "use client";
 
-export function PrintButton({ label = "Print / Download PDF" }: { label?: string }) {
+export function PrintButton({ label = "Print / PDF", title }: { label?: string; title?: string }) {
+  function handlePrint() {
+    const prev = document.title;
+    if (title) document.title = title;
+    window.print();
+    if (title) document.title = prev;
+  }
   return (
     <button
       className="btn-print no-print"
-      onClick={() => window.print()}
+      onClick={handlePrint}
       aria-label={label}
+      title="Print or save as PDF"
     >
       <svg
         width="14"
