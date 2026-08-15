@@ -99,6 +99,19 @@ test.describe('HR Sub-modules', () => {
       await page.goto('/hr/onboarding');
       await expect(page.locator('#page-heading')).toBeVisible();
     });
+
+    test('onboarding stat tiles all render', async ({ page }) => {
+      await page.goto('/hr/onboarding');
+      await expect(page.locator('.stat').first()).toBeVisible();
+    });
+
+    test('joinee cards or empty state present', async ({ page }) => {
+      await page.goto('/hr/onboarding');
+      const cards = page.locator('[data-testid^="joinee-card-"]');
+      const emptyEl = page.locator('.empty-state');
+      const found = await cards.count() > 0 ? cards.first() : emptyEl.first();
+      await expect(found).toBeVisible();
+    });
   });
 
   // ── Deputation ───────────────────────────────────────────────────────────

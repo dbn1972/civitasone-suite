@@ -231,3 +231,81 @@ export const acceptedResponse = {
   messageId: 'msg-e2e-test-001',
   accepted: true,
 };
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+export const onboardingRows = [
+  {
+    id: 'ob-001',
+    employee: 'Sunita Rao',
+    department: 'Finance',
+    joiningDate: '2026-08-11',
+    reportingManager: 'CFO Mahesh Iyer',
+    officeLocation: 'Block C, Udyog Bhavan, Minto Road, New Delhi — 110 001',
+    stepsCompleted: 2,
+    totalSteps: 5,
+    overdue: 0,
+    progress: '40',
+    status: 'in_progress',
+    checklist: [
+      { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
+      { id: 'id-card', label: 'ID Card Issued', status: 'completed', dueDay: 3 },
+      { id: 'workstation', label: 'Workstation Assigned', status: 'in_progress', dueDay: 3 },
+      { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
+      { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
+    ],
+    documents: [
+      { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
+      { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'uploaded', category: 'document' },
+      { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-pan', name: 'PAN Card', required: true, status: 'uploaded', category: 'document' },
+      { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
+    ],
+    tasks: [
+      { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
+      { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'completed' },
+      { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'in_progress' },
+      { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
+      { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
+      { id: 't6', title: 'Probation review meeting', milestoneDay: 30, status: 'pending' },
+    ],
+  },
+  {
+    id: 'ob-002',
+    employee: 'Rajesh Nambiar',
+    department: 'IT',
+    joiningDate: '2026-08-01',
+    reportingManager: 'Director IT',
+    officeLocation: 'Block A, Electronics Niketan, CGO Complex, New Delhi — 110 003',
+    stepsCompleted: 1,
+    totalSteps: 5,
+    overdue: 2,
+    progress: '20',
+    status: 'overdue',
+    checklist: [
+      { id: 'docs', label: 'Documents Submitted', status: 'completed', dueDay: 1 },
+      { id: 'id-card', label: 'ID Card Issued', status: 'overdue', dueDay: 3 },
+      { id: 'workstation', label: 'Workstation Assigned', status: 'overdue', dueDay: 3 },
+      { id: 'it-access', label: 'IT Access Created', status: 'pending', dueDay: 7 },
+      { id: 'induction', label: 'Induction Completed', status: 'pending', dueDay: 7 },
+    ],
+    documents: [
+      { id: 'doc-appt', name: 'Appointment Letter', required: true, status: 'verified', category: 'document' },
+      { id: 'doc-id', name: 'Government ID Proof', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-address', name: 'Address Proof', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-education', name: 'Education Certificate', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-pan', name: 'PAN Card', required: true, status: 'pending', category: 'document' },
+      { id: 'doc-bank', name: 'Bank Account Details', required: true, status: 'pending', category: 'document' },
+    ],
+    tasks: [
+      { id: 't1', title: 'Complete document submission', milestoneDay: 1, status: 'completed' },
+      { id: 't2', title: 'Collect ID card', milestoneDay: 3, status: 'overdue' },
+      { id: 't3', title: 'Workstation setup', milestoneDay: 3, status: 'overdue' },
+      { id: 't4', title: 'IT access & VPN setup', milestoneDay: 7, status: 'pending' },
+      { id: 't5', title: 'HR induction session', milestoneDay: 7, status: 'pending' },
+    ],
+  },
+];
+
+export const onboardingEmpty: never[] = [];

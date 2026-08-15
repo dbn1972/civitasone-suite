@@ -184,6 +184,9 @@ export async function mockHrmsApis(page: Page): Promise<void> {
   await page.route('**/api/v1/hrms/org-chart*', (route) =>
     json(route, []),
   );
+  await page.route('**/api/v1/hrms/onboarding*', (route) =>
+    json(route, fixtures.onboardingRows),
+  );
 }
 
 /** Fulfill a route with JSON data. */
