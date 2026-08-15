@@ -104,10 +104,19 @@ export function OpportunityViews() {
 
   async function confirmMove() {
     if (!pendingMove?.deal.id) return;
+    // The stage move is optimistic-locked, so the server needs the version this
+    // card was rendered from. If the payload did not carry one we stop here
+    // rather than guess: sending a wrong version would either be rejected as a
+    // conflict or, worse, overwrite a concurrent edit.
+    const version = pendingMove.deal.version;
+    if (typeof version !== "number") {
+      setMoveError("This opportunity is out of date. Refresh and try the move again.");
+      return;
+    }
     setMoveBusy(true);
     setMoveError("");
     try {
-      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStage);
+      await changeOpportunityStage(pendingMove.deal.id, pendingMove.toStage, version);
       setMessage(`“${pendingMove.deal.name}” moved to ${pendingMove.toStageName}.`);
       setPendingMove(null);
       await reload();

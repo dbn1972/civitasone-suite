@@ -130,7 +130,9 @@ export async function createProduct(p: Product): Promise<void> {
 }
 
 export async function updateProduct(id: string, p: Product): Promise<void> {
-  const res = await browserFetch(`v1/crm/products/${id}`, { method: "PUT", body: JSON.stringify(p) });
+  // PATCH, not PUT: the service registers only `app.patch("/v1/crm/products/:id")`,
+  // so a PUT matched no route and Fastify answered 404 — product edits never saved.
+  const res = await browserFetch(`v1/crm/products/${id}`, { method: "PATCH", body: JSON.stringify(p) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
@@ -207,7 +209,9 @@ export async function createPriceBook(p: PriceBook): Promise<void> {
 }
 
 export async function updatePriceBook(id: string, p: PriceBook): Promise<void> {
-  const res = await browserFetch(`v1/crm/price-books/${id}`, { method: "PUT", body: JSON.stringify(p) });
+  // PATCH, not PUT — the service registers `app.patch("/v1/crm/price-books/:id")`.
+  // PUT on this path is only defined for `/:id/items`, so the header edit 404'd.
+  const res = await browserFetch(`v1/crm/price-books/${id}`, { method: "PATCH", body: JSON.stringify(p) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 

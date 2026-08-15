@@ -175,8 +175,9 @@ export async function createPipeline(pipeline: Pipeline): Promise<void> {
 }
 
 export async function updatePipeline(id: string, pipeline: Pipeline): Promise<void> {
+  // PATCH, not PUT: the service registers `app.patch("/v1/crm/pipelines/:id")`.
   const res = await browserFetch(`v1/crm/pipelines/${id}`, {
-    method: "PUT",
+    method: "PATCH",
     body: JSON.stringify(pipeline),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
@@ -205,6 +206,12 @@ export interface Opportunity {
   accountId?: string;
   status?: string;
   outcome?: CloseOutcome | null;
+  /**
+   * Optimistic-lock version as read from the server. Required when moving the
+   * opportunity to another stage — `PATCH /v1/crm/deals/:id/stage` validates it
+   * and the consumer uses it to detect a concurrent edit.
+   */
+  version?: number;
 }
 
 export function normaliseOpportunity(raw: unknown): Opportunity | null {
@@ -231,6 +238,7 @@ export function normaliseOpportunity(raw: unknown): Opportunity | null {
     outcome: (CLOSE_OUTCOMES as readonly string[]).includes(str(r.outcome))
       ? (str(r.outcome) as CloseOutcome)
       : null,
+    ...(typeof r.version === "number" ? { version: r.version } : {}),
   };
 }
 
@@ -288,15 +296,24 @@ export async function createOpportunity(opp: Opportunity): Promise<void> {
 }
 
 export async function updateOpportunity(id: string, opp: Opportunity): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PUT", body: JSON.stringify(opp) });
+  // PATCH, not PUT: the service registers `app.patch("/v1/crm/deals/:id")`.
+  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(opp) });
   if (!res.ok) await throwStageError(res);
 }
 
 /** OP-003 stage move — 422 MANDATORY_STAGE_FIELDS_MISSING surfaces the fields. */
-export async function changeOpportunityStage(id: string, stage: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ stage }),
+export async function changeOpportunityStage(id: string, stage: string, version: number): Promise<void> {
+  // Moving a deal through the pipeline has its own route —
+  // `PATCH /v1/crm/deals/:id/stage` — which is what enforces the OP-003
+  // mandatory-field gate and stamps stage_entered_at for stage ageing. This was
+  // sending PUT to the generic `/v1/crm/deals/:id` instead: wrong verb and wrong
+  // path, so every stage move 404'd and the 422 field gate never ran.
+  //
+  // `version` is mandatory in the request schema: the stage move is an
+  // optimistic-locked write, so the caller must send the version it rendered.
+  const res = await browserFetch(`v1/crm/deals/${id}/stage`, {
+    method: "PATCH",
+    body: JSON.stringify({ stage, version }),
   });
   if (!res.ok) await throwStageError(res);
 }
@@ -456,8 +473,14 @@ export function normaliseAgeing(raw: unknown): StageAgeingRow[] {
       const id = str(r.id);
       if (!id) return null;
       const daysInStage = num(r.daysInStage);
-      const limitDays = num(r.limitDays);
-      const exceededBy = r.exceededBy !== undefined ? num(r.exceededBy) : Math.max(0, daysInStage - limitDays);
+      // The endpoint returns `maxDays` / `daysOverLimit` (see StageAgeingRow in
+      // crm-service repo.ts). This read `limitDays` / `exceededBy`, which are not
+      // in the payload, so the limit rendered as 0 and every aged deal appeared
+      // to be over its limit by its full age. Legacy names are still accepted so
+      // a cached offline page keeps working.
+      const limitDays = num(r.maxDays ?? r.limitDays);
+      const over = r.daysOverLimit ?? r.exceededBy;
+      const exceededBy = over !== undefined ? num(over) : Math.max(0, daysInStage - limitDays);
       return {
         id,
         name: str(r.name),
@@ -482,11 +505,17 @@ export async function getStageAgeing(pipelineId?: string): Promise<LoaderResult<
   }
 }
 
+/**
+ * Stage limit as the service models it: `maxDays` plus an `enabled` flag, keyed
+ * on pipelineId + stage. This type previously declared `limitDays`, which the
+ * API neither returns nor accepts — reads showed 0 days and writes were rejected.
+ */
 export interface StageLimit {
   id?: string;
   pipelineId?: string;
   stage: string;
-  limitDays: number;
+  maxDays: number;
+  enabled: boolean;
 }
 
 export function normaliseStageLimit(raw: unknown): StageLimit | null {
@@ -498,7 +527,9 @@ export function normaliseStageLimit(raw: unknown): StageLimit | null {
     id: typeof r.id === "string" ? r.id : undefined,
     pipelineId: str(r.pipelineId) || undefined,
     stage,
-    limitDays: num(r.limitDays),
+    // `limitDays` accepted as a fallback so a cached offline payload still renders.
+    maxDays: num(r.maxDays ?? r.limitDays),
+    enabled: typeof r.enabled === "boolean" ? r.enabled : true,
   };
 }
 
@@ -508,9 +539,21 @@ export function normaliseStageLimits(raw: unknown): StageLimit[] {
     .filter((s): s is StageLimit => s !== null);
 }
 
+/**
+ * Stage limits live at `/v1/crm/stage-limits`, NOT under `/v1/crm/deals/`.
+ * Every call here previously carried the `deals/` prefix, so all four operations
+ * matched no route and 404'd — the stage-ageing configuration could be neither
+ * read nor written.
+ *
+ * The service also models writes as a single upsert on the collection
+ * (`PUT /v1/crm/stage-limits`) keyed on `pipelineId + stage`, rather than
+ * create-by-POST plus update-by-id. `createStageLimit` and `updateStageLimit`
+ * therefore issue the same request; the pair is kept so the call sites in
+ * StageAgeingDashboard stay readable.
+ */
 export async function getStageLimits(): Promise<LoaderResult<StageLimit[]>> {
   try {
-    const res = await browserFetch("v1/crm/deals/stage-limits");
+    const res = await browserFetch("v1/crm/stage-limits");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseStageLimits(await res.json()), source: "api" };
   } catch {
@@ -518,16 +561,22 @@ export async function getStageLimits(): Promise<LoaderResult<StageLimit[]>> {
   }
 }
 
+/** Upsert a stage limit. Keyed server-side on pipelineId + stage. */
 export async function createStageLimit(limit: StageLimit): Promise<void> {
-  const res = await browserFetch("v1/crm/deals/stage-limits", {
-    method: "POST",
+  const res = await browserFetch("v1/crm/stage-limits", {
+    method: "PUT",
     body: JSON.stringify(limit),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function updateStageLimit(id: string, limit: StageLimit): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/stage-limits/${id}`, {
+/**
+ * Same upsert as createStageLimit — the service keys on pipelineId + stage, so
+ * the row id is not part of the request. The parameter is retained only to keep
+ * the caller's create/update branch expressive.
+ */
+export async function updateStageLimit(_id: string, limit: StageLimit): Promise<void> {
+  const res = await browserFetch("v1/crm/stage-limits", {
     method: "PUT",
     body: JSON.stringify(limit),
   });
@@ -535,6 +584,6 @@ export async function updateStageLimit(id: string, limit: StageLimit): Promise<v
 }
 
 export async function deleteStageLimit(id: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/deals/stage-limits/${id}`, { method: "DELETE" });
+  const res = await browserFetch(`v1/crm/stage-limits/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }

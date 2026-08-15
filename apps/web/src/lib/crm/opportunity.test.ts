@@ -71,8 +71,16 @@ describe("opportunity normalisers (OP-001..006)", () => {
     expect(rows2[0].exceededBy).toBe(0);
   });
 
-  it("normalises stage limits", () => {
-    expect(normaliseStageLimits({ limits: [{ stage: "qual", limitDays: 14 }] })[0].limitDays).toBe(14);
+  it("normalises stage limits from the API's maxDays/enabled shape", () => {
+    const [row] = normaliseStageLimits({ limits: [{ stage: "qual", maxDays: 14, enabled: false }] });
+    expect(row.maxDays).toBe(14);
+    expect(row.enabled).toBe(false);
+  });
+
+  it("still reads a cached payload that used the old limitDays name", () => {
+    // Offline caches written before the field name was corrected must not
+    // regress to a 0-day limit.
+    expect(normaliseStageLimits({ limits: [{ stage: "qual", limitDays: 21 }] })[0].maxDays).toBe(21);
   });
 
   it("extracts missing fields from a 422 body across shapes", () => {
