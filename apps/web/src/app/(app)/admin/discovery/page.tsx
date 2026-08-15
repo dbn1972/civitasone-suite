@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 } as const;
@@ -36,8 +36,18 @@ export default function AdminDiscoveryPage() {
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [services, setServices] = useState<Service[]>([]);
 
-  const filtered = MOCK_SERVICES.filter((s) => {
+  useEffect(() => {
+    fetch("/api/v1/admin/discovery/services")
+      .then((r) => r.json())
+      .then((body) => { setServices(body.data ?? MOCK_SERVICES); })
+      .catch(() => { setServices(MOCK_SERVICES); })
+      .finally(() => { setIsLoading(false); });
+  }, []);
+
+  const filtered = (isLoading ? [] : services).filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.endpoint.toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === "all" || s.type === typeFilter;
     return matchSearch && matchType;
@@ -200,7 +210,15 @@ export default function AdminDiscoveryPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                [1, 2, 3, 4, 5, 6].map((n) => (
+                  <tr key={n} aria-hidden="true">
+                    {[1, 2, 3, 4, 5].map((c) => (
+                      <td key={c}><span style={{ display: "block", height: 16, borderRadius: 4, background: "var(--panel, #f1f5f9)", animation: "pulse 1.5s ease-in-out infinite" }} /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "#6b7280" }}>No services match your filters.</td></tr>
               ) : (
                 filtered.map((s) => (
