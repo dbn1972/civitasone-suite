@@ -52,6 +52,77 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/finance/statements': [],
   '/api/v1/finance/utilization-certificates': [],
 
+  // HRMS Finance — HRMS-facing routes (S17 E2E fixtures)
+  // Travel claims: Level 5 employee with AC-III fare — entitlement must resolve to Sleeper
+  '/api/v1/finance/travel-claims': [
+    {
+      id: 'tc-e2e-001',
+      employee: { name: 'Suresh Nair', employeeNo: 'EMP-L5-001', payLevel: 5 },
+      from: 'Delhi',
+      to: 'Mumbai',
+      departureDate: '2026-08-01',
+      returnDate: '2026-08-03',
+      purpose: 'Official Inspection',
+      fareClass: 'AC-III',
+      fareAmountMinor: 120000,
+      daAmountMinor: 50000,
+      hotelAmountMinor: 80000,
+      hotelNights: 2,
+      totalAmountMinor: 250000,
+      auditStatus: 'Pending',
+    },
+  ],
+  // Medical claims: CGHS/CS(MA) outdoor claim
+  '/api/v1/finance/medical-claims': [
+    {
+      id: 'mc-e2e-001',
+      employee: { name: 'Kavita Sharma', employeeNo: 'EMP-M-001' },
+      treatmentDate: '2026-07-15',
+      hospital: 'CGHS Dispensary, New Delhi',
+      diagnosis: 'Upper Respiratory Infection',
+      claimType: 'Outdoor',
+      amountMinor: 50000,
+      cghsWard: 'General',
+      referralStatus: 'Not Required',
+      status: 'Pending',
+    },
+  ],
+  // Expense claims: GFR 2017 Rule 11
+  '/api/v1/finance/expenses': [
+    {
+      id: 'exp-e2e-001',
+      employeeName: 'Amit Trivedi',
+      employeeCode: 'EMP-E-001',
+      category: 'office_supplies',
+      description: 'Stationery for Q3',
+      amount: 5000,
+      currency: 'INR',
+      receiptAttached: true,
+      ddoCountersigned: false,
+      status: 'pending',
+      submittedDate: '2026-08-01',
+    },
+  ],
+  // Loans: GFR 2017 Chapter 23 — HBA record for LoanSummaryCard test
+  '/api/v1/finance/loans': [
+    {
+      id: 'loan-e2e-001',
+      employeeName: 'Vikram Mehta',
+      employeeCode: 'EMP-HBA-001',
+      loanType: 'hba',
+      sanctionedAmount: 2500000,
+      outstandingBalance: 1800000,
+      emiAmount: 25000,
+      interestRate: 8.5,
+      nextDueDate: '2026-09-01',
+      totalInterestPayable: 450000,
+      tenureMonths: 120,
+      paidMonths: 24,
+      status: 'active',
+      currency: 'INR',
+    },
+  ],
+
   // HR employees — employeesListSchema = paginatedSchema(employeeSummarySchema)
   '/api/v1/hrms/employees': {
     data: [
