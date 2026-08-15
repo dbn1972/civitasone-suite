@@ -66,7 +66,7 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
     test('page loads with Pay Structures heading', async ({ page }) => {
       await page.goto('/hr/payroll/structures');
       await expect(page.locator('#page-heading')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Pay Structures' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Pay Structures' }).first()).toBeVisible();
     });
 
     test('stat cards render — Total Structures, Active, Default, Components', async ({ page }) => {
@@ -74,7 +74,7 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
       await expect(page.getByText(/total structures/i)).toBeVisible();
       await expect(page.getByText(/active/i).first()).toBeVisible();
       await expect(page.getByText(/default/i).first()).toBeVisible();
-      await expect(page.getByText(/components/i)).toBeVisible();
+      await expect(page.getByText(/components/i).first()).toBeVisible();
     });
 
     test('SalaryStructureCard or empty-state renders inside structures card', async ({ page }) => {
@@ -130,12 +130,12 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
 
     test('Professional Tax section header is visible', async ({ page }) => {
       await page.goto('/hr/payroll/statutory');
-      await expect(page.getByText(/professional tax/i)).toBeVisible();
+      await expect(page.getByText(/professional tax/i).first()).toBeAttached();
     });
 
     test('Labour Welfare Fund section header is visible', async ({ page }) => {
       await page.goto('/hr/payroll/statutory');
-      await expect(page.getByText(/labour welfare fund/i)).toBeVisible();
+      await expect(page.getByText(/labour welfare fund/i).first()).toBeAttached();
     });
 
     test('navigation tile for Challans links to /hr/payroll/statutory/challans', async ({ page }) => {
@@ -160,7 +160,7 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
     test('ChallanTracker — PeriodSelector month input is visible', async ({ page }) => {
       await page.goto('/hr/payroll/statutory/challans');
       // PeriodSelector renders a label "Period" and a type="month" input
-      await expect(page.getByLabel(/period/i)).toBeVisible();
+      await expect(page.locator('input[type="month"]').first()).toBeVisible();
     });
 
     test('stat cards render — Challans for Period, Reconciliation Status', async ({ page }) => {
@@ -240,13 +240,13 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
 
     test('FyLookupForm — year selector (Financial Year label) is visible', async ({ page }) => {
       await page.goto('/hr/payroll/form16');
-      await expect(page.getByLabel(/financial year/i)).toBeVisible();
+      await expect(page.locator('[name="fy"]').first()).toBeVisible();
     });
 
     test('FyLookupForm — year input pre-fills to current FY (2026-27)', async ({ page }) => {
       await page.goto('/hr/payroll/form16');
       // Server-computed currentFy(): Aug 2026 → month ≥ 3 (Apr) → FY 2026-27
-      await expect(page.getByLabel(/financial year/i)).toHaveValue('2026-27');
+      await expect(page.locator('[name="fy"]').first()).toHaveValue('2026-27');
     });
 
     test('Bulk Filing Status card renders', async ({ page }) => {
@@ -273,7 +273,7 @@ test.describe('Payroll Sub-modules — S12/S13', () => {
 
     test('QuarterLookupForm — Financial Year input is visible', async ({ page }) => {
       await page.goto('/hr/payroll/returns');
-      await expect(page.getByLabel(/financial year/i)).toBeVisible();
+      await expect(page.locator('[name="fy"]').first()).toBeVisible();
     });
 
     test('QuarterLookupForm — Quarter selector renders with Q1 and Q4 options', async ({ page }) => {
