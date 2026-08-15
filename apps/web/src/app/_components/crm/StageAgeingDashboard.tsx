@@ -69,11 +69,11 @@ export function StageAgeingDashboard() {
     setLimits((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
   function addLimit() {
-    setLimits((prev) => [...prev, toRow({ stage: "", limitDays: 14 })]);
+    setLimits((prev) => [...prev, toRow({ stage: "", maxDays: 14, enabled: true })]);
   }
 
   function rowValid(r: LimitRow): boolean {
-    return r.stage.trim().length > 0 && Number.isInteger(r.limitDays) && r.limitDays > 0;
+    return r.stage.trim().length > 0 && Number.isInteger(r.maxDays) && r.maxDays > 0;
   }
 
   async function saveLimit(row: LimitRow) {
@@ -87,7 +87,8 @@ export function StageAgeingDashboard() {
       ...(row.id ? { id: row.id } : {}),
       ...(row.pipelineId ? { pipelineId: row.pipelineId } : {}),
       stage: row.stage.trim(),
-      limitDays: row.limitDays,
+      maxDays: row.maxDays,
+      enabled: row.enabled ?? true,
     };
     setBusyKey(row.key);
     try {
@@ -233,9 +234,9 @@ export function StageAgeingDashboard() {
                         type="number"
                         min={1}
                         step={1}
-                        value={Number.isInteger(row.limitDays) ? row.limitDays : ""}
-                        aria-invalid={Number.isInteger(row.limitDays) && row.limitDays > 0 ? undefined : true}
-                        onChange={(e) => update(row.key, { limitDays: Number(e.target.value) })}
+                        value={Number.isInteger(row.maxDays) ? row.maxDays : ""}
+                        aria-invalid={Number.isInteger(row.maxDays) && row.maxDays > 0 ? undefined : true}
+                        onChange={(e) => update(row.key, { maxDays: Number(e.target.value) })}
                         style={{ ...inputStyle, textAlign: "right" }}
                       />
                     </td>

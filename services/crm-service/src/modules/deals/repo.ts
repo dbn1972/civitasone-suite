@@ -350,13 +350,23 @@ export interface KanbanCard {
   valueMinor: string;
   probability: number;
   contactId: string | null;
+  /**
+   * Optimistic-lock version. The board is where a stage move is initiated and
+   * `PATCH /v1/crm/deals/:id/stage` requires the version the card was rendered
+   * from, so it has to travel with the card — otherwise the client has nothing
+   * to send and cannot safely move a deal.
+   */
+  version: number;
+  /** Drives the calendar view, which groups deals by expected close date. */
+  expectedCloseDate: string | null;
 }
 
 export async function kanbanCards(tenantId: string, pipelineId?: string): Promise<KanbanCard[]> {
   const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
   const rows = await scopedRead(async (tx) => tx.execute(sql`
     SELECT id, name, stage, owner_id AS "ownerId", value_minor::text AS "valueMinor",
-           probability, contact_id AS "contactId"
+           probability, contact_id AS "contactId", version,
+           expected_close_date AS "expectedCloseDate"
     FROM crm.deals
     WHERE tenant_id = ${tenantId}
       AND status NOT IN ('deleted','cancelled')

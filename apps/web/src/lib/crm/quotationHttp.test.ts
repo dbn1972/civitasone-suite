@@ -78,7 +78,57 @@ describe("quotation HTTP client (QP-001..005)", () => {
     await expect(qp.requestApproval("q1", { type: "discount", reason: "big", amountBps: 1000 })).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({}));
     await expect(qp.approveApproval("q1", "a1")).resolves.toBeUndefined();
-    fetchMock.mockResolvedValueOnce(res({ versions: [{ version: 2, status: "sent", totalMinor: "100" }] }));
-    expect((await qp.getQuotationVersions("q1")).data).toHaveLength(1);
+    // Versions are the list filtered by quoteRef — there is no /:id/versions
+    // route, so this now asks by ref and the payload carries versionNumber.
+    fetchMock.mockResolvedValueOnce(
+      res({ data: [{ id: "v2", quoteRef: "QTN/2026/ABC", versionNumber: 2, status: "sent", totalMinor: "100" }] }),
+    );
+    expect((await qp.getQuotationVersions("QTN/2026/ABC")).data).toHaveLength(1);
+  });
+
+  it("decides an approval via /v1/crm/quotation-approvals/:id/decide", async () => {
+    // approveApproval used to POST /v1/crm/quotations/:id/approvals/:aid/approve,
+    // a path the service never exposed, so approving always 404'd.
+    fetchMock.mockResolvedValueOnce(res({}, { status: 202 }));
+    await qp.approveApproval("q1", "a1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("v1/crm/quotation-approvals/a1/decide");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ decision: "approve" });
+  });
+
+  it("creates a quotation in the service's shape, not the UI model", async () => {
+    // The request schema needs quoteRef / templateRef / lineItems[].description;
+    // posting the raw UI model (template, lines) was rejected with 400.
+    fetchMock.mockResolvedValueOnce(res({}, { status: 202 }));
+    await qp.createQuotation({
+      template: "standard",
+      version: 1,
+      status: "draft",
+      lines: [{ productId: "11111111-1111-4111-8111-111111111111", productName: "Server", quantity: 2, unitPriceMinor: "5000", taxRateBps: 1800 }],
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.templateRef).toBe("standard");
+    expect(body.quoteRef).toMatch(/^QTN\//);
+    expect(body).not.toHaveProperty("lines");
+    expect(body.lineItems).toEqual([
+      { productId: "11111111-1111-4111-8111-111111111111", description: "Server", quantity: 2, unitPriceMinor: "5000", taxRateBps: 1800 },
+    ]);
+  });
+
+  it("saves an edit as a new version, since there is no update route", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, { status: 202 }));
+    await qp.updateQuotation("q1", {
+      id: "q1",
+      quoteRef: "QTN/2026/ABC",
+      template: "standard",
+      version: 1,
+      status: "draft",
+      lines: [{ productId: "11111111-1111-4111-8111-111111111111", productName: "Server", quantity: 1, unitPriceMinor: "100", taxRateBps: 0 }],
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("v1/crm/quotations/q1/new-version");
+    expect(init.method).toBe("POST");
   });
 });

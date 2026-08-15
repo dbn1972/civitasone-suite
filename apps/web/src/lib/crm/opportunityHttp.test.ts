@@ -48,9 +48,31 @@ describe("opportunity HTTP client (OP-001..006)", () => {
 
   it("changeOpportunityStage throws MandatoryFieldsError on 422 and a generic error otherwise", async () => {
     fetchMock.mockResolvedValueOnce(res({ code: "MANDATORY_STAGE_FIELDS_MISSING", fields: ["nextStep"] }, { status: 422 }));
-    await expect(op.changeOpportunityStage("d1", "propose")).rejects.toBeInstanceOf(op.MandatoryFieldsError);
+    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toBeInstanceOf(op.MandatoryFieldsError);
     fetchMock.mockResolvedValueOnce(res({ code: "FORBIDDEN", message: "no" }, { status: 403 }));
-    await expect(op.changeOpportunityStage("d1", "propose")).rejects.toThrow(/FORBIDDEN/);
+    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toThrow(/FORBIDDEN/);
+  });
+
+  it("changeOpportunityStage PATCHes the dedicated stage route with the version", async () => {
+    // Guards the contract this suite previously had wrong: the stage move is
+    // PATCH /v1/crm/deals/:id/stage (not PUT /v1/crm/deals/:id) and `version` is
+    // mandatory, because the write is optimistic-locked.
+    fetchMock.mockResolvedValueOnce(res({ ok: true }));
+    await expect(op.changeOpportunityStage("d1", "Proposal", 7)).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("v1/crm/deals/d1/stage");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ stage: "Proposal", version: 7 });
+  });
+
+  it("stage limits target /v1/crm/stage-limits and upsert with PUT", async () => {
+    // Every stage-limit call previously carried a `deals/` prefix and 404'd.
+    fetchMock.mockResolvedValueOnce(res({ ok: true }));
+    await op.createStageLimit({ stage: "Proposal", maxDays: 14, enabled: true });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain("v1/crm/stage-limits");
+    expect(String(url)).not.toContain("deals/stage-limits");
+    expect(init.method).toBe("PUT");
   });
 
   it("closeOpportunity posts the outcome payload", async () => {
@@ -69,21 +91,43 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     expect((await op.getOpportunities("p1")).data).toHaveLength(1);
     fetchMock.mockResolvedValueOnce(res([{ id: "d1", expectedCloseDate: "2026-09-01" }]));
     expect((await op.getCalendar()).data).toHaveLength(1);
-    fetchMock.mockResolvedValueOnce(res([{ id: "d1", name: "x", stage: "s", daysInStage: 20, limitDays: 14 }]));
+    // The ageing endpoint returns maxDays / daysOverLimit, not limitDays.
+    fetchMock.mockResolvedValueOnce(res([{ id: "d1", name: "x", stage: "s", daysInStage: 20, maxDays: 14 }]));
     expect((await op.getStageAgeing()).data[0].exceededBy).toBe(6);
-    fetchMock.mockResolvedValueOnce(res({ limits: [{ stage: "s", limitDays: 14 }] }));
+    fetchMock.mockResolvedValueOnce(res({ limits: [{ stage: "s", maxDays: 14 }] }));
     expect((await op.getStageLimits()).data).toHaveLength(1);
   });
 
-  it("stage-limit CRUD posts/puts/deletes", async () => {
-    fetchMock.mockResolvedValueOnce(res({ id: "l1" }, { status: 201 }));
-    await expect(op.createStageLimit({ stage: "s", limitDays: 14 })).resolves.toBeUndefined();
+  it("sources the calendar from the kanban endpoint and flattens its columns", async () => {
+    // /v1/crm/deals/calendar does not exist — the view was always empty.
+    fetchMock.mockResolvedValueOnce(
+      res({ data: [{ stage: "Lead", deals: [{ id: "d1", name: "x", expectedCloseDate: "2026-09-01" }] }] }),
+    );
+    const { data } = await op.getCalendar("p1");
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(String(url)).toContain("v1/crm/deals/kanban");
+    expect(String(url)).not.toContain("deals/calendar");
+    expect(data).toHaveLength(1);
+  });
+
+  it("stage-limit CRUD upserts and deletes against /v1/crm/stage-limits", async () => {
+    fetchMock.mockResolvedValueOnce(res({ id: "l1" }, { status: 202 }));
+    await expect(op.createStageLimit({ stage: "s", maxDays: 14, enabled: true })).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({}));
-    await expect(op.updateStageLimit("l1", { stage: "s", limitDays: 20 })).resolves.toBeUndefined();
+    await expect(op.updateStageLimit("l1", { stage: "s", maxDays: 20, enabled: true })).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(op.deleteStageLimit("l1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({}, { status: 500 }));
-    await expect(op.createStageLimit({ stage: "s", limitDays: 14 })).rejects.toThrow();
+    await expect(op.createStageLimit({ stage: "s", maxDays: 14, enabled: true })).rejects.toThrow();
+  });
+
+  it("sends maxDays/enabled, not the old limitDays, on a stage-limit upsert", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, { status: 202 }));
+    await op.createStageLimit({ stage: "Proposal", maxDays: 30, enabled: false });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ stage: "Proposal", maxDays: 30, enabled: false });
+    expect(body).not.toHaveProperty("limitDays");
   });
 
   it("updateOpportunity round-trips and surfaces errors", async () => {
