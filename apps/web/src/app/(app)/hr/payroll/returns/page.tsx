@@ -6,6 +6,7 @@ import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
 import { StripForceParam } from "./StripForceParam";
+import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -16,8 +17,6 @@ type Deductee24Q = {
   panFlag: string;
   name: string;
   tdsDeductedMinor: number;
-  /** Deposited == deducted in this model (backend does not track a separate
-   *  deposited-minor figure); kept as its own field/column for statutory clarity. */
   tdsDepositedMinor: number;
   periods: string[];
 };
@@ -57,18 +56,14 @@ type Form26Q = {
 
 type Form24QLookup =
   | { state: "ok"; data: Form24Q }
-  /** GET .../form24q legitimately 409s (TDS_RECONCILIATION_FAILED) when TDS
-   *  deducted doesn't match deposited challans for the quarter — a real
-   *  business state, not a failure. */
   | { state: "reconciliation_blocked"; message: string }
-  /** Auth failure, 5xx, or malformed payload — a REAL error. */
   | { state: "error" };
 
 function currentFyQuarter(): { fy: string; quarter: Quarter } {
   const now = new Date();
   const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   const fy = `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
-  const m = now.getMonth() + 1; // 1-12
+  const m = now.getMonth() + 1;
   const quarter: Quarter = m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4";
   return { fy, quarter };
 }
@@ -85,7 +80,6 @@ function toForm24Q(raw: unknown): Form24Q | null {
         panFlag: String(d.panFlag ?? ""),
         name: String(d.name ?? ""),
         tdsDeductedMinor: Number(d.tdsDeductedMinor ?? 0),
-        // Backend model: deposited == deducted (no independent deposited-minor field yet).
         tdsDepositedMinor: Number(d.tdsDeductedMinor ?? 0),
         periods: Array.isArray(d.periods) ? (d.periods as string[]) : [],
       }))
@@ -103,7 +97,9 @@ function toForm24Q(raw: unknown): Form24Q | null {
 
 async function getForm24Q(fy: string, quarter: Quarter, force: boolean): Promise<Form24QLookup> {
   const forceParam = force ? "&force=1" : "";
-  const r = await statusAwareGet(`/v1/payroll/statutory/form24q?fy=${encodeURIComponent(fy)}&quarter=${quarter}${forceParam}`);
+  const r = await statusAwareGet(
+    "/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + forceParam,
+  );
   if (r.kind === "ok") {
     const data = toForm24Q(r.body);
     return data ? { state: "ok", data } : { state: "error" };
@@ -112,7 +108,7 @@ async function getForm24Q(fy: string, quarter: Quarter, force: boolean): Promise
     const body = r.body as { message?: string } | null;
     return {
       state: "reconciliation_blocked",
-      message: body?.message ?? "TDS deducted does not match deposited challans for this quarter (TRACES reconciliation gate).",
+      message: body?.message ?? "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
     };
   }
   return { state: "error" };
@@ -120,7 +116,7 @@ async function getForm24Q(fy: string, quarter: Quarter, force: boolean): Promise
 
 async function getForm26Q(fy: string, quarter: Quarter): Promise<LoaderResult<Form26Q | null>> {
   return fetchJson<unknown, Form26Q | null>(
-    `/api/v1/payroll/statutory/form26q?fy=${encodeURIComponent(fy)}&quarter=${quarter}`,
+    "/api/v1/payroll/statutory/form26q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter,
     null,
     {
       telemetryKey: "payroll.statutory.form26q",
@@ -147,7 +143,8 @@ export default async function ReturnsPage({
     getForm26Q(fy, quarter),
   ]);
 
-  const overallSource: "api" | "error" = (f24Lookup.state === "error" || src26 === "error") ? "error" : "api";
+  const overallSource: "api" | "error" =
+    f24Lookup.state === "error" || src26 === "error" ? "error" : "api";
 
   const rows24 = f24Lookup.state === "ok" ? f24Lookup.data.deductees.map((d) => ({ ...d })) : [];
   const cols24: { key: keyof Deductee24Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
@@ -157,7 +154,7 @@ export default async function ReturnsPage({
     { key: "tdsDepositedMinor", label: "TDS Deposited", align: "right", cellType: "amount" },
   ];
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
-  const totalTdsDepositedMinor24 = totalTdsDeductedMinor24; // deposited == deducted in current model
+  const totalTdsDepositedMinor24 = totalTdsDeductedMinor24;
 
   const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
   const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
@@ -169,6 +166,28 @@ export default async function ReturnsPage({
     { key: "tdsDeductedMinor", label: "TDS Deducted", align: "right", cellType: "amount" },
   ];
 
+  // Build Q1-Q4 overview — current quarter gets real data, others stubbed as pending
+  const quarterSummaries: QuarterSummaryRow[] = QUARTERS.map((q) => {
+    if (q === quarter && f24Lookup.state === "ok") {
+      return {
+        quarter: q,
+        status: f24Lookup.data.reconciliation.matched ? "filed" : "pending",
+        filingDate: null,
+        challanRef: null,
+        totalTdsDepositedMinor: totalTdsDepositedMinor24,
+        deducteeCount: f24Lookup.data.deducteeCount,
+      };
+    }
+    return {
+      quarter: q,
+      status: q === quarter && f24Lookup.state === "reconciliation_blocked" ? "blocked" : "pending",
+      filingDate: null,
+      challanRef: null,
+      totalTdsDepositedMinor: 0,
+      deducteeCount: 0,
+    };
+  });
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -178,23 +197,22 @@ export default async function ReturnsPage({
       />
 
       <DataSourceBadge source={overallSource} />
-
-      {/* Strips a one-time ?force=1 from the visible URL (browser history API only —
-          no navigation/refetch) so a page refresh can't silently replay the
-          force_file_24q audit event. See ForceFileButton and BACKEND FOLLOW-UPS. */}
       {force && <StripForceParam />}
+
+      {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
+      <Card title={"Annual TDS Returns Overview — FY " + fy}>
+        <div className="pad">
+          <TaxReturnsSummary fy={fy} quarters={quarterSummaries} />
+        </div>
+      </Card>
 
       <QuarterLookupForm defaultFy={fy} defaultQuarter={quarter} quarters={QUARTERS} />
 
-      <Card title={`Form-24Q — Salary TDS — FY ${fy} ${quarter}`}>
+      <Card title={"Form-24Q — Salary TDS — FY " + fy + " " + quarter}>
         <div className="pad">
           {f24Lookup.state === "reconciliation_blocked" ? (
             <>
-              <EmptyState
-                icon="⚠️"
-                title={`Form-24Q blocked for FY ${fy} ${quarter}`}
-                message={f24Lookup.message}
-              />
+              <EmptyState icon="⚠️" title={"Form-24Q blocked for FY " + fy + " " + quarter} message={f24Lookup.message} />
               <ForceFileButton fy={fy} quarter={quarter} />
             </>
           ) : f24Lookup.state === "error" ? (
@@ -202,7 +220,7 @@ export default async function ReturnsPage({
               <DataSourceBadge source="error" />
               <EmptyState
                 icon="⚠️"
-                title={`Could not load Form-24Q for FY ${fy} ${quarter}`}
+                title={"Could not load Form-24Q for FY " + fy + " " + quarter}
                 message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
@@ -241,7 +259,7 @@ export default async function ReturnsPage({
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"
-                  href={`/api/proxy/v1/payroll/statutory/form24q?fy=${encodeURIComponent(fy)}&quarter=${quarter}&format=file`}
+                  href={"/api/proxy/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
                 >
                   <span aria-hidden="true">⬇</span> Download RPU flat file (.txt)
                 </a>
@@ -251,26 +269,19 @@ export default async function ReturnsPage({
         </div>
       </Card>
 
-      <Card title={`Form-26Q — Non-Salary TDS — FY ${fy} ${quarter}`}>
+      <Card title={"Form-26Q — Non-Salary TDS — FY " + fy + " " + quarter}>
         <div className="pad">
           {f26 === null ? (
             <>
-              {/* fetchJson collapses every non-2xx and invalid-payload case into
-                  source:"error" — form26q has no legitimate case that returns null,
-                  so this branch is always a real failure. */}
               <DataSourceBadge source="error" />
               <EmptyState
                 icon="⚠️"
-                title={`Could not load Form-26Q for FY ${fy} ${quarter}`}
+                title={"Could not load Form-26Q for FY " + fy + " " + quarter}
                 message="The request failed. Please reload the page, or contact an administrator if this persists."
               />
             </>
           ) : !f26.populated ? (
-            <EmptyState
-              icon="🧾"
-              title="Non-salary TDS not yet populated"
-              message={f26.note}
-            />
+            <EmptyState icon="🧾" title="Non-salary TDS not yet populated" message={f26.note} />
           ) : (
             <>
               <DataSourceBadge source={src26 === "error" ? "error" : "api"} />
@@ -301,7 +312,7 @@ export default async function ReturnsPage({
               <p style={{ marginTop: 10 }}>
                 <a
                   className="btn ghost sm"
-                  href={`/api/proxy/v1/payroll/statutory/form26q?fy=${encodeURIComponent(fy)}&quarter=${quarter}&format=file`}
+                  href={"/api/proxy/v1/payroll/statutory/form26q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
                 >
                   <span aria-hidden="true">⬇</span> Download RPU flat file (.txt)
                 </a>

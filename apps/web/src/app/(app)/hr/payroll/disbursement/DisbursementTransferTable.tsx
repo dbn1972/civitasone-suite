@@ -25,6 +25,8 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = total > 0 ? (done / total) * circ : 0;
+  const dashArray = String(dash) + " " + String(circ);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <svg width={88} height={88} viewBox="0 0 88 88" aria-hidden="true">
@@ -33,7 +35,7 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
           cx={44} cy={44} r={r}
           fill="none" strokeWidth={8}
           stroke="var(--good, #27ae60)"
-          strokeDasharray={}
+          strokeDasharray={dashArray}
           strokeLinecap="round"
           transform="rotate(-90 44 44)"
         />
@@ -43,9 +45,7 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
       </svg>
       <div>
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Disbursed</p>
-        <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>
-          {total > 0 ? Math.round((done / total) * 100) : 0}% credited
-        </p>
+        <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{pct}% credited</p>
       </div>
     </div>
   );
@@ -68,8 +68,11 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
     setBusy(true);
     setDialogError(undefined);
     try {
-      await browserJson<RetryResponse>(`v1/payroll/disbursement/transfers/${pendingRetry.id}/retry`, { method: "POST" });
-      setMessage(`Retry initiated for ${pendingRetry.employeeName}.`);
+      await browserJson<RetryResponse>(
+        "v1/payroll/disbursement/transfers/" + pendingRetry.id + "/retry",
+        { method: "POST" },
+      );
+      setMessage("Retry initiated for " + pendingRetry.employeeName + ".");
       setPendingRetry(null);
       router.refresh();
     } catch (err) {
@@ -84,7 +87,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
       <div className="pad" style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink2)" }}>
         <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏦</p>
         <p style={{ fontWeight: 600 }}>No transfers yet</p>
-        <p style={{ fontSize: 13 }}>Bank transfers will appear here after disbursement is initiated for a payroll run.</p>
+        <p style={{ fontSize: 13 }}>Bank transfers appear here after disbursement is initiated for a payroll run.</p>
       </div>
     );
   }
@@ -97,21 +100,26 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
         </p>
       )}
 
-      {/* Progress strip */}
+      {/* Progress + stat strip */}
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", marginBottom: 20 }}>
         <ProgressRing done={done} total={transfers.length} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, flex: 1 }}>
-          {[
-            { label: "Total Amount", val: inrFmt.format(total), bg: "var(--infobg)" },
-            { label: "Credited", val: String(done), bg: "var(--goodbg)" },
-            { label: "Failed", val: String(failed), bg: failed > 0 ? "var(--badbg)" : "var(--line2)" },
-            { label: "Processing", val: String(processing), bg: "var(--warnbg)" },
-          ].map((s) => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: "12px 16px" }}>
-              <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{s.label}</p>
-              <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{s.val}</p>
-            </div>
-          ))}
+          <div style={{ background: "var(--infobg)", borderRadius: 10, padding: "12px 16px" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Total Amount</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{inrFmt.format(total)}</p>
+          </div>
+          <div style={{ background: "var(--goodbg)", borderRadius: 10, padding: "12px 16px" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Credited</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{done}</p>
+          </div>
+          <div style={{ background: failed > 0 ? "var(--badbg)" : "var(--line2)", borderRadius: 10, padding: "12px 16px" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Failed</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{failed}</p>
+          </div>
+          <div style={{ background: "var(--warnbg)", borderRadius: 10, padding: "12px 16px" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Processing</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{processing}</p>
+          </div>
         </div>
       </div>
 
@@ -144,9 +152,9 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   <StatusPill status={t.status} />
-                  {t.status === "failed" && t.failureReason && (
+                  {t.status === "failed" && t.failureReason ? (
                     <div style={{ fontSize: 11, color: "var(--bad, #c0392b)", marginTop: 2 }}>{t.failureReason}</div>
-                  )}
+                  ) : null}
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   {t.status === "failed" ? (
@@ -154,7 +162,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                       type="button"
                       className="btn"
                       style={{ minHeight: 32, fontSize: 12 }}
-                      aria-label={`Retry transfer for ${t.employeeName}`}
+                      aria-label={"Retry transfer for " + t.employeeName}
                       onClick={() => { setDialogError(undefined); setPendingRetry(t); }}
                     >
                       Retry
@@ -180,7 +188,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
             <>
               Retry bank transfer for <strong>{pendingRetry.employeeName}</strong> ({pendingRetry.employeeId}),
               amount <strong>{inrFmt.format(pendingRetry.amountRupees)}</strong>.
-              {pendingRetry.failureReason && <> Previous failure: {pendingRetry.failureReason}</>}
+              {pendingRetry.failureReason ? " Previous failure: " + pendingRetry.failureReason : null}
             </>
           ) : null
         }

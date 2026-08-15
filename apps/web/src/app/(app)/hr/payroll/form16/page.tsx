@@ -2,9 +2,9 @@ import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "..
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
-import { GenerateForm16Form } from "./GenerateForm16Form";
 import { VerifyForm16Form } from "./VerifyForm16Form";
 import { FyLookupForm } from "./FyLookupForm";
+import { Form16Wizard } from "./Form16Wizard";
 
 type BulkJob = {
   jobId: string;
@@ -21,9 +21,7 @@ type BulkJob = {
 
 type JobLookup =
   | { state: "found"; job: BulkJob }
-  /** GET .../bulk-status legitimately 404s when no job has been created for this FY yet. */
   | { state: "not_found" }
-  /** Auth failure, 5xx, or malformed payload — a REAL error, must not look like "not found". */
   | { state: "error" };
 
 /** FY runs Apr–Mar; before April we're still in the FY that started last calendar year. */
@@ -59,36 +57,33 @@ export default async function Form16Page({
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Form-16 Generation"
-        subtitle="Generate, track, and verify statutory Form-16 (Sec 203) certificates for a financial year."
+        subtitle="Generate, review deductions, and issue statutory Form-16 (Sec 203) certificates."
         back="/hr/payroll"
       />
       <DataSourceBadge source={source} />
 
-      {/* Single-employee generate reuses the same async bulk-generate/bulk-status job
-          machinery as a whole-run bulk job (with employeeIds:[id]) — there is no separate
-          synchronous single-issue endpoint, so both paths are tracked identically below. */}
-      <GenerateForm16Form defaultFy={fy} />
+      {/* Wizard: 3-step — select FY / review deductions / generate & download */}
+      <Card title="Form-16 Wizard">
+        <Form16Wizard defaultFy={fy} />
+      </Card>
 
-      <Card title={`Bulk Filing Run — FY ${fy}`}>
+      <Card title={`Bulk Filing Status — FY ${fy}`}>
         <div className="pad">
           <FyLookupForm defaultFy={fy} />
 
-          {/* NOTE: the payroll-service does not expose a "list all Form-16 jobs" endpoint —
-              /v1/payroll/tax/form16/bulk-status only returns the single job for one FY at a
-              time, so this view queries one financial year per lookup rather than listing rows. */}
           {lookup.state === "not_found" ? (
             <EmptyState
               icon="🧾"
-              title={`No Form-16 filing run for FY ${fy}`}
-              message="Use “Generate Form-16” above to start a single-employee or whole-run bulk job for this financial year."
+              title={`No Form-16 run for FY ${fy}`}
+              message="Use the wizard above to start a single-employee or bulk generation job."
             />
           ) : lookup.state === "error" ? (
             <>
               <DataSourceBadge source="error" />
               <EmptyState
                 icon="⚠️"
-                title={`Could not load the Form-16 filing run for FY ${fy}`}
-                message="The status check failed. Please reload the page, or contact an administrator if this persists."
+                title={`Could not load filing run for FY ${fy}`}
+                message="The status check failed. Please reload the page or contact an administrator."
               />
             </>
           ) : (
@@ -97,7 +92,12 @@ export default async function Form16Page({
                 <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={lookup.job.totalEmployees} />
                 <StatCard icon="✅" iconBg="var(--goodbg)" label="Generated" value={lookup.job.generated} />
                 <StatCard icon="⚠️" iconBg="var(--badbg)" label="Failed" value={lookup.job.failed} />
-                <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={Math.max(0, lookup.job.totalEmployees - lookup.job.generated - lookup.job.failed)} />
+                <StatCard
+                  icon="⏳"
+                  iconBg="var(--warnbg)"
+                  label="Pending"
+                  value={Math.max(0, lookup.job.totalEmployees - lookup.job.generated - lookup.job.failed)}
+                />
               </StatGrid>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
                 <span style={{ fontSize: 13 }}>
@@ -106,14 +106,14 @@ export default async function Form16Page({
                 <StatusPill status={lookup.job.status} />
                 <span style={{ fontSize: 13, color: "var(--color-text-muted)" }}>
                   Created {formatIndianDate(lookup.job.createdAt)}
-                  {lookup.job.completedAt ? ` · Completed ${formatIndianDate(lookup.job.completedAt)}` : ""}
+                  {lookup.job.completedAt ? " · Completed " + formatIndianDate(lookup.job.completedAt) : ""}
                 </span>
               </div>
               {lookup.job.status === "completed" && lookup.job.storagePrefix && (
                 <p style={{ fontSize: 13, marginTop: 10 }}>
                   <a
                     className="btn ghost sm"
-                    href={`/api/proxy/v1/payroll/tax/form16/bulk-download?fy=${encodeURIComponent(fy)}`}
+                    href={"/api/proxy/v1/payroll/tax/form16/bulk-download?fy=" + encodeURIComponent(fy)}
                   >
                     <span aria-hidden="true">⬇</span> Get download link
                   </a>

@@ -26,21 +26,24 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
   const totalTds = quarters.reduce((s, q) => s + q.totalTdsDepositedMinor, 0);
   const filedCount = quarters.filter((q) => q.status === "filed" || q.status === "late_filed").length;
   const qMap = new Map<Quarter, QuarterSummaryRow>(quarters.map((q) => [q.quarter, q]));
+  const filedLabel = String(filedCount) + " / 4";
 
   return (
     <div>
-      {/* Annual summary */}
+      {/* Annual summary strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
-        {[
-          { label: "Financial Year", val: fy, bg: "var(--infobg)" },
-          { label: "Quarters Filed", val: , bg: "var(--goodbg)" },
-          { label: "Total TDS Deposited", val: inrFmt.format(totalTds / 100), bg: "var(--panel)" },
-        ].map((s) => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: "12px 16px" }}>
-            <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{s.label}</div>
-            <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{s.val}</div>
-          </div>
-        ))}
+        <div style={{ background: "var(--infobg)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Financial Year</div>
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{fy}</div>
+        </div>
+        <div style={{ background: "var(--goodbg)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Quarters Filed</div>
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{filedLabel}</div>
+        </div>
+        <div style={{ background: "var(--panel)", borderRadius: 10, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Total TDS Deposited</div>
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{inrFmt.format(totalTds / 100)}</div>
+        </div>
       </div>
 
       {/* Quarter rows */}
@@ -63,37 +66,37 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
             >
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{QUARTER_LABELS[q]}</div>
-                {data?.filingDate && (
+                {data?.filingDate ? (
                   <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-                    Filed: {new Date(data.filingDate).toLocaleDateString("en-IN")}
+                    {"Filed: " + new Date(data.filingDate).toLocaleDateString("en-IN")}
                   </div>
-                )}
-                {data?.challanRef && (
+                ) : null}
+                {data?.challanRef ? (
                   <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink2)", marginTop: 1 }}>
-                    Challan: {data.challanRef}
+                    {"Challan: " + data.challanRef}
                   </div>
-                )}
+                ) : null}
               </div>
               <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                {data && data.deducteeCount > 0 && (
+                {data && data.deducteeCount > 0 ? (
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>TDS Deposited</div>
                     <div style={{ fontWeight: 700 }}>{inrFmt.format(data.totalTdsDepositedMinor / 100)}</div>
                   </div>
-                )}
-                {data && data.deducteeCount > 0 && (
+                ) : null}
+                {data && data.deducteeCount > 0 ? (
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>Deductees</div>
                     <div style={{ fontWeight: 700 }}>{data.deducteeCount}</div>
                   </div>
-                )}
+                ) : null}
                 <StatusPill status={data?.status ?? "pending"} />
                 <a
                   className="btn ghost sm"
-                  href={`/hr/payroll/returns?fy=${encodeURIComponent(fy)}&quarter=${q}`}
+                  href={"/hr/payroll/returns?fy=" + encodeURIComponent(fy) + "&quarter=" + q}
                   style={{ fontSize: 12 }}
                 >
-                  View detail →
+                  View detail
                 </a>
               </div>
             </div>

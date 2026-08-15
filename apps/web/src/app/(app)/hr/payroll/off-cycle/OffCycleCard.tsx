@@ -29,8 +29,9 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
         <div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>{reasonLabel}</div>
           <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-            Period: <strong>{row.period}</strong>
-            {row.description ?  : ""}
+            {"Period: "}
+            <strong>{row.period}</strong>
+            {row.description ? " · " + row.description : ""}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -41,7 +42,7 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
               className="btn"
               style={{ minHeight: 32, fontSize: 12, padding: "0 14px" }}
               onClick={() => onProcess(row)}
-              aria-label={`Process ${reasonLabel} run for ${row.period}`}
+              aria-label={"Process " + reasonLabel + " run for " + row.period}
             >
               Process Run
             </button>
@@ -49,7 +50,7 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
         <div>
           <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Total Amount</div>
@@ -89,10 +90,10 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
     setDialogError(undefined);
     try {
       const res = await browserJson<{ data: { id: string; totalNetMinor: number } }>(
-        `v1/payroll/off-cycle/${pendingRow.id}/process`,
+        "v1/payroll/off-cycle/" + pendingRow.id + "/process",
         { method: "POST" },
       );
-      setMessage(`Off-cycle run for ${pendingRow.period} processed. Net payable ${formatMoney(res.data.totalNetMinor)}.`);
+      setMessage("Off-cycle run for " + pendingRow.period + " processed. Net payable " + formatMoney(res.data.totalNetMinor) + ".");
       setPendingRow(null);
       router.refresh();
     } catch (err) {
@@ -135,7 +136,7 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
           pendingRow ? (
             <>
               Process the {REASON_LABELS[pendingRow.run_type] ?? pendingRow.run_type} run for period{" "}
-              <strong>{pendingRow.period}</strong>, total {formatMoney(pendingRow.total_amount_minor)}.
+              <strong>{pendingRow.period}</strong>, total {formatMoney(pendingRow.total_amount_minor)}.{" "}
               This computes tax and net payable for every item and is irreversible.
             </>
           ) : null

@@ -1,11 +1,12 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { BankFileForm } from "./BankFileForm";
+import { BankFileWizard, type DscConfig } from "./BankFileWizard";
 import { NachMandateForm } from "./NachMandateForm";
 import { NachReturnForm } from "./NachReturnForm";
 import { SponsorBankConfigForm } from "./SponsorBankConfigForm";
 import { DscConfigForm } from "./DscConfigForm";
+import { DisbursementTransferTable, type TransferRow } from "./DisbursementTransferTable";
 
 type RunRow = {
   id: string;
@@ -27,7 +28,7 @@ type SponsorConfig = {
   apbsEnabled: boolean;
 } & Record<string, unknown>;
 
-type DscConfig = {
+type RawDscConfig = {
   subjectCn: string;
   serialNumber: string;
   notBefore: string;
@@ -54,102 +55,94 @@ async function getSponsorConfig(): Promise<LoaderResult<SponsorConfig | null>> {
   });
 }
 
-async function getDscConfig(): Promise<LoaderResult<DscConfig | null>> {
-  return fetchJson<unknown, DscConfig | null>("/api/v1/payroll/dsc-config", null, {
+async function getDscConfig(): Promise<LoaderResult<RawDscConfig | null>> {
+  return fetchJson<unknown, RawDscConfig | null>("/api/v1/payroll/dsc-config", null, {
     telemetryKey: "payroll.disbursement.dscConfig",
     mapResponse: (p) => {
       if (p == null) return null;
-      const arr = (p as { data?: DscConfig })?.data;
+      const arr = (p as { data?: RawDscConfig })?.data;
       return arr ?? null;
     },
   });
 }
 
+async function getTransfers(): Promise<LoaderResult<TransferRow[]>> {
+  return fetchJson<unknown, TransferRow[]>("/api/v1/payroll/disbursement/transfers", [], {
+    telemetryKey: "payroll.disbursement.transfers",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: TransferRow[] })?.data;
+      return Array.isArray(arr) ? (arr as TransferRow[]) : null;
+    },
+  });
+}
+
 export default async function DisbursementPage() {
-  const [runsResult, sponsorResult, dscResult] = await Promise.all([
+  const [runsResult, sponsorResult, dscResult, transfersResult] = await Promise.all([
     getRuns(),
     getSponsorConfig(),
     getDscConfig(),
+    getTransfers(),
   ]);
 
   const runs = runsResult.data;
   const eligibleRuns = runs.filter((r) => r.status === "completed" || r.status === "paid");
   const sponsorConfig = sponsorResult.data;
-  const dscConfig = dscResult.data;
+  const rawDsc = dscResult.data;
+  const transfers = transfersResult.data;
 
-  const anyError = runsResult.source === "error" || sponsorResult.source === "error" || dscResult.source === "error";
+  // Shape DscConfig to the type BankFileWizard expects
+  const dscConfig: DscConfig = rawDsc
+    ? { subjectCn: rawDsc.subjectCn, notAfter: rawDsc.notAfter, sha256Fingerprint: rawDsc.sha256Fingerprint }
+    : null;
 
-  // NOTE: PayrollRunDetailSchema's grossAmount/netAmount are already RUPEES
-  // (payroll-service's listRuns() divides totalNetMinor by 100 before returning),
-  // unlike every *Minor field elsewhere in the payroll API. DataTable's
-  // cellType:"amount" calls formatMoney(), which treats its input as MINOR
-  // units and divides by 100 again — that would render this run's net pay
-  // 100x too small on the exact screen used to confirm a bank transfer, so we
-  // deliberately do NOT use cellType:"amount" here. Format as rupees directly.
+  const anyError =
+    runsResult.source === "error" ||
+    sponsorResult.source === "error" ||
+    dscResult.source === "error";
+
+  // NOTE: PayrollRunDetailSchema's grossAmount/netAmount are already RUPEES.
+  // Do NOT use cellType:"amount" here (that would divide by 100 again).
   const inrFormatter = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 2,
   });
 
-  type RunDisplayRow = RunRow & { netAmountDisplay: string };
-  const runRows: RunDisplayRow[] = runs.map((r) => ({
-    ...r,
-    netAmountDisplay: inrFormatter.format(r.netAmount),
-  }));
-
-  const runColumns: { key: keyof RunDisplayRow & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "payPeriod", label: "Pay Period" },
-    { key: "employeeCount", label: "Employees", align: "right" },
-    { key: "netAmountDisplay", label: "Net Amount", align: "right" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
+  const credited = transfers.filter((t) => t.status === "credited").length;
+  const failed = transfers.filter((t) => t.status === "failed").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Disbursement & Settlement"
-        subtitle="Bank transfer files, NACH mandates, NACH returns, sponsor bank and DSC configuration."
+        subtitle="Employee bank transfers, NACH mandates, bank file generation, DSC signing."
         back="/hr/payroll"
       />
       {anyError && <DataSourceBadge source="error" />}
 
       <StatGrid>
         <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={eligibleRuns.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Transfers Credited" value={credited} />
+        <StatCard icon="⚠️" iconBg={failed > 0 ? "var(--badbg)" : "var(--line2)"} label="Transfers Failed" value={failed} />
         <StatCard
           icon="🔐"
           iconBg="var(--warnbg)"
-          label="Sponsor Bank Config"
-          value={sponsorConfig ? "Configured" : "Not configured"}
+          label="DSC Status"
+          value={dscConfig ? "Active" : "Not configured"}
         />
-        <StatCard icon="✍️" iconBg="var(--goodbg)" label="DSC Status" value={dscConfig ? "Active" : "Not configured"} />
-        <StatCard icon="📋" iconBg="var(--panel)" label="Total Payroll Runs" value={runs.length} />
       </StatGrid>
 
-      <Card title="Payroll Runs">
-        <DataTable<RunDisplayRow>
-          columns={runColumns}
-          rows={runRows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by pay period…"
-          pageSize={10}
-          emptyIcon="🏦"
-          emptyTitle="No payroll runs yet"
-          emptyMessage="Runs will appear here once payroll processing has started."
-        />
+      {/* Employee bank transfer dashboard */}
+      <Card title="Employee Bank Transfers">
+        <DisbursementTransferTable transfers={transfers} />
       </Card>
 
+      {/* Bank file generation wizard */}
       <Card title="Generate Bank Transfer File">
-        {eligibleRuns.length === 0 ? (
-          <EmptyState
-            icon="🏦"
-            title="No runs ready for a bank file"
-            message="A bank transfer file can only be generated for a run that is approved or disbursed. Approve a run under Payroll Runs first."
-          />
-        ) : (
-          <BankFileForm runs={eligibleRuns.map((r) => ({ id: r.id, payPeriod: r.payPeriod, netAmount: r.netAmount }))} />
-        )}
+        <BankFileWizard
+          runs={eligibleRuns.map((r) => ({ id: r.id, payPeriod: r.payPeriod, netAmount: r.netAmount }))}
+          dscConfig={dscConfig}
+        />
       </Card>
 
       <Card title="NACH Mandates">
@@ -157,7 +150,7 @@ export default async function DisbursementPage() {
         <EmptyState
           icon="📋"
           title="No active mandates"
-          message="Registered NACH mandates will appear here. Use the submit form above to register a new mandate, or look up an existing one by reference number."
+          message="Registered NACH mandates will appear here. Use the submit form above to register a new mandate."
         />
       </Card>
 
@@ -178,7 +171,7 @@ export default async function DisbursementPage() {
       </Card>
 
       <Card title="Digital Signature Certificate (DSC)">
-        <DscConfigForm initial={dscConfig} />
+        <DscConfigForm initial={rawDsc} />
       </Card>
     </main>
   );
