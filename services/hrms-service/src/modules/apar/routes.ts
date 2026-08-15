@@ -156,7 +156,10 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         weight: z.number().positive().max(100).default(1),
         score: z.number().int().min(1).max(10),
         remarks: z.string().max(2000).optional(),
-      })).min(1),
+      })).min(1).refine(
+        (arr) => arr.reduce((s, w) => s + w.weight, 0) === 100,
+        { message: "KRA weights must sum to 100" },
+      ),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
     const { override } = assertStageOwner(ctx, a, "reporting_officer");

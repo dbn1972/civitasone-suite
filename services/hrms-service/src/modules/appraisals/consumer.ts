@@ -14,6 +14,10 @@ export function registerAppraisalConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // SoD guard: reviewer must differ from appraisee (PASS_WITH_NOTES S9 fix)
+      if (p.reviewerId && p.reviewerId === p.employeeId) {
+        throw new Error("reviewer and appraisee must be different employees");
+      }
       await repo.insertAppraisal(tx, {
         id: p.id,
         tenantId: p.tenantId,
