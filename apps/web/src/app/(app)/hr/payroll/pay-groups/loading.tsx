@@ -1,3 +1,14 @@
+import { SkeletonTable, PageHeader } from "../../../../_components/ds";
+
 export default function Loading() {
-  return <div className="page-main wrap"><div className="skeleton" aria-label="Loading…" /></div>;
+  return (
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Pay Groups"
+        subtitle="Groups of employees paid on a common schedule."
+        back="/hr/payroll"
+      />
+      <SkeletonTable rows={4} />
+    </main>
+  );
 }

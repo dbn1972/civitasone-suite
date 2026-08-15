@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreatePayGroupForm } from "./CreatePayGroupForm";
+import { PayGroupCard } from "./PayGroupCard";
 
 type Row = {
   id: string;
@@ -10,6 +11,9 @@ type Row = {
   pay_day_of_month: number;
   timezone: string;
   status: string;
+  employeeCount?: number;
+  salaryStructureName?: string;
+  lastRevisionDate?: string;
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
@@ -22,30 +26,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const FREQUENCY_LABEL: Record<string, string> = {
-  monthly: "Monthly",
-  bi_weekly: "Bi-weekly",
-  weekly: "Weekly",
-};
-
 export default async function PayGroupsPage() {
   const { data: groups, source } = await getData();
 
-  const rows = groups.map((g) => ({
-    ...g,
-    frequencyLabel: FREQUENCY_LABEL[g.frequency] ?? g.frequency,
-  }));
-  type Row2 = (typeof rows)[number];
-  const monthlyGroups = groups.filter((g) => g.frequency === "monthly").length;
-  const inactiveGroups = groups.filter((g) => g.status !== "active").length;
-
-  const columns: { key: keyof Row2 & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "name", label: "Pay Group" },
-    { key: "frequencyLabel", label: "Frequency" },
-    { key: "pay_day_of_month", label: "Pay Day", align: "right" },
-    { key: "timezone", label: "Timezone" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
+  const activeCount = groups.filter((g) => g.status === "active").length;
+  const monthlyCount = groups.filter((g) => g.frequency === "monthly").length;
+  const inactiveCount = groups.filter((g) => g.status !== "active").length;
+  const totalEmployees = groups.reduce((s, g) => s + (Number(g.employeeCount) || 0), 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -55,28 +42,50 @@ export default async function PayGroupsPage() {
         back="/hr/payroll"
       />
       <DataSourceBadge source={source} />
+
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={groups.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={groups.filter((g) => g.status === "active").length} />
-        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyGroups} />
-        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveGroups} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={activeCount} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyCount} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveCount} />
       </StatGrid>
 
       <CreatePayGroupForm />
 
-      <Card title="Pay Groups">
-        <DataTable<Row2>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by name…"
-          pageSize={15}
-          emptyIcon="👥"
-          emptyTitle="No pay groups yet"
-          emptyMessage="Create your first pay group using the form above."
-        />
-      </Card>
+      {groups.length === 0 ? (
+        <Card title="Pay Groups">
+          <EmptyState
+            icon="👥"
+            title="No pay groups yet"
+            message="Create your first pay group using the form above to organize employees onto a common pay schedule."
+          />
+        </Card>
+      ) : (
+        <Card title="Pay Group Cards">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {groups.map((g) => (
+              <PayGroupCard
+                key={g.id}
+                id={g.id}
+                name={g.name}
+                frequency={g.frequency}
+                payDayOfMonth={g.pay_day_of_month}
+                timezone={g.timezone}
+                status={g.status}
+                employeeCount={Number(g.employeeCount) || 0}
+                associatedStructureName={g.salaryStructureName as string | undefined}
+                lastRevisionDate={g.lastRevisionDate as string | undefined}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
     </main>
   );
 }

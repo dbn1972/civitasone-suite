@@ -1,7 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { SkeletonTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateStructureForm } from "./CreateStructureForm";
+import { SalaryStructureCard } from "./SalaryStructureCard";
+import { ComponentGrid } from "./ComponentGrid";
 
 type Row = {
   id: string;
@@ -40,35 +43,20 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 }
 
 export default async function PayStructuresPage() {
-  const [{ data: structures, source: structuresSource }, { data: rawComponents, source: componentsSource }] = await Promise.all([
-    getData(),
-    getComponents(),
-  ]);
+  const [{ data: structures, source: structuresSource }, { data: rawComponents, source: componentsSource }] =
+    await Promise.all([getData(), getComponents()]);
+
   const active = structures.filter((s) => s.status === "active").length;
   const defaultCount = structures.filter((s) => s.isDefault).length;
 
-  const rows: (Row & { defaultLabel: string })[] = structures.map((s) => ({
-    ...s,
-    defaultLabel: s.isDefault ? "Yes" : "No",
-  }));
+  const componentsByStructure = rawComponents.reduce<Record<string, ComponentRow[]>>((acc, c) => {
+    const key = c.structureId ?? "__unassigned__";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
+    return acc;
+  }, {});
 
-  const columns: { key: (keyof Row & string) | "defaultLabel"; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "name", label: "Structure Name" },
-    { key: "defaultLabel", label: "Default" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
-
-  const componentRows: (ComponentRow & { taxableLabel: string })[] = rawComponents.map((c) => ({
-    ...c,
-    taxableLabel: c.isTaxable ? "Yes" : "No",
-  }));
-
-  const componentColumns: { key: keyof ComponentRow | "taxableLabel"; label: string; cellType?: "status" }[] = [
-    { key: "code", label: "Code" },
-    { key: "name", label: "Component Name" },
-    { key: "componentType", label: "Type", cellType: "status" },
-    { key: "taxableLabel", label: "Taxable" },
-  ];
+  const hasError = structuresSource === "error" || componentsSource === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -77,7 +65,8 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
-      {(structuresSource === "error" || componentsSource === "error") && <DataSourceBadge source="error" />}
+      {hasError && <DataSourceBadge source="error" />}
+
       <StatGrid>
         <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structures.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />
@@ -87,31 +76,47 @@ export default async function PayStructuresPage() {
 
       <CreateStructureForm />
 
-      <Card title="Pay Structures">
-        <DataTable<Row & { defaultLabel: string }>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by name…"
-          pageSize={15}
-          emptyIcon="🧱"
-          emptyTitle="No pay structures yet"
-          emptyMessage="Create your first pay structure using the form above."
-        />
-      </Card>
+      {structures.length === 0 ? (
+        <Card title="Pay Structures">
+          <EmptyState
+            icon="🧱"
+            title="No pay structures yet"
+            message="Create your first salary structure using the form above."
+          />
+        </Card>
+      ) : (
+        <Card title="Salary Structure Cards">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {structures.map((s) => (
+              <SalaryStructureCard
+                key={s.id}
+                id={s.id}
+                name={s.name}
+                isDefault={s.isDefault}
+                status={s.status}
+                components={componentsByStructure[s.id] ?? []}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
 
-      <Card title="Components (earnings & deductions)">
-        <DataTable<ComponentRow & { taxableLabel: string }>
-          columns={componentColumns}
-          rows={componentRows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by name or code…"
-          pageSize={20}
-          emptyIcon="🧩"
-          emptyTitle="No components yet"
-          emptyMessage="Components are added when a payroll structure is created with earnings and deductions."
+      <Card title="Component Grid — Earnings, Deductions & Benefits">
+        <ComponentGrid
+          components={rawComponents.map((c) => ({
+            id: c.id,
+            code: c.code,
+            name: c.name,
+            componentType: c.componentType,
+            isTaxable: c.isTaxable,
+            structureId: c.structureId,
+          }))}
         />
       </Card>
     </main>
