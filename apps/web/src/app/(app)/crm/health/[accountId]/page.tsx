@@ -67,14 +67,21 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
             message="The stored score has no signal breakdown, so only the composite score is available for this account."
           />
         ) : (
+          // Deliberately a plain table, not DataTable: this is a fixed,
+          // short explanation of how one score was composed. Sorting, filtering
+          // and CSV export would be noise on a five-row breakdown, and reordering
+          // the rows would obscure the weighting narrative.
           <table className="tbl">
+            <caption className="sr-only">
+              Signals contributing to this account&apos;s health score
+            </caption>
             <thead>
               <tr>
-                <th>Signal</th>
-                <th style={{ textAlign: "right" }}>Value</th>
-                <th style={{ textAlign: "right" }}>Weight</th>
-                <th style={{ textAlign: "right" }}>Contribution</th>
-                <th>Data Quality</th>
+                <th scope="col">Signal</th>
+                <th scope="col" style={{ textAlign: "right" }}>Value</th>
+                <th scope="col" style={{ textAlign: "right" }}>Weight</th>
+                <th scope="col" style={{ textAlign: "right" }}>Contribution</th>
+                <th scope="col">Data Quality</th>
               </tr>
             </thead>
             <tbody>
