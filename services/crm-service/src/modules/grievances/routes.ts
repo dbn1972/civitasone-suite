@@ -29,16 +29,16 @@ const listParams = listQuery.extend({
 const idParam = z.object({ id: z.string().uuid() });
 
 export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/crm/grievances — create grievance with CPGRAMS reference number
+  // POST /v1/crm/grievances — create grievance with CPGRAMS-aligned reference number
   app.post("/v1/crm/grievances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createBody.parse(req.body);
 
     const rows = (await scopedRead(async (tx) => {
-      // Ministry-prefixed sequence: DARPG/2026/000001
+      // Ministry-prefixed reference: DARPG/2026/000001
       const [seqRow] = (await tx.execute(
-        sql`SELECT nextval(crm.grievance_ref_seq)::bigint AS seq`
+        sql`SELECT nextval('"crm"."grievance_ref_seq"')::bigint AS seq`
       )) as Array<{ seq: number }>;
       const yr = new Date().getFullYear();
       const seq = Number(seqRow.seq).toString().padStart(6, "0");
@@ -53,7 +53,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
           ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
           ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
           ${body.category}, ${body.subject}, ${body.description ?? null},
-          ${body.priority}, REGISTERED,
+          ${body.priority}, 'REGISTERED',
           ${body.dueAt ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
         )
         RETURNING id, reference_no AS "referenceNo",
@@ -93,7 +93,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       WHERE g.tenant_id = ${ctx.tenantId}
         ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
       ORDER BY
-        CASE g.priority WHEN urgent THEN 1 WHEN high THEN 2 WHEN normal THEN 3 ELSE 4 END,
+        CASE g.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
         g.created_at DESC
       LIMIT ${w.pageSize} OFFSET ${w.offset}
     `))) as unknown as Array<Record<string, unknown>>;
@@ -107,17 +107,17 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(listEnvelope(rows, w, ct?.total ?? 0));
   });
 
-  // GET /v1/crm/grievances/stats — dashboard KPIs (must register before /:id)
+  // GET /v1/crm/grievances/stats — KPIs (must register before /:id to avoid routing conflict)
   app.get("/v1/crm/grievances/stats", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
 
     const [row] = (await scopedRead((tx) => tx.execute(sql`
       SELECT
-        COUNT(*) FILTER (WHERE status != DISPOSED)::int          AS "openCount",
-        COUNT(*) FILTER (WHERE status = DISPOSED
+        COUNT(*) FILTER (WHERE status != 'DISPOSED')::int          AS "openCount",
+        COUNT(*) FILTER (WHERE status = 'DISPOSED'
                            AND resolved_at IS NOT NULL)::int       AS "resolvedCount",
-        COUNT(*) FILTER (WHERE status = APPEAL)::int             AS "escalatedCount",
+        COUNT(*) FILTER (WHERE status = 'APPEAL')::int             AS "escalatedCount",
         ROUND(
           AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)
           FILTER (WHERE resolved_at IS NOT NULL)
@@ -131,7 +131,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/crm/grievances/:id — detail
+  // GET /v1/crm/grievances/:id — detail (exposes forwarded_to, appeal_reason)
   app.get("/v1/crm/grievances/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -167,7 +167,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
-          status = CASE WHEN status = REGISTERED THEN FORWARDED ELSE status END,
+          status = CASE WHEN status = 'REGISTERED' THEN 'FORWARDED' ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
       RETURNING id, status, assigned_to AS "assignedTo", version
@@ -186,12 +186,12 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = FORWARDED,
+      SET status = 'FORWARDED',
           forwarded_to = ${body.forwardedTo},
           forwarded_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != DISPOSED
+        AND status != 'DISPOSED'
       RETURNING id, status,
                 forwarded_to AS "forwardedTo", forwarded_at AS "forwardedAt",
                 version
@@ -202,7 +202,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows[0] });
   });
 
-  // PATCH /v1/crm/grievances/:id/resolve — marks as DISPOSED (CPGRAMS: attended and disposed)
+  // PATCH /v1/crm/grievances/:id/resolve — sets DISPOSED (CPGRAMS: attended and disposed)
   app.patch("/v1/crm/grievances/:id/resolve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -211,11 +211,11 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = DISPOSED, resolution = ${body.resolution},
+      SET status = 'DISPOSED', resolution = ${body.resolution},
           resolved_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != DISPOSED
+        AND status != 'DISPOSED'
       RETURNING id, status, resolved_at AS "resolvedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
@@ -232,10 +232,10 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = DISPOSED, closed_at = now(),
+      SET status = 'DISPOSED', closed_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != DISPOSED
+        AND status != 'DISPOSED'
       RETURNING id, status, closed_at AS "closedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
@@ -252,10 +252,10 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = APPEAL, priority = urgent, escalated_at = now(),
+      SET status = 'APPEAL', priority = 'urgent', escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != DISPOSED
+        AND status != 'DISPOSED'
       RETURNING id, status, priority, escalated_at AS "escalatedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
@@ -273,12 +273,12 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = APPEAL, priority = urgent,
+      SET status = 'APPEAL', priority = 'urgent',
           appeal_reason = ${body.appealReason ?? null},
           escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status != DISPOSED
+        AND status != 'DISPOSED'
       RETURNING id, status, priority,
                 appeal_reason AS "appealReason",
                 escalated_at AS "escalatedAt", version
