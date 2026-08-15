@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
+import { getTranslations } from "next-intl/server";
 
 const TYPE_LABELS: Record<string, string> = {
   permanent: "Permanent",
@@ -18,6 +19,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
     getEmployees(),
     getHRDashboard(),
   ]);
+  const t = await getTranslations();
   const employees = rawEmployees as EmpRow[];
 
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
@@ -45,10 +47,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Employee Directory"
-        subtitle="All staff, grades and posting locations."
+        title={t("employees.title")}
+        subtitle={t("common.search")}
         actions={
-          <Link href="/hr/employees/new" className="btn primary">+ Add Employee</Link>
+          <Link href="/hr/employees/new" className="btn primary">{t("employees.add")}</Link>
         }
       />
       <DataSourceBadge source={source} />

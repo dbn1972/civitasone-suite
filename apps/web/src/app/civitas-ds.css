@@ -356,3 +356,20 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}
 .btn.danger{background:var(--bad);color:#fff;box-shadow:0 8px 16px -8px var(--bad)}
 .btn.danger:hover{background:#912018}
+
+
+/* == Sprint 6: Mobile responsive breakpoints for key HRMS pages == */
+@media(max-width:768px){
+  .ph{flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:14px}
+  .ph-act{width:100%}
+  .g-4{grid-template-columns:1fr !important}
+  .btn{min-height:44px;box-sizing:border-box}
+  .iconbtn{min-height:44px;min-width:44px}
+  a.chip,.chip{min-height:40px;display:inline-flex;align-items:center}
+  .dt-toolbar{flex-direction:column;align-items:stretch}
+  .dt-filter{min-width:0;width:100%}
+}
+@media(max-width:480px){
+  .ph h1{font-size:20px;letter-spacing:-.3px}
+  .stat .val{font-size:22px}
+}

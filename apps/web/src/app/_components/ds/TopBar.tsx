@@ -8,6 +8,7 @@ import { AccountMenu } from "../AccountMenu";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { VoiceNav } from "../VoiceNav";
 import { MobileNavToggle } from "../MobileNavToggle";
+import { LanguageToggle } from "../LanguageToggle";
 
 interface TopBarProps {
   crumb?: ReactNode;
@@ -36,6 +37,7 @@ export function TopBar({ crumb, userName }: TopBarProps) {
       <div className="tb-actions">
         <ConnectionStatus />
         <VoiceNav />
+        <LanguageToggle />
         <LanguageSwitcher />
         <DarkModeToggle />
         <button className="iconbtn" title="Analytics" type="button">📊</button>

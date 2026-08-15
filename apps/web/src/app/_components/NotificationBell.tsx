@@ -47,6 +47,8 @@ const MODULE_ICONS: Record<string, string> = {
   asset: "🏢",
   citizen: "👥",
   ml: "🧠",
+  leave_approval: "✅",
+  payroll_run: "💸",
 };
 
 function formatRelativeTime(iso: string): string {
@@ -102,7 +104,14 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         createdAt: payload.createdAt,
         read: false,
         icon: MODULE_ICONS[payload.type?.split(".")[0] ?? ""] ?? "🔔",
-        actionUrl: (payload.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined,
+        actionUrl: ((): string | undefined => {
+          const _u = (payload.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined;
+          if (_u) return _u;
+          const _t = payload.type?.split(".")[0];
+          if (_t === "leave_approval") return "/hr/leave";
+          if (_t === "payroll_run") return "/payroll/runs";
+          return undefined;
+        })()
       };
       setItems((prev) => [newNotification, ...prev].slice(0, MAX_DROPDOWN_ITEMS));
       setLocalUnreadCount((prev) => prev + 1);
@@ -147,6 +156,9 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
               createdAt: n.createdAt,
               read: !!n.readAt,
               icon: MODULE_ICONS[n.type?.split(".")[0] ?? ""] ?? "🔔",
+              actionUrl: (n.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined
+                ?? (n.type?.split(".")[0] === "leave_approval" ? "/hr/leave"
+                : n.type?.split(".")[0] === "payroll_run" ? "/payroll/runs" : undefined),
             }));
           setItems(mapped);
           setLocalUnreadCount(mapped.filter((n) => !n.read).length);

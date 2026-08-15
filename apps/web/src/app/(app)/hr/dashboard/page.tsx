@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getHRDashboard, getEmployees, getDashboardLeaveInbox, getMyProfile } from "../../../_data/loaders";
@@ -49,6 +50,7 @@ export default async function HRDashboardPage() {
     getMyProfile(),
   ]);
 
+  const t = await getTranslations();
   const { data, source } = dashResult;
   const employees = empResult.data as EmpRow[];
   const leaveInbox = inboxResult.data;
@@ -74,7 +76,7 @@ export default async function HRDashboardPage() {
       aria-labelledby="hr-dash-heading"
       style={{ background: "var(--page-bg,#eef2f7)", minHeight: "100vh" }}
     >
-      <h1 id="hr-dash-heading" className="sr-only">HR Dashboard</h1>
+      <h1 id="hr-dash-heading" className="sr-only">{t("dashboard.title")}</h1>
       {anyError && <DataSourceBadge source="error" />}
 
       <GreetingHeader
@@ -117,7 +119,7 @@ export default async function HRDashboardPage() {
       {/* Rich employee table */}
       <section className="emp-section" aria-label="Recent employees">
         <div className="emp-section-head">
-          <span className="emp-section-title">Employees</span>
+          <span className="emp-section-title">{t("employees.title")}</span>
           <Link href="/hr/employees" className="emp-view-all">View all {data.headcount.toLocaleString("en-IN")} →</Link>
         </div>
         <div className="emp-table-wrap">

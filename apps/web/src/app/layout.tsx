@@ -3,10 +3,12 @@
  * Theme tokens are injected by theme-service at render time (Vol 7).
  * Tenant context is resolved server-side from JWT claims.
  */
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 import "@civitasone/ui-kit/tokens.css";
 import "./globals.css";
 import "./civitas-ds.css";
+import "./globals-print.css";
 
 export const metadata: Metadata = {
   title: "CivitasOne Suite",

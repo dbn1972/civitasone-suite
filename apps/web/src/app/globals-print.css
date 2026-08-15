@@ -1,0 +1,48 @@
+/* -- Print styles -- Sprint 6 -- */
+@media print {
+  /* Hide non-printable chrome */
+  nav, aside, header, .hr-sidebar, [data-sidebar], .hamburger-btn,
+  .no-print, button:not(.print-show), [role="navigation"],
+  [class*="sidebar"], [class*="topbar"], [class*="notification"] {
+    display: none !important;
+  }
+  /* Full width */
+  body, main, .hr-main { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+  /* Page breaks */
+  .print-page-break { page-break-before: always; }
+  .print-avoid-break { page-break-inside: avoid; }
+  /* Printable header */
+  .print-header {
+    display: block !important;
+    border-bottom: 2px solid #000;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    font-family: serif;
+  }
+  .print-header h1 { font-size: 18pt; margin: 0; }
+  .print-header .print-meta { font-size: 10pt; color: #555; margin-top: 4px; }
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; font-size: 10pt; }
+  th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+  /* Salary slip specific */
+  .salary-slip-print { max-width: 100%; font-family: serif; }
+  .salary-slip-print .slip-logo { font-size: 20pt; font-weight: bold; }
+  /* Leave balance specific */
+  .leave-balance-print table th { background: #e8e8e8 !important; }
+}
+/* Print button -- visible only on relevant pages */
+.btn-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-2);
+}
+.btn-print:hover { background: var(--bg); }

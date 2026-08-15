@@ -142,7 +142,7 @@ export function Sidebar({ enabledModules }: SidebarProps = {}) {
   })).filter(({ items }) => items.length > 0);
 
   return (
-    <aside className="sb">
+    <aside id="app-sidebar" className="sb">
       <div className="sb-brand">
         <div className="sb-logo" aria-hidden="true">◈</div>
         <div>

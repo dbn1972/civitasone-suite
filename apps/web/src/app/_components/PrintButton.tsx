@@ -1,46 +1,33 @@
 "use client";
 
-import React from "react";
-
-interface PrintButtonProps {
-  title?: string;
-}
-
-export function PrintButton({ title }: PrintButtonProps) {
-  const handlePrint = () => {
-    if (title) {
-      const prevTitle = document.title;
-      document.title = title;
-      window.print();
-      document.title = prevTitle;
-    } else {
-      window.print();
-    }
-  };
-
+export function PrintButton({ label = "Print / PDF", title }: { label?: string; title?: string }) {
+  function handlePrint() {
+    const prev = document.title;
+    if (title) document.title = title;
+    window.print();
+    if (title) document.title = prev;
+  }
   return (
-    <div style={{ display: "inline-flex", gap: 4 }}>
-      <button
-        onClick={handlePrint}
-        type="button"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "6px 12px",
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          background: "#fff",
-          fontSize: 13,
-          color: "#374151",
-          cursor: "pointer",
-          fontWeight: 500,
-        }}
-        title="Print or save as PDF"
+    <button
+      className="btn-print no-print"
+      onClick={handlePrint}
+      aria-label={label}
+      title="Print or save as PDF"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        aria-hidden="true"
       >
-        <span>🖨️</span>
-        Print / PDF
-      </button>
-    </div>
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </svg>
+      {label}
+    </button>
   );
 }
