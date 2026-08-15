@@ -69,24 +69,24 @@ export default function JobOpeningDetailPage() {
   const searchId = useId();
   const stageId = useId();
 
-  const loadOpening = useCallback(async () => {
+  const loadOpening = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/job-openings?limit=200`);
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings?limit=200`, { signal });
       if (!res.ok) { setError(`Failed to load vacancy (${res.status})`); return; }
       const data = await res.json() as unknown;
       const arr: JobOpening[] = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.data as JobOpening[] ?? []);
       const found = arr.find((o) => o.id === id) ?? null;
       setOpening(found);
-    } catch {
-      setError("Network error loading vacancy.");
+    } catch (e) {
+      if (!(e instanceof Error && e.name === 'AbortError')) setError("Network error loading vacancy.");
     } finally {
       setLoadingOpening(false);
     }
   }, [id]);
 
-  const loadApplications = useCallback(async () => {
+  const loadApplications = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/applications`);
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/applications`, { signal });
       if (!res.ok) { return; }
       const data = await res.json() as { data?: Application[] };
       setApplications(data.data ?? []);
@@ -98,8 +98,10 @@ export default function JobOpeningDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    void loadOpening();
-    void loadApplications();
+    const controller = new AbortController()
+    void loadOpening(controller.signal);
+    void loadApplications(controller.signal);
+    return () => controller.abort()
   }, [loadOpening, loadApplications]);
 
   async function makeDecision(appId: string, decision: "shortlisted" | "ineligible", reasonCode?: string) {

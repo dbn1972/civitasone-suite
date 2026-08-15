@@ -280,8 +280,10 @@ export default function BrandingPage() {
 
   // Load current brand + presets on mount
   useEffect(() => {
-    fetch("/api/v1/themes/brand").then((r) => r.json()).then(setConfig).catch(() => {});
-    fetch("/api/v1/themes/brand/presets").then((r) => r.json()).then(setPresets).catch(() => {});
+    const controller = new AbortController()
+    fetch("/api/v1/themes/brand", { signal: controller.signal }).then((r) => r.json()).then(setConfig).catch((e) => { if (e.name === 'AbortError') return; });
+    fetch("/api/v1/themes/brand/presets", { signal: controller.signal }).then((r) => r.json()).then(setPresets).catch((e) => { if (e.name === 'AbortError') return; });
+    return () => controller.abort()
   }, []);
 
   const updateColor = useCallback((key: keyof BrandConfig, value: string) => {

@@ -21,22 +21,28 @@ export default function IntegrationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ProviderMeta | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(API);
+      const res = await fetch(API, { signal });
       if (!res.ok) throw new Error(`Failed to load integrations (${res.status})`);
       const body = await res.json();
       setRows((body.data ?? []) as IntegrationRow[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load integrations");
+      if (err instanceof Error && err.name !== 'AbortError') {
+        setError(err.message || "Failed to load integrations");
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load]);
 
   const forEnv = useMemo(() => rows.filter((r) => r.envScope === env), [rows, env]);
   const byProvider = useMemo(() => {

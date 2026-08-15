@@ -8,14 +8,14 @@ import { formatMoney } from "@/lib/formatters";
 
 type RunType = "bonus" | "incentive" | "adhoc";
 
-type ItemDraft = { employeeId: string; amountRupees: string };
+type ItemDraft = { _key: string; employeeId: string; amountRupees: string };
 
 type CreateResponse = {
   data: { id: string; runType: string; period: string; totalAmountMinor: number; itemCount: number; status: string };
 };
 
 function emptyItem(): ItemDraft {
-  return { employeeId: "", amountRupees: "" };
+  return { _key: Math.random().toString(36).slice(2), employeeId: "", amountRupees: "" };
 }
 
 export function CreateOffCycleForm() {
@@ -176,7 +176,7 @@ export function CreateOffCycleForm() {
               const amtLabelId = `${errId}-amt-${index}`;
               return (
                 <div
-                  key={index}
+                  key={it._key}
                   style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr auto", alignItems: "end" }}
                 >
                   <div style={{ display: "grid", gap: 6 }}>

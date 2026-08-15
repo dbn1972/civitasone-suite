@@ -53,7 +53,7 @@ export default function LeavePoliciesPage() {
   const [saveError, setSaveError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
 
-  async function fetchPolicies() {
+  async function fetchPolicies(signal?: AbortSignal) {
     setState("loading");
     setLoadError(null);
     try {
@@ -61,20 +61,24 @@ export default function LeavePoliciesPage() {
         filter === "all"
           ? "/api/proxy/v1/hrms/admin/leave-policies"
           : `/api/proxy/v1/hrms/admin/leave-policies?employeeType=${filter}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal });
       if (!res.ok) throw new Error((await res.text()) || `Failed to load policies (${res.status})`);
       const data = await res.json();
       setPolicies(data.data ?? []);
       setState("ready");
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load leave policies.");
-      setState("error");
+      if (err instanceof Error && err.name !== 'AbortError') {
+        setLoadError(err.message || "Failed to load leave policies.");
+        setState("error");
+      }
     }
   }
 
   useEffect(() => {
-    void fetchPolicies();
+    const controller = new AbortController()
+    void fetchPolicies(controller.signal)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => controller.abort()
   }, [filter]);
 
   function startEdit(p: Policy) {

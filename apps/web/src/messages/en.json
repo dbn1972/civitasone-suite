@@ -61,7 +61,11 @@
     "total": "Total Records",
     "regularisation": "Regularisation",
     "approve": "Approve",
-    "reject": "Reject"
+    "reject": "Reject",
+    "markPresent": "Mark Present",
+    "regularise": "Regularise Request",
+    "viewHistory": "View History",
+    "late": "Late"
   },
   "payroll": {
     "title": "Payroll",
@@ -71,7 +75,13 @@
     "gross": "Gross Salary",
     "net": "Net Pay",
     "total": "Total Employees",
-    "status": "Status"
+    "status": "Status",
+    "runPayroll": "Run Payroll",
+    "salarySlips": "Salary Slips",
+    "viewRuns": "Payroll Runs",
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected"
   },
   "common": {
     "loading": "Loading",

@@ -30,25 +30,29 @@ export default function LeaveBalancePage() {
   const [source, setSource]       = useState<"api" | "error">("api");
 
   useEffect(() => {
-    fetch("/api/proxy/v1/hrms/employees?limit=500")
+    const controller = new AbortController()
+    fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
       .then((r) => r.json())
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch(() => { setError("Failed to load employees."); setSource("error"); });
+      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load employees."); setSource("error"); } });
+    return () => controller.abort()
   }, []);
 
   useEffect(() => {
     if (!empId) return;
+    const controller = new AbortController()
     setLoading(true);
     setError(null);
-    fetch(`/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`)
+    fetch(`/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data: LeaveContext) => setCtx(data))
-      .catch(() => { setError("Failed to load leave balance."); setSource("error"); })
+      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load leave balance."); setSource("error"); } })
       .finally(() => setLoading(false));
+    return () => controller.abort()
   }, [empId]);
 
   const usedByTypeId = (alloc: Allocation) => {

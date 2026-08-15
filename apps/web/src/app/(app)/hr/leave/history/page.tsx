@@ -43,28 +43,32 @@ export default function LeaveHistoryPage() {
   const [source, setSource]         = useState<"api" | "error">("api");
 
   useEffect(() => {
-    fetch("/api/proxy/v1/hrms/employees?limit=500")
+    const controller = new AbortController()
+    fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
       .then((r) => r.json())
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch(() => { setError("Failed to load employees."); setSource("error"); });
+      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load employees."); setSource("error"); } });
+    return () => controller.abort()
   }, []);
 
   useEffect(() => {
     if (!empId) return;
+    const controller = new AbortController()
     setLoading(true);
     setError(null);
-    fetch(`/api/proxy/v1/hrms/leave/applications?empId=${encodeURIComponent(empId)}&limit=50`)
+    fetch(`/api/proxy/v1/hrms/leave/applications?empId=${encodeURIComponent(empId)}&limit=50`, { signal: controller.signal })
       .then((r) => r.json())
       .then((body) => {
         const rows: LeaveApp[] = Array.isArray(body) ? body : (body.data ?? []);
         setApps(rows);
       })
-      .catch(() => { setError("Failed to load leave history."); setSource("error"); })
+      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load leave history."); setSource("error"); } })
       .finally(() => setLoading(false));
+    return () => controller.abort()
   }, [empId]);
 
   async function handleCancel(appId: string) {

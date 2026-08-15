@@ -245,23 +245,27 @@ export default function TradeLicensesPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
 
-  async function loadLicenses() {
+  async function loadLicenses(signal?: AbortSignal) {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/revenue/trade-licenses");
+      const res = await fetch("/api/v1/revenue/trade-licenses", { signal });
       if (!res.ok) throw new Error("fetch failed");
       const json = await res.json() as { data?: TradeLicenseRow[] };
       const arr = Array.isArray(json) ? json : (json.data ?? []);
       setLicenses(arr);
       setFetchError(false);
-    } catch {
-      setFetchError(true);
+    } catch (e) {
+      if (!(e instanceof Error && e.name === 'AbortError')) setFetchError(true);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { void loadLicenses(); }, []);
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadLicenses(controller.signal)
+    return () => controller.abort()
+  }, []);
 
   const activeCount = licenses.filter((l) => l.status === "active").length;
   const pendingCount = licenses.filter((l) => l.status === "pending").length;
