@@ -58,13 +58,13 @@ export function LogActivityButton() {
           ...(form.dueDate ? { dueDate: form.dueDate } : {}),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not log the activity.");
-      setMessage("Activity logged.");
+      if (!res.ok) throw new Error((await res.text()) || "Could not log the interaction.");
+      setMessage("Interaction logged.");
       setForm({ contactId: "", type: "call", subject: "", text: "", dueDate: "" });
       setOpen(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not log the activity.");
+      setError(err instanceof Error ? err.message : "Could not log the interaction.");
     } finally {
       setBusy(false);
     }
@@ -73,12 +73,12 @@ export function LogActivityButton() {
   return (
     <>
       <button type="button" className="btn primary" onClick={() => setOpen((v) => !v)} style={{ minHeight: 44 }}>
-        + Log Activity
+        + Log Interaction
       </button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
-            <h4 style={{ marginTop: 0 }}>Log an activity</h4>
+            <h4 style={{ marginTop: 0 }}>Log an interaction</h4>
             <label htmlFor="act-contact" style={labelStyle}>Contact (optional)</label>
             <select id="act-contact" value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })} style={inputStyle}>
               <option value="">— No contact —</option>
@@ -93,6 +93,7 @@ export function LogActivityButton() {
               <option value="email">Email</option>
               <option value="task">Task</option>
               <option value="note">Note</option>
+              <option value="site_visit">Site Visit</option>
             </select>
             <label htmlFor="act-subject" style={labelStyle}>Subject</label>
             <input id="act-subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
@@ -101,7 +102,7 @@ export function LogActivityButton() {
             <label htmlFor="act-notes" style={labelStyle}>Notes</label>
             <textarea id="act-notes" required value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="What happened or needs doing?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
             <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
-              {busy ? "Saving…" : "Save activity"}
+              {busy ? "Saving…" : "Save interaction"}
             </button>
             <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>
               Cancel
