@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
@@ -20,10 +21,11 @@ const procurementTiles: NavTile[] = [
 	{ title: "Pre-Bid", href: "/procurement/pre-bid", description: "Pre-bid conference log" },
 ];
 
-export default function Page() {
+export default async function Page() {
+	const t = await getTranslations("procurement");
 	return (
 		<main className="page-main" aria-labelledby="page-heading">
-			<PageHeader title="Procurement" subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." help="procurement" />
+			<PageHeader title={t("title")} subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." help="procurement" />
 			<LinkTiles tiles={procurementTiles} columns="four" />
 		</main>
 	);

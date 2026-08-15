@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
@@ -68,10 +69,11 @@ const financeSections: NavTile[] = [
 	{ title: "User Charges", description: "Service-wise user charges and fee collections.", href: "/finance/user-charges" },
 ];
 
-export default function Page() {
+export default async function Page() {
+	const t = await getTranslations("finance");
 	return (
 		<main className="page-main" aria-labelledby="page-heading">
-			<PageHeader title="Finance" subtitle="Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting." help="finance" />
+			<PageHeader title={t("title")} subtitle="Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting." help="finance" />
 			<LinkTiles tiles={financeSections} columns="four" />
 		</main>
 	);

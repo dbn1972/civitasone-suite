@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
@@ -65,18 +66,19 @@ const sections = [
 	},
 ];
 
-export default function Page() {
+export default async function Page() {
+	const t = await getTranslations("crm");
 	return (
 		<>
 			<PageHeader
-				title="CRM"
+				title={t("title")}
 				subtitle="Pipeline and customer operations workspace."
 			/>
 			<div className="space-y-6">
 				{sections.map((section) => (
-					<section key={section.heading} aria-labelledby={`crm-section-${section.heading.toLowerCase().replace(/\s+/g, "-")}`}>
+					<section key={section.heading} aria-labelledby={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}>
 						<h2
-							id={`crm-section-${section.heading.toLowerCase().replace(/\s+/g, "-")}`}
+							id={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}
 							className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 px-1"
 						>
 							{section.heading}

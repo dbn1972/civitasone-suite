@@ -102,5 +102,40 @@
     "edit": "संपादित करें",
     "view": "देखें",
     "close": "बंद करें"
+  },
+  "finance": {
+    "title": "वित्त",
+    "budget": "बजट",
+    "expenditure": "व्यय",
+    "challan": "चालान",
+    "sanctions": "मंजूरी",
+    "reports": "रिपोर्ट",
+    "approved": "स्वीकृत",
+    "pending": "लंबित",
+    "rejected": "अस्वीकृत"
+  },
+  "procurement": {
+    "title": "खरीद",
+    "tenders": "निविदाएं",
+    "bids": "बोलियां",
+    "purchase": "खरीद आदेश",
+    "vendors": "विक्रेता",
+    "contracts": "अनुबंध"
+  },
+  "crm": {
+    "title": "नागरिक सेवाएं",
+    "grievances": "शिकायतें",
+    "requests": "अनुरोध",
+    "complaints": "शिकायत",
+    "status": "स्थिति",
+    "resolved": "हल",
+    "open": "खुला"
+  },
+  "assets": {
+    "title": "संपत्ति",
+    "inventory": "सूची",
+    "maintenance": "रखरखाव",
+    "disposal": "निपटान",
+    "transfer": "स्थानांतरण"
   }
 }
