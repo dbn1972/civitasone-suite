@@ -67,7 +67,7 @@ export default async function TravelPage() {
   const totalMinor = claims.reduce((s, c) => s + c.totalAmount, 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="TA / DA Claims"
         subtitle="Travel allowance and daily allowance claims. GFR 2017 Chapter 19 — entitlement by 7th CPC pay level."
@@ -103,6 +103,6 @@ export default async function TravelPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

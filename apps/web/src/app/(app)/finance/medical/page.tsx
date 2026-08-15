@@ -95,7 +95,7 @@ export default async function MedicalPage() {
   }, 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Medical Reimbursement"
         subtitle="CGHS / CS(MA) Rules 1944 — indoor and outdoor reimbursement claims with referral and ward entitlement tracking."
@@ -133,6 +133,6 @@ export default async function MedicalPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

@@ -94,7 +94,7 @@ export default async function AdvancesPage() {
   const closed = items.filter((i) => i.status === "Closed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap">
       <PageHeader
         title="Advances"
         subtitle="TA, Medical, Festival and HBA advances — GFR 2017 Rule 290. Every advance requires sanctioning authority signature."
@@ -132,6 +132,6 @@ export default async function AdvancesPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }
