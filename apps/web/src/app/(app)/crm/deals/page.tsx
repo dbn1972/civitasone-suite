@@ -23,10 +23,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🤝" iconBg="#fce7ee" label="Total Engagements" value={deals.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔄" iconBg="#fce7ee" label="Active Engagements" value={openDeals.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#fce7ee" label="Pipeline Value" value={formatMoney(pipelineValue)} />
-        <StatCard icon="✅" iconBg="#fce7ee" label="Completed Value" value={formatMoney(wonValue)} />
+        <StatCard icon="🤝" iconBg="#eef2ff" label="Total Engagements" value={deals.length.toLocaleString("en-IN")} />
+        <StatCard icon="🔄" iconBg="#ecfdf3" label="Active Engagements" value={openDeals.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#f3e8ff" label="Pipeline Value" value={formatMoney(pipelineValue)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed Value" value={formatMoney(wonValue)} />
       </StatGrid>
       <DealsTable deals={deals} source={source} />
     </>
