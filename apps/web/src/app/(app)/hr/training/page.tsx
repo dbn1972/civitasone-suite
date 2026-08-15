@@ -1,18 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../_components/ds";
 import { getTrainingPrograms } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
-
-type Row = {
-  id: string;
-  title: string;
-  category: string;
-  trainer: string;
-  dates: string;
-  enrolled: string;
-  status: string;
-} & Record<string, unknown>;
+import { UpcomingPrograms } from "./_components/UpcomingPrograms";
+import { ProgramCard } from "./_components/ProgramCard";
 
 export default async function TrainingPage() {
   const { data: programs, source } = await getTrainingPrograms();
@@ -21,25 +13,6 @@ export default async function TrainingPage() {
   const upcoming = programs.filter((p) => p.status === "upcoming").length;
   const ongoing = programs.filter((p) => p.status === "ongoing").length;
   const completed = programs.filter((p) => p.status === "completed").length;
-
-  const rows: Row[] = programs.map((p) => ({
-    id: p.id,
-    title: p.title,
-    category: p.category,
-    trainer: p.trainerName ?? "—",
-    dates: `${formatIndianDate(p.startDate)} – ${formatIndianDate(p.endDate)}`,
-    enrolled: p.maxCapacity != null ? `${p.enrolledCount} / ${p.maxCapacity}` : String(p.enrolledCount),
-    status: p.status,
-  }));
-
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
-    { key: "title", label: "Title" },
-    { key: "category", label: "Category" },
-    { key: "trainer", label: "Trainer" },
-    { key: "dates", label: "Dates" },
-    { key: "enrolled", label: "Enrolled", align: "right" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -51,25 +24,57 @@ export default async function TrainingPage() {
         }
       />
       <DataSourceBadge source={source} />
-      <StatGrid>
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
-        <StatCard icon="📅" iconBg="#e6f0ff" label="Upcoming" value={upcoming} />
-        <StatCard icon="▶️" iconBg="#e6f7f0" label="Ongoing" value={ongoing} />
-        <StatCard icon="✅" iconBg="#fffbe6" label="Completed" value={completed} />
-      </StatGrid>
-      <Card title="Training Programs">
-        <DataTable<Row>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by title, category or trainer…"
-          pageSize={15}
-          emptyIcon="📚"
-          emptyTitle="No training programmes"
-          emptyMessage="Training programmes appear here once created. Click '+ New Program' to schedule a training."
-        />
-      </Card>
+
+      {total === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <EmptyState
+            icon="🏆"
+            title="No programs scheduled"
+            message="Schedule your first training program to build capacity and upskill your workforce."
+            action={<Link href="/hr/training/new" className="btn primary">Schedule Program</Link>}
+          />
+        </div>
+      ) : (
+        <>
+          <StatGrid>
+            <StatCard icon="📋" iconBg="#f5f5f5" label="Total" value={total} />
+            <StatCard icon="📅" iconBg="#e6f0ff" label="Upcoming" value={upcoming} />
+            <StatCard icon="▶️" iconBg="#e6f7f0" label="Ongoing" value={ongoing} />
+            <StatCard icon="✅" iconBg="#fffbe6" label="Completed" value={completed} />
+          </StatGrid>
+
+          {/* Upcoming Programs fast-access strip */}
+          {upcoming > 0 && (
+            <UpcomingPrograms programs={programs} />
+          )}
+
+          {/* Full program grid */}
+          <Card title="All Training Programs">
+            {programs.length > 0 ? (
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {programs.map((p) => (
+                  <ProgramCard
+                    key={p.id}
+                    program={p}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon="📚"
+                title="No training programmes"
+                message="Training programmes appear here once created."
+                action={<Link href="/hr/training/new" className="btn primary">+ New Program</Link>}
+              />
+            )}
+          </Card>
+
+          <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link href="/hr/training/nominations" className="btn ghost">View Nominations</Link>
+            <Link href="/hr/training/feedback" className="btn ghost">Feedback Reports</Link>
+          </div>
+        </>
+      )}
     </main>
   );
 }
