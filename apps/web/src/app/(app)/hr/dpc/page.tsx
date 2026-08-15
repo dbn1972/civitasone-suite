@@ -76,7 +76,6 @@ export default async function DpcPage() {
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers"  value={eligibleCount} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Not Yet Eligible"   value={ineligibleCount} />
-      </div>
         <StatCard icon="📅" iconBg="#f5f5f5" label="As On Date"         value={asOf} />
         <StatCard icon="👥" iconBg="#e6f7f0" label="Total Officers"     value={totalOfficers} />
       </StatGrid>
