@@ -1297,8 +1297,117 @@ export async function getCrmActivities(): Promise<LoaderResult<ActivitySummary[]
   });
 }
 
-export const getCrmGrievances = moduleLoader("/api/v1/crm/grievances", "crm.grievances");
-export const getCrmServiceRequests = moduleLoader("/api/v1/crm/service-requests", "crm.service-requests");
+/**
+ * Citizen Relationship Management — grievances + service requests.
+ *
+ * These deliberately do NOT use `moduleLoader`. The generic loader flattens
+ * every row to `{ id, label, sublabel, status, meta }`, which discarded the
+ * domain fields these registers are built on (citizenName vs subject, category,
+ * priority, createdAt) and forced the pages to render the same value in two
+ * columns. Both endpoints already return a `{ data, meta: { total } }` envelope,
+ * so the real total is carried through as well — stat cards computed from the
+ * current page alone were under-reporting once a tenant had more than one page.
+ */
+export type CrmGrievanceRow = {
+  id: string;
+  referenceNo: string | null;
+  citizenName: string | null;
+  category: string | null;
+  subject: string | null;
+  priority: string;
+  status: string;
+  assignedTo: string | null;
+  dueAt: string | null;
+  createdAt: string | null;
+};
+
+export type CrmServiceRequestRow = {
+  id: string;
+  referenceNo: string | null;
+  citizenName: string | null;
+  serviceType: string | null;
+  subject: string | null;
+  priority: string;
+  status: string;
+  assignedTo: string | null;
+  dueAt: string | null;
+  createdAt: string | null;
+};
+
+/** `{ data, meta: { total } }` → `{ rows, total }`, tolerating a bare array. */
+function mapEnvelopeWithTotal<T>(payload: unknown, pick: (r: Record<string, unknown>) => T): { rows: T[]; total: number } | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped = rows.filter(isRecord).map(pick);
+  const meta = isRecord(payload) && isRecord(payload.meta) ? payload.meta : undefined;
+  const total = typeof meta?.total === "number" ? meta.total : mapped.length;
+  return { rows: mapped, total };
+}
+
+export async function getCrmGrievances(
+  params: { status?: string; priority?: string; search?: string; limit?: number; page?: number } = {},
+): Promise<LoaderResult<{ rows: CrmGrievanceRow[]; total: number }>> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.priority) qs.set("priority", params.priority);
+  if (params.search) qs.set("search", params.search);
+  qs.set("limit", String(params.limit ?? 50));
+  qs.set("page", String(params.page ?? 1));
+  return fetchJson<unknown, { rows: CrmGrievanceRow[]; total: number }>(
+    `/api/v1/crm/grievances?${qs.toString()}`,
+    { rows: [], total: 0 },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "crm.grievances",
+      mapResponse: (p) =>
+        mapEnvelopeWithTotal<CrmGrievanceRow>(p, (r) => ({
+          id: toText(r.id) ?? "",
+          referenceNo: toText(r.referenceNo),
+          citizenName: toText(r.citizenName),
+          category: toText(r.category),
+          subject: toText(r.subject),
+          priority: toText(r.priority) ?? "normal",
+          status: toText(r.status) ?? "open",
+          assignedTo: toText(r.assignedTo),
+          dueAt: toText(r.dueAt),
+          createdAt: toText(r.createdAt),
+        })),
+    },
+  );
+}
+
+export async function getCrmServiceRequests(
+  params: { status?: string; priority?: string; serviceType?: string; search?: string; limit?: number; page?: number } = {},
+): Promise<LoaderResult<{ rows: CrmServiceRequestRow[]; total: number }>> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.priority) qs.set("priority", params.priority);
+  if (params.serviceType) qs.set("serviceType", params.serviceType);
+  if (params.search) qs.set("search", params.search);
+  qs.set("limit", String(params.limit ?? 50));
+  qs.set("page", String(params.page ?? 1));
+  return fetchJson<unknown, { rows: CrmServiceRequestRow[]; total: number }>(
+    `/api/v1/crm/service-requests?${qs.toString()}`,
+    { rows: [], total: 0 },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "crm.service-requests",
+      mapResponse: (p) =>
+        mapEnvelopeWithTotal<CrmServiceRequestRow>(p, (r) => ({
+          id: toText(r.id) ?? "",
+          referenceNo: toText(r.referenceNo),
+          citizenName: toText(r.citizenName),
+          serviceType: toText(r.serviceType),
+          subject: toText(r.subject),
+          priority: toText(r.priority) ?? "normal",
+          status: toText(r.status) ?? "open",
+          assignedTo: toText(r.assignedTo),
+          dueAt: toText(r.dueAt),
+          createdAt: toText(r.createdAt),
+        })),
+    },
+  );
+}
 function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
