@@ -5,8 +5,10 @@ import { formatRupees } from "@/lib/formatters";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 export default async function PayrollPage() {
+  const t = await getTranslations("payroll");
   const [{ data: runs, source }, { data: structures }] = await Promise.all([
     getPayrollRunDetails(),
     getPayrollStructures(),
@@ -25,7 +27,7 @@ export default async function PayrollPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Payroll Runs"
+        title={t("title")}
         subtitle="Monthly salary processing and statutory run status."
         help="payroll"
       />

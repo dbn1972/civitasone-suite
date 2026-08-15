@@ -2,8 +2,10 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getAttendanceList } from "../../../_data/loaders";
 import { AttendanceTable } from "./AttendanceTable";
+import { getTranslations } from "next-intl/server";
 
 export default async function AttendancePage() {
+  const t = await getTranslations("attendance");
   const { data: attendance, source } = await getAttendanceList();
 
   const total = attendance.length;
@@ -14,7 +16,7 @@ export default async function AttendancePage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Attendance"
+        title={t("title")}
         subtitle="Daily presence and punctuality records."
       />
       <DataSourceBadge source={source} />

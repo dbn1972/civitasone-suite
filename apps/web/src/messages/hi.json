@@ -61,7 +61,11 @@
     "total": "कुल रिकॉर्ड",
     "regularisation": "नियमितीकरण",
     "approve": "स्वीकृत करें",
-    "reject": "अस्वीकार करें"
+    "reject": "अस्वीकार करें",
+    "markPresent": "उपस्थित करें",
+    "regularise": "नियमित अनुरोध",
+    "viewHistory": "इतिहास देखें",
+    "late": "देर से"
   },
   "payroll": {
     "title": "वेतन",
@@ -71,7 +75,13 @@
     "gross": "सकल वेतन",
     "net": "शुद्ध वेतन",
     "total": "कुल कर्मचारी",
-    "status": "स्थिति"
+    "status": "स्थिति",
+    "runPayroll": "वेतन चलाएं",
+    "salarySlips": "वेतन पर्चियां",
+    "viewRuns": "वेतन रन",
+    "approved": "स्वीकृत",
+    "pending": "लंबित",
+    "rejected": "अस्वीकृत"
   },
   "common": {
     "loading": "लोड हो रहा है",
