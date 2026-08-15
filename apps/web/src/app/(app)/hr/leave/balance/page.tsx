@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PrintButton } from "../../../../_components/PrintButton";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type Allocation = {
@@ -69,13 +70,16 @@ export default function LeaveBalancePage() {
   const totalUsed     = totalEntitlement - totalBalance;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <main className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
       <PageHeader
         title="Leave Balance"
         subtitle="View leave entitlement and remaining balance for an employee."
         back="/hr/leave"
       />
       <DataSourceBadge source={source} />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }} className="no-print">
+        <PrintButton label="Download Leave Balance" />
+      </div>
 
       {ctx && (
         <StatGrid>

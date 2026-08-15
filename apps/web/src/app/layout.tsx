@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import "@civitasone/ui-kit/tokens.css";
 import "./globals.css";
 import "./civitas-ds.css";
+import "./globals-print.css";
 
 export const metadata: Metadata = {
   title: "CivitasOne Suite",
