@@ -57,6 +57,6 @@ export async function exportContacts(tenantId: string, isAdmin = false): Promise
   return isAdmin ? rows : rows.map(maskView);
 }
 
-export async function listAccounts(tenantId: string) {
-  return repo.listAccounts(tenantId);
+export async function listAccounts(tenantId: string, limit = 50, offset = 0) {
+  return repo.listAccounts(tenantId, limit, offset);
 }
