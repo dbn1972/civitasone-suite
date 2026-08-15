@@ -177,7 +177,8 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    sendValidated(reply, accountsListSchema, { data: await queries.listAccounts(ctx.tenantId) });
+    const q = listContactsQuery.parse(req.query);
+    sendValidated(reply, accountsListSchema, { data: await queries.listAccounts(ctx.tenantId, q.limit, q.offset) });
   });
 
   app.post("/v1/crm/accounts", async (req, reply) => {
