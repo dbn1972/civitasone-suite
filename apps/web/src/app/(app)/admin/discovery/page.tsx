@@ -40,11 +40,13 @@ export default function AdminDiscoveryPage() {
   const [services, setServices] = useState<Service[]>([]);
 
   useEffect(() => {
-    fetch("/api/v1/admin/discovery/services")
+    const controller = new AbortController()
+    fetch("/api/v1/admin/discovery/services", { signal: controller.signal })
       .then((r) => r.json())
       .then((body) => { setServices(body.data ?? MOCK_SERVICES); })
-      .catch(() => { setServices(MOCK_SERVICES); })
+      .catch((e) => { if (e.name !== 'AbortError') setServices(MOCK_SERVICES); })
       .finally(() => { setIsLoading(false); });
+    return () => controller.abort()
   }, []);
 
   const filtered = (isLoading ? [] : services).filter((s) => {

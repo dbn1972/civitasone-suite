@@ -19,19 +19,25 @@ export default function DispatchRegistryPage() {
   const [rows, setRows] = useState<DispatchRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/proxy/v1/estab/dispatch?limit=100");
+      const res = await fetch("/api/proxy/v1/estab/dispatch?limit=100", { signal });
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json() as { data?: DispatchRow[] };
       setRows(body.data ?? []);
+    } catch (e) {
+      if (!(e instanceof Error && e.name === 'AbortError')) throw e;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load]);
 
   return (
     <>

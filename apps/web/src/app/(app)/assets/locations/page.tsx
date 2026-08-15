@@ -13,15 +13,23 @@ export default function LocationsPage() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  async function load() {
-    const res = await fetch("/api/proxy/v1/asset/locations");
-    setLoaded(true);
-    if (!res.ok) return;
-    const body = await res.json() as { data: Location[] };
-    setRows(body.data ?? []);
+  async function load(signal?: AbortSignal) {
+    try {
+      const res = await fetch("/api/proxy/v1/asset/locations", { signal });
+      setLoaded(true);
+      if (!res.ok) return;
+      const body = await res.json() as { data: Location[] };
+      setRows(body.data ?? []);
+    } catch (e) {
+      if (e instanceof Error && e.name !== 'AbortError') setLoaded(true);
+    }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

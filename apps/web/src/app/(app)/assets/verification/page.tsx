@@ -12,23 +12,29 @@ export default function AssetVerificationPage() {
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await fetch("/api/proxy/v1/asset/verifications?limit=50");
+      const res = await fetch("/api/proxy/v1/asset/verifications?limit=50", { signal });
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json() as { data?: Verification[] };
       setRows(body.data ?? []);
     } catch (e) {
-      setLoadError(true);
-      setMessage(e instanceof Error ? e.message : "Load failed");
+      if (e instanceof Error && e.name !== 'AbortError') {
+        setLoadError(true);
+        setMessage(e.message || "Load failed");
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load]);
 
   const create = useConfirmAction({
     onConfirm: async (reason) => {

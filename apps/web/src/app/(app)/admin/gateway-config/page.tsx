@@ -24,22 +24,24 @@ export default function GatewayConfigPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchConfig = useCallback(async () => {
+  const fetchConfig = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/v1/admin/platform-config/gateway");
+      const res = await fetch("/api/v1/admin/platform-config/gateway", { signal });
       if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
       const body = await res.json();
       setConfig(body.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load gateway config");
+      if (err instanceof Error && err.name !== 'AbortError') {
+        setError(err.message || "Failed to load gateway config");
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchBreakers = useCallback(async () => {
+  const fetchBreakers = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/ops/breakers");
+      const res = await fetch("/api/ops/breakers", { signal });
       if (res.ok) {
         const body = await res.json();
         setBreakers(body.breakers ?? []);
@@ -50,8 +52,10 @@ export default function GatewayConfigPage() {
   }, []);
 
   useEffect(() => {
-    fetchConfig();
-    fetchBreakers();
+    const controller = new AbortController()
+    fetchConfig(controller.signal);
+    fetchBreakers(controller.signal);
+    return () => controller.abort()
   }, [fetchConfig, fetchBreakers]);
 
   async function handleSave() {

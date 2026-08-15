@@ -113,17 +113,19 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/v1/audit/library/issues")
+    const controller = new AbortController()
+    fetch("/api/v1/audit/library/issues", { signal: controller.signal })
       .then((r) => r.json())
       .then((body: { data?: AuditIssue[] }) => {
         setIssues(body.data ?? MOCK_ISSUES);
       })
-      .catch(() => {
-        setIssues(MOCK_ISSUES);
+      .catch((e) => {
+        if (e.name !== 'AbortError') setIssues(MOCK_ISSUES);
       })
       .finally(() => {
         setIsLoading(false);
       });
+    return () => controller.abort()
   }, []);
 
   const filtered = isLoading

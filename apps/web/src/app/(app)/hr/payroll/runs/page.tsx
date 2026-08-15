@@ -33,7 +33,8 @@ export default function PayrollRunsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/v1/hrms/payroll/runs")
+    const controller = new AbortController()
+    fetch("/api/v1/hrms/payroll/runs", { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -41,12 +42,13 @@ export default function PayrollRunsPage() {
       .then((body: { data?: PayrollRun[] }) => {
         setRuns(body.data ?? []);
       })
-      .catch(() => {
-        setError("Could not load payroll runs. Please try again.");
+      .catch((e) => {
+        if (e.name !== 'AbortError') setError("Could not load payroll runs. Please try again.");
       })
       .finally(() => {
         setIsLoading(false);
       });
+    return () => controller.abort()
   }, []);
 
   const skeletonCols = 5;
