@@ -4,24 +4,19 @@ import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
+import {
+  STATUS,
+  PRIORITY,
+  MINISTRY_CODE,
+  createBody,
+  assignBody,
+  resolveBody,
+  forwardBody,
+  appealBody,
+} from "./grievances-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-
-const PRIORITY = ["low", "normal", "high", "urgent"] as const;
-const STATUS = ["open", "assigned", "in_progress", "resolved", "closed", "escalated"] as const;
-
-const createBody = z.object({
-  contactId: z.string().uuid().optional(),
-  citizenName: z.string().min(1).max(200),
-  citizenPhone: z.string().min(3).max(32).optional(),
-  citizenEmail: z.string().email().max(320).optional(),
-  category: z.string().min(1).max(64),
-  subject: z.string().min(1).max(500),
-  description: z.string().max(5000).optional(),
-  priority: z.enum(PRIORITY).default("normal"),
-  dueAt: z.string().datetime().optional(),
-});
 
 const listParams = listQuery.extend({
   status: z.enum(STATUS).optional(),
@@ -31,58 +26,56 @@ const listParams = listQuery.extend({
   search: z.string().max(200).optional(),
 });
 
-const assignBody = z.object({ assignedTo: z.string().uuid() });
-const resolveBody = z.object({ resolution: z.string().min(1).max(5000) });
-const escalateBody = z.object({ reason: z.string().max(1000).optional() }).optional();
-
 const idParam = z.object({ id: z.string().uuid() });
 
-/** Build a short human-readable reference: GRV/YYYY/NNNNNNs */
-function grievanceRef(): string {
-  const yr = new Date().getFullYear();
-  const suffix = Date.now().toString(36).toUpperCase().slice(-6);
-  return `GRV/${yr}/${suffix}`;
-}
-
 export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/crm/grievances — create a new grievance
+  // POST /v1/crm/grievances — create grievance with CPGRAMS reference number
   app.post("/v1/crm/grievances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createBody.parse(req.body);
-    const refNo = grievanceRef();
 
-    const rows = (await scopedRead((tx) => tx.execute(sql`
-      INSERT INTO crm.grievances (
-        tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
-        category, subject, description, priority, status,
-        due_at, reference_no, created_by, updated_by
-      ) VALUES (
-        ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
-        ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
-        ${body.category}, ${body.subject}, ${body.description ?? null},
-        ${body.priority}, 'open',
-        ${body.dueAt ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
-      )
-      RETURNING id, reference_no AS "referenceNo",
-                citizen_name AS "citizenName", category, subject,
-                priority, status, created_at AS "createdAt"
-    `))) as unknown as Array<Record<string, unknown>>;
+    const rows = (await scopedRead(async (tx) => {
+      // Ministry-prefixed sequence: DARPG/2026/000001
+      const [seqRow] = (await tx.execute(
+        sql`SELECT nextval(crm.grievance_ref_seq)::bigint AS seq`
+      )) as Array<{ seq: number }>;
+      const yr = new Date().getFullYear();
+      const seq = Number(seqRow.seq).toString().padStart(6, "0");
+      const refNo = `${MINISTRY_CODE}/${yr}/${seq}`;
+
+      return tx.execute(sql`
+        INSERT INTO crm.grievances (
+          tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
+          category, subject, description, priority, status,
+          due_at, reference_no, created_by, updated_by
+        ) VALUES (
+          ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
+          ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
+          ${body.category}, ${body.subject}, ${body.description ?? null},
+          ${body.priority}, REGISTERED,
+          ${body.dueAt ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
+        )
+        RETURNING id, reference_no AS "referenceNo",
+                  citizen_name AS "citizenName", category, subject,
+                  priority, status, created_at AS "createdAt"
+      `);
+    })) as unknown as Array<Record<string, unknown>>;
     return reply.code(201).send({ data: rows[0] });
   });
 
-  // GET /v1/crm/grievances — list grievances with filters
+  // GET /v1/crm/grievances — list with CPGRAMS status filters
   app.get("/v1/crm/grievances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const q = listParams.parse(req.query ?? {});
     const w = windowOf(q);
 
-    const statusF  = q.status    ? sql`AND g.status   = ${q.status}`           : sql``;
-    const priorityF = q.priority ? sql`AND g.priority  = ${q.priority}`         : sql``;
-    const categoryF = q.category ? sql`AND g.category  = ${q.category}`         : sql``;
-    const assignedF = q.assignedTo ? sql`AND g.assigned_to = ${q.assignedTo}::uuid` : sql``;
-    const searchF = q.search
+    const statusF   = q.status     ? sql`AND g.status    = ${q.status}`               : sql``;
+    const priorityF = q.priority   ? sql`AND g.priority  = ${q.priority}`             : sql``;
+    const categoryF = q.category   ? sql`AND g.category  = ${q.category}`             : sql``;
+    const assignedF = q.assignedTo ? sql`AND g.assigned_to = ${q.assignedTo}::uuid`   : sql``;
+    const searchF   = q.search
       ? sql`AND (g.citizen_name ILIKE ${"%" + q.search + "%"}
                  OR g.subject   ILIKE ${"%" + q.search + "%"}
                  OR g.reference_no ILIKE ${"%" + q.search + "%"})`
@@ -100,7 +93,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       WHERE g.tenant_id = ${ctx.tenantId}
         ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
       ORDER BY
-        CASE g.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
+        CASE g.priority WHEN urgent THEN 1 WHEN high THEN 2 WHEN normal THEN 3 ELSE 4 END,
         g.created_at DESC
       LIMIT ${w.pageSize} OFFSET ${w.offset}
     `))) as unknown as Array<Record<string, unknown>>;
@@ -112,6 +105,30 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<{ total: number }>;
 
     return reply.send(listEnvelope(rows, w, ct?.total ?? 0));
+  });
+
+  // GET /v1/crm/grievances/stats — dashboard KPIs (must register before /:id)
+  app.get("/v1/crm/grievances/stats", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+
+    const [row] = (await scopedRead((tx) => tx.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status != DISPOSED)::int          AS "openCount",
+        COUNT(*) FILTER (WHERE status = DISPOSED
+                           AND resolved_at IS NOT NULL)::int       AS "resolvedCount",
+        COUNT(*) FILTER (WHERE status = APPEAL)::int             AS "escalatedCount",
+        ROUND(
+          AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)
+          FILTER (WHERE resolved_at IS NOT NULL)
+        )::int                                                     AS "avgResolutionHours"
+      FROM crm.grievances
+      WHERE tenant_id = ${ctx.tenantId}
+    `))) as unknown as Array<Record<string, unknown>>;
+
+    return reply.send({
+      data: row ?? { openCount: 0, resolvedCount: 0, escalatedCount: 0, avgResolutionHours: null },
+    });
   });
 
   // GET /v1/crm/grievances/:id — detail
@@ -128,6 +145,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
              g.resolution, g.due_at AS "dueAt",
              g.resolved_at AS "resolvedAt", g.closed_at AS "closedAt",
              g.escalated_at AS "escalatedAt",
+             g.forwarded_to AS "forwardedTo", g.forwarded_at AS "forwardedAt",
+             g.appeal_reason AS "appealReason",
              g.created_at AS "createdAt", g.updated_at AS "updatedAt",
              g.created_by AS "createdBy", g.version
       FROM crm.grievances g
@@ -148,7 +167,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
-          status = CASE WHEN status = 'open' THEN 'assigned' ELSE status END,
+          status = CASE WHEN status = REGISTERED THEN FORWARDED ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
       RETURNING id, status, assigned_to AS "assignedTo", version
@@ -158,7 +177,32 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows[0] });
   });
 
-  // PATCH /v1/crm/grievances/:id/resolve
+  // PATCH /v1/crm/grievances/:id/forward — CPGRAMS: forward to department/office
+  app.patch("/v1/crm/grievances/:id/forward", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = forwardBody.parse(req.body);
+
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      UPDATE crm.grievances
+      SET status = FORWARDED,
+          forwarded_to = ${body.forwardedTo},
+          forwarded_at = now(),
+          updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        AND status != DISPOSED
+      RETURNING id, status,
+                forwarded_to AS "forwardedTo", forwarded_at AS "forwardedAt",
+                version
+    `))) as unknown as Array<Record<string, unknown>>;
+
+    if (rows.length === 0)
+      throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    return reply.send({ data: rows[0] });
+  });
+
+  // PATCH /v1/crm/grievances/:id/resolve — marks as DISPOSED (CPGRAMS: attended and disposed)
   app.patch("/v1/crm/grievances/:id/resolve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -167,20 +211,20 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = 'resolved', resolution = ${body.resolution},
+      SET status = DISPOSED, resolution = ${body.resolution},
           resolved_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status NOT IN ('closed')
+        AND status != DISPOSED
       RETURNING id, status, resolved_at AS "resolvedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0)
-      throw new HttpError(404, "NOT_FOUND", "grievance not found or already closed");
+      throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
     return reply.send({ data: rows[0] });
   });
 
-  // PATCH /v1/crm/grievances/:id/close
+  // PATCH /v1/crm/grievances/:id/close — admin: administratively dispose
   app.patch("/v1/crm/grievances/:id/close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -188,55 +232,60 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = 'closed', closed_at = now(),
+      SET status = DISPOSED, closed_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
-      WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND status != 'closed'
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        AND status != DISPOSED
       RETURNING id, status, closed_at AS "closedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0)
-      throw new HttpError(404, "NOT_FOUND", "grievance not found or already closed");
+      throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
     return reply.send({ data: rows[0] });
   });
 
-  // PATCH /v1/crm/grievances/:id/escalate
+  // PATCH /v1/crm/grievances/:id/escalate — legacy alias; transitions to APPEAL
   app.patch("/v1/crm/grievances/:id/escalate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-    escalateBody?.parse(req.body ?? {});
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       UPDATE crm.grievances
-      SET status = 'escalated', priority = 'urgent', escalated_at = now(),
+      SET status = APPEAL, priority = urgent, escalated_at = now(),
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-        AND status NOT IN ('closed', 'resolved')
+        AND status != DISPOSED
       RETURNING id, status, priority, escalated_at AS "escalatedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0)
-      throw new HttpError(404, "NOT_FOUND", "grievance not found or already resolved/closed");
+      throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
     return reply.send({ data: rows[0] });
   });
 
-  // GET /v1/crm/grievances/stats — dashboard KPIs
-  app.get("/v1/crm/grievances/stats", async (req, reply) => {
+  // PATCH /v1/crm/grievances/:id/first-appeal — CPGRAMS: citizen files a first appeal
+  app.patch("/v1/crm/grievances/:id/first-appeal", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = appealBody.parse(req.body ?? {});
 
-    const [row] = (await scopedRead((tx) => tx.execute(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE status NOT IN ('closed', 'resolved'))::int AS "openCount",
-        COUNT(*) FILTER (WHERE status = 'resolved' AND resolved_at IS NOT NULL)::int AS "resolvedCount",
-        COUNT(*) FILTER (WHERE status = 'escalated')::int AS "escalatedCount",
-        ROUND(
-          AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) FILTER (WHERE resolved_at IS NOT NULL)
-        )::int AS "avgResolutionHours"
-      FROM crm.grievances
-      WHERE tenant_id = ${ctx.tenantId}
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      UPDATE crm.grievances
+      SET status = APPEAL, priority = urgent,
+          appeal_reason = ${body.appealReason ?? null},
+          escalated_at = now(),
+          updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        AND status != DISPOSED
+      RETURNING id, status, priority,
+                appeal_reason AS "appealReason",
+                escalated_at AS "escalatedAt", version
     `))) as unknown as Array<Record<string, unknown>>;
 
-    return reply.send({ data: row ?? { openCount: 0, resolvedCount: 0, escalatedCount: 0, avgResolutionHours: null } });
+    if (rows.length === 0)
+      throw new HttpError(404, "NOT_FOUND", "grievance not found or already disposed");
+    return reply.send({ data: rows[0] });
   });
 }

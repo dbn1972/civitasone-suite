@@ -76,6 +76,7 @@ import { volumeVsActualRoutes } from "./modules/dashboard/volume-vs-actual-route
 import { sponsorRoutes } from "./modules/accounts/sponsors-routes.js";
 import { grievanceRoutes } from "./modules/grievances/routes.js";
 import { serviceRequestRoutes } from "./modules/service-requests/routes.js";
+import { rtiRoutes } from "./modules/rti/rti-route.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -199,6 +200,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ── Citizen Relationship Management — grievances + service requests ──
   await app.register(grievanceRoutes);
   await app.register(serviceRequestRoutes);
+  // RTI Act 2005 — 30-day statutory response register
+  await app.register(rtiRoutes);
 
   return app;
 }
