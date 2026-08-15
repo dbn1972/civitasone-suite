@@ -2,7 +2,7 @@
 
 import { RouteError } from "@/app/_components/RouteError";
 
-export default function ErrorBoundary({
+export default function DedupCandidatesError({
   error,
   reset,
 }: {
@@ -15,7 +15,7 @@ export default function ErrorBoundary({
       reset={reset}
       backHref="/crm/data-quality"
       backLabel="Back to Data Quality"
-      area="CRM Dedup Candidates"
+      area="Duplicate Candidates"
     />
   );
 }

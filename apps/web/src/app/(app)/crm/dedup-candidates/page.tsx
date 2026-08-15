@@ -1,446 +1,354 @@
 "use client";
 /**
- * DQ-005 — Dedup Candidates review page.
+ * /crm/dedup-candidates — DQ-001 post-save duplicate review.
  *
- * Fetches flagged duplicate pairs from GET /v1/crm/contacts/dedup-candidates
- * and lets operators compare field values side-by-side, then either Merge or
- * Dismiss each pair. Merge is irreversible and confirmed via a ConfirmDialog.
+ * Operators see flagged contact pairs side-by-side with a confidence score.
+ * Fields that differ between the two contacts are highlighted amber so the
+ * mismatch is obvious at a glance. Each pair can be:
+ *   - Merged    — PATCH /v1/crm/contacts/:leftId/merge  { mergeIntoId }
+ *   - Dismissed — PATCH /v1/crm/contacts/dedup-candidates/:pairId/dismiss
  *
- * API contract:
- *   GET  /v1/crm/contacts/dedup-candidates       → { data: DedupPair[] }
- *   PATCH /v1/crm/contacts/{leftId}/merge         → { mergeIntoId: rightId }  (async 202)
- *   PATCH /v1/crm/contacts/dedup-candidates/{pairId}/dismiss
+ * On a failed API load the page shows DataSourceBadge rather than an empty
+ * state that could be mistaken for "data is clean".
  */
-import { useCallback, useEffect, useState } from "react";
-import { PageHeader, ConfirmDialog } from "@/app/_components/ds";
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { useCallback, useEffect, useId, useState } from "react";
+import { PageHeader, EmptyState, ConfirmDialog } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import {
+  getDedupCandidates,
+  mergeDedupPair,
+  dismissDedupPair,
+  type DedupPair,
+  type DedupContactSnapshot,
+  type DedupSource,
+} from "@/lib/crm/dedupCandidates";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Confidence badge ─────────────────────────────────────────────────────────
 
-interface DedupContactSnapshot {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  company: string | null;
-  lastActivity: string | null;
+function confidenceClass(score: number): string {
+  if (score >= 80) return "conf-high";
+  if (score >= 60) return "conf-mid";
+  return "conf-low";
 }
 
-export interface DedupPair {
-  pairId: string;
-  left: DedupContactSnapshot;
-  right: DedupContactSnapshot;
-  /** 0-100 — weighted confidence that these contacts are the same person. */
-  confidence: number;
-  matchedFields: string[];
-}
-
-type PairsState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ok"; pairs: DedupPair[] };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function normalisePairs(raw: unknown): DedupPair[] {
-  const list = raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)
-    ? (raw as { data: unknown[] }).data
-    : Array.isArray(raw) ? raw : [];
-  const out: DedupPair[] = [];
-  for (const item of list) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    if (typeof r.pairId !== "string") continue;
-    out.push({
-      pairId: r.pairId,
-      left: parseSnapshot(r.left),
-      right: parseSnapshot(r.right),
-      confidence: typeof r.confidence === "number" ? r.confidence : Number(r.confidence) || 0,
-      matchedFields: Array.isArray(r.matchedFields) ? r.matchedFields.map(String) : [],
-    });
-  }
-  return out;
-}
-
-function parseSnapshot(raw: unknown): DedupContactSnapshot {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const str = (v: unknown) => (typeof v === "string" ? v : null);
-  return {
-    id: typeof r.id === "string" ? r.id : "",
-    name: typeof r.name === "string" ? r.name : "Unknown",
-    email: str(r.email),
-    phone: str(r.phone),
-    company: str(r.company),
-    lastActivity: str(r.lastActivity),
-  };
-}
-
-/** Badge colour: ≥80 red · 60-79 amber · <60 green */
-function badgeStyle(confidence: number): React.CSSProperties {
-  if (confidence >= 80) return { background: "#fef2f2", color: "#b42318", border: "1px solid #fca5a5" };
-  if (confidence >= 60) return { background: "#fffbeb", color: "#92400e", border: "1px solid #fcd34d" };
-  return { background: "#ecfdf5", color: "#065f46", border: "1px solid #6ee7b7" };
-}
-
-const CONTACT_FIELDS: Array<{ key: keyof DedupContactSnapshot; label: string }> = [
-  { key: "name", label: "Name" },
-  { key: "email", label: "Email" },
-  { key: "phone", label: "Phone" },
-  { key: "company", label: "Company" },
-  { key: "lastActivity", label: "Last Activity" },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function EmptyState() {
-  return (
-    <div
-      role="status"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "64px 24px",
-        textAlign: "center",
-        gap: 16,
-      }}
-    >
-      {/* Checkmark illustration */}
-      <svg
-        aria-hidden="true"
-        width="64"
-        height="64"
-        viewBox="0 0 64 64"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle cx="32" cy="32" r="32" fill="#ecfdf5" />
-        <path
-          d="M20 32l8 8 16-16"
-          stroke="#059669"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <div>
-        <p style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>No duplicate candidates found</p>
-        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-          Data is clean — no flagged pairs require review.
-        </p>
-      </div>
-      <a className="btn ghost" href="/crm/data-quality" style={{ marginTop: 8 }}>
-        Back to Data Quality
-      </a>
-    </div>
-  );
-}
-
-function ConfidenceBadge({ confidence }: { confidence: number }) {
+function ConfidenceBadge({ score }: { score: number }) {
   return (
     <span
-      style={{
-        display: "inline-block",
-        padding: "2px 10px",
-        borderRadius: 99,
-        fontSize: 12,
-        fontWeight: 700,
-        ...badgeStyle(confidence),
-      }}
-      aria-label={`Confidence score ${confidence}%`}
+      className={`conf-badge ${confidenceClass(score)}`}
+      aria-label={`Confidence ${score}%`}
     >
-      {confidence}% match
+      {score}%
     </span>
   );
 }
 
-interface PairCardProps {
-  pair: DedupPair;
-  onMerge: (pair: DedupPair) => void;
-  onDismiss: (pair: DedupPair) => void;
-  dismissing: boolean;
+// ─── Field comparison ─────────────────────────────────────────────────────────
+
+const FIELDS: Array<{ key: keyof DedupContactSnapshot; label: string }> = [
+  { key: "name",         label: "Name" },
+  { key: "email",        label: "Email" },
+  { key: "phone",        label: "Phone" },
+  { key: "company",      label: "Company" },
+  { key: "lastActivity", label: "Last activity" },
+];
+
+function differs(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? "").trim().toLowerCase() !== (b ?? "").trim().toLowerCase();
 }
 
-function PairCard({ pair, onMerge, onDismiss, dismissing }: PairCardProps) {
-  const { left, right, confidence, matchedFields } = pair;
+function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): string {
+  if (v == null || v === "") return "—";
+  if (key === "lastActivity") {
+    try {
+      return new Date(v).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return v;
+    }
+  }
+  return v;
+}
+
+// ─── Pair card ────────────────────────────────────────────────────────────────
+
+interface PairCardProps {
+  pair: DedupPair;
+  busyPairId: string | null;
+  onMerge: (pair: DedupPair) => void;
+  onDismiss: (pair: DedupPair) => void;
+}
+
+function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
+  const headingId = useId();
+  const busy = busyPairId === pair.pairId;
 
   return (
-    <div
-      className="card"
-      style={{ marginBottom: 16 }}
-      data-testid={`pair-card-${pair.pairId}`}
-    >
-      <div className="pad">
-        {/* Header row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <ConfidenceBadge confidence={confidence} />
-            {matchedFields.length > 0 && (
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                Matched on: {matchedFields.join(", ")}
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => onMerge(pair)}
-              style={{ minHeight: 36, fontSize: 13 }}
-              aria-label={`Merge ${right.name} into ${left.name}`}
-            >
-              Merge &rarr; keep left
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => onDismiss(pair)}
-              disabled={dismissing}
-              style={{ minHeight: 36, fontSize: 13 }}
-              aria-label={`Dismiss duplicate pair for ${left.name} and ${right.name}`}
-            >
-              {dismissing ? "Dismissing…" : "Dismiss pair"}
-            </button>
-          </div>
+    <article className="dedup-card" aria-labelledby={headingId}>
+      <div className="dedup-card-header">
+        <h2 className="dedup-card-title" id={headingId}>
+          <span className="dedup-name">{pair.left.name ?? "Unnamed"}</span>
+          <span className="dedup-vs" aria-hidden="true">vs</span>
+          <span className="dedup-name">{pair.right.name ?? "Unnamed"}</span>
+        </h2>
+        <ConfidenceBadge score={pair.confidence} />
+      </div>
+
+      <div className="dedup-grid" role="table" aria-label="Field comparison">
+        <div className="dedup-grid-row dedup-thead" role="row">
+          <div role="columnheader" />
+          <div role="columnheader">Keep (left)</div>
+          <div role="columnheader">Merge from (right)</div>
         </div>
 
-        {/* Side-by-side table */}
-        <div style={{ overflowX: "auto" }}>
-          <table
-            className="tbl"
-            style={{ width: "100%", tableLayout: "fixed" }}
-            aria-label={`Comparison: ${left.name} vs ${right.name}`}
-          >
-            <colgroup>
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "41%" }} />
-              <col style={{ width: "41%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">Field</th>
-                <th scope="col">Left — {left.name}</th>
-                <th scope="col">Right — {right.name}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONTACT_FIELDS.map(({ key, label }) => {
-                const lv = left[key] ?? null;
-                const rv = right[key] ?? null;
-                const differs = lv !== rv;
-                return (
-                  <tr key={key}>
-                    <td style={{ fontWeight: 600, fontSize: 12, color: "var(--muted)" }}>{label}</td>
-                    <td>{lv || <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>}</td>
-                    <td
-                      style={
-                        differs
-                          ? { color: "#92400e", background: "#fffbeb", fontWeight: 500 }
-                          : undefined
-                      }
-                      aria-label={differs ? `${label} differs` : undefined}
-                    >
-                      {rv || <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {FIELDS.map(({ key, label }) => {
+          const diff = differs(
+            pair.left[key] as string | null,
+            pair.right[key] as string | null,
+          );
+          return (
+            <div key={key} className="dedup-grid-row" role="row">
+              <div className="dedup-field-label" role="rowheader">{label}</div>
+              <div
+                role="cell"
+                className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
+                title={diff ? "Values differ" : undefined}
+              >
+                {fmt(key, pair.left[key] as string | null)}
+              </div>
+              <div
+                role="cell"
+                className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
+              >
+                {fmt(key, pair.right[key] as string | null)}
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </div>
+
+      <div className="dedup-actions">
+        <button
+          type="button"
+          className="btn danger"
+          onClick={() => onMerge(pair)}
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy ? "Working…" : "Merge → keep left"}
+        </button>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={() => onDismiss(pair)}
+          disabled={busy}
+        >
+          Dismiss pair
+        </button>
+      </div>
+    </article>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DedupCandidatesPage() {
-  const [state, setState] = useState<PairsState>({ status: "loading" });
-  const [pendingMerge, setPendingMerge] = useState<DedupPair | null>(null);
-  const [mergeBusy, setMergeBusy] = useState(false);
-  const [mergeError, setMergeError] = useState("");
-  const [dismissingIds, setDismissingIds] = useState<Set<string>>(new Set());
+  const [pairs, setPairs]      = useState<DedupPair[]>([]);
+  const [source, setSource]    = useState<DedupSource | "loading">("loading");
+  const [busyPairId, setBusy]  = useState<string | null>(null);
+  const [actionErr, setActErr] = useState<string | null>(null);
 
-  const loadPairs = useCallback(async () => {
-    setState({ status: "loading" });
-    try {
-      const res = await browserFetch("v1/crm/contacts/dedup-candidates");
-      if (!res.ok) {
-        setState({ status: "error", message: await errorMessageFromResponse(res) });
-        return;
-      }
-      const body: unknown = await res.json();
-      setState({ status: "ok", pairs: normalisePairs(body) });
-    } catch (e) {
-      setState({
-        status: "error",
-        message: e instanceof Error ? e.message : "Failed to load dedup candidates.",
-      });
-    }
+  // Merge confirm state
+  const [mergeTarget, setMergeTarget] = useState<DedupPair | null>(null);
+  const [mergeBusy, setMergeBusy]     = useState(false);
+  const [mergeError, setMergeError]   = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setSource("loading");
+    const { data, source: s } = await getDedupCandidates();
+    setPairs(data);
+    setSource(s);
   }, []);
 
-  useEffect(() => {
-    void loadPairs();
-  }, [loadPairs]);
+  useEffect(() => { void load(); }, [load]);
 
-  async function doMerge() {
-    if (!pendingMerge) return;
-    setMergeBusy(true);
-    setMergeError("");
+  async function handleDismiss(pair: DedupPair) {
+    setBusy(pair.pairId);
+    setActErr(null);
     try {
-      const res = await browserFetch(
-        `v1/crm/contacts/${pendingMerge.left.id}/merge`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ mergeIntoId: pendingMerge.right.id }),
-        },
-      );
-      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
-      // Remove the pair from local state immediately; background job completes async.
-      setPendingMerge(null);
-      setState((prev) =>
-        prev.status === "ok"
-          ? { status: "ok", pairs: prev.pairs.filter((p) => p.pairId !== pendingMerge.pairId) }
-          : prev,
-      );
-    } catch (e) {
-      setMergeError(e instanceof Error ? e.message : "Merge failed. Please try again.");
+      await dismissDedupPair(pair.pairId);
+      setPairs((prev) => prev.filter((p) => p.pairId !== pair.pairId));
+    } catch (err) {
+      setActErr(err instanceof Error ? err.message : "Dismiss failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openMerge(pair: DedupPair) {
+    setMergeTarget(pair);
+    setMergeError(null);
+  }
+
+  function closeMerge() {
+    if (!mergeBusy) { setMergeTarget(null); setMergeError(null); }
+  }
+
+  async function confirmMerge() {
+    if (!mergeTarget) return;
+    setMergeBusy(true);
+    setMergeError(null);
+    try {
+      await mergeDedupPair(mergeTarget.left.id, mergeTarget.right.id);
+      setPairs((prev) => prev.filter((p) => p.pairId !== mergeTarget.pairId));
+      setMergeTarget(null);
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : "Merge failed");
     } finally {
       setMergeBusy(false);
     }
   }
 
-  async function doDismiss(pair: DedupPair) {
-    setDismissingIds((ids) => new Set([...ids, pair.pairId]));
-    try {
-      const res = await browserFetch(
-        `v1/crm/contacts/dedup-candidates/${pair.pairId}/dismiss`,
-        { method: "PATCH" },
-      );
-      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
-      setState((prev) =>
-        prev.status === "ok"
-          ? { status: "ok", pairs: prev.pairs.filter((p) => p.pairId !== pair.pairId) }
-          : prev,
-      );
-    } catch {
-      // Non-fatal: the pair stays visible; the operator can retry.
-    } finally {
-      setDismissingIds((ids) => {
-        const next = new Set(ids);
-        next.delete(pair.pairId);
-        return next;
-      });
-    }
-  }
-
-  const pairs = state.status === "ok" ? state.pairs : [];
+  const loading = source === "loading";
 
   return (
     <>
+      <style>{STYLES}</style>
+
       <PageHeader
         title="Duplicate Candidates"
-        subtitle="Review flagged contact pairs, compare field values, and merge or dismiss."
+        subtitle="Review flagged contact pairs. Merge to consolidate records or dismiss if they are distinct people."
         back="/crm/data-quality"
         backLabel="Data Quality"
         actions={
           <button
             type="button"
             className="btn ghost"
-            onClick={() => void loadPairs()}
-            aria-label="Refresh duplicate candidates"
-            style={{ minHeight: 44 }}
+            onClick={() => void load()}
+            disabled={loading}
           >
-            Refresh
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         }
       />
 
-      {state.status === "loading" && (
-        <div role="status" aria-live="polite" style={{ padding: 24, color: "var(--muted)" }}>
-          Loading duplicate candidates…
+      {source === "error" && <DataSourceBadge source="error" />}
+
+      {actionErr && (
+        <div role="alert" className="dedup-alert">
+          {actionErr}
         </div>
       )}
 
-      {state.status === "error" && (
-        <div
-          role="alert"
-          style={{
-            margin: "16px 0",
-            padding: "12px 16px",
-            background: "#fef2f2",
-            border: "1px solid #fca5a5",
-            borderRadius: 8,
-            fontSize: 13,
-            color: "#b42318",
-          }}
-        >
-          {state.message}
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => void loadPairs()}
-            style={{ marginLeft: 12, fontSize: 12 }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {state.status === "ok" && pairs.length === 0 && <EmptyState />}
-
-      {state.status === "ok" && pairs.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
-            {pairs.length} pair{pairs.length !== 1 ? "s" : ""} flagged for review — highest confidence first.
-          </p>
-          {pairs.map((pair) => (
-            <PairCard
-              key={pair.pairId}
-              pair={pair}
-              onMerge={setPendingMerge}
-              onDismiss={(p) => void doDismiss(p)}
-              dismissing={dismissingIds.has(pair.pairId)}
-            />
+      {loading && (
+        <div aria-label="Loading duplicate candidates" className="dedup-skeletons">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="dedup-skeleton" aria-hidden="true" />
           ))}
         </div>
       )}
 
-      {/* Merge confirm dialog */}
+      {!loading && pairs.length === 0 && source !== "error" && (
+        <EmptyState
+          icon="✓"
+          title="No duplicate candidates found — data is clean"
+          message="No flagged contact pairs at this time."
+        />
+      )}
+
+      {!loading && pairs.length > 0 && (
+        <div
+          className="dedup-list"
+          role="list"
+          aria-label={`${pairs.length} duplicate candidate pair${pairs.length === 1 ? "" : "s"}`}
+        >
+          {pairs.map((pair) => (
+            <div key={pair.pairId} role="listitem">
+              <PairCard
+                pair={pair}
+                busyPairId={busyPairId}
+                onMerge={openMerge}
+                onDismiss={handleDismiss}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <ConfirmDialog
-        open={pendingMerge !== null}
-        danger
-        title="Merge contacts? This cannot be undone"
+        open={mergeTarget !== null}
+        title="Merge contacts?"
         description={
-          pendingMerge ? (
-            <>
-              This will permanently merge{" "}
-              <strong>{pendingMerge.right.name}</strong> into{" "}
-              <strong>{pendingMerge.left.name}</strong>. This cannot be undone.
-            </>
-          ) : undefined
+          mergeTarget
+            ? `This will permanently merge ${mergeTarget.right.name ?? "the right contact"} into ${mergeTarget.left.name ?? "the left contact"}. This cannot be undone.`
+            : undefined
         }
-        confirmLabel="Merge permanently"
-        cancelLabel="Cancel"
+        confirmLabel="Merge"
+        danger
         busy={mergeBusy}
-        errorMessage={mergeError || undefined}
-        onConfirm={() => void doMerge()}
-        onCancel={() => {
-          setPendingMerge(null);
-          setMergeError("");
-        }}
+        errorMessage={mergeError ?? undefined}
+        onConfirm={() => void confirmMerge()}
+        onCancel={closeMerge}
       />
     </>
   );
 }
+
+// ─── Scoped styles ────────────────────────────────────────────────────────────
+
+const STYLES = `
+.conf-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  letter-spacing: .02em;
+}
+.conf-high { background:#fef2f2; color:#b91c1c; }
+.conf-mid  { background:#fffbeb; color:#92400e; }
+.conf-low  { background:#f0fdf4; color:#166534; }
+
+.dedup-list  { display: flex; flex-direction: column; gap: 0; }
+.dedup-card  { background:var(--surface,#fff); border:1px solid var(--line,#e5e7eb);
+               border-radius:12px; padding:20px 24px; margin-bottom:16px; }
+.dedup-card-header { display:flex; align-items:center; justify-content:space-between;
+                     gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.dedup-card-title  { font-size:1rem; font-weight:600; margin:0; display:flex;
+                     align-items:center; gap:8px; }
+.dedup-name { color:var(--text,#111); }
+.dedup-vs   { color:var(--muted,#6b7280); font-weight:400; font-size:.875rem; }
+
+.dedup-grid      { display:grid; grid-template-columns:110px 1fr 1fr; gap:0;
+                   margin-bottom:16px; }
+.dedup-grid-row  { display:contents; }
+.dedup-thead > div {
+  font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted,#6b7280); padding:0 6px 6px;
+  border-bottom:1px solid var(--line,#e5e7eb);
+}
+.dedup-field-label { color:var(--muted,#6b7280); font-size:.8rem; padding:5px 6px;
+                     align-self:center; }
+.dedup-field-val   { padding:5px 6px; border-radius:4px; font-size:.875rem;
+                     color:var(--text,#111); word-break:break-word; }
+.dedup-diff        { background:#fffbeb; outline:1px solid #fde68a; font-weight:500; }
+.dedup-actions     { display:flex; gap:10px; flex-wrap:wrap; }
+.dedup-alert       { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c;
+                     border-radius:8px; padding:10px 14px; font-size:.875rem;
+                     margin-bottom:12px; }
+.dedup-skeletons   { display:flex; flex-direction:column; gap:16px; margin-top:8px; }
+.dedup-skeleton    { height:180px; border-radius:12px;
+                     background:var(--surface-2,#f1f5f9);
+                     animation:dc-pulse 1.4s ease-in-out infinite; }
+@keyframes dc-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+@media (prefers-color-scheme:dark) {
+  .conf-high  { background:#450a0a; color:#fca5a5; }
+  .conf-mid   { background:#451a03; color:#fcd34d; }
+  .conf-low   { background:#052e16; color:#86efac; }
+  .dedup-diff { background:#422006; outline-color:#92400e; }
+  .dedup-alert{ background:#450a0a; border-color:#7f1d1d; color:#fca5a5; }
+}
+`;

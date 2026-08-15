@@ -1,236 +1,195 @@
-/**
- * DQ-005 — Dedup Candidates page tests.
- *
- * Covers:
- *  1. Renders pair list with confidence score badges
- *  2. Merge button opens a confirm dialog with contact names
- *  3. Dismiss action removes the pair from the list
- *  4. Empty state renders when the API returns no pairs
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import DedupCandidatesPage, { type DedupPair } from "./page";
+import DedupCandidatesPage from "./page";
+import * as api from "@/lib/crm/dedupCandidates";
 
-// ─── Mock browserFetch ────────────────────────────────────────────────────────
+vi.mock("@/lib/crm/dedupCandidates", async (orig) => {
+  const actual = await orig<typeof import("@/lib/crm/dedupCandidates")>();
+  return {
+    ...actual,
+    getDedupCandidates: vi.fn(),
+    mergeDedupPair: vi.fn(),
+    dismissDedupPair: vi.fn(),
+  };
+});
 
-vi.mock("@/lib/api/browserClient", () => ({
-  browserFetch: vi.fn(),
-  errorMessageFromResponse: async () => "Request failed",
+// DataSourceBadge is a named import; mock it minimally so we can assert on it.
+vi.mock("@/app/_components/DataSourceBadge", () => ({
+  DataSourceBadge: ({ source }: { source: string }) => (
+    <div data-testid="data-source-badge">{source}</div>
+  ),
 }));
 
-import { browserFetch } from "@/lib/api/browserClient";
-const mockFetch = vi.mocked(browserFetch);
+const LEFT = {
+  id: "aaa-111",
+  name: "Priya Sharma",
+  email: "priya@example.com",
+  phone: "+91-9876543210",
+  company: "Infosys",
+  lastActivity: "2026-07-01T10:00:00Z",
+};
 
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
+const RIGHT = {
+  id: "bbb-222",
+  name: "Priya Sharma",
+  email: "priya.s@example.com", // differs
+  phone: "+91-9876543210",
+  company: "Infosys",
+  lastActivity: "2026-07-05T10:00:00Z", // differs
+};
 
-const PAIR_HIGH: DedupPair = {
-  pairId: "pair-1",
+const PAIR = {
+  pairId: "pair-001",
   confidence: 85,
-  matchedFields: ["email"],
-  left: {
-    id: "c-001",
-    name: "Asha Gupta",
-    email: "asha@example.in",
-    phone: "9900001111",
-    company: "Acme Ltd",
-    lastActivity: "2026-07-01",
-  },
-  right: {
-    id: "c-002",
-    name: "Asha R. Gupta",
-    email: "asha@example.in",
-    phone: "9900002222",
-    company: "Acme Limited",
-    lastActivity: "2026-06-28",
-  },
+  left: LEFT,
+  right: RIGHT,
 };
 
-const PAIR_AMBER: DedupPair = {
-  pairId: "pair-2",
-  confidence: 65,
-  matchedFields: ["phone"],
-  left: {
-    id: "c-003",
-    name: "Ravi Kumar",
-    email: null,
-    phone: "8800001111",
-    company: null,
-    lastActivity: null,
-  },
-  right: {
-    id: "c-004",
-    name: "Ravi K.",
-    email: "ravi@mail.in",
-    phone: "8800001111",
-    company: null,
-    lastActivity: null,
-  },
-};
-
-function makeOkResponse(pairs: DedupPair[]) {
-  return {
-    ok: true,
-    json: async () => ({ data: pairs }),
-  } as unknown as Response;
-}
-
-function makeOkEmpty() {
-  return {
-    ok: true,
-    json: async () => ({ data: [] }),
-  } as unknown as Response;
-}
-
-function makeActionOk() {
-  return { ok: true, json: async () => ({}) } as unknown as Response;
-}
+const PAIR_MID = { ...PAIR, pairId: "pair-002", confidence: 65 };
+const PAIR_LOW = { ...PAIR, pairId: "pair-003", confidence: 45 };
 
 beforeEach(() => {
-  mockFetch.mockReset();
+  vi.mocked(api.getDedupCandidates).mockReset();
+  vi.mocked(api.mergeDedupPair).mockReset();
+  vi.mocked(api.dismissDedupPair).mockReset();
 });
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-// ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("DedupCandidatesPage", () => {
   it("renders pair list with confidence score badges", async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse([PAIR_HIGH, PAIR_AMBER]));
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR, PAIR_MID, PAIR_LOW],
+      source: "api",
+    });
 
     render(<DedupCandidatesPage />);
 
-    // Loading state appears first
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    // Wait for loading to resolve
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+    expect(screen.getByText("65%")).toBeInTheDocument();
+    expect(screen.getByText("45%")).toBeInTheDocument();
 
-    // Pair cards appear after data loads
-    expect(await screen.findByLabelText("Confidence score 85%")).toBeInTheDocument();
-    expect(await screen.findByLabelText("Confidence score 65%")).toBeInTheDocument();
+    // Confidence badge aria-labels
+    expect(screen.getByLabelText("Confidence 85%")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confidence 65%")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confidence 45%")).toBeInTheDocument();
 
-    // Badge text
-    expect(screen.getByText("85% match")).toBeInTheDocument();
-    expect(screen.getByText("65% match")).toBeInTheDocument();
-
-    // Contact names appear in table headers
-    expect(screen.getByText(/Left — Asha Gupta/)).toBeInTheDocument();
-    expect(screen.getByText(/Right — Asha R\. Gupta/)).toBeInTheDocument();
-
-    // Count summary
-    expect(screen.getByText(/2 pairs flagged/i)).toBeInTheDocument();
+    // Contact names appear
+    expect(screen.getAllByText("Priya Sharma").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("diff-highlights fields that differ between the two contacts", async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse([PAIR_HIGH]));
+  it("shows the merge confirm dialog when Merge button is clicked", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR],
+      source: "api",
+    });
+    vi.mocked(api.mergeDedupPair).mockResolvedValue(undefined);
 
     render(<DedupCandidatesPage />);
-    await screen.findByText("85% match");
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
 
-    // Phone differs (9900001111 vs 9900002222) — right cell should carry aria-label
-    const diffCells = screen
-      .getAllByRole("cell")
-      .filter((el) => el.getAttribute("aria-label") === "Phone differs");
+    // ConfirmDialog should not be visible initially
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 
-    expect(diffCells.length).toBeGreaterThanOrEqual(1);
+    // Click the Merge button
+    const mergeBtn = screen.getByRole("button", { name: /merge.*keep left/i });
+    fireEvent.click(mergeBtn);
+
+    // Dialog appears with correct warning text
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/permanently merge/i);
+    expect(dialog).toHaveTextContent(/cannot be undone/i);
+    // Right contact's name appears in description
+    expect(dialog).toHaveTextContent("Priya Sharma");
   });
 
-  it("merge button opens confirm dialog with correct contact names", async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse([PAIR_HIGH]));
+  it("calls mergeDedupPair and removes the pair on confirm", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR],
+      source: "api",
+    });
+    vi.mocked(api.mergeDedupPair).mockResolvedValue(undefined);
 
     render(<DedupCandidatesPage />);
-    await screen.findByText("85% match");
-
-    // Click the Merge button for the first pair
-    fireEvent.click(screen.getByRole("button", { name: /merge asha r\. gupta into asha gupta/i }));
-
-    // ConfirmDialog must appear with the contact names in the body
-    expect(await screen.findByText(/permanently merge/i)).toBeInTheDocument();
-    expect(screen.getByText("Asha R. Gupta")).toBeInTheDocument();
-    expect(screen.getByText("Asha Gupta")).toBeInTheDocument();
-
-    // "Merge permanently" confirm button must be present
-    expect(screen.getByRole("button", { name: /merge permanently/i })).toBeInTheDocument();
-  });
-
-  it("confirming merge calls PATCH and removes the pair", async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeOkResponse([PAIR_HIGH]))  // initial load
-      .mockResolvedValueOnce(makeActionOk());              // PATCH merge
-
-    render(<DedupCandidatesPage />);
-    await screen.findByText("85% match");
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
 
     // Open dialog
-    fireEvent.click(screen.getByRole("button", { name: /merge asha r\. gupta into asha gupta/i }));
-    await screen.findByRole("button", { name: /merge permanently/i });
+    fireEvent.click(screen.getByRole("button", { name: /merge.*keep left/i }));
+    await screen.findByRole("alertdialog");
 
-    // Confirm
-    fireEvent.click(screen.getByRole("button", { name: /merge permanently/i }));
+    // Confirm merge
+    const confirmBtn = screen.getByRole("button", { name: /^merge$/i });
+    fireEvent.click(confirmBtn);
 
-    // Pair card disappears; fetch called with correct path + body
-    await waitFor(() => {
-      expect(screen.queryByText("85% match")).not.toBeInTheDocument();
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "v1/crm/contacts/c-001/merge",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify({ mergeIntoId: "c-002" }),
-      }),
+    await waitFor(() =>
+      expect(api.mergeDedupPair).toHaveBeenCalledWith("aaa-111", "bbb-222"),
     );
+
+    // Dialog closed and pair removed from list
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("85%")).not.toBeInTheDocument();
   });
 
-  it("dismiss action removes the pair from the list", async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeOkResponse([PAIR_HIGH, PAIR_AMBER]))  // initial load
-      .mockResolvedValueOnce(makeActionOk());                           // PATCH dismiss
+  it("removes the pair when Dismiss pair is clicked", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR],
+      source: "api",
+    });
+    vi.mocked(api.dismissDedupPair).mockResolvedValue(undefined);
 
     render(<DedupCandidatesPage />);
-    await screen.findByText("85% match");
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
 
-    // Dismiss the first pair
-    const dismissButtons = screen.getAllByRole("button", { name: /dismiss pair/i });
-    fireEvent.click(dismissButtons[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /dismiss pair/i }));
 
-    // First pair disappears; second pair remains
-    await waitFor(() => {
-      expect(screen.queryByText("85% match")).not.toBeInTheDocument();
-    });
-    expect(screen.getByText("65% match")).toBeInTheDocument();
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "v1/crm/contacts/dedup-candidates/pair-1/dismiss",
-      expect.objectContaining({ method: "PATCH" }),
+    await waitFor(() =>
+      expect(api.dismissDedupPair).toHaveBeenCalledWith("pair-001"),
     );
+    await waitFor(() => expect(screen.queryByText("85%")).not.toBeInTheDocument());
   });
 
-  it("renders empty state when no pairs are returned", async () => {
-    mockFetch.mockResolvedValueOnce(makeOkEmpty());
+  it("renders the empty state when no pairs are returned", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [],
+      source: "api",
+    });
 
     render(<DedupCandidatesPage />);
-
-    expect(
-      await screen.findByText(/no duplicate candidates found/i),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/no duplicate candidates found/i),
+      ).toBeInTheDocument(),
+    );
     expect(screen.getByText(/data is clean/i)).toBeInTheDocument();
   });
 
-  it("cancel on confirm dialog keeps the pair visible", async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse([PAIR_HIGH]));
+  it("shows DataSourceBadge on API error without fabricating empty state", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [],
+      source: "error",
+    });
 
     render(<DedupCandidatesPage />);
-    await screen.findByText("85% match");
+    await waitFor(() =>
+      expect(screen.getByTestId("data-source-badge")).toBeInTheDocument(),
+    );
+    // Empty state must NOT appear on error — it would imply "data is clean"
+    expect(screen.queryByText(/no duplicate candidates found/i)).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /merge asha r\. gupta into asha gupta/i }));
-    await screen.findByRole("button", { name: /merge permanently/i });
-
-    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
-
-    // Dialog closes, pair still visible
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /merge permanently/i })).not.toBeInTheDocument();
+  it("highlights fields that differ between left and right contacts (amber class)", async () => {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({
+      data: [PAIR],
+      source: "api",
     });
-    expect(screen.getByText("85% match")).toBeInTheDocument();
+
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+
+    // Email differs — both cells should carry dedup-diff
+    const diffCells = document.querySelectorAll(".dedup-diff");
+    expect(diffCells.length).toBeGreaterThan(0);
   });
 });
