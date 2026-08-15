@@ -1,63 +1,96 @@
+/**
+ * Retirement & Separation page — Sprint 14 / Lifecycle Phase 2
+ * Top section: RetirementDashboard (card grid, next 6 months)
+ * Middle: RetirementProcessWizard (interactive 5-step checklist)
+ * Bottom: full register DataTable
+ */
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { RetirementDashboard, type RetirementRow } from "./_components/RetirementDashboard";
+import { RetirementProcessWizard } from "./_components/RetirementProcessWizard";
 
-type Row = {
-  id: string;
-  employee: string;
-  department: string;
-  designation: string;
-  dob: string;
-  superannuationDate: string;
-  separationType: string;
-  status: string;
-} & Record<string, unknown>;
-
-async function getData(): Promise<LoaderResult<Row[]>> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/retirements", [], {
+async function getData(): Promise<LoaderResult<RetirementRow[]>> {
+  return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {
     telemetryKey: "hr.retirement",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      const arr = Array.isArray(p) ? p : (p as { data?: RetirementRow[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r;
 }
+
+const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
+  { key: "employee",          label: "Employee" },
+  { key: "department",        label: "Department" },
+  { key: "designation",       label: "Designation" },
+  { key: "superannuationDate",label: "Retirement Date" },
+  { key: "separationType",    label: "Type" },
+  { key: "status",            label: "Status", cellType: "status" },
+];
 
 export default async function RetirementPage() {
   const { data: items, source } = await getData();
 
-  const upcoming = items.filter((i) => i.status === "pending").length;
+  const cutoff6m  = new Date();
+  cutoff6m.setMonth(cutoff6m.getMonth() + 6);
+  const upcoming  = items.filter((i) => {
+    if (!i.superannuationDate) return false;
+    const d = new Date(i.superannuationDate);
+    return d >= new Date() && d <= cutoff6m;
+  }).length;
   const completed = items.filter((i) => i.status === "completed").length;
-  const vrs = items.filter((i) => i.separationType === "VRS").length;
-
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "designation", label: "Designation" },
-    { key: "superannuationDate", label: "Superannuation Date" },
-    { key: "separationType", label: "Type" },
-    { key: "status", label: "Status", cellType: "status" },
-  ];
+  const vrs       = items.filter((i) => i.separationType === "VRS").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Retirement & Separation" subtitle="Upcoming retirements and separation queue." back="/hr" />
+      <PageHeader
+        title="Retirement & Separation"
+        subtitle="Upcoming retirements within 6 months, processing wizard, and full separation register."
+        back="/hr"
+      />
       <DataSourceBadge source={source} />
+
+      {/* KPI strip */}
       <StatGrid>
-        <StatCard icon="👴" iconBg="#e6f0ff" label="Total" value={items.length} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Upcoming" value={upcoming} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Processed" value={completed} />
-        <StatCard icon="📝" iconBg="#f5f5f5" label="VRS" value={vrs} />
+        <StatCard icon="👴" iconBg="#e6f0ff" label="Total"          value={items.length} />
+        <StatCard icon="📅" iconBg="#fffbe6" label="Next 6 Months"  value={upcoming} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Processed"       value={completed} />
+        <StatCard icon="📝" iconBg="#f5f5f5" label="VRS"            value={vrs} />
       </StatGrid>
-      <Card title="Retirement & Separation">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee, department or date…"
-          pageSize={15}
-          emptyIcon="🎓"
-          emptyTitle="No retirement or separation records"
-          emptyMessage="Superannuation, VRS, and resignation records appear here. These are auto-populated from the employee service book on separation."
-        />
+
+      {/* Card grid — upcoming retirements */}
+      <Card title="Retiring in Next 6 Months">
+        <div style={{ padding: "16px" }}>
+          <RetirementDashboard rows={items} />
+        </div>
       </Card>
+
+      {/* 5-step processing wizard */}
+      <div style={{ marginTop: 16 }}>
+        <Card title="Retirement Processing Wizard — 5-Step Checklist">
+          <div style={{ padding: 16 }}>
+            <RetirementProcessWizard />
+          </div>
+        </Card>
+      </div>
+
+      {/* Full register */}
+      <div style={{ marginTop: 16 }}>
+        <Card title="Full Separation Register">
+          <DataTable<RetirementRow>
+            columns={COLUMNS}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder="Filter by employee, department or date…"
+            pageSize={15}
+            emptyIcon="🎓"
+            emptyTitle="No retirement or separation records"
+            emptyMessage="Superannuation, VRS, and resignation records appear here."
+          />
+        </Card>
+      </div>
     </main>
   );
 }

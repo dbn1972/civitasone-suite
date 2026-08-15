@@ -102,7 +102,7 @@ export default async function DpcPage() {
       </Card>
 
       {ineligible.length > 0 && (
-        <Card title="Not Yet Eligible" style={{ marginTop: 16 }}>
+        <div className="mt-4"><Card>
           <DataTable<EligibleRow>
             columns={[
               { key: "fullName",        label: "Officer Name"           },
@@ -116,7 +116,7 @@ export default async function DpcPage() {
             emptyTitle="All officers are eligible"
             emptyMessage=""
           />
-        </Card>
+        </Card></div>
       )}
     </main>
   );

@@ -91,6 +91,7 @@ import { reservationRoutes } from "./modules/reservation/routes.js";
 import { rtiRoutes } from "./modules/rti/routes.js";
 import { socialRoutes } from "./modules/social/routes.js";
 import { pulseGoalsRoutes } from "./modules/social/pulse-routes.js";
+import { performanceDevRoutes } from "./modules/gap-features/performance-dev-routes.js";
 import { idCardRoutes } from "./modules/id-cards/routes.js";
 import { visitingCardRoutes } from "./modules/visiting-cards/routes.js";
 import { deviceTrustRoutes } from "./modules/device-trust/routes.js";
@@ -280,6 +281,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(aiPluginRegistryRoutes);
   const { hrmsGapRoutes } = await import("./modules/gap-features/routes.js");
   await app.register(hrmsGapRoutes);
+  await app.register(performanceDevRoutes);
 
   // Local audit log — records all mutating HR operations for e-Governance compliance.
   // Supplements the central audit-service outbox events with a co-located trail.

@@ -22,6 +22,7 @@ export type EmployeeDetailShape = {
   designation: string;
   grade?: string;
   joiningDate: string;
+  confirmationDate?: string;
   status: string;
   reportingTo?: string;
   postingLocation?: string;
