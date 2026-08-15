@@ -18,19 +18,6 @@ type Props = {
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
 
-/** Ordered lifecycle of a payroll run, used to render the status stepper. */
-const STAGES: { key: string; label: string }[] = [
-  { key: "draft", label: "Draft" },
-  { key: "processing", label: "Processing" },
-  { key: "approved", label: "Approved" },
-  { key: "disbursed", label: "Disbursed" },
-];
-
-function stageIndex(status: string): number {
-  const i = STAGES.findIndex((s) => s.key === status);
-  return i === -1 ? 0 : i;
-}
-
 export function PayrollRunActions({
   runId,
   status,
@@ -46,8 +33,6 @@ export function PayrollRunActions({
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"good" | "bad">("good");
   const { toast } = useToast();
-
-  const cur = stageIndex(status);
 
   async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
     setBusy(true);
@@ -93,89 +78,53 @@ export function PayrollRunActions({
     }
   }
 
-  const canApprove = status === "processing" || status === "draft";
+  const canApprove  = status === "processing" || status === "draft";
   const canDisburse = status === "approved";
-  const canRevert = status === "failed";
+  const canRevert   = status === "failed";
+
+  if (!canApprove && !canDisburse && !canRevert) return null;
 
   return (
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
-        <h3>Payroll Lifecycle</h3>
+        <h3>Payroll Actions</h3>
       </div>
       <div className="pad">
-        {/* Status stepper */}
-        <ol
-          className="tl"
-          aria-label="Payroll run status"
-          style={{ marginBottom: canApprove || canDisburse || canRevert ? 18 : 0 }}
-        >
-          {STAGES.map((s, i) => (
-            <li key={s.key} className={i < cur ? "done" : i === cur ? "cur" : ""}>
-              <div className="t">{s.label}</div>
-              <div className="m">
-                {i < cur ? "Completed" : i === cur ? "Current stage" : "Pending"}
-              </div>
-            </li>
-          ))}
-          {status === "failed" && (
-            <li className="cur" style={{ color: "var(--danger, #d32f2f)" }}>
-              <div className="t">Failed</div>
-              <div className="m">Disbursement failed — revert to draft to retry</div>
-            </li>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {canApprove && (
+            <button
+              type="button"
+              className="btn primary"
+              style={{ minHeight: 44 }}
+              onClick={() => { setError(undefined); setPending("approve"); }}
+            >
+              Approve Run
+            </button>
           )}
-        </ol>
-
-        {(canApprove || canDisburse || canRevert) && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {canApprove && (
-              <button
-                type="button"
-                className="btn primary"
-                style={{ minHeight: 44 }}
-                onClick={() => {
-                  setError(undefined);
-                  setPending("approve");
-                }}
-              >
-                Approve Run
-              </button>
-            )}
-            {canDisburse && (
-              <button
-                type="button"
-                className="btn primary"
-                style={{ minHeight: 44 }}
-                onClick={() => {
-                  setError(undefined);
-                  setPending("disburse");
-                }}
-              >
-                Disburse Run
-              </button>
-            )}
-            {canRevert && (
-              <button
-                type="button"
-                className="btn secondary"
-                style={{ minHeight: 44 }}
-                onClick={() => {
-                  setError(undefined);
-                  setPending("revert");
-                }}
-              >
-                Revert to Draft
-              </button>
-            )}
-          </div>
-        )}
+          {canDisburse && (
+            <button
+              type="button"
+              className="btn primary"
+              style={{ minHeight: 44 }}
+              onClick={() => { setError(undefined); setPending("disburse"); }}
+            >
+              Disburse Run
+            </button>
+          )}
+          {canRevert && (
+            <button
+              type="button"
+              className="btn secondary"
+              style={{ minHeight: 44 }}
+              onClick={() => { setError(undefined); setPending("revert"); }}
+            >
+              Revert to Draft
+            </button>
+          )}
+        </div>
 
         {message && (
-          <p
-            role="status"
-            aria-live="polite"
-            className={`pill ${messageTone}`}
-            style={{ marginTop: 14 }}
-          >
+          <p role="status" aria-live="polite" className={`pill ${messageTone}`} style={{ marginTop: 14 }}>
             {message}
           </p>
         )}
