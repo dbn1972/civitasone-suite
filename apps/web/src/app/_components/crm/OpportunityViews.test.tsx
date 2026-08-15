@@ -37,6 +37,9 @@ const deal: op.Opportunity = {
   competitors: [],
   nextStep: "",
   expectedCloseDate: "2026-09-01",
+  // The stage move is optimistic-locked, so a card must carry the version it
+  // was rendered from — without it the component refuses the move.
+  version: 3,
 };
 
 beforeEach(() => {
@@ -63,7 +66,7 @@ describe("OpportunityViews (OP-004)", () => {
     // confirm dialog appears; nothing called yet
     expect(op.changeOpportunityStage).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /^move$/i }));
-    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "propose"));
+    await waitFor(() => expect(op.changeOpportunityStage).toHaveBeenCalledWith("d1", "propose", 3));
   });
 
   it("surfaces a blocked stage move (422 mandatory fields) in the dialog", async () => {

@@ -150,7 +150,9 @@ export function QuotationBuilder() {
     setError("");
     setVersions([]);
     setVersionSource("idle");
-    if (q.id) void loadVersions(q.id);
+    // Versions are grouped by quoteRef, not by row id — each version is its own
+    // row with its own id, so passing the id returned only that one version.
+    if (q.quoteRef) void loadVersions(q.quoteRef);
   }
   function startNew() {
     setSelected(null);
@@ -163,9 +165,9 @@ export function QuotationBuilder() {
     setVersionSource("idle");
   }
 
-  async function loadVersions(id: string) {
+  async function loadVersions(quoteRef: string) {
     setVersionSource("idle");
-    const { data, source: s } = await getQuotationVersions(id);
+    const { data, source: s } = await getQuotationVersions(quoteRef);
     setVersions(data);
     setVersionSource(s);
   }
@@ -223,6 +225,9 @@ export function QuotationBuilder() {
       ...(selected?.id ? { id: selected.id } : {}),
       ...(selected?.accountId ? { accountId: selected.accountId } : {}),
       ...(selected?.opportunityId ? { opportunityId: selected.opportunityId } : {}),
+      // Carry the ref forward so an edit stays on the same quotation series
+      // instead of minting a second one.
+      ...(selected?.quoteRef ? { quoteRef: selected.quoteRef } : {}),
       template,
       version: selected?.version ?? 1,
       status: selected?.status ?? "draft",

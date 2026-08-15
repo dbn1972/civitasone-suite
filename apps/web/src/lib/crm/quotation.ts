@@ -263,6 +263,12 @@ export interface Quotation {
   id?: string;
   accountId?: string;
   opportunityId?: string;
+  /**
+   * Business reference shared by every version of the same quotation
+   * (`quote_ref` server-side). Versions are grouped by it, so it must survive a
+   * read/write round-trip.
+   */
+  quoteRef?: string;
   template: string;
   version: number;
   status: QuoteStatus;
@@ -279,7 +285,9 @@ export function normaliseLine(raw: unknown): QuotationLine | null {
   if (!productId) return null;
   return {
     productId,
-    productName: str(r.productName) || undefined,
+    // The service stores the line label as `description`; `productName` only
+    // exists in the UI model, so a round-tripped line lost its label.
+    productName: str(r.productName ?? r.description) || undefined,
     quantity: num(r.quantity),
     unitPriceMinor: minorStr(r.unitPriceMinor ?? r.unitPrice ?? r.priceMinor),
     taxRateBps: num(r.taxRateBps),
@@ -295,11 +303,19 @@ export function normaliseQuotation(raw: unknown): Quotation | null {
   return {
     id,
     accountId: str(r.accountId) || undefined,
-    opportunityId: str(r.opportunityId) || undefined,
-    template: str(r.template),
-    version: num(r.version) || 1,
+    opportunityId: str(r.opportunityId ?? r.dealId) || undefined,
+    quoteRef: str(r.quoteRef) || undefined,
+    // The API field names are templateRef / versionNumber. Reading `template`
+    // and `version` meant the template always rendered empty and every version
+    // displayed as 1. Old names kept as a fallback for cached payloads.
+    template: str(r.templateRef ?? r.template),
+    version: num(r.versionNumber ?? r.version) || 1,
     status: (QUOTE_STATUSES as readonly string[]).includes(status) ? (status as QuoteStatus) : "draft",
-    lines: toArray(r.lines, "lines", "lineItems")
+    // toArray() looks the keys up ON the object it is given, so this has to be
+    // handed `r`, not `r.lines`. Passing `r.lines` meant that whenever the API
+    // returned `lineItems` (which is its actual field name) the value was
+    // undefined and every quotation normalised to zero lines.
+    lines: toArray(r, "lines", "lineItems")
       .map(normaliseLine)
       .filter((l): l is QuotationLine => l !== null),
     approvalRequired: bool(r.approvalRequired),
@@ -347,28 +363,92 @@ export async function getQuotations(): Promise<LoaderResult<Quotation[]>> {
   }
 }
 
+/**
+ * Fetch one quotation.
+ *
+ * There is no `GET /v1/crm/quotations/:id`; the document endpoint is
+ * `GET /:id/document`, which returns the header plus its relational line items.
+ * This previously hit the bare `:id` path and always fell into the error branch.
+ */
 export async function getQuotation(id: string): Promise<LoaderResult<Quotation | null>> {
   try {
-    const res = await browserFetch(`v1/crm/quotations/${id}`);
+    const res = await browserFetch(`v1/crm/quotations/${id}/document`);
     if (!res.ok) return { data: null, source: "error" };
     const body = await res.json();
-    const inner =
-      body && typeof body === "object" && (body as Record<string, unknown>).quotation
-        ? (body as Record<string, unknown>).quotation
-        : body;
+    const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const inner = rec.quotation ?? rec.data ?? body;
     return { data: normaliseQuotation(inner), source: "api" };
   } catch {
     return { data: null, source: "error" };
   }
 }
 
+/**
+ * Map the UI's quotation model onto the service's line-item contract.
+ *
+ * The API requires `description` on every line; the builder only captures a
+ * product, so the product name carries the description. `productId` and
+ * `taxRateBps` are optional server-side but always present here.
+ */
+function toApiLineItems(lines: QuotationLine[]): Array<Record<string, unknown>> {
+  return lines.map((l) => ({
+    ...(l.productId ? { productId: l.productId } : {}),
+    description: l.productName?.trim() || l.productId || "Item",
+    quantity: l.quantity,
+    unitPriceMinor: l.unitPriceMinor,
+    taxRateBps: l.taxRateBps,
+  }));
+}
+
+/**
+ * Client-minted quotation reference.
+ *
+ * `quoteRef` is required by POST /v1/crm/quotations and the service does not
+ * default it, unlike grievances and service requests which mint GRV/SRQ refs
+ * server-side. Minting here unblocks quoting, but a tenant-scoped gapless series
+ * belongs in crm-service for consistency and auditability — flagged in the PR.
+ */
+function mintQuoteRef(): string {
+  return `QTN/${new Date().getFullYear()}/${Date.now().toString(36).toUpperCase().slice(-6)}`;
+}
+
+/**
+ * Create a quotation.
+ *
+ * Previously posted the raw UI model, which the request schema rejected: it
+ * requires `quoteRef`, `templateRef` and `lineItems`, while the UI model carries
+ * `template` and `lines` and no ref at all. So every create failed validation
+ * with 400 — the builder could not produce a quotation.
+ */
 export async function createQuotation(q: Quotation): Promise<void> {
-  const res = await browserFetch("v1/crm/quotations", { method: "POST", body: JSON.stringify(q) });
+  const body = {
+    ...(q.opportunityId ? { dealId: q.opportunityId } : {}),
+    quoteRef: q.quoteRef ?? mintQuoteRef(),
+    templateRef: q.template,
+    lineItems: toApiLineItems(q.lines),
+    totalMinor: quotationTotalMinor(q.lines),
+  };
+  const res = await browserFetch("v1/crm/quotations", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+/**
+ * Save changes to an existing quotation by superseding it with a new version.
+ *
+ * There is no update route: a quotation is a commercial document, so the service
+ * models a change as `POST /:id/new-version`, which clones the header and takes
+ * the revised line items. This helper used to PUT /v1/crm/quotations/:id, a path
+ * that does not exist, so saving an edit always 404'd.
+ */
 export async function updateQuotation(id: string, q: Quotation): Promise<void> {
-  const res = await browserFetch(`v1/crm/quotations/${id}`, { method: "PUT", body: JSON.stringify(q) });
+  const body = {
+    lineItems: toApiLineItems(q.lines),
+    totalMinor: quotationTotalMinor(q.lines),
+  };
+  const res = await browserFetch(`v1/crm/quotations/${id}/new-version`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
@@ -481,11 +561,36 @@ export async function requestApproval(quotationId: string, req: Omit<ApprovalReq
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function approveApproval(quotationId: string, approvalId: string): Promise<void> {
-  const res = await browserFetch(`v1/crm/quotations/${quotationId}/approvals/${approvalId}/approve`, {
+/**
+ * Decide a pending quotation approval.
+ *
+ * This used to POST `v1/crm/quotations/:id/approvals/:approvalId/approve`, a path
+ * the service never exposed, so approving a discount request always 404'd. The
+ * real endpoint is `POST /v1/crm/quotation-approvals/:approvalId/decide` and it
+ * takes the decision in the body, which also makes reject reachable.
+ *
+ * `quotationId` is no longer part of the request — the approval id is globally
+ * unique and the service resolves the quotation from it. The parameter is kept so
+ * the existing call sites read naturally.
+ */
+export async function decideApprovalRequest(
+  approvalId: string,
+  decision: "approve" | "reject",
+  reason?: string,
+): Promise<void> {
+  const res = await browserFetch(`v1/crm/quotation-approvals/${approvalId}/decide`, {
     method: "POST",
+    body: JSON.stringify({ decision, ...(reason ? { reason } : {}) }),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+}
+
+export async function approveApproval(_quotationId: string, approvalId: string): Promise<void> {
+  return decideApprovalRequest(approvalId, "approve");
+}
+
+export async function rejectApproval(approvalId: string, reason?: string): Promise<void> {
+  return decideApprovalRequest(approvalId, "reject", reason);
 }
 
 /* ============================================================ QP-005 types == */
@@ -495,6 +600,10 @@ export interface QuotationVersion {
   status: QuoteStatus;
   totalMinor: string;
   createdAt: string;
+  /** Shared business ref — versions of one quotation all carry the same value. */
+  quoteRef?: string;
+  /** Row id of this specific version. */
+  id?: string;
 }
 
 export function normaliseVersions(raw: unknown): QuotationVersion[] {
@@ -502,7 +611,8 @@ export function normaliseVersions(raw: unknown): QuotationVersion[] {
     .map((c): QuotationVersion | null => {
       if (!c || typeof c !== "object") return null;
       const r = c as Record<string, unknown>;
-      const version = num(r.version);
+      // The API names this `versionNumber`; `version` kept as a fallback.
+      const version = num(r.versionNumber ?? r.version);
       if (!version) return null;
       const status = str(r.status);
       return {
@@ -510,16 +620,32 @@ export function normaliseVersions(raw: unknown): QuotationVersion[] {
         status: (QUOTE_STATUSES as readonly string[]).includes(status) ? (status as QuoteStatus) : "draft",
         totalMinor: minorStr(r.totalMinor ?? r.total),
         createdAt: str(r.createdAt),
+        ...(str(r.quoteRef) ? { quoteRef: str(r.quoteRef) } : {}),
+        ...(typeof r.id === "string" ? { id: r.id } : {}),
       };
     })
     .filter((v): v is QuotationVersion => v !== null);
 }
 
-export async function getQuotationVersions(id: string): Promise<LoaderResult<QuotationVersion[]>> {
+/**
+ * Version history for a quotation.
+ *
+ * There is no `/:id/versions` route — that path 404'd, so the version panel was
+ * always empty. Versions are rows in `crm.quotations` sharing a `quote_ref`, and
+ * the list endpoint already orders by `quote_ref, version_number DESC`. So the
+ * history is the list filtered to this quotation's ref.
+ *
+ * `quoteRef` is passed in rather than looked up because the caller has already
+ * loaded the quotation; fetching the document again only to read its ref would
+ * double the round-trips.
+ */
+export async function getQuotationVersions(quoteRef: string): Promise<LoaderResult<QuotationVersion[]>> {
+  if (!quoteRef) return { data: [], source: "api" };
   try {
-    const res = await browserFetch(`v1/crm/quotations/${id}/versions`);
+    const res = await browserFetch(`v1/crm/quotations?limit=200`);
     if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseVersions(await res.json()), source: "api" };
+    const all = normaliseVersions(await res.json());
+    return { data: all.filter((v) => v.quoteRef === quoteRef), source: "api" };
   } catch {
     return { data: [], source: "error" };
   }

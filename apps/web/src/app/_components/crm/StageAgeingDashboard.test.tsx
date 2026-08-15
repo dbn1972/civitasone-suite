@@ -53,7 +53,9 @@ describe("StageAgeingDashboard (OP-005)", () => {
     fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "qual" } });
     fireEvent.change(screen.getByLabelText(/days limit for 1/i), { target: { value: "14" } });
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
-    await waitFor(() => expect(op.createStageLimit).toHaveBeenCalledWith(expect.objectContaining({ stage: "qual", limitDays: 14 })));
+    // maxDays + enabled is the service's contract; this asserted `limitDays`,
+    // which the API neither accepts nor returns.
+    await waitFor(() => expect(op.createStageLimit).toHaveBeenCalledWith(expect.objectContaining({ stage: "qual", maxDays: 14, enabled: true })));
   });
 
   it("blocks a zero-day limit", async () => {
