@@ -54,6 +54,12 @@ export function CreateLeavePolicyForm() {
   const empField = useId();
   const daysField = useId();
   const errId = useId();
+  const countMethodField = useId();
+  const maxAccumField = useId();
+  const maxContField = useId();
+  const minServiceField = useId();
+  const genderField = useId();
+  const medCertDaysField = useId();
   const ltRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
@@ -199,8 +205,9 @@ export function CreateLeavePolicyForm() {
               </div>
 
               <div style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Count Method</span>
+                <label htmlFor={countMethodField} style={{ fontSize: 13, fontWeight: 600 }}>Count Method</label>
                 <select
+                  id={countMethodField}
                   value={countMethod}
                   onChange={(e) => setCountMethod(e.target.value)}
                   style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
@@ -218,8 +225,9 @@ export function CreateLeavePolicyForm() {
               </summary>
               <div style={{ marginTop: 12, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Max accumulation (days)</span>
+                  <label htmlFor={maxAccumField} style={{ fontSize: 13, fontWeight: 600 }}>Max accumulation (days)</label>
                   <input
+                    id={maxAccumField}
                     type="number" min={0}
                     value={maxAccumulation}
                     onChange={(e) => setMaxAccumulation(e.target.value)}
@@ -227,8 +235,9 @@ export function CreateLeavePolicyForm() {
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Max continuous (days)</span>
+                  <label htmlFor={maxContField} style={{ fontSize: 13, fontWeight: 600 }}>Max continuous (days)</label>
                   <input
+                    id={maxContField}
                     type="number" min={1} max={730}
                     value={maxContinuousDays}
                     onChange={(e) => setMaxContinuousDays(e.target.value)}
@@ -236,8 +245,9 @@ export function CreateLeavePolicyForm() {
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Min service (months)</span>
+                  <label htmlFor={minServiceField} style={{ fontSize: 13, fontWeight: 600 }}>Min service (months)</label>
                   <input
+                    id={minServiceField}
                     type="number" min={0}
                     value={minServiceMonths}
                     onChange={(e) => setMinServiceMonths(e.target.value)}
@@ -245,8 +255,9 @@ export function CreateLeavePolicyForm() {
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Gender restriction</span>
+                  <label htmlFor={genderField} style={{ fontSize: 13, fontWeight: 600 }}>Gender restriction</label>
                   <select
+                    id={genderField}
                     value={genderRestriction}
                     onChange={(e) => setGenderRestriction(e.target.value as "" | "male" | "female")}
                     style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
@@ -257,8 +268,9 @@ export function CreateLeavePolicyForm() {
                   </select>
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Med cert required after (days)</span>
+                  <label htmlFor={medCertDaysField} style={{ fontSize: 13, fontWeight: 600 }}>Med cert required after (days)</label>
                   <input
+                    id={medCertDaysField}
                     type="number" min={1}
                     value={requiresMedicalCertAfterDays}
                     onChange={(e) => setRequiresMedicalCertAfterDays(e.target.value)}
