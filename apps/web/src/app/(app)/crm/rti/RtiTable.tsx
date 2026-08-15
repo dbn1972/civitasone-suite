@@ -169,13 +169,12 @@ export function RtiTable({
             render: (r) => (
               <StatusPill
                 label={r.status}
-                color={STATUS_TONE[r.status] ?? "var(--ink2)"}
+                status={r.status}
               />
             ),
           },
         ]}
         rows={rows}
-        rowKey={(r) => r.id}
         empty="No RTI requests match the current filters."
       />
     </>

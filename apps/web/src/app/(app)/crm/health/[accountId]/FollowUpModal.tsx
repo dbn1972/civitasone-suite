@@ -52,9 +52,10 @@ const LABEL: React.CSSProperties = {
 
 interface Props {
   accountId: string;
+  onClose?: () => void;
 }
 
-export function FollowUpModal({ accountId }: Props) {
+export function FollowUpModal({ accountId, onClose }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -109,7 +110,7 @@ export function FollowUpModal({ accountId }: Props) {
       </button>
 
       {open && (
-        <div style={OVERLAY} onClick={() => !saving && setOpen(false)}>
+        <div style={OVERLAY} onClick={() => { if (!saving) { setOpen(false); onClose?.(); } }}>
           <div
             role="dialog"
             aria-modal="true"
