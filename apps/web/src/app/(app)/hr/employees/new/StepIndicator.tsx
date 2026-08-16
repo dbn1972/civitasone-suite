@@ -49,7 +49,7 @@ export function StepIndicator({ steps, current }: Props) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: done || active ? "#fff" : "#94a3b8",
+                    color: done || active ? "#fff" : "var(--muted,#94a3b8)",
                     fontSize: done ? 15 : 13,
                     fontWeight: 700,
                     flexShrink: 0,
@@ -64,7 +64,7 @@ export function StepIndicator({ steps, current }: Props) {
                   style={{
                     fontSize: 10,
                     fontWeight: active ? 700 : 400,
-                    color: active ? ACCENT : done ? "#047857" : "#94a3b8",
+                    color: active ? ACCENT : done ? "var(--success,#047857)" : "var(--muted,#94a3b8)",
                     textAlign: "center",
                     lineHeight: 1.3,
                     maxWidth: 68,
@@ -81,7 +81,7 @@ export function StepIndicator({ steps, current }: Props) {
                   style={{
                     flex: 1,
                     height: 2,
-                    background: n < current ? ACCENT : "#e2e8f0",
+                    background: n < current ? ACCENT : "var(--border,#e2e8f0)",
                     marginTop: 15,
                     minWidth: 12,
                     transition: "background 0.2s",

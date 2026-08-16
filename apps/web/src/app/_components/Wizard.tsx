@@ -52,8 +52,8 @@ export function Wizard({ steps, onComplete }: WizardProps) {
                   justifyContent: "center",
                   fontSize: 13,
                   fontWeight: 600,
-                  background: i < current ? "#10b981" : i === current ? "#4f46e5" : "#e5e7eb",
-                  color: i <= current ? "#fff" : "#6b7280",
+                  background: i < current ? "var(--success,#10b981)" : i === current ? "var(--primary,#4f46e5)" : "var(--border,#e5e7eb)",
+                  color: i <= current ? "#fff" : "var(--muted,#6b7280)",
                   transition: "all 0.2s",
                 }}
               >
@@ -63,7 +63,7 @@ export function Wizard({ steps, onComplete }: WizardProps) {
                 style={{
                   fontSize: 11,
                   fontWeight: i === current ? 600 : 400,
-                  color: i === current ? "#4f46e5" : "#6b7280",
+                  color: i === current ? "var(--primary,#4f46e5)" : "var(--muted,#6b7280)",
                   marginTop: 4,
                   textAlign: "center",
                   maxWidth: 80,
@@ -77,7 +77,7 @@ export function Wizard({ steps, onComplete }: WizardProps) {
                 style={{
                   flex: 1,
                   height: 2,
-                  background: i < current ? "#10b981" : "#e5e7eb",
+                  background: i < current ? "var(--success,#10b981)" : "var(--border,#e5e7eb)",
                   marginBottom: 18,
                   marginLeft: -20,
                   marginRight: -20,
@@ -91,15 +91,15 @@ export function Wizard({ steps, onComplete }: WizardProps) {
       {/* Current step content */}
       <div
         style={{
-          border: "1px solid #e5e7eb",
+          border: "1px solid var(--border,#e5e7eb)",
           borderRadius: 10,
           padding: 24,
-          background: "#fff",
+          background: "var(--surface,#fff)",
           minHeight: 200,
         }}
       >
         {steps[current].description && (
-          <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "#64748b" }}>
+          <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "var(--muted,#64748b)" }}>
             {steps[current].description}
           </p>
         )}
@@ -114,10 +114,10 @@ export function Wizard({ steps, onComplete }: WizardProps) {
           type="button"
           style={{
             padding: "8px 20px",
-            border: "1px solid #d1d5db",
+            border: "1px solid var(--border,#d1d5db)",
             borderRadius: 6,
-            background: "#fff",
-            color: canPrev ? "#374151" : "#d1d5db",
+            background: "var(--surface,#fff)",
+            color: canPrev ? "var(--ink,#374151)" : "var(--muted,#d1d5db)",
             fontSize: 13,
             fontWeight: 500,
             cursor: canPrev ? "pointer" : "not-allowed",
