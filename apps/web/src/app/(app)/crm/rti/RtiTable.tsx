@@ -175,7 +175,7 @@ export function RtiTable({
           },
         ]}
         rows={rows}
-        empty="No RTI requests match the current filters."
+        emptyMessage="No RTI requests match the current filters."
       />
     </>
   );
