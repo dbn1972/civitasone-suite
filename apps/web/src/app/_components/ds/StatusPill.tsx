@@ -8,6 +8,7 @@ const STATUS_MAP: Record<string, PillVariant> = {
   passed: "good",
   cleared: "good",
   open: "good",
+  signed: "good",
   pending: "warn",
   "under review": "warn",
   "in progress": "warn",

@@ -992,6 +992,17 @@ export type GRNDetail = GRNSummary & {
   } | null;
 };
 
+/** Store Receipt Note (SRN) — GFR Rule 149 signed acceptance gating payment on a GRN. */
+export type SrnDetail = {
+  id: string;
+  grnId: string;
+  storeOfficerId: string;
+  receivedAt: string | null;
+  remarks?: string;
+  status: "draft" | "signed";
+  createdAt: string;
+};
+
 export type TenderSummary = {
   id: string;
   tenderNo: string;

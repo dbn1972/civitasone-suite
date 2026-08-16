@@ -79,6 +79,7 @@ import type {
   RFQDetail,
   GRNSummary,
   GRNDetail,
+  SrnDetail,
   TenderSummary,
   TenderDetail,
   PurchaseOrderListItem,
@@ -324,6 +325,7 @@ import {
   mapProcurementPODetail,
   mapProcurementGRNSummaries,
   mapProcurementGRNDetail,
+  mapSrnDetail,
   mapProcurementVendorDetails,
   mapProcurementVendorDetail,
   mapPurchaseOrderSummaries,
@@ -2317,6 +2319,18 @@ export async function getProcurementGRNById(id: string): Promise<LoaderResult<GR
     revalidateSeconds: 30,
     telemetryKey: "procurement.grn.detail",
     mapResponse: mapProcurementGRNDetail,
+  });
+}
+
+/** Store Receipt Note for a GRN — inventory-service, gates payment on the three-way-match consumer. */
+export async function getSrnByGrn(grnId: string): Promise<LoaderResult<SrnDetail | null>> {
+  return fetchJson<unknown, SrnDetail | null>(`/api/v1/inventory/srn/${grnId}`, null, {
+    revalidateSeconds: 15,
+    telemetryKey: "inventory.srn.byGrn",
+    mapResponse: (p) => {
+      const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
+      return data ? mapSrnDetail(data) : null;
+    },
   });
 }
 

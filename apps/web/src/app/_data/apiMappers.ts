@@ -7,6 +7,7 @@ import type {
   IndentSummary,
   GRNDetail,
   GRNSummary,
+  SrnDetail,
   LegalCaseSummary,
   MaintenanceSummary,
   PODetail,
@@ -337,6 +338,23 @@ export function mapProcurementGRNDetail(payload: unknown): GRNDetail | null {
           remarks: toText(insp.remarks) ?? undefined,
         }
       : null,
+  };
+}
+
+export function mapSrnDetail(payload: unknown): SrnDetail | null {
+  if (!isRecord(payload)) return null;
+  const id = toText(payload.id);
+  const grnId = toText(payload.grnId);
+  if (!id || !grnId) return null;
+  const status = toText(payload.status) === "signed" ? "signed" : "draft";
+  return {
+    id,
+    grnId,
+    storeOfficerId: toText(payload.storeOfficerId) ?? "—",
+    receivedAt: toText(payload.receivedAt) ?? null,
+    remarks: toText(payload.remarks) ?? undefined,
+    status,
+    createdAt: toText(payload.createdAt) ?? "—",
   };
 }
 

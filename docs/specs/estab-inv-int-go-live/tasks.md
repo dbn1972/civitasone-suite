@@ -41,7 +41,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add test in `services/inventory-service/tests/three-way-match.test.ts` for the SRN-missing block path
   - _Requirements: 1.1_
 
-- [ ] 4. Build SRN web pages
+- [x] 4. Build SRN web pages
   - `apps/web/src/app/(app)/procurement/grn/[id]/srn/new/page.tsx` — form: store officer name (pre-filled from session), received date, remarks, sign button
   - `apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx` — read view showing SRN details
   - Server loader calls `GET /v1/inventory/srn/:grnId`; form action calls `POST /v1/inventory/srn`
@@ -303,15 +303,24 @@ Notes on the graph:
 
 ## Notes
 
-- Task 1-3 are implemented, committed, and pushed via PR #644
-  (`kiro/estab-inv-int-go-live` branch, not yet merged — pending CI/review):
-  `inventory.store_receipt_notes` migration, the `srn` CQRS module,
+- Task 1-3 are merged into `main` via PR #644 (`kiro/estab-inv-int-go-live`
+  branch): `inventory.store_receipt_notes` migration, the `srn` CQRS module,
   and the SRN gate in `matching/consumer.ts` (payment.released only when the
   three-way match is clean AND the SRN is signed; payment.blocked with
   `SRN_MISSING` or `MATCH_EXCEPTION` otherwise). Verified: `tsc --noEmit`
   clean, `services/inventory-service/tests/srn.test.ts` (8 cases) + full
   service suite (555/556; the 1 failure is a pre-existing unrelated HRMS
   seed-data issue).
+- Task 4 (SRN web pages, `kiro/srn-web-pages` branch): added `SrnDetail` type
+  (`packages/types`), `mapSrnDetail` + `getSrnByGrn` loader, and three page
+  changes — `/procurement/grn/[id]` now shows an SRN status chip + link,
+  `/procurement/grn/[id]/srn` is the read view with a "Sign & confirm receipt"
+  `ActionButton` when draft, `/procurement/grn/[id]/srn/new` is the create form
+  (with an optional immediate-sign checkbox). Verified: `tsc --noEmit` clean,
+  `next build` succeeds and both routes appear in the route manifest, new
+  `mapSrnDetail` unit tests (6 cases) pass, full `apps/web` unit suite has the
+  same 23 pre-existing unrelated failures as a clean checkout (not introduced
+  by this change) with 2880+ passing.
 - `.kiro/specs/estab-inv-int-go-live/` (this copy) is gitignored — it is not
   the source of truth for anyone working from a plain git checkout.
   `docs/specs/estab-inv-int-go-live/` is the git-tracked mirror and must be
