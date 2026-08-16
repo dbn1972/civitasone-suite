@@ -2,18 +2,23 @@
 
 ## Overview
 
+Closes the gaps identified in `docs/SPRINT-READINESS-ESTAB-INV-INT.html` across Establishment,
+Inventory & Stock, and the Procurement integration chain, ahead of go-live. 40 tasks across four
+sprints (21-24): P0 functional completeness, WCAG AA + UX polish, an E2E test suite, and go-live
+gates. All work targets the monorepo at the root of this repository.
+
+## Tasks
+
 Tasks are ordered so shared foundations (DB migrations, service modules, redirects) land before
 the UI layers that depend on them. Each task is self-contained, references its requirement(s),
 names exact file paths, and ends in a typecheck- or test-verifiable state. Start each task on a
 feature branch; open a PR when the task's acceptance test passes.
 
-All work targets the monorepo at the root of this repository.
-
 ---
 
 ## Sprint 21 — P0 Functional Gaps (Aug 18 – Aug 29)
 
-- [ ] 1. Add `inventory.store_receipt_notes` DB migration
+- [x] 1. Add `inventory.store_receipt_notes` DB migration
   - Create migration file in `services/inventory-service/src/db/migrations/`
   - Add table to `db/schema.sql` and `services/inventory-service/src/modules/srn/schema.ts`
   - Columns: `id uuid PK`, `tenant_id uuid NOT NULL`, `grn_id uuid NOT NULL REFERENCES grn.procurement_grns(id)`, `store_officer_id uuid NOT NULL`, `received_at timestamptz`, `remarks text`, `status text CHECK (status IN ('draft','signed'))`, `created_at timestamptz DEFAULT now()`
@@ -21,7 +26,7 @@ All work targets the monorepo at the root of this repository.
   - Run `pnpm --filter inventory-service db:migrate` to verify migration applies cleanly
   - _Requirements: 1.1_
 
-- [ ] 2. Build SRN service module
+- [x] 2. Build SRN service module
   - Create `services/inventory-service/src/modules/srn/` with: `schema.ts`, `domain.ts`, `commands.ts`, `repo.ts`, `routes.ts`, `validators.ts`
   - `domain.ts`: `canCreateSrn(grn: GrnRow): boolean` — true when `grn.status === 'accepted'`
   - `repo.ts`: `createSrn(tenantId, input)` · `findByGrnId(tenantId, grnId)`
@@ -30,7 +35,7 @@ All work targets the monorepo at the root of this repository.
   - `services/inventory-service/tests/srn.test.ts`: create, find-by-grn, RLS isolation
   - _Requirements: 1.1, 5.2_
 
-- [ ] 3. Wire SRN gate into three-way-match consumer
+- [x] 3. Wire SRN gate into three-way-match consumer
   - In `services/inventory-service/src/modules/matching/consumer.ts`, check for an existing SRN (`findByGrnId`) before publishing `payment.released` event
   - If no SRN found, publish `payment.blocked` with `reason: 'SRN_MISSING'`
   - Add test in `services/inventory-service/tests/three-way-match.test.ts` for the SRN-missing block path
@@ -265,3 +270,56 @@ All work targets the monorepo at the root of this repository.
   - Run the full E2E suite (`tests/e2e-live/`) against staging; all specs must pass
   - Record pass/fail in `docs/STAGING-SIGN-OFF-SPRINT24.md`
   - _Requirements: all_
+
+## Task Dependency Graph
+
+```json
+{
+  "waves": [
+    { "id": 0, "tasks": ["1"] },
+    { "id": 1, "tasks": ["2", "5", "7", "8", "9", "10", "11"] },
+    { "id": 2, "tasks": ["3", "6"] },
+    { "id": 3, "tasks": ["4"] },
+    { "id": 4, "tasks": ["12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26"] },
+    { "id": 5, "tasks": ["27", "28", "29", "30", "31", "32", "33", "34"] },
+    { "id": 6, "tasks": ["35", "36", "37", "38", "39"] },
+    { "id": 7, "tasks": ["40"] }
+  ]
+}
+```
+
+Notes on the graph:
+- Wave 0-3 (Sprint 21): 1 → 2 → 3 → 4 is the SRN chain (migration → module → payment
+  gate → web pages). 5 → 6 is the GRN amendment chain. 7-11 have no dependencies
+  within this spec and can run in parallel with the SRN/GRN chains.
+- Wave 4 (Sprint 22): all WCAG/UX tasks are independent of each other and of
+  Sprint 21; 18 and 34 are paired (component + its Playwright assertion) but 34
+  is deferred to wave 5 since it's an E2E-suite task.
+- Wave 5 (Sprint 23 E2E): 27/28 exercise estab features only; 29/30 depend on 7
+  and 9; 31/32 depend on the full SRN + GRN amendment chain (1-6); 33 is
+  infra-only; 34 depends on 18.
+- Wave 6-7 (Sprint 24): go-live gates depend on all prior sprints being merged.
+  40 (staging sign-off) runs last, after 35-39.
+
+## Notes
+
+- Task 1-3 are implemented, committed, and pushed via PR #644
+  (`kiro/estab-inv-int-go-live` branch, not yet merged — pending CI/review):
+  `inventory.store_receipt_notes` migration, the `srn` CQRS module,
+  and the SRN gate in `matching/consumer.ts` (payment.released only when the
+  three-way match is clean AND the SRN is signed; payment.blocked with
+  `SRN_MISSING` or `MATCH_EXCEPTION` otherwise). Verified: `tsc --noEmit`
+  clean, `services/inventory-service/tests/srn.test.ts` (8 cases) + full
+  service suite (555/556; the 1 failure is a pre-existing unrelated HRMS
+  seed-data issue).
+- `.kiro/specs/estab-inv-int-go-live/` (this copy) is gitignored — it is not
+  the source of truth for anyone working from a plain git checkout.
+  `docs/specs/estab-inv-int-go-live/` is the git-tracked mirror and must be
+  kept in sync manually after each task's checkbox changes here, since there
+  is currently no automated sync between the two.
+- Per `.kiro/steering/git-workflow.md`: work happens in
+  `wt/kiro-estab-inv-int-go-live` on branch `kiro/estab-inv-int-go-live`, never
+  directly on `main`. Each task's PR should be reviewed and CI-green before
+  merge; if CI is red for reasons unrelated to the task (e.g. a pre-existing
+  pipeline infra issue), that must be verified against `main`'s own CI before
+  requesting a merge decision.
