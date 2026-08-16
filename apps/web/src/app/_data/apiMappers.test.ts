@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -294,5 +294,59 @@ describe("mapProcurementIndentSummaries", () => {
 
   it("returns null for invalid input", () => {
     expect(mapProcurementIndentSummaries(null)).toBeNull();
+  });
+});
+
+describe("mapSrnDetail", () => {
+  it("maps a signed SRN with all fields present", () => {
+    const mapped = mapSrnDetail({
+      id: "srn-1",
+      grnId: "grn-1",
+      storeOfficerId: "user-1",
+      receivedAt: "2026-08-16T10:00:00.000Z",
+      remarks: "Received in good condition",
+      status: "signed",
+      createdAt: "2026-08-16T09:00:00.000Z",
+    });
+    expect(mapped).toEqual({
+      id: "srn-1",
+      grnId: "grn-1",
+      storeOfficerId: "user-1",
+      receivedAt: "2026-08-16T10:00:00.000Z",
+      remarks: "Received in good condition",
+      status: "signed",
+      createdAt: "2026-08-16T09:00:00.000Z",
+    });
+  });
+
+  it("defaults status to draft for any non-'signed' value", () => {
+    const mapped = mapSrnDetail({ id: "srn-1", grnId: "grn-1", status: "bogus" });
+    expect(mapped?.status).toBe("draft");
+  });
+
+  it("returns null when id is missing", () => {
+    expect(mapSrnDetail({ grnId: "grn-1", status: "draft" })).toBeNull();
+  });
+
+  it("returns null when grnId is missing", () => {
+    expect(mapSrnDetail({ id: "srn-1", status: "draft" })).toBeNull();
+  });
+
+  it("returns null for a non-object payload", () => {
+    expect(mapSrnDetail(null)).toBeNull();
+    expect(mapSrnDetail("not an object")).toBeNull();
+  });
+
+  it("defaults optional fields when absent", () => {
+    const mapped = mapSrnDetail({ id: "srn-1", grnId: "grn-1", status: "draft" });
+    expect(mapped).toEqual({
+      id: "srn-1",
+      grnId: "grn-1",
+      storeOfficerId: "—",
+      receivedAt: null,
+      remarks: undefined,
+      status: "draft",
+      createdAt: "—",
+    });
   });
 });

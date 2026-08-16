@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
-import { getProcurementGRNById } from "../../../../_data/loaders";
+import { getProcurementGRNById, getSrnByGrn } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -31,7 +32,10 @@ const ITEM_COLUMNS: { key: keyof ItemRow; label: string; align?: "left" | "right
 ];
 
 export default async function GRNDetailPage({ params }: { params: { id: string } }) {
-  const { data: grn, source } = await getProcurementGRNById(params.id);
+  const [{ data: grn, source }, { data: srn }] = await Promise.all([
+    getProcurementGRNById(params.id),
+    getSrnByGrn(params.id),
+  ]);
 
   if (!grn) {
     return (
@@ -91,6 +95,22 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
             <span className="label">Three-way match</span>
             <span style={{ color: grn.threeWayMatch ? "#16a34a" : "#b91c1c", fontWeight: 600 }}>
               {grn.threeWayMatch ? "Matched (PO · receipt · inspection)" : "Not matched"}
+            </span>
+          </div>
+          <div className="field">
+            <span className="label">Store Receipt Note (SRN)</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {srn ? (
+                <>
+                  <StatusPill status={srn.status} label={srn.status === "signed" ? "Signed" : "Draft"} />
+                  <Link href={`/procurement/grn/${grn.id}/srn`}>View SRN</Link>
+                </>
+              ) : (
+                <>
+                  <StatusPill status="draft" label="Not created" />
+                  <Link href={`/procurement/grn/${grn.id}/srn/new`}>Create SRN</Link>
+                </>
+              )}
             </span>
           </div>
           {grn.notes ? (
