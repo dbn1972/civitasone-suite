@@ -44,8 +44,8 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
       onKeyDown={handleKeyDown}
       tabIndex={0}
       role="button"
-      aria-label={`Deal: ${deal.name}, value ${deal.valueDisplay}, probability ${deal.probability}%, ${deal.contactName ? `assignee ${deal.contactName}` : "unassigned"}. Use left and right arrow keys to move between stages.`}
-      aria-grabbed={isDragging}
+      aria-label={`Engagement: ${deal.name}, value ${deal.valueDisplay}, likelihood ${deal.probability}%, ${deal.contactName ? `assignee ${deal.contactName}` : "unassigned"}. Use left and right arrow keys to move between stages.`}
+      aria-roledescription="draggable engagement card"
       className={`cursor-grab rounded-lg border p-3 shadow-sm transition-all select-none ${
         isDragging
           ? "border-blue-300 bg-blue-50 opacity-50"
@@ -54,7 +54,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
             : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
       } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1`}
     >
-      {/* Deal name */}
+      {/* Engagement name */}
       <a
         href={`/crm/deals/${deal.id}`}
         className="text-sm font-medium text-slate-900 hover:text-blue-700 hover:underline"
@@ -65,7 +65,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
         {deal.name}
       </a>
 
-      {/* Value and probability */}
+      {/* Value and likelihood */}
       <div className="mt-1.5 flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-700">
           {formatMoney(deal.valueMinor)}

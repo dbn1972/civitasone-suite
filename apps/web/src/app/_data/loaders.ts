@@ -1408,6 +1408,64 @@ export async function getCrmServiceRequests(
     },
   );
 }
+
+export type CrmRtiRow = {
+  id: string;
+  referenceNo: string | null;
+  section: string;
+  departmentRef: string;
+  applicantName: string;
+  applicantContact: string | null;
+  subject: string;
+  status: string;
+  feePaid: boolean;
+  feeAmount: number | null;
+  receivedAt: string | null;
+  dueAt: string | null;
+  firstAppealDueAt: string | null;
+  respondedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export async function getCrmRti(
+  params: { status?: string; section?: string; departmentRef?: string; search?: string; limit?: number; page?: number } = {},
+): Promise<LoaderResult<{ rows: CrmRtiRow[]; total: number }>> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.section) qs.set("section", params.section);
+  if (params.departmentRef) qs.set("departmentRef", params.departmentRef);
+  if (params.search) qs.set("search", params.search);
+  qs.set("limit", String(params.limit ?? 50));
+  qs.set("page", String(params.page ?? 1));
+  return fetchJson<unknown, { rows: CrmRtiRow[]; total: number }>(
+    `/api/v1/crm/rti?${qs.toString()}`,
+    { rows: [], total: 0 },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "crm.rti",
+      mapResponse: (p) =>
+        mapEnvelopeWithTotal<CrmRtiRow>(p, (r) => ({
+          id: toText(r.id) ?? "",
+          referenceNo: toText(r.referenceNo),
+          section: toText(r.section) ?? "",
+          departmentRef: toText(r.departmentRef) ?? "",
+          applicantName: toText(r.applicantName) ?? "",
+          applicantContact: toText(r.applicantContact),
+          subject: toText(r.subject) ?? "",
+          status: toText(r.status) ?? "RECEIVED",
+          feePaid: r.feePaid === true,
+          feeAmount: typeof r.feeAmount === "number" ? r.feeAmount : null,
+          receivedAt: toText(r.receivedAt),
+          dueAt: toText(r.dueAt),
+          firstAppealDueAt: toText(r.firstAppealDueAt),
+          respondedAt: toText(r.respondedAt),
+          createdAt: toText(r.createdAt),
+          updatedAt: toText(r.updatedAt),
+        })),
+    },
+  );
+}
 function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;

@@ -14,6 +14,9 @@ export default async function Page() {
   const totalContacts = accounts.reduce((sum, a) => sum + a.contactCount, 0);
   const subsidiaries = countSubsidiaries(accounts);
 
+  // Never fabricate a 0 count when the list load failed — show "—" instead.
+  const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
+
   const mergeOptions: MergeOption[] = accounts.map((a) => ({
     id: a.id,
     label: a.industry ? `${a.name} · ${a.industry}` : a.name,
@@ -29,7 +32,7 @@ export default async function Page() {
     <>
       <PageHeader
         title="Accounts"
-        subtitle="Organisation master — departments, PSUs, vendors and institutional customers with their reporting hierarchy."
+        subtitle="Organisation master — departments, PSUs, vendors and institutional accounts with their reporting hierarchy • संगठन पंजी"
         back="/crm"
         backLabel="CRM"
         actions={<NewAccountForm accounts={accounts} />}
@@ -37,14 +40,14 @@ export default async function Page() {
       {source === "error" && <DataSourceBadge source={source} />}
       {mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#eef2ff" label="Total Accounts" value={accounts.length.toLocaleString("en-IN")} />
-        <StatCard icon="🌳" iconBg="#eef2ff" label="Subsidiary Accounts" value={subsidiaries.toLocaleString("en-IN")} />
-        <StatCard icon="👤" iconBg="#eef2ff" label="Linked Contacts" value={totalContacts.toLocaleString("en-IN")} />
+        <StatCard icon="▣" iconBg="#eef2ff" label="Total Accounts" value={stat(accounts.length)} />
+        <StatCard icon="◉" iconBg="#eef2ff" label="Subsidiary Accounts" value={stat(subsidiaries)} />
+        <StatCard icon="◈" iconBg="#eef2ff" label="Linked Contacts" value={stat(totalContacts)} />
         <StatCard
-          icon="🏭"
+          icon="△"
           iconBg="#eef2ff"
-          label="Industries Covered"
-          value={new Set(accounts.map((a) => a.industry).filter(Boolean)).size.toLocaleString("en-IN")}
+          label="Sectors / Ministries"
+          value={stat(new Set(accounts.map((a) => a.industry).filter(Boolean)).size)}
         />
       </StatGrid>
       <AccountsTable accounts={accounts} source={source} />

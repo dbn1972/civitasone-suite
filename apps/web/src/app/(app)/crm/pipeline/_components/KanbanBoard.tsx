@@ -63,7 +63,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     setMoveError(null);
     const deal = localDeals.find((d) => d.id === dealId);
     if (deal) {
-      announce(`Picked up deal ${deal.name}. Use arrow keys or drop on a stage column.`);
+      announce(`Picked up engagement ${deal.name}. Use arrow keys or drop on a stage column.`);
     }
   }, [localDeals, announce]);
 
@@ -119,12 +119,12 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
             dealId: deal.id,
             message: "Version conflict — someone else updated this deal. Please refresh.",
           });
-          announce(`Move failed for ${deal.name}: version conflict. Please refresh.`);
+          announce(`Move failed for engagement ${deal.name}: version conflict. Please refresh.`);
         } else {
           const errBody = await res.json().catch(() => ({ error: { message: "Failed to move deal" } }));
           const msg = errBody?.error?.message ?? `Server error (${res.status})`;
           setMoveError({ dealId: deal.id, message: msg });
-          announce(`Move failed for ${deal.name}: ${msg}`);
+          announce(`Move failed for engagement ${deal.name}: ${msg}`);
         }
       } else {
         // Success — increment version locally
@@ -133,13 +133,13 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
             d.id === deal.id ? { ...d, version: d.version + 1 } : d,
           ),
         );
-        announce(`Moved ${deal.name} to ${targetStage.name} stage.`);
+        announce(`Moved engagement ${deal.name} to ${targetStage.name} stage.`);
         setMoveError(null);
       }
     } catch {
       setLocalDeals(previousDeals);
       setMoveError({ dealId: deal.id, message: "Network error — check your connection." });
-      announce(`Move failed for ${deal.name}: network error.`);
+      announce(`Move failed for engagement ${deal.name}: network error.`);
     } finally {
       setMovingDealId(null);
     }
@@ -168,7 +168,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
 
     const newIdx = direction === "left" ? currentStageIdx - 1 : currentStageIdx + 1;
     if (newIdx < 0 || newIdx >= stages.length) {
-      announce(`Cannot move ${deal.name} ${direction} — already at the ${direction === "left" ? "first" : "last"} stage.`);
+      announce(`Cannot move engagement ${deal.name} ${direction} — already at the ${direction === "left" ? "first" : "last"} stage.`);
       return;
     }
 

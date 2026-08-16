@@ -16,9 +16,9 @@ export function AccountHierarchy({ accounts }: { accounts: CRMAccountSummary[] }
         <EmptyState icon="🌳" title="No hierarchy yet" message="Accounts appear here once the organisation master has entries." />
       ) : (
         <div className="pad">
-          <ul aria-label="Account hierarchy" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <ul role="tree" aria-label="Account hierarchy" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {rows.map((row) => (
-              <li key={row.id} style={{ paddingLeft: row.depth * 20, marginBottom: 6 }}>
+              <li key={row.id} role="treeitem" aria-level={row.depth + 1} style={{ paddingLeft: row.depth * 20, marginBottom: 6 }}>
                 <span aria-hidden="true" style={{ color: "var(--muted)", marginRight: 6 }}>
                   {row.depth > 0 ? "└" : "●"}
                 </span>

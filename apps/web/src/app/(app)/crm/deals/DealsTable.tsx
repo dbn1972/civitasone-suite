@@ -23,7 +23,7 @@ type DealRow = {
   owner: string;
 };
 
-const SEGMENTS = ["All", "Open", "Won"] as const;
+const SEGMENTS = ["All", "Open", "Concluded"] as const;
 
 export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Deal[]>(
@@ -43,7 +43,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
   const tableRows: DealRow[] = rows
     .filter((d) => {
       if (segment === "Open") return d.status === "open";
-      if (segment === "Won") return d.status === "won";
+      if (segment === "Concluded") return d.status === "won";
       return true;
     })
     .map((d) => ({
@@ -51,12 +51,12 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       dealName: d.dealName,
       account: d.contactName ?? "—",
       amount: d.amount,
-      stage: d.stage.replace(/_/g, " "),
+      stage: d.stage.replace(/_/g, " ").replace(/\bWon\b/, "Concluded").replace(/\bLost\b/, "Lapsed"),
       owner: d.owner,
     }));
 
   function exportCsv() {
-    const header = ["Deal", "Account", "Value", "Stage", "Owner"];
+    const header = ["Engagement", "Account", "Value", "Stage", "Owner"];
     const lines = tableRows.map((r) =>
       [r.dealName, r.account, String(r.amount), r.stage, r.owner]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -67,7 +67,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `deals-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `engagements-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -75,7 +75,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
   return (
     <div className="card">
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <h3 style={{ marginRight: "auto" }}>Deals</h3>
+        <h3 style={{ marginRight: "auto" }}>Engagements</h3>
         <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
       </div>
       {cacheNote ? (
@@ -84,11 +84,11 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
         </p>
       ) : null}
       {rows.length === 0 ? (
-        <EmptyState icon="🎯" title="No deals found" message="Start adding deals to track your pipeline." />
+        <EmptyState icon="◈" title="No engagements found" message="Start adding engagements to track your procurement pipeline." />
       ) : (
         <DataTable<DealRow>
           columns={[
-            { key: "dealName", label: "Deal #" },
+            { key: "dealName", label: "Engagement" },
             { key: "account", label: "Account" },
             { key: "amount", label: "Value", align: "right", cellType: "amount" },
             { key: "stage", label: "Stage", cellType: "status" },
@@ -98,9 +98,9 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
           rowHref={(row) => `/crm/deals/${row.id}`}
           sortable
           filterable
-          filterPlaceholder="Filter deals by name, account or stage…"
+          filterPlaceholder="Filter engagements…"
           exportable
-          exportFilename="deals"
+          exportFilename="engagements"
           pageSize={15}
         />
       )}

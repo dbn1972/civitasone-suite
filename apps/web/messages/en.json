@@ -1,0 +1,10 @@
+{
+  "crm": {
+    "nav": {"dashboard":"Dashboard","contacts":"Contacts","accounts":"Accounts","deals":"Deals","pipeline":"Pipeline","activities":"Activities","forecast":"Procurement Pipeline Forecast","voc":"Voice of Citizen","grievances":"Grievances","rti":"RTI Requests"},
+    "dashboard": {"title":"CRM Dashboard","loading":"Loading dashboard...","empty":"No data available"},
+    "contacts": {"title":"Contacts","new":"New Contact","search":"Search contacts...","empty":"No contacts found"},
+    "deals": {"title":"Procurement Deals","new":"New Deal","pipeline":"Pipeline View"},
+    "grievances": {"title":"Grievances","new":"Submit Grievance","status":{"REGISTERED":"Registered","FORWARDED":"Forwarded","ATTENDED":"Being Attended","DISPOSED":"Disposed","APPEAL":"Under Appeal"}},
+    "rti": {"title":"RTI Requests","new":"File RTI Request","sla":"Response Due","overdue":"Overdue"}
+  }
+}

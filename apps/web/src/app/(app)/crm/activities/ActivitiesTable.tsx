@@ -40,11 +40,11 @@ export function ActivitiesTable({ activities }: { activities: CRMActivityEntry[]
   return (
     <div className="card">
       <div className="card-h">
-        <h3>Activities</h3>
+        <h3>Interactions</h3>
         <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
       </div>
       {activities.length === 0 ? (
-        <EmptyState icon="⚡" title="No activities yet" message="Schedule your first call, meeting, or task." />
+        <EmptyState icon="◈" title="No interactions yet" message="Schedule your first call, meeting, site visit, or correspondence." />
       ) : (
         <DataTable<ActivityRow>
           columns={[

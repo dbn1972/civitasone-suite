@@ -4,28 +4,31 @@ import { useRouter } from "next/navigation";
 import { ActionButton } from "../../../../_components/ds";
 
 /**
- * Grievance lifecycle actions.
+ * Grievance lifecycle actions — CPGRAMS-aligned.
  *
- * The detail page previously linked to /assign and /resolve sub-routes that were
- * never built, so both buttons 404'd and the register was effectively read-only
- * despite the service exposing assign, escalate, resolve and close. Actioning a
- * grievance is a single decision, so it is taken inline through ConfirmDialog
- * (which also captures the resolution text) rather than on a separate screen.
+ * Status vocabulary (post-0082 migration):
+ *   REGISTERED  initial
+ *   FORWARDED   assigned to department
+ *   ATTENDED    being worked on
+ *   DISPOSED    resolved or administratively closed (terminal)
+ *   APPEAL      citizen first appeal (urgent priority)
  *
- * Assign is deliberately not offered here: it needs `assignedTo` as a user id,
- * which requires an officer picker this module does not yet have. Shipping a
- * button that cannot supply a valid body would just move the 404 to a 400.
+ * Available actions:
+ *   Forward      PATCH /forward       { forwardedTo }   FORWARDED
+ *   First Appeal PATCH /first-appeal  { appealReason }  APPEAL
+ *   Resolve      PATCH /resolve       { resolution }    DISPOSED
+ *   Close        PATCH /close         (admin only)      DISPOSED
  *
- * Close is restricted to crm_admin/super_admin server-side; for a crm_user the
- * API answers 403 and the dialog surfaces that message rather than failing quietly.
+ * The legacy /escalate alias remains on the backend for backward compatibility.
+ * The UI uses /first-appeal to match CPGRAMS portal terminology.
  */
 export function GrievanceActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
 
-  const terminal = status === "closed" || status === "cancelled";
-  const resolved = status === "resolved";
+  // DISPOSED is the only terminal state in CPGRAMS (covers both resolved + closed)
+  const terminal = status === "DISPOSED";
+  const disposed = status === "DISPOSED";
 
-  /** All four transitions are PATCH — they mutate the existing grievance. */
   async function patch(action: string, payload?: Record<string, unknown>) {
     const res = await fetch(`/api/v1/crm/grievances/${id}/${action}`, {
       method: "PATCH",
@@ -43,37 +46,49 @@ export function GrievanceActions({ id, status }: { id: string; status: string })
   if (terminal) {
     return (
       <span style={{ fontSize: 13, color: "var(--ink2)" }}>
-        This grievance is {status} — no further action available.
+        This grievance is disposed — no further action available.
       </span>
     );
   }
 
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {/* Forward to department — CPGRAMS portal: forward to competent authority */}
       <ActionButton
-        label="Escalate"
-        confirmTitle="Escalate this grievance?"
-        confirmDescription="Escalation is recorded on the grievance with the time and the reason given."
+        label="Forward"
+        confirmTitle="Forward this grievance?"
+        confirmDescription="Enter the department or office to which this grievance is being forwarded."
         requireReason
-        reasonLabel="Reason for escalation"
-        onConfirm={(reason) => patch("escalate", { ...(reason ? { reason } : {}) })}
+        reasonLabel="Department / Office"
+        onConfirm={(dept) => patch("forward", { forwardedTo: dept })}
       />
-      {!resolved && (
+
+      {/* First Appeal — citizen-initiated; bumps priority to urgent */}
+      <ActionButton
+        label="First Appeal"
+        confirmTitle="File a first appeal?"
+        confirmDescription="Record the citizen reason for appeal. The grievance is escalated to urgent priority."
+        reasonLabel="Reason for appeal (optional)"
+        onConfirm={(reason) => patch("first-appeal", { ...(reason ? { appealReason: reason } : {}) })}
+      />
+
+      {!disposed && (
         <ActionButton
           label="Resolve"
           className="primary"
           confirmTitle="Resolve this grievance?"
-          confirmDescription="Record how the grievance was resolved. This is stored as the resolution."
+          confirmDescription="Record how the grievance was resolved. Status moves to DISPOSED in the CPGRAMS portal."
           requireReason
           reasonLabel="Resolution"
           onConfirm={(reason) => patch("resolve", { resolution: reason })}
         />
       )}
+
       <ActionButton
         label="Close"
         danger
         confirmTitle="Close this grievance?"
-        confirmDescription="Closing is final — the grievance can no longer be escalated or resolved. Requires administrator rights."
+        confirmDescription="Administrative closure — grievance is marked DISPOSED. Requires administrator rights."
         onConfirm={() => patch("close")}
       />
     </div>

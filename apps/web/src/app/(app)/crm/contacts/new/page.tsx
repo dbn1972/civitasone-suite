@@ -288,8 +288,8 @@ export default function NewContactPage() {
               <select id="new-leadStatus" value={form.leadStatus} onChange={(e) => setForm({ ...form, leadStatus: e.target.value })} style={inputStyle}>
                 <option value="new">New</option>
                 <option value="contacted">Contacted</option>
-                <option value="qualified">Qualified</option>
-                <option value="unqualified">Unqualified</option>
+                <option value="qualified">Engaged Stakeholder</option>
+                <option value="unqualified">Inactive Stakeholder</option>
                 <option value="customer">Customer</option>
               </select>
             </div>

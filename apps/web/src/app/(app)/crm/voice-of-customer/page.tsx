@@ -13,7 +13,7 @@ import {
   topConcern,
 } from "./voc";
 
-export default async function VoiceOfCustomerPage() {
+export default async function VoiceOfCitizenPage() {
   const { data: summary, source } = await getCrmSentimentSummary();
 
   const mood = moodOf(summary);
@@ -23,8 +23,8 @@ export default async function VoiceOfCustomerPage() {
   return (
     <>
       <PageHeader
-        title="Voice of Customer"
-        subtitle="What customers are actually saying — every logged interaction is scored for sentiment and grouped by theme."
+        title="Voice of Citizen"
+        subtitle="What citizens and stakeholders are saying — every logged interaction is scored for sentiment and grouped by theme • नागरिक प्रतिक्रिया"
         back="/crm"
         actions={
           <a className="btn" href="/crm/activities">
@@ -32,6 +32,10 @@ export default async function VoiceOfCustomerPage() {
           </a>
         }
       />
+      <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <span aria-hidden="true" className="text-base leading-snug">🛡</span>
+        <span>Citizen feedback is anonymised in aggregate reporting. Individual feedback access is subject to DPDP Act 2023 provisions.</span>
+      </div>
       {source === "error" && <DataSourceBadge source={source} />}
 
       <StatGrid>
@@ -42,21 +46,21 @@ export default async function VoiceOfCustomerPage() {
           value={MOOD_LABEL[mood]}
         />
         <StatCard
-          icon="💬"
+          icon="▣"
           iconBg="#e0f2fe"
           label="Interactions Scored"
           value={summary.total.toLocaleString("en-IN")}
         />
         <StatCard
-          icon="📉"
+          icon="△"
           iconBg="#fee2e2"
           label="Negative Share"
           value={summary.total === 0 ? "—" : `${summary.negativeShare}%`}
         />
         <StatCard
-          icon="🎯"
+          icon="◈"
           iconBg="#fef3c7"
-          label="Top Concern"
+          label="Primary Concern"
           value={concern ? themeLabel(concern.theme) : "None"}
         />
       </StatGrid>
@@ -74,25 +78,25 @@ export default async function VoiceOfCustomerPage() {
       <Card title="Sentiment Mix">
         <StatGrid>
           <StatCard
-            icon="🙂"
+            icon="▲"
             iconBg="#dcfce7"
             label="Positive"
             value={`${summary.byPolarity.positive.toLocaleString("en-IN")} (${shareOf(summary, "positive")}%)`}
           />
           <StatCard
-            icon="😐"
+            icon="○"
             iconBg="#fef3c7"
             label="Neutral"
             value={`${summary.byPolarity.neutral.toLocaleString("en-IN")} (${shareOf(summary, "neutral")}%)`}
           />
           <StatCard
-            icon="🙁"
+            icon="▽"
             iconBg="#fee2e2"
             label="Negative"
             value={`${summary.byPolarity.negative.toLocaleString("en-IN")} (${shareOf(summary, "negative")}%)`}
           />
           <StatCard
-            icon="📊"
+            icon="▣"
             iconBg="#e0e7ff"
             label="Average Score"
             value={summary.total === 0 ? "—" : `${summary.averageScore} / 100`}
@@ -100,7 +104,7 @@ export default async function VoiceOfCustomerPage() {
         </StatGrid>
       </Card>
 
-      <Card title="What They Are Talking About">
+      <Card title="Key Feedback Themes">
         <ThemeTable themes={themes} />
       </Card>
     </>

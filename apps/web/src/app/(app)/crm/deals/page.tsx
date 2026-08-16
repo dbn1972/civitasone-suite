@@ -15,7 +15,7 @@ export default async function Page() {
     <>
       <PageHeader
         title="Vendor / Stakeholder Engagements"
-        subtitle="Track high-value vendor engagements, procurement opportunities, and stakeholder interactions."
+        subtitle="Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions • संलग्नताएँ"
         back="/crm"
         actions={
           <a className="btn primary" href="/crm/deals/new">+ New Engagement</a>
@@ -23,10 +23,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🤝" iconBg="#eef2ff" label="Total Engagements" value={deals.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔄" iconBg="#ecfdf3" label="Active Engagements" value={openDeals.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#f3e8ff" label="Pipeline Value" value={formatMoney(pipelineValue)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed Value" value={formatMoney(wonValue)} />
+        <StatCard icon="▣" iconBg="#eef2ff" label="Total Engagements" value={deals.length.toLocaleString("en-IN")} />
+        <StatCard icon="◉" iconBg="#ecfdf3" label="Active Engagements" value={openDeals.toLocaleString("en-IN")} />
+        <StatCard icon="◈" iconBg="#f3e8ff" label="Active Procurement Value" value={formatMoney(pipelineValue)} />
+        <StatCard icon="△" iconBg="#ecfdf3" label="Concluded Value" value={formatMoney(wonValue)} />
       </StatGrid>
       <DealsTable deals={deals} source={source} />
     </>

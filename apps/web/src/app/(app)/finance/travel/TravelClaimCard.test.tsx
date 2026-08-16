@@ -13,7 +13,7 @@ const BASE: TravelClaimCardProps = {
   departureDate: "2026-08-01",
   returnDate: "2026-08-03",
   purpose: "Departmental Review Meeting",
-  fareClass: "AC-II",
+  fareClass: "AC-I",
   fareAmount: 320000,
   daAmount: 80000,
   hotelAmount: 150000,
@@ -48,19 +48,39 @@ describe("TravelClaimCard", () => {
 
   it("shows fare class", () => {
     render(<TravelClaimCard {...BASE} />);
-    expect(screen.getByText("AC-II")).toBeInTheDocument();
+    expect(screen.getByText("AC-I")).toBeInTheDocument();
   });
 
   it("shows warning icon when fare class exceeds entitlement", () => {
-    // Pay Level 10 entitlement is AC-III; claiming AC-I exceeds it
-    render(<TravelClaimCard {...BASE} fareClass="AC-I" />);
+    // Pay Level 10 entitlement is AC-I (CCS(TA) Rules 1988); claiming Business exceeds it
+    render(<TravelClaimCard {...BASE} fareClass="Business" />);
     expect(screen.getByRole("generic", { name: /Fare class exceeds entitlement/i })).toBeInTheDocument();
   });
 
   it("does not show warning when fare class equals entitlement", () => {
-    // Pay Level 10 entitlement is AC-III; claiming AC-III is fine
-    render(<TravelClaimCard {...BASE} payLevel={10} fareClass="AC-III" />);
+    // Pay Level 10 entitlement is AC-I (CCS(TA) Rules 1988); claiming AC-I is within entitlement
+    render(<TravelClaimCard {...BASE} payLevel={10} fareClass="AC-I" />);
     expect(screen.queryByLabelText(/Fare class exceeds entitlement/i)).not.toBeInTheDocument();
+  });
+
+  it("shows Sleeper entitlement for Level 3 employee (CCS(TA) Rules 1988 Second Schedule)", () => {
+    // Level 1–5 are entitled to Sleeper Class per CCS(TA) Rules 1988
+    render(<TravelClaimCard {...BASE} payLevel={3} fareClass="Sleeper" />);
+    // Sleeper is the entitled class — no warning expected
+    expect(screen.queryByLabelText(/Fare class exceeds entitlement/i)).not.toBeInTheDocument();
+    // The entitlement tooltip confirms Sleeper for pay level 3
+    const span = screen.getByTitle(/Entitlement for Pay Level 3: Sleeper/i);
+    expect(span).toBeInTheDocument();
+  });
+
+  it("shows AC-I entitlement for Level 11 employee (CCS(TA) Rules 1988 Second Schedule)", () => {
+    // Level 9–17 are entitled to AC-I Tier per CCS(TA) Rules 1988
+    render(<TravelClaimCard {...BASE} payLevel={11} fareClass="AC-I" />);
+    // AC-I is the entitled class — no warning expected
+    expect(screen.queryByLabelText(/Fare class exceeds entitlement/i)).not.toBeInTheDocument();
+    // The entitlement tooltip confirms AC-I for pay level 11
+    const span = screen.getByTitle(/Entitlement for Pay Level 11: AC-I/i);
+    expect(span).toBeInTheDocument();
   });
 
   it("renders hotel stay details", () => {

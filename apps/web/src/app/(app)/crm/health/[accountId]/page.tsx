@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../../_components/ds";
 import { getAccountHealthBreakdown } from "../../../../_data/loaders";
 import { BAND_LABEL, signalLabel } from "../health";
+import { FollowUpModal } from "./FollowUpModal";
 
 interface PageProps {
   params: { accountId: string };
@@ -25,7 +26,11 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
   if (!breakdown) {
     return (
       <>
-        <PageHeader title="Account Health" back="/crm/health" />
+        <PageHeader
+          title="Account Health"
+          back="/crm/health"
+          actions={<FollowUpModal accountId={params.accountId} />}
+        />
         {source === "error" && <DataSourceBadge source={source} />}
         <Card>
           <EmptyState
@@ -45,7 +50,12 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
         title="Account Health"
         subtitle={`Scored ${formatDateTime(breakdown.computedAt)}`}
         back="/crm/health"
-        actions={<a className="btn" href={`/crm/accounts/${breakdown.accountId}`}>View Account</a>}
+        actions={
+          <>
+            <FollowUpModal accountId={breakdown.accountId} />
+            <a className="btn" href={`/crm/accounts/${breakdown.accountId}`}>View Account</a>
+          </>
+        }
       />
       <StatGrid>
         <StatCard icon="❤️" iconBg="#fee2e2" label="Health Score" value={`${breakdown.score}/100`} />

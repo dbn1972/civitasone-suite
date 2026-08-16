@@ -1,6 +1,6 @@
 /**
  * WFHRequestForm — submits a Work-From-Home request.
- * DoPT WFH policy: max 2 days/week for eligible cadres.
+ * DoPT OM 2022 / DoPT WFH policy: max 2 days/week for non-gazetted staff (Level 1–10).
  * WCAG 2.2 AA: all form fields labelled, error states, 44px touch targets.
  */
 "use client";
@@ -11,11 +11,26 @@ import { useRouter } from "next/navigation";
 interface WFHRequestFormProps {
   /** Pre-fill employee UUID (optional — admin filing on behalf) */
   employeeId?: string;
+  /**
+   * Pay Level from the employee record (GoI pay matrix Level 1–18).
+   * Non-gazetted: Level 1–10; Gazetted: Level 11–18.
+   * Pass undefined when not yet known — form warns but allows submission.
+   */
+  payLevel?: number;
+  /**
+   * WFH days already approved/taken in the current ISO week.
+   * DoPT OM 2022 cap: 2 days/week for eligible staff.
+   */
+  weeklyWfhCount?: number;
 }
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
 
-export function WFHRequestForm({ employeeId: prefillId = "" }: WFHRequestFormProps) {
+export function WFHRequestForm({
+  employeeId: prefillId = "",
+  payLevel,
+  weeklyWfhCount,
+}: WFHRequestFormProps) {
   const router = useRouter();
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -31,8 +46,16 @@ export function WFHRequestForm({ employeeId: prefillId = "" }: WFHRequestFormPro
   const idReason = useId();
   const errId = useId();
 
+  // DoPT OM 2022 eligibility gates
+  const isGazetted = payLevel !== undefined && payLevel > 10;
+  const weeklyCapReached = weeklyWfhCount !== undefined && weeklyWfhCount >= 2;
+  const payLevelUnknown = payLevel === undefined;
+
+  const submitDisabled = isGazetted || weeklyCapReached || state === "submitting";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isGazetted || weeklyCapReached) return; // belt-and-suspenders
     if (!fromDate || !toDate) {
       setErrorMsg("Both From date and To date are required.");
       setState("error");
@@ -71,7 +94,41 @@ export function WFHRequestForm({ employeeId: prefillId = "" }: WFHRequestFormPro
       aria-label="Work-From-Home request form"
       style={{ display: "flex", flexDirection: "column", gap: 18, padding: "20px 24px" }}
     >
-      {/* DoPT eligibility note */}
+      {/* DoPT OM 2022 eligibility banners */}
+
+      {isGazetted && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="gazetted-error"
+          style={errorBannerStyle}
+        >
+          WFH is available for non-gazetted staff (Level 1–10) only per DoPT OM 2022.
+        </div>
+      )}
+
+      {weeklyCapReached && !isGazetted && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="weekly-cap-error"
+          style={errorBannerStyle}
+        >
+          2-day weekly WFH limit reached (DoPT OM 2022).
+        </div>
+      )}
+
+      {payLevelUnknown && !isGazetted && !weeklyCapReached && (
+        <div
+          role="note"
+          data-testid="paylevel-warning"
+          style={warningBannerStyle}
+        >
+          Pay level could not be verified. You may submit, but the request is subject to eligibility review.
+        </div>
+      )}
+
+      {/* DoPT policy note */}
       <div
         role="note"
         style={{
@@ -148,7 +205,11 @@ export function WFHRequestForm({ employeeId: prefillId = "" }: WFHRequestFormPro
         <p
           id={errId}
           role={state === "error" ? "alert" : "status"}
-          style={{ fontSize: 13, color: state === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)", margin: 0 }}
+          style={{
+            fontSize: 13,
+            color: state === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)",
+            margin: 0,
+          }}
         >
           {state === "done" ? "WFH request submitted. Redirecting…" : errorMsg}
         </p>
@@ -167,8 +228,9 @@ export function WFHRequestForm({ employeeId: prefillId = "" }: WFHRequestFormPro
           type="submit"
           className="btn primary"
           style={{ minHeight: 44 }}
-          disabled={state === "submitting"}
+          disabled={submitDisabled}
           aria-busy={state === "submitting"}
+          aria-disabled={submitDisabled}
         >
           {state === "submitting" ? "Submitting…" : "Submit Request"}
         </button>
@@ -189,4 +251,23 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   minHeight: 44,
+};
+
+const errorBannerStyle: React.CSSProperties = {
+  background: "var(--error-bg, #fef2f2)",
+  border: "1px solid var(--error-border, #fecaca)",
+  borderRadius: 6,
+  padding: "10px 14px",
+  fontSize: 13,
+  color: "var(--red, #dc2626)",
+  fontWeight: 500,
+};
+
+const warningBannerStyle: React.CSSProperties = {
+  background: "var(--warn-bg, #fffbeb)",
+  border: "1px solid var(--warn-border, #fde68a)",
+  borderRadius: 6,
+  padding: "10px 14px",
+  fontSize: 13,
+  color: "var(--warn-text, #92400e)",
 };
