@@ -7,6 +7,7 @@ import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 type SalarySlipRow = {
   id: string;
@@ -35,6 +36,8 @@ function prevPeriodLabel(pp: string): string {
 }
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => ["payroll_admin", "payroll_officer", "super_admin"].includes(r));
   const { data: run, source } = await getPayrollRunById(params.id);
 
   if (!run) {
@@ -112,6 +115,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         grossAmount={run.grossAmount}
         netAmount={run.netAmount}
         payPeriod={run.payPeriod}
+        canAdminister={canAdminister}
       />
 
       <Card title="Run Details">

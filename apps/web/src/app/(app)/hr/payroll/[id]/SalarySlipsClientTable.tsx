@@ -253,6 +253,8 @@ export function SalarySlipsClientTable({
 }: TableProps) {
   const [preview, setPreview] = useState<SlipRow | null>(null);
   const [filter, setFilter] = useState("");
+  const [page, setPage] = useState(0);
+  const SLIP_PAGE = 50;
 
   const visible = filter
     ? slips.filter(
@@ -261,6 +263,8 @@ export function SalarySlipsClientTable({
           s.status.toLowerCase().includes(filter.toLowerCase()),
       )
     : slips;
+  const totalVisible = visible.length;
+  const paged = visible.slice(page * SLIP_PAGE, (page + 1) * SLIP_PAGE);
 
   const thStyle: React.CSSProperties = {
     padding: "8px 12px",
@@ -368,7 +372,7 @@ export function SalarySlipsClientTable({
                 </td>
               </tr>
             ) : (
-              visible.map((slip) => (
+              paged.map((slip) => (
                 <tr key={slip.id} style={{ borderBottom: "1px solid var(--line,#f1f5f9)" }}>
                   <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
@@ -402,6 +406,20 @@ export function SalarySlipsClientTable({
             )}
           </tbody>
         </table>
+
+        {totalVisible > SLIP_PAGE && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", fontSize: 13 }}>
+            <button className="btn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+              {"←"} Previous
+            </button>
+            <span style={{ color: "var(--ink2)" }}>
+              {page * SLIP_PAGE + 1}–{Math.min((page + 1) * SLIP_PAGE, totalVisible)} of {totalVisible}
+            </span>
+            <button className="btn" onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * SLIP_PAGE >= totalVisible}>
+              Next {"→"}
+            </button>
+          </div>
+        )}
       </div>
 
       {preview && (

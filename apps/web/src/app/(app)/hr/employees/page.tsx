@@ -14,9 +14,19 @@ const TYPE_LABELS: Record<string, string> = {
   intern: "Intern / Trainee",
 };
 
+const PAGE_SIZE = 50;
+
+function empPageHref(type: string, p: number): string {
+  const qs: string[] = [];
+  if (type !== "all") qs.push("type=" + encodeURIComponent(type));
+  if (p > 0) qs.push("page=" + p);
+  return "/hr/employees" + (qs.length ? "?" + qs.join("&") : "");
+}
+
 export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
+  const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
   const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
-    getEmployees(),
+    getEmployees(PAGE_SIZE, page * PAGE_SIZE),
     getHRDashboard(),
   ]);
   const t = await getTranslations();
@@ -89,6 +99,30 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
       <Card title="All Employees">
         <EmployeesTable employees={filtered} source={source} />
       </Card>
+
+      {total > PAGE_SIZE && (
+        <nav aria-label="Employee list pagination" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
+          {page > 0 && (
+            <Link
+              href={empPageHref(typeFilter, page - 1)}
+              className="btn"
+            >
+              {"←"} Previous
+            </Link>
+          )}
+          <span style={{ color: "var(--ink2)" }}>
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total} employees
+          </span>
+          {(page + 1) * PAGE_SIZE < total && (
+            <Link
+              href={empPageHref(typeFilter, page + 1)}
+              className="btn"
+            >
+              Next {"→"}
+            </Link>
+          )}
+        </nav>
+      )}
     </main>
   );
 }

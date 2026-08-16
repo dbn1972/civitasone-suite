@@ -6,9 +6,15 @@ import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 export default async function PayrollPage() {
   const t = await getTranslations("payroll");
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+
   const [{ data: runs, source }, { data: structures }] = await Promise.all([
     getPayrollRunDetails(),
     getPayrollStructures(),
@@ -32,17 +38,19 @@ export default async function PayrollPage() {
         help="payroll"
       />
       <DataSourceBadge source={source} />
-      {structures.length === 0 ? (
-        <Card>
-          <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
+      {canAdminister && (
+        structures.length === 0 ? (
+          <Card>
+            <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
               No pay structures configured — create one first.{" "}
               <Link href="/hr/payroll/structures" style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
                 Go to pay structures →
               </Link>
             </p>
-        </Card>
-      ) : (
-        <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} />
+          </Card>
+        ) : (
+          <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} />
+        )
       )}
       <StatGrid>
         <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Runs" value={totalRuns} />
@@ -51,7 +59,7 @@ export default async function PayrollPage() {
         <StatCard icon="📄" iconBg="var(--panel)" label="Pending" value={pending} />
       </StatGrid>
       <Card title="Payroll Runs">
-        <PayrollRunsTable runs={runs} source={source} />
+        <PayrollRunsTable runs={runs} source={source} canAdminister={canAdminister} />
       </Card>
     </main>
   );
