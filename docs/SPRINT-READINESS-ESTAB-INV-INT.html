@@ -1,0 +1,980 @@
+<title>CivitasOne — Sprint Readiness: Establishment · Inventory · Integration</title>
+<style>
+/* ── TOKEN LAYER ── */
+:root {
+  --navy:       #00439C;
+  --navy-dark:  #002F70;
+  --navy-light: #E8F0FB;
+  --saffron:    #E07B00;
+  --saffron-lt: #FFF3E0;
+  --bg:         #EEF2F9;
+  --surface:    #FFFFFF;
+  --surface2:   #F4F7FD;
+  --ink:        #0D1B3E;
+  --ink2:       #4A5A80;
+  --ink3:       #8A96B0;
+  --border:     #D0D8EC;
+  --border2:    #E4EAF5;
+  --ok:         #0B6E45;
+  --ok-bg:      #E6F4EE;
+  --warn:       #925200;
+  --warn-bg:    #FFF0D9;
+  --bad:        #B91C1C;
+  --bad-bg:     #FDE8E8;
+  --radius:     8px;
+  --shadow:     0 1px 4px rgba(0,47,112,.08), 0 4px 16px rgba(0,47,112,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --navy:       #3B82F6;
+    --navy-dark:  #1D4ED8;
+    --navy-light: #172038;
+    --saffron:    #FB923C;
+    --saffron-lt: #2A1A00;
+    --bg:         #0A0F1C;
+    --surface:    #131929;
+    --surface2:   #1A2238;
+    --ink:        #E4EBF8;
+    --ink2:       #8C9EC0;
+    --ink3:       #56678A;
+    --border:     #1E2D4A;
+    --border2:    #16213A;
+    --ok:         #22C55E;
+    --ok-bg:      #052218;
+    --warn:       #FBBF24;
+    --warn-bg:    #1E1000;
+    --bad:        #F87171;
+    --bad-bg:     #1E0505;
+  }
+}
+:root[data-theme="dark"] {
+  --navy:#3B82F6;--navy-dark:#1D4ED8;--navy-light:#172038;--saffron:#FB923C;
+  --saffron-lt:#2A1A00;--bg:#0A0F1C;--surface:#131929;--surface2:#1A2238;
+  --ink:#E4EBF8;--ink2:#8C9EC0;--ink3:#56678A;--border:#1E2D4A;--border2:#16213A;
+  --ok:#22C55E;--ok-bg:#052218;--warn:#FBBF24;--warn-bg:#1E1000;--bad:#F87171;--bad-bg:#1E0505;
+}
+:root[data-theme="light"] {
+  --navy:#00439C;--navy-dark:#002F70;--navy-light:#E8F0FB;--saffron:#E07B00;
+  --saffron-lt:#FFF3E0;--bg:#EEF2F9;--surface:#FFFFFF;--surface2:#F4F7FD;
+  --ink:#0D1B3E;--ink2:#4A5A80;--ink3:#8A96B0;--border:#D0D8EC;--border2:#E4EAF5;
+  --ok:#0B6E45;--ok-bg:#E6F4EE;--warn:#925200;--warn-bg:#FFF0D9;--bad:#B91C1C;--bad-bg:#FDE8E8;
+}
+
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.site-header {
+  background: var(--navy-dark);
+  border-top: 3px solid #FF9933;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 52px;
+}
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.header-logo svg { opacity: .9; }
+.header-title { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+.header-sub { font-size: 11px; opacity: .6; font-weight: 400; }
+.header-spacer { flex: 1; }
+.header-meta {
+  font-size: 11px;
+  color: rgba(255,255,255,.55);
+  text-align: right;
+  line-height: 1.4;
+}
+.theme-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.8);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 12px;
+}
+
+/* ── TABS ── */
+.tab-bar {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 0 24px;
+  position: sticky;
+  top: 52px;
+  z-index: 90;
+}
+.tab-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  gap: 0;
+}
+.tab-btn {
+  padding: 12px 20px;
+  border: none;
+  background: none;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+  letter-spacing: .1px;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--navy); }
+.tab-btn.active { color: var(--navy); border-bottom-color: var(--navy); }
+.tab-btn .dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  margin-top: -1px;
+}
+
+/* ── MAIN LAYOUT ── */
+.main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── KPI STRIP ── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.kpi-card.ok::before { background: var(--ok); }
+.kpi-card.warn::before { background: var(--saffron); }
+.kpi-card.bad::before { background: var(--bad); }
+
+.kpi-label { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--ink3); }
+.kpi-score-row { display: flex; align-items: baseline; gap: 8px; }
+.kpi-num { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.kpi-num.ok { color: var(--ok); }
+.kpi-num.warn { color: var(--saffron); }
+.kpi-num.bad { color: var(--bad); }
+.kpi-denom { font-size: 13px; color: var(--ink3); }
+.kpi-bar { height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.kpi-bar-fill { height: 100%; border-radius: 2px; transition: width .6s; }
+.kpi-fill-ok { background: var(--ok); }
+.kpi-fill-warn { background: var(--saffron); }
+.kpi-fill-bad { background: var(--bad); }
+.kpi-note { font-size: 10px; color: var(--ink3); line-height: 1.3; }
+
+/* ── SECTION GRID ── */
+.section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.card-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface2);
+}
+.card-icon { font-size: 16px; }
+.card-title { font-size: 13px; font-weight: 700; letter-spacing: -.1px; }
+.card-body { padding: 16px; }
+
+/* ── FINDING ROWS ── */
+.finding-list { display: flex; flex-direction: column; gap: 6px; }
+.finding-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.finding-row.pass { background: var(--ok-bg); }
+.finding-row.fail { background: var(--bad-bg); }
+.finding-row.warn { background: var(--warn-bg); }
+.finding-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.finding-text { flex: 1; color: var(--ink); }
+.severity-chip {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.sev-p0 { background: var(--bad); color: #fff; }
+.sev-p1 { background: var(--saffron); color: #fff; }
+.sev-p2 { background: var(--navy); color: #fff; }
+.sev-ok { background: var(--ok); color: #fff; }
+
+/* ── TEST COVERAGE ── */
+.cov-list { display: flex; flex-direction: column; gap: 8px; }
+.cov-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.cov-label { width: 130px; color: var(--ink2); flex-shrink: 0; }
+.cov-bar-wrap { flex: 1; height: 8px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+.cov-bar-fill { height: 100%; border-radius: 4px; }
+.cov-pct { width: 36px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 12px; }
+.cov-pct.ok { color: var(--ok); }
+.cov-pct.warn { color: var(--saffron); }
+.cov-pct.bad { color: var(--bad); }
+
+/* ── E2E TABLE ── */
+.e2e-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.e2e-table th {
+  background: var(--surface2);
+  border-bottom: 2px solid var(--border);
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.e2e-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border2);
+  vertical-align: top;
+  color: var(--ink);
+}
+.e2e-table tr:last-child td { border-bottom: none; }
+.e2e-table tr:hover td { background: var(--surface2); }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.pill-ok { background: var(--ok-bg); color: var(--ok); }
+.pill-miss { background: var(--bad-bg); color: var(--bad); }
+.pill-part { background: var(--warn-bg); color: var(--warn); }
+
+/* ── GO-LIVE TABLE ── */
+.golive-card { margin-bottom: 16px; }
+.golive-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.golive-table th {
+  background: var(--surface2);
+  border-bottom: 2px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.golive-table td { padding: 8px 12px; border-bottom: 1px solid var(--border2); vertical-align: top; }
+.golive-table tr:last-child td { border-bottom: none; }
+.golive-table tr:hover td { background: var(--surface2); }
+.gate-name { font-weight: 600; color: var(--ink); }
+.gate-area { color: var(--ink2); font-size: 11px; }
+
+/* ── SPRINT ROADMAP ── */
+.roadmap-section { margin-top: 8px; }
+.roadmap-head {
+  padding: 10px 0 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -.2px;
+  border-top: 2px solid var(--border);
+  margin-top: 8px;
+}
+.roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.sprint-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.sprint-hd {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sprint-hd.s21 { background: var(--bad-bg); color: var(--bad); border-bottom: 2px solid var(--bad); }
+.sprint-hd.s22 { background: var(--warn-bg); color: var(--warn); border-bottom: 2px solid var(--saffron); }
+.sprint-hd.s23 { background: var(--navy-light); color: var(--navy); border-bottom: 2px solid var(--navy); }
+.sprint-hd.s24 { background: var(--ok-bg); color: var(--ok); border-bottom: 2px solid var(--ok); }
+.sprint-dates { font-size: 10px; font-weight: 400; opacity: .8; }
+.sprint-tasks { padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+.task-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink);
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border2);
+}
+.task-row:last-child { border-bottom: none; }
+.task-mod {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.mod-estab { background: #E0EAFF; color: #2952B3; }
+.mod-inv   { background: #E0F4EA; color: #1A6B3E; }
+.mod-int   { background: #FFF4E0; color: #7A4400; }
+.mod-ux    { background: #F0E0FF; color: #6B2FA0; }
+.mod-wcag  { background: #FFE0F0; color: #A02060; }
+.mod-e2e   { background: #E0F7FF; color: #006080; }
+.mod-gate  { background: #E8E8E8; color: #444; }
+:root[data-theme="dark"] .mod-estab { background: #1A2A5A; color: #7BA8FF; }
+:root[data-theme="dark"] .mod-inv   { background: #0A2A1A; color: #4ADF8A; }
+:root[data-theme="dark"] .mod-int   { background: #2A1A00; color: #FFC060; }
+:root[data-theme="dark"] .mod-ux    { background: #2A0A4A; color: #C080FF; }
+:root[data-theme="dark"] .mod-wcag  { background: #3A0A20; color: #FF80B0; }
+:root[data-theme="dark"] .mod-e2e   { background: #003040; color: #40D0FF; }
+:root[data-theme="dark"] .mod-gate  { background: #333; color: #aaa; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+  .section-grid { grid-template-columns: 1fr; }
+  .roadmap-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .kpi-strip { grid-template-columns: 1fr 1fr; }
+  .roadmap-grid { grid-template-columns: 1fr; }
+  .main { padding: 16px; }
+}
+
+/* ── DIVIDER ── */
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin: 16px 0 8px;
+}
+</style>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="5" fill="rgba(255,255,255,.12)"/>
+        <path d="M7 8h14M7 14h9M7 20h11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="header-title">CivitasOne ERP</div>
+        <div class="header-sub">Sprint Readiness · Go-live Assessment</div>
+      </div>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-meta">
+      <div>Establishment · Inventory · Integration</div>
+      <div>Generated 2026-08-16</div>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()">◐ Theme</button>
+  </div>
+</header>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <div class="tab-inner">
+    <button class="tab-btn active" onclick="switchTab('estab', this)">
+      <span class="dot" style="background:#B91C1C"></span>Establishment
+    </button>
+    <button class="tab-btn" onclick="switchTab('inv', this)">
+      <span class="dot" style="background:#925200"></span>Inventory &amp; Stock
+    </button>
+    <button class="tab-btn" onclick="switchTab('int', this)">
+      <span class="dot" style="background:#0B6E45"></span>Integration Chain
+    </button>
+  </div>
+</div>
+
+<main class="main">
+
+<!-- ════════════════════════════════════════════════
+     ESTABLISHMENT PANEL
+════════════════════════════════════════════════ -->
+<section id="panel-estab" class="panel active">
+
+  <!-- KPI strip -->
+  <div class="kpi-strip">
+    <div class="kpi-card warn">
+      <div class="kpi-label">UX vs World-class</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">71</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:71%"></div></div>
+      <div class="kpi-note">Good IA; empty states and bulk actions missing</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">WCAG AA Score</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">66</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:66%"></div></div>
+      <div class="kpi-note">Wizard dark-mode fixed; ARIA live regions missing</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="kpi-label">Unit + Integration</div>
+      <div class="kpi-score-row"><span class="kpi-num ok">83</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-ok" style="width:83%"></div></div>
+      <div class="kpi-note">41 service files + 9 component tests</div>
+    </div>
+    <div class="kpi-card bad">
+      <div class="kpi-label">E2E Coverage</div>
+      <div class="kpi-score-row"><span class="kpi-num bad">0</span><span class="kpi-denom">specs</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-bad" style="width:2%"></div></div>
+      <div class="kpi-note">Zero E2E specs for any estab flow</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Go-live Readiness</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">76</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:76%"></div></div>
+      <div class="kpi-note">1 placeholder; consumables module thin</div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <!-- UX AUDIT CARD -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-icon">🎨</span>
+        <span class="card-title">UX Audit vs World-class Standards</span>
+      </div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Consistent card + data-table layout across all 26 sub-routes; clear IA hierarchy</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Loading/error/not-found states on every route group</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">DFA routing wizard step-indicator dark mode now fixed (Sprint 20 fix merged)</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Role-based UI conditioning wired on payroll/admin actions</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Empty-state illustrations absent — generic "No records" text on estab/files, estab/meetings, estab/vehicles</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">File movement timeline shows flat list — no visual diff of status/officer changes between moves</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">No bulk select or batch-action on any estab table (mass-close files, batch dispatch)</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">Mobile layout untested — estab/files and estab/meetings tables overflow at 375 px viewport</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">consumables module: no domain.ts / repo.ts — stock-out, reorder-level logic is absent</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">records/consumer.ts line 255: recordCategory hardcoded "B" — placeholder, not production-ready</span><span class="severity-chip sev-p0">P0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WCAG CARD -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-icon">♿</span>
+        <span class="card-title">WCAG 2.2 AA Compliance</span>
+      </div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Focus rings present on all form inputs and buttons</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Semantic HTML: &lt;nav&gt; breadcrumbs, &lt;main&gt; landmark, &lt;h1&gt; per page</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Wizard + StepIndicator dark-mode fixed — hardcoded #fff/#0f172a → CSS vars</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">No skip-to-main-content link on any estab page — screen reader must tab through full nav on every page</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">estab/files table: row selection not keyboard-accessible (no Enter/Space to open file detail)</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">NotificationsPanel lacks aria-live="polite" — new notifications not announced to screen readers</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">File status badge uses #FF6B00 on white — contrast ratio 3.8:1 fails AA (need ≥4.5:1)</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Quarter allotment table: no &lt;caption&gt; element — table purpose unclear to AT</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">DFA multi-step form: step completion not announced (needs aria-live update on advance)</span><span class="severity-chip sev-p1">P1</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <!-- TEST COVERAGE -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-icon">🧪</span>
+        <span class="card-title">Test Coverage</span>
+      </div>
+      <div class="card-body">
+        <div class="cov-list">
+          <div class="cov-row"><span class="cov-label">Service (unit)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:88%"></div></div><span class="cov-pct ok">88%</span></div>
+          <div class="cov-row"><span class="cov-label">DFA/approval flows</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:92%"></div></div><span class="cov-pct ok">92%</span></div>
+          <div class="cov-row"><span class="cov-label">File lifecycle</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:85%"></div></div><span class="cov-pct ok">85%</span></div>
+          <div class="cov-row"><span class="cov-label">Quarters / spaces</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:80%"></div></div><span class="cov-pct ok">80%</span></div>
+          <div class="cov-row"><span class="cov-label">Fleet domain</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:78%"></div></div><span class="cov-pct ok">78%</span></div>
+          <div class="cov-row"><span class="cov-label">Component (React)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-warn" style="width:42%"></div></div><span class="cov-pct warn">42%</span></div>
+          <div class="cov-row"><span class="cov-label">Consumables module</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:12%"></div></div><span class="cov-pct bad">12%</span></div>
+          <div class="cov-row"><span class="cov-label">E2E (browser)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:2%"></div></div><span class="cov-pct bad">0%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E2E SUITE -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-icon">🔬</span>
+        <span class="card-title">E2E Suite Coverage</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <table class="e2e-table">
+          <thead><tr><th>User Journey</th><th>Status</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>Create file → note-sheet → DFA approval → dispatch</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Inward dak receipt → file linkage</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Quarters application → allotment → occupation</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Charge handover end-to-end</td><td><span class="status-pill pill-miss">Missing</span></td><td>P1</td></tr>
+            <tr><td>Library book issue + return</td><td><span class="status-pill pill-miss">Missing</span></td><td>P2</td></tr>
+            <tr><td>Fleet trip log + fuel entry</td><td><span class="status-pill pill-miss">Missing</span></td><td>P2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GO-LIVE READINESS TABLE -->
+  <div class="card golive-card">
+    <div class="card-head"><span class="card-icon">🚦</span><span class="card-title">Go-live Readiness Gates — Establishment</span></div>
+    <div class="card-body" style="padding:0">
+      <table class="golive-table">
+        <thead><tr><th>Gate</th><th>Area</th><th>Status</th><th>Action Required</th></tr></thead>
+        <tbody>
+          <tr><td class="gate-name">RLS tenant isolation</td><td class="gate-area">Security</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>Verified via rls-isolation.test.ts</td></tr>
+          <tr><td class="gate-name">Skip link + keyboard nav</td><td class="gate-area">Accessibility</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add &lt;a href="#main"&gt; skip link to layout.tsx</td></tr>
+          <tr><td class="gate-name">File status badge contrast</td><td class="gate-area">WCAG AA §1.4.3</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Darken #FF6B00 to #C55200 or add border</td></tr>
+          <tr><td class="gate-name">consumables domain + repo</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Implement consumables/domain.ts + repo.ts</td></tr>
+          <tr><td class="gate-name">records category placeholder</td><td class="gate-area">Data integrity</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Replace hardcoded "B" with param-driven logic</td></tr>
+          <tr><td class="gate-name">E2E core file journey</td><td class="gate-area">QA gate</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Write create-file → DFA → dispatch spec</td></tr>
+          <tr><td class="gate-name">Mobile responsive audit</td><td class="gate-area">UX</td><td><span class="status-pill pill-part">⚠ Partial</span></td><td>Overflow-x:auto on tables, test at 375 px</td></tr>
+          <tr><td class="gate-name">eSign integration live</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>esign module with DSC hash chain implemented</td></tr>
+          <tr><td class="gate-name">DFA conditional approval paths</td><td class="gate-area">Business logic</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>92% branch coverage on dfa-conditional tests</td></tr>
+          <tr><td class="gate-name">Noting hash chain integrity</td><td class="gate-area">Audit trail</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>noting-hash-chain.test.ts passing</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<!-- ════════════════════════════════════════════════
+     INVENTORY PANEL
+════════════════════════════════════════════════ -->
+<section id="panel-inv" class="panel">
+
+  <div class="kpi-strip">
+    <div class="kpi-card warn">
+      <div class="kpi-label">UX vs World-class</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">63</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:63%"></div></div>
+      <div class="kpi-note">SRN flow absent; cycle-count approval UX sparse</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">WCAG AA Score</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">61</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:61%"></div></div>
+      <div class="kpi-note">Charts lack alt-text table; movement chips missing role</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="kpi-label">Unit + Integration</div>
+      <div class="kpi-score-row"><span class="kpi-num ok">81</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-ok" style="width:81%"></div></div>
+      <div class="kpi-note">36 files; deep FIFO/WAVG + cycle-count coverage</div>
+    </div>
+    <div class="kpi-card bad">
+      <div class="kpi-label">E2E Coverage</div>
+      <div class="kpi-score-row"><span class="kpi-num bad">0</span><span class="kpi-denom">specs</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-bad" style="width:2%"></div></div>
+      <div class="kpi-note">Zero E2E specs for inventory flows</div>
+    </div>
+    <div class="kpi-card bad">
+      <div class="kpi-label">Go-live Readiness</div>
+      <div class="kpi-score-row"><span class="kpi-num bad">58</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-bad" style="width:58%"></div></div>
+      <div class="kpi-note">SRN missing; stock-service migration incomplete</div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🎨</span><span class="card-title">UX Audit vs World-class Standards</span></div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Low-stock alert table with threshold indicator and reorder trigger</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Stock ledger page with FIFO / WAVG costing mode toggle</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Bin/aisle/rack location hierarchy in place; batch + serial tracking screens built</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">No SRN (Store Receipt Note) workflow — table, service route, and UI completely absent; critical operational gap for GFR compliance</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Cycle-count module: backend approved/rejected flow exists but no UI for supervisor approval action</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Goods-return QC verdict screen missing — qcStatus + disposition written to DB but no UI to trigger it</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">Legacy stock/ routes not redirected to inventory/ — users on old bookmarks land on deprecated UI</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Forecast page shows ML output only — no confidence interval band, no override input for store officer</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">stock-service ledger module: schema exists but no routes.ts or queries.ts — ledger only readable via inventory-service proxy</span><span class="severity-chip sev-p1">P1</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-icon">♿</span><span class="card-title">WCAG 2.2 AA Compliance</span></div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Stock balances table uses numeric data with tabular-nums font variant</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Low-stock page uses color + icon to indicate threshold (not color alone)</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Forecast chart has no alternative data table — chart-only display fails WCAG §1.1.1 (non-text content)</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Movement type chips (RECEIPT / ISSUE / TRANSFER) lack role="status" or role="img" with aria-label</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Stock balances table: no summary row or visually announced total — AT users cannot get aggregate without reading every row</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Inventory reconcile page: diff values use red/green only — colorblind users (8% of male population) cannot distinguish</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">No skip-to-main link on inventory pages (same gap as estab)</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">Bin picker lacks keyboard navigation — mouse-only interaction for selecting aisle/rack/shelf</span><span class="severity-chip sev-p1">P1</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🧪</span><span class="card-title">Test Coverage</span></div>
+      <div class="card-body">
+        <div class="cov-list">
+          <div class="cov-row"><span class="cov-label">FIFO costing engine</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:95%"></div></div><span class="cov-pct ok">95%</span></div>
+          <div class="cov-row"><span class="cov-label">WAVG engine</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:90%"></div></div><span class="cov-pct ok">90%</span></div>
+          <div class="cov-row"><span class="cov-label">Three-way match</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:85%"></div></div><span class="cov-pct ok">85%</span></div>
+          <div class="cov-row"><span class="cov-label">Movements domain</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:82%"></div></div><span class="cov-pct ok">82%</span></div>
+          <div class="cov-row"><span class="cov-label">Cycle count</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:78%"></div></div><span class="cov-pct ok">78%</span></div>
+          <div class="cov-row"><span class="cov-label">Batch / serial tracking</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-warn" style="width:65%"></div></div><span class="cov-pct warn">65%</span></div>
+          <div class="cov-row"><span class="cov-label">Goods returns / QC</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-warn" style="width:40%"></div></div><span class="cov-pct warn">40%</span></div>
+          <div class="cov-row"><span class="cov-label">SRN (missing)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:2%"></div></div><span class="cov-pct bad">0%</span></div>
+          <div class="cov-row"><span class="cov-label">E2E (browser)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:2%"></div></div><span class="cov-pct bad">0%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🔬</span><span class="card-title">E2E Suite Coverage</span></div>
+      <div class="card-body" style="padding:0">
+        <table class="e2e-table">
+          <thead><tr><th>User Journey</th><th>Status</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>Raise indent → create GRN → stock receipt → balance update</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Issue stock to department → movement line → ledger entry</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Cycle count: initiate → physical count → supervisor approve</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Low-stock alert → reorder trigger → indent auto-creation</td><td><span class="status-pill pill-miss">Missing</span></td><td>P1</td></tr>
+            <tr><td>Goods return: QC reject → disposition → stock adjustment</td><td><span class="status-pill pill-miss">Missing</span></td><td>P1</td></tr>
+            <tr><td>Batch expiry warning display on inventory list</td><td><span class="status-pill pill-miss">Missing</span></td><td>P2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card golive-card">
+    <div class="card-head"><span class="card-icon">🚦</span><span class="card-title">Go-live Readiness Gates — Inventory</span></div>
+    <div class="card-body" style="padding:0">
+      <table class="golive-table">
+        <thead><tr><th>Gate</th><th>Area</th><th>Status</th><th>Action Required</th></tr></thead>
+        <tbody>
+          <tr><td class="gate-name">SRN (Store Receipt Note)</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Build table + service route + UI (4-day effort)</td></tr>
+          <tr><td class="gate-name">Cycle-count approval UI</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add supervisor approve/reject action panel</td></tr>
+          <tr><td class="gate-name">Goods-return QC verdict screen</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Wire qcStatus UI to existing backend endpoint</td></tr>
+          <tr><td class="gate-name">Stock-service → inventory migration</td><td class="gate-area">Architecture</td><td><span class="status-pill pill-part">⚠ Partial</span></td><td>Redirect legacy /stock/* routes; remove proxy</td></tr>
+          <tr><td class="gate-name">Forecast chart alt-text table</td><td class="gate-area">WCAG §1.1.1</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td">Add visually-hidden &lt;table&gt; alongside chart</td></tr>
+          <tr><td class="gate-name">Recon color + shape encoding</td><td class="gate-area">WCAG §1.4.1</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add ▲/▼ icons alongside red/green diff values</td></tr>
+          <tr><td class="gate-name">FIFO costing correctness</td><td class="gate-area">Data integrity</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>Property-based tests passing (95% coverage)</td></tr>
+          <tr><td class="gate-name">RLS isolation per tenant</td><td class="gate-area">Security</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>rls-isolation.test.ts passing on all stores</td></tr>
+          <tr><td class="gate-name">Three-way match (PO/GRN/Invoice)</td><td class="gate-area">Integration</td><td><span class="status-pill pill-part">⚠ Partial</span></td><td>Unit tests pass; LocalStack E2E gated — needs live run</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<!-- ════════════════════════════════════════════════
+     INTEGRATION CHAIN PANEL
+════════════════════════════════════════════════ -->
+<section id="panel-int" class="panel">
+
+  <div class="kpi-strip">
+    <div class="kpi-card warn">
+      <div class="kpi-label">UX vs World-class</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">68</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:68%"></div></div>
+      <div class="kpi-note">GRN form complete; no SRN; GeM env-gated</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">WCAG AA Score</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">63</span><span class="kpi-denom">/100</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:63%"></div></div>
+      <div class="kpi-note">GRN form needs ARIA; three-way match table needs caption</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Unit + Integration</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">74</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:74%"></div></div>
+      <div class="kpi-note">Cross-service chains tested; LocalStack gated</div>
+    </div>
+    <div class="kpi-card bad">
+      <div class="kpi-label">E2E Coverage</div>
+      <div class="kpi-score-row"><span class="kpi-num bad">18</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-bad" style="width:18%"></div></div>
+      <div class="kpi-note">3 procurement specs; no end-to-end chain spec</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Go-live Readiness</div>
+      <div class="kpi-score-row"><span class="kpi-num warn">63</span><span class="kpi-denom">%</span></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill kpi-fill-warn" style="width:63%"></div></div>
+      <div class="kpi-note">SRN gap + GeM config + pre-bid attendance gap</div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🔗</span><span class="card-title">Integration Chain — UX Audit</span></div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">GRN creation form → PO line-item selection → acceptance/rejection UI complete</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">Three-way match (PO ↔ GRN ↔ Invoice) UI present with match status indicator</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">procurement.grn.accepted → inventory movement chain tested in procurement-stock-chains.test.ts</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">No GRN edit endpoint — GRNs can only be accepted/rejected; partial-delivery amendment not supported</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">SRN (Store Receipt Note) entirely absent — GFR rule 149 requires SRN before payment authorisation</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">GeM integration returns meta.integrationDisabled:true unless GEM_ENABLED env is set — must be configured for prod</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">Pre-bid conference attendee count always 0 — system models Q&amp;A threads, not meeting attendance; documented gap</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">No UI to track PO milestone delivery — backend milestone table exists but no frontend</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">three-way-match-live.test.ts gated behind LocalStack env — not run in standard CI pipeline</span><span class="severity-chip sev-p1">P1</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-icon">♿</span><span class="card-title">WCAG 2.2 AA — Integration Screens</span></div>
+      <div class="card-body">
+        <div class="finding-list">
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">GRN line-item table uses &lt;th scope="col"&gt; headers correctly</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row pass"><span class="finding-icon">✓</span><span class="finding-text">PO approval status uses color + text label (not color alone)</span><span class="severity-chip sev-ok">PASS</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">CreateGRNForm: required field indicators (*) not associated with fieldset or aria-required="true"</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Three-way match table: no &lt;caption&gt; — table purpose not announced to screen readers</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">DispatchPOActions modal: focus not trapped — keyboard users can tab behind modal overlay</span><span class="severity-chip sev-p0">P0</span></div>
+          <div class="finding-row fail"><span class="finding-icon">✗</span><span class="finding-text">Vendor scorecard radar chart: no data table alternative (same gap as forecast chart)</span><span class="severity-chip sev-p1">P1</span></div>
+          <div class="finding-row warn"><span class="finding-icon">⚠</span><span class="finding-text">LineItemsEditor: delete row button has no accessible label — only "×" character with no aria-label</span><span class="severity-chip sev-p1">P1</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🧪</span><span class="card-title">Test Coverage — Chain Tests</span></div>
+      <div class="card-body">
+        <div class="cov-list">
+          <div class="cov-row"><span class="cov-label">GRN lifecycle</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:88%"></div></div><span class="cov-pct ok">88%</span></div>
+          <div class="cov-row"><span class="cov-label">PO + amendment</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:86%"></div></div><span class="cov-pct ok">86%</span></div>
+          <div class="cov-row"><span class="cov-label">Vendor scorecard</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:82%"></div></div><span class="cov-pct ok">82%</span></div>
+          <div class="cov-row"><span class="cov-label">Indent → PO flow</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:80%"></div></div><span class="cov-pct ok">80%</span></div>
+          <div class="cov-row"><span class="cov-label">procurement→stock chain</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-ok" style="width:78%"></div></div><span class="cov-pct ok">78%</span></div>
+          <div class="cov-row"><span class="cov-label">Three-way match (live)</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-warn" style="width:55%"></div></div><span class="cov-pct warn">55%</span></div>
+          <div class="cov-row"><span class="cov-label">SRN</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:2%"></div></div><span class="cov-pct bad">0%</span></div>
+          <div class="cov-row"><span class="cov-label">PO milestone delivery UI</span><div class="cov-bar-wrap"><div class="cov-bar-fill kpi-fill-bad" style="width:2%"></div></div><span class="cov-pct bad">0%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-icon">🔬</span><span class="card-title">E2E Suite Coverage — Integration</span></div>
+      <div class="card-body" style="padding:0">
+        <table class="e2e-table">
+          <thead><tr><th>User Journey</th><th>Status</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>Indent → RFQ → PO → GRN → stock-receipt (full chain)</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>PO dispatch → GRN accept → inventory balance verified</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Three-way match: flag mismatch → payment block</td><td><span class="status-pill pill-miss">Missing</span></td><td>P0</td></tr>
+            <tr><td>Vendors list page renders with live data</td><td><span class="status-pill pill-ok">✓ Exists</span></td><td>P0</td></tr>
+            <tr><td>Indent creation form → POST → 202 Accepted</td><td><span class="status-pill pill-ok">✓ Exists</span></td><td>P0</td></tr>
+            <tr><td>Procurement officer full persona journey</td><td><span class="status-pill pill-part">⚠ Persona</span></td><td>P1</td></tr>
+            <tr><td>GRN partial delivery → PO amendment → re-approval</td><td><span class="status-pill pill-miss">Missing</span></td><td>P1</td></tr>
+            <tr><td>GeM order sync → PO auto-creation</td><td><span class="status-pill pill-miss">Missing</span></td><td>P2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card golive-card">
+    <div class="card-head"><span class="card-icon">🚦</span><span class="card-title">Go-live Readiness Gates — Integration Chain</span></div>
+    <div class="card-body" style="padding:0">
+      <table class="golive-table">
+        <thead><tr><th>Gate</th><th>Area</th><th>Status</th><th>Action Required</th></tr></thead>
+        <tbody>
+          <tr><td class="gate-name">SRN before payment authorisation</td><td class="gate-area">GFR Rule 149</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Build SRN: DB table + service endpoint + web form</td></tr>
+          <tr><td class="gate-name">GRN partial-delivery edit</td><td class="gate-area">Feature completeness</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add PATCH /v1/procurement/grns/:id endpoint + form</td></tr>
+          <tr><td class="gate-name">DispatchPOActions focus trap</td><td class="gate-area">WCAG §2.1.2</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add focus-trap-react or equivalent on modal open</td></tr>
+          <tr><td class="gate-name">GeM integration configured</td><td class="gate-area">Integration</td><td><span class="status-pill pill-part">⚠ Partial</span></td><td>Set GEM_ENABLED + GEM_API_KEY in prod environment</td></tr>
+          <tr><td class="gate-name">Three-way match live CI gate</td><td class="gate-area">CI / QA</td><td><span class="status-pill pill-part">⚠ Partial</span></td><td>Enable LocalStack job in CI for nightly three-way-match</td></tr>
+          <tr><td class="gate-name">Full procurement chain E2E</td><td class="gate-area">QA gate</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Write indent→PO→GRN→inventory spec</td></tr>
+          <tr><td class="gate-name">CreateGRNForm ARIA required</td><td class="gate-area">WCAG §1.3.1</td><td><span class="status-pill pill-miss">✗ Fail</span></td><td>Add aria-required="true" + fieldset/legend structure</td></tr>
+          <tr><td class="gate-name">PO → GRN event chain</td><td class="gate-area">Integration</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>procurement-stock-chains.test.ts passing</td></tr>
+          <tr><td class="gate-name">Vendor PII encryption</td><td class="gate-area">Security</td><td><span class="status-pill pill-ok">✓ Pass</span></td><td>pii-encryption.property.test.ts passing</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<!-- ════════════════════════════════════════════════
+     SHARED SPRINT ROADMAP (always visible)
+════════════════════════════════════════════════ -->
+<div class="roadmap-section">
+  <div class="roadmap-head">Sprint Roadmap to Go-live</div>
+  <div class="roadmap-grid">
+
+    <!-- Sprint 21 -->
+    <div class="sprint-card">
+      <div class="sprint-hd s21">
+        <span>Sprint 21 — P0 Functional Gaps</span>
+        <span class="sprint-dates">Aug 18 – Aug 29</span>
+      </div>
+      <div class="sprint-tasks">
+        <div class="task-row"><span class="task-mod mod-inv">INV</span>Build SRN: DB migration + inventory-service route + web form + unit tests</div>
+        <div class="task-row"><span class="task-mod mod-inv">INV</span>Cycle-count supervisor approve/reject UI panel (wire existing backend)</div>
+        <div class="task-row"><span class="task-mod mod-inv">INV</span>Goods-return QC verdict screen — trigger qcStatus disposition</div>
+        <div class="task-row"><span class="task-mod mod-estab">ESTAB</span>consumables/domain.ts + repo.ts — stock-out + reorder-level logic</div>
+        <div class="task-row"><span class="task-mod mod-estab">ESTAB</span>records/consumer.ts line 255 — replace hardcoded "B" with param-driven category</div>
+        <div class="task-row"><span class="task-mod mod-int">INT</span>PATCH /v1/procurement/grns/:id — partial-delivery amendment endpoint + form</div>
+        <div class="task-row"><span class="task-mod mod-inv">INV</span>Redirect /stock/* → /inventory/* + remove stock-service proxy module</div>
+      </div>
+    </div>
+
+    <!-- Sprint 22 -->
+    <div class="sprint-card">
+      <div class="sprint-hd s22">
+        <span>Sprint 22 — WCAG AA + UX Polish</span>
+        <span class="sprint-dates">Sep 1 – Sep 12</span>
+      </div>
+      <div class="sprint-tasks">
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>Add skip-to-main &lt;a href="#main"&gt; to all three module layouts</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>Fix file status badge contrast: #FF6B00 → #C55200 (passes AA 4.7:1)</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>estab/files table: keyboard row selection (Enter/Space → navigate to detail)</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>NotificationsPanel: add aria-live="polite" + aria-atomic="true"</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>Inventory recon: add ▲/▼ icons alongside red/green diff (not color-only)</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>DispatchPOActions modal: add focus trap; Escape to close</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>CreateGRNForm: aria-required + fieldset/legend + error announcements</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>LineItemsEditor delete button: aria-label="Remove item N"</div>
+        <div class="task-row"><span class="task-mod mod-ux">UX</span>Add empty-state illustrations to estab/files, estab/meetings, estab/vehicles</div>
+        <div class="task-row"><span class="task-mod mod-ux">UX</span>Mobile overflow audit: overflow-x:auto on all tables; test at 375 px</div>
+      </div>
+    </div>
+
+    <!-- Sprint 23 -->
+    <div class="sprint-card">
+      <div class="sprint-hd s23">
+        <span>Sprint 23 — E2E Suite</span>
+        <span class="sprint-dates">Sep 15 – Sep 26</span>
+      </div>
+      <div class="sprint-tasks">
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>estab: create-file → noting → DFA approval → dispatch spec</div>
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>estab: quarters application → allotment → occupation flow</div>
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>inventory: GRN → stock receipt → balance verified → low-stock alert</div>
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>inventory: cycle-count initiate → physical count → supervisor approve</div>
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>integration: indent → PO → GRN → inventory movement full chain</div>
+        <div class="task-row"><span class="task-mod mod-e2e">E2E</span>integration: three-way match mismatch → payment block flow</div>
+        <div class="task-row"><span class="task-mod mod-wcag">WCAG</span>Add visually-hidden data tables for forecast + vendor scorecard charts</div>
+        <div class="task-row"><span class="task-mod mod-int">INT</span>Enable LocalStack three-way-match gate in nightly CI pipeline</div>
+      </div>
+    </div>
+
+    <!-- Sprint 24 -->
+    <div class="sprint-card">
+      <div class="sprint-hd s24">
+        <span>Sprint 24 — Go-live Gates</span>
+        <span class="sprint-dates">Sep 29 – Oct 10</span>
+      </div>
+      <div class="sprint-tasks">
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>Set GEM_ENABLED + GEM_API_KEY in production environment; smoke-test GeM sync</div>
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>Performance audit: LCP &lt;2.5 s on estab/files and inventory/list; bundle-split if needed</div>
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>IDOR penetration test on estab/files/:id movements and allotments/:id endpoints</div>
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>Staging full-data smoke run with production-scale tenant (500+ files, 1000+ inventory items)</div>
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>GIGW 3.0 / GFR compliance checklist sign-off by nodal officer</div>
+        <div class="task-row"><span class="task-mod mod-gate">GATE</span>Rollback playbook: test restore-drill for estab + inventory DB schemas</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</main>
+
+<script>
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+function toggleTheme() {
+  const root = document.documentElement;
+  const cur = root.getAttribute('data-theme');
+  root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+}
+// Honor OS preference on load
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.setAttribute('data-theme', 'dark');
+}
+</script>
