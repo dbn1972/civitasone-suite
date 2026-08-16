@@ -4298,6 +4298,132 @@ paths:
         - bearerAuth: []
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Inventory Service — Store Receipt Note / SRN (Req 1.1, GFR Rule 149)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /v1/inventory/srn:
+    post:
+      operationId: createSrn
+      tags: [Inventory]
+      summary: Create a Store Receipt Note
+      description: |
+        Raises a Store Receipt Note (SRN) — the store officer's record of
+        physical acceptance of a GRN into store. GFR Rule 149 requires a
+        signed SRN before any payment against that GRN can be authorised.
+        The referenced GRN must already be `accepted` in procurement-service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grnId]
+              properties:
+                grnId:
+                  type: string
+                  format: uuid
+                remarks:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "202":
+          description: SRN create command accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires store_officer, inventory_manager, inventory_admin, warehouse_officer, or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/inventory/srn/{id}/sign:
+    patch:
+      operationId: signSrn
+      tags: [Inventory]
+      summary: Sign a Store Receipt Note
+      description: |
+        Signs a draft SRN, marking store acceptance as final. This is the
+        gate the three-way-match consumer checks before releasing payment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                receivedAt:
+                  type: string
+                  format: date-time
+                remarks:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "202":
+          description: SRN sign command accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role — requires store_officer, inventory_manager, inventory_admin, warehouse_officer, or super_admin
+      security:
+        - bearerAuth: []
+
+  /v1/inventory/srn/{grnId}:
+    get:
+      operationId: getSrnByGrn
+      tags: [Inventory]
+      summary: Get the Store Receipt Note for a GRN
+      description: Returns the SRN for the given GRN id, or `data: null` if none exists yet.
+      parameters:
+        - name: grnId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SRN found (or null)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    nullable: true
+                    type: object
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Insufficient role
+      security:
+        - bearerAuth: []
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Helpdesk Service
   # ═══════════════════════════════════════════════════════════════════════════
 

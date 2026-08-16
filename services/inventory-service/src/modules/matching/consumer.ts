@@ -14,6 +14,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, INTEGRATION, RESOURCE } from "../../topics.js";
 import { threeWayMatches } from "./schema.js";
 import { threeWayMatch } from "./domain.js";
+import { findByGrnId as findSrnByGrnId } from "../srn/repo.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -26,22 +27,30 @@ export function registerMatchingConsumers(q: Queue): void {
       invoiceQty: number; invoiceRatePaise: string;
       tolerancePct?: number; toleranceAbsPaise?: string;
     };
+
+    const result = threeWayMatch(
+      {
+        poQty: p.poQty,
+        poRatePaise: BigInt(p.poRatePaise),
+        grnQty: p.grnQty,
+        invoiceQty: p.invoiceQty,
+        invoiceRatePaise: BigInt(p.invoiceRatePaise),
+      },
+      {
+        percentageTolerance: p.tolerancePct ?? 5,
+        ...(p.toleranceAbsPaise ? { absoluteAmountPaise: BigInt(p.toleranceAbsPaise) } : {}),
+      },
+    );
+
+    // GFR Rule 149 (Req 1.1): even a clean three-way match must not release
+    // payment without a SIGNED Store Receipt Note. Looked up outside the write
+    // transaction below (SRN reads through its own cache/tx), same pattern as
+    // srn/consumer.ts's cross-service GRN check.
+    const srn = result.paymentBlocked ? null : await findSrnByGrnId(msg.tenantId, p.grnId);
+    const srnSigned = srn?.status === "signed";
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-
-      const result = threeWayMatch(
-        {
-          poQty: p.poQty,
-          poRatePaise: BigInt(p.poRatePaise),
-          grnQty: p.grnQty,
-          invoiceQty: p.invoiceQty,
-          invoiceRatePaise: BigInt(p.invoiceRatePaise),
-        },
-        {
-          percentageTolerance: p.tolerancePct ?? 5,
-          ...(p.toleranceAbsPaise ? { absoluteAmountPaise: BigInt(p.toleranceAbsPaise) } : {}),
-        },
-      );
 
       await tx.insert(threeWayMatches).values({
         id: p.id,
@@ -71,6 +80,29 @@ export function registerMatchingConsumers(q: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { id: p.id, poId: p.poId, grnId: p.grnId, invoiceId: p.invoiceId, status: result.status, paymentBlocked: result.paymentBlocked },
       });
+
+      // SRN gate: a payment-mismatch already blocks (handled above); a clean
+      // match additionally requires a signed SRN before payment.released fires.
+      if (result.paymentBlocked) {
+        await enqueue(tx as EnqueueTx, {
+          topic: EVENTS.paymentBlocked, eventType: EVENTS.paymentBlocked,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, poId: p.poId, grnId: p.grnId, invoiceId: p.invoiceId, reason: "MATCH_EXCEPTION" },
+        });
+      } else if (!srnSigned) {
+        await enqueue(tx as EnqueueTx, {
+          topic: EVENTS.paymentBlocked, eventType: EVENTS.paymentBlocked,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, poId: p.poId, grnId: p.grnId, invoiceId: p.invoiceId, reason: "SRN_MISSING" },
+        });
+      } else {
+        await enqueue(tx as EnqueueTx, {
+          topic: EVENTS.paymentReleased, eventType: EVENTS.paymentReleased,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { id: p.id, poId: p.poId, grnId: p.grnId, invoiceId: p.invoiceId },
+        });
+      }
+
       await audit(tx as EnqueueTx, msg, "create", p.id);
     });
     await cache.invalidateResource(msg.tenantId, RESOURCE.threeWayMatch);

@@ -11,6 +11,7 @@ import { schema as movementsModule } from "../modules/movements/schema.js";
 import { schema as batchesModule } from "../modules/batches/schema.js";
 import { schema as cycleCountModule } from "../modules/cycle-count/schema.js";
 import { schema as matchingModule } from "../modules/matching/schema.js";
+import { schema as srnModule } from "../modules/srn/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 const SCHEMA = {
@@ -20,6 +21,7 @@ const SCHEMA = {
   ...batchesModule,
   ...cycleCountModule,
   ...matchingModule,
+  ...srnModule,
   ...outboxSchema,
 };
 

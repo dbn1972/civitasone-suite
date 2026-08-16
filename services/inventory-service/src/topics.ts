@@ -47,6 +47,9 @@ export const COMMANDS = {
   // Three-way match
   threeWayMatchCreate:  "inventory.match.create",
   threeWayMatchResolve: "inventory.match.resolve",
+  // Store Receipt Note (SRN) — GFR Rule 149 (Req 1.1)
+  srnCreate: "inventory.srn.create",
+  srnSign:   "inventory.srn.sign",
 } as const;
 
 export const EVENTS = {
@@ -94,6 +97,14 @@ export const EVENTS = {
   batchQuarantined: "inventory.batch.quarantined",
   /** Emitted when a batch recall is issued — traces to all issued locations. */
   batchRecalled:     "inventory.batch.recalled",
+  /** Emitted when a Store Receipt Note is created (status 'draft'). */
+  srnCreated:        "inventory.srn.created",
+  /** Emitted when a Store Receipt Note is signed by the store officer. */
+  srnSigned:         "inventory.srn.signed",
+  /** Emitted by the three-way-match consumer when SRN + match are both clear — gates payment. */
+  paymentReleased:   "inventory.payment.released",
+  /** Emitted by the three-way-match consumer when SRN is missing/unsigned or match failed. */
+  paymentBlocked:    "inventory.payment.blocked",
 } as const;
 
 /** Topics owned by OTHER services that inventory-service consumes. */
@@ -124,4 +135,5 @@ export const RESOURCE = {
   serial:        "serial",
   cycleCount:    "cycle-count",
   threeWayMatch: "three-way-match",
+  srn:           "srn",
 } as const;
