@@ -152,6 +152,21 @@ Schemas: `tender`, `bid`, `award`, `vendor`.
 - `award.award` — tender_id, bid_id → `bid.bid`.
 - Emits `procurement.tender.awarded`; contract service reacts to create the contract.
 
+### inventory — `civitas_inventory`
+Schema: `inventory`.
+
+- `inventory.items` / `inventory.categories` / `inventory.uoms` — item master, HSN/GST classification, reorder levels, standard unit cost in paise.
+- `inventory.stores` / `inventory.bins` — physical storage locations.
+- `inventory.movements` / `inventory.movement_lines` / `inventory.stock_ledger` / `inventory.stock_balances` — stock movement and on-hand balance tracking.
+- `inventory.batches` / `inventory.serial_numbers` — batch and serial tracking.
+- `inventory.cost_layers` — FIFO/WAVG costing layers.
+- `inventory.cycle_counts` — physical vs system count reconciliation with supervisor approval.
+- `inventory.reservations` — stock allocated against an indent/PO but not yet issued.
+- `inventory.goods_returns` — returned/rejected items with QC gate (qcStatus, disposition).
+- `inventory.three_way_matches` — PO × GRN × Invoice verification outcomes; gates payment authorisation via `payment_blocked`. `grn_id`, `po_id`, `invoice_id` are plain uuids (no cross-database FK — see §6).
+- `inventory.store_receipt_notes` — id, tenant_id, grn_id (plain uuid, no cross-database FK — see §6), store_officer_id, received_at, remarks, status (`draft` | `signed`, CHECK-constrained), created_at. Store Receipt Note (SRN): GFR Rule 149 requires a signed SRN before payment against a GRN is authorised. Unique on (tenant_id, grn_id) — one SRN per GRN. The three-way-match consumer checks `status = 'signed'` before publishing `payment.released`; absent or draft publishes `payment.blocked` with `reason: 'SRN_MISSING'`.
+- Emits `srn.created` / `srn.signed` (consumed by the matching module); consumes GRN acceptance state from procurement-service events.
+
 ### workflow — `civitas_workflow`
 Schemas: `definition`, `instance`, `task`.
 
