@@ -25,11 +25,23 @@ export async function drainQueue(): Promise<void> {
   else await new Promise<void>((r) => setTimeout(r, 400));
 }
 
-/** Register every consumer against a stub bus and expose the handlers by topic. */
+/** Register every consumer against a stub bus and expose the handlers by topic.
+ *
+ * The stub stores ALL subscribers per topic in an array, mirroring real-queue
+ * fan-out semantics. Using a plain Map that overwrites on each subscribe() call
+ * silently dropped every handler except the last one registered for a topic —
+ * e.g. registerCommissionConsumers() subscribes to EVENTS.dealClosed AFTER
+ * registerOnboardingConsumers(), so the onboarding handler was never reachable
+ * via captureHandlers().handlerFor(EVENTS.dealClosed).
+ */
 export function captureHandlers(): { handlerFor: (topic: string) => Handler } {
-  const handlers = new Map<string, Handler>();
+  const handlers = new Map<string, Handler[]>();
   const stub = {
-    subscribe: (topic: string, handler: Handler) => { handlers.set(topic, handler); },
+    subscribe: (topic: string, handler: Handler) => {
+      const list = handlers.get(topic) ?? [];
+      list.push(handler);
+      handlers.set(topic, list);
+    },
     publish: async () => "stub-id",
     start: async () => {},
     stop: async () => {},
@@ -37,9 +49,15 @@ export function captureHandlers(): { handlerFor: (topic: string) => Handler } {
   registerAllConsumers(stub as never);
   return {
     handlerFor(topic: string): Handler {
-      const handler = handlers.get(topic);
-      if (!handler) throw new Error(`no consumer registered for topic "${topic}"`);
-      return handler;
+      const list = handlers.get(topic);
+      if (!list || list.length === 0) throw new Error(`no consumer registered for topic "${topic}"`);
+      // Composite: invoke every subscriber in registration order, exactly as the
+      // real queue delivers a message to all subscribers for the same topic.
+      return async (msg: CommandEnvelope) => {
+        for (const h of list) {
+          await h(msg);
+        }
+      };
     },
   };
 }
