@@ -67,7 +67,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - `services/estab-service/tests/consumables.test.ts`: boundary tests + delta accumulation
   - _Requirements: 1.3, 5.1_
 
-- [ ] 8. Fix records category placeholder
+- [x] 8. Fix records category placeholder
   - `services/estab-service/src/modules/records/consumer.ts` ~line 255: replace `recordCategory: "B"` with a derived value
   - Add a `getRecordCategory(fileType: string, classificationLevel: string): string` helper (e.g. "A" for Top Secret, "B" for Secret, "C" for Confidential, "D" for general)
   - Unit test asserting each classification maps to the correct category letter

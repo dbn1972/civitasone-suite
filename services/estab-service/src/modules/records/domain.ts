@@ -32,6 +32,34 @@ export function assertValidCategory(v: string): asserts v is RecordCategory {
 }
 
 /**
+ * Derive the CSMOP record category from the file's security classification
+ * (canonical values from `modules/files/domain.ts` FILE_CLASSIFICATIONS:
+ * `top_secret` | `secret` | `confidential` | `public`, matched
+ * case-insensitively). `fileType` (CSMOP file-type taxonomy — main / part /
+ * volume / linked / standing_guard / ephemeral) is accepted for signature
+ * parity with the requirement and reserved for future taxonomy-based
+ * overrides, but the current statutory mapping (docs/specs/
+ * estab-inv-int-go-live/requirements.md §1.4) is driven solely by
+ * classification: Top Secret → A (permanent), Secret → B, Confidential → C,
+ * anything else (public / restricted / unclassified / unrecognised) → D
+ * (general).
+ */
+export function getRecordCategory(fileType: string, classificationLevel: string): RecordCategory {
+  void fileType;
+  switch (classificationLevel.trim().toLowerCase()) {
+    case "top_secret":
+    case "top secret":
+      return "A";
+    case "secret":
+      return "B";
+    case "confidential":
+      return "C";
+    default:
+      return "D";
+  }
+}
+
+/**
  * Review-due date = fromDate + retention_years (whole years). Returns `null`
  * for Category A (permanent records are never review-due / weedable).
  */

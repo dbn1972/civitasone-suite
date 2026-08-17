@@ -17,7 +17,7 @@ import { estabFileRecord, estabWeedout } from "../src/modules/records/schema.js"
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerRecordsConsumers } from "../src/modules/records/consumer.js";
 import { COMMANDS } from "../src/modules/records/commands.js";
-import { assertWeedable, computeReviewDueDate, DomainError } from "../src/modules/records/domain.js";
+import { assertWeedable, computeReviewDueDate, getRecordCategory, DomainError } from "../src/modules/records/domain.js";
 
 /**
  * Test-harness fix: `new MemoryQueue()` used directly here (not the
@@ -245,5 +245,43 @@ describe("assertWeedable — pure guard", () => {
   it("passes on/after the review-due date", () => {
     const due = new Date("2000-01-01T00:00:00.000Z");
     expect(() => assertWeedable("E", due, new Date())).not.toThrow();
+  });
+});
+
+// ── getRecordCategory — classification → category derivation (req 1.4) ─────
+
+describe("getRecordCategory — classification → category mapping", () => {
+  it("maps top_secret to category A", () => {
+    expect(getRecordCategory("main", "top_secret")).toBe("A");
+  });
+
+  it("maps secret to category B", () => {
+    expect(getRecordCategory("main", "secret")).toBe("B");
+  });
+
+  it("maps confidential to category C", () => {
+    expect(getRecordCategory("main", "confidential")).toBe("C");
+  });
+
+  it("maps public (general/unclassified) to category D", () => {
+    expect(getRecordCategory("main", "public")).toBe("D");
+  });
+
+  it("is case-insensitive and tolerates surrounding whitespace", () => {
+    expect(getRecordCategory("main", "  Top_Secret  ")).toBe("A");
+    expect(getRecordCategory("main", "SECRET")).toBe("B");
+    expect(getRecordCategory("main", "Confidential")).toBe("C");
+  });
+
+  it("falls back to category D for any unrecognised classification", () => {
+    expect(getRecordCategory("main", "restricted")).toBe("D");
+    expect(getRecordCategory("main", "unclassified")).toBe("D");
+    expect(getRecordCategory("main", "")).toBe("D");
+  });
+
+  it("is independent of fileType — the CSMOP file-type taxonomy does not change the derived category", () => {
+    for (const fileType of ["main", "part", "volume", "linked", "standing_guard", "ephemeral"]) {
+      expect(getRecordCategory(fileType, "secret")).toBe("B");
+    }
   });
 });
