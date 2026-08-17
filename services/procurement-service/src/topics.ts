@@ -15,6 +15,7 @@ export const COMMANDS = {
   grnCreate:       "procurement.grn.create",
   grnAccept:       "procurement.grn.accept",
   grnReject:       "procurement.grn.reject",
+  grnAmend:        "procurement.grn.amend",
   auctionCreate:   "procurement.auction.create",
   bidSubmit:       "procurement.bid.submit",
   auctionClose:    "procurement.auction.close",
@@ -80,6 +81,7 @@ export const EVENTS = {
   poApprovalRejected:  "procurement.po.approval_rejected",
   grnAccepted:         "procurement.grn.accepted",
   grnRejected:         "procurement.grn.rejected",
+  grnAmended:          "procurement.grn.amended",
   vendorBlacklisted:   "procurement.vendor.blacklisted",
   auctionClosed:       "procurement.auction.closed",
   // Tender lifecycle events

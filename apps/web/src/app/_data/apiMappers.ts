@@ -272,7 +272,7 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
   };
 }
 
-const GRN_STATUSES = new Set(["draft", "received", "quality_check", "accepted", "partially_rejected", "rejected"]);
+const GRN_STATUSES = new Set(["draft", "under_inspection", "received", "quality_check", "accepted", "partially_rejected", "rejected"]);
 
 function normalizeGrnStatus(raw: string | null): GRNSummary["status"] {
   const key = (raw ?? "draft").toLowerCase();

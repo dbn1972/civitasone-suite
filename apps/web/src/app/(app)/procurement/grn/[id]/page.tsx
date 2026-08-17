@@ -3,15 +3,24 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
 import { getProcurementGRNById, getSrnByGrn } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { AmendGrnForm } from "./AmendGrnForm";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
+  under_inspection: "Under Inspection",
   received: "Received",
   quality_check: "Quality Check",
   accepted: "Accepted",
   partially_rejected: "Partially Rejected",
   rejected: "Rejected",
 };
+
+// Req 1.2 — GRN partial-delivery amendment. Only editable while `draft` or
+// `under_inspection`; the server rejects a PATCH after that with 409
+// GRN_NOT_AMENDABLE, so the UI gate mirrors the same rule.
+function canAmendGrn(status: string): boolean {
+  return status === "draft" || status === "under_inspection";
+}
 
 type ItemRow = Record<string, unknown> & {
   itemCode: string;
@@ -143,7 +152,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
         </Card>
       ) : null}
 
-      {grn.items.length > 0 && (
+      {grn.items.length > 0 && canAmendGrn(grn.status) ? (
+        <Card title="Amend received items" padding>
+          <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted, #6b7280)" }}>
+            This GRN is still {STATUS_LABELS[grn.status] ?? grn.status} — update received and accepted
+            quantities to record a partial delivery. GRN number, vendor, and PO reference cannot be changed.
+          </p>
+          <AmendGrnForm grnId={grn.id} items={grn.items} />
+        </Card>
+      ) : grn.items.length > 0 ? (
         <Card title="Received items">
           <DataTable<ItemRow>
             columns={ITEM_COLUMNS}
@@ -151,7 +168,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
             pageSize={50}
           />
         </Card>
-      )}
+      ) : null}
     </>
   );
 }

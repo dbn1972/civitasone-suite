@@ -951,6 +951,7 @@ export type RFQDetail = RFQSummary & {
 export type GRNStatus =
   | "pending"
   | "draft"
+  | "under_inspection"
   | "received"
   | "quality_check"
   | "accepted"

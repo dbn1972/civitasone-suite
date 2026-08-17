@@ -43,3 +43,24 @@ export function assertQtyValid(items: GrnItem[]): void {
     }
   }
 }
+
+/**
+ * SVC/GRN-amend (Req 1.2): a GRN may only be amended (partial-delivery qty
+ * correction) while it is still in `draft` or `under_inspection`. Once a
+ * three-way-match decision has been recorded (`accepted` / `rejected` /
+ * `partial`), the GRN is immutable — amending it after acceptance would let a
+ * store officer silently rewrite a financial record the payment gate already
+ * relied on. `partial` is the historical column-check name for a rejected
+ * three-way-match outcome (see migration 0015) and is likewise terminal.
+ */
+export function canAmendGrn(grn: { status: string }): boolean {
+  return grn.status === "draft" || grn.status === "under_inspection";
+}
+
+/** Defense-in-depth: the consumer re-checks amendability under the DB lock,
+ * since the route-level check and the consumer write are not atomic. */
+export function assertGrnAmendable(grn: { status: string }): void {
+  if (!canAmendGrn(grn)) {
+    throw new DomainError("GRN_NOT_AMENDABLE", `GRN in status '${grn.status}' cannot be amended`);
+  }
+}
