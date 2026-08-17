@@ -45,6 +45,8 @@ interface DataTableProps<T extends Record<string, unknown>> {
   exportable?: boolean;
   /** Filename for CSV export (without extension). */
   exportFilename?: string;
+  /** Screen-reader-only <caption> describing the table's purpose/scope. */
+  caption?: string;
 }
 
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
@@ -85,6 +87,7 @@ export function DataTable<T extends Record<string, unknown>>({
   emptyAction,
   exportable = false,
   exportFilename = "export",
+  caption,
 }: DataTableProps<T>) {
   const router = useRouter();
 
@@ -200,6 +203,7 @@ export function DataTable<T extends Record<string, unknown>>({
       ) : (
         <div className="tbl-wrap">
         <table className="tbl">
+          {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead>
             <tr>
               {columns.map((col) => {
