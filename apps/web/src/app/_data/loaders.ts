@@ -81,6 +81,7 @@ import type {
   GRNDetail,
   GoodsReturnDetail,
   SrnDetail,
+  CycleCountDetail,
   TenderSummary,
   TenderDetail,
   PurchaseOrderListItem,
@@ -328,6 +329,7 @@ import {
   mapProcurementGRNDetail,
   mapSrnDetail,
   mapGoodsReturnDetail,
+  mapCycleCountDetail,
   mapProcurementVendorDetails,
   mapProcurementVendorDetail,
   mapPurchaseOrderSummaries,
@@ -2344,6 +2346,18 @@ export async function getGoodsReturnById(id: string): Promise<LoaderResult<Goods
     mapResponse: (p) => {
       const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
       return data ? mapGoodsReturnDetail(data) : null;
+    },
+  });
+}
+
+/** Cycle count detail — inventory-service, supervisor approve/reject workflow. */
+export async function getCycleCountById(id: string): Promise<LoaderResult<CycleCountDetail | null>> {
+  return fetchJson<unknown, CycleCountDetail | null>(`/api/v1/inventory/cycle-counts/${id}`, null, {
+    revalidateSeconds: 15,
+    telemetryKey: "inventory.cycleCount.detail",
+    mapResponse: (p) => {
+      const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
+      return data ? mapCycleCountDetail(data) : null;
     },
   });
 }

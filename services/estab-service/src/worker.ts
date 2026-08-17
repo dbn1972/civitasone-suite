@@ -22,6 +22,7 @@ import { registerReferencingConsumers } from "./modules/referencing/consumer.js"
 import { registerCorrespondenceConsumers } from "./modules/correspondence/consumer.js";
 import { registerRecordsConsumers } from "./modules/records/consumer.js";
 import { registerEsignConsumers } from "./modules/esign/consumer.js";
+import { registerConsumablesConsumers } from "./modules/consumables/consumer.js";
 
 const log = pino({ name: "estab-worker" });
 
@@ -54,6 +55,7 @@ registerReferencingConsumers(queue);
 registerCorrespondenceConsumers(queue);
 registerRecordsConsumers(queue);
 registerEsignConsumers(queue);
+registerConsumablesConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

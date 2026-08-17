@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -416,5 +416,91 @@ describe("mapGoodsReturnDetail", () => {
   it("returns null for a non-object payload", () => {
     expect(mapGoodsReturnDetail(null)).toBeNull();
     expect(mapGoodsReturnDetail("not an object")).toBeNull();
+  });
+});
+
+describe("mapCycleCountDetail", () => {
+  it("maps a pending_approval cycle count with all fields present", () => {
+    const mapped = mapCycleCountDetail({
+      id: "cc-1",
+      itemId: "item-1",
+      warehouseId: "wh-1",
+      systemQty: 100,
+      physicalQty: 80,
+      variance: -20,
+      absVariance: 20,
+      autoAdjustThreshold: 10,
+      reasonCode: "damaged",
+      status: "pending_approval",
+      countedAt: "2026-08-16T09:00:00.000Z",
+      createdAt: "2026-08-16T09:00:00.000Z",
+      version: 1,
+    });
+    expect(mapped).toEqual({
+      id: "cc-1",
+      itemId: "item-1",
+      warehouseId: "wh-1",
+      systemQty: 100,
+      physicalQty: 80,
+      variance: -20,
+      absVariance: 20,
+      autoAdjustThreshold: 10,
+      reasonCode: "damaged",
+      status: "pending_approval",
+      approvedBy: undefined,
+      approvedAt: undefined,
+      rejectedBy: undefined,
+      rejectedAt: undefined,
+      rejectionReason: undefined,
+      countedAt: "2026-08-16T09:00:00.000Z",
+      createdAt: "2026-08-16T09:00:00.000Z",
+      version: 1,
+    });
+  });
+
+  it("defaults status to pending for an unrecognised status value", () => {
+    const mapped = mapCycleCountDetail({ id: "cc-1", itemId: "item-1", warehouseId: "wh-1", status: "bogus" });
+    expect(mapped?.status).toBe("pending");
+  });
+
+  it("returns null when id is missing", () => {
+    expect(mapCycleCountDetail({ itemId: "item-1", warehouseId: "wh-1" })).toBeNull();
+  });
+
+  it("returns null when itemId is missing", () => {
+    expect(mapCycleCountDetail({ id: "cc-1", warehouseId: "wh-1" })).toBeNull();
+  });
+
+  it("returns null when warehouseId is missing", () => {
+    expect(mapCycleCountDetail({ id: "cc-1", itemId: "item-1" })).toBeNull();
+  });
+
+  it("returns null for a non-object payload", () => {
+    expect(mapCycleCountDetail(null)).toBeNull();
+    expect(mapCycleCountDetail("not an object")).toBeNull();
+  });
+
+  it("defaults numeric and optional fields when absent", () => {
+    const mapped = mapCycleCountDetail({ id: "cc-1", itemId: "item-1", warehouseId: "wh-1" });
+    expect(mapped).toEqual({
+      id: "cc-1",
+      itemId: "item-1",
+      warehouseId: "wh-1",
+      systemQty: 0,
+      physicalQty: 0,
+      variance: 0,
+      absVariance: 0,
+      autoAdjustThreshold: 0,
+      reasonCode: "—",
+      status: "pending",
+      approvedBy: undefined,
+      approvedAt: undefined,
+      rejectedBy: undefined,
+      rejectedAt: undefined,
+      rejectionReason: undefined,
+      countedAt: "—",
+      createdAt: "—",
+      version: 1,
+    });
   });
 });

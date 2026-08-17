@@ -1640,6 +1640,34 @@ export type StockLedgerEntry = {
   balance: number;
 };
 
+/**
+ * Cycle count — physical vs. system on-hand quantity comparison, with
+ * auto-adjust threshold and a supervisor approve/reject workflow above it.
+ * Mirrors `services/inventory-service/src/modules/cycle-count/schema.ts`.
+ */
+export type CycleCountStatus = "pending" | "auto_posted" | "pending_approval" | "approved" | "rejected";
+
+export type CycleCountDetail = {
+  id: string;
+  itemId: string;
+  warehouseId: string;
+  systemQty: number;
+  physicalQty: number;
+  variance: number;
+  absVariance: number;
+  autoAdjustThreshold: number;
+  reasonCode: string;
+  status: CycleCountStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  countedAt: string;
+  createdAt: string;
+  version: number;
+};
+
 // ── Audit types ───────────────────────────────────────────────────────────────
 
 export type AuditDashboard = {
