@@ -92,6 +92,19 @@ export type InventorySubstituteRow = {
   createdAt: string;
 };
 
+export type InventoryCycleCountRow = {
+  id: string;
+  itemId: string;
+  warehouseId: string;
+  systemQty: number;
+  physicalQty: number;
+  variance: number;
+  absVariance: number;
+  status: string;
+  reasonCode: string;
+  countedAt: string;
+};
+
 type Envelope<T> = { data?: T[] } | null | undefined;
 
 function listOf<T>(payload: Envelope<T>): T[] {
@@ -152,6 +165,17 @@ export function getInventoryGoodsReturns(): Promise<LoaderResult<InventoryGoodsR
       mapResponse: listOf,
     },
   );
+}
+
+export function getInventoryCycleCounts(status?: string): Promise<LoaderResult<InventoryCycleCountRow[]>> {
+  const path = status
+    ? `/api/v1/inventory/cycle-counts?status=${encodeURIComponent(status)}&limit=200`
+    : "/api/v1/inventory/cycle-counts?limit=200";
+  return fetchJson<Envelope<InventoryCycleCountRow>, InventoryCycleCountRow[]>(path, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "inventory.cycleCounts",
+    mapResponse: listOf,
+  });
 }
 
 /**

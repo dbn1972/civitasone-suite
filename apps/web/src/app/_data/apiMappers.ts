@@ -8,6 +8,7 @@ import type {
   GRNDetail,
   GRNSummary,
   SrnDetail,
+  CycleCountDetail,
   LegalCaseSummary,
   MaintenanceSummary,
   PODetail,
@@ -355,6 +356,47 @@ export function mapSrnDetail(payload: unknown): SrnDetail | null {
     remarks: toText(payload.remarks) ?? undefined,
     status,
     createdAt: toText(payload.createdAt) ?? "—",
+  };
+}
+
+const CYCLE_COUNT_STATUSES = new Set([
+  "pending",
+  "auto_posted",
+  "pending_approval",
+  "approved",
+  "rejected",
+]);
+
+function normalizeCycleCountStatus(raw: string | null): CycleCountDetail["status"] {
+  if (raw && CYCLE_COUNT_STATUSES.has(raw)) return raw as CycleCountDetail["status"];
+  return "pending";
+}
+
+export function mapCycleCountDetail(payload: unknown): CycleCountDetail | null {
+  if (!isRecord(payload)) return null;
+  const id = toText(payload.id);
+  const itemId = toText(payload.itemId);
+  const warehouseId = toText(payload.warehouseId);
+  if (!id || !itemId || !warehouseId) return null;
+  return {
+    id,
+    itemId,
+    warehouseId,
+    systemQty: typeof payload.systemQty === "number" ? payload.systemQty : 0,
+    physicalQty: typeof payload.physicalQty === "number" ? payload.physicalQty : 0,
+    variance: typeof payload.variance === "number" ? payload.variance : 0,
+    absVariance: typeof payload.absVariance === "number" ? payload.absVariance : 0,
+    autoAdjustThreshold: typeof payload.autoAdjustThreshold === "number" ? payload.autoAdjustThreshold : 0,
+    reasonCode: toText(payload.reasonCode) ?? "—",
+    status: normalizeCycleCountStatus(toText(payload.status)),
+    approvedBy: toText(payload.approvedBy) ?? undefined,
+    approvedAt: toText(payload.approvedAt) ?? undefined,
+    rejectedBy: toText(payload.rejectedBy) ?? undefined,
+    rejectedAt: toText(payload.rejectedAt) ?? undefined,
+    rejectionReason: toText(payload.rejectionReason) ?? undefined,
+    countedAt: toText(payload.countedAt) ?? "—",
+    createdAt: toText(payload.createdAt) ?? "—",
+    version: typeof payload.version === "number" ? payload.version : 1,
   };
 }
 

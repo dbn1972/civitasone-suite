@@ -60,7 +60,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Form fields: per-line `receivedQty` and `acceptedQty`; submit calls `PATCH /v1/procurement/grns/:id`
   - _Requirements: 1.2_
 
-- [ ] 7. Implement consumables domain + repo + migration
+- [x] 7. Implement consumables domain + repo + migration
   - Migration: `files.estab_consumables (id, tenant_id, item_id, item_name, balance numeric, reorder_level numeric, unit text, updated_at)` with RLS
   - `services/estab-service/src/modules/consumables/domain.ts`: `isReorderRequired(balance, reorderLevel): boolean`
   - `services/estab-service/src/modules/consumables/repo.ts`: `getBalance(tenantId, itemId)` · `upsertBalance(tenantId, itemId, delta)`
@@ -73,7 +73,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Unit test asserting each classification maps to the correct category letter
   - _Requirements: 1.4_
 
-- [ ] 9. Cycle-count supervisor approval UI
+- [x] 9. Cycle-count supervisor approval UI
   - `apps/web/src/app/(app)/inventory/cycle-counts/[id]/page.tsx` (create if absent)
   - Render current cycle count details (systemQty, physicalQty, variance) and two action buttons: Approve (`PATCH /v1/inventory/cycle-counts/:id/approve`) and Reject
   - Add link from `/inventory/list` to cycle-count detail when status is `pending`
