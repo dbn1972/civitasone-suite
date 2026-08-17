@@ -37,6 +37,19 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    // Legacy /stock/* routes -> /inventory/* (requirement 1.7).
+    // Specific paths must precede the /stock/:path* wildcard: Next.js
+    // evaluates redirects in array order and the first match wins, so a
+    // catch-all listed first would shadow the more specific redirects below.
+    return [
+      { source: '/stock', destination: '/inventory', permanent: true },
+      { source: '/stock/list', destination: '/inventory/list', permanent: true },
+      { source: '/stock/ledger', destination: '/inventory/reconcile', permanent: true },
+      { source: '/stock/dashboard', destination: '/inventory', permanent: true },
+      { source: '/stock/:path*', destination: '/inventory/:path*', permanent: true },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

@@ -85,7 +85,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Submit calls `PATCH /v1/inventory/goods-returns/:id` with `{ qcStatus, disposition, remarks }`
   - _Requirements: 1.6_
 
-- [ ] 11. Redirect legacy `/stock/*` routes to `/inventory/*`
+- [x] 11. Redirect legacy `/stock/*` routes to `/inventory/*`
   - In `apps/web/next.config.js`, add a `redirects()` array:
     - `{ source: '/stock', destination: '/inventory', permanent: true }`
     - `{ source: '/stock/list', destination: '/inventory/list', permanent: true }`
