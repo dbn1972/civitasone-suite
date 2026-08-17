@@ -4,7 +4,7 @@ import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createGrnBody, idParam, rejectGrnBody } from "./validators.js";
+import { createGrnBody, idParam, rejectGrnBody, amendGrnBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -54,6 +54,18 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
     const grn = await queries.getGrn(id, ctx.tenantId);
     if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectGrn(ctx, id, reason));
+  });
+
+  // Req 1.2 — GRN partial-delivery amendment. Only permitted while the GRN is
+  // `draft` or `under_inspection`; commands.amendGrn returns 409
+  // GRN_NOT_AMENDABLE otherwise (checked synchronously, not deferred to the
+  // consumer, so the caller gets an immediate answer).
+  app.patch("/v1/procurement/grns/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = amendGrnBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.amendGrn(ctx, id, body));
   });
 
   app.setErrorHandler(errorHandler);

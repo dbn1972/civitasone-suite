@@ -78,7 +78,7 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
   }));
 }
 
-function mapGrnStatus(status: string): "draft" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {
-  const valid = ["draft", "received", "quality_check", "accepted", "partially_rejected", "rejected"] as const;
+function mapGrnStatus(status: string): "draft" | "under_inspection" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {
+  const valid = ["draft", "under_inspection", "received", "quality_check", "accepted", "partially_rejected", "rejected"] as const;
   return (valid as readonly string[]).includes(status) ? status as typeof valid[number] : "draft";
 }

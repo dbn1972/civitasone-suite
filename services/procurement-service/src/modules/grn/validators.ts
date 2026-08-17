@@ -28,3 +28,16 @@ export const idParam = z.object({ id: z.string().uuid() });
 
 export const rejectGrnBody = z.object({ reason: z.string().min(1).max(500) });
 export type RejectGrnBody = z.infer<typeof rejectGrnBody>;
+
+// Req 1.2 — GRN partial-delivery amendment. Only line quantities change;
+// grnNo, vendorId, and poRef are immutable and are not accepted here.
+const amendGrnLineSchema = z.object({
+  lineId:      z.string().uuid(),
+  receivedQty: z.number().int().nonnegative(),
+  acceptedQty: z.number().int().nonnegative(),
+});
+
+export const amendGrnBody = z.object({
+  lines: z.array(amendGrnLineSchema).min(1),
+});
+export type AmendGrnBody = z.infer<typeof amendGrnBody>;

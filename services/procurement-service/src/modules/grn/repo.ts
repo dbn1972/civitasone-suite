@@ -78,6 +78,23 @@ export async function insertGrnItems(tx: Writer, items: GrnItemInsert[]): Promis
   if (items.length) await tx.insert(procurementGrnItems).values(items);
 }
 
+/** Req 1.2 — amend a single GRN line's received/accepted quantities. */
+export async function updateGrnItemQty(
+  tx: Writer,
+  lineId: string,
+  grnId: string,
+  patch: { receivedQty: number; acceptedQty: number; updatedBy: string },
+): Promise<void> {
+  await (tx as typeof db).update(procurementGrnItems)
+    .set({
+      receivedQty: patch.receivedQty,
+      acceptedQty: patch.acceptedQty,
+      updatedBy: patch.updatedBy,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(procurementGrnItems.id, lineId), eq(procurementGrnItems.grnId, grnId)));
+}
+
 export async function insertInspection(tx: Writer, row: typeof procurementInspections.$inferInsert): Promise<void> {
   await tx.insert(procurementInspections).values(row);
 }

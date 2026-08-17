@@ -893,7 +893,7 @@ export const GRNSummarySchema = z.object({
   receivedBy: z.string(),
   itemCount: z.number(),
   totalValue: z.number(),
-  status: z.enum(["draft", "received", "quality_check", "accepted", "partially_rejected", "rejected"]),
+  status: z.enum(["draft", "under_inspection", "received", "quality_check", "accepted", "partially_rejected", "rejected"]),
   threeWayMatch: z.boolean().optional(),
 });
 export const GRNSummaryListSchema = z.array(GRNSummarySchema);

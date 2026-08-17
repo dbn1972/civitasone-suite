@@ -48,14 +48,14 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add link to SRN from `/procurement/grn/[id]/page.tsx` (below acceptance status)
   - _Requirements: 1.1_
 
-- [ ] 5. Add GRN amendment endpoint
+- [x] 5. Add GRN amendment endpoint
   - In `services/procurement-service/src/modules/grn/routes.ts`: add `PATCH /v1/procurement/grns/:id`
   - `domain.ts`: `canAmendGrn(grn): boolean` — only when `status` is `draft` or `under_inspection`
   - Return 409 with `{ code: 'GRN_NOT_AMENDABLE' }` when guard fails
   - `services/procurement-service/tests/grn-amendment.test.ts`: happy path + 409 guard
   - _Requirements: 1.2, 5.3_
 
-- [ ] 6. Add GRN edit form to web
+- [x] 6. Add GRN edit form to web
   - `apps/web/src/app/(app)/procurement/grn/[id]/page.tsx`: render an edit form when `grn.status` is `draft` or `under_inspection`; read-only view otherwise
   - Form fields: per-line `receivedQty` and `acceptedQty`; submit calls `PATCH /v1/procurement/grns/:id`
   - _Requirements: 1.2_

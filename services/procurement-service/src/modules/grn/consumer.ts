@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeThreeWayMatch, assertQtyValid } from "./domain.js";
+import { computeThreeWayMatch, assertQtyValid, assertGrnAmendable } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
@@ -135,6 +135,38 @@ export function registerGrnConsumers(queue: Queue): void {
         });
       }
       await audit(tx, msg, "create", "grn", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "grn", p.id));
+  });
+
+  // Req 1.2 — GRN partial-delivery amendment. Only receivedQty/acceptedQty
+  // per line change; grnNo, vendorId, poRef stay immutable. Re-asserts the
+  // amendability guard under the transaction (the route-level check and this
+  // write are not atomic, so a GRN accepted between the two must still block).
+  queue.subscribe(COMMANDS.grnAmend, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string;
+      lines: Array<{ lineId: string; receivedQty: number; acceptedQty: number }>;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const grn = await repo.findGrnByIdTx(tx, p.id);
+      if (!grn || grn.tenantId !== p.tenantId) throw new Error(`GRN ${p.id} not found`);
+      assertGrnAmendable(grn);
+      assertQtyValid(p.lines.map((l) => ({ orderedQty: 0, receivedQty: l.receivedQty, acceptedQty: l.acceptedQty })));
+      for (const line of p.lines) {
+        await repo.updateGrnItemQty(tx, line.lineId, p.id, {
+          receivedQty: line.receivedQty,
+          acceptedQty: line.acceptedQty,
+          updatedBy: msg.actorId,
+        });
+      }
+      await enqueue(tx, {
+        topic: EVENTS.grnAmended, eventType: EVENTS.grnAmended,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { grnId: p.id, lines: p.lines },
+      });
+      await audit(tx, msg, "amend", "grn", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "grn", p.id));
   });
