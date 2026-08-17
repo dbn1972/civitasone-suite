@@ -5,9 +5,10 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "./commands.js";
 import {
   RETENTION_YEARS, computeReviewDueDate, assertWeedable, toDateString,
-  assertValidCategory, DomainError, type RecordCategory,
+  assertValidCategory, getRecordCategory, DomainError, type RecordCategory,
 } from "./domain.js";
 import * as repo from "./repo.js";
+import * as filesRepo from "../files/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -249,10 +250,18 @@ export function registerRecordsConsumers(queue: Queue): void {
         createdBy: msg.actorId,
       });
       // If decision is retain, update the next review_due_date on the record.
+      // The category is re-derived from the file's current file-type +
+      // security classification (CSMOP mapping) rather than hardcoded, so a
+      // reclassified file's retention schedule stays correct on annual review.
       if (p.decision === "retain" && p.nextReviewDue) {
+        const file = await filesRepo.findFileById(p.fileId, p.tenantId);
+        const existing = await repo.findRecordTx(tx, p.tenantId, p.fileId);
+        const category = file
+          ? getRecordCategory(file.fileType, file.classification)
+          : ((existing?.recordCategory ?? "D") as RecordCategory);
         await repo.upsertRecord(tx, {
           tenantId: p.tenantId, fileId: p.fileId,
-          recordCategory: "B", // placeholder; upsert only updates review date
+          recordCategory: category,
           reviewDueDate: p.nextReviewDue, createdBy: msg.actorId,
         });
       }
