@@ -73,7 +73,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Unit test asserting each classification maps to the correct category letter
   - _Requirements: 1.4_
 
-- [ ] 9. Cycle-count supervisor approval UI
+- [x] 9. Cycle-count supervisor approval UI
   - `apps/web/src/app/(app)/inventory/cycle-counts/[id]/page.tsx` (create if absent)
   - Render current cycle count details (systemQty, physicalQty, variance) and two action buttons: Approve (`PATCH /v1/inventory/cycle-counts/:id/approve`) and Reject
   - Add link from `/inventory/list` to cycle-count detail when status is `pending`
