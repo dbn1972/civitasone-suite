@@ -111,6 +111,9 @@ export const COMMANDS = {
   leaseRequestSubmit:      "estab.lease.request.submit",
   leaseRequestReview:      "estab.lease.request.review",
   leaseRequestComplete:    "estab.lease.request.complete",
+  // consumables inventory (SVC-061)
+  consumableCreate:        "estab.consumable.create",
+  consumableTransaction:   "estab.consumable.transaction",
 } as const;
 
 /**
@@ -137,6 +140,7 @@ export const EVENTS = {
   spaceMaintenanceRaised: "estab.space.maintenance.raised",
   libraryReturned:      "estab.library.returned",
   libraryRenewed:       "estab.library.renewed",
+  consumableReorderRequired: "estab.consumable.reorder_required",
 } as const;
 
 /** Topics consumed from other services */
