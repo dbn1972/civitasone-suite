@@ -136,4 +136,5 @@ export const RESOURCE = {
   cycleCount:    "cycle-count",
   threeWayMatch: "three-way-match",
   srn:           "srn",
+  goodsReturn:   "goods-return",
 } as const;

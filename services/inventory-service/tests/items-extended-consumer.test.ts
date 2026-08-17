@@ -274,6 +274,31 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     expect(rows[0]!.qcNotes).toBe("good condition");
   });
 
+  it("GET goods-returns/:id -> returns the inspected record with updated qcStatus/disposition (cache invalidated on write)", async () => {
+    const create = await app.inject({
+      method: "POST", url: "/v1/inventory/goods-returns", headers: hdr(TENANT_A, ACTOR_A),
+      payload: { originalIssueId: ITEM_A2, itemId: ITEM_A1, storeId: STORE_A, qty: 4, reason: "QC detail view check" },
+    });
+    const id = create.json().id as string;
+    await drain();
+
+    const beforeInspect = await app.inject({ method: "GET", url: `/v1/inventory/goods-returns/${id}`, headers: hdr(TENANT_A, ACTOR_A) });
+    expect(beforeInspect.statusCode).toBe(200);
+    expect(beforeInspect.json().data.qcStatus).toBe("pending");
+
+    await app.inject({
+      method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
+      payload: { qcStatus: "failed", disposition: "scrap", qcNotes: "cracked casing" },
+    });
+    await drain();
+
+    const afterInspect = await app.inject({ method: "GET", url: `/v1/inventory/goods-returns/${id}`, headers: hdr(TENANT_A, ACTOR_A) });
+    expect(afterInspect.statusCode).toBe(200);
+    expect(afterInspect.json().data.qcStatus).toBe("failed");
+    expect(afterInspect.json().data.disposition).toBe("scrap");
+    expect(afterInspect.json().data.qcNotes).toBe("cracked casing");
+  });
+
   it("re-inspecting an already-inspected goods return is rejected (QC_NOT_PENDING, no double-apply)", async () => {
     const create = await app.inject({
       method: "POST", url: "/v1/inventory/goods-returns", headers: hdr(TENANT_A, ACTOR_A),

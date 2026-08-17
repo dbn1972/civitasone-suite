@@ -53,6 +53,7 @@ export function GoodsReturnsTable({
       <DataTable<InventoryGoodsReturnRow>
         columns={columns}
         rows={rows}
+        rowHref={(row) => `/inventory/goods-returns/${row.id}`}
         sortable
         filterable
         filterPlaceholder="Filter goods returns…"

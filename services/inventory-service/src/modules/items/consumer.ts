@@ -178,6 +178,7 @@ export function registerItemConsumers(rawQueue: Queue): void {
       });
       await emit(tx, msg, EVENTS.goodsReturnCreated, { itemId: p.itemId, storeId: p.storeId, qty: p.qty }, "create", "goods_return", p.id);
     });
+    await invalidate(msg.tenantId, RESOURCE.goodsReturn, p.id);
   });
 
   queue.subscribe(COMMANDS.goodsReturnInspect, async (msg) => {
@@ -198,6 +199,7 @@ export function registerItemConsumers(rawQueue: Queue): void {
       }
       await emit(tx, msg, EVENTS.goodsReturnInspected, { goodsReturnId: p.id, qcStatus: p.qcStatus, disposition: p.disposition }, "inspect", "goods_return", p.id);
     });
+    await invalidate(msg.tenantId, RESOURCE.goodsReturn, p.id);
   });
 }
 

@@ -269,4 +269,10 @@ export async function listGoodsReturns(tenantId: string, limit: number, offset: 
     .limit(limit).offset(offset));
 }
 
+export async function findGoodsReturn(tenantId: string, id: string): Promise<GoodsReturnRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(goodsReturns)
+    .where(and(eq(goodsReturns.id, id), eq(goodsReturns.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 export { toView };

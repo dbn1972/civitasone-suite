@@ -79,6 +79,7 @@ import type {
   RFQDetail,
   GRNSummary,
   GRNDetail,
+  GoodsReturnDetail,
   SrnDetail,
   CycleCountDetail,
   TenderSummary,
@@ -327,6 +328,7 @@ import {
   mapProcurementGRNSummaries,
   mapProcurementGRNDetail,
   mapSrnDetail,
+  mapGoodsReturnDetail,
   mapCycleCountDetail,
   mapProcurementVendorDetails,
   mapProcurementVendorDetail,
@@ -2332,6 +2334,18 @@ export async function getSrnByGrn(grnId: string): Promise<LoaderResult<SrnDetail
     mapResponse: (p) => {
       const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
       return data ? mapSrnDetail(data) : null;
+    },
+  });
+}
+
+/** Single goods return (item back from issue) awaiting/undergoing QC — inventory-service. */
+export async function getGoodsReturnById(id: string): Promise<LoaderResult<GoodsReturnDetail | null>> {
+  return fetchJson<unknown, GoodsReturnDetail | null>(`/api/v1/inventory/goods-returns/${id}`, null, {
+    revalidateSeconds: 15,
+    telemetryKey: "inventory.goodsReturn.detail",
+    mapResponse: (p) => {
+      const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
+      return data ? mapGoodsReturnDetail(data) : null;
     },
   });
 }

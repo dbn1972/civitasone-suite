@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapCycleCountDetail } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -348,6 +348,74 @@ describe("mapSrnDetail", () => {
       status: "draft",
       createdAt: "—",
     });
+  });
+});
+
+describe("mapGoodsReturnDetail", () => {
+  it("maps a fully-inspected goods return", () => {
+    const mapped = mapGoodsReturnDetail({
+      id: "gr-1",
+      originalIssueId: "issue-1",
+      itemId: "item-1",
+      storeId: "store-1",
+      qty: 5,
+      reason: "Defective batch",
+      qcStatus: "passed",
+      qcInspectedBy: "user-1",
+      qcInspectedAt: "2026-08-16T10:00:00.000Z",
+      qcNotes: "Good condition",
+      disposition: "restock",
+      createdAt: "2026-08-16T09:00:00.000Z",
+    });
+    expect(mapped).toEqual({
+      id: "gr-1",
+      originalIssueId: "issue-1",
+      itemId: "item-1",
+      storeId: "store-1",
+      qty: 5,
+      reason: "Defective batch",
+      qcStatus: "passed",
+      qcInspectedBy: "user-1",
+      qcInspectedAt: "2026-08-16T10:00:00.000Z",
+      qcNotes: "Good condition",
+      disposition: "restock",
+      createdAt: "2026-08-16T09:00:00.000Z",
+    });
+  });
+
+  it("defaults qcStatus to 'pending' and disposition to 'pending' when absent", () => {
+    const mapped = mapGoodsReturnDetail({
+      id: "gr-2", originalIssueId: "issue-2", itemId: "item-2", storeId: "store-2",
+      qty: 1, reason: "Wrong item",
+    });
+    expect(mapped?.qcStatus).toBe("pending");
+    expect(mapped?.disposition).toBe("pending");
+    expect(mapped?.qcInspectedBy).toBeNull();
+    expect(mapped?.qcNotes).toBeNull();
+  });
+
+  it("falls back to 'pending' for an unrecognized qcStatus/disposition value", () => {
+    const mapped = mapGoodsReturnDetail({
+      id: "gr-3", originalIssueId: "issue-3", itemId: "item-3", storeId: "store-3",
+      qty: 2, reason: "x", qcStatus: "bogus", disposition: "bogus",
+    });
+    expect(mapped?.qcStatus).toBe("pending");
+    expect(mapped?.disposition).toBe("pending");
+  });
+
+  it("returns null when id is missing", () => {
+    expect(mapGoodsReturnDetail({ originalIssueId: "i", itemId: "it", storeId: "s", qty: 1, reason: "x" })).toBeNull();
+  });
+
+  it("returns null when originalIssueId, itemId, or storeId is missing", () => {
+    expect(mapGoodsReturnDetail({ id: "gr-4", itemId: "it", storeId: "s", qty: 1, reason: "x" })).toBeNull();
+    expect(mapGoodsReturnDetail({ id: "gr-4", originalIssueId: "i", storeId: "s", qty: 1, reason: "x" })).toBeNull();
+    expect(mapGoodsReturnDetail({ id: "gr-4", originalIssueId: "i", itemId: "it", qty: 1, reason: "x" })).toBeNull();
+  });
+
+  it("returns null for a non-object payload", () => {
+    expect(mapGoodsReturnDetail(null)).toBeNull();
+    expect(mapGoodsReturnDetail("not an object")).toBeNull();
   });
 });
 

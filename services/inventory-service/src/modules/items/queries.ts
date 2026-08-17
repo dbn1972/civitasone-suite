@@ -53,3 +53,7 @@ export async function listReservations(tenantId: string, limit: number, offset: 
 export async function listGoodsReturns(tenantId: string, limit: number, offset: number): Promise<GoodsReturnRow[]> {
   return repo.listGoodsReturns(tenantId, limit, offset);
 }
+
+export async function getGoodsReturn(tenantId: string, id: string): Promise<GoodsReturnRow | null> {
+  return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE.goodsReturn, id), () => repo.findGoodsReturn(tenantId, id));
+}

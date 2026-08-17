@@ -188,6 +188,15 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.inspectGoodsReturn(ctx, id, body));
   });
 
+  app.get("/v1/inventory/goods-returns/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const record = await queries.getGoodsReturn(ctx.tenantId, id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "goods return not found");
+    return reply.send({ data: record });
+  });
+
   app.get("/v1/inventory/goods-returns", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

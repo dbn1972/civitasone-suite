@@ -79,7 +79,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add link from `/inventory/list` to cycle-count detail when status is `pending`
   - _Requirements: 1.5_
 
-- [ ] 10. Goods-return QC verdict screen
+- [x] 10. Goods-return QC verdict screen
   - `apps/web/src/app/(app)/inventory/goods-returns/[id]/page.tsx` (create if absent)
   - Render GRN reference, item details, and a QC form: verdict (pass/fail radio), disposition (select: return-to-vendor / scrap / accept-with-penalty), inspector notes
   - Submit calls `PATCH /v1/inventory/goods-returns/:id` with `{ qcStatus, disposition, remarks }`
