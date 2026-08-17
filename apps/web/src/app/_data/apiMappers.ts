@@ -7,6 +7,7 @@ import type {
   IndentSummary,
   GRNDetail,
   GRNSummary,
+  GoodsReturnDetail,
   SrnDetail,
   LegalCaseSummary,
   MaintenanceSummary,
@@ -354,6 +355,34 @@ export function mapSrnDetail(payload: unknown): SrnDetail | null {
     receivedAt: toText(payload.receivedAt) ?? null,
     remarks: toText(payload.remarks) ?? undefined,
     status,
+    createdAt: toText(payload.createdAt) ?? "—",
+  };
+}
+
+const GOODS_RETURN_QC_STATUSES = new Set(["pending", "passed", "failed", "conditional"]);
+const GOODS_RETURN_DISPOSITIONS = new Set(["pending", "restock", "quarantine", "scrap"]);
+
+export function mapGoodsReturnDetail(payload: unknown): GoodsReturnDetail | null {
+  if (!isRecord(payload)) return null;
+  const id = toText(payload.id);
+  const originalIssueId = toText(payload.originalIssueId);
+  const itemId = toText(payload.itemId);
+  const storeId = toText(payload.storeId);
+  if (!id || !originalIssueId || !itemId || !storeId) return null;
+  const qcStatusRaw = toText(payload.qcStatus) ?? "pending";
+  const dispositionRaw = toText(payload.disposition) ?? "pending";
+  return {
+    id,
+    originalIssueId,
+    itemId,
+    storeId,
+    qty: typeof payload.qty === "number" ? payload.qty : Number(payload.qty ?? 0),
+    reason: toText(payload.reason) ?? "",
+    qcStatus: (GOODS_RETURN_QC_STATUSES.has(qcStatusRaw) ? qcStatusRaw : "pending") as GoodsReturnDetail["qcStatus"],
+    qcInspectedBy: toText(payload.qcInspectedBy),
+    qcInspectedAt: toText(payload.qcInspectedAt),
+    qcNotes: toText(payload.qcNotes),
+    disposition: (GOODS_RETURN_DISPOSITIONS.has(dispositionRaw) ? dispositionRaw : "pending") as GoodsReturnDetail["disposition"],
     createdAt: toText(payload.createdAt) ?? "—",
   };
 }

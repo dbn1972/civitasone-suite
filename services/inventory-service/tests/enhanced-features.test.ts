@@ -221,4 +221,19 @@ describe("Goods Returns + QC Gate (SVC-053)", () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  it("GET /v1/inventory/goods-returns/:id → 404 for a nonexistent goods return", async () => {
+    const fakeId = "88888888-aaaa-4000-8000-000000000002";
+    const res = await app.inject({
+      method: "GET", url: `/v1/inventory/goods-returns/${fakeId}`,
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("GET /v1/inventory/goods-returns/:id → 401 no token", async () => {
+    const fakeId = "88888888-aaaa-4000-8000-000000000002";
+    const res = await app.inject({ method: "GET", url: `/v1/inventory/goods-returns/${fakeId}` });
+    expect(res.statusCode).toBe(401);
+  });
 });

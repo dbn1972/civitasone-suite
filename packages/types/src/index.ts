@@ -1004,6 +1004,22 @@ export type SrnDetail = {
   createdAt: string;
 };
 
+/** Goods return awaiting/undergoing QC — inventory-service (SVC-053). */
+export type GoodsReturnDetail = {
+  id: string;
+  originalIssueId: string;
+  itemId: string;
+  storeId: string;
+  qty: number;
+  reason: string;
+  qcStatus: "pending" | "passed" | "failed" | "conditional";
+  qcInspectedBy: string | null;
+  qcInspectedAt: string | null;
+  qcNotes: string | null;
+  disposition: "pending" | "restock" | "quarantine" | "scrap";
+  createdAt: string;
+};
+
 export type TenderSummary = {
   id: string;
   tenderNo: string;
