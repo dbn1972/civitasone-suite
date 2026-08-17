@@ -36,6 +36,7 @@ export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) 
     <DataTable
       columns={columns}
       rows={rows}
+      caption="Quarter allotments — current financial year"
       rowLinkKey="id"
       rowLinkPrefix="/estab/quarters/allotments/"
       sortable

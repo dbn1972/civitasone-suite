@@ -48,7 +48,7 @@ export function NotificationsPanel() {
       ) : items.length === 0 ? (
         <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>All clear — nothing needs your attention.</p></div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
+        <div aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 10 }}>
           {items.map((n) => {
             const s = SEV_STYLE[n.severity] ?? SEV_STYLE.info!;
             return (
