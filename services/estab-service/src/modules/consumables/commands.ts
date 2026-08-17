@@ -4,6 +4,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -32,12 +33,12 @@ async function publish(type: string, ctx: RequestContext, id: string, payload: R
 
 export async function createConsumable(ctx: RequestContext, body: CreateConsumableBody): Promise<Accepted> {
   const id = randomUUID();
-  await publish("estab.consumable.create", ctx, id, { id, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.consumableCreate, ctx, id, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function recordTransaction(ctx: RequestContext, body: RecordTransactionBody): Promise<Accepted> {
   const id = randomUUID();
-  await publish("estab.consumable.transaction", ctx, id, { id, tenantId: ctx.tenantId, ...body });
+  await publish(COMMANDS.consumableTransaction, ctx, id, { id, tenantId: ctx.tenantId, ...body });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

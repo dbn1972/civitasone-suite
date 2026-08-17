@@ -60,7 +60,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Form fields: per-line `receivedQty` and `acceptedQty`; submit calls `PATCH /v1/procurement/grns/:id`
   - _Requirements: 1.2_
 
-- [ ] 7. Implement consumables domain + repo + migration
+- [x] 7. Implement consumables domain + repo + migration
   - Migration: `files.estab_consumables (id, tenant_id, item_id, item_name, balance numeric, reorder_level numeric, unit text, updated_at)` with RLS
   - `services/estab-service/src/modules/consumables/domain.ts`: `isReorderRequired(balance, reorderLevel): boolean`
   - `services/estab-service/src/modules/consumables/repo.ts`: `getBalance(tenantId, itemId)` · `upsertBalance(tenantId, itemId, delta)`
