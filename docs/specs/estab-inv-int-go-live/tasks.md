@@ -99,7 +99,7 @@ feature branch; open a PR when the task's acceptance test passes.
 
 ## Sprint 22 — WCAG AA + UX Polish (Sep 1 – Sep 12)
 
-- [ ] 12. Add skip-to-main link to all three module layouts
+- [x] 12. Add skip-to-main link to all three module layouts
   - Edit `apps/web/src/app/(app)/estab/layout.tsx`, `inventory/layout.tsx`, `procurement/layout.tsx`
   - Insert as first child of the layout root:
     ```tsx
@@ -110,7 +110,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add `id="main-content"` to `<main>` in each layout or page
   - _Requirements: 2.1_
 
-- [ ] 13. Fix file status badge contrast
+- [x] 13. Fix file status badge contrast
   - Search `apps/web/src/app/(app)/estab/` for `#FF6B00` or equivalent; replace with `#C55200`
   - Add a unit test in `apps/web/src/lib/__tests__/contrast.test.ts` using the WCAG relative-luminance formula to assert `contrast('#C55200', '#FFFFFF') >= 4.5`
   - _Requirements: 2.2_
@@ -123,17 +123,17 @@ feature branch; open a PR when the task's acceptance test passes.
     ```
   - _Requirements: 2.3_
 
-- [ ] 15. Add ARIA live region to NotificationsPanel
+- [x] 15. Add ARIA live region to NotificationsPanel
   - `apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx`
   - Wrap the notification list with `<div aria-live="polite" aria-atomic="false">`
   - _Requirements: 2.4_
 
-- [ ] 16. Quarter allotment table caption
+- [x] 16. Quarter allotment table caption
   - `apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx`
   - Add `<caption className="sr-only">Quarter allotments — current financial year</caption>` as first child of `<table>`
   - _Requirements: 2.5_
 
-- [ ] 17. DFA wizard step-change announcement
+- [x] 17. DFA wizard step-change announcement
   - In `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx` (or wherever the wizard step state lives)
   - Add a visually-hidden `<span aria-live="assertive" aria-atomic="true">{currentStepTitle}</span>` that updates on step advance
   - _Requirements: 2.6_
@@ -144,17 +144,17 @@ feature branch; open a PR when the task's acceptance test passes.
   - Both tables must be reachable by keyboard (sr-only class, not display:none)
   - _Requirements: 3.1_
 
-- [ ] 19. Movement type chips ARIA
+- [x] 19. Movement type chips ARIA
   - `apps/web/src/app/(app)/inventory/MovementsTable.tsx`
   - Add `role="status"` and `aria-label={\`Movement type: ${movementType}\`}` to each chip
   - _Requirements: 3.2_
 
-- [ ] 20. Inventory reconcile variance encoding
+- [x] 20. Inventory reconcile variance encoding
   - `apps/web/src/app/(app)/inventory/reconcile/StockLedgerTable.tsx` (or equivalent)
   - Prepend ▲ to positive variance values and ▼ to negative values alongside the existing colour
   - _Requirements: 3.3_
 
-- [ ] 21. DispatchPOActions modal focus trap
+- [x] 21. DispatchPOActions modal focus trap
   - `apps/web/src/app/(app)/procurement/orders/[id]/DispatchPOActions.tsx`
   - Import and apply `FocusTrap` from `focus-trap-react` (add if not already a dependency)
   - Ensure `Escape` key calls the close handler and returns focus to the trigger button

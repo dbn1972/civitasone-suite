@@ -42,9 +42,20 @@ export function StockLedgerTable({ rows }: { rows: LedgerEntry[] }) {
           key: "quantity",
           label: "Quantity",
           align: "right",
-          render: (e) => (
-            <>{e.type === "issue" ? "-" : "+"}{(e.quantity as number).toLocaleString("en-IN")}</>
-          ),
+          render: (e) => {
+            const qty = e.quantity as number;
+            const isNegative = e.type === "issue";
+            const sign = isNegative ? "-" : "+";
+            // Variance direction is conveyed by arrow + sign + color together
+            // (not color alone), per WCAG 1.4.1 use-of-color.
+            const arrow = qty === 0 ? "" : isNegative ? "▼ " : "▲ ";
+            const color = qty === 0 ? "var(--ink2)" : isNegative ? "var(--bad)" : "var(--good)";
+            return (
+              <span style={{ color }}>
+                {arrow}{sign}{qty.toLocaleString("en-IN")}
+              </span>
+            );
+          },
         },
         {
           key: "totalValue",
