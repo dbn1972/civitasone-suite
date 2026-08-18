@@ -2,8 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { PageHeader, Card, FileUpload } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 
 const inputStyle: React.CSSProperties = {
@@ -31,26 +30,20 @@ function PhotoForm() {
 
   const prefillWorkId = searchParams.get("workId") ?? "";
 
-  const [workId, setWorkId] = useState(prefillWorkId);
-  const [fileKey, setFileKey] = useState("");
+  const [workId, setWorkId]           = useState(prefillWorkId);
+  const [fileKey, setFileKey]         = useState("");
   const [description, setDescription] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [latitude, setLatitude]       = useState("");
+  const [longitude, setLongitude]     = useState("");
+  const [submitting, setSubmitting]   = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!workId.trim()) {
-      setError("Work ID is required.");
-      return;
-    }
-    if (!fileKey.trim()) {
-      setError("File key is required.");
-      return;
-    }
+    if (!workId.trim()) { setError("Work ID is required."); return; }
+    if (!fileKey.trim()) { setError("Please upload a photo first."); return; }
 
     setSubmitting(true);
 
@@ -60,7 +53,7 @@ function PhotoForm() {
       source: "web",
     };
     if (description.trim()) body.description = description.trim();
-    if (latitude) body.latitude = parseFloat(latitude);
+    if (latitude)  body.latitude  = parseFloat(latitude);
     if (longitude) body.longitude = parseFloat(longitude);
 
     try {
@@ -71,31 +64,29 @@ function PhotoForm() {
       });
 
       if (!res.ok) {
-        let msg = "Failed to register photo.";
-        try {
-          const data = await res.json();
-          if (data?.message) msg = data.message;
-          else if (data?.error) msg = data.error;
-        } catch {}
-        setError(msg);
+        const data = await res.json().catch(() => ({}));
+        setError((data as { message?: string }).message ?? "Failed to register photo.");
         setSubmitting(false);
         return;
       }
 
       toast.success("Photo registered.");
       setTimeout(() => {
-        if (workId.trim()) {
-          router.push("/works/execution/" + workId.trim());
-        } else {
-          router.push("/works/execution");
-        }
+        router.push(
+          workId.trim()
+            ? `/works/execution/${workId.trim()}`
+            : "/works/execution",
+        );
       }, 600);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Network error.";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Network error.");
       setSubmitting(false);
     }
   }
+
+  const backHref = prefillWorkId
+    ? `/works/execution/${prefillWorkId}`
+    : "/works/execution";
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -109,6 +100,7 @@ function PhotoForm() {
               padding: "10px 14px",
               fontSize: 14,
             }}
+            role="alert"
           >
             {error}
           </div>
@@ -129,23 +121,23 @@ function PhotoForm() {
           />
         </div>
 
+        {/* F2 — replaced raw fileKey text input with presigned FileUpload */}
         <div>
-          <label style={labelStyle} htmlFor="fileKey">
-            File Key <span style={{ color: "#b42318" }}>*</span>
-          </label>
-          <input
-            id="fileKey"
-            type="text"
-            style={inputStyle}
-            value={fileKey}
-            onChange={(e) => setFileKey(e.target.value.slice(0, 512))}
-            maxLength={512}
-            placeholder="S3/MinIO object key (e.g. works/2024/photo-001.jpg)"
-            required
-          />
-          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-            Upload the file to storage first, then paste the key here.
+          <p style={{ ...labelStyle, marginBottom: 8 }}>
+            Site Photo <span style={{ color: "#b42318" }}>*</span>
           </p>
+          <FileUpload
+            category="photo"
+            label="Choose photo to upload"
+            accept="image/*"
+            maxSizeMb={20}
+            onUploaded={(key) => setFileKey(key)}
+          />
+          {fileKey && (
+            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
+              ✓ File key: <code style={{ fontSize: 11 }}>{fileKey}</code>
+            </p>
+          )}
         </div>
 
         <div>
@@ -164,9 +156,7 @@ function PhotoForm() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
-            <label style={labelStyle} htmlFor="latitude">
-              Latitude
-            </label>
+            <label style={labelStyle} htmlFor="latitude">Latitude</label>
             <input
               id="latitude"
               type="number"
@@ -178,9 +168,7 @@ function PhotoForm() {
             />
           </div>
           <div>
-            <label style={labelStyle} htmlFor="longitude">
-              Longitude
-            </label>
+            <label style={labelStyle} htmlFor="longitude">Longitude</label>
             <input
               id="longitude"
               type="number"
@@ -193,9 +181,13 @@ function PhotoForm() {
           </div>
         </div>
 
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+          GPS coordinates are optional but help verify on-site photo authenticity.
+        </p>
+
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <Link
-            href={workId.trim() ? "/works/execution/" + workId.trim() : "/works/execution"}
+          <a
+            href={backHref}
             style={{
               padding: "8px 18px",
               borderRadius: 8,
@@ -206,7 +198,7 @@ function PhotoForm() {
             }}
           >
             Cancel
-          </Link>
+          </a>
           <button
             type="submit"
             disabled={submitting}
@@ -234,8 +226,8 @@ export default function PhotoNewPage() {
   return (
     <>
       <PageHeader
-        title="Register Photo"
-        subtitle="Attach a site photo to an execution record."
+        title="Register Site Photo"
+        subtitle="Upload a photo and attach it to an execution record."
         back="/works/execution"
         backLabel="Execution"
       />

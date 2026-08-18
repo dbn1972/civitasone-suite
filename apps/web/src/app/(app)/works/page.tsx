@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 type DashboardData = {
   totalWorks: number;
@@ -27,89 +28,84 @@ async function getWorksDashboard(): Promise<LoaderResult<DashboardData>> {
   );
 }
 
+const MODULES: Array<{ href: string; label: string; icon: string; desc: string }> = [
+  { href: "/works/proposals",   label: "Work Proposals",   icon: "📋", desc: "Register and track proposals" },
+  { href: "/works/tenders",     label: "Tender Pipeline",  icon: "📢", desc: "Publish and manage tenders" },
+  { href: "/works/contractors", label: "Contractors",      icon: "🏢", desc: "Registered firms & ratings" },
+  { href: "/works/execution",   label: "Execution",        icon: "🏗️", desc: "Progress, issues, photos" },
+  { href: "/works/billing",     label: "Bills & MB",       icon: "💰", desc: "MBs, bills and disbursement" },
+  { href: "/works/procurement", label: "Procurement",      icon: "📦", desc: "Purchase orders" },
+  { href: "/works/masters",     label: "Masters Registry", icon: "📚", desc: "Lookup values & categories" },
+  { href: "/works/reports",     label: "Reports",          icon: "📊", desc: "Analytics and work register" },
+];
+
+const WORKS_ADMIN_ROLES = ["works_admin", "dao", "do", "super_admin", "div_officer"];
+
 export default async function WorksHub() {
   const { data: dash, source } = await getWorksDashboard();
+  const roles = getSessionRoles();
+  const canAdmin = roles.some((r) => WORKS_ADMIN_ROLES.includes(r));
+
+  const draftCount   = dash.byStatus["draft"]     ?? 0;
+  const pendingCount = dash.byStatus["submitted"]  ?? dash.byStatus["pending"] ?? 0;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Works & Billing"
-        subtitle="Engineering works lifecycle management"
+        subtitle="Engineering works lifecycle — proposals to bills."
         actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
-      {/* KPI strip */}
+      <StatGrid>
+        <StatCard icon="🏗️" iconBg="var(--infobg, #eff6ff)"  label="Total Works"  value={dash.totalWorks} />
+        <StatCard icon="▶️"  iconBg="var(--goodbg, #ecfdf3)"  label="Active"       value={dash.activeWorks} />
+        <StatCard icon="✅"  iconBg="var(--panel, #f1f5f9)"   label="Completed"    value={dash.closedWorks} />
+        <StatCard icon="📝"  iconBg="var(--warnbg, #fef3c7)"  label="Draft"        value={draftCount} />
+        <StatCard icon="⏳"  iconBg="#fdf2f8"                 label="Pending"      value={pendingCount} />
+      </StatGrid>
+
+      {canAdmin && (
+        <Card title="Quick Actions" padding>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Link href="/works/proposals/new"          className="btn ghost" style={{ fontSize: 13 }}>📋 New Proposal</Link>
+            <Link href="/works/tenders/new"            className="btn ghost" style={{ fontSize: 13 }}>📢 Create Tender</Link>
+            <Link href="/works/contractors/new"        className="btn ghost" style={{ fontSize: 13 }}>🏢 Register Contractor</Link>
+            <Link href="/works/billing/account-compile" className="btn ghost" style={{ fontSize: 13 }}>💼 Account Compile</Link>
+          </div>
+        </Card>
+      )}
+
       <div
         style={{
           display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
           gap: 16,
-          gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
-          marginBottom: 24,
+          marginTop: 8,
         }}
       >
-        <KpiCard label="Total Works"   value={dash.totalWorks}  variant="neutral" />
-        <KpiCard label="Active"        value={dash.activeWorks}  variant="good"   />
-        <KpiCard label="Closed"        value={dash.closedWorks}  variant="neutral" />
-        <KpiCard
-          label="Draft"
-          value={dash.byStatus["draft"] ?? 0}
-          variant="warn"
-        />
-      </div>
-
-      {/* Navigation tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-        <HubTile href="/works/proposals"  label="Work Proposals"    icon="📋" />
-        <HubTile href="/works/orders"     label="Work Orders"       icon="📑" />
-        <HubTile href="/works/approvals"  label="AA / TS"           icon="✅" />
-        <HubTile href="/works/boq"        label="Bill of Quantities" icon="📐" />
-        <HubTile href="/works/tenders"    label="Tender Pipeline"   icon="📢" />
-        <HubTile href="/works/execution"  label="Execution"         icon="🏗️" />
-        <HubTile href="/works/billing"    label="Bills & MB"        icon="💰" />
-        <HubTile href="/works/closure"    label="Closure"           icon="🔒" />
-        <HubTile href="/works/contractors" label="Contractors"      icon="🏢" />
-        <HubTile href="/works/masters"     label="Masters Registry" icon="📚" />
-        <HubTile href="/works/reports"     label="Reports"          icon="📊" />
+        {MODULES.map(({ href, icon, label, desc }) => (
+          <Link
+            key={href}
+            href={href}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              padding: 20,
+              borderRadius: 12,
+              border: "1px solid var(--line)",
+              background: "var(--surface, #fff)",
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <span style={{ fontSize: 28, lineHeight: 1 }}>{icon}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{label}</span>
+            <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>{desc}</span>
+          </Link>
+        ))}
       </div>
     </main>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: number;
-  variant: "neutral" | "good" | "warn" | "bad";
-}) {
-  const colorMap = {
-    neutral: "var(--text)",
-    good:    "var(--good, #27ae60)",
-    warn:    "var(--warn, #e67e22)",
-    bad:     "var(--bad, #c0392b)",
-  };
-  return (
-    <Card padding>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 32, fontWeight: 700, color: colorMap[variant], lineHeight: 1.1 }}>
-          {value}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>{label}</div>
-      </div>
-    </Card>
-  );
-}
-
-function HubTile({ href, icon, label }: { href: string; icon: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex flex-col items-center gap-2 p-6 rounded-xl border hover:bg-muted/50 transition-colors"
-    >
-      <span className="text-3xl">{icon}</span>
-      <span className="font-medium text-sm">{label}</span>
-    </Link>
   );
 }
