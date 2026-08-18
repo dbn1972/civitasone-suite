@@ -4,7 +4,8 @@
  * contractor_ratings records every individual rating event for full history.
  * PG schema: `works` (same schema as all other works tables).
  */
-import { pgSchema, uuid, varchar, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgSchema, uuid, varchar, integer, text, boolean, timestamp, check } from "drizzle-orm/pg-core";
 
 const works = pgSchema("works");
 
@@ -41,7 +42,9 @@ export const contractorRatings = works.table("contractor_ratings", {
   ratedBy:      uuid("rated_by").notNull(),
   ratedAt:      timestamp("rated_at", { withTimezone: true }).notNull().defaultNow(),
   note:         text("note"),
-});
+}, (t) => ({
+  ratingRange: check("rating_range", sql`${t.rating} >= 1 AND ${t.rating} <= 5`),
+}));
 
 export type ContractorRatingInsert = typeof contractorRatings.$inferInsert;
 export type ContractorRatingRow    = typeof contractorRatings.$inferSelect;

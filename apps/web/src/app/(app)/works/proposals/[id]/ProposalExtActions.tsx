@@ -3,17 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
+import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { ConfirmDialog } from "@/app/_components/ds";
 
-const PROPOSAL_WRITE_ROLES = [
-  "works_admin",
-  "works_operator",
-  "super_admin",
-  "dao",
-  "do",
-  "sdo",
-  "section_officer",
-];
 
 interface ProposalExtActionsProps {
   workId: string;

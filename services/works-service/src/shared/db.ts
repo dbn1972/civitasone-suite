@@ -26,7 +26,7 @@ const { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead } = createTenantDb
 export { sqlClient, db, dbFor, sqlClientFor, tierOf, dbForRead };
 export type Db = typeof db;
 
-type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
 }

@@ -1,5 +1,5 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
   contractors,
   contractorRatings,
@@ -9,10 +9,8 @@ import {
   type ContractorRatingRow,
 } from "./schema.js";
 
-export type Writer = { insert: Function; update: Function; select: Function };
-
-export async function insertContractor(tx: Writer, row: ContractorInsert): Promise<void> {
-  await (tx as any).insert(contractors).values(row);
+export async function insertContractor(tx: ScopedTx, row: ContractorInsert): Promise<void> {
+  await tx.insert(contractors).values(row);
 }
 
 export async function findContractorById(tenantId: string, id: string): Promise<ContractorRow | null> {
@@ -38,13 +36,13 @@ export async function listContractors(
 }
 
 export async function updateContractorRating(
-  tx: Writer,
+  tx: ScopedTx,
   id: string,
   tenantId: string,
   newRating: number,
 ): Promise<void> {
   // incremental average: new_avg = (old_avg * n + rating) / (n + 1)
-  await (tx as any)
+  await tx
     .update(contractors)
     .set({
       performanceRating: sql`
@@ -58,10 +56,10 @@ export async function updateContractorRating(
 }
 
 export async function insertRatingHistory(
-  tx: Writer,
+  tx: ScopedTx,
   row: Omit<ContractorRatingInsert, "id">,
 ): Promise<void> {
-  await (tx as any).insert(contractorRatings).values(row);
+  await tx.insert(contractorRatings).values(row);
 }
 
 export async function listRatingHistory(

@@ -3,16 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/app/_components/ds";
+import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 
-const PROPOSAL_WRITE_ROLES = [
-  "works_admin",
-  "works_operator",
-  "super_admin",
-  "dao",
-  "do",
-  "sdo",
-  "section_officer",
-];
 
 interface ProposalActionsProps {
   id: string;

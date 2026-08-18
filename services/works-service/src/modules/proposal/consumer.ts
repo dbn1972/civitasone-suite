@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
@@ -22,7 +23,7 @@ export function registerProposalConsumers(rawQueue: Queue): void {
       const workNumber = generateWorkNumber(
         (p.executingDivisionId as string) ?? "GEN",
         new Date().getFullYear(),
-        Math.floor(Math.random() * 9999) + 1
+        randomInt(1, 10000)
       );
 
       await tx.insert(workProposals).values({
