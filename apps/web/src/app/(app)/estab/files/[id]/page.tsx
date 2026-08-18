@@ -5,6 +5,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { OfficerName } from "./OfficerName";
+import { MovementTimeline } from "./MovementTimeline";
 import type { EstabFileDetail } from "@civitasone/types";
 
 type NoteRow = {
@@ -38,7 +39,19 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
       && (n as { noteStatus?: string }).noteStatus === "draft",
   );
 
-  const ext = file as EstabFileDetail & { dakNo?: string; dueBy?: string; movementHistory?: Array<{ id: string; toOfficerId: string; movedAt: string; remarks?: string | null }> };
+  const ext = file as EstabFileDetail & {
+    dakNo?: string;
+    dueBy?: string;
+    movementHistory?: Array<{
+      id: string;
+      fromOfficerId?: string | null;
+      toOfficerId: string;
+      action?: string | null;
+      movedAt: string;
+      status?: string | null;
+      remarks?: string | null;
+    }>;
+  };
 
   const noteRows: NoteRow[] = file.noteSheets.map((ns, idx) => {
     const n = ns as { noteType?: string; noteStatus?: string; eSigned?: boolean };
@@ -128,14 +141,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
             <div className="card-h"><h3>Movement trail</h3></div>
             <div className="pad">
               {ext.movementHistory?.length ? (
-                <ul className="tl">
-                  {ext.movementHistory.map((m, i, arr) => (
-                    <li key={m.id} className={i < arr.length - 1 ? "done" : "cur"}>
-                      <div className="t"><OfficerName id={m.toOfficerId} prefix="→ " /></div>
-                      <div className="d">{formatIndianDate(m.movedAt)}{m.remarks ? ` · ${m.remarks}` : ""}</div>
-                    </li>
-                  ))}
-                </ul>
+                <MovementTimeline movements={ext.movementHistory} />
               ) : (
                 <EmptyState icon="📋" title="No movement yet" message="Forward or refer the file to see trail." />
               )}

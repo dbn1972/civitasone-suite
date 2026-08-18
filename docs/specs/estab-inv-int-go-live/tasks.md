@@ -183,7 +183,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Manual verify at 375 px viewport in Chrome DevTools
   - _Requirements: 4.2_
 
-- [ ] 26. File movement timeline component
+- [x] 26. File movement timeline component
   - Create `apps/web/src/app/(app)/estab/files/[id]/MovementTimeline.tsx`
   - Render `estab_file_movements` as a vertical timeline: date chip → action verb → from-officer → to-officer arrow → status badge
   - Replace the existing flat list on `apps/web/src/app/(app)/estab/files/[id]/page.tsx` with `<MovementTimeline movements={movements} />`
