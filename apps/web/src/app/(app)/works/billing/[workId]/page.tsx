@@ -101,6 +101,13 @@ export default async function BillingDetailPage({
               <DataSourceBadge source={billsResult.source} />
             )}
             <Link
+              href={`/works/billing/measurements/new?workId=${params.workId}`}
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Record measurement
+            </Link>
+            <Link
               href={newMbHref}
               className="btn primary"
               style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
