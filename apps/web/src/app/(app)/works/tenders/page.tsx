@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getTenders } from "../_data/loaders";
@@ -16,7 +17,12 @@ export default async function TendersPage() {
         title="Tender Pipeline"
         subtitle="Pre-tender, quotation, and award management."
         back="/works"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {source === "error" && <DataSourceBadge source={source} />}
+            <Link href="/works/tenders/new" className="btn primary" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}>+ New pre-tender</Link>
+          </div>
+        }
       />
       <StatGrid>
         <StatCard icon="📢" iconBg="#eff6ff" label="Total Tenders" value={total} />

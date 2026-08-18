@@ -5,9 +5,10 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, billAmountExceedsAward } from "./domain.js";
-import { getMb, getBill, listBillsForWork } from "./repo.js";
+import { getMb, getBill, listBillsForWork, listBills } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
 import { parseMinor } from "@civitasone/schemas";
+import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -20,6 +21,21 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const { workId } = req.params as { workId: string };
     const data = await listBillsForWork(ctx.tenantId, workId);
     return reply.send({ data });
+  });
+
+  // Tenant-wide bills register (paginated) — the FE billing list page.
+  app.get("/v1/works/billing/bills", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const query = paginationSchema.parse(req.query);
+    const rows = await listBills(ctx.tenantId, query.page, query.pageSize);
+    const data = rows.map((r) => ({
+      ...r,
+      grossAmountMinor: r.grossAmountMinor?.toString() ?? null,
+      netPayableMinor: r.netPayableMinor?.toString() ?? null,
+      deductionsMinor: r.deductionsMinor?.toString() ?? null,
+    }));
+    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total: data.length } });
   });
 
   // Issue MB

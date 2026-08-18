@@ -29,6 +29,7 @@ export function BoqTable({ items, source }: { items: Record<string, unknown>[]; 
       emptyIcon="📐"
       emptyTitle="No BoQ items found"
       emptyMessage="Bill of Quantities items will appear here once a work is selected."
+      rowHref={(row) => "/works/boq/" + String(row.workId ?? "")}
     />
   );
 }

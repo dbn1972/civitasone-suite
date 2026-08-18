@@ -72,7 +72,20 @@ export async function listAllIssues(tenantId: string, page: number, pageSize: nu
 /** Tenant-wide closure register (closed | dropped | completion), newest first — backs the FE closure list page. */
 export async function listClosures(tenantId: string, page: number, pageSize: number) {
   return scopedRead(async (tx) => {
-    return tx.select().from(workClosures)
+    return tx
+      .select({
+        id: workClosures.id,
+        tenantId: workClosures.tenantId,
+        workId: workClosures.workId,
+        closureType: workClosures.closureType,
+        closedDate: workClosures.closedDate,
+        remarks: workClosures.remarks,
+        version: workClosures.version,
+        workNumber: workProposals.workNumber,
+        description: workProposals.description,
+      })
+      .from(workClosures)
+      .leftJoin(workProposals, eq(workProposals.id, workClosures.workId))
       .where(eq(workClosures.tenantId, tenantId))
       .orderBy(desc(workClosures.closedDate))
       .limit(pageSize)
