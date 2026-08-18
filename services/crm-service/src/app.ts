@@ -8,6 +8,7 @@ import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { contactRoutes } from "./modules/contacts/routes.js";
 import { dealRoutes } from "./modules/deals/routes.js";
 import { forecastRoutes } from "./modules/deals/forecast-route.js";
@@ -98,6 +99,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // H4: per-user rate limit - 300 req / 60 s, keyed per tenantId+IP.
+  // Excludes /health, /ready, /metrics naturally (low call volume).
+  // Public lead-capture has its own limiter in public-routes.ts.
+  await registerRateLimit(app, { max: 300, timeWindow: "1 minute" });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

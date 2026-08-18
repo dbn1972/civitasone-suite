@@ -52,8 +52,8 @@ export async function listContacts(
   return { ...result, data: result.data.map(maskView) };
 }
 
-export async function exportContacts(tenantId: string, isAdmin = false): Promise<ContactView[]> {
-  const rows = await repo.exportAll(tenantId);
+export async function exportContacts(tenantId: string, isAdmin = false, limit = 500, offset = 0): Promise<ContactView[]> {
+  const rows = await repo.exportAll(tenantId, limit, offset);
   return isAdmin ? rows : rows.map(maskView);
 }
 

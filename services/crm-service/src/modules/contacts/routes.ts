@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -69,10 +69,14 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const admin = isAdmin(ctx.roles);
-    const rows = await queries.exportContacts(ctx.tenantId, admin);
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(500),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const rows = await queries.exportContacts(ctx.tenantId, admin, q.limit, q.offset);
     // Dedicated audit for a bulk PII export (DPDP accountability).
     await commands.auditBulkExport(ctx, rows.length, admin);
-    return reply.send({ data: rows, exportedAt: new Date().toISOString() });
+    return reply.send({ data: rows, exportedAt: new Date().toISOString(), meta: { limit: q.limit, offset: q.offset, returned: rows.length } });
   });
 
   app.post("/v1/crm/contacts/bulk/import", async (req, reply) => {

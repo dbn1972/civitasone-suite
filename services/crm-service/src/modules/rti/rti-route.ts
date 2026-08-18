@@ -80,11 +80,11 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
       section: body.section,
       departmentRef: body.departmentRef,
       applicantName: body.applicantName,
-      applicantContact: body.applicantContact,
+      ...(body.applicantContact !== undefined ? { applicantContact: body.applicantContact } : {}),
       subject: body.subject,
       description: body.description,
       feePaid: body.feePaid,
-      feeAmount: body.feeAmount,
+      ...(body.feeAmount !== undefined ? { feeAmount: body.feeAmount } : {}),
     });
 
     return reply.code(201).send({ data: row });
@@ -99,10 +99,10 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
 
     const { rows, total } = await repo.getRtiList({
       tenantId: ctx.tenantId,
-      status: q.status,
-      section: q.section,
-      departmentRef: q.departmentRef,
-      search: q.search,
+      ...(q.status !== undefined ? { status: q.status } : {}),
+      ...(q.section !== undefined ? { section: q.section } : {}),
+      ...(q.departmentRef !== undefined ? { departmentRef: q.departmentRef } : {}),
+      ...(q.search !== undefined ? { search: q.search } : {}),
       pageSize: w.pageSize,
       offset: w.offset,
     });

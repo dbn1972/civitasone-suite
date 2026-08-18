@@ -41,7 +41,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
         sql`SELECT nextval('"crm"."grievance_ref_seq"')::bigint AS seq`
       )) as Array<{ seq: number }>;
       const yr = new Date().getFullYear();
-      const seq = Number(seqRow.seq).toString().padStart(6, "0");
+      const seq = Number(seqRow!.seq).toString().padStart(6, "0");
       const refNo = `${MINISTRY_CODE}/${yr}/${seq}`;
 
       return tx.execute(sql`

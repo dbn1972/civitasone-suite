@@ -141,11 +141,12 @@ export async function listByTenant(
   return rows.map(toView);
 }
 
-export async function exportAll(tenantId: string, limit = 5000): Promise<ContactView[]> {
+export async function exportAll(tenantId: string, limit = 500, offset = 0): Promise<ContactView[]> {
   const rows = await scopedRead((tx) => tx.select().from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`))
     .orderBy(contacts.name)
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
   return rows.map(toView);
 }
 
@@ -339,7 +340,7 @@ export interface AccountListRow {
   contactCount: number;
 }
 
-export async function listAccounts(tenantId: string, limit = 500): Promise<AccountListRow[]> {
+export async function listAccounts(tenantId: string, limit = 500, offset = 0): Promise<AccountListRow[]> {
   const rows = await scopedRead((tx) => tx.select({
     id: accounts.id,
     name: accounts.name,
@@ -357,7 +358,8 @@ export async function listAccounts(tenantId: string, limit = 500): Promise<Accou
     .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
     .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId)
     .orderBy(accounts.name)
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
   // count() arrives as a bigint string from pg — normalise to a JSON number.
   return rows.map((r) => ({ ...r, contactCount: Number(r.contactCount ?? 0) }));
 }
