@@ -485,10 +485,10 @@ module.exports = {
         ...AUTH_ENV,
         INTERNAL_SERVICE_SECRET,
         // AWS_ENV supplies QUEUE_DRIVER=sqs for catalogue CQRS publishes.
-        // Force-clear REDIS_URL: PM2 inherits the shell env; a host REDIS_URL
-        // enables the broken `{ url }` rate-limit store (defineCommand crash).
+        // REDIS_URL backs fleet-wide rate-limit + quota counters via ioredis.
+        // app.ts creates a real ioredis client; @fastify/rate-limit RedisStore is safe.
         ...AWS_ENV,
-        REDIS_URL: "",
+        REDIS_URL: REDIS,
         DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
         QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
