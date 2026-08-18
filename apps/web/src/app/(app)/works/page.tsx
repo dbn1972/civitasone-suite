@@ -68,6 +68,8 @@ export default async function WorksHub() {
         <HubTile href="/works/billing"    label="Bills & MB"        icon="💰" />
         <HubTile href="/works/closure"    label="Closure"           icon="🔒" />
         <HubTile href="/works/contractors" label="Contractors"      icon="🏢" />
+        <HubTile href="/works/masters"     label="Masters Registry" icon="📚" />
+        <HubTile href="/works/reports"     label="Reports"          icon="📊" />
       </div>
     </main>
   );
