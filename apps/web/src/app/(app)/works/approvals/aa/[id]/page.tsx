@@ -109,8 +109,8 @@ export default async function AaDetailPage({
   const detailRows: Array<[string, string]> = [
     ["AA Number", aa.aaNumber ?? "—"],
     ["Approval Type", humanize(aa.approvalType)],
-    ["Work ID", aa.workId?.slice(0, 8) + "…" ?? "—"],
-    ["Approving Authority", aa.approvingAuthorityId?.slice(0, 8) + "…" ?? "—"],
+    ["Work ID", aa.workId != null ? aa.workId.slice(0, 8) + "…" : "—"],
+    ["Approving Authority", aa.approvingAuthorityId != null ? aa.approvingAuthorityId.slice(0, 8) + "…" : "—"],
     ["Date", formatIndianDate(aa.aaDate)],
     ["Created", formatIndianDate(aa.createdAt)],
     ["Remarks", aa.remarks ?? "—"],

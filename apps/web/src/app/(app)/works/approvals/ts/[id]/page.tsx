@@ -107,8 +107,8 @@ export default async function TsDetailPage({
   const detailRows: Array<[string, string]> = [
     ["TS Number", ts.tsNumber ?? "—"],
     ["Sanction Type", humanize(ts.sanctionType)],
-    ["Work ID", ts.workId?.slice(0, 8) + "…" ?? "—"],
-    ["TS Authority", ts.tsAuthorityId?.slice(0, 8) + "…" ?? "—"],
+    ["Work ID", ts.workId != null ? ts.workId.slice(0, 8) + "…" : "—"],
+    ["TS Authority", ts.tsAuthorityId != null ? ts.tsAuthorityId.slice(0, 8) + "…" : "—"],
     ["Date", formatIndianDate(ts.tsDate)],
     ["Created", formatIndianDate(ts.createdAt)],
     ["Remarks", ts.remarks ?? "—"],
