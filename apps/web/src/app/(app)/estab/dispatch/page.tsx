@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill, DataTable } from "../../../_components/ds";
+import { PageHeader, StatusPill, DataTable, EmptyState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 type DispatchRow = {
@@ -50,6 +50,8 @@ export default function DispatchRegistryPage() {
         <div className="card-h"><h3>Dispatch register</h3></div>
         {loading ? (
           <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : rows.length === 0 ? (
+          <EmptyState icon="📮" title="No dispatches yet" message="Outward dispatches linked to eOffice files will appear here." />
         ) : (
           <DataTable<DispatchRow>
             columns={[

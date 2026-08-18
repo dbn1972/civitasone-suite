@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill, DataTable } from "../../../_components/ds";
+import { PageHeader, StatusPill, DataTable, EmptyState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 type InwardRow = {
@@ -137,6 +137,8 @@ export default function DakRegistryPage() {
         </div>
         {loading ? (
           <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : rows.length === 0 ? (
+          <EmptyState icon="📥" title="No DAK registered yet" message="Register incoming dak above to start tracking it here." />
         ) : (
           <DataTable<InwardRow>
             columns={[

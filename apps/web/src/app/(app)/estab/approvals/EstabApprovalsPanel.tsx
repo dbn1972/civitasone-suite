@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, ActionButton } from "../../../_components/ds";
+import { DataTable, ActionButton, EmptyState } from "../../../_components/ds";
 
 type WorkflowTask = {
   id: string;
@@ -72,6 +72,8 @@ export function EstabApprovalsPanel() {
       </div>
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+      ) : tasks.length === 0 ? (
+        <EmptyState icon="✅" title="No approvals pending" message="File notings awaiting your approval will appear here." />
       ) : (
         <DataTable<WorkflowTask>
           columns={[
