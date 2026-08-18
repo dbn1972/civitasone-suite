@@ -3,6 +3,7 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { BillingActions } from "./BillingActions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,10 @@ export default async function BillingDetailPage({
           emptyMessage="Issue a Measurement Book to start billing."
         />
       </Card>
+
+      <BillingActions
+        bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.status }))}
+      />
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <Link href="/works/billing" className="btn ghost">

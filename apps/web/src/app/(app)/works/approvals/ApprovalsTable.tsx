@@ -29,6 +29,10 @@ export function ApprovalsTable({
   const { data: aaData } = useSeededResource("works-approvals-aa", aaApprovals, source, (rows) => rows.length === 0);
   const { data: tsData } = useSeededResource("works-approvals-ts", tsApprovals, source, (rows) => rows.length === 0);
   const rows = tab === "aa" ? aaData : tsData;
+  const rowHref =
+    tab === "aa"
+      ? (row: Record<string, unknown>) => "/works/approvals/aa/" + String(row.id ?? "")
+      : (row: Record<string, unknown>) => "/works/approvals/ts/" + String(row.id ?? "");
 
   return (
     <div>
@@ -59,6 +63,7 @@ export function ApprovalsTable({
         pageSize={15}
         exportable
         exportFilename={`works-approvals-${tab}`}
+        rowHref={rowHref}
         emptyIcon="✅"
         emptyTitle="No approvals found"
         emptyMessage={`${tab === "aa" ? "Administrative Approval" : "Technical Sanction"} records will appear here.`}
