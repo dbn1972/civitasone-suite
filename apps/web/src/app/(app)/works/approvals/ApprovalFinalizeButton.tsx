@@ -10,6 +10,9 @@ interface ApprovalFinalizeButtonProps {
   status: string;
 }
 
+// Only show the Finalize button for statuses that allow finalization.
+// Intermediate or already-finalized statuses hide the button to avoid confusing errors.
+const FINALIZABLE_STATUSES = new Set(["draft", "submitted"]);
 const FINALIZED_STATUSES = new Set(["finalized", "approved", "published"]);
 
 export function ApprovalFinalizeButton({
@@ -21,6 +24,9 @@ export function ApprovalFinalizeButton({
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(FINALIZED_STATUSES.has(status));
+
+  // Not in a finalizable state and not yet done — hide entirely
+  if (!done && !FINALIZABLE_STATUSES.has(status)) return null;
 
   if (done) {
     return (
