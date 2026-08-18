@@ -209,7 +209,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Steps: create GRN → accept → navigate to `/inventory/balances` → verify item balance increased → if item was below reorder level, verify it cleared from low-stock list
   - _Requirements: 6.2_
 
-- [ ] 30. Inventory cycle-count E2E spec
+- [x] 30. Inventory cycle-count E2E spec
   - `tests/e2e-live/specs/inventory-cycle-count.spec.ts`
   - Steps: store officer initiates cycle count → enters physical qty → supervisor navigates to `/inventory/cycle-counts/:id` → approves → verify ledger updated
   - _Requirements: 6.2_
