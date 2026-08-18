@@ -133,6 +133,22 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
         </Card>
         <Card title="Performance radar" padding>
           <RadarChart scores={subscores} />
+          <table className="sr-only" aria-label="Performance radar data table">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscores.map((s) => (
+                <tr key={s.label}>
+                  <td>{s.label}</td>
+                  <td>{s.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       </div>
     </>
