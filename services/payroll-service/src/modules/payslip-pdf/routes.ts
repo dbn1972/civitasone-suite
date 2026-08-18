@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
+import { fetchPayrollInput, fetchEmployeeSummaries, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 
@@ -116,6 +117,52 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       // Table may not exist yet — use default template
     }
 
+    // Hydrate employee identity fields from HRMS.
+    // fetchPayrollInput returns full employee records (name, PAN, bank, UAN)
+    // for the run month. If HRMS is unavailable we fall back to empty strings
+    // so the PDF still renders — a warning is logged for ops visibility.
+    let employeeName = "";
+    let pan = "";
+    let bankAccount = "";
+    let bankIfsc = "";
+    let uan = "";
+    let department = "";
+
+    if (run?.month) {
+      try {
+        const hrmsInput = await fetchPayrollInput(ctx.tenantId, run.month);
+        const emp = hrmsInput.employees.find((e) => e.id === slip.employeeId);
+        if (emp) {
+          employeeName = emp.fullName;
+          pan = emp.pan ?? "";
+          bankAccount = emp.bankAccountNo ?? "";
+          bankIfsc = emp.bankIfsc ?? "";
+          uan = emp.uan ?? "";
+        } else {
+          req.log.warn({ employeeId: slip.employeeId, month: run.month },
+            "payslip-pdf: employee not found in HRMS payroll-input for month");
+        }
+      } catch (err) {
+        if (err instanceof HrmsUnavailableError) {
+          req.log.warn({ err: err.message, employeeId: slip.employeeId },
+            "payslip-pdf: HRMS unavailable — identity fields will be blank in PDF");
+        } else {
+          req.log.warn({ err, employeeId: slip.employeeId },
+            "payslip-pdf: unexpected error fetching HRMS payroll-input");
+        }
+      }
+    }
+
+    // fetchEmployeeSummaries provides departmentName; it never throws (returns
+    // empty Map on any failure) so no try/catch needed here.
+    const summaries = await fetchEmployeeSummaries(ctx.tenantId);
+    const summary = summaries.get(slip.employeeId);
+    if (summary) {
+      department = summary.departmentName;
+      // Prefer the richer fullName from fetchPayrollInput if already set.
+      if (!employeeName) employeeName = summary.fullName;
+    }
+
     // Build components breakdown
     const components = slip.components ?? [];
     const earnings = components.filter((c) => c.type === "earning");
@@ -154,13 +201,13 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       orgName: "Organization", // Would be fetched from tenant config in production
       month: run?.month ?? "",
       employeeNo: slip.employeeNo,
-      employeeName: slip.employeeNo, // Employee name from HR service lookup
-      department: "",
+      employeeName,
+      department,
       designation: "",
-      uan: "",
-      pan: "",
-      bankAccount: "",
-      bankIfsc: "",
+      uan,
+      pan,
+      bankAccount,
+      bankIfsc,
       earningsRows,
       deductionsRows,
       pensionRows: pensionRows.join("\n    "),
