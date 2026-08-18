@@ -154,7 +154,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Prepend ▲ to positive variance values and ▼ to negative values alongside the existing colour
   - _Requirements: 3.3_
 
-- [ ] 21. DispatchPOActions modal focus trap
+- [x] 21. DispatchPOActions modal focus trap
   - `apps/web/src/app/(app)/procurement/orders/[id]/DispatchPOActions.tsx`
   - Import and apply `FocusTrap` from `focus-trap-react` (add if not already a dependency)
   - Ensure `Escape` key calls the close handler and returns focus to the trigger button
