@@ -115,7 +115,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add a unit test in `apps/web/src/lib/__tests__/contrast.test.ts` using the WCAG relative-luminance formula to assert `contrast('#C55200', '#FFFFFF') >= 4.5`
   - _Requirements: 2.2_
 
-- [ ] 14. Keyboard row selection on estab/files table
+- [x] 14. Keyboard row selection on estab/files table
   - `apps/web/src/app/(app)/estab/files/list/FilesTable.tsx`
   - Add `role="grid"` on `<table>`, `role="row"` + `tabIndex={0}` on `<tr>`, `onKeyDown` on each row:
     ```tsx
@@ -171,13 +171,13 @@ feature branch; open a PR when the task's acceptance test passes.
   - Change `<button onClick={...}>×</button>` to `<button aria-label={\`Remove line item ${n + 1}\`} onClick={...}>×</button>`
   - _Requirements: 3.6_
 
-- [ ] 24. Empty-state illustrations on three estab pages
+- [x] 24. Empty-state illustrations on three estab pages
   - `apps/web/src/app/(app)/estab/files/list/page.tsx`: pass `emptyIcon="📁"` `emptyTitle="No files yet"` `emptyMessage="Create a new file to begin managing correspondence."` `emptyAction={<Link href="/estab/workspace">Create file</Link>}` to DataTable
   - `apps/web/src/app/(app)/estab/meetings/page.tsx`: `emptyIcon="📅"` `emptyTitle="No meetings scheduled"` `emptyMessage="Schedule a committee or departmental meeting."` `emptyAction={<Link href="/estab/meetings/new">Schedule meeting</Link>}`
   - `apps/web/src/app/(app)/estab/vehicles/page.tsx`: `emptyIcon="🚗"` `emptyTitle="No vehicles registered"` `emptyMessage="Add a vehicle to begin fleet management."` `emptyAction={<Link href="/estab/vehicles/new">Add vehicle</Link>}`
   - _Requirements: 4.1_
 
-- [ ] 25. Mobile table overflow fix
+- [x] 25. Mobile table overflow fix
   - Search `apps/web/src/app/(app)/estab/`, `apps/web/src/app/(app)/inventory/`, `apps/web/src/app/(app)/procurement/` for `<table` and `<DataTable` components
   - Ensure every table is wrapped in `<div style={{ overflowX: 'auto' }}>` or equivalent Tailwind `overflow-x-auto` container
   - Manual verify at 375 px viewport in Chrome DevTools
