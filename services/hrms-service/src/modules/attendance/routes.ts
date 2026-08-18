@@ -5,6 +5,8 @@ import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, At
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { enqueue } from "../../shared/outbox.js";
+import { EVENTS } from "../../topics.js";
 import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -109,8 +111,27 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
-    const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "approved", ctx.actorId, reason);
-    if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    const row = await db.transaction(async (tx) => {
+      const updated = await repo.updateRegularisationStatus(tx, ctx.tenantId, id, "approved", ctx.actorId, reason);
+      if (!updated) return null;
+      await enqueue(tx, {
+        topic: EVENTS.regularisationApproved,
+        eventType: EVENTS.regularisationApproved,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          regularisationId: id,
+          employeeId: updated.employeeId,
+          actorId: ctx.actorId,
+          attendanceDate: updated.date,
+          outcome: "approved",
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return updated;
+    });
+    if (!row) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
     await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
     return reply.send({ id, status: "approved" });
   });
@@ -120,8 +141,27 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body ?? {});
-    const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "rejected", ctx.actorId, reason);
-    if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    const row = await db.transaction(async (tx) => {
+      const updated = await repo.updateRegularisationStatus(tx, ctx.tenantId, id, "rejected", ctx.actorId, reason);
+      if (!updated) return null;
+      await enqueue(tx, {
+        topic: EVENTS.regularisationRejected,
+        eventType: EVENTS.regularisationRejected,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        payload: {
+          regularisationId: id,
+          employeeId: updated.employeeId,
+          actorId: ctx.actorId,
+          attendanceDate: updated.date,
+          outcome: "rejected",
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return updated;
+    });
+    if (!row) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
     await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
     return reply.send({ id, status: "rejected" });
   });

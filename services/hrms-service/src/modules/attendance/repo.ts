@@ -51,20 +51,28 @@ export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanc
   await tx.insert(hrmsAttendanceRegularisations).values(row);
 }
 
-/** PPL-D1 fix: update a pending regularisation to approved or rejected. Returns false if not found or already decided. */
+/** PPL-D1 fix: update a pending regularisation to approved or rejected.
+ * Accepts a drizzle tx so the caller can enqueue an outbox event atomically.
+ * Returns the updated row (with employeeId and date) or null if not found / already decided.
+ */
 export async function updateRegularisationStatus(
+  tx: Writer,
   tenantId: string, id: string, status: "approved" | "rejected", actorId: string, reason?: string,
-): Promise<boolean> {
+): Promise<{ id: string; employeeId: string; date: string } | null> {
   // Atomic: WHERE status='pending' guards against concurrent approve/reject races.
-  const updated = await db.update(hrmsAttendanceRegularisations)
+  const updated = await tx.update(hrmsAttendanceRegularisations)
     .set({ status, updatedBy: actorId, updatedAt: new Date(), ...(reason ? { reason } : {}) })
     .where(and(
       eq(hrmsAttendanceRegularisations.tenantId, tenantId),
       eq(hrmsAttendanceRegularisations.id, id),
       eq(hrmsAttendanceRegularisations.status, "pending"),
     ))
-    .returning({ id: hrmsAttendanceRegularisations.id });
-  return updated.length > 0;
+    .returning({
+      id: hrmsAttendanceRegularisations.id,
+      employeeId: hrmsAttendanceRegularisations.employeeId,
+      date: hrmsAttendanceRegularisations.date,
+    });
+  return updated[0] ?? null;
 }
 
 /** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */

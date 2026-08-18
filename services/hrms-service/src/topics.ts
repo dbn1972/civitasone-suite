@@ -149,6 +149,8 @@ export const EVENTS = {
 
   // contracts
   contractCreated:    "hrms.contract.created",
+  regularisationApproved: "hrms.attendance.regularisation.approved",
+  regularisationRejected: "hrms.attendance.regularisation.rejected",
   contractRenewed:    "hrms.contract.renewed",
   contractExpired:    "hrms.contract.expired",
   contractEscalated:  "hrms.contract.escalated",
