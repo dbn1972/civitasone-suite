@@ -193,7 +193,7 @@ feature branch; open a PR when the task's acceptance test passes.
 
 ## Sprint 23 — E2E Suite (Sep 15 – Sep 26)
 
-- [ ] 27. Establishment file journey E2E spec
+- [x] 27. Establishment file journey E2E spec
   - `tests/e2e-live/specs/estab-file-journey.spec.ts`
   - Steps: login as estab officer → create new file via `/estab/workspace` → add noting → submit for DFA → login as approver → approve → verify dispatch status
   - Use existing `tests/e2e-live/` config and `baseURL` from env
