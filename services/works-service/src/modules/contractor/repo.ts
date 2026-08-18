@@ -1,5 +1,5 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, db, type ScopedTx } from "../../shared/db.js";
 import {
   contractors,
   contractorRatings,
@@ -78,4 +78,17 @@ export async function listRatingHistory(
       .orderBy(desc(contractorRatings.ratedAt))
       .limit(limit),
   );
+}
+
+export async function updateContractor(
+  tenantId: string,
+  id: string,
+  patch: Partial<ContractorInsert>,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(contractors)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
+  });
 }

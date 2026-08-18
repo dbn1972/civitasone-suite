@@ -59,6 +59,22 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(202).send(result);
   });
 
+  // Update contractor basic info
+  app.patch("/v1/works/contractors/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const body = v.updateContractorSchema.parse(req.body);
+    const existing = await repo.findContractorById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
+    const patch = Object.fromEntries(
+      Object.entries(body).filter(([, val]) => val !== undefined),
+    ) as Parameters<typeof repo.updateContractor>[2];
+    await repo.updateContractor(ctx.tenantId, id, patch);
+    const updated = await repo.findContractorById(ctx.tenantId, id);
+    return reply.send({ data: updated });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError)

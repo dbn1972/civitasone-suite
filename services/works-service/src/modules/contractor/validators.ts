@@ -23,3 +23,15 @@ export const listQuerySchema = z.object({
 
 export type CreateContractorBody  = z.infer<typeof createContractorSchema>;
 export type RateContractorBody    = z.infer<typeof rateContractorSchema>;
+
+export const updateContractorSchema = z.object({
+  name:           z.string().min(1).max(256).optional(),
+  registrationNo: z.string().max(64).optional(),
+  pan:            z.string().length(10).optional(),
+  gst:            z.string().max(15).optional(),
+  email:          z.string().email().max(256).optional(),
+  phone:          z.string().max(20).optional(),
+  address:        z.string().max(1024).optional(),
+}).refine((b) => Object.keys(b).length > 0, "at least one field required");
+
+export type UpdateContractorBody = z.infer<typeof updateContractorSchema>;

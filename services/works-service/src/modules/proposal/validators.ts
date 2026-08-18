@@ -44,3 +44,17 @@ export const mapOfficeSchema = z.object({
 export const finalizeSchema = z.object({
   workId: z.string().uuid(),
 });
+
+export const updateProposalSchema = z.object({
+  description:        z.string().min(1).max(2048).optional(),
+  estimatedCostMinor: z.coerce.bigint().positive().optional(),
+  district:           z.string().max(128).nullable().optional(),
+  taluka:             z.string().max(128).nullable().optional(),
+  village:            z.string().max(128).nullable().optional(),
+  habitation:         z.string().max(128).nullable().optional(),
+  mlaConstituency:    z.string().max(128).nullable().optional(),
+  sector:             z.string().max(128).nullable().optional(),
+  remarks:            z.string().max(2048).nullable().optional(),
+}).refine((b) => Object.keys(b).length > 0, "at least one field required");
+
+export type UpdateProposalBody = z.infer<typeof updateProposalSchema>;

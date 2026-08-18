@@ -3,7 +3,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { queue } from "../../shared/infra.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getProposal, listProposals } from "./repo.js";
+import { getProposal, listProposals, updateProposal } from "./repo.js";
 import { canDaoFinalize, validateCoa } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
@@ -100,5 +100,19 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
 
     await commands.publishDaoFinalize(ctx, id);
     return reply.status(202).send({ status: "accepted" });
+  });
+
+  // Update proposal (draft only)
+  app.patch("/v1/works/proposals/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = req.params as { id: string };
+    const body = v.updateProposalSchema.parse(req.body);
+    const existing = await getProposal(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
+    if (existing.status !== "draft") throw new HttpError(422, "NOT_DRAFT", "only draft proposals can be edited");
+    await updateProposal(ctx.tenantId, id, body as Record<string, unknown>);
+    const updated = await getProposal(ctx.tenantId, id);
+    return reply.send({ data: updated });
   });
 }

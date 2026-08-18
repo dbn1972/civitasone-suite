@@ -1,6 +1,6 @@
 import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, db } from "../../shared/db.js";
 import { workProposals, workSplits, workCoaMappings, workOfficeMappings } from "./schema.js";
 import type { ReportFilters } from "../reporting/validators.js";
 
@@ -98,5 +98,18 @@ export async function listProposalsForReport(tenantId: string, filters: ReportFi
       .orderBy(desc(workProposals.createdAt))
       .limit(filters.pageSize)
       .offset((filters.page - 1) * filters.pageSize);
+  });
+}
+
+export async function updateProposal(
+  tenantId: string,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(workProposals)
+      .set({ ...(patch as Partial<typeof workProposals.$inferInsert>), updatedAt: new Date() })
+      .where(and(eq(workProposals.id, id), eq(workProposals.tenantId, tenantId)));
   });
 }
