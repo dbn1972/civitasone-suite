@@ -166,7 +166,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Assign unique `id` to each error message and point the input to it via `aria-describedby`
   - _Requirements: 3.5_
 
-- [ ] 23. LineItemsEditor delete button label
+- [x] 23. LineItemsEditor delete button label
   - `apps/web/src/app/(app)/procurement/_components/LineItemsEditor.tsx`
   - Change `<button onClick={...}>×</button>` to `<button aria-label={\`Remove line item ${n + 1}\`} onClick={...}>×</button>`
   - _Requirements: 3.6_
