@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { ConfirmDialog } from "@/app/_components/ds";
 
@@ -105,6 +106,10 @@ function SplitProposalForm({
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [splitResult, setSplitResult] = useState<{
+    id: string;
+    workNumber?: string;
+  } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -116,17 +121,79 @@ function SplitProposalForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parentWorkId: workId, description }),
       });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message ?? `Request failed (${res.status})`);
+        throw new Error((data?.message as string) ?? `Request failed (${res.status})`);
       }
-      toast.success("Split initiated. New work will appear shortly.");
-      onClose();
-    } catch (err: any) {
-      setError(err?.message ?? "Unknown error");
+
+      // Capture child work info from response envelope (best-effort)
+      const inner = (data?.data ?? data) as Record<string, unknown>;
+      const childId =
+        (inner?.id as string | undefined) ??
+        (data?.childWorkId as string | undefined) ??
+        null;
+      const childNo =
+        (inner?.workNumber as string | undefined) ??
+        (data?.workNumber as string | undefined) ??
+        undefined;
+
+      if (childId) {
+        setSplitResult({ id: childId, workNumber: childNo });
+      }
+      toast.success("Split initiated.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setBusy(false);
     }
+  }
+
+  // Success state — show child work link
+  if (splitResult) {
+    return (
+      <div style={formPad}>
+        <div
+          style={{
+            background: "#ecfdf3",
+            borderRadius: 10,
+            padding: "14px 16px",
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: "#166534" }}>
+            ✅ Split created
+          </p>
+          <p style={{ fontSize: 13, color: "#166534", marginBottom: 10 }}>
+            Child work{splitResult.workNumber ? ` ${splitResult.workNumber}` : ""} is
+            now active. The new work ID is{" "}
+            <code style={{ fontSize: 12 }}>{splitResult.id.slice(0, 8)}…</code>
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link
+              href={`/works/proposals/${splitResult.id}`}
+              className="btn primary"
+              style={{ fontSize: 13, padding: "6px 14px" }}
+            >
+              View child work →
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--line)",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -193,10 +260,10 @@ function MapCOAForm({
     try {
       const payload: Record<string, string> = { workId, majorHead };
       if (subMajorHead) payload.subMajorHead = subMajorHead;
-      if (minorHead) payload.minorHead = minorHead;
-      if (subHead) payload.subHead = subHead;
-      if (detailHead) payload.detailHead = detailHead;
-      if (objectHead) payload.objectHead = objectHead;
+      if (minorHead)    payload.minorHead    = minorHead;
+      if (subHead)      payload.subHead      = subHead;
+      if (detailHead)   payload.detailHead   = detailHead;
+      if (objectHead)   payload.objectHead   = objectHead;
 
       const res = await fetch("/api/proxy/v1/works/proposals/coa", {
         method: "POST",
@@ -205,12 +272,12 @@ function MapCOAForm({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message ?? `Request failed (${res.status})`);
+        throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
       }
       toast.success("COA mapped.");
       onClose();
-    } catch (err: any) {
-      setError(err?.message ?? "Unknown error");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setBusy(false);
     }
@@ -220,7 +287,7 @@ function MapCOAForm({
     label: string,
     value: string,
     onChange: (v: string) => void,
-    placeholder: string
+    placeholder: string,
   ) => (
     <div>
       <label style={labelStyle}>{label}</label>
@@ -255,10 +322,10 @@ function MapCOAForm({
         </div>
         <div style={gridStyle}>
           {optionalInput("Sub-Major Head", subMajorHead, setSubMajorHead, "e.g. 01")}
-          {optionalInput("Minor Head", minorHead, setMinorHead, "e.g. 800")}
-          {optionalInput("Sub Head", subHead, setSubHead, "e.g. 01")}
-          {optionalInput("Detail Head", detailHead, setDetailHead, "e.g. 01")}
-          {optionalInput("Object Head", objectHead, setObjectHead, "e.g. 26")}
+          {optionalInput("Minor Head",     minorHead,    setMinorHead,    "e.g. 800")}
+          {optionalInput("Sub Head",       subHead,      setSubHead,      "e.g. 01")}
+          {optionalInput("Detail Head",    detailHead,   setDetailHead,   "e.g. 01")}
+          {optionalInput("Object Head",    objectHead,   setObjectHead,   "e.g. 26")}
         </div>
         <SubmitBtn busy={busy} label="Map COA" />
       </form>
@@ -276,25 +343,21 @@ function MapOfficeForm({
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [divisionId, setDivisionId] = useState("");
+  const [divisionId, setDivisionId]     = useState("");
   const [subDivisionId, setSubDivisionId] = useState("");
-  const [sectionId, setSectionId] = useState("");
-  const [isNodal, setIsNodal] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sectionId, setSectionId]       = useState("");
+  const [isNodal, setIsNodal]           = useState(false);
+  const [busy, setBusy]                 = useState(false);
+  const [error, setError]               = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const payload: Record<string, unknown> = {
-        workId,
-        divisionId,
-        isNodal,
-      };
+      const payload: Record<string, unknown> = { workId, divisionId, isNodal };
       if (subDivisionId) payload.subDivisionId = subDivisionId;
-      if (sectionId) payload.sectionId = sectionId;
+      if (sectionId)     payload.sectionId     = sectionId;
 
       const res = await fetch("/api/proxy/v1/works/proposals/office-mapping", {
         method: "POST",
@@ -303,12 +366,12 @@ function MapOfficeForm({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message ?? `Request failed (${res.status})`);
+        throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
       }
       toast.success("Office mapped.");
       onClose();
-    } catch (err: any) {
-      setError(err?.message ?? "Unknown error");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setBusy(false);
     }
@@ -359,10 +422,7 @@ function MapOfficeForm({
             onChange={(e) => setIsNodal(e.target.checked)}
             style={{ width: 16, height: 16, cursor: "pointer" }}
           />
-          <label
-            htmlFor="isNodal"
-            style={{ ...labelStyle, marginBottom: 0, cursor: "pointer" }}
-          >
+          <label htmlFor="isNodal" style={{ ...labelStyle, marginBottom: 0, cursor: "pointer" }}>
             Mark as nodal division
           </label>
         </div>
@@ -382,8 +442,8 @@ export function ProposalExtActions({ workId }: ProposalExtActionsProps) {
   }
 
   const sections = [
-    { id: "split", label: "Split Proposal" },
-    { id: "coa", label: "Map COA" },
+    { id: "split",  label: "Split Proposal" },
+    { id: "coa",    label: "Map COA" },
     { id: "office", label: "Map Office" },
   ];
 

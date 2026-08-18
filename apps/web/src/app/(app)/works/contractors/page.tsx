@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
@@ -21,15 +21,19 @@ export type ContractorRow = {
   pan: string;
   phone: string;
   rating: string;
+  activeStatus: string;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-function formatRating(perf: number | null | undefined, count: number | undefined): string {
+function formatRating(
+  perf: number | null | undefined,
+  count: number | undefined,
+): string {
   if (perf == null) return "Not rated";
-  return String(perf) + "/5 (" + String(count ?? 0) + " reviews)";
+  return `${perf}/5 (${count ?? 0} reviews)`;
 }
 
 function mapContractors(payload: unknown): ContractorRow[] | null {
@@ -43,14 +47,17 @@ function mapContractors(payload: unknown): ContractorRow[] | null {
     if (!isRecord(raw)) return [];
     const row = raw as RawContractor;
     if (typeof row.id !== "string") return [];
-    return [{
-      id: row.id,
-      name: String(row.name ?? "—"),
-      registrationNo: String(row.registrationNo ?? "—"),
-      pan: String(row.pan ?? "—"),
-      phone: String(row.phone ?? "—"),
-      rating: formatRating(row.performanceRating, row.ratingCount),
-    }];
+    return [
+      {
+        id: row.id,
+        name: String(row.name ?? "—"),
+        registrationNo: String(row.registrationNo ?? "—"),
+        pan: String(row.pan ?? "—"),
+        phone: String(row.phone ?? "—"),
+        rating: formatRating(row.performanceRating, row.ratingCount),
+        activeStatus: row.active !== false ? "Active" : "Inactive",
+      },
+    ];
   });
 }
 
@@ -67,10 +74,17 @@ const columns: { key: keyof ContractorRow; label: string }[] = [
   { key: "pan",            label: "PAN" },
   { key: "phone",          label: "Phone" },
   { key: "rating",         label: "Performance Rating" },
+  { key: "activeStatus",   label: "Status" },
 ];
 
 export default async function ContractorsPage() {
   const { data: contractors, source } = await getContractors();
+
+  const total      = contractors.length;
+  const activeCount  = contractors.filter((c) => c.activeStatus === "Active").length;
+  const ratedCount   = contractors.filter((c) => c.rating !== "Not rated").length;
+  const unratedCount = total - ratedCount;
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -91,13 +105,21 @@ export default async function ContractorsPage() {
           </div>
         }
       />
-      <Card title={"Contractors (" + contractors.length + ")"}>
+
+      <StatGrid>
+        <StatCard icon="🏢" iconBg="var(--infobg, #eff6ff)"  label="Total"    value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)"  label="Active"   value={activeCount} />
+        <StatCard icon="⭐" iconBg="var(--warnbg, #fef3c7)"  label="Rated"    value={ratedCount} />
+        <StatCard icon="🔲" iconBg="var(--panel, #f1f5f9)"   label="Unrated"  value={unratedCount} />
+      </StatGrid>
+
+      <Card title={`Contractors (${total})`}>
         <DataTable<ContractorRow>
           columns={columns}
           rows={contractors}
           sortable
           filterable
-          filterPlaceholder="Filter by name, registration..."
+          filterPlaceholder="Filter by name, registration…"
           pageSize={20}
           emptyIcon="🏢"
           emptyTitle="No contractors registered"
