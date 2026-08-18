@@ -87,7 +87,8 @@ export async function listCheckinLog(tenantId: string, limit = 200) {
       ? (() => {
           const [ih, im] = r.inTime.split(":").map(Number) as [number, number];
           const [oh, om] = r.outTime!.split(":").map(Number) as [number, number];
-          const mins = (oh * 60 + om) - (ih * 60 + im);
+          let mins = (oh * 60 + om) - (ih * 60 + im);
+          if (mins < 0) mins += 1440; // cross-midnight shift
           return mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
         })()
       : "—",

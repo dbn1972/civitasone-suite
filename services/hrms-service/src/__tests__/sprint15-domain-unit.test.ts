@@ -30,7 +30,7 @@ describe("assessment domain — gradeAttempt", () => {
   it("awards full marks for a correct single answer", () => {
     const result = gradeAttempt([q1], [{ questionId: "q1", response: ["A"] }]);
     expect(result.score).toBe(10);
-    expect(result.perQuestion[0].awarded).toBe(10);
+    expect(result.perQuestion[0]!.awarded).toBe(10);
   });
 
   it("awards 0 for a wrong single answer", () => {
@@ -61,7 +61,7 @@ describe("assessment domain — gradeAttempt", () => {
   it("awards 0 for unanswered question (not in answers list)", () => {
     const result = gradeAttempt([q1], []);
     expect(result.score).toBe(0);
-    expect(result.perQuestion[0].awarded).toBe(0);
+    expect(result.perQuestion[0]!.awarded).toBe(0);
   });
 
   it("sums scores across multiple questions", () => {

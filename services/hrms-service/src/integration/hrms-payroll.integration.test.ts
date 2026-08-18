@@ -282,7 +282,7 @@ describe("Leave approval event shape — payroll LOP consumer contract", () => {
     expect(r.statusCode).not.toBe(500);
     // Regardless of acceptance, verify that if published, event contains LOP-required fields
     if (H.queuePublish.mock.calls.length > 0) {
-      const [_topic, event] = H.queuePublish.mock.calls[0];
+      const [_topic, event] = H.queuePublish.mock.calls[0]!;
       // payroll LOP consumer expects: employeeId, daysApplied, fromDate
       if (event.payload) {
         if (event.payload.employeeId) expect(typeof event.payload.employeeId).toBe("string");
@@ -314,7 +314,7 @@ describe("Attendance event shape — payroll LOP consumer contract", () => {
     expect(r.statusCode).not.toBe(500);
     // If event published, validate payroll LOP consumer expected shape
     if (H.queuePublish.mock.calls.length > 0) {
-      const [_topic, event] = H.queuePublish.mock.calls[0];
+      const [_topic, event] = H.queuePublish.mock.calls[0]!;
       if (event.payload?.attendanceDate) {
         expect(typeof event.payload.attendanceDate).toBe("string");
       }

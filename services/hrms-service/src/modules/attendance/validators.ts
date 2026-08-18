@@ -9,7 +9,10 @@ const attendanceRecord = z.object({
   shiftId:        z.string().uuid().optional(),
   lateMins:       z.number().int().nonnegative().default(0),
   source:         z.string().default("manual"),
-});
+}).refine(
+  (data) => data.attendanceDate <= new Date().toISOString().slice(0, 10),
+  { message: "attendanceDate cannot be in the future", path: ["attendanceDate"] }
+);
 
 export const markAttendanceBody = z.object({
   records: z.array(attendanceRecord).min(1).max(200),
@@ -26,7 +29,10 @@ export const regularisationCreateBody = z.object({
   date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
   requestedStatus: z.enum(["present", "absent", "half_day"]),
   reason:          z.string().min(1),
-});
+}).refine(
+  (data) => data.date <= new Date().toISOString().slice(0, 10),
+  { message: "regularisation date cannot be in the future", path: ["date"] }
+);
 export type RegularisationCreateBody = z.infer<typeof regularisationCreateBody>;
 
 // DEF-AT-001: lock / unlock an attendance period (payroll cut-off).

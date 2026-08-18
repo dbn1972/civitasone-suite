@@ -54,19 +54,19 @@ export async function auditLog(txOrDb: typeof db, entry: AuditEntry): Promise<vo
     await txOrDb.insert(hrmsAuditLog).values({
       tenantId: entry.tenantId,
       actorId: entry.actorId,
-      actorName: entry.actorName,
+      actorName: entry.actorName ?? null,
       action: entry.action,
       resourceType: entry.resourceType,
-      resourceId: entry.resourceId,
+      resourceId: entry.resourceId ?? null,
       payload: entry.payload ?? null,
-      ipAddress: entry.ipAddress,
-      correlationId: entry.correlationId,
+      ipAddress: entry.ipAddress ?? null,
+      correlationId: entry.correlationId ?? null,
     });
   } catch (err) {
     // Audit must never block business operations. Log and continue.
     // The central audit-service (outbox) is the primary audit record.
-    const pino = await import("pino");
-    const log = pino.default({ name: "hrms-audit-log" });
+    const { pino: pinoFactory } = await import("pino");
+    const log = pinoFactory({ name: "hrms-audit-log" });
     log.error({ err, entry }, "failed to write local audit log entry");
   }
 }
@@ -101,9 +101,9 @@ export function createAuditHook() {
       actorId,
       action,
       resourceType,
-      resourceId,
-      correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
-      ipAddress: req.headers["x-forwarded-for"] as string ?? req.headers["x-real-ip"] as string,
+      ...(resourceId !== undefined ? { resourceId } : {}),
+      correlationId: (req.headers["x-correlation-id"] as string | undefined) ?? req.id,
+      ...(() => { const ip = (req.headers["x-forwarded-for"] as string | undefined) ?? (req.headers["x-real-ip"] as string | undefined); return ip !== undefined ? { ipAddress: ip } : {}; })(),
     });
   };
 }

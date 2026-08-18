@@ -4,6 +4,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { cache } from "../../shared/infra.js";
 import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -110,6 +111,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
     const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "approved", ctx.actorId, reason);
     if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
     return reply.send({ id, status: "approved" });
   });
 
@@ -120,6 +122,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body ?? {});
     const ok = await repo.updateRegularisationStatus(ctx.tenantId, id, "rejected", ctx.actorId, reason);
     if (!ok) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
     return reply.send({ id, status: "rejected" });
   });
 
@@ -183,6 +186,11 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       hoursRequested: z.number().min(0.5).max(24),
       reason:         z.string().max(500).optional(),
     }).parse(req.body);
+    // IDOR guard: employees may only submit OT requests for themselves
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHrActor && body.employeeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only create overtime requests for themselves");
+    }
     const rows = await db.insert(hrmsOvertimeRequests).values({
       tenantId: ctx.tenantId, employeeId: body.employeeId,
       requestDate: body.requestDate, hoursRequested: String(body.hoursRequested),
@@ -197,10 +205,13 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "employee", "manager"]);
     const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
+    // IDOR guard: employees may only read their own OT requests
+    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
     const rows = await db.select().from(hrmsOvertimeRequests)
       .where(and(
         eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
-        q.empId ? eq(hrmsOvertimeRequests.employeeId, q.empId) : undefined,
+        effectiveEmpId ? eq(hrmsOvertimeRequests.employeeId, effectiveEmpId) : undefined,
       ))
       .orderBy(desc(hrmsOvertimeRequests.requestDate))
       .limit(200);
