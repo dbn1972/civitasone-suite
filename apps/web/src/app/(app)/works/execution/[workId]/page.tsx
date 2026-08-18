@@ -151,6 +151,13 @@ export default async function ExecutionDetailPage({
             >
               + Raise issue
             </Link>
+            <Link
+              href={"/works/execution/photos/new?workId=" + params.workId}
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              📷 Add photo
+            </Link>
           </div>
         }
       />
