@@ -107,6 +107,20 @@ export async function updateLeaveApp(tx: Writer, id: string, patch: Partial<type
   await tx.update(hrmsLeaveApps).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsLeaveApps.id, id));
 }
 
+/**
+ * H2 — Race-safe approve: update only if current status is still 'pending'.
+ * Returns the number of rows updated (1 = success, 0 = already processed by
+ * another worker). Callers must check the return value and throw
+ * LEAVE_ALREADY_PROCESSED when 0 to prevent double-approval under concurrency.
+ */
+export async function approveLeaveApp(tx: Writer, id: string, patch: Partial<typeof hrmsLeaveApps.$inferInsert>): Promise<number> {
+  const result = await tx.update(hrmsLeaveApps)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(hrmsLeaveApps.id, id), eq(hrmsLeaveApps.status, "pending")))
+    .returning({ id: hrmsLeaveApps.id });
+  return result.length;
+}
+
 export async function debitLeaveBalance(tx: Writer, allocId: string, days: number): Promise<void> {
   // H7 FIX: Guarded atomic UPDATE prevents lost updates under concurrency.
   // WHERE balance_days >= days ensures we never go negative; RETURNING confirms success.

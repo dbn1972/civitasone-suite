@@ -92,40 +92,52 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     let employeeId = "";
     let fromDate = "";
     let toDate = "";
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findLeaveAppById(p.id, p.tenantId);
-      if (!app) throw new Error(`leave app ${p.id} not found`);
-      assertLeaveAppStatusTransition(app.status, "approved");
-      employeeId = app.employeeId;
-      fromDate = app.fromDate;
-      toDate = app.toDate;
-      await repo.debitLeaveBalance(tx, app.allocId, app.daysApplied);
-      await repo.updateLeaveApp(tx, p.id, { status: "approved", approvedBy: p.approvedBy, updatedBy: msg.actorId });
-      await markLeaveDaysOnAttendance(tx, {
-        tenantId: p.tenantId,
-        employeeId: app.employeeId,
-        fromDate: app.fromDate,
-        toDate: app.toDate,
-        actorId: msg.actorId,
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const app = await repo.findLeaveAppById(p.id, p.tenantId);
+        if (!app) throw new Error(`leave app ${p.id} not found`);
+        assertLeaveAppStatusTransition(app.status, "approved");
+        employeeId = app.employeeId;
+        fromDate = app.fromDate;
+        toDate = app.toDate;
+        await repo.debitLeaveBalance(tx, app.allocId, app.daysApplied);
+        // H2: race-safe approve — WHERE id = $1 AND status = 'pending' ensures only
+        // one concurrent worker succeeds; the other gets rowsAffected = 0 and aborts.
+        const rowsAffected = await repo.approveLeaveApp(tx, p.id, { status: "approved", approvedBy: p.approvedBy, updatedBy: msg.actorId });
+        if (rowsAffected === 0) throw new Error("LEAVE_ALREADY_PROCESSED");
+        await markLeaveDaysOnAttendance(tx, {
+          tenantId: p.tenantId,
+          employeeId: app.employeeId,
+          fromDate: app.fromDate,
+          toDate: app.toDate,
+          actorId: msg.actorId,
+        });
+        await enqueue(tx, {
+          topic: EVENTS.leaveApproved, eventType: EVENTS.leaveApproved,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { leaveAppId: p.id, employeeId: app.employeeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
+        });
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.approved",
+            recipient: app.employeeId,
+            recipientId: app.employeeId,
+            variables: { leaveAppId: p.id, days: String(app.daysApplied) },
+          }),
+        });
+        await audit(tx, msg, "approve", "leave_app", p.id);
       });
-      await enqueue(tx, {
-        topic: EVENTS.leaveApproved, eventType: EVENTS.leaveApproved,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { leaveAppId: p.id, employeeId: app.employeeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
-      });
-      await enqueue(tx, {
-        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: buildNotificationPayload({
-          eventType: "hrms.leave.approved",
-          recipient: app.employeeId,
-          recipientId: app.employeeId,
-          variables: { leaveAppId: p.id, days: String(app.daysApplied) },
-        }),
-      });
-      await audit(tx, msg, "approve", "leave_app", p.id);
-    });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === "LEAVE_ALREADY_PROCESSED") {
+        // Idempotent safety: another worker already approved this leave application.
+        // Log and return without re-queueing — this is not a bug, just a concurrent duplicate.
+        return;
+      }
+      throw err;
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
   });

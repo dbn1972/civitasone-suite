@@ -77,7 +77,6 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
         name: r.fullName,
         department: deptNameById.get(r.departmentId) ?? "—",
         employeeType: r.employeeType,
-        basicMinor: Number(r.basicMinor ?? 0),
         status: r.status, // P1-5: canonical lowercase (see employee/status.ts)
       })),
       pagination: {

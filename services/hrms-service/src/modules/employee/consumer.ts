@@ -59,6 +59,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "create", "employee", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
+    // M1: invalidate list cache so new employee appears in paginated lists
+    await cache.invalidateResource(msg.tenantId, "employee");
   });
 
   queue.subscribe(COMMANDS.employeeConfirm, async (msg) => {
@@ -69,6 +71,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "confirm", "employee", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
+    // M1: status change visible in list
+    await cache.invalidateResource(msg.tenantId, "employee");
   });
 
   queue.subscribe(COMMANDS.employeeTransfer, async (msg) => {
@@ -93,6 +97,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
+    // M1: department and status change visible in list
+    await cache.invalidateResource(msg.tenantId, "employee");
   });
 
   // eOffice loop — record a transfer REQUEST in `pending_approval` rather than
@@ -215,6 +221,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "separate", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
+    // M1: status change (separated) visible in list
+    await cache.invalidateResource(msg.tenantId, "employee");
   });
 
   queue.subscribe(COMMANDS.employeeUpdate, async (msg) => {
@@ -252,6 +260,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "update", "employee", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
+    // M1: any field change may affect list display (name, email, status-derived fields)
+    await cache.invalidateResource(msg.tenantId, "employee");
   });
 }
 

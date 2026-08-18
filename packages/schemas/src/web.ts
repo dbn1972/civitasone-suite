@@ -44,7 +44,6 @@ export const employeeSummarySchema = z.object({
   name: z.string(),
   department: z.string(),
   employeeType: z.string().optional(),
-  basicMinor: z.number().optional(),
   status: z.string(),
 });
 

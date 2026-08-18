@@ -24,9 +24,11 @@
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/render": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/search": "workspace:*",
+    "@civitasone/storage": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "drizzle-orm": "^0.30.0",
@@ -34,8 +36,7 @@
     "ioredis": "^5.4.1",
     "pino": "^8.21.0",
     "postgres": "^3.4.0",
-    "zod": "^3.23.0",
-    "@civitasone/storage": "workspace:*"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
