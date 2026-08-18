@@ -96,7 +96,7 @@ function ProposalEditForm({
 
     const costMinor = Math.round(parseFloat(costRupees) * 100);
     if (!isNaN(costMinor) && String(costMinor) !== String(proposal.estimatedCostMinor))
-      patch.estimatedCostMinor = costMinor;
+      patch.estimatedCostMinor = String(costMinor);
 
     if (district !== (proposal.district ?? "")) patch.district = district || null;
     if (taluka !== (proposal.taluka ?? "")) patch.taluka = taluka || null;

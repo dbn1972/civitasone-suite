@@ -41,3 +41,5 @@ export const createAwardSchema = z.object({
 export const finalizeAwardSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const idParamSchema = z.object({ id: z.string().uuid() });

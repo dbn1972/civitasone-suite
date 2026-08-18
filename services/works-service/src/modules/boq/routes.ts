@@ -59,7 +59,7 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/works/boq/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const body = v.updateBoqItemSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
+    const body = v.updateBoqItemSchema.parse({ ...(req.body as object), id: v.idParamSchema.parse(req.params).id });
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateBoqItemCommand(ctx, body));
   });
 
@@ -67,7 +67,7 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/works/boq/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const body = v.deleteBoqItemSchema.parse({ id: (req.params as { id: string }).id });
+    const body = v.deleteBoqItemSchema.parse({ id: v.idParamSchema.parse(req.params).id });
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteBoqItemCommand(ctx, body.id));
   });
 }

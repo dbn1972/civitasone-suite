@@ -26,3 +26,5 @@ export const createTsSchema = z.object({
 export const finalizeApprovalSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const idParamSchema = z.object({ id: z.string().uuid() });

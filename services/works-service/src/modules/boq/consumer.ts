@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -28,7 +28,7 @@ export function registerBoqConsumers(q: Queue): void {
       }).from(boqItems)
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.workId, workId)));
       if (isDuplicateBoqLine(existingRows, workId, itemCode, itemDescription)) {
-        return;
+        throw new NonRetryableError("DUPLICATE_BOQ_LINE: a BoQ line with the same code and description already exists for this work");
       }
 
       const rate = BigInt(p.rate as string | number);
@@ -123,14 +123,14 @@ export function registerBoqConsumers(q: Queue): void {
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)))
         .limit(1);
       const current = rows[0];
-      if (!current) return; // nothing to update — reject silently
+      if (!current) throw new NonRetryableError("BOQ_ITEM_NOT_FOUND: BoQ item not found for update");
 
       // Do not allow the quantity of an already-billed BoQ item to change — a
       // measurement references it as the billing ceiling.
       if (p.quantity !== undefined && Number(p.quantity) !== Number(current.quantity)) {
         const measRefs = await tx.select().from(measurements)
           .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.boqItemId, id)));
-        if (measRefs.length > 0) return; // referenced by a measurement — block quantity change
+        if (measRefs.length > 0) throw new NonRetryableError("BOQ_ITEM_QUANTITY_LOCKED: BoQ item quantity cannot be changed — measurement references exist");
       }
 
       const rate = p.rate !== undefined ? BigInt(p.rate as string | number) : current.rate;
@@ -172,7 +172,7 @@ export function registerBoqConsumers(q: Queue): void {
       // award. (There is no lock field on boqItems — enforce via reference check.)
       const measRefs = await tx.select().from(measurements)
         .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.boqItemId, id)));
-      if (measRefs.length > 0) return; // referenced by a measurement — block delete
+      if (measRefs.length > 0) throw new NonRetryableError("BOQ_ITEM_DELETE_BLOCKED: BoQ item cannot be deleted — measurement references exist");
 
       const boqRows = await tx.select().from(boqItems)
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, id)))
@@ -184,7 +184,7 @@ export function registerBoqConsumers(q: Queue): void {
         const hasActiveAward = awardRefs.some(
           (a) => a.status === "dao_finalized" || a.status === "do_finalized",
         );
-        if (hasActiveAward) return; // active award exists — block delete
+        if (hasActiveAward) throw new NonRetryableError("BOQ_ITEM_DELETE_BLOCKED: BoQ item cannot be deleted — active award exists");
       }
 
       await tx.delete(boqItems)

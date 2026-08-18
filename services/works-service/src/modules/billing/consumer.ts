@@ -1,4 +1,4 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
@@ -80,7 +80,7 @@ export function registerBillingConsumers(q: Queue): void {
           .limit(1);
         const mb = mbRows[0];
         if (!mb || !canCreateBill(mb.status)) {
-          return; // reject: MB missing or not in an allowed status for bill creation
+          throw new NonRetryableError("MB_INVALID_STATUS: measurement book missing or not in allowed status for bill creation");
         }
       }
 
@@ -96,7 +96,7 @@ export function registerBillingConsumers(q: Queue): void {
         .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, awardId)))
         .limit(1);
       const award = awardRows[0];
-      if (!award) return;
+      if (!award) throw new NonRetryableError("AWARD_NOT_FOUND: award record not found for bill create");
 
       const priorBillRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.workId, workId)));
@@ -105,7 +105,7 @@ export function registerBillingConsumers(q: Queue): void {
         0n,
       );
       if (billAmountExceedsAward(priorBilledGross, gross, award.acceptedAmountMinor)) {
-        return;
+        throw new NonRetryableError("AWARD_CEILING_EXCEEDED: cumulative billed amount exceeds award ceiling");
       }
 
       await tx.insert(bills).values({
@@ -146,7 +146,7 @@ export function registerBillingConsumers(q: Queue): void {
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)))
         .limit(1);
       const bill = billRows[0];
-      if (!bill) return;
+      if (!bill) throw new NonRetryableError("BILL_NOT_FOUND: bill record not found for finalization");
 
       await tx.update(bills)
         .set({ status: nextStatus })
@@ -217,7 +217,7 @@ export function registerBillingConsumers(q: Queue): void {
         .limit(1);
       const boq = boqRows[0];
       if (!boq) {
-        return; // reject: a measurement against a non-existent BoQ item is invalid
+        throw new NonRetryableError("INVALID_BOQ_REF: measurement references non-existent BoQ item");
       }
 
       // FR-BIL-011: enforce the CUMULATIVE billing ceiling. Sum every prior
@@ -228,7 +228,7 @@ export function registerBillingConsumers(q: Queue): void {
       const priorBilled = priorMeasurements.reduce((sum, r) => sum + Number(r.quantity ?? 0), 0);
       const cumulative = priorBilled + quantity;
       if (billedQuantityExceedsBoq(cumulative, Number(boq.quantity))) {
-        return; // reject: cumulative measured quantity exceeds the approved BoQ quantity
+        throw new NonRetryableError("BOQ_QUANTITY_EXCEEDED: cumulative measurement exceeds approved BoQ quantity");
       }
 
       await tx.insert(measurements).values({

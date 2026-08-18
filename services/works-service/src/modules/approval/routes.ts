@@ -49,7 +49,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/approvals/aa/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = v.idParamSchema.parse(req.params);
     const aa = await getAa(ctx.tenantId, id);
     if (!aa) throw new HttpError(404, "NOT_FOUND", "AA not found");
 
@@ -81,7 +81,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/approvals/ts/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = v.idParamSchema.parse(req.params);
     const ts = await getTs(ctx.tenantId, id);
     if (!ts) throw new HttpError(404, "NOT_FOUND", "TS not found");
 

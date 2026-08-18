@@ -39,3 +39,5 @@ export const updateBoqItemSchema = z.object({
 export const deleteBoqItemSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const idParamSchema = z.object({ id: z.string().uuid() });

@@ -20,7 +20,7 @@ export const recordMeasurementSchema = z.object({
 
 export const finalizeMbSchema = z.object({
   id: z.string().uuid(),
-  nextStatus: z.string().min(1),
+  nextStatus: z.enum(["so_finalized", "sdo_finalized", "estimator_finalized", "do_finalized"]),
 });
 
 export const createBillSchema = z.object({
@@ -35,7 +35,7 @@ export const createBillSchema = z.object({
 
 export const finalizeBillSchema = z.object({
   id: z.string().uuid(),
-  nextStatus: z.string().min(1),
+  nextStatus: z.enum(["so_finalized", "sdo_finalized", "auditor_finalized", "dao_finalized", "do_finalized"]),
 });
 
 export const compileAccountSchema = z.object({

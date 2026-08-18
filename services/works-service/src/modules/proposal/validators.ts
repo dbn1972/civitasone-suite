@@ -47,7 +47,7 @@ export const finalizeSchema = z.object({
 
 export const updateProposalSchema = z.object({
   description:        z.string().min(1).max(2048).optional(),
-  estimatedCostMinor: z.coerce.bigint().positive().optional(),
+  estimatedCostMinor: zMoneyMinorString.optional(),
   district:           z.string().max(128).nullable().optional(),
   taluka:             z.string().max(128).nullable().optional(),
   village:            z.string().max(128).nullable().optional(),

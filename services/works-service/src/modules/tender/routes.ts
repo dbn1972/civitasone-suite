@@ -72,7 +72,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/tenders/award/:id/dao-finalize", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "works_admin", "super_admin"]);
-    const body = v.finalizeAwardSchema.parse({ id: (req.params as { id: string }).id });
+    const body = v.finalizeAwardSchema.parse({ id: v.idParamSchema.parse(req.params).id });
     const award = await getAwardById(ctx.tenantId, body.id);
     if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
     const check = canDaoFinalizeAward(award.status);
@@ -85,7 +85,7 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/tenders/award/:id/do-finalize", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["do", "works_admin", "super_admin"]);
-    const body = v.finalizeAwardSchema.parse({ id: (req.params as { id: string }).id });
+    const body = v.finalizeAwardSchema.parse({ id: v.idParamSchema.parse(req.params).id });
     const award = await getAwardById(ctx.tenantId, body.id);
     if (!award) throw new HttpError(404, "NOT_FOUND", "award not found");
     const check = canDoFinalizeAward(award.status);
