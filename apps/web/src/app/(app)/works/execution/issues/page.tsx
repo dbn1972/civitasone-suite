@@ -26,15 +26,15 @@ const columns = [
 ];
 
 export default async function IssuesRegisterPage() {
-  const response = await fetchJson<unknown, IssuesResponse>(
+  const response = await fetchJson<unknown, IssueRow[]>(
     "/api/v1/works/execution/issues?pageSize=100",
-    { data: [] },
+    [],
     {
       telemetryKey: "works.issues.list",
       mapResponse: (raw: unknown) => {
-        if (Array.isArray(raw)) return { data: raw as IssueRow[] };
+        if (Array.isArray(raw)) return raw as IssueRow[];
         const typed = raw as IssuesResponse;
-        return { data: typed.data ?? [] };
+        return typed.data ?? [];
       },
     }
   );
