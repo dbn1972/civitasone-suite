@@ -144,7 +144,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Both tables must be reachable by keyboard (sr-only class, not display:none)
   - _Requirements: 3.1_
 
-- [ ] 19. Movement type chips ARIA
+- [x] 19. Movement type chips ARIA
   - `apps/web/src/app/(app)/inventory/MovementsTable.tsx`
   - Add `role="status"` and `aria-label={\`Movement type: ${movementType}\`}` to each chip
   - _Requirements: 3.2_

@@ -47,7 +47,15 @@ export function MovementsTable({
     { key: "balanceQty", label: "Balance", align: "right" },
     { key: "rateMinor", label: "Rate", align: "right", render: (r) => formatMoney(r.rateMinor) },
     { key: "valueMinor", label: "Value", align: "right", render: (r) => formatMoney(r.valueMinor) },
-    { key: "movementType", label: "Type", render: (r) => <StatusPill status={r.movementType === "receipt" ? "completed" : "open"} label={r.movementType} /> },
+    {
+      key: "movementType",
+      label: "Type",
+      render: (r) => (
+        <span role="status" aria-label={`Movement type: ${r.movementType}`}>
+          <StatusPill status={r.movementType === "receipt" ? "completed" : "open"} label={r.movementType} />
+        </span>
+      ),
+    },
   ];
 
   const cacheNote =
