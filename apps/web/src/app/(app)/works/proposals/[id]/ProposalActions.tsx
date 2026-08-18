@@ -19,7 +19,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  if (!roles.some((r) => PROPOSAL_WRITE_ROLES.includes(r))) return null;
+  if (!roles.some((r) => (PROPOSAL_WRITE_ROLES as readonly string[]).includes(r))) return null;
 
   const isDaoFinalized = status === "dao_finalized";
   if (isDaoFinalized) return null;

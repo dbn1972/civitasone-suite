@@ -440,7 +440,7 @@ function MapOfficeForm({
 export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
 
-  if (!roles.some((r) => PROPOSAL_WRITE_ROLES.includes(r))) return null;
+  if (!roles.some((r) => (PROPOSAL_WRITE_ROLES as readonly string[]).includes(r))) return null;
 
   function toggle(section: string) {
     setOpenSection((prev) => (prev === section ? null : section));
