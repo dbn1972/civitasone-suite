@@ -228,7 +228,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Edit `.github/workflows/nightly.yml` (or equivalent): add LocalStack service container step and run `tests/integration/three-way-match-live.test.ts`
   - _Requirements: 7.2_
 
-- [ ] 34. Add ARIA-visible data tables alongside charts
+- [x] 34. Add ARIA-visible data tables alongside charts
   - This is the test-verifiable side of task 18: write Playwright `expect(page.getByRole('table'))` assertions on the forecast and scorecard pages
   - _Requirements: 3.1_
 
