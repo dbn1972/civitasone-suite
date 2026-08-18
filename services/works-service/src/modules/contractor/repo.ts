@@ -84,11 +84,12 @@ export async function updateContractor(
   tenantId: string,
   id: string,
   patch: Partial<ContractorInsert>,
+  updatedBy: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .update(contractors)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...patch, updatedAt: new Date(), updatedBy })
       .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
   });
 }

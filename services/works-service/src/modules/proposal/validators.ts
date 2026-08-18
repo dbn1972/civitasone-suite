@@ -58,3 +58,5 @@ export const updateProposalSchema = z.object({
 }).refine((b) => Object.keys(b).length > 0, "at least one field required");
 
 export type UpdateProposalBody = z.infer<typeof updateProposalSchema>;
+
+export const idParamSchema = z.object({ id: z.string().uuid() });

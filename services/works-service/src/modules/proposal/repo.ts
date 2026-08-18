@@ -105,11 +105,13 @@ export async function updateProposal(
   tenantId: string,
   id: string,
   patch: Record<string, unknown>,
+  updatedBy: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .update(workProposals)
-      .set({ ...(patch as Partial<typeof workProposals.$inferInsert>), updatedAt: new Date() })
+      .set({ ...(patch as Partial<typeof workProposals.$inferInsert>), updatedAt: new Date(), updatedBy })
       .where(and(eq(workProposals.id, id), eq(workProposals.tenantId, tenantId)));
   });
+  await cache.invalidate(`works:${tenantId}:proposal:${id}`);
 }

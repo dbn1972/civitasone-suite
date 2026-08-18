@@ -70,7 +70,7 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const patch = Object.fromEntries(
       Object.entries(body).filter(([, val]) => val !== undefined),
     ) as Parameters<typeof repo.updateContractor>[2];
-    await repo.updateContractor(ctx.tenantId, id, patch);
+    await repo.updateContractor(ctx.tenantId, id, patch, ctx.actorId);
     const updated = await repo.findContractorById(ctx.tenantId, id);
     return reply.send({ data: updated });
   });

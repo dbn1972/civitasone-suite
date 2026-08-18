@@ -33,7 +33,7 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/proposals/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = v.idParamSchema.parse(req.params);
     const row = await getProposal(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "proposal not found");
     return reply.send({ data: row });
@@ -83,7 +83,7 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/works/proposals/:id/dao-finalize", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "works_admin", "super_admin"]);
-    const { id } = req.params as { id: string };
+    const { id } = v.idParamSchema.parse(req.params);
     const proposal = await getProposal(ctx.tenantId, id);
     if (!proposal) throw new HttpError(404, "NOT_FOUND", "proposal not found");
 
@@ -106,12 +106,12 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/works/proposals/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = v.idParamSchema.parse(req.params);
     const body = v.updateProposalSchema.parse(req.body);
     const existing = await getProposal(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
     if (existing.status !== "draft") throw new HttpError(422, "NOT_DRAFT", "only draft proposals can be edited");
-    await updateProposal(ctx.tenantId, id, body as Record<string, unknown>);
+    await updateProposal(ctx.tenantId, id, body as Record<string, unknown>, ctx.actorId);
     const updated = await getProposal(ctx.tenantId, id);
     return reply.send({ data: updated });
   });
