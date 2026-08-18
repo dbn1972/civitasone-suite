@@ -160,7 +160,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Ensure `Escape` key calls the close handler and returns focus to the trigger button
   - _Requirements: 3.4_
 
-- [ ] 22. CreateGRNForm required-field ARIA
+- [x] 22. CreateGRNForm required-field ARIA
   - `apps/web/src/app/(app)/procurement/grn/new/CreateGRNForm.tsx`
   - Add `aria-required="true"` to each required input/select
   - Assign unique `id` to each error message and point the input to it via `aria-describedby`

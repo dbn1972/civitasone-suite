@@ -159,7 +159,7 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
       <div className="fields">
         <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <span className="label">Purchase order *</span>
-          <select value={poId} onChange={(e) => { const p = pos.find((x) => x.id === e.target.value); if (p) void selectPo(p); }} required style={{ minHeight: 44 }}>
+          <select value={poId} onChange={(e) => { const p = pos.find((x) => x.id === e.target.value); if (p) void selectPo(p); }} required aria-required="true" aria-describedby={status === "error" ? "grn-form-message" : undefined} style={{ minHeight: 44 }}>
             {pos.length === 0 ? <option value="">Loading POs…</option> : null}
             {pos.map((p) => (
               <option key={p.id} value={p.id}>{p.poNo}{p.vendor ? ` — ${p.vendor}` : ""}</option>
@@ -168,7 +168,7 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
         </label>
         <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <span className="label">Vendor *</span>
-          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required style={{ minHeight: 44 }}>
+          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required aria-required="true" aria-describedby={status === "error" ? "grn-form-message" : undefined} style={{ minHeight: 44 }}>
             {vendors.length === 0 ? <option value="">Loading vendors…</option> : null}
             {vendors.map((v) => (
               <option key={v.id} value={v.id}>{v.name}</option>
@@ -201,17 +201,17 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
                   <td>
                     <label className="sr-only" htmlFor={`g-item-${idx}`}>PO item, row {idx + 1}</label>
                     {poItems.length > 0 ? (
-                      <select id={`g-item-${idx}`} value={l.poItemRef} onChange={(e) => pickItem(idx, e.target.value)} style={{ minHeight: 40, width: "100%" }}>
+                      <select id={`g-item-${idx}`} value={l.poItemRef} onChange={(e) => pickItem(idx, e.target.value)} required aria-required="true" style={{ minHeight: 40, width: "100%" }}>
                         <option value="">Select item…</option>
                         {poItems.map((it) => <option key={it.ref} value={it.ref}>{it.itemCode}</option>)}
                       </select>
                     ) : (
-                      <input id={`g-item-${idx}`} value={l.poItemRef} onChange={(e) => updateLine(idx, { poItemRef: e.target.value })} placeholder="PO item ref" style={{ minHeight: 40, width: "100%" }} />
+                      <input id={`g-item-${idx}`} value={l.poItemRef} onChange={(e) => updateLine(idx, { poItemRef: e.target.value })} placeholder="PO item ref" required aria-required="true" style={{ minHeight: 40, width: "100%" }} />
                     )}
                   </td>
                   <td>
                     <label className="sr-only" htmlFor={`g-code-${idx}`}>Item code, row {idx + 1}</label>
-                    <input id={`g-code-${idx}`} value={l.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} required style={{ minHeight: 40, width: "100%" }} />
+                    <input id={`g-code-${idx}`} value={l.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} required aria-required="true" aria-describedby={status === "error" ? "grn-form-message" : undefined} style={{ minHeight: 40, width: "100%" }} />
                   </td>
                   <td className="num"><input type="number" min={0} aria-label={`Ordered qty row ${idx + 1}`} value={l.orderedQty} onChange={(e) => updateLine(idx, { orderedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td className="num"><input type="number" min={0} aria-label={`Received qty row ${idx + 1}`} value={l.receivedQty} onChange={(e) => updateLine(idx, { receivedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
@@ -244,7 +244,7 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "#b91c1c" : "#047857" }}>{message}</p>
+          <p id="grn-form-message" role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "#b91c1c" : "#047857" }}>{message}</p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
