@@ -1,4 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
+import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards } from "./schema.js";
 
@@ -38,7 +39,22 @@ export async function getAwardById(tenantId: string, id: string) {
 /** Tenant-wide tender register (post pre-tender stage), newest first — backs the FE tenders list page. */
 export async function listTenders(tenantId: string, page: number, pageSize: number) {
   return scopedRead(async (tx) => {
-    return tx.select().from(tenders)
+    return tx
+      .select({
+        id: tenders.id,
+        tenantId: tenders.tenantId,
+        workId: tenders.workId,
+        tenderTypeId: tenders.tenderTypeId,
+        tenderAmountMinor: tenders.tenderAmountMinor,
+        openingDate: tenders.openingDate,
+        approvingAuthorityId: tenders.approvingAuthorityId,
+        contractorClassId: tenders.contractorClassId,
+        remarks: tenders.remarks,
+        createdAt: tenders.createdAt,
+        workNumber: workProposals.workNumber,
+      })
+      .from(tenders)
+      .leftJoin(workProposals, eq(workProposals.id, tenders.workId))
       .where(eq(tenders.tenantId, tenantId))
       .orderBy(desc(tenders.createdAt))
       .limit(pageSize)

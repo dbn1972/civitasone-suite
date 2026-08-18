@@ -73,14 +73,15 @@ export function getBills(): Promise<LoaderResult<Row[]>> {
 function mapTenderRow(r: Row): Row {
   const openingDate = strOrNull(r.openingDate);
   const isPast = !!openingDate && new Date(openingDate).getTime() < Date.now();
+  const dbStatus = strOrNull(r.preTenderStatus) ?? strOrNull(r.status);
   return {
     id: str(r.id),
-    work: shortId(strOrNull(r.workId)),
+    work: str(r.workNumber) || shortId(strOrNull(r.workId)),
     tenderType: shortId(strOrNull(r.tenderTypeId)),
     amount: str(r.tenderAmountMinor, "0"),
     openingDate: fmtDate(openingDate),
     authority: shortId(strOrNull(r.approvingAuthorityId)),
-    status: isPast ? "closed" : "open",
+    status: dbStatus ?? (isPast ? "closed" : "open"),
   };
 }
 
@@ -180,9 +181,9 @@ export function getExecutionIssues(): Promise<LoaderResult<Row[]>> {
 function mapClosureRow(r: Row): Row {
   return {
     id: str(r.id),
-    workNumber: shortId(strOrNull(r.workId)),
-    description: "—",
-    agreement: "—",
+    workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
+    description: str(r.description, "—"),
+    agreement: str(r.agreementNumber, "—"),
     statusDate: fmtDate(strOrNull(r.closedDate)),
     remarks: str(r.remarks, "—"),
     status: str(r.closureType, "closed"),
