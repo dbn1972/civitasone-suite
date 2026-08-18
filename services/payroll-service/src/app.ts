@@ -25,6 +25,7 @@ import { nachRoutes } from "./modules/nach/routes.js";
 import { fnfRoutes } from "./modules/fnf/routes.js";
 import { dscConfigRoutes } from "./modules/dsc-config/routes.js";
 import { form16VerifyRoutes } from "./modules/form16-verify/routes.js";
+import { registerRateLimit } from "@civitasone/rate-limit";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -35,6 +36,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // M2: per-user rate limiting -- 300 req/min keyed by actorId, ops paths excluded.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as any).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

@@ -190,7 +190,7 @@ export function computeSlip(input: SlipInput): SlipResult {
   for (const c of rawComponents) {
     if (["BASIC", "DA", "HRA"].includes(c.code)) continue;
     const amt = c.pctOfBasic != null && c.pctOfBasic > 0
-      ? pct(basicMinor, BigInt(Math.round(c.pctOfBasic)))
+      ? roundRupee((basicMinor * BigInt(Math.round(c.pctOfBasic * 100))) / 100n)
       : roundRupee(c.fixedMinor ?? 0n);
     if (amt === 0n) continue;
     (c.type === "earning" ? earnings : deductions).push({ code: c.code, name: c.name, type: c.type, amountMinor: amt });

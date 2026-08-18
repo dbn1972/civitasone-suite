@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { db } from "../../shared/db.js";
+import { sql } from "drizzle-orm";
+import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import type {
@@ -22,6 +25,15 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
+  const existing = await db.execute(sql`
+    SELECT id FROM payroll.payroll_runs
+    WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
+      AND status <> 'failed' LIMIT 1
+  `);
+  if (existing[0]) {
+    throw new HttpError(409, "DUPLICATE_RUN",
+      `a payroll run already exists for ${body.month}: ${existing[0].id}`);
+  }
   await queue.publish(COMMANDS.runCreate, {
     messageId: id, type: COMMANDS.runCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

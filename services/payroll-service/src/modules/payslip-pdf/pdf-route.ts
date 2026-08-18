@@ -8,12 +8,15 @@
  * browsers can print-to-PDF.
  */
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { z } from "zod";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+
+const pathParamSchema = z.object({ id: z.string().uuid() });
 
 function formatAmount(minor: number | bigint): string {
   return (Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -43,13 +46,18 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
   app.get("/v1/payroll/slips/:id/download", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const { id } = req.params as { id: string };
+    const { id } = pathParamSchema.parse(req.params);
 
     const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
       .where(and(eq(payrollSlips.id, id), eq(payrollSlips.tenantId, ctx.tenantId)))
       .limit(1));
     const slip = slipRows[0];
     if (!slip) throw new HttpError(404, "NOT_FOUND", "salary slip not found");
+
+    // SEC-P1-02: a self-service `employee` caller may only download their OWN
+    // payslip — without this any employee could download any co-worker's slip
+    // by iterating slip IDs (IDOR).
+    enforceEmployeeOwnership(ctx, slip.employeeId);
 
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.id, slip.runId), eq(payrollRuns.tenantId, ctx.tenantId)))

@@ -23,6 +23,7 @@
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/render": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/storage": "workspace:*",

@@ -559,7 +559,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.bonusCompute, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; employeeId: string; fy: string; basicMinor: number; bonusPct: number };
-    const bonusAmountMinor = Math.round((p.basicMinor * p.bonusPct) / 100);
+    // bonusPct scaled to basis points to avoid IEEE 754 error (e.g. 8.33 -> 833n bps)
+    const bonusPctBps = BigInt(Math.round(p.bonusPct * 100));
+    const bonusAmountMinor = Number((BigInt(p.basicMinor) * bonusPctBps + 5000n) / 10000n);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
