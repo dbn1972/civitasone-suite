@@ -217,7 +217,7 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
                   <td className="num"><input type="number" min={0} aria-label={`Received qty row ${idx + 1}`} value={l.receivedQty} onChange={(e) => updateLine(idx, { receivedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td className="num"><input type="number" min={0} aria-label={`Accepted qty row ${idx + 1}`} value={l.acceptedQty} onChange={(e) => updateLine(idx, { acceptedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td>
-                    <button type="button" className="btn ghost sm" onClick={() => setLines((p) => p.length > 1 ? p.filter((_, i) => i !== idx) : p)} disabled={lines.length <= 1} aria-label={`Remove line ${idx + 1}`} style={{ minHeight: 40 }}>Remove</button>
+                    <button type="button" className="btn ghost sm" onClick={() => setLines((p) => p.length > 1 ? p.filter((_, i) => i !== idx) : p)} disabled={lines.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>Remove</button>
                   </td>
                 </tr>
               ))}

@@ -86,7 +86,7 @@ export function LineItemsEditor({
                   <td className="num">{formatMoney(lineMinor)}</td>
                   <td>
                     <button type="button" className="btn ghost sm" onClick={() => remove(idx)}
-                      disabled={items.length <= 1} aria-label={`Remove line ${idx + 1}`} style={{ minHeight: 40 }}>
+                      disabled={items.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>
                       Remove
                     </button>
                   </td>
