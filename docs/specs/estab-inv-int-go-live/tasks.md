@@ -204,7 +204,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Steps: apply for quarter → allotment officer grants allotment → applicant occupies → vacate
   - _Requirements: 6.1_
 
-- [ ] 29. Inventory receipt journey E2E spec
+- [x] 29. Inventory receipt journey E2E spec
   - `tests/e2e-live/specs/inventory-receipt-journey.spec.ts`
   - Steps: create GRN → accept → navigate to `/inventory/balances` → verify item balance increased → if item was below reorder level, verify it cleared from low-stock list
   - _Requirements: 6.2_
