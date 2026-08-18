@@ -4,6 +4,7 @@ import { PageHeader, Card } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
+import { ContractorRatingForm } from "./ContractorRatingForm";
 
 type ContractorDetail = {
   id: string;
@@ -190,75 +191,14 @@ export default async function ContractorDetailPage({
         </dl>
       </Card>
 
-      {/* Performance card */}
-      <Card title="Performance">
+      {/* Rate Contractor card */}
+      <Card title="Rate Contractor">
         <div style={{ padding: "16px" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  marginBottom: 4,
-                }}
-              >
-                Current Rating
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>
-                {contractor.performanceRating != null
-                  ? `${contractor.performanceRating.toFixed(1)} / 5.0`
-                  : "—"}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                  marginBottom: 4,
-                }}
-              >
-                Reviews
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>
-                {contractor.ratingCount}
-              </div>
-            </div>
-          </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "var(--muted)",
-              borderTop: "1px solid var(--line)",
-              paddingTop: 10,
-            }}
-          >
-            Use{" "}
-            <code
-              style={{
-                background: "var(--surface2, #f1f5f9)",
-                padding: "1px 6px",
-                borderRadius: 4,
-              }}
-            >
-              PATCH /v1/works/contractors/{params.id}/rate
-            </code>{" "}
-            to update rating.
-          </p>
+          <ContractorRatingForm
+            contractorId={params.id}
+            currentRating={contractor.performanceRating ?? 0}
+            ratingCount={contractor.ratingCount}
+          />
         </div>
       </Card>
 
@@ -275,9 +215,6 @@ export default async function ContractorDetailPage({
         <Link href="/works/contractors" className="btn ghost">
           ← All contractors
         </Link>
-        <span style={{ color: "var(--muted)", fontSize: 13 }}>
-          To issue a rating, use the rating form (W4 — coming soon).
-        </span>
       </div>
     </main>
   );

@@ -6,6 +6,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { ProposalActions } from "./ProposalActions";
+import { ProposalExtActions } from "./ProposalExtActions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -251,6 +252,8 @@ export default async function WorkProposalDetailPage({
           Create AA →
         </Link>
       </div>
+
+      <ProposalExtActions workId={proposal.id ?? params.id} />
     </main>
   );
 }
