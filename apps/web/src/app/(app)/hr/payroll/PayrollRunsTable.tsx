@@ -18,7 +18,7 @@ const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "l
   { key: "status", label: "Status", cellType: "status" },
 ];
 
-export function PayrollRunsTable({ runs, source = "api" }: { runs: PayrollRunDetail[]; source?: "api" | "error" }) {
+export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
     "hr.payroll.runs",
     runs,
@@ -51,9 +51,11 @@ export function PayrollRunsTable({ runs, source = "api" }: { runs: PayrollRunDet
         emptyTitle="No payroll runs yet"
         emptyMessage="Payroll runs process and disburse monthly salaries. Create your first run to get started."
         emptyAction={
-          <Link href="/hr/payroll/period" className="btn primary" style={{ marginTop: 10 }}>
-            Create first run
-          </Link>
+          canAdminister ? (
+            <Link href="/hr/payroll/period" className="btn primary" style={{ marginTop: 10 }}>
+              Create first run
+            </Link>
+          ) : undefined
         }
       />
     </>

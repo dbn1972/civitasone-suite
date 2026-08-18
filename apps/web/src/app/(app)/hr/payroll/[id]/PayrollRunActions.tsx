@@ -14,6 +14,7 @@ type Props = {
   grossAmount: number;
   netAmount: number;
   payPeriod: string;
+  canAdminister?: boolean;
 };
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
@@ -25,6 +26,7 @@ export function PayrollRunActions({
   grossAmount,
   netAmount,
   payPeriod,
+  canAdminister = false,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
@@ -78,8 +80,8 @@ export function PayrollRunActions({
     }
   }
 
-  const canApprove  = status === "processing" || status === "draft";
-  const canDisburse = status === "approved";
+  const canApprove  = canAdminister && (status === "processing" || status === "draft");
+  const canDisburse = canAdminister && status === "approved";
   const canRevert   = status === "failed";
 
   if (!canApprove && !canDisburse && !canRevert) return null;
