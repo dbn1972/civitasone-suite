@@ -1,6 +1,7 @@
 /**
- * Contractor module schema — works.contractors table.
+ * Contractor module schema — works.contractors + works.contractor_ratings tables.
  * Stores registered contractors with class, contact details, and performance rating.
+ * contractor_ratings records every individual rating event for full history.
  * PG schema: `works` (same schema as all other works tables).
  */
 import { pgSchema, uuid, varchar, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
@@ -31,4 +32,18 @@ export const contractors = works.table("contractors", {
 
 export type ContractorRow    = typeof contractors.$inferSelect;
 export type ContractorInsert = typeof contractors.$inferInsert;
-export const schema = { contractors };
+
+export const contractorRatings = works.table("contractor_ratings", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  tenantId:     uuid("tenant_id").notNull(),
+  contractorId: uuid("contractor_id").notNull().references(() => contractors.id, { onDelete: "cascade" }),
+  rating:       integer("rating").notNull(),
+  ratedBy:      uuid("rated_by").notNull(),
+  ratedAt:      timestamp("rated_at", { withTimezone: true }).notNull().defaultNow(),
+  note:         text("note"),
+});
+
+export type ContractorRatingInsert = typeof contractorRatings.$inferInsert;
+export type ContractorRatingRow    = typeof contractorRatings.$inferSelect;
+
+export const schema = { contractors, contractorRatings };

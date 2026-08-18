@@ -1,6 +1,13 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
-import { contractors, type ContractorInsert, type ContractorRow } from "./schema.js";
+import {
+  contractors,
+  contractorRatings,
+  type ContractorInsert,
+  type ContractorRow,
+  type ContractorRatingInsert,
+  type ContractorRatingRow,
+} from "./schema.js";
 
 export type Writer = { insert: Function; update: Function; select: Function };
 
@@ -48,4 +55,29 @@ export async function updateContractorRating(
       updatedAt: new Date(),
     })
     .where(and(eq(contractors.id, id), eq(contractors.tenantId, tenantId)));
+}
+
+export async function insertRatingHistory(
+  tx: Writer,
+  row: Omit<ContractorRatingInsert, "id">,
+): Promise<void> {
+  await (tx as any).insert(contractorRatings).values(row);
+}
+
+export async function listRatingHistory(
+  tenantId: string,
+  contractorId: string,
+  limit = 50,
+): Promise<ContractorRatingRow[]> {
+  return scopedRead((tx) =>
+    tx.select().from(contractorRatings)
+      .where(
+        and(
+          eq(contractorRatings.tenantId, tenantId),
+          eq(contractorRatings.contractorId, contractorId),
+        )
+      )
+      .orderBy(desc(contractorRatings.ratedAt))
+      .limit(limit),
+  );
 }

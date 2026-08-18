@@ -2,9 +2,11 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Card, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
+import type { StatusTimelineStep } from "@/app/_components/ds/designer/StatusTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ProposalActions } from "./ProposalActions";
 import { ProposalExtActions } from "./ProposalExtActions";
 
@@ -108,6 +110,49 @@ async function getProposal(id: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Timeline
+// ---------------------------------------------------------------------------
+
+const PROPOSAL_STATUSES = ["draft", "submitted", "dao_finalized", "ts_eligible", "aa_issued"];
+
+function buildTimelineSteps(proposal: WorkProposal): StatusTimelineStep[] {
+  const statusIdx = PROPOSAL_STATUSES.indexOf(proposal.status);
+  function fmtDate(d: string | null): string | undefined {
+    const s = formatIndianDate(d);
+    return s !== "—" ? s : undefined;
+  }
+  return [
+    {
+      id: "created",
+      label: "Proposal Created",
+      state: statusIdx >= 0 ? "done" : "current",
+      date: fmtDate(proposal.createdAt),
+    },
+    {
+      id: "submitted",
+      label: "Submitted",
+      state: statusIdx >= 1 ? "done" : statusIdx === 0 ? "current" : "upcoming",
+    },
+    {
+      id: "dao_finalized",
+      label: "DAO Finalized",
+      state: statusIdx >= 2 ? "done" : statusIdx === 1 ? "current" : "upcoming",
+      date: fmtDate(proposal.daoFinalizedAt),
+    },
+    {
+      id: "ts_eligible",
+      label: "TS Eligible",
+      state: statusIdx >= 3 ? "done" : statusIdx === 2 ? "current" : "upcoming",
+    },
+    {
+      id: "aa_issued",
+      label: "AA Issued",
+      state: statusIdx >= 4 ? "done" : "upcoming",
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Styles (re-used to keep inline style objects DRY)
 // ---------------------------------------------------------------------------
 
@@ -141,6 +186,8 @@ export default async function WorkProposalDetailPage({
     notFound();
   }
 
+  const roles = getSessionRoles();
+
   const detailRows: Array<[string, string]> = [
     ["Work Number", proposal.workNumber],
     ["Plan/Non-Plan", humanize(proposal.planOrNonPlan)],
@@ -158,9 +205,7 @@ export default async function WorkProposalDetailPage({
         subtitle={truncate(proposal.description, 80)}
         back="/works/proposals"
         backLabel="Proposals"
-        actions={
-          source === "error" ? <DataSourceBadge source="error" /> : undefined
-        }
+
       />
 
       {/* 6 KPI tiles */}
@@ -232,6 +277,13 @@ export default async function WorkProposalDetailPage({
         </dl>
       </Card>
 
+      {/* Progress timeline */}
+      <Card title="Progress">
+        <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}>
+          <StatusTimeline steps={buildTimelineSteps(proposal)} />
+        </div>
+      </Card>
+
       {/* Footer action row */}
       <div
         style={{
@@ -244,7 +296,7 @@ export default async function WorkProposalDetailPage({
         <Link href="/works/proposals" className="btn ghost">
           ← All proposals
         </Link>
-        <ProposalActions id={String(proposal.id ?? "")} status={String(proposal.status ?? "")} />
+        <ProposalActions id={String(proposal.id ?? "")} status={String(proposal.status ?? "")} roles={roles} />
         <Link
           href={"/works/approvals/new?workId=" + proposal.id}
           className="btn secondary"
@@ -253,7 +305,7 @@ export default async function WorkProposalDetailPage({
         </Link>
       </div>
 
-      <ProposalExtActions workId={proposal.id ?? params.id} />
+      <ProposalExtActions workId={proposal.id ?? params.id} roles={roles} />
     </main>
   );
 }

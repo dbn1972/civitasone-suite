@@ -4,17 +4,30 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/app/_components/ds";
 
+const PROPOSAL_WRITE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+];
+
 interface ProposalActionsProps {
   id: string;
   status: string;
+  roles: string[];
 }
 
-export function ProposalActions({ id, status }: ProposalActionsProps) {
+export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  if (!roles.some((r) => PROPOSAL_WRITE_ROLES.includes(r))) return null;
 
   const isDaoFinalized = status === "dao_finalized";
   if (isDaoFinalized) return null;

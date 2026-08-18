@@ -5,8 +5,19 @@ import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { ConfirmDialog } from "@/app/_components/ds";
 
+const PROPOSAL_WRITE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+];
+
 interface ProposalExtActionsProps {
   workId: string;
+  roles: string[];
 }
 
 const cardStyle: React.CSSProperties = {
@@ -102,7 +113,7 @@ function SplitProposalForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -243,7 +254,7 @@ function MapCOAForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [majorHead, setMajorHead] = useState("");
   const [subMajorHead, setSubMajorHead] = useState("");
   const [minorHead, setMinorHead] = useState("");
@@ -342,7 +353,7 @@ function MapOfficeForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [divisionId, setDivisionId]     = useState("");
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
@@ -434,8 +445,10 @@ function MapOfficeForm({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function ProposalExtActions({ workId }: ProposalExtActionsProps) {
+export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
+
+  if (!roles.some((r) => PROPOSAL_WRITE_ROLES.includes(r))) return null;
 
   function toggle(section: string) {
     setOpenSection((prev) => (prev === section ? null : section));

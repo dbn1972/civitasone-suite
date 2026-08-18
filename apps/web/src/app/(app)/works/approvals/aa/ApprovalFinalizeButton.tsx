@@ -1,0 +1,1 @@
+export { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";

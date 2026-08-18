@@ -24,7 +24,7 @@ const labelStyle: React.CSSProperties = {
 
 export function IssueCloseForm() {
   const router = useRouter();
-  const toast = useToast();
+  const { toast } = useToast();
 
   const [issueId, setIssueId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);

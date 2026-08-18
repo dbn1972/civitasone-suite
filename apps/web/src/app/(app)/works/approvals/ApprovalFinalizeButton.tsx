@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast } from "@/app/_components/ds";
+import { useToast } from "@/app/_components/ds/Toast";
 
 interface ApprovalFinalizeButtonProps {
   id: string;
@@ -10,63 +10,92 @@ interface ApprovalFinalizeButtonProps {
   status: string;
 }
 
-const LABELS = {
-  aa: { title: "Finalize Administrative Approval", label: "Finalize AA" },
-  ts: { title: "Finalize Technical Sanction", label: "Finalize TS" },
-} as const;
+// Only show the Finalize button for statuses that allow finalization.
+// Intermediate or already-finalized statuses hide the button to avoid confusing errors.
+const FINALIZABLE_STATUSES = new Set(["draft", "submitted"]);
+const FINALIZED_STATUSES = new Set(["finalized", "approved", "published"]);
 
-export function ApprovalFinalizeButton({ id, type, status }: ApprovalFinalizeButtonProps) {
+export function ApprovalFinalizeButton({
+  id,
+  type,
+  status,
+}: ApprovalFinalizeButtonProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [done, setDone] = useState(FINALIZED_STATUSES.has(status));
 
-  if (status !== "draft") return null;
+  // Not in a finalizable state and not yet done — hide entirely
+  if (!done && !FINALIZABLE_STATUSES.has(status)) return null;
+
+  if (done) {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "8px 16px",
+          borderRadius: 8,
+          background: "#ecfdf3",
+          color: "#166534",
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+      >
+        ✓ Finalized
+      </span>
+    );
+  }
 
   async function handleFinalize() {
+    if (busy) return;
     setBusy(true);
-    setErrorMessage("");
     try {
       const res = await fetch(
         `/api/proxy/v1/works/approvals/${type}/${id}/finalize`,
         { method: "POST" },
       );
       if (!res.ok) {
-        setErrorMessage(await res.text().catch(() => "Request failed"));
+        const data = await res.json().catch(() => ({}));
+        toast.error(
+          (data as { message?: string }).message ??
+            `Finalize failed (${res.status})`,
+        );
         return;
       }
-      toast.success(`${type.toUpperCase()} finalized successfully.`);
-      setOpen(false);
-      setTimeout(() => router.refresh(), 600);
+      toast.success(
+        type === "aa"
+          ? "Administrative Approval finalized."
+          : "Technical Sanction finalized.",
+      );
+      setDone(true);
+      setTimeout(() => router.refresh(), 800);
     } catch {
-      setErrorMessage("Network error. Please try again.");
+      toast.error("Network error — could not finalize.");
     } finally {
       setBusy(false);
     }
   }
 
-  const { title, label } = LABELS[type];
-
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="btn primary">
-        {label}
-      </button>
-      <ConfirmDialog
-        open={open}
-        title={title}
-        description="Once finalized this approval cannot be revised. Ensure all details are correct before proceeding."
-        confirmLabel="Finalize"
-        danger
-        busy={busy}
-        errorMessage={errorMessage || undefined}
-        onConfirm={handleFinalize}
-        onCancel={() => {
-          setOpen(false);
-          setErrorMessage("");
-        }}
-      />
-    </>
+    <button
+      type="button"
+      onClick={handleFinalize}
+      disabled={busy}
+      style={{
+        padding: "8px 20px",
+        borderRadius: 8,
+        background: "var(--accent)",
+        color: "#fff",
+        border: "none",
+        fontWeight: 600,
+        fontSize: 14,
+        cursor: busy ? "not-allowed" : "pointer",
+        opacity: busy ? 0.7 : 1,
+      }}
+    >
+      {busy ? "Finalizing…" : type === "aa" ? "Finalize AA" : "Finalize TS"}
+    </button>
   );
 }

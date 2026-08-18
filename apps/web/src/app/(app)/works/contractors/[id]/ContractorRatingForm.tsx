@@ -9,12 +9,14 @@ interface ContractorRatingFormProps {
   contractorId: string;
   currentRating: number;
   ratingCount: number;
+  canRate: boolean;
 }
 
 export function ContractorRatingForm({
   contractorId,
   currentRating,
   ratingCount,
+  canRate,
 }: ContractorRatingFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -23,6 +25,14 @@ export function ContractorRatingForm({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+
+  if (!canRate) {
+    return (
+      <p style={{ fontSize: 13, color: "var(--muted)" }}>
+        You do not have permission to rate contractors.
+      </p>
+    );
+  }
 
   const displayRating = hoverRating || selectedRating;
 

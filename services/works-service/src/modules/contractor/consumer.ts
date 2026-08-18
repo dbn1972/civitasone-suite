@@ -43,13 +43,20 @@ export function registerContractorConsumers(rawQueue: Queue): void {
     }
   });
 
-  // works.contractor.rate → incremental average update
+  // works.contractor.rate → incremental average update + rating history
   queue.subscribe(COMMANDS.contractorRate, async (msg) => {
     try {
       const p = msg.payload as { id: string; tenantId: string; rating: number };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.updateContractorRating(tx, p.id, msg.tenantId, p.rating);
+        await repo.insertRatingHistory(tx, {
+          tenantId: msg.tenantId,
+          contractorId: p.id,
+          rating: p.rating,
+          ratedBy: msg.actorId,
+          note: null,
+        });
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

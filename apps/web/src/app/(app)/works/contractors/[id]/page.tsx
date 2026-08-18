@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { PageHeader, Card, DataTable } from "@/app/_components/ds";
+import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ContractorRatingForm } from "./ContractorRatingForm";
 
 type ContractorDetail = {
@@ -22,6 +24,20 @@ type ContractorDetail = {
   updatedAt: string;
 };
 
+type RatingHistoryRow = {
+  id: string;
+  rating: number;
+  ratedAt: string;
+  ratedBy?: string;
+};
+
+type RatingDisplayRow = {
+  id: string;
+  rating: string;
+  ratedAt: string;
+  ratedBy: string;
+};
+
 const EMPTY: ContractorDetail = {
   id: "",
   name: "",
@@ -38,6 +54,40 @@ const EMPTY: ContractorDetail = {
   updatedAt: "",
 };
 
+const CONTRACTOR_RATE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+];
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function mapRatingHistory(payload: unknown): RatingHistoryRow[] | null {
+  const rows = Array.isArray(payload)
+    ? payload
+    : isRecord(payload) && Array.isArray((payload as { data?: unknown }).data)
+    ? (payload as { data: unknown[] }).data
+    : null;
+  if (!rows) return null;
+  return rows.flatMap((r) => {
+    if (!isRecord(r)) return [];
+    return [
+      {
+        id: String((r as { id?: unknown }).id ?? Math.random()),
+        rating: Number((r as { rating?: unknown }).rating ?? 0),
+        ratedAt: String((r as { ratedAt?: unknown }).ratedAt ?? ""),
+        ratedBy: (r as { ratedBy?: unknown }).ratedBy
+          ? String((r as { ratedBy?: unknown }).ratedBy)
+          : undefined,
+      },
+    ];
+  });
+}
+
 function starDisplay(rating: number): string {
   const filled = Math.min(5, Math.max(0, Math.round(rating)));
   return "★".repeat(filled) + "☆".repeat(5 - filled);
@@ -48,17 +98,35 @@ export default async function ContractorDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { data: contractor, source } = await fetchJson<unknown, ContractorDetail>(
-    `/api/v1/works/contractors/${params.id}`,
-    EMPTY,
-    {
-      telemetryKey: "works.contractors.detail",
-      mapResponse: (p) => {
-        if (!p || typeof p !== "object") return null as unknown as ContractorDetail;
-        return (p as { data?: ContractorDetail }).data ?? (null as unknown as ContractorDetail);
-      },
-    }
-  );
+  const roles = getSessionRoles();
+  const canRate = roles.some((r) => CONTRACTOR_RATE_ROLES.includes(r));
+
+  const [{ data: contractor, source }, { data: ratingHistory }] =
+    await Promise.all([
+      fetchJson<unknown, ContractorDetail>(
+        `/api/v1/works/contractors/${params.id}`,
+        EMPTY,
+        {
+          telemetryKey: "works.contractors.detail",
+          mapResponse: (p) => {
+            if (!p || typeof p !== "object")
+              return null as unknown as ContractorDetail;
+            return (
+              (p as { data?: ContractorDetail }).data ??
+              (null as unknown as ContractorDetail)
+            );
+          },
+        }
+      ),
+      fetchJson<unknown, RatingHistoryRow[]>(
+        `/api/v1/works/contractors/${params.id}/rating-history`,
+        [],
+        {
+          telemetryKey: "works.contractor.rating-history",
+          mapResponse: mapRatingHistory,
+        }
+      ),
+    ]);
 
   const hasApiError = source === "error";
   if (source === "error" || !contractor.id) return notFound();
@@ -80,6 +148,28 @@ export default async function ContractorDetailPage({
     { term: "GST", value: String(contractor.gst ?? "—") },
     { term: "Active", value: contractor.active ? "Yes" : "No" },
   ];
+
+  const contractorTimelineSteps = [
+    {
+      id: "registered",
+      label: "Registered",
+      state: "done" as const,
+      date: contractor.createdAt,
+    },
+    {
+      id: "active",
+      label: contractor.active !== false ? "Active" : "Inactive",
+      state:
+        contractor.active !== false ? ("current" as const) : ("done" as const),
+    },
+  ];
+
+  const ratingDisplayRows: RatingDisplayRow[] = ratingHistory.map((r) => ({
+    id: r.id,
+    ratedAt: r.ratedAt ? new Date(r.ratedAt).toLocaleDateString("en-IN") : "—",
+    rating: `${r.rating} / 5`,
+    ratedBy: r.ratedBy?.slice(0, 8) ?? "—",
+  }));
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -198,6 +288,39 @@ export default async function ContractorDetailPage({
             contractorId={params.id}
             currentRating={contractor.performanceRating ?? 0}
             ratingCount={contractor.ratingCount}
+            canRate={canRate}
+          />
+        </div>
+      </Card>
+
+      {/* Rating History card */}
+      <Card title={`Rating History (${ratingHistory.length})`}>
+        {ratingHistory.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>
+            No ratings recorded yet.
+          </p>
+        ) : (
+          <DataTable<RatingDisplayRow>
+            columns={[
+              { key: "ratedAt", label: "Date" },
+              { key: "rating", label: "Rating (1–5)" },
+              { key: "ratedBy", label: "Rated By" },
+            ]}
+            rows={ratingDisplayRows}
+            pageSize={10}
+            emptyIcon="⭐"
+            emptyTitle="No ratings yet"
+            emptyMessage="Ratings will appear here after the contractor is evaluated."
+          />
+        )}
+      </Card>
+
+      {/* Contractor Status card */}
+      <Card title="Contractor Status">
+        <div style={{ padding: "16px" }}>
+          <StatusTimeline
+            steps={contractorTimelineSteps}
+            aria-label="Contractor lifecycle"
           />
         </div>
       </Card>
