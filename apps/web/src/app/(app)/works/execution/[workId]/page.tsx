@@ -2,6 +2,7 @@ import Link from "next/link";
 import { fetchJson } from "@/app/_data/apiClient";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { fmtDate } from "../../_data/format";
+import { ExecutionActions } from "./ExecutionActions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -191,6 +192,8 @@ export default async function ExecutionDetailPage({
           emptyMessage="Issues raised against this work will appear here."
         />
       </Card>
+
+      <ExecutionActions workId={params.workId} />
     </main>
   );
 }

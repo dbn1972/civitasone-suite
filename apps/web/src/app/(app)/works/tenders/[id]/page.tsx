@@ -3,6 +3,7 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { TenderActions } from "./TenderActions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,12 @@ export default async function TenderDetailPage({
           </dl>
         </Card>
       )}
+
+      <TenderActions
+        tenderId={params.id}
+        workId={tender?.workId ?? null}
+        awardId={quotations.find((q) => q.awardId !== null)?.awardId ?? null}
+      />
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <Link href="/works/tenders" className="btn ghost">

@@ -5,6 +5,7 @@ import { PageHeader, Card, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { ProposalActions } from "./ProposalActions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -242,6 +243,7 @@ export default async function WorkProposalDetailPage({
         <Link href="/works/proposals" className="btn ghost">
           ← All proposals
         </Link>
+        <ProposalActions id={String(proposal.id ?? "")} status={String(proposal.status ?? "")} />
         <Link
           href={"/works/approvals/new?workId=" + proposal.id}
           className="btn secondary"
