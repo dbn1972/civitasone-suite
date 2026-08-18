@@ -270,8 +270,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rateLimitClient: any = undefined;
   if (rateLimitRedisUrl) {
-    rateLimitClient = new Redis(rateLimitRedisUrl, { maxRetriesPerRequest: 2, lazyConnect: true });
-    await rateLimitClient.connect();
+    try {
+      rateLimitClient = new Redis(rateLimitRedisUrl, { maxRetriesPerRequest: 2, lazyConnect: true });
+      await rateLimitClient.connect();
+      app.log.info({ redisUrl: rateLimitRedisUrl }, "rate-limit: Redis store connected");
+    } catch (err) {
+      app.log.warn(
+        { err, redisUrl: rateLimitRedisUrl },
+        "rate-limit: Redis connection failed — falling back to in-process store",
+      );
+      rateLimitClient = undefined;
+    }
   }
 
   await app.register(rateLimit, {
