@@ -7,6 +7,7 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ContractorRatingForm } from "./ContractorRatingForm";
+import { ContractorEditToggle } from "./ContractorEditToggle";
 
 type ContractorDetail = {
   id: string;
@@ -338,6 +339,19 @@ export default async function ContractorDetailPage({
         <Link href="/works/contractors" className="btn ghost">
           ← All contractors
         </Link>
+        <ContractorEditToggle
+          contractor={{
+            id: contractor.id,
+            name: contractor.name,
+            registrationNo: contractor.registrationNo ?? null,
+            pan: contractor.pan ?? null,
+            gst: contractor.gst ?? null,
+            email: contractor.email ?? null,
+            phone: contractor.phone ?? null,
+            address: contractor.address ?? null,
+          }}
+          roles={roles}
+        />
       </div>
     </main>
   );

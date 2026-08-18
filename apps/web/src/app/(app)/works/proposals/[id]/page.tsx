@@ -9,6 +9,7 @@ import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ProposalActions } from "./ProposalActions";
 import { ProposalExtActions } from "./ProposalExtActions";
+import { ProposalEditToggle } from "./ProposalEditToggle";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -297,6 +298,19 @@ export default async function WorkProposalDetailPage({
           ← All proposals
         </Link>
         <ProposalActions id={String(proposal.id ?? "")} status={String(proposal.status ?? "")} roles={roles} />
+        <ProposalEditToggle
+          proposal={{
+            id: String(proposal.id ?? ""),
+            status: String(proposal.status ?? ""),
+            description: String(proposal.description ?? ""),
+            estimatedCostMinor: String(proposal.estimatedCostMinor ?? "0"),
+            district: proposal.district ?? null,
+            taluka: proposal.taluka ?? null,
+            village: proposal.village ?? null,
+            remarks: proposal.remarks ?? null,
+          }}
+          roles={roles}
+        />
         <Link
           href={"/works/approvals/new?workId=" + proposal.id}
           className="btn secondary"
