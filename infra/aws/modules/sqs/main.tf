@@ -38,7 +38,7 @@ variable "dlq_retention_seconds" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "SNS topic ARN to notify on DLQ alarms (optional)."
+  description = "SNS topic ARN for DLQ-depth and message-age alarms. Must be set for production; leave empty to create silent alarms in non-prod environments."
   type        = string
   default     = ""
 }

@@ -18,6 +18,14 @@ provider "aws" {
 # module "elasticache"  { source = "../../modules/elasticache" }
 # module "s3"           { source = "../../modules/s3" }
 
+module "sns_alerts" {
+  source       = "../../modules/sns-alerts"
+  environment  = var.environment
+  # Set TF_VAR_alerts_email before applying to subscribe an email address.
+  # Subscription requires manual confirmation from the inbox.
+  alerts_email = var.alerts_email
+}
+
 # QUE-2 / gap 05-T2: per-topic SQS main queue + DLQ with redrive, tuned
 # visibility, and CloudWatch alarms. Topic list is kept in sync with
 # infra/localstack-init/01-create-sqs-queues.sh so prod and local match.
@@ -29,7 +37,7 @@ module "sqs" {
   # Module defaults are sensible for production:
   #   max_receive_count = 5, visibility_timeout_seconds = 60,
   #   message_retention_seconds = 4d, dlq_retention_seconds = 14d.
-  alarm_sns_topic_arn = var.alarm_sns_topic_arn
+  alarm_sns_topic_arn = module.sns_alerts.topic_arn
 }
 
 # G9 / SC-H2: single RDS read replica, streaming from the primary, so read
@@ -107,10 +115,8 @@ variable "replica_instance_class" {
   default = "db.t3.medium"
 }
 
-# No SNS topic module is wired into this env yet, so this defaults to "" which
-# the sqs module treats as "create alarms with no notification actions".
-# Set this (e.g. via tfvars) once an alerting SNS topic exists.
-variable "alarm_sns_topic_arn" {
-  type    = string
-  default = ""
+variable "alerts_email" {
+  description = "Email address to subscribe to alarm notifications. Set TF_VAR_alerts_email before applying."
+  type        = string
+  default     = ""
 }

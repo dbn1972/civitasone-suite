@@ -4,10 +4,11 @@ import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import { Redis } from "ioredis";
 import { quotaCheckPlugin } from "@civitasone/db";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { resolveRoute } from "./registry.js";
+import { resolveRoute, SERVICE_ROUTES } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
 import { createRedisQuotaStore, createInMemoryQuotaStore } from "./quota-store.js";
@@ -262,17 +263,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
   // H8 FIX: Back rate-limit with Redis so it is fleet-wide (not per-pod).
-  // @fastify/rate-limit accepts a `redis` option for distributed counters.
+  // @fastify/rate-limit v9 RedisStore calls redis.defineCommand() on the value
+  // passed as { redis: ... }. A plain { url } object has no such method and
+  // crashes. We must pass a real ioredis client instance.
   const rateLimitRedisUrl = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
-  const rateLimitStore = rateLimitRedisUrl
-    ? { url: rateLimitRedisUrl }
-    : undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rateLimitClient: any = undefined;
+  if (rateLimitRedisUrl) {
+    rateLimitClient = new Redis(rateLimitRedisUrl, { maxRetriesPerRequest: 2, lazyConnect: true });
+    await rateLimitClient.connect();
+  }
 
   await app.register(rateLimit, {
     global: true,
     max: Number(process.env.GATEWAY_RATE_LIMIT_MAX ?? 1000),
     timeWindow: process.env.GATEWAY_RATE_LIMIT_WINDOW ?? "1 minute",
-    ...(rateLimitStore ? { redis: rateLimitStore } : {}),
+    ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });
 
   // SC-5: Per-tenant rate limit (second tier, registered after the global one).
@@ -284,9 +290,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     keyGenerator: (req) => (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
-    ...(rateLimitStore ? { redis: rateLimitStore } : {}),
+    ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });
-
   // Phase 1 hyperscale: per-tenant configurable quota enforcement.
   // Uses Redis for distributed counters (survives restart, fleet-wide enforcement).
   const REDIS_URL = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
@@ -343,38 +348,54 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
+  // Build one health-check entry per unique upstream from the service registry.
+  // Multiple route entries that share the same upstream (e.g. "estab" and
+  // "establishment" both resolve to :3010) are collapsed to a single probe.
+  const _upstreamNames = new Map<string, string>(); // url -> representative service name
+  for (const route of SERVICE_ROUTES) {
+    if (!_upstreamNames.has(route.upstream)) {
+      _upstreamNames.set(route.upstream, route.name);
+    }
+  }
+  const _dedupedUpstreams = [..._upstreamNames.entries()]; // [[url, name], ...]
+
+  // Concurrent-probe batch: the first ping() call in a /ready request starts ALL
+  // upstream fetches simultaneously (Promise.allSettled). Subsequent ping() calls
+  // for the same /ready request await the already-in-flight promises rather than
+  // launching new fetches. The batch reference is cleared after all probes settle,
+  // so the next /ready call starts a fresh batch.
+  let _batchProbes: Map<string, Promise<boolean>> | null = null;
+
+  function _makePing(url: string): () => Promise<boolean> {
+    return async () => {
+      if (!_batchProbes) {
+        _batchProbes = new Map(
+          _dedupedUpstreams.map(([u]) => [
+            u,
+            fetch(`${u}/health`, { signal: AbortSignal.timeout(2000) })
+              .then((r) => r.ok)
+              .catch(() => false),
+          ])
+        );
+        void Promise.allSettled([..._batchProbes.values()]).then(() => {
+          _batchProbes = null;
+        });
+      }
+      return _batchProbes!.get(url)!;
+    };
+  }
+
+  // /health (liveness)  — always 200; handled by registerOpsRoutes; never probes upstreams.
+  // /ready (readiness)  — 503 when any upstream is degraded; load balancers use this to
+  //                       stop routing traffic. Response body: { checks: { <name>: bool } }
+  //                       identifies which upstreams are degraded.
   registerOpsRoutes(app, {
     service: "gateway-service",
     checks: {
-      custom: [
-        {
-          name: "identity",
-          ping: async () => {
-            try {
-              const res = await fetch(process.env.IDENTITY_HEALTH_URL ?? "http://127.0.0.1:3001/health", { signal: AbortSignal.timeout(3000) });
-              return res.ok;
-            } catch { return false; }
-          },
-        },
-        {
-          name: "finance",
-          ping: async () => {
-            try {
-              const res = await fetch(process.env.FINANCE_HEALTH_URL ?? "http://127.0.0.1:3007/health", { signal: AbortSignal.timeout(3000) });
-              return res.ok;
-            } catch { return false; }
-          },
-        },
-        {
-          name: "queue_upstream",
-          ping: async () => {
-            try {
-              const res = await fetch(process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health", { signal: AbortSignal.timeout(3000) });
-              return res.ok;
-            } catch { return false; }
-          },
-        },
-      ],
+      custom: _dedupedUpstreams.map(([url, name]) => ({
+        name,
+        ping: _makePing(url),
+      })),
     },
   });
 
