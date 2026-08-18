@@ -133,7 +133,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add `<caption className="sr-only">Quarter allotments — current financial year</caption>` as first child of `<table>`
   - _Requirements: 2.5_
 
-- [ ] 17. DFA wizard step-change announcement
+- [x] 17. DFA wizard step-change announcement
   - In `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx` (or wherever the wizard step state lives)
   - Add a visually-hidden `<span aria-live="assertive" aria-atomic="true">{currentStepTitle}</span>` that updates on step advance
   - _Requirements: 2.6_

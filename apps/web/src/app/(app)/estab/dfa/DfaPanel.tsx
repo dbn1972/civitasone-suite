@@ -19,6 +19,22 @@ const FILTERS = ["all", "draft", "pending_approval", "approved", "signed", "disp
 
 const EMPTY = { communicationType: "letter", subject: "", body: "", recipientName: "", recipientAddress: "" };
 
+// The DFA wizard's "steps" are the draft's lifecycle stages. Each action advances the
+// draft to the next stage — this maps action -> resulting status, reusing the same
+// status vocabulary already rendered via StatusPill elsewhere in this file.
+const ACTION_STEP_STATUS: Record<string, string> = {
+  submit: "pending_approval",
+  approve: "approved",
+  return: "returned",
+  sign: "signed",
+  dispatch: "dispatched",
+};
+
+function stepTitleFor(status: string): string {
+  const label = status.replace(/_/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export function DfaPanel() {
   const [rows, setRows] = useState<Dfa[]>([]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
@@ -28,6 +44,7 @@ export function DfaPanel() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const [currentStepTitle, setCurrentStepTitle] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +81,7 @@ export function DfaPanel() {
       });
       if (!res.ok) throw new Error((await res.text()) || "Create failed");
       setMessage("Draft created. Edit it, then submit for approval.");
+      setCurrentStepTitle(stepTitleFor("draft"));
       setForm({ ...EMPTY }); setShowForm(false);
       setTimeout(() => void load(), 800);
     } catch (err) {
@@ -80,6 +98,8 @@ export function DfaPanel() {
     });
     if (!res.ok) throw new Error((await res.text()) || `${action} failed`);
     setMessage(`DFA ${action} done.`);
+    const nextStatus = ACTION_STEP_STATUS[action];
+    if (nextStatus) setCurrentStepTitle(stepTitleFor(nextStatus));
     setTimeout(() => void load(), 800);
   }, [load]);
 
@@ -138,6 +158,8 @@ export function DfaPanel() {
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
         {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
+
+      <span className="sr-only" aria-live="assertive" aria-atomic="true">{currentStepTitle}</span>
 
       {showForm ? (
         <div className="card">
