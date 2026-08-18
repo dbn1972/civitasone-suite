@@ -18,11 +18,11 @@ interface IssuesResponse {
 }
 
 const columns = [
-  { key: "shortId", label: "ID" },
-  { key: "description", label: "Description" },
-  { key: "priority", label: "Priority" },
-  { key: "raisedDate", label: "Raised" },
-  { key: "status", label: "Status" },
+  { key: "shortId" as const, label: "ID" },
+  { key: "description" as const, label: "Description" },
+  { key: "priority" as const, label: "Priority" },
+  { key: "raisedDate" as const, label: "Raised" },
+  { key: "status" as const, label: "Status" },
 ];
 
 export default async function IssuesRegisterPage() {
@@ -70,9 +70,9 @@ export default async function IssuesRegisterPage() {
         }}
       >
         <StatGrid>
-          <StatCard label="Total Issues" value={totalCount} />
-          <StatCard label="Open" value={openCount} />
-          <StatCard label="Closed" value={closedCount} />
+          <StatCard icon="📋" label="Total Issues" value={totalCount} />
+          <StatCard icon="⚠️" iconBg="var(--warnbg, #fef3c7)" label="Open" value={openCount} />
+          <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label="Closed" value={closedCount} />
         </StatGrid>
 
         <Card title="Issues">

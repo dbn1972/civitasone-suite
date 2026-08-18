@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { PageHeader, Card, StatCard } from "@/app/_components/ds";
 import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
 import type { StatusTimelineStep } from "@/app/_components/ds/designer/StatusTimeline";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -206,9 +205,7 @@ export default async function WorkProposalDetailPage({
         subtitle={truncate(proposal.description, 80)}
         back="/works/proposals"
         backLabel="Proposals"
-        actions={
-          source === "error" ? <DataSourceBadge source="error" /> : undefined
-        }
+
       />
 
       {/* 6 KPI tiles */}

@@ -30,7 +30,8 @@ export default async function ProposalsPage({
   const tsEligible   = proposals.filter((p) => p.status === "ts_eligible").length;
 
   const countByStatus = proposals.reduce<Record<string, number>>((acc, p) => {
-    acc[p.status] = (acc[p.status] ?? 0) + 1;
+    const s = String(p.status);
+    acc[s] = (acc[s] ?? 0) + 1;
     return acc;
   }, {});
 
