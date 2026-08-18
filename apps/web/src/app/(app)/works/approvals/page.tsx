@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getApprovalsAa, getApprovalsTs } from "../_data/loaders";
@@ -21,7 +22,13 @@ export default async function ApprovalsPage() {
         title="AA / TS Register"
         subtitle="Administrative Approval and Technical Sanction registers."
         back="/works"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {source === "error" && <DataSourceBadge source={source} />}
+            <Link href="/works/approvals/new" className="btn" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px", border: "1px solid var(--line)" }}>+ New AA</Link>
+            <Link href="/works/approvals/ts-new" className="btn primary" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}>+ New TS</Link>
+          </div>
+        }
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total AA" value={totalAA} />

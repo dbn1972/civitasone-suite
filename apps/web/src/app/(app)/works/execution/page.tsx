@@ -1,18 +1,19 @@
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getExecutionIssues, getExecutionProgress } from "../_data/loaders";
 import { ExecutionTable } from "./ExecutionTable";
 
 export default async function ExecutionPage() {
-  const [{ data: progress, source: progressSource }, { data: issues, source: issuesSource }] = await Promise.all([
-    getExecutionProgress(),
-    getExecutionIssues(),
-  ]);
+  const [{ data: progress, source: progressSource }, { data: issues, source: issuesSource }] =
+    await Promise.all([getExecutionProgress(), getExecutionIssues()]);
 
   const source = progressSource === "error" || issuesSource === "error" ? "error" : "api";
   const total = progress.length;
   const onTrack = progress.filter((p) => Number(p.percentage ?? 0) >= 80).length;
-  const delayed = progress.filter((p) => Number(p.percentage ?? 0) < 50 && Number(p.percentage ?? 0) > 0).length;
+  const delayed =
+    progress.filter((p) => Number(p.percentage ?? 0) < 50 && Number(p.percentage ?? 0) > 0)
+      .length;
   const completed = progress.filter((p) => Number(p.percentage ?? 0) === 100).length;
   const openIssues = issues.filter((i) => i.status === "open").length;
 
@@ -22,7 +23,18 @@ export default async function ExecutionPage() {
         title="Execution & Progress"
         subtitle="Scope progress monitoring, photos, and issue tracking."
         back="/works"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {source === "error" && <DataSourceBadge source={source} />}
+            <Link
+              href="/works/execution/record-progress"
+              className="btn primary"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Record progress
+            </Link>
+          </div>
+        }
       />
       <StatGrid>
         <StatCard icon="🏗️" iconBg="#eff6ff" label="Progress Entries" value={total} />

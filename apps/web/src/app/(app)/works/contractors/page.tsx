@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, Card, DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -26,6 +27,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
+function formatRating(perf: number | null | undefined, count: number | undefined): string {
+  if (perf == null) return "Not rated";
+  return String(perf) + "/5 (" + String(count ?? 0) + " reviews)";
+}
+
 function mapContractors(payload: unknown): ContractorRow[] | null {
   const rows = Array.isArray(payload)
     ? payload
@@ -37,14 +43,13 @@ function mapContractors(payload: unknown): ContractorRow[] | null {
     if (!isRecord(raw)) return [];
     const row = raw as RawContractor;
     if (typeof row.id !== "string") return [];
-    const rating = row.performanceRating != null ? `${row.performanceRating}/5 (${row.ratingCount ?? 0})` : "Not rated";
     return [{
       id: row.id,
       name: String(row.name ?? "—"),
       registrationNo: String(row.registrationNo ?? "—"),
       pan: String(row.pan ?? "—"),
       phone: String(row.phone ?? "—"),
-      rating,
+      rating: formatRating(row.performanceRating, row.ratingCount),
     }];
   });
 }
@@ -73,7 +78,18 @@ export default async function ContractorsPage() {
         subtitle="Registered contractors available for tender quotations."
         back="/works"
         backLabel="Works & Billing"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {source === "error" && <DataSourceBadge source="error" />}
+            <Link
+              href="/works/contractors/new"
+              className="btn primary"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Register contractor
+            </Link>
+          </div>
+        }
       />
       <Card title={"Contractors (" + contractors.length + ")"}>
         <DataTable<ContractorRow>
@@ -81,7 +97,7 @@ export default async function ContractorsPage() {
           rows={contractors}
           sortable
           filterable
-          filterPlaceholder="Filter by name, registration…"
+          filterPlaceholder="Filter by name, registration..."
           pageSize={20}
           emptyIcon="🏢"
           emptyTitle="No contractors registered"

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getProposals } from "../_data/loaders";
@@ -17,7 +18,12 @@ export default async function ProposalsPage() {
         title="Work Proposals"
         subtitle="Work registration, categorization, and proposal lifecycle."
         back="/works"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {source === "error" && <DataSourceBadge source={source} />}
+            <Link href="/works/proposals/new" className="btn primary" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}>+ New proposal</Link>
+          </div>
+        }
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Works" value={total} />
