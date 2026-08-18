@@ -138,7 +138,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add a visually-hidden `<span aria-live="assertive" aria-atomic="true">{currentStepTitle}</span>` that updates on step advance
   - _Requirements: 2.6_
 
-- [ ] 18. Add chart alternative data tables
+- [x] 18. Add chart alternative data tables
   - For the forecast chart on `/inventory`: add a `<table className="sr-only">` sibling with the same time-series data
   - For the vendor scorecard radar on `/procurement/vendors/[id]/scorecard`: add a `<table className="sr-only">` with dimension scores
   - Both tables must be reachable by keyboard (sr-only class, not display:none)

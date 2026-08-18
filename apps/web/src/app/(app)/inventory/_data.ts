@@ -105,10 +105,22 @@ export type InventoryCycleCountRow = {
   countedAt: string;
 };
 
+export type InventoryForecastResult = {
+  available: boolean;
+  itemId: string;
+  dailyForecast: number[];
+  totalDemand: number;
+  confidence: number;
+};
+
 type Envelope<T> = { data?: T[] } | null | undefined;
 
 function listOf<T>(payload: Envelope<T>): T[] {
   return Array.isArray(payload?.data) ? (payload!.data as T[]) : [];
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
 export function getInventoryItems(): Promise<LoaderResult<InventoryItemRow[]>> {
@@ -175,6 +187,42 @@ export function getInventoryCycleCounts(status?: string): Promise<LoaderResult<I
     revalidateSeconds: 30,
     telemetryKey: "inventory.cycleCounts",
     mapResponse: listOf,
+  });
+}
+
+const emptyForecast: InventoryForecastResult = {
+  available: false,
+  itemId: "",
+  dailyForecast: [],
+  totalDemand: 0,
+  confidence: 0,
+};
+
+/**
+ * 30-day demand forecast for a single item (GET /items/:id/forecast). Used by
+ * the hub screen to chart projected demand for the item currently nearest its
+ * reorder point.
+ */
+export function getInventoryItemForecast(itemId: string): Promise<LoaderResult<InventoryForecastResult>> {
+  return fetchJson<unknown, InventoryForecastResult>(`/api/v1/inventory/items/${itemId}/forecast?horizon=30`, emptyForecast, {
+    revalidateSeconds: 60,
+    telemetryKey: "inventory.itemForecast",
+    mapResponse: (payload) => {
+      if (!isRecord(payload)) return null;
+      const dailyForecast = Array.isArray(payload.dailyForecast)
+        ? payload.dailyForecast.filter((v): v is number => typeof v === "number")
+        : [];
+      if (dailyForecast.length === 0) {
+        return { available: false, itemId, dailyForecast: [], totalDemand: 0, confidence: 0 };
+      }
+      return {
+        available: true,
+        itemId,
+        dailyForecast,
+        totalDemand: typeof payload.totalDemand === "number" ? payload.totalDemand : 0,
+        confidence: typeof payload.confidence === "number" ? payload.confidence : 0,
+      };
+    },
   });
 }
 
