@@ -28,6 +28,7 @@ export function TendersTable({ tenders, source }: { tenders: Record<string, unkn
       emptyIcon="📢"
       emptyTitle="No tenders found"
       emptyMessage="Tender records will appear here once created."
+      rowHref={(row) => "/works/tenders/" + String(row.id ?? "")}
     />
   );
 }

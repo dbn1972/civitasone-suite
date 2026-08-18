@@ -50,6 +50,7 @@ function mapBillRow(r: Row): Row {
   const status = str(r.status, "draft");
   return {
     id: str(r.id),
+    workId: str(r.workId),
     billNo: str(r.billNumber),
     work: shortId(strOrNull(r.workId)),
     mode: humanize(str(r.billMode)),
@@ -142,6 +143,7 @@ export function getApprovalsTs(): Promise<LoaderResult<Row[]>> {
 function mapProgressRow(r: Row): Row {
   return {
     id: str(r.id),
+    workId: str(r.workId),
     work: shortId(strOrNull(r.workId)),
     scope: shortId(strOrNull(r.scopeId)),
     target: str(r.targetValue, "—"),
@@ -153,6 +155,7 @@ function mapProgressRow(r: Row): Row {
 function mapIssueRow(r: Row): Row {
   return {
     id: str(r.id),
+    workId: str(r.workId),
     work: shortId(strOrNull(r.workId)),
     description: str(r.description),
     raisedDate: fmtDate(strOrNull(r.raisedDate)),
@@ -203,6 +206,7 @@ export function getClosures(): Promise<LoaderResult<Row[]>> {
 function mapBoqRow(r: Row): Row {
   return {
     id: str(r.id),
+    workId: str(r.workId),
     itemCode: str(r.itemCode, "—"),
     description: str(r.itemDescription),
     unit: str(r.unit),

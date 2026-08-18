@@ -67,6 +67,7 @@ export function ExecutionTable({
           emptyIcon="🏗️"
           emptyTitle="No execution data"
           emptyMessage="Execution progress records will appear here."
+          rowHref={(row) => "/works/execution/" + String(row.workId ?? "")}
         />
       ) : (
         <DataTable
@@ -81,6 +82,7 @@ export function ExecutionTable({
           emptyIcon="🚧"
           emptyTitle="No issues found"
           emptyMessage="Execution issues will appear here once raised."
+          rowHref={(row) => "/works/execution/" + String(row.workId ?? "")}
         />
       )}
     </div>

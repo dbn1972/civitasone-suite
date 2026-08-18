@@ -29,6 +29,7 @@ export function ProposalsTable({ proposals, source }: { proposals: Record<string
       emptyIcon="📋"
       emptyTitle="No proposals found"
       emptyMessage="Work proposals will appear here once created."
+      rowHref={(row) => "/works/proposals/" + String(row.id ?? "")}
     />
   );
 }

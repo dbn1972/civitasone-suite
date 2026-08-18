@@ -29,6 +29,7 @@ export function BillingTable({ bills, source }: { bills: Record<string, unknown>
       emptyIcon="💰"
       emptyTitle="No bills found"
       emptyMessage="Works billing records will appear here."
+      rowHref={(row) => "/works/billing/" + String(row.workId ?? "")}
     />
   );
 }
