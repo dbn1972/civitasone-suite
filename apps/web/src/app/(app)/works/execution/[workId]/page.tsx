@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fetchJson } from "@/app/_data/apiClient";
-import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, DataTable, StatGrid, StatCard, ProgressBar } from "@/app/_components/ds";
 import { fmtDate } from "../../_data/format";
 import { ExecutionActions } from "./ExecutionActions";
 
@@ -105,9 +105,11 @@ export default async function ExecutionDetailPage({
   const issues = issuesResult.data;
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const totalScopes  = scopes.length;
-  const openIssues   = issues.filter((i) => i.status === "open").length;
-  const closedIssues = issues.filter((i) => i.status !== "open").length;
+  const totalScopes     = scopes.length;
+  const completedScopes = scopes.filter((s) => s.status === "completed").length;
+  const overallPct      = totalScopes > 0 ? Math.round((completedScopes / totalScopes) * 100) : 0;
+  const openIssues      = issues.filter((i) => i.status === "open").length;
+  const closedIssues    = issues.filter((i) => i.status !== "open").length;
 
   // ── DataTable rows ─────────────────────────────────────────────────────────
   const scopeRows: Record<string, unknown>[] = scopes.map((s) => ({
@@ -167,6 +169,18 @@ export default async function ExecutionDetailPage({
         <StatCard icon="🚨" iconBg="#fef2f2" label="Open Issues"   value={openIssues} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Closed Issues" value={closedIssues} />
       </StatGrid>
+
+      <Card title="Overall Progress" padding>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <ProgressBar value={overallPct} />
+          <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--ink)", minWidth: 48 }}>
+            {overallPct}%
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+          {completedScopes} of {totalScopes} scope{totalScopes !== 1 ? "s" : ""} completed
+        </p>
+      </Card>
 
       <Card title="Work Scopes">
         <DataTable

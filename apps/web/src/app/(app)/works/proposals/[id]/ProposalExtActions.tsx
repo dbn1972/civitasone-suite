@@ -5,8 +5,19 @@ import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { ConfirmDialog } from "@/app/_components/ds";
 
+const PROPOSAL_WRITE_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+];
+
 interface ProposalExtActionsProps {
   workId: string;
+  roles: string[];
 }
 
 const cardStyle: React.CSSProperties = {
@@ -434,8 +445,10 @@ function MapOfficeForm({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function ProposalExtActions({ workId }: ProposalExtActionsProps) {
+export function ProposalExtActions({ workId, roles }: ProposalExtActionsProps) {
   const [openSection, setOpenSection] = useState<string | null>(null);
+
+  if (!roles.some((r) => PROPOSAL_WRITE_ROLES.includes(r))) return null;
 
   function toggle(section: string) {
     setOpenSection((prev) => (prev === section ? null : section));

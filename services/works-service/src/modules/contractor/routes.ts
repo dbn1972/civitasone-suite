@@ -28,6 +28,16 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: row });
   });
 
+  // Get contractor rating history
+  app.get("/v1/works/contractors/:id/rating-history", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { id } = v.idParamSchema.parse(req.params);
+    const { limit } = v.listQuerySchema.parse(req.query);
+    const rows = await repo.listRatingHistory(ctx.tenantId, id, Math.min(limit, 100));
+    return reply.send({ data: rows });
+  });
+
   // Create contractor
   app.post("/v1/works/contractors", async (req, reply) => {
     const ctx = resolveContext(req);
