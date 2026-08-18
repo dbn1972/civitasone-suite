@@ -199,7 +199,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Use existing `tests/e2e-live/` config and `baseURL` from env
   - _Requirements: 6.1_
 
-- [ ] 28. Establishment quarters journey E2E spec
+- [x] 28. Establishment quarters journey E2E spec
   - `tests/e2e-live/specs/estab-quarters-journey.spec.ts`
   - Steps: apply for quarter → allotment officer grants allotment → applicant occupies → vacate
   - _Requirements: 6.1_
