@@ -25,7 +25,7 @@ const labelStyle: React.CSSProperties = {
 function RaiseIssueForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const toast = useToast();
+  const { toast } = useToast();
 
   const initialWorkId = searchParams.get("workId") ?? "";
 

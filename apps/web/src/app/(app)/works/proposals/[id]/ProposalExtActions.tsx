@@ -113,7 +113,7 @@ function SplitProposalForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,7 +254,7 @@ function MapCOAForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [majorHead, setMajorHead] = useState("");
   const [subMajorHead, setSubMajorHead] = useState("");
   const [minorHead, setMinorHead] = useState("");
@@ -353,7 +353,7 @@ function MapOfficeForm({
   workId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [divisionId, setDivisionId]     = useState("");
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
