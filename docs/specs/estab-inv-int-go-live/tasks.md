@@ -214,7 +214,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Steps: store officer initiates cycle count → enters physical qty → supervisor navigates to `/inventory/cycle-counts/:id` → approves → verify ledger updated
   - _Requirements: 6.2_
 
-- [ ] 31. Full procurement chain E2E spec (includes SRN)
+- [x] 31. Full procurement chain E2E spec (includes SRN)
   - `tests/e2e-live/specs/procurement-full-chain.spec.ts`
   - Steps: raise indent → create PO → dispatch PO → create GRN → accept GRN → create SRN → verify three-way match passes → verify payment released event emitted
   - _Requirements: 6.3_
