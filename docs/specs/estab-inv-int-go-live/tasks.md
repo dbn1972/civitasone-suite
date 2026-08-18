@@ -149,7 +149,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Add `role="status"` and `aria-label={\`Movement type: ${movementType}\`}` to each chip
   - _Requirements: 3.2_
 
-- [ ] 20. Inventory reconcile variance encoding
+- [x] 20. Inventory reconcile variance encoding
   - `apps/web/src/app/(app)/inventory/reconcile/StockLedgerTable.tsx` (or equivalent)
   - Prepend ▲ to positive variance values and ▼ to negative values alongside the existing colour
   - _Requirements: 3.3_
