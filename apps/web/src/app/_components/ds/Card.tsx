@@ -1,15 +1,16 @@
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 
 interface CardProps {
   title?: string;
   link?: ReactNode;
   children: ReactNode;
   padding?: boolean;
+  style?: CSSProperties;
 }
 
-export function Card({ title, link, children, padding = false }: CardProps) {
+export function Card({ title, link, children, padding = false, style }: CardProps) {
   return (
-    <div className="card">
+    <div className="card" style={style}>
       {title && (
         <div className="card-h">
           <h3>{title}</h3>
