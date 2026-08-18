@@ -219,7 +219,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Steps: raise indent → create PO → dispatch PO → create GRN → accept GRN → create SRN → verify three-way match passes → verify payment released event emitted
   - _Requirements: 6.3_
 
-- [ ] 32. Three-way-match mismatch E2E spec
+- [x] 32. Three-way-match mismatch E2E spec
   - `tests/e2e-live/specs/threeway-mismatch.spec.ts`
   - Steps: create PO for qty 100 → create GRN for qty 60 → verify three-way match flags mismatch → verify payment.blocked event with reason `QTY_MISMATCH`
   - _Requirements: 6.3_
