@@ -17,7 +17,7 @@
 import { connect, type ChannelModel, type Channel, type ConsumeMessage } from "amqplib";
 import { parseEnvelope } from "@civitasone/events";
 import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
-import type { Queue, QueueDriver, CommandEnvelope, PublishInput, Handler, PublishOptions } from "../bus.js";
+import type { Queue, QueueDriver, CommandEnvelope, PublishInput, Handler, PublishOptions, SubscribeOptions } from "../bus.js";
 import { NonRetryableError, isFifoTopic } from "../bus.js";
 import { randomUUID } from "node:crypto";
 
@@ -50,7 +50,7 @@ export class RabbitMqQueue implements Queue {
       ?? "queue-service";
   }
 
-  subscribe<T>(topic: string, handler: Handler<T>): void {
+  subscribe<T>(topic: string, handler: Handler<T>, _options?: SubscribeOptions): void {
     const list = this.handlers.get(topic) ?? [];
     list.push(handler as Handler);
     this.handlers.set(topic, list);

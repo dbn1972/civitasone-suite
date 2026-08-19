@@ -135,6 +135,8 @@ export function registerBillingConsumers(q: Queue): void {
     });
   });
 
+  // billFinalize involves DB write, tax calculation, PDF/invoice generation;
+  // 300s timeout prevents redelivery while the first handler is still running.
   q.subscribe(COMMANDS.billFinalize, async (msg) => {
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
@@ -199,7 +201,7 @@ export function registerBillingConsumers(q: Queue): void {
         });
       }
     });
-  });
+  }, { visibilityTimeout: 300 });
 
   // ORPHAN FIX: record a measurement line against an MB. Enforces
   // FR-BIL-011 — billed quantity may not exceed the approved BoQ quantity.

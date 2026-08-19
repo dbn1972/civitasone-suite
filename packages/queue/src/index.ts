@@ -19,6 +19,7 @@ export type {
   Handler,
   Queue,
   QueueDriver,
+  SubscribeOptions,
   QueueAdapter,
   QueueClient,
   QueuePublishOptions,

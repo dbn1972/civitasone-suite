@@ -80,9 +80,21 @@ export type PublishOptions = {
   messageDeduplicationId?: string;
 };
 
+/**
+ * Per-subscription options passed to queue.subscribe(). Currently supports
+ * overriding the SQS VisibilityTimeout on a per-topic basis so long-running
+ * consumers (e.g. billing finalize, payroll run) can hold a message invisible
+ * longer than the global SQS_VISIBILITY_TIMEOUT default without risking
+ * redelivery of a message still being processed.
+ */
+export type SubscribeOptions = {
+  /** SQS VisibilityTimeout in seconds for this topic's ReceiveMessage call. */
+  visibilityTimeout?: number;
+};
+
 export interface Queue {
   publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string>;
-  subscribe<T>(topic: string, handler: Handler<T>): void;
+  subscribe<T>(topic: string, handler: Handler<T>, options?: SubscribeOptions): void;
   start(): Promise<void>;
   stop(): Promise<void>;
   healthCheck(): Promise<{ healthy: boolean; driver: QueueDriver }>;
@@ -155,7 +167,7 @@ export class MemoryQueue implements Queue {
     }
   }
 
-  subscribe<T>(topic: string, handler: Handler<T>): void {
+  subscribe<T>(topic: string, handler: Handler<T>, _options?: SubscribeOptions): void {
     const list = this.handlers.get(topic) ?? [];
     list.push(handler as Handler);
     this.handlers.set(topic, list);
@@ -362,6 +374,7 @@ export class SqsQueue implements Queue {
   private readonly service: string;
   private readonly maxReceiveCount: number;
   private readonly visibilityTimeout: number;
+  private readonly topicVisibilityTimeouts = new Map<string, number>();
 
   constructor() {
     // QUE-FANOUT: the per-service queue name needs a DISTINCT service id.
@@ -520,10 +533,13 @@ export class SqsQueue implements Queue {
     return msg.messageId;
   }
 
-  subscribe<T>(topic: string, handler: Handler<T>): void {
+  subscribe<T>(topic: string, handler: Handler<T>, options?: SubscribeOptions): void {
     const list = this.handlers.get(topic) ?? [];
     list.push(handler as Handler);
     this.handlers.set(topic, list);
+    if (options?.visibilityTimeout != null) {
+      this.topicVisibilityTimeouts.set(topic, options.visibilityTimeout);
+    }
   }
 
   async start(): Promise<void> {
@@ -608,6 +624,7 @@ export class SqsQueue implements Queue {
           WaitTimeSeconds: resolveWaitTimeSeconds(),
           MessageAttributeNames: ["All"],
           MessageSystemAttributeNames: ["ApproximateReceiveCount"],
+          VisibilityTimeout: this.topicVisibilityTimeouts.get(topic) ?? this.visibilityTimeout,
         }));
 
         // 09-T4: a successful receive means the poll loop is alive. Record a
@@ -798,7 +815,7 @@ export function createQueue(): Queue {
   // tenant-aware db wrapper sets the GUC on the consumer write path. Services
   // that also wrap in runWithTenant just re-set the same tenantId (harmless).
   const raw = q.subscribe.bind(q);
-  q.subscribe = ((topic, handler) =>
-    raw(topic, withTenantConsumer(handler as Handler) as typeof handler)) as typeof q.subscribe;
+  q.subscribe = ((topic, handler, options) =>
+    raw(topic, withTenantConsumer(handler as Handler) as typeof handler, options)) as typeof q.subscribe;
   return q;
 }

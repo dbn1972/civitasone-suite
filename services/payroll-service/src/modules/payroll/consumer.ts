@@ -300,6 +300,8 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     });
   });
 
+  // runCreate triggers processPayrollRun/processPensionRun which iterates every
+  // employee; 300s prevents redelivery of a still-running large-tenant run.
   queue.subscribe(COMMANDS.runCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; runNo: string; month: string;
@@ -349,7 +351,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       });
       throw err;
     }
-  });
+  }, { visibilityTimeout: 300 });
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; approvedBy: string };

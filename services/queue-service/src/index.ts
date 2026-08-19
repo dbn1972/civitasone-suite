@@ -30,6 +30,7 @@ export type {
   Queue,
   QueueDriver,
   PublishOptions,
+  SubscribeOptions,
 } from "./bus.js";
 
 // ── SQS adapter (used when QUEUE_DRIVER=sqs in production) ──
