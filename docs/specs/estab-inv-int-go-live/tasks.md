@@ -255,7 +255,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Smoke test: `curl /v1/procurement/gem/items` returns items with `meta.integrationDisabled` absent
   - _Requirements: 7.1_
 
-- [ ] 38. GIGW 3.0 compliance checklist
+- [x] 38. GIGW 3.0 compliance checklist
   - Create `docs/GIGW-COMPLIANCE-CHECKLIST.md`
   - Map each GIGW 3.0 checkpoint (Section 2–9) to the implementing file path or a documented waiver
   - _Requirements: 7.5_
