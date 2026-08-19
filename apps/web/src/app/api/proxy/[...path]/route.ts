@@ -30,6 +30,10 @@ export async function DELETE(req: Request, ctx: { params: { path: string[] } }) 
 const NO_BODY_STATUSES = new Set([204, 205, 304]);
 
 async function proxy(req: Request, segments: string[], method: string) {
+  // M1: block path-traversal segments
+  if (segments.some(s => decodeURIComponent(s) === '..' || decodeURIComponent(s) === '.')) {
+    return NextResponse.json({ code: 'BAD_REQUEST', message: 'Invalid path' }, { status: 400 });
+  }
   const token = cookies().get(COOKIE.ACCESS)?.value;
   if (!token) return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
 

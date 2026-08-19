@@ -20,9 +20,9 @@ export async function GET(req: Request) {
 
   try {
     const tokens = await exchangeAuthorizationCode(getOidcConfig(), code, verifier);
-    jar.set(COOKIE.ACCESS, tokens.access_token, { httpOnly: true, secure: SECURE, sameSite: "lax", path: "/", maxAge: tokens.expires_in });
+    jar.set(COOKIE.ACCESS, tokens.access_token, { httpOnly: true, secure: SECURE, sameSite: "strict", path: "/", maxAge: tokens.expires_in });
     if (tokens.refresh_token) {
-      jar.set(COOKIE.REFRESH, tokens.refresh_token, { httpOnly: true, secure: SECURE, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+      jar.set(COOKIE.REFRESH, tokens.refresh_token, { httpOnly: true, secure: SECURE, sameSite: "strict", path: "/", maxAge: 60 * 60 * 24 * 30 });
     }
     jar.delete(COOKIE.PKCE_VERIFIER);
     jar.delete(COOKIE.OAUTH_STATE);

@@ -77,7 +77,7 @@ const AUTH_ENV = {
   KEYCLOAK_REALM,
   DEVICE_TRUST_SECRET,
   JWT_AUDIENCE: process.env.JWT_AUDIENCE ?? "account",
-  NODE_TLS_REJECT_UNAUTHORIZED: "0",
+  NODE_EXTRA_CA_CERTS: "/etc/certs/keycloak-ca.pem",
   ...(JWT_SECRET ? { JWT_SECRET } : {}),
 };
 
@@ -518,7 +518,7 @@ module.exports = {
         KEYCLOAK_URL,
         KEYCLOAK_REALM,
         KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID ?? "civitasone-web",
-        NODE_TLS_REJECT_UNAUTHORIZED: "0",
+        NODE_EXTRA_CA_CERTS: "/etc/certs/keycloak-ca.pem",
       },
     },
   ],
