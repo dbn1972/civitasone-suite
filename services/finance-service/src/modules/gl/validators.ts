@@ -1,9 +1,14 @@
 import { z } from "zod";
 
+const zMoneyMinor = z.union([
+  z.string().regex(/^\d+$/).transform((s) => BigInt(s)),
+  z.bigint().nonnegative(),
+]).pipe(z.bigint().nonnegative());
+
 const journalLine = z.object({
   accountCode: z.string().min(1),
-  debitMinor:  z.number().int().nonnegative(),
-  creditMinor: z.number().int().nonnegative(),
+  debitMinor:  zMoneyMinor,
+  creditMinor: zMoneyMinor,
 });
 
 export const postJournalBody = z.object({
@@ -14,8 +19,8 @@ export const postJournalBody = z.object({
   lines:       z.array(journalLine).min(2),
 }).refine(
   (b) => {
-    const td = b.lines.reduce((s, l) => s + l.debitMinor,  0);
-    const tc = b.lines.reduce((s, l) => s + l.creditMinor, 0);
+    const td = b.lines.reduce((s, l) => s + l.debitMinor,  0n);
+    const tc = b.lines.reduce((s, l) => s + l.creditMinor, 0n);
     return td === tc;
   },
   { message: "journal lines must balance: sum(debit) must equal sum(credit)" }

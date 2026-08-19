@@ -34,7 +34,7 @@ const READER_ROLES = [...SIMPLIFIED_ROLES, "accountant", "viewer"];
 function requireMsmeEdition(req: { headers: Record<string, string | string[] | undefined> }): void {
   const edition = req.headers["x-tenant-edition"] as string | undefined;
   // If the header is set and it's NOT a small-office variant, block.
-  if (edition && !["small_office", "msme", "startup"].includes(edition)) {
+  if (!edition || !["small_office", "msme", "startup"].includes(edition)) {
     throw new HttpError(403, "EDITION_RESTRICTED", "Simplified accounting is only available for Small Office / MSME tenants");
   }
 }

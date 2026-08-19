@@ -20,7 +20,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const { period } = z.object({ period: z.string().min(1) }).parse(req.params);
+    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (existing?.status === "hard_close") {
@@ -33,7 +33,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/hard-close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const { period } = z.object({ period: z.string().min(1) }).parse(req.params);
+    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (existing?.status === "hard_close") {
@@ -46,7 +46,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["finance_admin", "super_admin"]);
-    const { period } = z.object({ period: z.string().min(1) }).parse(req.params);
+    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
     const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);

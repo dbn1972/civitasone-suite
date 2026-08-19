@@ -1,7 +1,12 @@
 import { z } from "zod";
 
-/** Positive rupee amount (user provides in rupees, we convert to paise internally). */
-const positiveRupees = z.number().positive("amount must be greater than 0");
+/** Monetary amount in paise (minor units). Accepts digit-string or bigint; outputs bigint. */
+const zMoneyMinor = z
+  .union([
+    z.string().regex(/^\d+$/, "amount must be whole number in paise"),
+    z.bigint().nonnegative(),
+  ])
+  .pipe(z.bigint().nonnegative());
 
 /** GST rate as a percentage (0, 5, 12, 18, 28). */
 const gstRate = z.number().int().min(0).max(28).default(0);
@@ -10,7 +15,7 @@ const gstRate = z.number().int().min(0).max(28).default(0);
 const periodParam = z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM");
 
 export const recordIncomeBody = z.object({
-  amount:       positiveRupees,
+  amount:       zMoneyMinor,
   customerName: z.string().min(1).max(200),
   description:  z.string().max(500).optional(),
   gstRate:      gstRate,
@@ -21,7 +26,7 @@ export const recordIncomeBody = z.object({
 export type RecordIncomeBody = z.infer<typeof recordIncomeBody>;
 
 export const recordExpenseBody = z.object({
-  amount:       positiveRupees,
+  amount:       zMoneyMinor,
   category:     z.string().min(1).max(64),
   vendorName:   z.string().min(1).max(200).optional(),
   description:  z.string().max(500).optional(),
@@ -31,7 +36,7 @@ export const recordExpenseBody = z.object({
 export type RecordExpenseBody = z.infer<typeof recordExpenseBody>;
 
 export const recordPaymentReceivedBody = z.object({
-  amount:       positiveRupees,
+  amount:       zMoneyMinor,
   customerName: z.string().min(1).max(200),
   invoiceNo:    z.string().max(64).optional(),
   postingDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -39,7 +44,7 @@ export const recordPaymentReceivedBody = z.object({
 export type RecordPaymentReceivedBody = z.infer<typeof recordPaymentReceivedBody>;
 
 export const recordPaymentMadeBody = z.object({
-  amount:       positiveRupees,
+  amount:       zMoneyMinor,
   vendorName:   z.string().min(1).max(200),
   description:  z.string().max(500).optional(),
   postingDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

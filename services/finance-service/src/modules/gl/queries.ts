@@ -48,10 +48,10 @@ export async function getTrialBalanceBalanced(tenantId: string, period?: string)
   };
 }
 
-export async function listJournalEntries(tenantId: string, limit: number) {
+export async function listJournalEntries(tenantId: string, limit: number, offset = 0) {
   const journals = await cache.getOrLoad(
-    cache.makeKey(tenantId, "journals", `list:${limit}`),
-    () => repo.listJournalsByTenant(tenantId, limit),
+    cache.makeKey(tenantId, "journals", `list:${limit}:${offset}`),
+    () => repo.listJournalsByTenant(tenantId, limit, offset),
     60,
   );
   const entries = [];

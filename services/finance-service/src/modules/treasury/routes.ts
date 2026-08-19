@@ -22,8 +22,14 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const bank = await queries.getBankBalance(id, ctx.tenantId);
-    if (!bank) throw new HttpError(404, "NOT_FOUND", "bank account not found");
-    return reply.send({ id: bank.id, name: bank.name, accountNo: bank.accountNo, balanceMinor: bank.balanceMinor.toString(), currency: bank.currency });
+    if (!bank || bank.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "bank account not found");
+    return reply.send({
+      id: bank.id,
+      name: bank.name,
+      accountNoLast4: String(bank.accountNo).slice(-4),
+      balanceMinor: bank.balanceMinor.toString(),
+      currency: bank.currency,
+    });
   });
 
   app.post("/v1/finance/deposits", async (req, reply) => {

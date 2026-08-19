@@ -28,7 +28,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, BillSummaryListSchema, await queries.listBillSummaries(ctx.tenantId, q.limit));
+    sendValidated(reply, BillSummaryListSchema, await queries.listBillSummaries(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/finance/bills/:id", async (req, reply) => {
@@ -44,7 +44,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, q.limit));
+    sendValidated(reply, AdvanceSummaryListSchema, await queries.listAdvances(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/finance/utilization-certificates", async (req, reply) => {
@@ -68,7 +68,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createUC(ctx, body));
   });
 
-  app.post("/v1/finance/bills", async (req, reply) => {
+  app.post("/v1/finance/bills", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createBillBody.parse(req.body);
@@ -101,7 +101,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body));
   });
 
-  app.post("/v1/finance/payments/eft", async (req, reply) => {
+  app.post("/v1/finance/payments/eft", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
@@ -114,7 +114,16 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const payment = await queries.getPayment(id, ctx.tenantId);
     if (!payment) throw new HttpError(404, "NOT_FOUND", "payment not found");
-    return reply.send(payment);
+    return reply.send({
+      id: payment.id,
+      billId: payment.billId,
+      amountMinor: payment.amountMinor.toString(),
+      mode: payment.mode,
+      status: payment.status,
+      currency: payment.currency,
+      createdBy: payment.createdBy,
+      createdAt: payment.createdAt,
+    });
   });
 
   // H1 (payment) — submit a payment to eOffice for administrative approval. The

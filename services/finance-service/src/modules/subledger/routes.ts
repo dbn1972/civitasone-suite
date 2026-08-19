@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
@@ -40,7 +40,7 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
 
     const q = z.object({
-      status: z.string().optional(),
+      status: z.enum(["open","partial","paid","overdue"]).optional(),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
@@ -154,5 +154,20 @@ export async function subLedgerRoutes(app: FastifyInstance): Promise<void> {
     `));
 
     return reply.send({ data: rows });
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({
+        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

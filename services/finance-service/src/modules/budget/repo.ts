@@ -100,16 +100,18 @@ export async function listHeads(tenantId: string, limit: number): Promise<HeadRo
     .limit(limit));
 }
 
-export async function listSanctionsByTenant(tenantId: string, limit: number): Promise<SanctionRow[]> {
+export async function listSanctionsByTenant(tenantId: string, limit: number, offset = 0): Promise<SanctionRow[]> {
   return scopedRead((tx) => tx.select().from(financeSanctions)
     .where(eq(financeSanctions.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
 }
 
-export async function listBudgetsByTenant(tenantId: string, limit: number): Promise<BudgetRow[]> {
+export async function listBudgetsByTenant(tenantId: string, limit: number, offset = 0): Promise<BudgetRow[]> {
   return scopedRead((tx) => tx.select().from(financeBudgets)
     .where(eq(financeBudgets.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
 }
 
 export async function findHeadById(id: string): Promise<HeadRow | null> {

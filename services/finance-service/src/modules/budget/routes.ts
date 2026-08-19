@@ -57,7 +57,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const q = budgetQueryParams.parse(req.query);
     if (!q.headId || !q.fy) {
       const lq = listQuerySchema.parse(req.query);
-      return sendValidated(reply, BudgetSummaryListSchema, await queries.listBudgetSummaries(ctx.tenantId, lq.limit));
+      return sendValidated(reply, BudgetSummaryListSchema, await queries.listBudgetSummaries(ctx.tenantId, lq.limit, lq.offset));
     }
     const budget = await queries.getBudget(ctx.tenantId, q.headId, q.fy);
     if (!budget) throw new HttpError(404, "NOT_FOUND", "budget not found");
@@ -68,7 +68,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, q.limit));
+    sendValidated(reply, SanctionSummaryListSchema, await queries.listSanctionSummaries(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/finance/sanctions/:id/available", async (req, reply) => {
@@ -89,7 +89,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, SanctionDetailSchema, detail);
   });
 
-  app.post("/v1/finance/sanctions", async (req, reply) => {
+  app.post("/v1/finance/sanctions", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createSanctionBody.parse(req.body);

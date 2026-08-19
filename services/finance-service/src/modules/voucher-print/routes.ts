@@ -5,6 +5,10 @@ import * as repo from "../gl/repo.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
@@ -57,14 +61,14 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       const cr = Number(l.creditMinor);
       totalDebit += dr;
       totalCredit += cr;
-      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
+      return `<tr><td>${escHtml(l.accountCode)}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
     }).join("");
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
-      voucherNo: journal.voucherNo,
-      postingDate: String(journal.postingDate),
-      type: journal.type ?? "journal",
-      status: journal.status ?? "posted",
+      voucherNo: escHtml(journal.voucherNo),
+      postingDate: escHtml(String(journal.postingDate)),
+      type: escHtml(journal.type ?? "journal"),
+      status: escHtml(journal.status ?? "posted"),
       lineRows,
       totalDebit: fmt(totalDebit),
       totalCredit: fmt(totalCredit),
@@ -88,14 +92,14 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       const cr = Number(l.creditMinor);
       totalDebit += dr;
       totalCredit += cr;
-      return `<tr><td>${l.accountCode}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
+      return `<tr><td>${escHtml(l.accountCode)}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
     }).join("");
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
-      voucherNo: journal.voucherNo,
-      postingDate: String(journal.postingDate),
-      type: journal.type ?? "journal",
-      status: journal.status ?? "posted",
+      voucherNo: escHtml(journal.voucherNo),
+      postingDate: escHtml(String(journal.postingDate)),
+      type: escHtml(journal.type ?? "journal"),
+      status: escHtml(journal.status ?? "posted"),
       lineRows,
       totalDebit: fmt(totalDebit),
       totalCredit: fmt(totalCredit),

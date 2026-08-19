@@ -87,10 +87,11 @@ export async function listPaymentsByTenant(tenantId: string, limit: number, offs
     .offset(offset));
 }
 
-export async function listBillsByTenant(tenantId: string, limit: number): Promise<BillRow[]> {
+export async function listBillsByTenant(tenantId: string, limit: number, offset = 0): Promise<BillRow[]> {
   return scopedRead((tx) => tx.select().from(financeBills)
     .where(eq(financeBills.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
 }
 
 export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
@@ -148,10 +149,11 @@ export async function clearSampleBills(tenantId: string): Promise<number> {
   });
 }
 
-export async function listAdvancesByTenant(tenantId: string, limit: number): Promise<AdvanceRow[]> {
+export async function listAdvancesByTenant(tenantId: string, limit: number, offset = 0): Promise<AdvanceRow[]> {
   return scopedRead((tx) => tx.select().from(financeAdvances)
     .where(eq(financeAdvances.tenantId, tenantId))
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
 }
 
 export async function insertAdvance(tx: Writer, row: AdvanceInsert): Promise<void> {

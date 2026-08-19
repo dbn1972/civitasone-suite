@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
+import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import { deterministicId } from "./spine.js";
@@ -349,6 +350,7 @@ export function registerGlConsumers(queue: Queue): void {
       const original = await repo.findJournalByIdTx(tx, raw.originalJournalId);
       if (!original) throw new Error(`JOURNAL_NOT_FOUND: ${raw.originalJournalId}`);
       if (original.tenantId !== msg.tenantId) throw new Error(`JOURNAL_TENANT_MISMATCH: ${raw.originalJournalId}`);
+      assertDistinctMakerChecker(original.createdBy, msg.actorId);
       if (original.status === "reversed") return; // already reversed — idempotent no-op
       if (original.status !== "posted") throw new Error(`JOURNAL_NOT_POSTED: cannot reverse status '${original.status}'`);
       const origLines = (original.lines ?? []) as JournalLine[];

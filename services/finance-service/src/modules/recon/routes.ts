@@ -4,7 +4,7 @@
  * Mutations are CQRS (queue.publish → 202). Reads remain synchronous.
  */
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import {
@@ -75,9 +75,13 @@ export async function reconRoutes(app: FastifyInstance): Promise<void> {
       .object({
         status: z.enum(["open", "investigating", "resolved", "written_off"]).optional(),
         runId: z.string().uuid().optional(),
+        limit: z.coerce.number().int().min(1).max(500).default(100),
+        offset: z.coerce.number().int().min(0).default(0),
       })
       .parse(req.query);
-    const breaks = await repo.listBreaks(ctx.tenantId, q);
+    const { status, runId, limit, offset } = q;
+    const allBreaks = await repo.listBreaks(ctx.tenantId, { status, runId }, limit + offset);
+    const breaks = allBreaks.slice(offset, offset + limit);
     return reply.send({ data: breaks, meta: { total: breaks.length } });
   });
 
@@ -102,5 +106,20 @@ export async function reconRoutes(app: FastifyInstance): Promise<void> {
       acceptedResponseSchema,
       await commands.applyExceptionActionCmd(ctx, id, body),
     );
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    if (err instanceof ZodError) {
+      return reply.code(400).send({
+        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+    }
+    if (err instanceof HttpError) {
+      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
 }

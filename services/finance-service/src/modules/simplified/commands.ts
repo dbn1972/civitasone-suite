@@ -8,7 +8,6 @@ import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { SIMPLIFIED_COMMANDS } from "./topics.js";
-import { rupeesToPaise } from "./auto-journal.js";
 import type {
   RecordIncomeBody,
   RecordExpenseBody,
@@ -20,8 +19,8 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function recordIncome(ctx: RequestContext, body: RecordIncomeBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = rupeesToPaise(body.amount);
-  const gstMinor = rupeesToPaise(body.amount * body.gstRate / 100);
+  const amountMinor = body.amount;
+  const gstMinor = body.amount * BigInt(body.gstRate) / 100n;
   const totalMinor = amountMinor + gstMinor;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordIncome, {
@@ -52,8 +51,8 @@ export async function recordIncome(ctx: RequestContext, body: RecordIncomeBody):
 
 export async function recordExpense(ctx: RequestContext, body: RecordExpenseBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = rupeesToPaise(body.amount);
-  const gstMinor = rupeesToPaise(body.amount * body.gstRate / 100);
+  const amountMinor = body.amount;
+  const gstMinor = body.amount * BigInt(body.gstRate) / 100n;
   const totalMinor = amountMinor + gstMinor;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordExpense, {
@@ -83,7 +82,7 @@ export async function recordExpense(ctx: RequestContext, body: RecordExpenseBody
 
 export async function recordPaymentReceived(ctx: RequestContext, body: RecordPaymentReceivedBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = rupeesToPaise(body.amount);
+  const amountMinor = body.amount;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordPaymentReceived, {
     messageId: id,
@@ -108,7 +107,7 @@ export async function recordPaymentReceived(ctx: RequestContext, body: RecordPay
 
 export async function recordPaymentMade(ctx: RequestContext, body: RecordPaymentMadeBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = rupeesToPaise(body.amount);
+  const amountMinor = body.amount;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordPaymentMade, {
     messageId: id,

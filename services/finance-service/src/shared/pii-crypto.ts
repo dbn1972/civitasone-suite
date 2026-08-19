@@ -33,6 +33,10 @@ const KEY_LEN = 32;
 // Fixed fallback salt (used only when PII_ENC_SALT is unset).
 const DEFAULT_SALT = "civitas-fin-pii!";
 
+if (!process.env.PII_ENC_SALT && process.env.NODE_ENV === "production") {
+  throw new Error("PII_ENC_SALT must be set in production — missing salt weakens PII encryption key derivation");
+}
+
 /** Typed error for any decrypt failure (tamper, wrong key, corruption). */
 export class PiiDecryptError extends Error {
   readonly code = "PII_DECRYPT_FAILED";

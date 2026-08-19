@@ -106,6 +106,10 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const sanction = await repo.findSanctionByIdTx(tx, p.id);
+      if (!sanction || sanction.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
+      assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);
       await repo.updateSanction(tx, p.id, { status: "cancelled", updatedBy: msg.actorId });
       await audit(tx, msg, "reject", "sanction", p.id);
     });

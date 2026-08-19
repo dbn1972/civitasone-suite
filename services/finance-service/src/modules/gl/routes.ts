@@ -9,12 +9,13 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+const FINANCE_ADMIN_ROLES = ["finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/finance/journals", async (req, reply) => {
+  app.post("/v1/finance/journals", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, FINANCE_ADMIN_ROLES);
     const body = postJournalBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.postJournal(ctx, body));
   });
@@ -38,7 +39,7 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit));
+    sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit, q.offset));
   });
 
   app.get("/v1/finance/statements/trial-balance", async (req, reply) => {

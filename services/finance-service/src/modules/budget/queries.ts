@@ -76,10 +76,10 @@ export async function getBudget(tenantId: string, headId: string, fy: string): P
   );
 }
 
-export async function listBudgetSummaries(tenantId: string, limit: number) {
+export async function listBudgetSummaries(tenantId: string, limit: number, offset = 0) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "budgets", `list:${limit}`),
-    () => repo.listBudgetsByTenant(tenantId, limit),
+    cache.makeKey(tenantId, "budgets", `list:${limit}:${offset}`),
+    () => repo.listBudgetsByTenant(tenantId, limit, offset),
     60,
   );
   const summaries = [];
@@ -119,10 +119,10 @@ export async function getSanctionAvailable(id: string, tenantId: string): Promis
   };
 }
 
-export async function listSanctionSummaries(tenantId: string, limit: number) {
+export async function listSanctionSummaries(tenantId: string, limit: number, offset = 0) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "sanctions", `list:${limit}`),
-    () => repo.listSanctionsByTenant(tenantId, limit),
+    cache.makeKey(tenantId, "sanctions", `list:${limit}:${offset}`),
+    () => repo.listSanctionsByTenant(tenantId, limit, offset),
     60,
   );
   const summaries = [];

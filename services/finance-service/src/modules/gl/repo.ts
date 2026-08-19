@@ -66,10 +66,12 @@ export async function getTrialBalance(tenantId: string) {
     .groupBy(financeLedger.headId));
 }
 
-export async function listJournalsByTenant(tenantId: string, limit: number): Promise<JournalRow[]> {
+export async function listJournalsByTenant(tenantId: string, limit: number, offset = 0): Promise<JournalRow[]> {
   return scopedRead((tx) => tx.select().from(financeJournals)
     .where(eq(financeJournals.tenantId, tenantId))
-    .limit(limit));
+    .orderBy(financeJournals.postingDate)
+    .limit(limit)
+    .offset(offset));
 }
 
 /**

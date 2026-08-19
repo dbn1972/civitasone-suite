@@ -246,6 +246,20 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
   });
 
+  sub(COMMANDS.billReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const bill = await repo.findBillByIdTx(tx, p.id);
+      if (!bill || bill.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/payments] BILL_NOT_FOUND_FOR_REJECT: id=${p.id}`);
+      assertDistinctMakerChecker(bill.createdBy, msg.actorId);
+      await repo.updateBill(tx, p.id, { status: "rejected", updatedBy: msg.actorId });
+      await audit(tx, msg, "reject", "bill", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "bill", p.id));
+  });
+
   sub(COMMANDS.paymentInitiate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
@@ -401,7 +415,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const advance = await repo.findAdvanceByIdForUpdateTx(tx, p.id);
-      if (!advance) throw new Error(`advance ${p.id} not found`);
+      if (!advance || advance.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/payments] ADVANCE_NOT_FOUND: id=${p.id} tenant=${p.tenantId}`);
       const newAdjusted = BigInt(advance.adjustedMinor) + BigInt(p.adjustedMinor);
       if (newAdjusted > BigInt(advance.amountMinor)) {
         throw new NonRetryableError(

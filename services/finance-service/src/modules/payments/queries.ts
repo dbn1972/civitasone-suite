@@ -78,10 +78,10 @@ function mapBillStatus(status: string): "pending" | "passed" | "paid" | "rejecte
   return "pending";
 }
 
-export async function listBillSummaries(tenantId: string, limit: number) {
+export async function listBillSummaries(tenantId: string, limit: number, offset = 0) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "bills", `list:${limit}`),
-    () => repo.listBillsByTenant(tenantId, limit),
+    cache.makeKey(tenantId, "bills", `list:${limit}:${offset}`),
+    () => repo.listBillsByTenant(tenantId, limit, offset),
     60,
   );
   return (rows ?? []).map((row) => ({
@@ -113,10 +113,10 @@ function resolveAdvanceStatus(row: { status: string; dueDate: string | null }): 
   return row.status as "active" | "adjusted" | "overdue" | "closed";
 }
 
-export async function listAdvances(tenantId: string, limit: number) {
+export async function listAdvances(tenantId: string, limit: number, offset = 0) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "advances", `list:${limit}`),
-    () => repo.listAdvancesByTenant(tenantId, limit),
+    cache.makeKey(tenantId, "advances", `list:${limit}:${offset}`),
+    () => repo.listAdvancesByTenant(tenantId, limit, offset),
     60,
   );
   return (rows ?? []).map((row) => ({
