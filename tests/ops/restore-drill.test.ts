@@ -179,6 +179,34 @@ describe("restore-drill.sh — pass/fail determinism", () => {
   });
 });
 
+describe("restore-drill.sh — files/quarters/spaces/inventory schema coverage (task 39, Req 7.5)", () => {
+  it("estab (owns the files/quarters/spaces PG schemas) has a registered sample-row check", () => {
+    const script = readFileSync(SCRIPT, "utf-8");
+    // `estab` is a single Postgres database (civitas_estab) shared across the
+    // files.*, quarters.* and spaces.* PG schemas — one drill entry covers
+    // all three, per services/estab-service/src/modules/{files,quarters,
+    // spaces}/schema.ts each declaring their own pgSchema() under that DB.
+    expect(script).toMatch(/\[estab\]="files\.estab_files"/);
+  });
+
+  it("inventory has a registered sample-row check, even though it is outside the fixed Tier-0/Tier-1 universe", () => {
+    const script = readFileSync(SCRIPT, "utf-8");
+    expect(script).toMatch(/\[inventory\]="inventory\.items"/);
+  });
+
+  it("a passing drill against the inventory service (drilled explicitly via --service, not --all-tier01) reports PASS", () => {
+    const { result } = runDrill({ service: "inventory", backupExists: true, tableCount: 20, minTableCount: 5 });
+    expect(result.stdout).toContain("PASS: Restore drill succeeded for inventory");
+    expect(result.status).toBe(0);
+  });
+
+  it("a corrupted inventory restore is classified FAILED, never a false PASS", () => {
+    const { result } = runDrill({ service: "inventory", backupExists: true, restoreFail: true, tableCount: 20 });
+    expect(result.stdout).toContain("FAIL: Restore drill failed for inventory");
+    expect(result.status).toBe(1);
+  });
+});
+
 describe("restore-drill.sh — scratch DB cleanup (Req 12.5)", () => {
   it("drops the scratch DB on a successful drill", () => {
     const { drops } = runDrill({ service: "finance", backupExists: true, tableCount: 20 });

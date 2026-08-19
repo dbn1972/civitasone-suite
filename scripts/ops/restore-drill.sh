@@ -64,6 +64,15 @@ declare -A SAMPLE_TABLE=(
   [hrms]="employee.hrms_departments"
   [payroll]="payroll.payroll_structures"
   [audit]="events.events"
+  # Not part of the fixed Tier-0/Tier-1 universe (TIER01_SERVICES above), but
+  # drilled explicitly by dr-drill.yml alongside it (task 39, Req 7.5
+  # operational gate) — the estab-inv-int-go-live spec requires restore
+  # coverage for both the estab schemas (files/quarters/spaces, all three
+  # already covered above by the single `estab` entry — one Postgres
+  # database, `civitas_estab`, shared across those three PG schemas) AND the
+  # inventory-service database, which this project's core Tier-0/Tier-1 list
+  # never included.
+  [inventory]="inventory.items"
 )
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────────────────────
