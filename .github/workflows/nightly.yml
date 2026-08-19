@@ -119,3 +119,61 @@ jobs:
             /tmp/bootstrap-migration-out.txt
             /tmp/finance-worker.log
           retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Sprint 24 Task 36 (Req 7.3): Lighthouse CI performance baseline gate.
+  # Asserts LCP < 2500ms and TBT < 300ms on /estab/files/list and
+  # /inventory/list against a production build. Uses the mock gateway (same
+  # one the accessibility CI job uses) so the audited pages render real
+  # DataTable rows instead of empty-state shells.
+  # ─────────────────────────────────────────────
+  lighthouse:
+    name: Lighthouse Performance Baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'pnpm' }
+      - name: Install Chrome (for Lighthouse's chrome-launcher)
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Build web (production build)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Start mock gateway
+        run: |
+          node scripts/ci/start-mock-gateway.mjs > mock-gateway.log 2>&1 &
+          npx --yes wait-on http://localhost:8080/health --timeout 60000
+      - name: Start web
+        run: |
+          pnpm --filter @civitasone/web run start > web-server.log 2>&1 &
+          npx --yes wait-on http://localhost:3000/auth/login --timeout 120000
+        env:
+          CIVITASONE_API_BASE_URL: http://localhost:8080
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+          ENABLE_DEV_LOGIN: 'true'
+          JWT_SECRET: civitasone-dev-secret
+      # Run from the repo root (not via `pnpm --filter exec`, which changes
+      # cwd to apps/web) so lighthouserc.js's relative paths — puppeteerScript
+      # and the filesystem upload outputDir — resolve against the same root
+      # they're written relative to.
+      - name: Run Lighthouse CI
+        run: apps/web/node_modules/.bin/lhci autorun --config=lighthouserc.js
+        env:
+          JWT_SECRET: civitasone-dev-secret
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: |
+            .lighthouseci/
+            web-server.log
+            mock-gateway.log
+          retention-days: 14
