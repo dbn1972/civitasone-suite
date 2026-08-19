@@ -36,7 +36,7 @@ export function registerReconConsumers(queue: Queue): void {
     }
     await cache.invalidate(`finance:${msg.tenantId}:recon:*`);
     log.info({ id: msg.messageId, runId: result.run.id }, "Processed finance.recon.run");
-  });
+  }, { visibilityTimeout: 300 });
 
   queue.subscribe("finance.recon.exception_action", async (msg) => {
     const p = msg.payload as {

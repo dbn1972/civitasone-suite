@@ -16,7 +16,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { isTransactionDismissed } from "./queries.js";
-import { createAnomalyFlag } from "./commands.js";
+import { createAnomalyFlag, createAnomalyFlagTx } from "./commands.js";
 import {
   scoreTransactionZScore,
   scoreCostCenterPattern,
@@ -116,7 +116,7 @@ export function registerAnomalyConsumers(queue: Queue): void {
         amountPaise: p.amountPaise,
       };
 
-      await createAnomalyFlag(msg.tenantId, msg.actorId, anomaly, correlationId);
+      await createAnomalyFlagTx(tx, msg.tenantId, msg.actorId, anomaly, correlationId);
 
       await enqueue(tx, {
         topic: AUDIT_TOPIC,

@@ -17,6 +17,7 @@ export async function createBudget(ctx: RequestContext, body: CreateBudgetBody):
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
+  await cache.invalidateResource(ctx.tenantId, "budgets");
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
@@ -37,6 +38,7 @@ export async function createSanction(ctx: RequestContext, body: CreateSanctionBo
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
+  await cache.invalidateResource(ctx.tenantId, "sanctions");
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

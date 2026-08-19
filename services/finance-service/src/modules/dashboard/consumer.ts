@@ -18,7 +18,7 @@ export function registerDashboardConsumers(queue: Queue): void {
         payload: { service: "finance", action: "dashboard_refresh", resourceType: "dashboard", resourceId: msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:dashboard:*`);
+    await cache.invalidate(cache.makeKey(p.tenantId, "dashboard", "summary"));
     log.info({ id: msg.messageId }, "Processed dashboard.refresh");
   });
 }

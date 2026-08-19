@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "./domain.js";
 import { financeBudgets, financeSanctions, financeHeads, financeReappropriations, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow, type ReappropriationRow, type ReappropriationInsert } from "./schema.js";
@@ -117,6 +117,13 @@ export async function listBudgetsByTenant(tenantId: string, limit: number, offse
 export async function findHeadById(id: string): Promise<HeadRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1));
   return rows[0] ?? null;
+}
+
+export async function findHeadsByIds(ids: string[]): Promise<HeadRow[]> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) =>
+    tx.select().from(financeHeads).where(inArray(financeHeads.id, ids))
+  );
 }
 
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {

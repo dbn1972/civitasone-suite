@@ -268,10 +268,9 @@ export function registerGlConsumers(queue: Queue): void {
     // H3: paise as bigint — no Number() on aggregate paise.
     const net = BigInt(p.totalNetMinor);
 
-    try {
-      // A zero-net run has nothing to settle (all-exception slips); posting an
-      // all-zero journal would be rejected downstream as unbalanced noise.
-      if (net <= 0n) {
+    // A zero-net run has nothing to settle (all-exception slips); posting an
+    // all-zero journal would be rejected downstream as unbalanced noise.
+    if (net <= 0n) {
         await db.transaction(async (tx) => { await markProcessed(tx, msg.messageId); });
         return;
       }
@@ -291,7 +290,12 @@ export function registerGlConsumers(queue: Queue): void {
             entry.headCode,
           );
           if (!head) {
-            throw new Error(`INVALID_HEAD_CODE: head code '${entry.headCode}' not found in Chart of Accounts for tenant ${msg.tenantId}`);
+            await enqueue(tx, {
+              topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: { runId: p.runId, journalId, reason: `INVALID_HEAD_CODE: head code '${entry.headCode}' not found in Chart of Accounts for tenant ${msg.tenantId}` },
+            });
+            return;  // markProcessed + glRejected atomic
           }
           resolvedLines.push({
             accountCode: head.id,
@@ -315,28 +319,6 @@ export function registerGlConsumers(queue: Queue): void {
       });
 
       await cache.invalidateResource(msg.tenantId, "journals");
-    } catch (err: unknown) {
-      const reason = err instanceof Error ? err.message : String(err);
-
-      // If the error is a headCode validation failure or unbalanced journal, emit gl.rejected
-      if (reason.startsWith("INVALID_HEAD_CODE") || reason.includes("JOURNAL_UNBALANCED") || reason.includes("JOURNAL_TOO_FEW_LINES")) {
-        await db.transaction(async (tx) => {
-          await enqueue(tx, {
-            topic: EVENTS.glRejected,
-            eventType: EVENTS.glRejected,
-            tenantId: msg.tenantId,
-            actorId: msg.actorId,
-            correlationId: msg.correlationId,
-            payload: { runId: p.runId, journalId, reason },
-          });
-        });
-        await cache.invalidateResource(msg.tenantId, "journals");
-        return;
-      }
-
-      // Re-throw other errors (e.g. period closed, DB failure) for DLQ retry
-      throw err;
-    }
   });
 
   // P0-3: reversal = contra-as-creation. Post a NEW mirror journal (debits and

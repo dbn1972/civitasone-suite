@@ -45,12 +45,10 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
     // Build bill->vendor map for beneficiary resolution
     const uniqueBillIds = [...new Set(rows.map((r) => r.billId))];
     const billVendorMap = new Map<string, string>();
-    for (const billId of uniqueBillIds) {
-      const bill = await repo.findBillByIdAndTenant(billId, tenantId);
-      if (bill) {
-        const vendorName = VENDOR_NAMES[bill.vendorId];
-        if (vendorName) billVendorMap.set(billId, vendorName);
-      }
+    const bills = await repo.findBillsByIds(uniqueBillIds, tenantId);
+    for (const bill of bills) {
+      const vendorName = VENDOR_NAMES[bill.vendorId];
+      if (vendorName) billVendorMap.set(bill.id, vendorName);
     }
     return {
       data: rows.map((r) => ({

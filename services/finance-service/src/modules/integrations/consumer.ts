@@ -100,7 +100,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
       const resourceId = p.payrollRunId ?? p.disbursementId ?? p.pfmsTxnId;
       await audit(tx, msg, "eft_disbursement", "payment", resourceId);
     });
-  });
+  }, { visibilityTimeout: 300 });
 
   /** procurement.grn.accepted → draft vendor bill with PO/GRN refs for 3-way match */
   queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
@@ -150,6 +150,27 @@ export function registerIntegrationConsumers(queue: Queue): void {
           ...(grnAmountMinor != null ? { grnAmountMinor: grnAmountMinor.toString() } : {}),
         },
       });
+      // Three-way match advisory notification (merged from payments/grnAccepted)
+      if (poAmountMinor != null && grnAmountMinor != null) {
+        const THREE_WAY_TOLERANCE_PCT = 5;
+        const deviationMinor = grossBig > poAmountMinor ? grossBig - poAmountMinor : poAmountMinor - grossBig;
+        const variance = poAmountMinor > 0n
+          ? Number(deviationMinor * 10000n / poAmountMinor) / 100
+          : (grossBig > 0n ? Number.POSITIVE_INFINITY : 0);
+        const matched = variance <= THREE_WAY_TOLERANCE_PCT;
+        await enqueue(tx, {
+          topic: matched ? "procurement.three_way_match.passed" : "procurement.three_way_match.failed",
+          eventType: matched ? "procurement.three_way_match.passed" : "procurement.three_way_match.failed",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            grnId: p.grnId, billId, vendorId: p.vendorId,
+            poAmountMinor: poAmountMinor.toString(),
+            grnAmountMinor: grossBig.toString(),
+            variancePct: variance,
+            ...(matched ? {} : { reason: `Amount variance ${variance.toFixed(2)}% exceeds ${THREE_WAY_TOLERANCE_PCT}% tolerance` }),
+          },
+        });
+      }
       await audit(tx, msg, "grn_bill_draft", "bill", billId);
     });
   });

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
@@ -44,6 +44,14 @@ export async function findBillByIdAndTenant(id: string, tenantId: string): Promi
   const rows = await scopedRead((tx) => tx.select().from(financeBills)
     .where(and(eq(financeBills.id, id), eq(financeBills.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
+}
+
+export async function findBillsByIds(ids: string[], tenantId: string): Promise<BillRow[]> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) =>
+    tx.select().from(financeBills)
+      .where(and(inArray(financeBills.id, ids), eq(financeBills.tenantId, tenantId)))
+  );
 }
 
 export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | null> {

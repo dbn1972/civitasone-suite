@@ -1,4 +1,5 @@
 import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
@@ -56,6 +57,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
   const sub = <T>(topic: string, handler: (msg: CommandEnvelope<T>) => Promise<void>): void =>
     queue.subscribe<T>(topic, async (msg) => { await runWithTenant(msg.tenantId, () => handler(msg)); });
   sub(COMMANDS.billCreate, async (msg) => {
+    {
+      const schema = z.object({
+        id: z.string().uuid(),
+        tenantId: z.string().uuid(),
+        headId: z.string().uuid(),
+        vendorId: z.string().uuid(),
+        grossMinor: z.union([z.string(), z.number(), z.bigint()]),
+        netMinor: z.union([z.string(), z.number(), z.bigint()]),
+      });
+      const _v = schema.safeParse(msg.payload);
+      if (!_v.success) throw new NonRetryableError(`[finance/payments] billCreate SCHEMA_VIOLATION: ${_v.error.message}`);
+    }
     const p = msg.payload as {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
       ddoCode?: string; paoCode?: string;
@@ -261,6 +274,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
   });
 
   sub(COMMANDS.paymentInitiate, async (msg) => {
+    {
+      const schema = z.object({
+        id: z.string().uuid(),
+        tenantId: z.string().uuid(),
+        billId: z.string().uuid(),
+        ddoCode: z.string().min(1),
+        mode: z.string().min(1),
+        amountMinor: z.union([z.string(), z.number()]),
+      });
+      const _v = schema.safeParse(msg.payload);
+      if (!_v.success) throw new NonRetryableError(`[finance/payments] paymentInitiate SCHEMA_VIOLATION: ${_v.error.message}`);
+    }
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
       amountMinor: number | string; currency?: string; eftRef?: string; bankAccountId?: string;
@@ -411,6 +436,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
   });
 
   sub(COMMANDS.advanceAdjust, async (msg) => {
+    {
+      const schema = z.object({
+        id: z.string().uuid(),
+        tenantId: z.string().uuid(),
+        adjustedMinor: z.union([z.string(), z.number()]),
+        reason: z.string().min(1),
+      });
+      const _v = schema.safeParse(msg.payload);
+      if (!_v.success) throw new NonRetryableError(`[finance/payments] advanceAdjust SCHEMA_VIOLATION: ${_v.error.message}`);
+    }
     const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -440,114 +475,12 @@ export function registerPaymentsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const payment = await repo.findPaymentByIdTx(tx, p.id);
-      if (!payment || payment.tenantId !== p.tenantId) return;
+      if (!payment || payment.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/payments] PAYMENT_NOT_FOUND: id=${p.id} tenant=${p.tenantId}`);
       await repo.updatePayment(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
       await audit(tx, msg, "submit_for_eoffice_approval", "payment", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
-  });
-
-  /**
-   * procurement.grn.accepted → three-way match validation.
-   * Validates PO amounts match GRN amounts (within 5% tolerance), creates a
-   * draft bill, and emits procurement.three_way_match.passed or .failed.
-   */
-  sub(CONSUMED_EVENTS.grnAccepted, async (msg) => {
-    const p = msg.payload as {
-      poId: string; grnId: string; vendorId: string;
-      lineItems?: Array<{ description?: string; quantity?: number; unitPriceMinor?: number }>;
-      totalMinor: number | string;
-      tenantId: string; messageId?: string;
-      poAmountMinor?: number | string;
-    };
-    // Advisory gate (emits passed/failed); the hard authorisation gate is on
-    // billApprove above. Default here is 5% (looser than the approve default)
-    // because this fires on receipt, before the invoice is known.
-    const THREE_WAY_MATCH_TOLERANCE_PCT = resolveThreeWayTolerancePct(5);
-    const grnTotalMinor = BigInt(p.totalMinor ?? 0);
-    const poAmountMinor = p.poAmountMinor != null ? BigInt(p.poAmountMinor) : grnTotalMinor;
-    const billId = randomUUID();
-    const poRef = `procurement_po:${p.poId}`;
-    const grnRef = `procurement_grn:${p.grnId}`;
-    const headId = process.env.FINANCE_DEFAULT_HEAD_ID ?? "dddddddd-0001-0000-0000-000000000001";
-
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-
-      // Insert draft bill
-      await repo.insertBill(tx, {
-        id: billId,
-        tenantId: msg.tenantId,
-        billNo: `BILL/GRN/${p.grnId.slice(0, 8).toUpperCase()}`,
-        vendorId: p.vendorId,
-        headId,
-        grossMinor: grnTotalMinor,
-        netMinor: grnTotalMinor,
-        poRef,
-        grnRef,
-        stage: "section",
-        status: "draft",
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
-
-      // Three-way match validation: compare PO amount vs GRN amount (tolerance-based).
-      // Deviation = |poAmount - grnAmount|.
-      const deviationMinor = grnTotalMinor > poAmountMinor
-        ? grnTotalMinor - poAmountMinor
-        : poAmountMinor - grnTotalMinor;
-      // The DECISION uses exact integer arithmetic. `variance` below is REPORTING
-      // ONLY: its BigInt division truncates toward zero, so it quantises to
-      // 0.01%-of-PO steps and under-reports (on a Rs 1 crore PO the quantum is
-      // Rs 1,000). Deciding on it admitted overage the tolerance forbids.
-      const matched = !deviationExceedsTolerance(deviationMinor, poAmountMinor, THREE_WAY_MATCH_TOLERANCE_PCT);
-      const variance = poAmountMinor > 0n
-        ? Number(deviationMinor * 10000n / poAmountMinor) / 100
-        : (grnTotalMinor > 0n ? Number.POSITIVE_INFINITY : 0);
-
-      if (matched) {
-        // Match passes
-        await enqueue(tx, {
-          topic: "procurement.three_way_match.passed",
-          eventType: "procurement.three_way_match.passed",
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          payload: {
-            poId: p.poId,
-            grnId: p.grnId,
-            billId,
-            vendorId: p.vendorId,
-            poAmountMinor: poAmountMinor.toString(),
-            grnAmountMinor: grnTotalMinor.toString(),
-            variancePct: variance,
-          },
-        });
-      } else {
-        // Match fails — variance exceeds tolerance
-        await enqueue(tx, {
-          topic: "procurement.three_way_match.failed",
-          eventType: "procurement.three_way_match.failed",
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          payload: {
-            poId: p.poId,
-            grnId: p.grnId,
-            billId,
-            vendorId: p.vendorId,
-            poAmountMinor: poAmountMinor.toString(),
-            grnAmountMinor: grnTotalMinor.toString(),
-            variancePct: variance,
-            reason: `Amount variance ${variance.toFixed(2)}% exceeds ${THREE_WAY_MATCH_TOLERANCE_PCT}% tolerance (PO: ${poAmountMinor} paise, GRN: ${grnTotalMinor} paise)`,
-          },
-        });
-      }
-
-      await audit(tx, msg, "three_way_match", "bill", billId);
-    });
-
-    await cache.invalidateResource(msg.tenantId, "bills");
   });
 }
 

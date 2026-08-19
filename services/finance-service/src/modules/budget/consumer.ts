@@ -87,7 +87,9 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!sanction || sanction.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       // Only a pending sanction can be approved (idempotent on redelivery).
-      if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
+      if (sanction.status === "approved") return;  // true idempotent redelivery
+      if (sanction.status !== "pending_approval" && sanction.status !== "draft")
+        throw new NonRetryableError(`[finance/budget] INVALID_SANCTION_STATE: id=${p.id} status=${sanction.status}`);
       // R11 SoD: the approving officer (checker) must differ from the creator
       // (maker). Same-officer approval is the maker-checker bypass we are closing.
       assertSanctionApproverDistinct(sanction.createdBy, msg.actorId);

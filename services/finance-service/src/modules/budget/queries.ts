@@ -82,9 +82,12 @@ export async function listBudgetSummaries(tenantId: string, limit: number, offse
     () => repo.listBudgetsByTenant(tenantId, limit, offset),
     60,
   );
+  const headIds_b = [...new Set((rows ?? []).map((r) => r.headId))];
+  const headList_b = await repo.findHeadsByIds(headIds_b);
+  const headMap_b = new Map(headList_b.map((h) => [h.id, h]));
   const summaries = [];
   for (const row of rows ?? []) {
-    const head = await repo.findHeadById(row.headId);
+    const head = headMap_b.get(row.headId);
     // H3: keep as bigint throughout to avoid 2^53 precision loss on large budgets.
     const allocated = row.allocatedMinor ?? row.beMinor ?? 0n;
     const utilised = row.utilisedMinor ?? 0n;
@@ -125,9 +128,12 @@ export async function listSanctionSummaries(tenantId: string, limit: number, off
     () => repo.listSanctionsByTenant(tenantId, limit, offset),
     60,
   );
+  const headIds_s = [...new Set((rows ?? []).map((r) => r.headId))];
+  const headList_s = await repo.findHeadsByIds(headIds_s);
+  const headMap_s = new Map(headList_s.map((h) => [h.id, h]));
   const summaries = [];
   for (const row of rows ?? []) {
-    const head = await repo.findHeadById(row.headId);
+    const head = headMap_s.get(row.headId);
     summaries.push({
       id: row.id,
       sanctionNo: row.sanctionNo,

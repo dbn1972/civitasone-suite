@@ -129,3 +129,53 @@ export async function createAnomalyFlag(
 
   return id;
 }
+
+/**
+ * Tx-scoped variant of createAnomalyFlag for use inside an existing db.transaction.
+ * Accepts the outer tx instead of opening its own, so markProcessed + anomaly insert are atomic.
+ */
+export async function createAnomalyFlagTx(
+  tx: Parameters<typeof enqueue>[0],
+  tenantId: string,
+  actorId: string,
+  anomaly: DetectedAnomaly,
+  correlationId: string,
+): Promise<string> {
+  const id = randomUUID();
+  const txDb = tx as unknown as typeof import("../../shared/db.js").db;
+  await txDb.insert(financeAnomalies).values({
+    id,
+    tenantId,
+    transactionId: anomaly.transactionId,
+    anomalyType: anomaly.anomalyType,
+    severity: anomaly.severity,
+    status: "open",
+    zScore: anomaly.zScore?.toFixed(4) ?? null,
+    factors: anomaly.factors,
+    vendorId: anomaly.vendorId ?? null,
+    categoryId: anomaly.categoryId ?? null,
+    amountPaise: anomaly.amountPaise ?? null,
+    correlationId,
+    createdBy: actorId,
+    updatedBy: actorId,
+  });
+  await enqueue(tx, {
+    topic: "ml.prediction.anomaly_detected",
+    eventType: "ml.prediction.anomaly_detected",
+    tenantId,
+    actorId,
+    correlationId,
+    payload: {
+      tenantId,
+      domain: "transactions",
+      entityId: anomaly.transactionId,
+      anomalyType: anomaly.anomalyType,
+      severity: anomaly.severity,
+      factors: anomaly.factors,
+      zScore: anomaly.zScore,
+      timestamp: new Date().toISOString(),
+      correlationId,
+    },
+  });
+  return id;
+}
