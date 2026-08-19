@@ -119,6 +119,21 @@ jobs:
         run: bash scripts/ops/backup-databases.sh "${{ env.BACKUP_DIR }}"
       - name: Restore drill — all Tier-0/Tier-1 services
         run: bash scripts/ops/restore-drill.sh --all-tier01 --report-json drill-report.json
+      # Task 39 (Req 7.5, operational gate): inventory-service is not part of
+      # the fixed Tier-0/Tier-1 universe (scripts/ops/lib/outcome-aggregation.mjs),
+      # so the --all-tier01 run above never exercises it. estab's own
+      # files/quarters/spaces schemas ARE already covered by the Tier-1 `estab`
+      # entry (one Postgres database shared across those three PG schemas), so
+      # only inventory needs this explicit second drill.
+      - name: Restore drill — inventory schema (Req 7.5)
+        run: bash scripts/ops/restore-drill.sh --service inventory --report-json drill-report-inventory.json
+      - name: Upload inventory Drill_Report artifact (Req 13.2 — 400-day retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-drill-report-inventory-${{ github.run_id }}
+          path: drill-report-inventory.json
+          retention-days: 400
       - name: Upload Drill_Report artifact (Req 13.2 — 400-day retention)
         if: always()
         uses: actions/upload-artifact@v4

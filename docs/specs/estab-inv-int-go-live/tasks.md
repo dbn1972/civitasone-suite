@@ -260,7 +260,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Map each GIGW 3.0 checkpoint (Section 2–9) to the implementing file path or a documented waiver
   - _Requirements: 7.5_
 
-- [ ] 39. Restore-drill verification for estab + inventory schemas
+- [x] 39. Restore-drill verification for estab + inventory schemas
   - Add a restore-drill test entry in `tests/ops/restore-drill.test.ts` for the `files`, `quarters`, `spaces`, and `inventory` PG schemas
   - Confirm the drill is included in the nightly ops test run
   - _Requirements: 7.5 (operational gate)_
