@@ -1,7 +1,10 @@
 "use client";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar } from "./Avatar";
+
+const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
 type NavItem = {
   icon: string;
@@ -126,20 +129,42 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
   const pathname = usePathname();
   const enabledSet = enabledModules ? new Set(enabledModules) : null;
 
+  // Persisted collapsed state per group label
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem(COLLAPSED_KEY);
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleGroup = useCallback((group: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) {
+        next.delete(group);
+      } else {
+        next.add(group);
+      }
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+      } catch { /* storage unavailable */ }
+      return next;
+    });
+  }, []);
+
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
   }
 
   function isVisible(item: NavItem): boolean {
-    // No enabledModules data → show everything (backwards compatible)
     if (!enabledSet) return true;
-    // Items without a moduleKey are always visible (platform/overview)
     if (item.moduleKey === null) return true;
-    // Otherwise, only show if the module is enabled
     return enabledSet.has(item.moduleKey);
   }
 
-  // Filter groups: only render a group if it has at least one visible item
   const visibleNav = NAV.map(({ group, items }) => ({
     group,
     items: items.filter(isVisible),
@@ -155,22 +180,47 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
         </div>
       </div>
       <nav className="sb-nav" aria-label="Main navigation">
-        {visibleNav.map(({ group, items }) => (
-          <div key={group} role="group" aria-label={group}>
-            <div className="sb-grp" aria-hidden="true">{group}</div>
-            {items.map(({ icon, label, href }) => (
-              <Link
-                key={href}
-                href={href}
-                className={"sb-item" + (isActive(href) ? " on" : "")}
-                aria-current={isActive(href) ? "page" : undefined}
+        {visibleNav.map(({ group, items }) => {
+          const isCollapsed = collapsed.has(group);
+          // Never collapse a group that contains the active page
+          const hasActive = items.some(({ href }) => isActive(href));
+          const actuallyCollapsed = isCollapsed && !hasActive;
+          return (
+            <div key={group} role="group" aria-label={group}>
+              <button
+                type="button"
+                className="sb-grp"
+                aria-expanded={!actuallyCollapsed}
+                onClick={() => toggleGroup(group)}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0 10px",
+                }}
               >
-                <span className="i" aria-hidden="true">{icon}</span>
-                {label}
-              </Link>
-            ))}
-          </div>
-        ))}
+                <span>{group}</span>
+                <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.5, transition: "transform 160ms", transform: actuallyCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
+              </button>
+              {!actuallyCollapsed && items.map(({ icon, label, href }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={"sb-item" + (isActive(href) ? " on" : "")}
+                  aria-current={isActive(href) ? "page" : undefined}
+                >
+                  <span className="i" aria-hidden="true">{icon}</span>
+                  {label}
+                </Link>
+              ))}
+            </div>
+          );
+        })}
       </nav>
       <div className="sb-foot">
         <Avatar name={userName ?? "User"} color="#4f46e5" />

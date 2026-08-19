@@ -2,13 +2,9 @@
 import type { ReactNode } from "react";
 import { GlobalSearch } from "../GlobalSearch";
 import { NotificationBell } from "../NotificationBell";
-import { DarkModeToggle } from "../DarkModeToggle";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { AccountMenu } from "../AccountMenu";
-import { LanguageSwitcher } from "../LanguageSwitcher";
-import { VoiceNav } from "../VoiceNav";
 import { MobileNavToggle } from "../MobileNavToggle";
-import { LanguageToggle } from "../LanguageToggle";
 
 interface TopBarProps {
   crumb?: ReactNode;
@@ -26,7 +22,7 @@ export function TopBar({ crumb, userName }: TopBarProps) {
       <nav className="crumb" aria-label="Breadcrumb">
         {crumb ?? <b>CivitasOne</b>}
       </nav>
-      {/* C-01 fix: replace readOnly input trap with a proper button */}
+      {/* C-01: semantic button replaces readOnly input trap */}
       <button
         className="tb-search"
         type="button"
@@ -41,26 +37,9 @@ export function TopBar({ crumb, userName }: TopBarProps) {
         <span>Search…</span>
         <kbd aria-hidden="true">Ctrl+K</kbd>
       </button>
+      {/* H-08/H-09: reduced from 8 controls to 3; DarkMode + Language moved to AccountMenu */}
       <div className="tb-actions">
         <ConnectionStatus />
-        <VoiceNav />
-        <LanguageToggle />
-        <LanguageSwitcher />
-        <DarkModeToggle />
-        {/* C-02 fix: replace emoji + title-only with aria-label + SVG icon */}
-        <button
-          className="iconbtn"
-          type="button"
-          aria-label="Analytics overview"
-          onClick={openSearch}
-        >
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="20" x2="18" y2="10"/>
-            <line x1="12" y1="20" x2="12" y2="4"/>
-            <line x1="6"  y1="20" x2="6"  y2="14"/>
-          </svg>
-        </button>
         <NotificationBell />
         <AccountMenu name={userName} />
       </div>
