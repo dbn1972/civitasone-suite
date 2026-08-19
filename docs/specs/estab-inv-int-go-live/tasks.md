@@ -224,7 +224,7 @@ feature branch; open a PR when the task's acceptance test passes.
   - Steps: create PO for qty 100 → create GRN for qty 60 → verify three-way match flags mismatch → verify payment.blocked event with reason `QTY_MISMATCH`
   - _Requirements: 6.3_
 
-- [ ] 33. Enable LocalStack three-way-match in CI nightly
+- [x] 33. Enable LocalStack three-way-match in CI nightly
   - Edit `.github/workflows/nightly.yml` (or equivalent): add LocalStack service container step and run `tests/integration/three-way-match-live.test.ts`
   - _Requirements: 7.2_
 

@@ -1,0 +1,121 @@
+name: Nightly
+
+# Sprint 23 Task 33 (Req 7.2): runs the LocalStack-backed three-way-match live
+# integration test that is gated OFF in the regular CI `test`/`integration-tests`
+# jobs (QUEUE_DRIVER: memory there). This nightly job runs the SAME test file
+# against a real SQS (LocalStack) + Postgres + Redis stack to prove the
+# procurement.grn.accepted -> finance draft-bill chain works over the live
+# queue driver, not just MemoryQueue.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Every day at 3am UTC
+  workflow_dispatch: {}
+
+jobs:
+  three-way-match-live:
+    name: Three-Way-Match Live (LocalStack SQS)
+    runs-on: ubuntu-latest
+    services:
+      localstack:
+        image: localstack/localstack:3
+        env:
+          SERVICES: sqs
+          DEBUG: '0'
+          AWS_DEFAULT_REGION: ap-south-1
+        ports: ['4566:4566']
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+      # Same PostGIS-capable image and TCP-based healthcheck as ci.yml's `test`
+      # job — see that job's comment for why a bare pg_isready reports healthy
+      # long before the server accepts a real connection.
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: civitas
+          POSTGRES_PASSWORD: civitas_test
+          POSTGRES_DB: civitas_test
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U civitas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 30s
+      redis:
+        image: redis:7-alpine
+        ports: ['6381:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+    env:
+      # Gates the test's describe.skipIf — must be set for the suite to run.
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_DEFAULT_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      QUEUE_DRIVER: sqs
+      REDIS_URL: redis://localhost:6381
+      JWT_SECRET: ci-test-secret-min-32-chars-long
+      JWT_ALGORITHM: HS256
+      NODE_ENV: test
+      PGHOST: localhost
+      PGPORT: '5435'
+      PGUSER: civitas
+      PGPASSWORD: civitas_test
+      DATABASE_URL: postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'pnpm' }
+      - name: Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='./packages/*'
+      - name: Bootstrap Postgres (per-service DBs + migrations)
+        run: bash scripts/ci/bootstrap-postgres.sh
+      - name: Wait for LocalStack SQS
+        run: npx --yes wait-on http://localhost:4566/_localstack/health --timeout 60000
+      # The test only publishes procurement.grn.accepted and waits for the
+      # downstream procurement.three_way_match.passed/.failed events — it does
+      # not run any service itself. Those events are emitted by
+      # finance-service's payments consumer (registerPaymentsConsumers in
+      # worker.ts), so that worker must actually be running against the same
+      # LocalStack SQS queue or the test times out waiting for a message
+      # nothing ever sends (confirmed locally: without a running worker both
+      # SQS assertions time out after 10s each).
+      - name: Start finance-service worker (consumes procurement.grn.accepted)
+        run: |
+          nohup pnpm --filter @civitasone/finance-service run worker > /tmp/finance-worker.log 2>&1 &
+          echo $! > /tmp/finance-worker.pid
+        env:
+          DATABASE_URL: postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance
+          FINANCE_SCANNER_DATABASE_URL: postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance
+      - name: Wait for finance-service worker to come up
+        run: |
+          for i in $(seq 1 30); do
+            if grep -q "consumers + outbox relay running" /tmp/finance-worker.log 2>/dev/null; then
+              echo "finance-service worker ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "finance-service worker did not report ready within 30s — log follows:"
+          cat /tmp/finance-worker.log
+          exit 1
+      - name: Run three-way-match live integration test (real SQS + Postgres + Redis)
+        run: pnpm exec vitest run tests/integration/three-way-match-live.test.ts
+      - name: Stop finance-service worker
+        if: always()
+        run: kill "$(cat /tmp/finance-worker.pid)" 2>/dev/null || true
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: three-way-match-live-failure
+          path: |
+            /tmp/bootstrap-migration-out.txt
+            /tmp/finance-worker.log
+          retention-days: 7
