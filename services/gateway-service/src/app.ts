@@ -35,7 +35,7 @@ const FORWARD_HEADERS = [
 ] as const;
 
 // Actively strip these from every inbound request before forwarding, regardless of FORWARD_HEADERS.
-const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "x-service-secret"] as const;
+const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "x-service-secret", "x-gateway-request"] as const;
 
 /**
  * Routes that do NOT require a bearer token at the gateway.
@@ -156,6 +156,13 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   // Defense-in-depth: ensure bypass headers never reach upstream regardless of FORWARD_HEADERS.
   for (const h of STRIP_HEADERS) {
     delete (headers as Record<string, string | undefined>)[h];
+  }
+
+  // Inject gateway-identity headers AFTER stripping so a client cannot forge them.
+  // x-gateway-request is in STRIP_HEADERS above — any inbound value is already discarded.
+  headers["x-gateway-request"] = "1";
+  if (process.env.INTERNAL_SERVICE_SECRET) {
+    headers["x-internal-secret"] = process.env.INTERNAL_SERVICE_SECRET;
   }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";

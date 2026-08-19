@@ -18,6 +18,7 @@ import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { verifyJwt, verifyToken, toRequestContext } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { AuthContextError } from "./context.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -167,6 +168,39 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
     }
   });
 };
+
+
+/**
+ * Guard for routes that must only be reachable via the gateway, not via direct
+ * service-to-service calls or rogue clients. Verifies that both:
+ *   - `x-gateway-request: 1` is present (set by the gateway on every proxied request)
+ *   - `x-internal-secret` matches the shared INTERNAL_SERVICE_SECRET env var
+ *
+ * Usage in a downstream route handler:
+ *   import { assertGatewayRequest } from "@civitasone/auth/plugin";
+ *   assertGatewayRequest(req); // throws 403 if request did not originate from the gateway
+ *
+ * Downstream services can opt in for internal-only or admin-only routes; existing
+ * routes are unaffected until they explicitly call this guard.
+ */
+export function assertGatewayRequest(req: FastifyRequest): void {
+  const gatewayFlag = req.headers["x-gateway-request"];
+  const secret = req.headers["x-internal-secret"] as string | undefined;
+  const expected = process.env.INTERNAL_SERVICE_SECRET;
+  if (
+    gatewayFlag !== "1" ||
+    !expected ||
+    expected.length === 0 ||
+    !secret ||
+    !constantTimeEqual(secret, expected)
+  ) {
+    throw new AuthContextError(
+      403,
+      "DIRECT_ACCESS_FORBIDDEN",
+      "This endpoint must be accessed through the gateway",
+    );
+  }
+}
 
 export const authPlugin = fp(authPluginImpl, {
   name: "civitasone-auth",
