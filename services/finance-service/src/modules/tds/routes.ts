@@ -57,7 +57,10 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       paymentId: z.string().uuid().optional(),
       section: z.string().max(10).default("194C"),
       grossAmountMinor: z.number().int().positive(),
-      tdsRatePct: z.number().min(0).max(100).default(2.0),
+      tdsRatePct: z.number().refine(
+        r => ([0, 1, 1.5, 2, 5, 7.5, 10, 20, 30] as readonly number[]).includes(r),
+        { message: "tdsRatePct must be a statutory rate: 0, 1, 1.5, 2, 5, 7.5, 10, 20, 30%" }
+      ).default(2),
       tdsAmountMinor: z.number().int().min(0),
       surchargeMinor: z.number().int().min(0).default(0),
       cessMinor: z.number().int().min(0).default(0),

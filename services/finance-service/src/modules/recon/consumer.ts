@@ -28,41 +28,12 @@ export function registerReconConsumers(queue: Queue): void {
       { tenantId: p.tenantId, actorId: msg.actorId },
       p.provider,
       p.params ?? {},
-      { runId: p.id, messageId: msg.messageId },
+      { runId: p.id, messageId: msg.messageId, correlationId: msg.correlationId },
     );
     if (!result) {
       log.debug({ id: msg.messageId }, "finance.recon.run already processed");
       return;
     }
-
-    await db.transaction(async (tx) => {
-      await enqueue(tx, {
-        topic: "finance.recon.run_completed",
-        eventType: "finance.recon.run_completed",
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: {
-          runId: result.run.id,
-          balanced: result.balanced,
-          breakCount: result.breakCount,
-        },
-      });
-      await enqueue(tx, {
-        topic: AUDIT_TOPIC,
-        eventType: AUDIT_TOPIC,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: {
-          service: "finance",
-          action: "recon_run",
-          resourceType: "recon_run",
-          resourceId: result.run.id,
-          outcome: "success",
-        },
-      });
-    });
     await cache.invalidate(`finance:${msg.tenantId}:recon:*`);
     log.info({ id: msg.messageId, runId: result.run.id }, "Processed finance.recon.run");
   });

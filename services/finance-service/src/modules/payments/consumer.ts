@@ -1,4 +1,4 @@
-import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
@@ -13,7 +13,7 @@ import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { ddoExists, paoExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
-import { getPeriodStatus } from "../period-close/routes.js";
+import { getPeriodStatusTx } from "../period-close/repo.js";
 import * as allocRepo from "../budget/allocation-repo.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
 import type { Deduction } from "./schema.js";
@@ -114,7 +114,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         }
       }
       // Period hard-close: block bill posting into a hard-closed period (bill's own date).
-      if ((await getPeriodStatus(p.tenantId, billPeriod)) === "hard_close") {
+      if ((await getPeriodStatusTx(tx, p.tenantId, billPeriod)) === "hard_close") {
         throw new Error(`PERIOD_CLOSED: cannot post bill into hard-closed period ${billPeriod}`);
       }
       // Budget appropriation control: locate the head allocation for the bill's FY.
@@ -155,12 +155,13 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // C1: register the commitment with a single atomic guarded UPDATE. Two
       // concurrent bills can no longer both pass a stale read — the conditional
       // WHERE serialises them; the loser gets rowcount=0 and is rejected.
-      if (alloc) {
-        const ok = await allocRepo.addCommittedGuarded(tx, alloc.id, netMinor);
-        if (!ok) {
-          throw new Error(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available appropriation for head ${p.headId} (${billFy})`);
-        }
+      if (!alloc) {
+        throw new NonRetryableError(
+          `NO_ALLOCATION_FOUND: no budget allocation for head ${p.headId} in FY ${billFy} — create an allocation before committing expenditure`
+        );
       }
+      const ok = await allocRepo.addCommittedGuarded(tx, alloc.id, netMinor);
+      if (!ok) throw new NonRetryableError(`OVER_APPROPRIATION: bill ${netMinor} paise exceeds available allocation for head ${p.headId}`);
       // C2: increment sanction utilised via guarded SQL expression (no read-then-set,
       // no lost update). Loser of a concurrent race gets rowcount=0 → rejected.
       if (sanction) {
@@ -279,7 +280,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // not wall-clock. Falls back to the bill's create date if no billDate set.
       const payDate = (bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10));
       const payPeriod = payDate.slice(0, 7);
-      if ((await getPeriodStatus(p.tenantId, payPeriod)) === "hard_close") {
+      if ((await getPeriodStatusTx(tx, p.tenantId, payPeriod)) === "hard_close") {
         throw new Error(`PERIOD_CLOSED: cannot post payment into hard-closed period ${payPeriod}`);
       }
       await repo.insertPayment(tx, {
@@ -399,9 +400,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const advance = await repo.findAdvanceByIdTx(tx, p.id);
+      const advance = await repo.findAdvanceByIdForUpdateTx(tx, p.id);
       if (!advance) throw new Error(`advance ${p.id} not found`);
       const newAdjusted = BigInt(advance.adjustedMinor) + BigInt(p.adjustedMinor);
+      if (newAdjusted > BigInt(advance.amountMinor)) {
+        throw new NonRetryableError(
+          `ADVANCE_OVERDRAW: adjustedMinor ${newAdjusted} exceeds amountMinor ${advance.amountMinor} for advance ${p.id}`
+        );
+      }
       const balance = BigInt(advance.amountMinor) - newAdjusted;
       const newStatus = balance <= 0n ? "adjusted" : advance.status;
       await repo.updateAdvance(tx, p.id, {

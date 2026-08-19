@@ -10,7 +10,7 @@
 import { reconcile } from "@civitasone/reconciliation";
 import type { RequestContext } from "@civitasone/types";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { getProvider } from "./providers.js";
 import * as repo from "./repo.js";
 import type { ReconRunRow, ReconBreakInsert } from "./schema.js";
@@ -27,11 +27,13 @@ export interface RunResult {
   balanced: boolean;
 }
 
+const RECON_AUDIT_TOPIC = "audit.event.record";
+
 export async function runReconciliation(
   ctx: Pick<RequestContext, "tenantId" | "actorId">,
   providerKey: string,
   params: Record<string, unknown> = {},
-  opts: { runId?: string; messageId?: string } = {},
+  opts: { runId?: string; messageId?: string; correlationId?: string } = {},
 ): Promise<RunResult | null> {
   const provider = getProvider(providerKey);
   if (!provider) throw new ReconError(400, "UNKNOWN_PROVIDER", `no reconciliation provider '${providerKey}'`);
@@ -74,6 +76,24 @@ export async function runReconciliation(
       ...(b.delta !== undefined ? { deltaMinor: BigInt(Math.round(b.delta)) } : {}),
     }));
     await repo.insertBreaks(tx, breakRows);
+
+    const corrId = opts.correlationId ?? "";
+    await enqueue(tx, {
+      topic: "finance.recon.run_completed",
+      eventType: "finance.recon.run_completed",
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: corrId,
+      payload: { runId: run.id, balanced: summary.balanced, breakCount: summary.breakCount },
+    });
+    await enqueue(tx, {
+      topic: RECON_AUDIT_TOPIC,
+      eventType: RECON_AUDIT_TOPIC,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: corrId,
+      payload: { service: "finance", action: "recon_run", resourceType: "recon_run", resourceId: run.id, outcome: "success" },
+    });
 
     return { run, breakCount: summary.breakCount, balanced: summary.balanced };
   });

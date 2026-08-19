@@ -163,6 +163,13 @@ export async function findAdvanceByIdTx(tx: Writer, id: string): Promise<Advance
   return rows[0] ?? null;
 }
 
+export async function findAdvanceByIdForUpdateTx(tx: Exec, id: string): Promise<AdvanceRow | null> {
+  const rows = await tx.execute(
+    sql`SELECT * FROM payments.finance_advances WHERE id = ${id}::uuid FOR UPDATE`
+  );
+  return (rows as AdvanceRow[])[0] ?? null;
+}
+
 export async function updateAdvance(tx: Writer, id: string, patch: Partial<AdvanceInsert>): Promise<void> {
   await tx.update(financeAdvances).set({ ...patch, updatedAt: new Date() }).where(eq(financeAdvances.id, id));
 }

@@ -1,14 +1,17 @@
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { encryptPii } from "../../shared/pii-crypto.js";
 import { COMMANDS } from "../../topics.js";
+import { enqueueSpineJournal } from "../gl/spine.js";
 
 const log = pino({ name: "finance.tds.consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
+const TDS_EXPENSE_CODE = process.env.FINANCE_TDS_EXPENSE_CODE ?? "6100";
+const TDS_PAYABLE_CODE = process.env.FINANCE_TDS_PAYABLE_CODE ?? "2200";
 
 export function registerTdsConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.tdsDeductionRecord, async (msg) => {
@@ -21,6 +24,15 @@ export function registerTdsConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const expectedTds = BigInt(p.grossAmountMinor) * BigInt(Math.round(p.tdsRatePct * 100)) / 10000n;
+      const diff = expectedTds > BigInt(p.tdsAmountMinor)
+        ? expectedTds - BigInt(p.tdsAmountMinor)
+        : BigInt(p.tdsAmountMinor) - expectedTds;
+      if (diff > 1n) {
+        throw new NonRetryableError(
+          `TDS_AMOUNT_MISMATCH: declared ${p.tdsAmountMinor} paise ≠ computed ${expectedTds} paise at ${p.tdsRatePct}%`
+        );
+      }
       const { sql } = await import("drizzle-orm");
       const encryptedPan = p.pan ? encryptPii(p.pan) : null;
       const id = p.id ?? msg.messageId;
@@ -39,6 +51,18 @@ export function registerTdsConsumers(queue: Queue): void {
         )
         ON CONFLICT (id) DO NOTHING
       `);
+      await enqueueSpineJournal(tx as Parameters<typeof enqueueSpineJournal>[0], {
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        sourceKey: `tds:${id}`,
+        type: "tds",
+        postingDate: p.deductionDate,
+        lines: [
+          { accountCode: TDS_EXPENSE_CODE, debitMinor: BigInt(p.tdsAmountMinor), creditMinor: 0n },
+          { accountCode: TDS_PAYABLE_CODE, debitMinor: 0n, creditMinor: BigInt(p.tdsAmountMinor) },
+        ],
+      });
       await enqueue(tx, {
         topic: "finance.tds.deduction_recorded", eventType: "finance.tds.deduction_recorded",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

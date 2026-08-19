@@ -7,7 +7,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
-import { getPeriodStatus } from "../period-close/routes.js";
+import { getPeriodStatusTx } from "../period-close/repo.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
@@ -84,7 +84,7 @@ async function postJournal(
     return;
   }
   const period = journal.postingDate.slice(0, 7);
-  const periodStatus = await getPeriodStatus(journal.tenantId, period);
+  const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
   if (periodStatus === "hard_close") {
     throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
   }
@@ -270,7 +270,10 @@ export function registerGlConsumers(queue: Queue): void {
     try {
       // A zero-net run has nothing to settle (all-exception slips); posting an
       // all-zero journal would be rejected downstream as unbalanced noise.
-      if (net <= 0n) return;
+      if (net <= 0n) {
+        await db.transaction(async (tx) => { await markProcessed(tx, msg.messageId); });
+        return;
+      }
 
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
