@@ -28,13 +28,34 @@
   "accessCodeLifespan": 60,
   "roles": {
     "realm": [
-      { "name": "super_admin",  "description": "Platform super-administrator (control plane)" },
-      { "name": "tenant_admin", "description": "Tenant administrator — manages users and config" },
-      { "name": "dept_head",    "description": "Department head — approves, audits within dept" },
-      { "name": "officer",      "description": "Government officer — creates and processes records" },
-      { "name": "auditor",      "description": "Internal/external auditor — read-only + audit ops" },
-      { "name": "citizen",      "description": "Citizen — portal access only" },
-      { "name": "service_account", "description": "Service-to-service machine identity" }
+      {
+        "name": "super_admin",
+        "description": "Platform super-administrator (control plane)"
+      },
+      {
+        "name": "tenant_admin",
+        "description": "Tenant administrator \u2014 manages users and config"
+      },
+      {
+        "name": "dept_head",
+        "description": "Department head \u2014 approves, audits within dept"
+      },
+      {
+        "name": "officer",
+        "description": "Government officer \u2014 creates and processes records"
+      },
+      {
+        "name": "auditor",
+        "description": "Internal/external auditor \u2014 read-only + audit ops"
+      },
+      {
+        "name": "citizen",
+        "description": "Citizen \u2014 portal access only"
+      },
+      {
+        "name": "service_account",
+        "description": "Service-to-service machine identity"
+      }
     ]
   },
   "clients": [
@@ -85,6 +106,18 @@
             "access.token.claim": "true",
             "userinfo.token.claim": "false"
           }
+        },
+        {
+          "name": "audience-account",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "account",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "lightweight.claim": "false"
+          }
         }
       ]
     },
@@ -102,7 +135,9 @@
         "civitasone://auth/callback",
         "http://localhost:*"
       ],
-      "webOrigins": ["*"],
+      "webOrigins": [
+        "*"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
@@ -175,7 +210,10 @@
   "identityProviders": [],
   "userFederationProviders": [],
   "internationalizationEnabled": true,
-  "supportedLocales": ["en", "hi"],
+  "supportedLocales": [
+    "en",
+    "hi"
+  ],
   "defaultLocale": "en",
   "browserSecurityHeaders": {
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
@@ -191,9 +229,21 @@
       "firstName": "Dev",
       "lastName": "SuperAdmin",
       "enabled": true,
-      "credentials": [{ "type": "password", "value": "Admin@1234", "temporary": false }],
-      "realmRoles": ["super_admin"],
-      "attributes": { "tenantId": ["00000000-0000-0000-0000-000000000001"] }
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "super_admin"
+      ],
+      "attributes": {
+        "tenantId": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      }
     },
     {
       "username": "dev-officer",
@@ -201,9 +251,21 @@
       "firstName": "Dev",
       "lastName": "Officer",
       "enabled": true,
-      "credentials": [{ "type": "password", "value": "Officer@1234", "temporary": false }],
-      "realmRoles": ["officer"],
-      "attributes": { "tenantId": ["00000000-0000-0000-0000-000000000001"] }
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Officer@1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "officer"
+      ],
+      "attributes": {
+        "tenantId": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      }
     }
   ]
 }
