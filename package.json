@@ -5,7 +5,7 @@
   "packageManager": "pnpm@9.0.0",
   "description": "CivitasOne Suite — Unified Enterprise Suite for Government, PSU, and Small Offices",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
