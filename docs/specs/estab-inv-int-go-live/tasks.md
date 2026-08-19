@@ -236,7 +236,7 @@ feature branch; open a PR when the task's acceptance test passes.
 
 ## Sprint 24 — Go-live Gates (Sep 29 – Oct 10)
 
-- [ ] 35. IDOR security integration tests
+- [x] 35. IDOR security integration tests
   - `tests/security/idor-estab.test.ts`:
     - `GET /v1/estab/files/:id` with a different tenant's file id → expect 403
     - `GET /v1/estab/quarters/allotments/:id` cross-tenant → expect 403
