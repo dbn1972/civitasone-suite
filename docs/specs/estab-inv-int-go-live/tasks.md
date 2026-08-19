@@ -245,7 +245,7 @@ feature branch; open a PR when the task's acceptance test passes.
     - `GET /v1/inventory/cycle-counts/:id` cross-tenant → expect 403
   - _Requirements: 7.4_
 
-- [ ] 36. Performance baseline + Lighthouse CI gate
+- [x] 36. Performance baseline + Lighthouse CI gate
   - Add `lighthouserc.js` at repo root: assert LCP < 2500 ms, TBT < 300 ms on `/estab/files/list` and `/inventory/list`
   - Add Lighthouse CI step to the nightly GitHub Actions job
   - _Requirements: 7.3_
