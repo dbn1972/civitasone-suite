@@ -19,8 +19,8 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function recordIncome(ctx: RequestContext, body: RecordIncomeBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = body.amount;
-  const gstMinor = body.amount * BigInt(body.gstRate) / 100n;
+  const amountMinor = body.amount as bigint;
+  const gstMinor = amountMinor * BigInt(body.gstRate) / 100n;
   const totalMinor = amountMinor + gstMinor;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordIncome, {
@@ -51,8 +51,8 @@ export async function recordIncome(ctx: RequestContext, body: RecordIncomeBody):
 
 export async function recordExpense(ctx: RequestContext, body: RecordExpenseBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = body.amount;
-  const gstMinor = body.amount * BigInt(body.gstRate) / 100n;
+  const amountMinor = body.amount as bigint;
+  const gstMinor = amountMinor * BigInt(body.gstRate) / 100n;
   const totalMinor = amountMinor + gstMinor;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordExpense, {
@@ -82,7 +82,7 @@ export async function recordExpense(ctx: RequestContext, body: RecordExpenseBody
 
 export async function recordPaymentReceived(ctx: RequestContext, body: RecordPaymentReceivedBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = body.amount;
+  const amountMinor = body.amount as bigint;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordPaymentReceived, {
     messageId: id,
@@ -107,7 +107,7 @@ export async function recordPaymentReceived(ctx: RequestContext, body: RecordPay
 
 export async function recordPaymentMade(ctx: RequestContext, body: RecordPaymentMadeBody): Promise<Accepted> {
   const id = idempotentId(ctx);
-  const amountMinor = body.amount;
+  const amountMinor = body.amount as bigint;
 
   await queue.publish(SIMPLIFIED_COMMANDS.recordPaymentMade, {
     messageId: id,
