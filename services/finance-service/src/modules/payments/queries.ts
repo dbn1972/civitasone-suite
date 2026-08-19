@@ -88,7 +88,8 @@ export async function listBillSummaries(tenantId: string, limit: number) {
     id: row.id,
     billNo: row.billNo,
     vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
-    amount: Number(row.netMinor),
+    // H3: string to avoid 2^53 precision loss on large government bill amounts.
+    amount: row.netMinor.toString(),
     amountDisplay: formatMinor(row.netMinor),
     submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     dueDate: undefined,
@@ -123,11 +124,12 @@ export async function listAdvances(tenantId: string, limit: number) {
     advanceNo: row.advanceNo,
     beneficiary: row.beneficiary,
     type: (row.type as "employee" | "vendor" | "other"),
-    amount: Number(row.amountMinor),
+    // H3: string to avoid 2^53 precision loss on large government advance amounts.
+    amount: row.amountMinor.toString(),
     disbursedDate: String(row.disbursedDate),
     dueDate: row.dueDate ? String(row.dueDate) : undefined,
-    adjustedAmount: Number(row.adjustedMinor),
-    balance: Number(row.amountMinor) - Number(row.adjustedMinor),
+    adjustedAmount: row.adjustedMinor.toString(),
+    balance: (row.amountMinor - row.adjustedMinor).toString(),
     status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
   }));
 }
@@ -143,7 +145,8 @@ export async function listUCs(tenantId: string, limit: number) {
     ucNo: row.ucNo,
     grantRef: row.grantRef ?? undefined,
     grantee: row.grantee,
-    amount: Number(row.amountMinor),
+    // H3: string to avoid 2^53 precision loss on large government UC amounts.
+    amount: row.amountMinor.toString(),
     periodFrom: String(row.periodFrom),
     periodTo: String(row.periodTo),
     submittedDate: row.submittedDate ? String(row.submittedDate) : undefined,
@@ -162,7 +165,8 @@ export async function getBillDetail(id: string, tenantId: string) {
     id: row.id,
     billNo: row.billNo,
     vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
-    amount: Number(row.netMinor),
+    // H3: string to avoid 2^53 precision loss on large government bill amounts.
+    amount: row.netMinor.toString(),
     amountDisplay: formatMinor(row.netMinor),
     submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapBillStatus(row.status),

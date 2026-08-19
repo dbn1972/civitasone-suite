@@ -9,7 +9,8 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createBill(ctx: RequestContext, body: CreateBillBody): Promise<Accepted> {
   const id = idempotentId(ctx); // EVT-4: double-submit dedupe
-  const totalDeductions = body.deductions.reduce((s, d) => s + d.amountMinor, 0);
+  // M2: grossMinor is now bigint; accumulate deductions as bigint to match.
+  const totalDeductions = body.deductions.reduce((s, d) => s + BigInt(d.amountMinor), 0n);
   const netMinor = body.grossMinor - totalDeductions;
   await queue.publish(COMMANDS.billCreate, {
     messageId: id, type: COMMANDS.billCreate,

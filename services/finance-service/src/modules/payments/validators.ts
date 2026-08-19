@@ -18,7 +18,12 @@ export const createBillBody = z.object({
   agencyCode:  z.string().regex(PFMS_AGENCY_REGEX, "agency code 4–12 alphanumeric").optional(),
   schemeCode:  z.string().regex(PFMS_SCHEME_REGEX, "scheme code 4–20 alphanumeric").optional(),
   sanctionRef: z.string().uuid().optional(),
-  grossMinor:  z.number().int().positive(),
+  // M2: accept string-encoded bigint to avoid 2^53 JSON precision loss on large
+  // government bill amounts. Legacy number payloads still accepted via union.
+  grossMinor:  z.union([
+    z.string().regex(/^\d+$/, "grossMinor must be a positive integer string").transform(s => BigInt(s)),
+    z.bigint().positive(),
+  ]).pipe(z.bigint().positive()),
   currency:    z.string().length(3).default("INR"),
   deductions:  z.array(deduction).default([]),
   poRef:       z.string().optional(),

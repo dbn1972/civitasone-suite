@@ -85,16 +85,19 @@ export async function listBudgetSummaries(tenantId: string, limit: number) {
   const summaries = [];
   for (const row of rows ?? []) {
     const head = await repo.findHeadById(row.headId);
-    const allocated = Number(row.allocatedMinor ?? row.beMinor ?? 0n);
-    const utilised = Number(row.utilisedMinor ?? 0n);
+    // H3: keep as bigint throughout to avoid 2^53 precision loss on large budgets.
+    const allocated = row.allocatedMinor ?? row.beMinor ?? 0n;
+    const utilised = row.utilisedMinor ?? 0n;
+    const reMinor = row.reMinor ?? allocated;
     summaries.push({
       id: row.id,
       majorHead: head?.code ?? row.headId,
       subHead: head?.name,
-      sanctionedAmount: allocated,
-      releasedAmount: Math.min(Number(row.reMinor ?? row.allocatedMinor ?? 0n), allocated),
-      expenditure: utilised,
-      balance: Math.max(0, allocated - utilised),
+      // H3: return paise amounts as strings; frontend divides by 100 for display.
+      sanctionedAmount: allocated.toString(),
+      releasedAmount: (reMinor < allocated ? reMinor : allocated).toString(),
+      expenditure: utilised.toString(),
+      balance: (allocated > utilised ? allocated - utilised : 0n).toString(),
       status: utilised >= allocated ? "exhausted" : "active",
       financialYear: row.fy,
     });
@@ -129,7 +132,8 @@ export async function listSanctionSummaries(tenantId: string, limit: number) {
       id: row.id,
       sanctionNo: row.sanctionNo,
       subject: row.purpose,
-      amount: Number(row.amountMinor),
+      // H3: string to avoid 2^53 precision loss on large government sanction amounts.
+      amount: row.amountMinor.toString(),
       sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
       date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
       status: mapSanctionStatus(row.status),
@@ -150,7 +154,8 @@ export async function getSanctionDetail(id: string, tenantId: string) {
     id: row.id,
     sanctionNo: row.sanctionNo,
     subject: row.purpose,
-    amount: Number(row.amountMinor),
+    // H3: string to avoid 2^53 precision loss on large government sanction amounts.
+    amount: row.amountMinor.toString(),
     sanctionedBy: OFFICER_NAMES[row.createdBy] ?? `Officer (${row.createdBy.slice(-4)})`,
     date: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapSanctionStatus(row.status),

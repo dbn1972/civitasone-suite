@@ -1,4 +1,4 @@
-import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type Queue, type CommandEnvelope } from "@civitasone/queue";
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { runWithTenant } from "@civitasone/db";
@@ -83,7 +83,9 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
-      if (!sanction || sanction.tenantId !== p.tenantId) return;
+      // H2: IDOR / not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!sanction || sanction.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       // Only a pending sanction can be approved (idempotent on redelivery).
       if (sanction.status !== "pending_approval" && sanction.status !== "draft") return;
       // R11 SoD: the approving officer (checker) must differ from the creator
@@ -115,7 +117,9 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sanction = await repo.findSanctionByIdTx(tx, p.id);
-      if (!sanction || sanction.tenantId !== p.tenantId) return;
+      // H2: IDOR / not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!sanction || sanction.tenantId !== p.tenantId)
+        throw new NonRetryableError(`[finance/budget] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
       await repo.updateSanction(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
       await audit(tx, msg, "submit_for_eoffice_approval", "sanction", p.id);
     });
@@ -218,7 +222,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.findDistributionByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertDistributionTransition(row.status as any, "issued");
       await repo.updateDistribution(tx, p.id, { status: "issued", issuedBy: msg.actorId, issuedAt: new Date(), updatedBy: msg.actorId });
       await enqueue(tx, {
@@ -241,7 +246,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.findDistributionByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertDistributionTransition(row.status as any, "acknowledged");
       assertAcknowledgerDistinct(row.issuedBy ?? row.createdBy, msg.actorId);
       await repo.updateDistribution(tx, p.id, {
@@ -278,7 +284,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.findProposalByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertProposalTransition(row.status as any, "submitted");
       await repo.updateProposal(tx, p.id, { status: "submitted", updatedBy: msg.actorId });
       await audit(tx, msg, "transition_submitted", "budget_proposal", p.id);
@@ -293,7 +300,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const to = p.decision === "accept" ? "under_review" : "returned";
       const row = await repo.findProposalByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertProposalTransition(row.status as any, to as any);
       await repo.updateProposal(tx, p.id, {
         status: to, reviewNote: p.note ?? null, reviewedBy: msg.actorId, reviewedAt: new Date(), updatedBy: msg.actorId,
@@ -312,7 +320,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const parent = await repo.findProposalByIdTx(tx, p.parentId, p.tenantId);
-      if (!parent) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!parent) throw new NonRetryableError(`[finance/budget] entity ${p.parentId} not found for tenant ${p.tenantId}`);
       const ceiling = p.ceilingMinor !== undefined ? BigInt(p.ceilingMinor) : parent.ceilingMinor;
       await repo.insertProposal(tx, {
         id: p.id, tenantId: p.tenantId, fy: parent.fy, deptCode: parent.deptCode, headId: parent.headId,
@@ -332,7 +341,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.findProposalByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertProposalTransition(row.status as any, "approved");
       assertProposalApproverDistinct(row.createdBy, msg.actorId);
       await repo.updateProposal(tx, p.id, {
@@ -402,7 +412,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await outcomeRepo.findOutcomeByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertEvaluatorDistinct(row.createdBy, msg.actorId);
       const rating = classifyAchievement(
         { targetValue: row.targetValue, baselineValue: row.baselineValue },
@@ -455,7 +466,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await suppRepo.findSupplementaryByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertSupplementaryTransition(row.status as any, "approved");
       assertSupplementaryApproverDistinct(row.createdBy, msg.actorId);
       const budget = await budgetRepo.findBudgetByIdTx(tx, row.budgetId);
@@ -486,7 +498,8 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await suppRepo.findSupplementaryByIdTx(tx, p.id, p.tenantId);
-      if (!row) return;
+      // H2: not-found — throw to roll back markProcessed and trigger retry/DLQ.
+      if (!row) throw new NonRetryableError(`[finance/budget] entity ${p.id} not found for tenant ${p.tenantId}`);
       assertSupplementaryTransition(row.status as any, "rejected");
       await suppRepo.updateSupplementary(tx, p.id, {
         status: "rejected", rejectReason: p.reason, updatedBy: msg.actorId,
