@@ -17,8 +17,11 @@ export function StatCard({ icon, iconBg, label, value, delta, up }: StatCardProp
       <div className="lab">{label}</div>
       <div className="val">{value}</div>
       {delta && (
-        <div className={`delta ${up ? "up" : "down"}`}>
-          {up ? "▲" : "▼"} {delta}
+        <div
+          className={`delta ${up ? "up" : "down"}`}
+          aria-label={`${up ? "Increase" : "Decrease"} of ${delta}`}
+        >
+          <span aria-hidden="true">{up ? "↑" : "↓"}</span> {delta}
         </div>
       )}
     </div>

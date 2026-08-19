@@ -116,9 +116,13 @@ export type SidebarProps = {
    * If undefined/null, all items are shown (backwards compatible — no filtering).
    */
   enabledModules?: string[] | null;
+  /** Display name for the logged-in user shown in the sidebar footer. */
+  userName?: string;
+  /** Role label shown beneath the user name in the sidebar footer. */
+  userRole?: string;
 };
 
-export function Sidebar({ enabledModules }: SidebarProps = {}) {
+export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {}) {
   const pathname = usePathname();
   const enabledSet = enabledModules ? new Set(enabledModules) : null;
 
@@ -150,17 +154,18 @@ export function Sidebar({ enabledModules }: SidebarProps = {}) {
           <div className="sb-bs">Enterprise Suite</div>
         </div>
       </div>
-      <nav className="sb-nav">
+      <nav className="sb-nav" aria-label="Main navigation">
         {visibleNav.map(({ group, items }) => (
-          <div key={group}>
-            <div className="sb-grp">{group}</div>
+          <div key={group} role="group" aria-label={group}>
+            <div className="sb-grp" aria-hidden="true">{group}</div>
             {items.map(({ icon, label, href }) => (
               <Link
                 key={href}
                 href={href}
                 className={"sb-item" + (isActive(href) ? " on" : "")}
+                aria-current={isActive(href) ? "page" : undefined}
               >
-                <span className="i">{icon}</span>
+                <span className="i" aria-hidden="true">{icon}</span>
                 {label}
               </Link>
             ))}
@@ -168,10 +173,10 @@ export function Sidebar({ enabledModules }: SidebarProps = {}) {
         ))}
       </nav>
       <div className="sb-foot">
-        <Avatar name="D Nayak" color="#4f46e5" />
+        <Avatar name={userName ?? "User"} color="#4f46e5" />
         <div>
-          <div className="nm">D. Nayak</div>
-          <div className="rl">Admin</div>
+          <div className="nm">{userName ?? "User"}</div>
+          <div className="rl">{userRole ?? "Staff"}</div>
         </div>
       </div>
     </aside>

@@ -3,14 +3,14 @@
    ============================================================ */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --primary:#0e9f6e; --primary-d:#0b815a; --primary-soft:#e6f7f0;
+  --primary:#00439C; --primary-d:#003280; --primary-soft:#dbeafe;
   --indigo:#6366f1; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
   /* --mut was #98a2b3, which is 2.58:1 on --panel/#ffffff and fails WCAG 2.2 AA
      (SC 1.4.3 requires 4.5:1 for body text). It is used by the sidebar brand
      subtitle, group headings and role label, which appear on EVERY page, so a
      single token failed accessibility on ~50 of 52 audited routes. #667085 is
      4.97:1 on white. Verified by tests/a11y/design-tokens.spec.ts. */
-  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#667085;
+  --bg:#f4f6f8; --panel:#ffffff; --ink:#101828; --ink2:#475467; --mut:#667085; --muted:#667085;
   --line:#eaecf0; --line2:#f2f4f7;
   --good:#067647; --goodbg:#ecfdf3; --goodbd:#abefc6;
   --warn:#b54708; --warnbg:#fffaeb; --warnbd:#fedf89;
@@ -278,11 +278,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   .gx-head,.gh,.tg,.fchips,.gsearch,.hr-sec{display:none!important}
   .thumb iframe{transform:none}
 }
-:root{--primary:#1d4ed8;--primary-d:#1e40af;--primary-soft:#e7edfd}
-.sb-logo{background:linear-gradient(135deg,#1d4ed8,#3b82f6)!important}
 
-:root{--primary:#4f46e5;--primary-d:#4338ca;--primary-soft:#eef2ff}
-.sb-logo{background:linear-gradient(135deg,#4f46e5,#6366f1)!important}
 
 /* ============================================================
    ACCESSIBILITY FOUNDATIONS (WCAG 2.2 AA)

@@ -249,8 +249,6 @@ export function DataTable<T extends Record<string, unknown>>({
                   onClick={href ? () => router.push(href) : undefined}
                   onKeyDown={href ? (e) => onRowKeyDown(e, href) : undefined}
                   tabIndex={href ? 0 : undefined}
-                  role={href ? "link" : undefined}
-                  aria-label={href ? `Open ${String(row[columns[0].key] ?? "row")}` : undefined}
                 >
                   {columns.map((col, colIndex) => {
                     const cellContent = cellValue(col, row);
@@ -260,7 +258,7 @@ export function DataTable<T extends Record<string, unknown>>({
                           <a
                             href={href}
                             tabIndex={-1}
-                            aria-hidden="true"
+                            aria-label={`Open ${String(row[columns[0].key] ?? "row")}`}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();

@@ -13,12 +13,14 @@ interface AppShellProps {
   enabledModules?: string[] | null;
   /** Logged-in user display name from JWT claims. */
   userName?: string;
+  /** Logged-in user role label from JWT claims. */
+  userRole?: string;
 }
 
-export function AppShell({ children, crumb, enabledModules, userName }: AppShellProps) {
+export function AppShell({ children, crumb, enabledModules, userName, userRole }: AppShellProps) {
   return (
     <div className="app">
-      <Sidebar enabledModules={enabledModules} />
+      <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} />
       <div className="main">
         <TopBar crumb={crumb} userName={userName} />
         <WhatsNewBanner />
