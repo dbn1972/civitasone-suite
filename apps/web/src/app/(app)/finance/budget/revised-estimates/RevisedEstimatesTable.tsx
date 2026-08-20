@@ -1,9 +1,24 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
-export function RevisedEstimatesTable({ estimates, source = "api" }: { estimates: Row[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.revised-estimates", estimates, source, (d) => d.length === 0);
+
+export type RevisedEstimateRow = {
+  id: string;
+  headCode: string;
+  description: string;
+  budgetEstimate: number;
+  revisedEstimate: number;
+  variancePct: number;
+  status: "increased" | "decreased" | "no_change";
+};
+
+// DataTable's generic requires an index signature; RevisedEstimateRow is a
+// plain named type. Intersection satisfies the constraint without widening
+// away real field names/types.
+type Row = RevisedEstimateRow & Record<string, unknown>;
+
+export function RevisedEstimatesTable({ estimates, source = "api" }: { estimates: RevisedEstimateRow[]; source?: "api" | "error" }) {
+  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.revised-estimates", estimates as Row[], source, (d) => d.length === 0);
   const cacheNote = offline || fromCache ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.` : null;
   return (
     <>

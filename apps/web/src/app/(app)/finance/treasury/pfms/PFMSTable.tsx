@@ -2,8 +2,9 @@
 
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import type { PfmsBatchSummary } from "@civitasone/types";
 
-type Scroll = Record<string, unknown>;
+type Scroll = PfmsBatchSummary;
 
 export function PFMSTable({ scrolls, source = "api" }: { scrolls: Scroll[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Scroll[]>(
@@ -23,12 +24,12 @@ export function PFMSTable({ scrolls, source = "api" }: { scrolls: Scroll[]; sour
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Scroll>
         columns={[
-          { key: "scrollId", label: "Scroll ID" },
-          { key: "beneficiary", label: "Beneficiary" },
-          { key: "amount", label: "Amount", align: "right" },
-          { key: "bankAccount", label: "Bank Account" },
-          { key: "status", label: "Status", cellType: "status" },
-          { key: "date", label: "Date" },
+          { key: "pfmsId", label: "Scroll ID" },
+          { key: "type", label: "Type" },
+          { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
+          { key: "agencyCode", label: "Agency" },
+          { key: "schemeCode", label: "Scheme" },
+          { key: "submissionStatus", label: "Status", cellType: "status" },
         ]}
         rows={rows}
         sortable

@@ -2,8 +2,9 @@
 
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import type { FinanceDepositSummary } from "@civitasone/types";
 
-type Deposit = Record<string, unknown>;
+type Deposit = FinanceDepositSummary;
 
 export function DepositsTable({ deposits, source = "api" }: { deposits: Deposit[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Deposit[]>(
@@ -23,12 +24,10 @@ export function DepositsTable({ deposits, source = "api" }: { deposits: Deposit[
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Deposit>
         columns={[
-          { key: "depositId", label: "Deposit ID" },
-          { key: "bank", label: "Bank" },
-          { key: "principal", label: "Principal", align: "right" },
-          { key: "interestRate", label: "Rate (%)", align: "right" },
-          { key: "maturityDate", label: "Maturity" },
-          { key: "tenure", label: "Tenure" },
+          { key: "pdNo", label: "PD No" },
+          { key: "type", label: "Type" },
+          { key: "administrator", label: "Administrator" },
+          { key: "balanceMinor", label: "Balance", align: "right", cellType: "amount" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

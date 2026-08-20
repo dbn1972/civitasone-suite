@@ -99,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(bankRoutes);
   const { instrumentRoutes } = await import("./modules/instruments/routes.js");
   await app.register(instrumentRoutes);
+  const { auditRoutes } = await import("./modules/audit/routes.js");
+  await app.register(auditRoutes);
   const { fixedAssetRoutes } = await import("./modules/fixed-asset/routes.js");
   await app.register(fixedAssetRoutes);
   const { pfmsTreasuryStubRoutes } = await import("./modules/pfms/treasury-stubs.js");

@@ -1,14 +1,113 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import type { VendorRow } from "./schema.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
+// Vendor master is financial system-of-record data (bank account/IFSC feed
+// payment issuance) — writes are gated the same as masters/bank-routes.ts's
+// POST /v1/finance/bank-accounts (finance_admin/super_admin only), narrower
+// than the read roles above.
+const WRITER_ROLES = ["finance_admin", "super_admin"];
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 }).partial();
+
+const vendorIdParam = z.object({ id: z.string().uuid() });
+
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+const createVendorBody = z.object({
+  name:          z.string().min(2).max(200),
+  category:      z.string().min(1).max(100),
+  pan:           z.string().length(10).transform((v) => v.toUpperCase()).refine((v) => PAN_RE.test(v), "invalid PAN format (expect AAAAA9999A)"),
+  gstin:         z.string().length(15).transform((v) => v.toUpperCase()).refine((v) => GSTIN_RE.test(v), "invalid GSTIN format").optional(),
+  address:       z.string().min(2).max(500),
+  contactPerson: z.string().min(1).max(200).optional(),
+  phone:         z.string().min(6).max(20).optional(),
+  email:         z.string().email().max(200).optional(),
+  bankName:      z.string().min(2).max(200),
+  bankAccount:   z.string().min(5).max(30),
+  ifsc:          z.string().length(11).transform((v) => v.toUpperCase()).refine((v) => IFSC_RE.test(v), "invalid IFSC format"),
+});
+
+const updateVendorBody = z.object({
+  version:       z.number().int().min(1),
+  name:          z.string().min(2).max(200).optional(),
+  category:      z.string().min(1).max(100).optional(),
+  gstin:         z.string().length(15).transform((v) => v.toUpperCase()).refine((v) => GSTIN_RE.test(v), "invalid GSTIN format").optional(),
+  address:       z.string().min(2).max(500).optional(),
+  contactPerson: z.string().min(1).max(200).optional(),
+  phone:         z.string().min(6).max(20).optional(),
+  email:         z.string().email().max(200).optional(),
+  bankName:      z.string().min(2).max(200).optional(),
+  bankAccount:   z.string().min(5).max(30).optional(),
+  ifsc:          z.string().length(11).transform((v) => v.toUpperCase()).refine((v) => IFSC_RE.test(v), "invalid IFSC format").optional(),
+  isActive:      z.boolean().optional(),
+});
+
+// List-view shape: satisfies packages/types VendorSummary (name/category/
+// ratingDisplay) exactly, plus id/pan/gstin/status which VendorsTable.tsx
+// and the vendors list page also read (via a Record<string,unknown> cast —
+// VendorSummary itself doesn't declare them, but the runtime objects must
+// carry them for the table's columns and rowLinkKey="id" to work).
+// ratingDisplay has no backing data source anywhere in this codebase (no
+// vendor rating/review feature exists) — returning a constant "Not rated"
+// rather than a fabricated score.
+function toVendorSummary(r: VendorRow) {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    pan: r.pan,
+    gstin: r.gstin,
+    status: r.isActive ? "active" : "inactive",
+    ratingDisplay: "Not rated",
+  };
+}
+
+// Detail-view shape: every canonical key the vendor [id] page's field()
+// helper probes for (first-listed candidate per field — pan, gstin, address,
+// contactPerson, email, phone, bankName, ifsc, bankAccount), plus id/status/
+// isActive/version/timestamps. "status" is derived from isActive (this table
+// has no separate approval workflow) rather than adding an unrequested
+// status enum. Bill-history (bills/billHistory on the detail page) is
+// intentionally not populated here — that's a vendor<->bills join with no
+// FK to join on yet (see migration 0065's note) and is out of this task's
+// scope; the frontend already renders a clean "No bills yet" empty state.
+// showFullBankDetails gates the cleartext account number/IFSC to
+// WRITER_ROLES (finance_admin/super_admin — the roles that actually submit
+// PFMS payments and need the real value); finance_officer/audit_officer get
+// the same masked shape masters/bank-routes.ts uses for the org's own
+// accounts. Keys stay ifsc/bankAccount either way so the frontend's
+// field() probes keep working unchanged — only the value is masked.
+function toVendorDetail(r: VendorRow, showFullBankDetails: boolean) {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    status: r.isActive ? "active" : "inactive",
+    pan: r.pan,
+    gstin: r.gstin,
+    address: r.address,
+    contactPerson: r.contactPerson,
+    email: r.email,
+    phone: r.phone,
+    bankName: r.bankName,
+    ifsc: showFullBankDetails ? r.ifsc : r.ifsc.slice(0, 4) + "XXXXXXX",
+    bankAccount: showFullBankDetails ? r.bankAccountNo : "••••••" + r.bankAccountNo.slice(-4),
+    isActive: r.isActive,
+    version: r.version,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
 
 export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/pao", async (req, reply) => {
@@ -36,7 +135,54 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     listQuerySchema.parse(req.query);
     const rows = await repo.listVendors(ctx.tenantId);
-    return reply.send({ data: rows, meta: { page: 1, pageSize: 100, total: rows.length } });
+    return reply.send({ data: rows.map(toVendorSummary), meta: { page: 1, pageSize: 100, total: rows.length } });
+  });
+
+  app.get("/v1/finance/vendors/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = vendorIdParam.parse(req.params);
+    const vendor = await repo.getVendorById(ctx.tenantId, id);
+    if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
+    const showFullBankDetails = hasAnyRole(ctx, WRITER_ROLES);
+    return reply.send(toVendorDetail(vendor, showFullBankDetails));
+  });
+
+  app.post("/v1/finance/vendors", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITER_ROLES);
+    const body = createVendorBody.parse(req.body);
+    const vendor = await repo.createVendor(ctx.tenantId, {
+      name: body.name,
+      category: body.category,
+      pan: body.pan,
+      gstin: body.gstin ?? null,
+      address: body.address,
+      contactPerson: body.contactPerson ?? null,
+      phone: body.phone ?? null,
+      email: body.email ?? null,
+      bankName: body.bankName,
+      bankAccountNo: body.bankAccount,
+      ifsc: body.ifsc,
+    }, ctx.actorId);
+    // Always full detail: this route is already WRITER_ROLES-only.
+    return reply.code(201).send(toVendorDetail(vendor, true));
+  });
+
+  app.patch("/v1/finance/vendors/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITER_ROLES);
+    const { id } = vendorIdParam.parse(req.params);
+    const { version, bankAccount, ...rest } = updateVendorBody.parse(req.body);
+    const existing = await repo.getVendorById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "vendor not found");
+    const updated = await repo.updateVendor(ctx.tenantId, id, version, {
+      ...rest,
+      ...(bankAccount !== undefined ? { bankAccountNo: bankAccount } : {}),
+    }, ctx.actorId);
+    if (!updated) throw new HttpError(409, "VERSION_CONFLICT", "vendor was modified by another request; reload and retry");
+    // Always full detail: this route is already WRITER_ROLES-only.
+    return reply.send(toVendorDetail(updated, true));
   });
 
   app.setErrorHandler((err, req, reply) => {
