@@ -5,7 +5,11 @@ import { AllocationTable } from "./AllocationTable";
 
 export default async function AllocationPage() {
   const { data: allocations, source } = await getFinanceAllocations();
-  const released = allocations.filter((a) => Number(a.releasedMinor ?? 0) > 0).length;
+  // FinanceBudgetAllocationSummary has no "released" field — committedMinor
+  // (funds committed for spending) is the real, distinct GFR stage this
+  // counts. Labelled "Committed" below rather than "Released" so the card
+  // doesn't imply funds have been physically disbursed downstream.
+  const committed = allocations.filter((a) => Number(a.committedMinor ?? 0) > 0).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -17,9 +21,9 @@ export default async function AllocationPage() {
       />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e7edfd" label="Allocations" value={allocations.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={released} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={allocations.length - released} />
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Departments" value={new Set(allocations.map((a) => String(a.department ?? ""))).size} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Committed" value={committed} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={allocations.length - committed} />
+        <StatCard icon="🏛️" iconBg="#eff6ff" label="Budget Heads" value={new Set(allocations.map((a) => a.headId)).size} />
       </StatGrid>
       <Card title="Budget Allocations">
         <AllocationTable allocations={allocations} source={source === "error" ? "error" : "api"} />

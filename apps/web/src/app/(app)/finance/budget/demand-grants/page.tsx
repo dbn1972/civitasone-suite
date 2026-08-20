@@ -5,8 +5,9 @@ import { DemandGrantsTable } from "./DemandGrantsTable";
 
 export default async function DemandGrantsPage() {
   const { data: grants, source } = await getFinanceDemandGrants();
-  const voted = grants.filter((g) => String(g.type).toLowerCase() === "voted").length;
-  const charged = grants.filter((g) => String(g.type).toLowerCase() === "charged").length;
+  // budget.finance_demands calls this column "class" (voted|charged), not "type".
+  const voted = grants.filter((g) => String(g.class).toLowerCase() === "voted").length;
+  const charged = grants.filter((g) => String(g.class).toLowerCase() === "charged").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -20,7 +21,7 @@ export default async function DemandGrantsPage() {
         <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Demands" value={grants.length} />
         <StatCard icon="🗳️" iconBg="#ecfdf3" label="Voted" value={voted} />
         <StatCard icon="⚖️" iconBg="#fffaeb" label="Charged" value={charged} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Ministries" value={new Set(grants.map((g) => String(g.ministry ?? ""))).size} />
+        <StatCard icon="📊" iconBg="#eff6ff" label="Services" value={new Set(grants.map((g) => g.service)).size} />
       </StatGrid>
       <Card title="Demand for Grants">
         <DemandGrantsTable grants={grants} source={source === "error" ? "error" : "api"} />

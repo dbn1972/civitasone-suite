@@ -35,6 +35,9 @@ describe("PfmsOpsConsolePage", () => {
           source: "api",
         });
       }
+      if (path.includes("/departments")) {
+        return Promise.resolve({ data: [], source: "api" });
+      }
       return Promise.resolve({ data: { agencyCode: "AG01", defaultDdo: "DDO01" }, source: "api" });
     });
 
@@ -49,6 +52,7 @@ describe("PfmsOpsConsolePage", () => {
   it("renders an empty state when there are no batches", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/batches")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/departments")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: null, source: "api" });
     });
 
@@ -61,6 +65,7 @@ describe("PfmsOpsConsolePage", () => {
   it("shows the data-source badge when an endpoint errors", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/batches")) return Promise.resolve({ data: [], source: "error" });
+      if (path.includes("/departments")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: null, source: "api" });
     });
 

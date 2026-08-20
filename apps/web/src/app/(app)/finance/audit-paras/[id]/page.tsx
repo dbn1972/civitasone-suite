@@ -1,61 +1,122 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { getFinanceAuditParaById } from "@/app/_data/loaders";
+import { formatMoney } from "@/lib/formatters";
 
-export default function AuditParaDetailPage({ params }: { params: { id: string } }) {
-  const para = {
-    paraNo: "AP/2024/001",
-    year: "2023-24",
-    amount: "₹4,50,00,000",
-    department: "Public Works Department",
-    status: "pending",
-    subject: "Irregular expenditure on road construction without proper tendering",
-    observation: "The department incurred expenditure of ₹4.50 crore on construction of approach roads without following the prescribed tendering process under GFR 2017. The works were split into smaller packages to avoid open competitive bidding.",
-    reply: "The department has submitted that the works were of urgent nature due to monsoon damage and were executed under emergency provisions. Detailed reply with supporting documents is being compiled.",
-    actionTaken: "Show-cause notice issued to concerned officers. Recovery proceedings initiated for excess payment of ₹45 lakhs.",
-  };
+function field(data: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const v = data[key];
+    if (typeof v === "string" && v.length > 0) return v;
+    if (typeof v === "number") return String(v);
+  }
+  return "—";
+}
 
-  const timeline = [
-    { date: "15-Aug-2024", event: "Audit para issued by CAG", actor: "AG Office" },
-    { date: "30-Sep-2024", event: "First reply submitted", actor: "PWD" },
-    { date: "15-Nov-2024", event: "Reply found inadequate", actor: "PAC" },
-    { date: "01-Dec-2024", event: "Revised reply submitted", actor: "PWD" },
-    { date: "15-Jan-2025", event: "Under review by PAC", actor: "PAC Secretariat" },
-  ];
+/** Best-effort minor-unit amount from a loosely-typed record (number | numeric string | bigint). */
+function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const v = data[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "bigint") return Number(v);
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+  }
+  return undefined;
+}
+
+/** Long-form text field with an honest fallback instead of a bare dash. */
+function longText(data: Record<string, unknown>, fallback: string, ...keys: string[]): string {
+  for (const key of keys) {
+    const v = data[key];
+    if (typeof v === "string" && v.trim().length > 0) return v;
+  }
+  return fallback;
+}
+
+type TimelineRow = { date: string; event: string; actor: string };
+
+function timelineOf(data: Record<string, unknown>): TimelineRow[] {
+  const raw = data["timeline"] ?? data["events"] ?? data["history"];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === "object")
+    .map((r) => ({
+      date: field(r, "date", "at", "createdAt"),
+      event: field(r, "event", "title", "description"),
+      actor: field(r, "actor", "by", "user"),
+    }));
+}
+
+export default async function AuditParaDetailPage({ params }: { params: { id: string } }) {
+  const { data: para, source } = await getFinanceAuditParaById(params.id);
+
+  if (!para) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Audit Para Detail" back="/finance/audit-paras" />
+        <EmptyState icon="📝" title="Audit para not found" message="This audit para may have been removed or the ID is invalid." />
+      </main>
+    );
+  }
+
+  const paraNo = field(para, "paraNo", "paraNumber");
+  const dept = field(para, "dept", "department");
+  const status = field(para, "status");
+  // "source" here is the issuing authority (CAG | AG | internal) — a real, always-populated
+  // column on finance_audit_paras, unlike the fabricated "Year" stat it replaces below.
+  const paraSource = field(para, "source");
+  const amountMinor = amountMinorOf(para, "moneyValueMinor", "amountMinor", "amount");
+  const timeline = timelineOf(para);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={`Audit Para ${para.paraNo}`} subtitle={para.department} back="/finance/audit-paras" />
+      <PageHeader
+        title={`Audit Para ${paraNo}`}
+        subtitle={dept !== "—" ? dept : undefined}
+        back="/finance/audit-paras"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={para.amount} />
-        <StatCard icon="📅" iconBg="#e7edfd" label="Year" value={para.year} />
-        <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value="PWD" />
-        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value="Pending" />
+        <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={amountMinor !== undefined ? formatMoney(amountMinor) : "—"} />
+        <StatCard icon="🏛️" iconBg="#e7edfd" label="Source" value={paraSource} />
+        <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value={dept} />
+        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={status} />
       </StatGrid>
 
       <Card title="Observation" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>{para.observation}</p>
+        <p style={{ margin: 0, lineHeight: 1.6 }}>
+          {longText(para, "No observation on file.", "observation", "narrative", "description", "subject")}
+        </p>
       </Card>
 
       <Card title="Department Reply" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>{para.reply}</p>
+        <p style={{ margin: 0, lineHeight: 1.6 }}>
+          {longText(para, "No reply on file.", "reply", "departmentReply", "response")}
+        </p>
       </Card>
 
       <Card title="Action Taken" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>{para.actionTaken}</p>
+        <p style={{ margin: 0, lineHeight: 1.6 }}>
+          {longText(para, "No action recorded.", "actionTaken", "action")}
+        </p>
         <div style={{ marginTop: 12 }}>
-          <span className="label">Current Status: </span><StatusPill status={para.status} />
+          <span className="label">Current Status: </span><StatusPill status={status} />
         </div>
       </Card>
 
       <Card title="Timeline" padding>
-        <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Audit para timeline">
-          {timeline.map((item, i) => (
-            <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.length - 1 ? "1px solid var(--border)" : "none" }}>
-              <span style={{ minWidth: 100, fontSize: 13, color: "var(--muted)" }}>{item.date}</span>
-              <span style={{ flex: 1 }}>{item.event}</span>
-              <span style={{ fontSize: 13, color: "var(--muted)" }}>{item.actor}</span>
-            </li>
-          ))}
-        </ol>
+        {timeline.length === 0 ? (
+          <EmptyState icon="🕒" title="No timeline recorded" message="No history events have been recorded for this audit para." />
+        ) : (
+          <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Audit para timeline">
+            {timeline.map((item, i) => (
+              <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <span style={{ minWidth: 100, fontSize: 13, color: "var(--muted)" }}>{item.date}</span>
+                <span style={{ flex: 1 }}>{item.event}</span>
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>{item.actor}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </Card>
     </main>
   );

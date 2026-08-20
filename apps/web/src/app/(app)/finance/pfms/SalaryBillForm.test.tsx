@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SalaryBillForm } from "./SalaryBillForm";
 
 const VALID_DEPT = "11111111-1111-1111-1111-111111111111";
+const DEPARTMENTS = [{ id: VALID_DEPT, name: "Finance Department" }];
 
 describe("SalaryBillForm", () => {
   beforeEach(() => {
@@ -10,13 +11,14 @@ describe("SalaryBillForm", () => {
   });
 
   it("requires all core fields before opening the confirm dialog, with field-specific messages", () => {
-    render(<SalaryBillForm />);
+    render(<SalaryBillForm departments={DEPARTMENTS} />);
     fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
 
     const monthInput = screen.getByLabelText(/Month \(YYYY-MM\)/);
     expect(screen.getByText("Month must be in YYYY-MM format.")).toBeInTheDocument();
     expect(monthInput).toHaveAttribute("aria-invalid", "true");
     expect(monthInput).toHaveFocus();
+    expect(screen.getByText("Please select a department.")).toBeInTheDocument();
     expect(screen.getByText("DDO code is required.")).toBeInTheDocument();
     expect(
       screen.queryByText(/Month \(YYYY-MM\), department ID \(UUID\), total amount \(paise\)/),
@@ -37,9 +39,9 @@ describe("SalaryBillForm", () => {
       ),
     );
 
-    render(<SalaryBillForm />);
+    render(<SalaryBillForm departments={DEPARTMENTS} />);
     fireEvent.change(screen.getByLabelText(/Month \(YYYY-MM\)/), { target: { value: "2026-08" } });
-    fireEvent.change(screen.getByLabelText(/Department ID/), { target: { value: VALID_DEPT } });
+    fireEvent.change(screen.getByLabelText(/Department/), { target: { value: VALID_DEPT } });
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
     fireEvent.change(screen.getByLabelText(/Employee Count/), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO01" } });
@@ -56,9 +58,9 @@ describe("SalaryBillForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<SalaryBillForm />);
+    render(<SalaryBillForm departments={DEPARTMENTS} />);
     fireEvent.change(screen.getByLabelText(/Month \(YYYY-MM\)/), { target: { value: "2026-08" } });
-    fireEvent.change(screen.getByLabelText(/Department ID/), { target: { value: VALID_DEPT } });
+    fireEvent.change(screen.getByLabelText(/Department/), { target: { value: VALID_DEPT } });
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
     fireEvent.change(screen.getByLabelText(/Employee Count/), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO01" } });
@@ -70,5 +72,14 @@ describe("SalaryBillForm", () => {
     await waitFor(() => {
       expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
     });
+  });
+
+  it("shows a fallback message and disables the select when no departments are available", () => {
+    render(<SalaryBillForm departments={[]} />);
+    const select = screen.getByLabelText(/Department/) as HTMLSelectElement;
+    expect(select).toBeDisabled();
+    expect(
+      screen.getByText("Unable to load departments. Contact an administrator if this persists."),
+    ).toBeInTheDocument();
   });
 });

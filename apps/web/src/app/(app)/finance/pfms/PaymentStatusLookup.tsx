@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { Card } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import type { PfmsMode } from "./types";
 
 type StatusResult = {
   referenceId: string;
@@ -11,10 +12,16 @@ type StatusResult = {
   utrNumber?: string;
   processedAt?: string;
   failureReason?: string;
+  mode?: PfmsMode;
 };
 
+interface PaymentStatusLookupProps {
+  /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
+  onModeObserved?: (mode: PfmsMode) => void;
+}
+
 /** GET /v1/finance/pfms/payments/:ref/status — e-Kuber payment status enquiry. */
-export function PaymentStatusLookup() {
+export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps) {
   const [ref, setRef] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,6 +46,7 @@ export function PaymentStatusLookup() {
         { method: "GET" },
       );
       setResult(res.data);
+      if (res.data.mode) onModeObserved?.(res.data.mode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not fetch payment status.");
     } finally {

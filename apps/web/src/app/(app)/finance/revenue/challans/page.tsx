@@ -14,7 +14,8 @@ export default async function ChallansPage() {
         <StatCard icon="📄" iconBg="#e7edfd" label="Total Challans" value={challans.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Verified" value={verified} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={challans.length - verified} />
-        <StatCard icon="🏦" iconBg="#eff6ff" label="Banks" value={new Set(challans.map((c) => String(c.bank ?? ""))).size} />
+        {/* treasury.finance_challans has no "bank" column — "depositor" is the closest real field. */}
+        <StatCard icon="🏦" iconBg="#eff6ff" label="Depositors" value={new Set(challans.map((c) => c.depositor)).size} />
       </StatGrid>
       <Card title="Challans"><ChallansTable challans={challans} source={source === "error" ? "error" : "api"} /></Card>
     </main>

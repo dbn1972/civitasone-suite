@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import type { PfmsDepartment, PfmsMode } from "./types";
 
 type SalaryBillResult = {
   billRef: string;
@@ -15,17 +16,25 @@ type SalaryBillResult = {
   status: string;
   submittedAt: string;
   message?: string;
+  mode?: PfmsMode;
 };
 
 type FieldKey = "month" | "departmentId" | "totalAmountMinor" | "employeeCount" | "ddoCode";
 
 const FIELD_ERRORS: Record<FieldKey, string> = {
   month: "Month must be in YYYY-MM format.",
-  departmentId: "Department ID must be a valid UUID.",
+  departmentId: "Please select a department.",
   totalAmountMinor: "Total amount must be a whole number of paise, at least 1.",
   employeeCount: "Employee count must be a whole number, at least 1.",
   ddoCode: "DDO code is required.",
 };
+
+interface SalaryBillFormProps {
+  /** Populates the department dropdown; see PfmsOpsConsolePage's getDepartments(). */
+  departments?: PfmsDepartment[];
+  /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
+  onModeObserved?: (mode: PfmsMode) => void;
+}
 
 /**
  * POST /v1/finance/pfms/salary-bill — submits a monthly salary bill to
@@ -35,7 +44,7 @@ const FIELD_ERRORS: Record<FieldKey, string> = {
  * real and reachable, but the integration itself is documented as not yet live.
  * `totalAmountMinor` is paise (minor units) per the backend schema comment.
  */
-export function SalaryBillForm() {
+export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillFormProps) {
   const [month, setMonth] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [totalAmountMinor, setTotalAmountMinor] = useState("");
@@ -58,11 +67,11 @@ export function SalaryBillForm() {
   const remarksId = useId();
 
   const monthRef = useRef<HTMLInputElement>(null);
-  const deptRef = useRef<HTMLInputElement>(null);
+  const deptRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const countRef = useRef<HTMLInputElement>(null);
   const ddoRef = useRef<HTMLInputElement>(null);
-  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | null>> = {
+  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | HTMLSelectElement | null>> = {
     month: monthRef,
     departmentId: deptRef,
     totalAmountMinor: amountRef,
@@ -70,14 +79,12 @@ export function SalaryBillForm() {
     ddoCode: ddoRef,
   };
 
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     const nextErrors: Partial<Record<FieldKey, string>> = {};
     if (!/^\d{4}-\d{2}$/.test(month.trim())) nextErrors.month = FIELD_ERRORS.month;
-    if (!uuidRe.test(departmentId.trim())) nextErrors.departmentId = FIELD_ERRORS.departmentId;
+    if (!departmentId.trim()) nextErrors.departmentId = FIELD_ERRORS.departmentId;
     if (!/^\d+$/.test(totalAmountMinor.trim()) || Number(totalAmountMinor) < 1) {
       nextErrors.totalAmountMinor = FIELD_ERRORS.totalAmountMinor;
     }
@@ -112,6 +119,7 @@ export function SalaryBillForm() {
         }),
       });
       setConfirmOpen(false);
+      if (res.data.mode) onModeObserved?.(res.data.mode);
       setMessage(`Salary bill ${res.data.pfmsBillNo} submitted for ${res.data.month} — status: ${res.data.status}.`);
       setMonth("");
       setDepartmentId("");
@@ -159,18 +167,36 @@ export function SalaryBillForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Department ID (UUID) <span aria-hidden="true">*</span>
+                Department <span aria-hidden="true">*</span>
               </label>
-              <input
+              <select
                 id={deptId}
                 ref={deptRef}
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
+                disabled={departments.length === 0}
                 aria-required="true"
                 aria-invalid={!!errors.departmentId || undefined}
-                aria-describedby={errors.departmentId ? `${deptId}-error` : undefined}
+                aria-describedby={
+                  [
+                    departments.length === 0 ? `${deptId}-empty` : null,
+                    errors.departmentId ? `${deptId}-error` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              >
+                <option value="">{departments.length === 0 ? "No departments available" : "Select department"}</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              {departments.length === 0 && (
+                <p id={`${deptId}-empty`} className="pill warn" style={{ width: "fit-content" }}>
+                  Unable to load departments. Contact an administrator if this persists.
+                </p>
+              )}
               {errors.departmentId && (
                 <p id={`${deptId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                   {errors.departmentId}

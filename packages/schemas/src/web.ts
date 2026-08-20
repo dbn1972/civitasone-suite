@@ -2072,3 +2072,285 @@ export const NotificationDeliverySchema = z.object({
 export const NotificationDeliveryListSchema = z.array(NotificationDeliverySchema);
 
 export const PayrollStructureListSchema = z.array(z.object({ id: z.string(), name: z.string() }));
+
+// ── Finance schemas (extended — data-layer type-safety pass) ────────────────
+// Mirrors the types of the same name in @civitasone/types — see that file's
+// header comment for the confidence/evidence notes per type.
+
+export const FinancePaymentDetailSchema = z.object({
+  id: z.string(),
+  billId: z.string(),
+  amountMinor: z.string(),
+  mode: z.enum(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]),
+  status: z.string(),
+  currency: z.string(),
+  createdBy: z.string(),
+  createdAt: z.string(),
+});
+
+export const FinanceInstrumentSummarySchema = z.object({
+  id: z.string(),
+  instrumentType: z.string(),
+  instrumentNo: z.string(),
+  bankAccountId: z.string().nullable(),
+  bankName: z.string(),
+  payee: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  issueDate: z.string(),
+  status: z.enum(["issued", "presented", "cleared", "bounced", "cancelled"]),
+  presentedAt: z.string().nullable(),
+  clearedAt: z.string().nullable(),
+  bouncedAt: z.string().nullable(),
+  cancelledAt: z.string().nullable(),
+  bounceReason: z.string().nullable(),
+});
+export const FinanceInstrumentSummaryListSchema = z.array(FinanceInstrumentSummarySchema);
+
+export const BudgetOutcomeSummarySchema = z.object({
+  id: z.string(),
+  headId: z.string(),
+  fy: z.string(),
+  allocationId: z.string().nullable(),
+  schemeId: z.string().nullable(),
+  outputDesc: z.string(),
+  outcomeDesc: z.string(),
+  indicator: z.string(),
+  unit: z.string(),
+  baselineValue: z.string(),
+  targetValue: z.string(),
+  achievedValue: z.string(),
+  achievementBps: z.string(),
+  allocatedMinor: z.string(),
+  currency: z.string(),
+  status: z.string(),
+  evaluationRating: z.string().nullable(),
+  evaluationNote: z.string().nullable(),
+  evaluatedBy: z.string().nullable(),
+  evaluatedAt: z.string().nullable(),
+  effectiveFrom: z.string(),
+});
+export const BudgetOutcomeSummaryListSchema = z.array(BudgetOutcomeSummarySchema);
+
+export const AllocationDistributionSummarySchema = z.object({
+  id: z.string(),
+  allocationId: z.string(),
+  fy: z.string(),
+  headId: z.string(),
+  fromOfficeId: z.string(),
+  toOfficeId: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  conditions: z.string().nullable(),
+  status: z.string(),
+  effectiveFrom: z.string(),
+  issuedBy: z.string().nullable(),
+  acknowledgedBy: z.string().nullable(),
+  acknowledgeNote: z.string().nullable(),
+  version: z.number(),
+});
+export const AllocationDistributionSummaryListSchema = z.array(AllocationDistributionSummarySchema);
+
+export const FinanceBudgetAllocationSummarySchema = z.object({
+  id: z.string(),
+  headId: z.string(),
+  fy: z.string(),
+  allocatedMinor: z.string(),
+  committedMinor: z.string(),
+  actualMinor: z.string(),
+  availableMinor: z.string(),
+  enforce: z.boolean(),
+});
+export const FinanceBudgetAllocationSummaryListSchema = z.array(FinanceBudgetAllocationSummarySchema);
+
+export const BudgetMonitoringTotalsSchema = z.object({
+  count: z.number(),
+  allocatedMinor: z.string(),
+  committedMinor: z.string(),
+  actualMinor: z.string(),
+  availableMinor: z.string(),
+  forecastYearEndMinor: z.string(),
+  exceptions: z.record(z.string(), z.number()),
+});
+
+export const BudgetMonitoringSummarySchema = z.object({
+  fy: z.string(),
+  fractionElapsedBps: z.string(),
+  totals: BudgetMonitoringTotalsSchema,
+});
+
+export const BudgetMonitoringLineSchema = z.object({
+  id: z.string(),
+  headId: z.string(),
+  fy: z.string(),
+  allocatedMinor: z.string(),
+  committedMinor: z.string(),
+  actualMinor: z.string(),
+  availableMinor: z.string(),
+  burnRateBps: z.string(),
+  utilisationBps: z.string(),
+  forecastYearEndMinor: z.string(),
+  exception: z.enum(["on_track", "over_committed", "under_utilised", "projected_overspend"]),
+});
+export const BudgetMonitoringLineListSchema = z.array(BudgetMonitoringLineSchema);
+
+export const BudgetMonitoringLinesResponseSchema = z.object({
+  fy: z.string(),
+  asOf: z.string(),
+  fractionElapsedBps: z.string(),
+  totals: BudgetMonitoringTotalsSchema,
+  lines: BudgetMonitoringLineListSchema,
+});
+
+export const VendorTdsEntrySchema = z.object({
+  id: z.string(),
+  vendor_id: z.string(),
+  vendor_name: z.string(),
+  pan: z.string().nullable(),
+  bill_id: z.string().nullable(),
+  payment_id: z.string().nullable(),
+  section: z.string(),
+  gross_amount_minor: z.string(),
+  tds_rate_pct: z.string(),
+  tds_amount_minor: z.string(),
+  surcharge_minor: z.string(),
+  cess_minor: z.string(),
+  net_payment_minor: z.string(),
+  deduction_date: z.string(),
+  deposit_date: z.string().nullable(),
+  challan_no: z.string().nullable(),
+  quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
+  fy: z.string(),
+  status: z.enum(["deducted", "deposited", "filed"]),
+  created_at: z.string(),
+});
+export const VendorTdsEntryListSchema = z.array(VendorTdsEntrySchema);
+
+export const PfmsBatchSummarySchema = z.object({
+  id: z.string(),
+  pfmsId: z.string(),
+  type: z.string(),
+  amountMinor: z.string(),
+  agencyCode: z.string().nullable(),
+  schemeCode: z.string().nullable(),
+  ddoCode: z.string().nullable(),
+  submissionStatus: z.string(),
+  signedAt: z.string().nullable(),
+});
+export const PfmsBatchSummaryListSchema = z.array(PfmsBatchSummarySchema);
+
+export const CashBookEntrySchema = z.object({
+  id: z.string(),
+  entry_date: z.string(),
+  voucher_type: z.string(),
+  voucher_no: z.string(),
+  particulars: z.string(),
+  receipt_minor: z.string(),
+  payment_minor: z.string(),
+  balance_minor: z.string(),
+  bank_or_cash: z.string(),
+  reference: z.string().nullable(),
+  created_at: z.string(),
+});
+export const CashBookEntryListSchema = z.array(CashBookEntrySchema);
+
+export const FinanceChallanSummarySchema = z.object({
+  id: z.string(),
+  challanNo: z.string(),
+  receiptHeadId: z.string(),
+  depositor: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  grnNo: z.string().nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceChallanSummaryListSchema = z.array(FinanceChallanSummarySchema);
+
+export const FinanceDepositSummarySchema = z.object({
+  id: z.string(),
+  pdNo: z.string(),
+  type: z.string(),
+  administrator: z.string(),
+  balanceMinor: z.string(),
+  currency: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceDepositSummaryListSchema = z.array(FinanceDepositSummarySchema);
+
+export const FinanceGuaranteeSummarySchema = z.object({
+  id: z.string(),
+  entity: z.string(),
+  type: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  feePct: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceGuaranteeSummaryListSchema = z.array(FinanceGuaranteeSummarySchema);
+
+export const FinanceDebtSummarySchema = z.object({
+  id: z.string(),
+  instrument: z.string(),
+  source: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  maturity: z.string().nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceDebtSummaryListSchema = z.array(FinanceDebtSummarySchema);
+
+export const FinanceSchemeSummarySchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  outlayMinor: z.string(),
+  utilisedMinor: z.string(),
+  currency: z.string(),
+  funding: z.string().nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceSchemeSummaryListSchema = z.array(FinanceSchemeSummarySchema);
+
+export const FinanceDemandSummarySchema = z.object({
+  id: z.string(),
+  demandNo: z.string(),
+  service: z.string(),
+  amountMinor: z.string(),
+  currency: z.string(),
+  class: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceDemandSummaryListSchema = z.array(FinanceDemandSummarySchema);
+
+export const FinanceAuditParaSummarySchema = z.object({
+  id: z.string(),
+  paraNo: z.string(),
+  source: z.string(),
+  dept: z.string(),
+  departmentId: z.string().nullable(),
+  moneyValueMinor: z.string(),
+  currency: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  version: z.number(),
+});
+export const FinanceAuditParaSummaryListSchema = z.array(FinanceAuditParaSummarySchema);
