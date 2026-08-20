@@ -120,6 +120,7 @@ export interface NavTile {
   title: string;
   href: string;
   description?: string;
+  section?: string;
 }
 
 export interface MetricCard {
