@@ -25,7 +25,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   revenue: "Revenue",
   works: "Works",
   citizen: "Citizen Portal",
-  helpdesk: "Helpdesk",
   visitor: "Visitor Mgmt",
   meeting: "Meeting Mgmt",
   court: "Court Mgmt",
@@ -111,7 +110,6 @@ export function AutoBreadcrumb() {
   return (
     <ol
       className="auto-crumb"
-      aria-label="Breadcrumb"
       style={{ display: "flex", alignItems: "center", gap: 4, margin: 0, padding: 0, listStyle: "none", fontSize: 13 }}
     >
       {crumbs.map((crumb, i) => {
