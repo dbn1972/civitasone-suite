@@ -2,8 +2,9 @@
 
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import type { FinanceInstrumentSummary } from "@civitasone/types";
 
-type Cheque = Record<string, unknown>;
+type Cheque = FinanceInstrumentSummary;
 
 export function ChequesTable({ cheques, source = "api" }: { cheques: Cheque[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Cheque[]>(
@@ -23,12 +24,12 @@ export function ChequesTable({ cheques, source = "api" }: { cheques: Cheque[]; s
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Cheque>
         columns={[
-          { key: "chequeNo", label: "Cheque/DD No" },
+          { key: "instrumentNo", label: "Cheque/DD No" },
           { key: "payee", label: "Payee" },
-          { key: "amount", label: "Amount", align: "right" },
-          { key: "bank", label: "Drawn On" },
-          { key: "issuedDate", label: "Issued" },
-          { key: "clearanceDate", label: "Cleared" },
+          { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
+          { key: "bankName", label: "Drawn On" },
+          { key: "issueDate", label: "Issued" },
+          { key: "clearedAt", label: "Cleared" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

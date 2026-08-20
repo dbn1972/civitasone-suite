@@ -625,6 +625,10 @@ export type BudgetSummary = {
   releasedAmount: number;
   expenditure: number;
   balance: number;
+  /** Raw Budget Estimate, paise as string — distinct from releasedAmount, which is BE-capped. */
+  beMinor: string;
+  /** Raw Revised Estimate, paise as string — can legitimately exceed beMinor pre-reconciliation. */
+  reMinor: string;
   status: string;
   financialYear: string;
 };
@@ -2461,4 +2465,47 @@ export type FinanceAuditParaSummary = {
   createdAt: string;
   updatedAt: string;
   version: number;
+};
+
+/**
+ * Backed by GET /v1/finance/vendors/:id (services/finance-service/src/modules/masters/routes.ts),
+ * added alongside the payments.finance_vendors table (services/finance-service/migrations/
+ * 0065_vendor_master.sql). Field names match the route's response mapping exactly — this is a
+ * runtime-verified contract, not a prediction.
+ */
+export type FinanceVendorDetail = {
+  id: string;
+  name: string;
+  category: string;
+  status: string;
+  pan: string;
+  gstin: string | null;
+  address: string;
+  contactPerson: string | null;
+  email: string | null;
+  phone: string | null;
+  bankName: string;
+  ifsc: string;
+  bankAccount: string;
+  isActive: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Backed by GET /v1/finance/vendors (toVendorSummary() in masters/routes.ts).
+ * Named distinctly from the pre-existing `VendorSummary` interface — that one
+ * belongs to an unrelated (CRM) vendor concept and only has
+ * {name, category, ratingDisplay}, missing id/pan/gstin/status entirely; it
+ * was a namespace collision, not the real finance contract.
+ */
+export type FinanceVendorSummary = {
+  id: string;
+  name: string;
+  category: string;
+  pan: string;
+  gstin: string | null;
+  status: string;
+  ratingDisplay: string;
 };

@@ -101,6 +101,12 @@ export async function listBudgetSummaries(tenantId: string, limit: number, offse
       releasedAmount: (reMinor < allocated ? reMinor : allocated).toString(),
       expenditure: utilised.toString(),
       balance: (allocated > utilised ? allocated - utilised : 0n).toString(),
+      // Raw BE/RE (distinct from the capped releasedAmount above) so
+      // consumers needing genuine BE-vs-RE variance — where RE can
+      // legitimately exceed BE before a supplementary grant reconciles it —
+      // aren't stuck with releasedAmount's allocated-cap.
+      beMinor: (row.beMinor ?? 0n).toString(),
+      reMinor: reMinor.toString(),
       status: utilised >= allocated ? "exhausted" : "active",
       financialYear: row.fy,
     });

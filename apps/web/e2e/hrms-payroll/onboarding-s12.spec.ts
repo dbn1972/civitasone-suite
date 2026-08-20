@@ -236,7 +236,7 @@ test.describe('S12 — Joinee welcome header', () => {
     await expect(header).toContainText('CFO Mahesh Iyer');
   });
 
-  test('welcome header for a second joinee (ob-002) shows that joinee's name', async ({
+  test("welcome header for a second joinee (ob-002) shows that joinee's name", async ({
     page,
   }) => {
     await mockOnboardingRoutes(page);

@@ -1,7 +1,8 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
+import type { FinanceGuaranteeSummary } from "@civitasone/types";
+type Row = FinanceGuaranteeSummary;
 export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Row[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.guarantees", guarantees, source, (d) => d.length === 0);
   const cacheNote = offline || fromCache ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.` : null;
@@ -10,12 +11,10 @@ export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Ro
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Row>
         columns={[
-          { key: "guaranteeNo", label: "BG No" },
+          { key: "entity", label: "Entity" },
           { key: "type", label: "Type" },
-          { key: "vendor", label: "Vendor" },
-          { key: "amount", label: "Amount", align: "right" },
-          { key: "bank", label: "Issuing Bank" },
-          { key: "expiryDate", label: "Expiry" },
+          { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
+          { key: "feePct", label: "Fee %", align: "right" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

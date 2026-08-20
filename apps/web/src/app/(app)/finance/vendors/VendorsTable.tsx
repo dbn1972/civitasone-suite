@@ -1,9 +1,15 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
-export function VendorsTable({ vendors, source = "api" }: { vendors: Row[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.vendors", vendors, source, (d) => d.length === 0);
+import type { FinanceVendorSummary } from "@civitasone/types";
+
+// DataTable's generic requires an index signature; FinanceVendorSummary is a
+// plain named type. Intersection satisfies the constraint without widening
+// away real field names/types.
+type Row = FinanceVendorSummary & Record<string, unknown>;
+
+export function VendorsTable({ vendors, source = "api" }: { vendors: FinanceVendorSummary[]; source?: "api" | "error" }) {
+  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.vendors", vendors as Row[], source, (d) => d.length === 0);
   const cacheNote = offline || fromCache ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.` : null;
   return (
     <>

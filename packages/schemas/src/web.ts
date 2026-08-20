@@ -525,6 +525,8 @@ export const BudgetSummarySchema = z.object({
   releasedAmount: z.number(),
   expenditure: z.number(),
   balance: z.number(),
+  beMinor: z.string(),
+  reMinor: z.string(),
   status: z.string(),
   financialYear: z.string(),
 });
@@ -2354,3 +2356,34 @@ export const FinanceAuditParaSummarySchema = z.object({
   version: z.number(),
 });
 export const FinanceAuditParaSummaryListSchema = z.array(FinanceAuditParaSummarySchema);
+
+export const FinanceVendorDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.string(),
+  status: z.string(),
+  pan: z.string(),
+  gstin: z.string().nullable(),
+  address: z.string(),
+  contactPerson: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  bankName: z.string(),
+  ifsc: z.string(),
+  bankAccount: z.string(),
+  isActive: z.boolean(),
+  version: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const FinanceVendorSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.string(),
+  pan: z.string(),
+  gstin: z.string().nullable(),
+  status: z.string(),
+  ratingDisplay: z.string(),
+});
+export const FinanceVendorSummaryListSchema = z.array(FinanceVendorSummarySchema);

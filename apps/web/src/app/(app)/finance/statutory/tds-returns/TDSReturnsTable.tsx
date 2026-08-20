@@ -1,7 +1,8 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
+import type { VendorTdsEntry } from "@civitasone/types";
+type Row = VendorTdsEntry;
 export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>("finance.tds-returns", returns, source, (d) => d.length === 0);
   const cacheNote = offline || fromCache ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.` : null;
@@ -10,12 +11,12 @@ export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; s
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Row>
         columns={[
-          { key: "formType", label: "Form" },
+          { key: "vendor_name", label: "Vendor" },
+          { key: "section", label: "Section" },
           { key: "quarter", label: "Quarter" },
           { key: "fy", label: "FY" },
-          { key: "deductees", label: "Deductees", align: "right" },
-          { key: "totalTds", label: "Total TDS", align: "right" },
-          { key: "filedDate", label: "Filed Date" },
+          { key: "tds_amount_minor", label: "Total TDS", align: "right", cellType: "amount" },
+          { key: "deduction_date", label: "Deduction Date" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

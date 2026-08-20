@@ -2,8 +2,9 @@
 
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import type { CashBookEntry } from "@civitasone/types";
 
-type Entry = Record<string, unknown>;
+type Entry = CashBookEntry;
 
 export function CashBankTable({ entries, source = "api" }: { entries: Entry[]; source?: "api" | "error" }) {
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Entry[]>(
@@ -23,12 +24,12 @@ export function CashBankTable({ entries, source = "api" }: { entries: Entry[]; s
       {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<Entry>
         columns={[
-          { key: "date", label: "Date" },
+          { key: "entry_date", label: "Date" },
           { key: "particulars", label: "Particulars" },
-          { key: "voucherNo", label: "Voucher No" },
-          { key: "receipt", label: "Receipt", align: "right" },
-          { key: "payment", label: "Payment", align: "right" },
-          { key: "balance", label: "Balance", align: "right" },
+          { key: "voucher_no", label: "Voucher No" },
+          { key: "receipt_minor", label: "Receipt", align: "right", cellType: "amount" },
+          { key: "payment_minor", label: "Payment", align: "right", cellType: "amount" },
+          { key: "balance_minor", label: "Balance", align: "right", cellType: "amount" },
         ]}
         rows={rows}
         sortable

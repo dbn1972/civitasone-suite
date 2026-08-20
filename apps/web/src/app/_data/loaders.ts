@@ -89,6 +89,8 @@ import type {
   FinanceSchemeSummary,
   FinanceDemandSummary,
   FinanceAuditParaSummary,
+  FinanceVendorDetail,
+  FinanceVendorSummary,
   ProcurementDashboard,
   IndentSummary,
   IndentDetail,
@@ -252,6 +254,8 @@ import {
   FinanceDemandSummaryListSchema,
   FinanceAuditParaSummarySchema,
   FinanceAuditParaSummaryListSchema,
+  FinanceVendorDetailSchema,
+  FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
   IndentSummaryListSchema,
   IndentDetailSchema,
@@ -1929,14 +1933,6 @@ export async function getFinanceDemandGrants(): Promise<LoaderResult<FinanceDema
   });
 }
 
-export async function getFinanceRevisedEstimates(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/revised-estimates", [], {
-    revalidateSeconds: 300,
-    telemetryKey: "finance.revised-estimates",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
-  });
-}
-
 export async function getFinanceOutcomeBudget(): Promise<LoaderResult<BudgetOutcomeSummary[]>> {
   return fetchJson<unknown, BudgetOutcomeSummary[]>("/api/v1/finance/budget-outcomes", [], {
     revalidateSeconds: 300,
@@ -2019,19 +2015,21 @@ export async function getFinanceFundAccounting(): Promise<LoaderResult<Record<st
 
 // ─── Finance: Vendors & Masters ──────────────────────────────────────────────
 
-export async function getFinanceVendors(): Promise<LoaderResult<VendorSummary[]>> {
-  return fetchJson<unknown, VendorSummary[]>("/api/v1/finance/vendors", [], {
+export async function getFinanceVendors(): Promise<LoaderResult<FinanceVendorSummary[]>> {
+  return fetchJson<unknown, FinanceVendorSummary[]>("/api/v1/finance/vendors", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.vendors",
-    mapResponse: (p) => getArrayPayload(p) as VendorSummary[] | null,
+    responseSchema: FinanceVendorSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceVendorSummary[] | null,
   });
 }
 
-export async function getFinanceVendorById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/vendors/${id}`, null, {
+export async function getFinanceVendorById(id: string): Promise<LoaderResult<FinanceVendorDetail | null>> {
+  return fetchJson<unknown, FinanceVendorDetail | null>(`/api/v1/finance/vendors/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "finance.vendor.detail",
-    mapResponse: (p) => (p && typeof p === "object" ? p : null) as Record<string, unknown> | null,
+    responseSchema: FinanceVendorDetailSchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceVendorDetail) : null),
   });
 }
 
