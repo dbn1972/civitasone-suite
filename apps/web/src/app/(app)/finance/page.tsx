@@ -15,32 +15,23 @@ const financeSections: NavTile[] = [
 	{ title: "Revised Estimates", section: "Budget", description: "BE vs RE with variance analysis by head.", href: "/finance/budget/revised-estimates" },
 	{ title: "Outcome Budget", section: "Budget", description: "Scheme output indicators and achievement tracking.", href: "/finance/budget/outcome-budget" },
 	{ title: "Budget Allocation", section: "Budget", description: "Department-wise allocation, release, and utilization.", href: "/finance/budget/allocation" },
-	{ title: "Fund Accounting", section: "Budget", description: "Fund-wise receipts, expenditure, and balance.", href: "/finance/budget/fund-accounting" },
 
 	// Expenditure
 	{ title: "Bill Processing", section: "Expenditure", description: "Vendor bills with 3-way match and payment lifecycle.", href: "/finance/expenditure/bills" },
 	{ title: "Advances", section: "Expenditure", description: "Employee and vendor advances with outstanding balance tracking.", href: "/finance/expenditure/advances" },
 	{ title: "Utilization Certificates", section: "Expenditure", description: "Grant utilization certificates submitted by grantees.", href: "/finance/expenditure/utilization-certificates" },
-	{ title: "Deductions", section: "Expenditure", description: "Statutory deductions register (TDS, IT, GST).", href: "/finance/expenditure/deductions" },
-	{ title: "Payment Advice", section: "Expenditure", description: "Payment advice notes issued to banks.", href: "/finance/expenditure/payment-advice" },
 	{ title: "Guarantees", section: "Expenditure", description: "Bank guarantees, performance securities, and EMDs.", href: "/finance/expenditure/guarantees" },
 	{ title: "Scheme Tracking", section: "Expenditure", description: "Scheme expenditure with milestones and UC status.", href: "/finance/expenditure/scheme-tracking" },
 
 	// Treasury & Banking
 	{ title: "PFMS Integration", section: "Treasury & Banking", description: "PFMS payment scroll tracking and beneficiary verification.", href: "/finance/treasury/pfms" },
-	{ title: "RBI / Treasury", section: "Treasury & Banking", description: "Treasury bills, bonds, and term deposit investments.", href: "/finance/treasury/rbi" },
-	{ title: "Electronic Fund Transfer", section: "Treasury & Banking", description: "NEFT/RTGS transfers with UTR tracking.", href: "/finance/treasury/eft" },
 	{ title: "e-Payment Orders", section: "Treasury & Banking", description: "Electronic payment orders with bank references.", href: "/finance/treasury/e-payments" },
 	{ title: "Cheque Register", section: "Treasury & Banking", description: "Cheque/DD register with clearance tracking.", href: "/finance/treasury/cheques" },
 	{ title: "Fixed Deposits", section: "Treasury & Banking", description: "Fixed and term deposits across treasury banks.", href: "/finance/treasury/deposits" },
 	{ title: "Cash & Bank Book", section: "Treasury & Banking", description: "Day book with receipts, payments, and balance.", href: "/finance/treasury/cash-bank" },
 
 	// Revenue & Receipts
-	{ title: "Receipt Vouchers", section: "Revenue & Receipts", description: "Revenue receipts with payer and head mapping.", href: "/finance/revenue/receipts" },
-	{ title: "Tax & Non-Tax Revenue", section: "Revenue & Receipts", description: "Budget vs actual revenue by account head.", href: "/finance/revenue/tax-nontax" },
-	{ title: "Fees Collection", section: "Revenue & Receipts", description: "Statutory fees and application fee register.", href: "/finance/revenue/fees" },
 	{ title: "Challan Register", section: "Revenue & Receipts", description: "Government challans with deposit verification.", href: "/finance/revenue/challans" },
-	{ title: "DBT Beneficiaries", section: "Revenue & Receipts", description: "Direct Benefit Transfer with Aadhaar verification.", href: "/finance/revenue/dbt" },
 
 	// Accounting
 	{ title: "General Ledger", section: "Accounting", description: "All posted journal entries with debit and credit detail.", href: "/finance/accounting/general-ledger" },
@@ -58,15 +49,12 @@ const financeSections: NavTile[] = [
 
 	// Vendor & Masters
 	{ title: "Vendors", section: "Vendor & Masters", description: "Registered vendor master with PAN and GSTIN.", href: "/finance/vendors" },
-	{ title: "Licenses & Fees", section: "Vendor & Masters", description: "Issued licenses, permits, and fee tracking.", href: "/finance/licenses" },
 
 	// Statutory
-	{ title: "GeM & e-Invoice", section: "Statutory", description: "GeM orders and IRN-validated e-invoices.", href: "/finance/statutory/gem-einvoice" },
 	{ title: "TDS Returns", section: "Statutory", description: "Quarterly TDS filing and Form 16A issuance.", href: "/finance/statutory/tds-returns" },
 	{ title: "GST & ITC", section: "Statutory", description: "GST summary, ledger, and input-tax-credit reconciliation.", href: "/finance/gst" },
 	{ title: "Reconciliation", section: "Statutory", description: "Bank/subledger reconciliation runs and break resolution.", href: "/finance/reconciliation" },
 	{ title: "PFMS Operations", section: "Statutory", description: "PFMS batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },
-	{ title: "User Charges", section: "Statutory", description: "Service-wise user charges and fee collections.", href: "/finance/user-charges" },
 ];
 
 export default async function Page() {
