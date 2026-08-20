@@ -6,6 +6,7 @@ import { WhatsNewBanner } from "../WhatsNewBanner";
 import { FeedbackWidget } from "../FeedbackWidget";
 import { AskCivitasOne } from "../AskCivitasOne";
 import { RouteProgress } from "../RouteProgress";
+import { AutoBreadcrumb } from "../AutoBreadcrumb";
 
 interface AppShellProps {
   children: ReactNode;
@@ -24,7 +25,7 @@ export function AppShell({ children, crumb, enabledModules, userName, userRole }
       <RouteProgress />
       <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} />
       <div className="main">
-        <TopBar crumb={crumb} userName={userName} />
+        <TopBar crumb={crumb ?? <AutoBreadcrumb />} userName={userName} />
         <WhatsNewBanner />
         <main id="main" tabIndex={-1} className="wrap">
           {children}
