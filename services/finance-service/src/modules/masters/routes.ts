@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { VendorRow } from "./schema.js";
@@ -80,7 +81,13 @@ function toVendorSummary(r: VendorRow) {
 // intentionally not populated here — that's a vendor<->bills join with no
 // FK to join on yet (see migration 0065's note) and is out of this task's
 // scope; the frontend already renders a clean "No bills yet" empty state.
-function toVendorDetail(r: VendorRow) {
+// showFullBankDetails gates the cleartext account number/IFSC to
+// WRITER_ROLES (finance_admin/super_admin — the roles that actually submit
+// PFMS payments and need the real value); finance_officer/audit_officer get
+// the same masked shape masters/bank-routes.ts uses for the org's own
+// accounts. Keys stay ifsc/bankAccount either way so the frontend's
+// field() probes keep working unchanged — only the value is masked.
+function toVendorDetail(r: VendorRow, showFullBankDetails: boolean) {
   return {
     id: r.id,
     name: r.name,
@@ -93,8 +100,8 @@ function toVendorDetail(r: VendorRow) {
     email: r.email,
     phone: r.phone,
     bankName: r.bankName,
-    ifsc: r.ifsc,
-    bankAccount: r.bankAccountNo,
+    ifsc: showFullBankDetails ? r.ifsc : r.ifsc.slice(0, 4) + "XXXXXXX",
+    bankAccount: showFullBankDetails ? r.bankAccountNo : "••••••" + r.bankAccountNo.slice(-4),
     isActive: r.isActive,
     version: r.version,
     createdAt: r.createdAt,
@@ -137,7 +144,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const { id } = vendorIdParam.parse(req.params);
     const vendor = await repo.getVendorById(ctx.tenantId, id);
     if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
-    return reply.send(toVendorDetail(vendor));
+    const showFullBankDetails = hasAnyRole(ctx, WRITER_ROLES);
+    return reply.send(toVendorDetail(vendor, showFullBankDetails));
   });
 
   app.post("/v1/finance/vendors", async (req, reply) => {
@@ -157,7 +165,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       bankAccountNo: body.bankAccount,
       ifsc: body.ifsc,
     }, ctx.actorId);
-    return reply.code(201).send(toVendorDetail(vendor));
+    // Always full detail: this route is already WRITER_ROLES-only.
+    return reply.code(201).send(toVendorDetail(vendor, true));
   });
 
   app.patch("/v1/finance/vendors/:id", async (req, reply) => {
@@ -172,7 +181,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       ...(bankAccount !== undefined ? { bankAccountNo: bankAccount } : {}),
     }, ctx.actorId);
     if (!updated) throw new HttpError(409, "VERSION_CONFLICT", "vendor was modified by another request; reload and retry");
-    return reply.send(toVendorDetail(updated));
+    // Always full detail: this route is already WRITER_ROLES-only.
+    return reply.send(toVendorDetail(updated, true));
   });
 
   app.setErrorHandler((err, req, reply) => {

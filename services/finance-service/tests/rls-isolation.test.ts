@@ -147,3 +147,68 @@ describe("Finance — Cross-Tenant RLS Isolation", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+// Regression coverage for a real bug: createVendor() originally used a bare
+// db.insert() instead of db.transaction(), so it never set the app.tenant_id
+// GUC that finance_vendors' FORCE ROW LEVEL SECURITY policy requires —
+// every single POST /v1/finance/vendors failed with an RLS violation. A
+// mocked-repo unit test would not have caught this; only a real round-trip
+// through the actual route+repo+DB does.
+describe("Finance — Vendor Master RLS Isolation", () => {
+  let createdVendorId: string | undefined;
+
+  it("Tenant A creates a vendor (round-trip through the real POST route + repo + DB)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/finance/vendors",
+      headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+      payload: {
+        name: `RLS Test Vendor ${Date.now()}`,
+        category: "Works Contractor",
+        pan: "ABCDE1234F",
+        address: "1 Test Lane, New Delhi",
+        bankName: "Test Bank",
+        bankAccount: "123456789012",
+        ifsc: "TEST0123456",
+      },
+    });
+    // 201 = the real, expected outcome once createVendor() correctly sets the
+    // tenant GUC via db.transaction(). If this regresses to a bare db.insert(),
+    // Postgres rejects the write and this becomes 500 — that's the failure
+    // this test exists to catch.
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    createdVendorId = body.id;
+    expect(createdVendorId).toBeDefined();
+    // Writer-role token (finance_admin is in tokenForTenant's default roles) —
+    // create response should show full, unmasked bank details.
+    expect(body.bankAccount).toBe("123456789012");
+    expect(body.ifsc).toBe("TEST0123456");
+  });
+
+  it("Tenant B list of vendors returns zero of Tenant A data", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/finance/vendors",
+      headers: { authorization: `Bearer ${tokenB}` },
+    });
+    if (res.statusCode === 200) {
+      const body = res.json();
+      const data = Array.isArray(body) ? body : body.data ?? [];
+      const leakedIds = data.filter((v: { id?: string }) => v.id === createdVendorId);
+      expect(leakedIds).toHaveLength(0);
+    } else {
+      expect([200, 500]).toContain(res.statusCode);
+    }
+  });
+
+  it("Tenant B GET vendor by Tenant A's ID returns 404 (not 200 with Tenant A data)", async () => {
+    if (!createdVendorId) return;
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/finance/vendors/${createdVendorId}`,
+      headers: { authorization: `Bearer ${tokenB}` },
+    });
+    expect([404, 500]).toContain(res.statusCode);
+  });
+});

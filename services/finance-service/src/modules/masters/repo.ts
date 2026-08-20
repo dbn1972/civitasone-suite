@@ -69,17 +69,24 @@ export type VendorPatch = {
 };
 
 export async function createVendor(tenantId: string, input: VendorWriteInput, actorId: string): Promise<VendorRow> {
-  const rows = await db.insert(financeVendors).values({
-    tenantId,
-    ...input,
-    isActive: true,
-    version: 1,
-    createdBy: actorId,
-    updatedBy: actorId,
-  }).returning();
-  const row = rows[0];
-  if (!row) throw new Error("VENDOR_INSERT_FAILED: insert returned no row");
-  return row;
+  // Must go through db.transaction() (not a bare db.insert()) — that's the
+  // only path that sets the app.tenant_id GUC financeVendors' FORCE ROW
+  // LEVEL SECURITY policy checks. An unwrapped insert sees tenant_id as
+  // NULL under the policy and is rejected by Postgres on every call. Mirrors
+  // updateVendor() below.
+  return db.transaction(async (tx) => {
+    const rows = await tx.insert(financeVendors).values({
+      tenantId,
+      ...input,
+      isActive: true,
+      version: 1,
+      createdBy: actorId,
+      updatedBy: actorId,
+    }).returning();
+    const row = rows[0];
+    if (!row) throw new Error("VENDOR_INSERT_FAILED: insert returned no row");
+    return row;
+  });
 }
 
 /**

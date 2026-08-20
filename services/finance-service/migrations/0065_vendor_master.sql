@@ -22,15 +22,16 @@
 -- for once vendor backfill/reconciliation against existing bill/payment
 -- vendor_id values has been done.
 --
--- Also deliberately NOT done here: encrypting bank_account_no/ifsc the way
--- masters/bank-routes.ts's finance_bank_accounts (the org's own treasury
--- accounts) encrypts them via encryptedText. This table's pan column carries
--- a UNIQUE(tenant_id, pan) constraint, which a random-IV encryption scheme
--- would silently break (two rows with the same real PAN would get different
--- ciphertext and the constraint would never fire) — see masters/schema.ts
--- for the same note. Vendor bank_account_no/ifsc are plaintext for now;
--- worth revisiting alongside the encryptedText helper if vendor bank details
--- need the same at-rest protection as the org's own accounts.
+-- bank_account_no/ifsc ARE encrypted at rest (encryptedText, same helper
+-- masters/bank-routes.ts's finance_bank_accounts uses) — real government
+-- vendor payment-routing details, no reason to hold them to a lower bar
+-- than the org's own accounts. This is safe for these two columns
+-- specifically because neither carries a uniqueness constraint (unlike
+-- pan below, where a random-IV scheme would silently break
+-- UNIQUE(tenant_id, pan) — see masters/schema.ts). Columns are `text`
+-- (not varchar) because ciphertext is longer than the cleartext value;
+-- format is validated at the Zod layer on cleartext before encryption,
+-- not via a DB CHECK, since a CHECK can't see past the ciphertext.
 
 CREATE TABLE IF NOT EXISTS payments.finance_vendors (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,8 +45,8 @@ CREATE TABLE IF NOT EXISTS payments.finance_vendors (
   phone            varchar(20),
   email            text,
   bank_name        text NOT NULL,
-  bank_account_no  varchar(30) NOT NULL,
-  ifsc             varchar(11) NOT NULL,
+  bank_account_no  text NOT NULL,
+  ifsc             text NOT NULL,
   is_active        boolean NOT NULL DEFAULT true,
   version          integer NOT NULL DEFAULT 1,
   created_by       uuid NOT NULL,
@@ -54,7 +55,6 @@ CREATE TABLE IF NOT EXISTS payments.finance_vendors (
   updated_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT chk_vendor_pan   CHECK (pan ~ '^[A-Z]{5}[0-9]{4}[A-Z]$'),
   CONSTRAINT chk_vendor_gstin CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$'),
-  CONSTRAINT chk_vendor_ifsc  CHECK (ifsc ~ '^[A-Z]{4}0[A-Z0-9]{6}$'),
   UNIQUE (tenant_id, pan)
 );
 CREATE INDEX IF NOT EXISTS idx_vendor_tenant ON payments.finance_vendors(tenant_id);

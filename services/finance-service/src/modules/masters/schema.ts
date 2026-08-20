@@ -1,4 +1,5 @@
 import { pgSchema, uuid, text, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const paymentsSchema = pgSchema("payments");
 
@@ -33,10 +34,14 @@ export const financeDdo = paymentsSchema.table("finance_ddo", {
 // Vendor master — backs apps/web finance/vendors (list + [id] detail pages).
 // Follows the same conventions as financePao/financeDdo above: tenant-scoped,
 // soft-active flag, version + audit columns, full RLS tenant isolation
-// (migrations/0065_vendor_master.sql). pan/gstin/ifsc are plain (not
-// encryptedText like masters/bank-routes.ts's org-owned bank accounts) so the
-// UNIQUE(tenant_id, pan) constraint can actually enforce uniqueness on the
-// stored value — encrypting pan with a random-IV scheme would defeat that.
+// (migrations/0065_vendor_master.sql). pan/gstin are plain (not encryptedText)
+// so UNIQUE(tenant_id, pan) can enforce uniqueness on the stored value —
+// encrypting pan with a random-IV scheme would defeat that. bankAccountNo/
+// ifsc carry no such constraint, so they ARE encryptedText, matching
+// masters/bank-routes.ts's finance_bank_accounts (the org's own accounts) —
+// this is real vendor payment-routing data and shouldn't sit behind a
+// weaker bar than the org's own. Format validation for these two moved to
+// the Zod layer in routes.ts (a DB CHECK can't see past ciphertext).
 export const financeVendors = paymentsSchema.table("finance_vendors", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
@@ -49,8 +54,8 @@ export const financeVendors = paymentsSchema.table("finance_vendors", {
   phone:         varchar("phone", { length: 20 }),
   email:         text("email"),
   bankName:      text("bank_name").notNull(),
-  bankAccountNo: varchar("bank_account_no", { length: 30 }).notNull(),
-  ifsc:          varchar("ifsc", { length: 11 }).notNull(),
+  bankAccountNo: encryptedText("bank_account_no").notNull(),
+  ifsc:          encryptedText("ifsc").notNull(),
   isActive:      boolean("is_active").notNull().default(true),
   version:       integer("version").notNull().default(1),
   createdBy:     uuid("created_by").notNull(),
