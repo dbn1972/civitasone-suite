@@ -2160,3 +2160,305 @@ export type PensionerSummary = {
   bankAccount?: string;
   retirementDate?: string;
 };
+
+// ── Finance types (extended — data-layer type-safety pass) ──────────────────
+//
+// The loaders below used to return `Record<string, unknown>`. These types are
+// modeled on the actual finance-service backend (route handlers, Drizzle
+// table definitions, or raw migration DDL — see per-type notes). Where a type
+// is marked "no live GET route", the endpoint the frontend calls has no
+// matching backend handler today (confirmed by reading every registered
+// route in finance-service), so the loader currently always falls back to
+// empty/error state; the shape is a best-effort prediction based on the
+// underlying table and this codebase's consistent serialize() convention
+// (camelCase, `*Minor` bigint columns emitted as strings), not a
+// runtime-verified contract.
+
+export type FinancePaymentDetail = {
+  id: string;
+  billId: string;
+  amountMinor: string;
+  mode: "NEFT" | "RTGS" | "IMPS" | "DBT" | "PFMS" | "cheque";
+  status: string;
+  currency: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+/** Cheque / DD payment instrument. Shared by the list and detail loaders — identical wire shape. */
+export type FinanceInstrumentSummary = {
+  id: string;
+  instrumentType: string;
+  instrumentNo: string;
+  bankAccountId: string | null;
+  bankName: string;
+  payee: string;
+  amountMinor: string;
+  currency: string;
+  issueDate: string;
+  status: "issued" | "presented" | "cleared" | "bounced" | "cancelled";
+  presentedAt: string | null;
+  clearedAt: string | null;
+  bouncedAt: string | null;
+  cancelledAt: string | null;
+  bounceReason: string | null;
+};
+
+export type BudgetOutcomeSummary = {
+  id: string;
+  headId: string;
+  fy: string;
+  allocationId: string | null;
+  schemeId: string | null;
+  outputDesc: string;
+  outcomeDesc: string;
+  indicator: string;
+  unit: string;
+  baselineValue: string;
+  targetValue: string;
+  achievedValue: string;
+  /** Achievement ratio in basis points (achievedValue / target-baseline range * 10000), not a 0-100 percent. */
+  achievementBps: string;
+  allocatedMinor: string;
+  currency: string;
+  status: string;
+  evaluationRating: string | null;
+  evaluationNote: string | null;
+  evaluatedBy: string | null;
+  evaluatedAt: string | null;
+  effectiveFrom: string;
+};
+
+export type AllocationDistributionSummary = {
+  id: string;
+  allocationId: string;
+  fy: string;
+  headId: string;
+  fromOfficeId: string;
+  toOfficeId: string;
+  amountMinor: string;
+  currency: string;
+  conditions: string | null;
+  status: string;
+  effectiveFrom: string;
+  issuedBy: string | null;
+  acknowledgedBy: string | null;
+  acknowledgeNote: string | null;
+  version: number;
+};
+
+export type FinanceBudgetAllocationSummary = {
+  id: string;
+  headId: string;
+  fy: string;
+  allocatedMinor: string;
+  committedMinor: string;
+  actualMinor: string;
+  availableMinor: string;
+  enforce: boolean;
+};
+
+export type BudgetMonitoringTotals = {
+  count: number;
+  allocatedMinor: string;
+  committedMinor: string;
+  actualMinor: string;
+  availableMinor: string;
+  forecastYearEndMinor: string;
+  exceptions: Record<string, number>;
+};
+
+export type BudgetMonitoringSummary = {
+  fy: string;
+  fractionElapsedBps: string;
+  totals: BudgetMonitoringTotals;
+};
+
+export type BudgetMonitoringLine = {
+  id: string;
+  headId: string;
+  fy: string;
+  allocatedMinor: string;
+  committedMinor: string;
+  actualMinor: string;
+  availableMinor: string;
+  burnRateBps: string;
+  utilisationBps: string;
+  forecastYearEndMinor: string;
+  exception: "on_track" | "over_committed" | "under_utilised" | "projected_overspend";
+};
+
+/** Full envelope from GET /v1/finance/budget-monitoring (distinct from the /summary variant, which omits asOf/lines). */
+export type BudgetMonitoringLinesResponse = {
+  fy: string;
+  asOf: string;
+  fractionElapsedBps: string;
+  totals: BudgetMonitoringTotals;
+  lines: BudgetMonitoringLine[];
+};
+
+/**
+ * Raw row from gl.finance_vendor_tds (the "/v1/finance/vendor-tds" ledger).
+ * No serialize() step on the backend (plain `tx.execute(sql...)`), so field
+ * names are the raw snake_case SQL columns, not house-style camelCase.
+ */
+export type VendorTdsEntry = {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  pan: string | null;
+  bill_id: string | null;
+  payment_id: string | null;
+  section: string;
+  gross_amount_minor: string;
+  tds_rate_pct: string;
+  tds_amount_minor: string;
+  surcharge_minor: string;
+  cess_minor: string;
+  net_payment_minor: string;
+  deduction_date: string;
+  deposit_date: string | null;
+  challan_no: string | null;
+  quarter: "Q1" | "Q2" | "Q3" | "Q4";
+  fy: string;
+  status: "deducted" | "deposited" | "filed";
+  created_at: string;
+};
+
+export type PfmsBatchSummary = {
+  id: string;
+  pfmsId: string;
+  type: string;
+  amountMinor: string;
+  agencyCode: string | null;
+  schemeCode: string | null;
+  ddoCode: string | null;
+  submissionStatus: string;
+  signedAt: string | null;
+};
+
+/**
+ * Raw row from gl.finance_cash_book (the "/v1/finance/cash-book" day book).
+ * No serialize() step on the backend, so field names are the raw snake_case
+ * SQL columns, not house-style camelCase.
+ */
+export type CashBookEntry = {
+  id: string;
+  entry_date: string;
+  voucher_type: string;
+  voucher_no: string;
+  particulars: string;
+  receipt_minor: string;
+  payment_minor: string;
+  balance_minor: string;
+  bank_or_cash: string;
+  reference: string | null;
+  created_at: string;
+};
+
+/** Modeled on treasury.finance_challans DDL — no live GET route (see file header note). */
+export type FinanceChallanSummary = {
+  id: string;
+  challanNo: string;
+  receiptHeadId: string;
+  depositor: string;
+  amountMinor: string;
+  currency: string;
+  grnNo: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/** Modeled on treasury.finance_deposits DDL — no live GET route (see file header note). */
+export type FinanceDepositSummary = {
+  id: string;
+  pdNo: string;
+  type: string;
+  administrator: string;
+  balanceMinor: string;
+  currency: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/** Modeled on treasury.finance_guarantees DDL — no live GET route (see file header note). */
+export type FinanceGuaranteeSummary = {
+  id: string;
+  entity: string;
+  type: string;
+  amountMinor: string;
+  currency: string;
+  feePct: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/** Modeled on treasury.finance_debt DDL — no live GET route (see file header note). */
+export type FinanceDebtSummary = {
+  id: string;
+  instrument: string;
+  source: string;
+  amountMinor: string;
+  currency: string;
+  maturity: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/** Modeled on budget.finance_schemes DDL — no live GET route (see file header note). */
+export type FinanceSchemeSummary = {
+  id: string;
+  code: string;
+  name: string;
+  outlayMinor: string;
+  utilisedMinor: string;
+  currency: string;
+  funding: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/** Modeled on budget.finance_demands DDL — no live GET route (see file header note). */
+export type FinanceDemandSummary = {
+  id: string;
+  demandNo: string;
+  service: string;
+  amountMinor: string;
+  currency: string;
+  class: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+/**
+ * Modeled on the audit module's Drizzle table (finance-service
+ * modules/audit/schema.ts). That module has no routes.ts, so no live GET
+ * route serves this yet — field names match the Drizzle column definitions
+ * exactly and are independently corroborated by the [id] detail page, which
+ * already reads paraNo/dept/source/moneyValueMinor/status.
+ */
+export type FinanceAuditParaSummary = {
+  id: string;
+  paraNo: string;
+  source: string;
+  dept: string;
+  departmentId: string | null;
+  moneyValueMinor: string;
+  currency: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};

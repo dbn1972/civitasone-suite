@@ -1,18 +1,33 @@
 /**
- * PFMS / Treasury Integration Stubs
+ * PFMS Treasury Gateway Routes
  *
- * INTEGRATION STUB — connect to real PFMS API when available
+ * Thin HTTP layer: validates requests, delegates to ./pfms-client.ts for the
+ * actual PFMS treasury operation, and maps PfmsTreasuryError onto HTTP
+ * responses. This file used to contain an unlabeled stub (random UUIDs,
+ * always-success, no indication anything was simulated) inline — it no
+ * longer does. See pfms-client.ts for mode resolution (sandbox vs. live),
+ * DSC signing, retry/timeout behavior, and audit logging.
  *
  * Endpoints:
  *  POST /v1/finance/pfms/payment-advice    — generate payment advice for treasury
  *  GET  /v1/finance/pfms/payment-status/:adviceId — check payment status
  *  POST /v1/finance/pfms/salary-bill       — submit salary bill to treasury
- *  GET  /v1/finance/treasury/balance       — fetch treasury balance (stub: returns mock)
+ *  GET  /v1/finance/treasury/balance       — fetch treasury balance
+ *
+ * Every response body includes `mode: "sandbox" | "live"` (see pfms-client.ts)
+ * so nothing downstream can mistake a simulated result for a real government
+ * transaction.
  */
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import {
+  submitPaymentAdvice,
+  getPaymentStatus,
+  submitSalaryBill,
+  getTreasuryBalance,
+  PfmsTreasuryError,
+} from "./pfms-client.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin", "payroll_admin"];
 
@@ -39,96 +54,39 @@ const salaryBillBody = z.object({
 });
 
 export async function pfmsTreasuryStubRoutes(app: FastifyInstance): Promise<void> {
-  // INTEGRATION STUB — connect to real PFMS API when available
   app.post("/v1/finance/pfms/payment-advice", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = paymentAdviceBody.parse(req.body);
 
-    // INTEGRATION STUB — connect to real PFMS API when available
-    // In production this will call the PFMS payment advice API
-    const adviceId = randomUUID();
-    const pfmsRef = `PFMS-ADV-${Date.now()}-${adviceId.slice(0, 8).toUpperCase()}`;
-
-    return reply.code(201).send({
-      data: {
-        adviceId,
-        pfmsRef,
-        billId: body.billId,
-        amountMinor: body.amountMinor,
-        status: "submitted",
-        submittedAt: new Date().toISOString(),
-        message: "STUB: Payment advice generated successfully. Connect to real PFMS when available.",
-      },
-    });
+    const result = await submitPaymentAdvice(body);
+    return reply.code(201).send({ data: result });
   });
 
-  // INTEGRATION STUB — connect to real PFMS API when available
   app.get("/v1/finance/pfms/payment-status/:adviceId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { adviceId } = z.object({ adviceId: z.string().uuid() }).parse(req.params);
 
-    // INTEGRATION STUB — connect to real PFMS API when available
-    // In production this will query PFMS for payment status
-    return reply.send({
-      data: {
-        adviceId,
-        status: "processed",
-        pfmsTransactionId: `PFMS-TXN-${adviceId.slice(0, 12).toUpperCase()}`,
-        processedAt: new Date().toISOString(),
-        utrNumber: `UTR${Date.now()}`,
-        message: "STUB: Payment processed. Connect to real PFMS for live status.",
-      },
-    });
+    const result = await getPaymentStatus(adviceId);
+    return reply.send({ data: result });
   });
 
-  // INTEGRATION STUB — connect to real PFMS API when available
   app.post("/v1/finance/pfms/salary-bill", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = salaryBillBody.parse(req.body);
 
-    // INTEGRATION STUB — connect to real PFMS API when available
-    // In production this will submit salary bill to treasury via PFMS
-    const billRef = randomUUID();
-    const pfmsBillNo = `SAL-${body.month}-${body.ddoCode}-${billRef.slice(0, 6).toUpperCase()}`;
-
-    return reply.code(201).send({
-      data: {
-        billRef,
-        pfmsBillNo,
-        month: body.month,
-        departmentId: body.departmentId,
-        totalAmountMinor: body.totalAmountMinor,
-        employeeCount: body.employeeCount,
-        status: "submitted_to_treasury",
-        submittedAt: new Date().toISOString(),
-        message: "STUB: Salary bill submitted to treasury. Connect to real PFMS when available.",
-      },
-    });
+    const result = await submitSalaryBill(body);
+    return reply.code(201).send({ data: result });
   });
 
-  // INTEGRATION STUB — connect to real PFMS API when available
   app.get("/v1/finance/treasury/balance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
 
-    // INTEGRATION STUB — connect to real PFMS API when available
-    // In production this will fetch live treasury balance from PFMS/bank
-    return reply.send({
-      data: {
-        tenantId: ctx.tenantId,
-        balanceMinor: "500000000000", // 500 Cr paise as string (stub)
-        currency: "INR",
-        asOf: new Date().toISOString(),
-        accounts: [
-          { accountType: "treasury", balanceMinor: "400000000000", bankName: "RBI" },
-          { accountType: "assignment", balanceMinor: "100000000000", bankName: "SBI" },
-        ],
-        message: "STUB: Mock treasury balance. Connect to real PFMS/bank API when available.",
-      },
-    });
+    const result = await getTreasuryBalance(ctx.tenantId);
+    return reply.send({ data: result });
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -140,6 +98,24 @@ export async function pfmsTreasuryStubRoutes(app: FastifyInstance): Promise<void
       });
     }
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
+    if (err instanceof PfmsTreasuryError) {
+      // Explicit cast: setErrorHandler types its callback's error as a generic
+      // `TError extends Error = FastifyError` (see fastify/types/instance.d.ts), and
+      // narrowing that generic parameter via `instanceof` does not reliably widen member
+      // access to PfmsTreasuryError-only fields (httpStatus) under this repo's tsconfig,
+      // even though the instanceof check above has already verified it at runtime.
+      const pfmsErr = err as PfmsTreasuryError;
+      // DSC_CONFIG_MISSING is "we refuse to submit unsigned" (service misconfigured, not
+      // the caller's fault) → 503. Everything else (network failure after retry, a live
+      // non-2xx response, a signing failure) is an upstream/integration problem → 502.
+      // Never leak the raw upstream response body here — see pfms-client.ts's PII note.
+      const status = pfmsErr.code === "DSC_CONFIG_MISSING" ? 503 : 502;
+      req.log.error(
+        { adapter: "pfms-treasury", code: pfmsErr.code, httpStatus: pfmsErr.httpStatus, correlationId },
+        "PFMS treasury error",
+      );
+      return reply.code(status).send({ code: pfmsErr.code, message: "PFMS treasury service error", correlationId });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });

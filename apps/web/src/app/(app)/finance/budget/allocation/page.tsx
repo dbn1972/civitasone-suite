@@ -5,7 +5,10 @@ import { AllocationTable } from "./AllocationTable";
 
 export default async function AllocationPage() {
   const { data: allocations, source } = await getFinanceAllocations();
-  const released = allocations.filter((a) => Number(a.releasedMinor ?? 0) > 0).length;
+  // FinanceBudgetAllocationSummary has no "released" field — the closest real
+  // lifecycle stage past plain allocation is committedMinor (funds committed
+  // for spending), so that's what "Released" counts here.
+  const released = allocations.filter((a) => Number(a.committedMinor ?? 0) > 0).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -19,7 +22,7 @@ export default async function AllocationPage() {
         <StatCard icon="📊" iconBg="#e7edfd" label="Allocations" value={allocations.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={released} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={allocations.length - released} />
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Departments" value={new Set(allocations.map((a) => String(a.department ?? ""))).size} />
+        <StatCard icon="🏛️" iconBg="#eff6ff" label="Budget Heads" value={new Set(allocations.map((a) => a.headId)).size} />
       </StatGrid>
       <Card title="Budget Allocations">
         <AllocationTable allocations={allocations} source={source === "error" ? "error" : "api"} />

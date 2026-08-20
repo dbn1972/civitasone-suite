@@ -5,9 +5,10 @@ import { PFMSTable } from "./PFMSTable";
 
 export default async function PfmsPage() {
   const { data: scrolls, source } = await getFinancePFMSScrolls();
-  const approved = scrolls.filter((s) => String(s.status).toLowerCase() === "approved").length;
-  const pending = scrolls.filter((s) => String(s.status).toLowerCase() === "pending").length;
-  const rejected = scrolls.filter((s) => String(s.status).toLowerCase() === "rejected").length;
+  // The pfms/batches row calls this field submissionStatus, not status.
+  const approved = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "approved").length;
+  const pending = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "pending").length;
+  const rejected = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "rejected").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

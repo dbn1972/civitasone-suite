@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import type { PfmsMode } from "./types";
 
 type AdviceResult = {
   adviceId: string;
@@ -13,6 +14,7 @@ type AdviceResult = {
   status: string;
   submittedAt: string;
   message?: string;
+  mode?: PfmsMode;
 };
 
 type AdviceStatusResult = {
@@ -22,6 +24,7 @@ type AdviceStatusResult = {
   processedAt: string;
   utrNumber: string;
   message?: string;
+  mode?: PfmsMode;
 };
 
 type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeIfsc" | "amountMinor" | "purposeCode";
@@ -35,6 +38,11 @@ const FIELD_ERRORS: Record<FieldKey, string> = {
   purposeCode: "Purpose code is required.",
 };
 
+interface PaymentAdviceFormProps {
+  /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
+  onModeObserved?: (mode: PfmsMode) => void;
+}
+
 /**
  * POST /v1/finance/pfms/payment-advice — generates a treasury payment advice.
  * Backend note: registered as an INTEGRATION STUB
@@ -43,7 +51,7 @@ const FIELD_ERRORS: Record<FieldKey, string> = {
  * comment. Payee account number is a POST body field only, never placed in a
  * URL/query string.
  */
-export function PaymentAdviceForm() {
+export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
   const [billId, setBillId] = useState("");
   const [payeeName, setPayeeName] = useState("");
   const [payeeAccountNo, setPayeeAccountNo] = useState("");
@@ -122,6 +130,7 @@ export function PaymentAdviceForm() {
         }),
       });
       setConfirmOpen(false);
+      if (res.data.mode) onModeObserved?.(res.data.mode);
       setLastAdviceId(res.data.adviceId);
       setMessage(`Payment advice ${res.data.pfmsRef} generated — status: ${res.data.status}.`);
       setBillId("");
@@ -318,13 +327,19 @@ export function PaymentAdviceForm() {
         />
       </form>
 
-      <AdviceStatusLookup prefillAdviceId={lastAdviceId} />
+      <AdviceStatusLookup prefillAdviceId={lastAdviceId} onModeObserved={onModeObserved} />
     </>
   );
 }
 
 /** GET /v1/finance/pfms/payment-status/:adviceId — treasury advice status enquiry. */
-function AdviceStatusLookup({ prefillAdviceId }: { prefillAdviceId: string | null }) {
+function AdviceStatusLookup({
+  prefillAdviceId,
+  onModeObserved,
+}: {
+  prefillAdviceId: string | null;
+  onModeObserved?: (mode: PfmsMode) => void;
+}) {
   const [adviceId, setAdviceId] = useState(prefillAdviceId ?? "");
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -349,6 +364,7 @@ function AdviceStatusLookup({ prefillAdviceId }: { prefillAdviceId: string | nul
         { method: "GET" },
       );
       setResult(res.data);
+      if (res.data.mode) onModeObserved?.(res.data.mode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not fetch advice status.");
     } finally {

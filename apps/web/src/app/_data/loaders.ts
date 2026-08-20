@@ -71,6 +71,24 @@ import type {
   UCSummary,
   GLEntrySummary,
   FinancialStatementSummary,
+  FinancePaymentDetail,
+  FinanceInstrumentSummary,
+  BudgetOutcomeSummary,
+  AllocationDistributionSummary,
+  FinanceBudgetAllocationSummary,
+  BudgetMonitoringSummary,
+  BudgetMonitoringLine,
+  BudgetMonitoringLinesResponse,
+  VendorTdsEntry,
+  PfmsBatchSummary,
+  CashBookEntry,
+  FinanceChallanSummary,
+  FinanceDepositSummary,
+  FinanceGuaranteeSummary,
+  FinanceDebtSummary,
+  FinanceSchemeSummary,
+  FinanceDemandSummary,
+  FinanceAuditParaSummary,
   ProcurementDashboard,
   IndentSummary,
   IndentDetail,
@@ -212,6 +230,28 @@ import {
   UCSummaryListSchema,
   GLEntrySummaryListSchema,
   FinancialStatementSummaryListSchema,
+  FinancePaymentDetailSchema,
+  FinanceInstrumentSummarySchema,
+  FinanceInstrumentSummaryListSchema,
+  BudgetOutcomeSummaryListSchema,
+  AllocationDistributionSummaryListSchema,
+  FinanceBudgetAllocationSummaryListSchema,
+  BudgetMonitoringSummarySchema,
+  BudgetMonitoringLineListSchema,
+  BudgetMonitoringLinesResponseSchema,
+  VendorTdsEntryListSchema,
+  PfmsBatchSummaryListSchema,
+  CashBookEntryListSchema,
+  FinanceChallanSummarySchema,
+  FinanceChallanSummaryListSchema,
+  FinanceDepositSummaryListSchema,
+  FinanceGuaranteeSummaryListSchema,
+  FinanceDebtSummaryListSchema,
+  FinanceSchemeSummarySchema,
+  FinanceSchemeSummaryListSchema,
+  FinanceDemandSummaryListSchema,
+  FinanceAuditParaSummarySchema,
+  FinanceAuditParaSummaryListSchema,
   ProcurementDashboardSchema,
   IndentSummaryListSchema,
   IndentDetailSchema,
@@ -707,11 +747,12 @@ export async function getPayments(): Promise<LoaderResult<PaymentSummary[]>> {
   });
 }
 
-export async function getFinancePaymentById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/payments/${id}`, null, {
+export async function getFinancePaymentById(id: string): Promise<LoaderResult<FinancePaymentDetail | null>> {
+  return fetchJson<unknown, FinancePaymentDetail | null>(`/api/v1/finance/payments/${id}`, null, {
     revalidateSeconds: 20,
     telemetryKey: "finance.payment.detail",
-    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
+    responseSchema: FinancePaymentDetailSchema,
+    mapResponse: (payload) => (isRecord(payload) ? (payload as FinancePaymentDetail) : null),
   });
 }
 
@@ -1706,27 +1747,30 @@ export async function getFinancialStatements(): Promise<LoaderResult<FinancialSt
 
 // ─── Finance: Treasury & Banking ─────────────────────────────────────────────
 
-export async function getFinancePFMSScrolls(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/pfms/scrolls", [], {
+export async function getFinancePFMSScrolls(): Promise<LoaderResult<PfmsBatchSummary[]>> {
+  return fetchJson<unknown, PfmsBatchSummary[]>("/api/v1/finance/pfms/scrolls", [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.pfms.scrolls",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: PfmsBatchSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as PfmsBatchSummary[] | null,
   });
 }
 
-export async function getFinanceCashBook(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/cashbook", [], {
+export async function getFinanceCashBook(): Promise<LoaderResult<CashBookEntry[]>> {
+  return fetchJson<unknown, CashBookEntry[]>("/api/v1/finance/cashbook", [], {
     revalidateSeconds: 30,
     telemetryKey: "finance.cashbook",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: CashBookEntryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as CashBookEntry[] | null,
   });
 }
 
-export async function getFinanceDeposits(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/deposits", [], {
+export async function getFinanceDeposits(): Promise<LoaderResult<FinanceDepositSummary[]>> {
+  return fetchJson<unknown, FinanceDepositSummary[]>("/api/v1/finance/deposits", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.deposits",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceDepositSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceDepositSummary[] | null,
   });
 }
 
@@ -1738,19 +1782,21 @@ export async function getFinanceEFT(): Promise<LoaderResult<Record<string, unkno
   });
 }
 
-export async function getFinanceCheques(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/instruments", [], {
+export async function getFinanceCheques(): Promise<LoaderResult<FinanceInstrumentSummary[]>> {
+  return fetchJson<unknown, FinanceInstrumentSummary[]>("/api/v1/finance/instruments", [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.cheques",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceInstrumentSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceInstrumentSummary[] | null,
   });
 }
 
-export async function getFinanceChequeById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/instruments/${id}`, null, {
+export async function getFinanceChequeById(id: string): Promise<LoaderResult<FinanceInstrumentSummary | null>> {
+  return fetchJson<unknown, FinanceInstrumentSummary | null>(`/api/v1/finance/instruments/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "finance.cheque.detail",
-    mapResponse: (p) => (p && typeof p === "object" ? p : null) as Record<string, unknown> | null,
+    responseSchema: FinanceInstrumentSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceInstrumentSummary) : null),
   });
 }
 
@@ -1762,11 +1808,16 @@ export async function getFinanceRBI(): Promise<LoaderResult<Record<string, unkno
   });
 }
 
-export async function getFinanceEPayments(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/payments", [], {
+// NOTE: this hits the exact same endpoint as getPayments() above (both call
+// GET /api/v1/finance/payments), so it reuses that loader's established
+// PaymentSummary/paymentsListSchema/mapPayments contract rather than
+// inventing a second, possibly-divergent shape for the same wire data.
+export async function getFinanceEPayments(): Promise<LoaderResult<PaymentSummary[]>> {
+  return fetchJson("/api/v1/finance/payments", [] as PaymentSummary[], {
     revalidateSeconds: 60,
     telemetryKey: "finance.epayments",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: paymentsListSchema,
+    mapResponse: mapPayments,
   });
 }
 
@@ -1796,19 +1847,21 @@ export async function getFinanceFees(): Promise<LoaderResult<Record<string, unkn
   });
 }
 
-export async function getFinanceChallans(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/challans", [], {
+export async function getFinanceChallans(): Promise<LoaderResult<FinanceChallanSummary[]>> {
+  return fetchJson<unknown, FinanceChallanSummary[]>("/api/v1/finance/challans", [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.challans",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceChallanSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceChallanSummary[] | null,
   });
 }
 
-export async function getFinanceChallanById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/challans/${id}`, null, {
+export async function getFinanceChallanById(id: string): Promise<LoaderResult<FinanceChallanSummary | null>> {
+  return fetchJson<unknown, FinanceChallanSummary | null>(`/api/v1/finance/challans/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "finance.challan.detail",
-    mapResponse: (p) => (p && typeof p === "object" ? p : null) as Record<string, unknown> | null,
+    responseSchema: FinanceChallanSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceChallanSummary) : null),
   });
 }
 
@@ -1838,37 +1891,41 @@ export async function getFinancePaymentAdvice(): Promise<LoaderResult<Record<str
   });
 }
 
-export async function getFinanceGuarantees(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/guarantees", [], {
+export async function getFinanceGuarantees(): Promise<LoaderResult<FinanceGuaranteeSummary[]>> {
+  return fetchJson<unknown, FinanceGuaranteeSummary[]>("/api/v1/finance/guarantees", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.guarantees",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceGuaranteeSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceGuaranteeSummary[] | null,
   });
 }
 
-export async function getFinanceSchemes(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/schemes", [], {
+export async function getFinanceSchemes(): Promise<LoaderResult<FinanceSchemeSummary[]>> {
+  return fetchJson<unknown, FinanceSchemeSummary[]>("/api/v1/finance/schemes", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.schemes",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceSchemeSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceSchemeSummary[] | null,
   });
 }
 
-export async function getFinanceSchemeById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/schemes/${id}`, null, {
+export async function getFinanceSchemeById(id: string): Promise<LoaderResult<FinanceSchemeSummary | null>> {
+  return fetchJson<unknown, FinanceSchemeSummary | null>(`/api/v1/finance/schemes/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "finance.scheme.detail",
-    mapResponse: (p) => (p && typeof p === "object" ? p : null) as Record<string, unknown> | null,
+    responseSchema: FinanceSchemeSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceSchemeSummary) : null),
   });
 }
 
 // ─── Finance: Budget ─────────────────────────────────────────────────────────
 
-export async function getFinanceDemandGrants(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/demand-grants", [], {
+export async function getFinanceDemandGrants(): Promise<LoaderResult<FinanceDemandSummary[]>> {
+  return fetchJson<unknown, FinanceDemandSummary[]>("/api/v1/finance/budgets/demand-grants", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.demand-grants",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceDemandSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceDemandSummary[] | null,
   });
 }
 
@@ -1880,56 +1937,75 @@ export async function getFinanceRevisedEstimates(): Promise<LoaderResult<Record<
   });
 }
 
-export async function getFinanceOutcomeBudget(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/outcomes", [], {
+export async function getFinanceOutcomeBudget(): Promise<LoaderResult<BudgetOutcomeSummary[]>> {
+  return fetchJson<unknown, BudgetOutcomeSummary[]>("/api/v1/finance/budgets/outcomes", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.outcome-budget",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: BudgetOutcomeSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as BudgetOutcomeSummary[] | null,
   });
 }
 
-export async function getFinanceAllocations(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/budgets/allocations", [], {
+export async function getFinanceAllocations(): Promise<LoaderResult<FinanceBudgetAllocationSummary[]>> {
+  return fetchJson<unknown, FinanceBudgetAllocationSummary[]>("/api/v1/finance/budgets/allocations", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.allocations",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceBudgetAllocationSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceBudgetAllocationSummary[] | null,
   });
 }
 
 
-export async function getFinanceBudgetMonitoring(fy?: string): Promise<LoaderResult<Record<string, unknown>>> {
+const BUDGET_MONITORING_EMPTY: BudgetMonitoringSummary = {
+  fy: "",
+  fractionElapsedBps: "0",
+  totals: {
+    count: 0,
+    allocatedMinor: "0",
+    committedMinor: "0",
+    actualMinor: "0",
+    availableMinor: "0",
+    forecastYearEndMinor: "0",
+    exceptions: {},
+  },
+};
+
+export async function getFinanceBudgetMonitoring(fy?: string): Promise<LoaderResult<BudgetMonitoringSummary>> {
   const url = fy
     ? `/api/v1/finance/budget-monitoring/summary?fy=${encodeURIComponent(fy)}`
     : "/api/v1/finance/budget-monitoring/summary";
-  return fetchJson<unknown, Record<string, unknown>>(url, {}, {
+  return fetchJson<unknown, BudgetMonitoringSummary>(url, BUDGET_MONITORING_EMPTY, {
     revalidateSeconds: 60,
     telemetryKey: "finance.budget-monitoring",
-    mapResponse: (p) => (p as Record<string, unknown>) ?? null,
+    responseSchema: BudgetMonitoringSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as BudgetMonitoringSummary) : null),
   });
 }
 
-export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<LoaderResult<BudgetMonitoringLine[]>> {
   const url = fy
     ? `/api/v1/finance/budget-monitoring?fy=${encodeURIComponent(fy)}`
     : "/api/v1/finance/budget-monitoring";
-  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+  return fetchJson<unknown, BudgetMonitoringLine[]>(url, [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.budget-monitoring-lines",
+    responseSchema: BudgetMonitoringLinesResponseSchema,
     mapResponse: (p) => {
-      const obj = p as Record<string, unknown>;
-      return Array.isArray(obj.lines) ? obj.lines as Record<string, unknown>[] : null;
+      const obj = p as BudgetMonitoringLinesResponse;
+      return Array.isArray(obj.lines) ? obj.lines : null;
     },
   });
 }
 
-export async function getFinanceFundReleases(fy?: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+export async function getFinanceFundReleases(fy?: string): Promise<LoaderResult<AllocationDistributionSummary[]>> {
   const url = fy
     ? `/api/v1/finance/allocation-distributions?fy=${encodeURIComponent(fy)}`
     : "/api/v1/finance/allocation-distributions";
-  return fetchJson<unknown, Record<string, unknown>[]>(url, [], {
+  return fetchJson<unknown, AllocationDistributionSummary[]>(url, [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.fund-releases",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: AllocationDistributionSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as AllocationDistributionSummary[] | null,
   });
 }
 
@@ -1985,11 +2061,18 @@ export async function getFinanceGemEInvoice(): Promise<LoaderResult<Record<strin
   });
 }
 
-export async function getFinanceTDSReturns(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/tds/returns", [], {
+// NOTE: the frontend path says "tds/returns" but the backend module is
+// vendor-tds; the /form-26q endpoint returns one consolidated report object
+// per fy+quarter (not a list), while this plain vendor-tds ledger returns
+// per-row entries whose `status` enum literally includes "filed" — matching
+// this loader's consumer, which filters rows by status==="filed" and groups
+// by row.quarter. That per-row shape is the better fit for a "returns list".
+export async function getFinanceTDSReturns(): Promise<LoaderResult<VendorTdsEntry[]>> {
+  return fetchJson<unknown, VendorTdsEntry[]>("/api/v1/finance/vendor-tds", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.tds-returns",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: VendorTdsEntryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as VendorTdsEntry[] | null,
   });
 }
 
@@ -2003,27 +2086,30 @@ export async function getFinanceUserCharges(): Promise<LoaderResult<Record<strin
 
 // ─── Finance: Audit & Debt ───────────────────────────────────────────────────
 
-export async function getFinanceAuditParas(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/audit-paras", [], {
+export async function getFinanceAuditParas(): Promise<LoaderResult<FinanceAuditParaSummary[]>> {
+  return fetchJson<unknown, FinanceAuditParaSummary[]>("/api/v1/finance/audit-paras", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.audit-paras",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceAuditParaSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceAuditParaSummary[] | null,
   });
 }
 
-export async function getFinanceAuditParaById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/finance/audit-paras/${id}`, null, {
+export async function getFinanceAuditParaById(id: string): Promise<LoaderResult<FinanceAuditParaSummary | null>> {
+  return fetchJson<unknown, FinanceAuditParaSummary | null>(`/api/v1/finance/audit-paras/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "finance.audit-para.detail",
-    mapResponse: (p) => (p && typeof p === "object" ? p : null) as Record<string, unknown> | null,
+    responseSchema: FinanceAuditParaSummarySchema,
+    mapResponse: (p) => (isRecord(p) ? (p as FinanceAuditParaSummary) : null),
   });
 }
 
-export async function getFinanceDebt(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/finance/debt", [], {
+export async function getFinanceDebt(): Promise<LoaderResult<FinanceDebtSummary[]>> {
+  return fetchJson<unknown, FinanceDebtSummary[]>("/api/v1/finance/debt", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.debt",
-    mapResponse: (p) => getArrayPayload(p) as Record<string, unknown>[] | null,
+    responseSchema: FinanceDebtSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as FinanceDebtSummary[] | null,
   });
 }
 

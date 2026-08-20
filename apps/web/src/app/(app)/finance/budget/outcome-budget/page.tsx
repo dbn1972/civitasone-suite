@@ -5,8 +5,10 @@ import { OutcomeBudgetTable } from "./OutcomeBudgetTable";
 
 export default async function OutcomeBudgetPage() {
   const { data: outcomes, source } = await getFinanceOutcomeBudget();
-  const achieved = outcomes.filter((o) => Number(o.achievementPct ?? 0) >= 100).length;
-  const inProgress = outcomes.filter((o) => { const p = Number(o.achievementPct ?? 0); return p > 0 && p < 100; }).length;
+  // achievementBps is basis points (10000 = 100%), not a 0-100 percent.
+  const achievementPct = (o: (typeof outcomes)[number]) => Number(o.achievementBps ?? 0) / 100;
+  const achieved = outcomes.filter((o) => achievementPct(o) >= 100).length;
+  const inProgress = outcomes.filter((o) => { const p = achievementPct(o); return p > 0 && p < 100; }).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

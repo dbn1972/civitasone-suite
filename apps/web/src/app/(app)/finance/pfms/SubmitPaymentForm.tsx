@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import type { PfmsMode } from "./types";
 
 type SubmitResult = {
   referenceId: string;
@@ -10,6 +11,7 @@ type SubmitResult = {
   status: "accepted" | "rejected";
   message?: string;
   timestamp: string;
+  mode?: PfmsMode;
 };
 
 type FieldKey = "referenceId" | "beneficiaryCode" | "amount" | "purposeCode";
@@ -21,6 +23,11 @@ const FIELD_ERRORS: Record<FieldKey, string> = {
   purposeCode: "Purpose code is required.",
 };
 
+interface SubmitPaymentFormProps {
+  /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
+  onModeObserved?: (mode: PfmsMode) => void;
+}
+
 /**
  * POST /v1/finance/pfms/payments — submits a payment to PFMS/e-Kuber via the
  * finance-service adapter (services/finance-service/src/modules/pfms/adapter-routes.ts).
@@ -29,7 +36,7 @@ const FIELD_ERRORS: Record<FieldKey, string> = {
  * The adapter fails closed with 503 INTEGRATION_DISABLED when PFMS_ENABLED is
  * not set in this environment; that surfaces as a server error in the dialog.
  */
-export function SubmitPaymentForm() {
+export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
   const [referenceId, setReferenceId] = useState("");
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
   const [amount, setAmount] = useState("");
@@ -101,6 +108,7 @@ export function SubmitPaymentForm() {
       });
       setConfirmOpen(false);
       setResult(res.data);
+      if (res.data.mode) onModeObserved?.(res.data.mode);
       setMessage(`Payment ${res.data.referenceId} submitted to PFMS — status: ${res.data.status}.`);
       setReferenceId("");
       setBeneficiaryCode("");

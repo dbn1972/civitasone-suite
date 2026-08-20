@@ -20,7 +20,8 @@ export default async function DebtPage() {
         <StatCard icon="🏦" iconBg="#e7edfd" label="Total Loans" value={loans.length} />
         <StatCard icon="📈" iconBg="#ecfdf3" label="Active" value={active} />
         <StatCard icon="✅" iconBg="#fffaeb" label="Closed" value={closedCount} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Lenders" value={new Set(loans.map((l) => String(l.lender ?? ""))).size} />
+        {/* treasury.finance_debt has no "lender" column — "source" (RBI|market|central_govt) is the closest real field. */}
+        <StatCard icon="💰" iconBg="#eff6ff" label="Sources" value={new Set(loans.map((l) => l.source)).size} />
       </StatGrid>
       <Card title="Loan Portfolio">
         <DebtTable loans={loans} source={source === "error" ? "error" : "api"} />

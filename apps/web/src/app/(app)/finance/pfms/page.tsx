@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { PfmsConsole } from "./PfmsConsole";
-import type { PfmsBatchRow, PfmsConfig } from "./types";
+import type { PfmsBatchRow, PfmsConfig, PfmsDepartment } from "./types";
 
 async function getBatches(): Promise<LoaderResult<PfmsBatchRow[]>> {
   return fetchJson<unknown, PfmsBatchRow[]>("/api/v1/finance/pfms/batches", [], {
@@ -22,9 +22,34 @@ async function getConfig(): Promise<LoaderResult<PfmsConfig | null>> {
   });
 }
 
+/**
+ * Reuses the HRMS departments endpoint the same way
+ * hr/employees/new/page.tsx already does — no new backend route, and no
+ * touch to the shared loaders.ts (which has no existing department-list
+ * loader to import).
+ *
+ * Known gap: GET /v1/hrms/departments is gated to HR_READ_ROLES
+ * (hr_admin/hr_officer/super_admin/admin/manager) on hrms-service — it does
+ * NOT include finance_officer/finance_admin/payroll_admin, the roles that
+ * actually submit PFMS salary bills. Those sessions get a 403 here, which
+ * this loader (like getBatches/getConfig above) turns into an empty list
+ * rather than a crash; SalaryBillForm shows a "no departments available"
+ * fallback in that case. Not fixed here — it's an hrms-service RBAC change
+ * outside this task's scope.
+ */
+async function getDepartments(): Promise<LoaderResult<PfmsDepartment[]>> {
+  return fetchJson<unknown, PfmsDepartment[]>("/api/v1/hrms/departments", [], {
+    telemetryKey: "finance.pfms.departments",
+    mapResponse: (p) => (p as { data: PfmsDepartment[] })?.data ?? null,
+  });
+}
+
 export default async function PfmsOpsConsolePage() {
-  const [{ data: batches, source: batchesSource }, { data: config, source: configSource }] =
-    await Promise.all([getBatches(), getConfig()]);
+  const [
+    { data: batches, source: batchesSource },
+    { data: config, source: configSource },
+    { data: departments },
+  ] = await Promise.all([getBatches(), getConfig(), getDepartments()]);
 
   const source = batchesSource === "error" || configSource === "error" ? "error" : "api";
 
@@ -55,7 +80,7 @@ export default async function PfmsOpsConsolePage() {
         />
       </StatGrid>
 
-      <PfmsConsole batches={batches} config={config} />
+      <PfmsConsole batches={batches} config={config} departments={departments} />
     </main>
   );
 }
