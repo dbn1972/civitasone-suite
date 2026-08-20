@@ -9,7 +9,18 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 
-const HR_READ_ROLES = ["hr_admin", "hr_officer", "super_admin", "admin", "manager"];
+const HR_READ_ROLES = [
+  "hr_admin",
+  "hr_officer",
+  "super_admin",
+  "admin",
+  "manager",
+  // Finance/payroll roles need department names to submit PFMS salary bills
+  // and payment advices (see apps/web finance/pfms/SalaryBillForm.tsx).
+  "finance_officer",
+  "finance_admin",
+  "payroll_admin",
+];
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
 const createDeptBody = z.object({

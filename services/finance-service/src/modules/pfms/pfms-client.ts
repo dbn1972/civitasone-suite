@@ -347,14 +347,18 @@ export async function submitPaymentAdvice(input: PaymentAdviceInput): Promise<Pa
   // UNVERIFIED signature — see signRequest() doc comment.
   const signature = await signRequest(payload, certPath, certPassphrase);
 
-  const res = await fetchWithOneRetry(
+  // NOT retried: this is a non-idempotent financial submission with no
+  // idempotency key in the payload. A timeout/abort here is ambiguous —
+  // PFMS may have already accepted it — so retrying could double-submit
+  // a real payment advice. Surface the failure and let a human check
+  // status (getPaymentStatus) before deciding whether to resubmit.
+  const res = await fetchWithTimeout(
     `${cfg.baseUrl}/api/v1/payment-advice`, // placeholder path — confirm against real NIC PFMS API docs
     {
       method: "POST",
       headers: authHeaders(cfg.apiKey, { "X-DSC-Signature": signature }),
       body: JSON.stringify(payload),
     },
-    "submitPaymentAdvice",
   );
   await assertOk(res, "submitPaymentAdvice");
 
@@ -472,14 +476,15 @@ export async function submitSalaryBill(input: SalaryBillInput): Promise<SalaryBi
   };
   const signature = await signRequest(payload, certPath, certPassphrase);
 
-  const res = await fetchWithOneRetry(
+  // NOT retried — same non-idempotency reasoning as submitPaymentAdvice
+  // above: a real salary bill must never be silently double-submitted.
+  const res = await fetchWithTimeout(
     `${cfg.baseUrl}/api/v1/salary-bill`, // placeholder path — confirm against real NIC PFMS API docs
     {
       method: "POST",
       headers: authHeaders(cfg.apiKey, { "X-DSC-Signature": signature }),
       body: JSON.stringify(payload),
     },
-    "submitSalaryBill",
   );
   await assertOk(res, "submitSalaryBill");
 

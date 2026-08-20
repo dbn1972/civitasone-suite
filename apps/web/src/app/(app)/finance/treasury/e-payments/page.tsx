@@ -20,13 +20,11 @@ export default async function EPaymentsPage() {
         <StatCard icon="💳" iconBg="#e7edfd" label="Total Orders" value={orders.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={released} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
-        {/* PaymentSummary has no "bank" field (id/referenceId/beneficiary/amountDisplay/status only) — beneficiary is the closest real field. */}
+        {/* PaymentSummary has no "bank" field (referenceId/beneficiary/amountDisplay/status only) — beneficiary is the closest real field. */}
         <StatCard icon="🏦" iconBg="#eff6ff" label="Beneficiaries" value={new Set(orders.map((o) => o.beneficiary)).size} />
       </StatGrid>
       <Card title="Payment Orders">
-        {/* EPaymentsTable's column keys predate PaymentSummary's real shape (orderNo/bank/bankRef/date
-            aren't real fields); widen at this boundary rather than retyping the shared table component. */}
-        <EPaymentsTable orders={orders as unknown as Record<string, unknown>[]} source={source === "error" ? "error" : "api"} />
+        <EPaymentsTable orders={orders} source={source === "error" ? "error" : "api"} />
       </Card>
     </main>
   );

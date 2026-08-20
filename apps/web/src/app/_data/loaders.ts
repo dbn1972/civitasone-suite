@@ -1748,7 +1748,7 @@ export async function getFinancialStatements(): Promise<LoaderResult<FinancialSt
 // ─── Finance: Treasury & Banking ─────────────────────────────────────────────
 
 export async function getFinancePFMSScrolls(): Promise<LoaderResult<PfmsBatchSummary[]>> {
-  return fetchJson<unknown, PfmsBatchSummary[]>("/api/v1/finance/pfms/scrolls", [], {
+  return fetchJson<unknown, PfmsBatchSummary[]>("/api/v1/finance/pfms/batches", [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.pfms.scrolls",
     responseSchema: PfmsBatchSummaryListSchema,
@@ -1757,7 +1757,7 @@ export async function getFinancePFMSScrolls(): Promise<LoaderResult<PfmsBatchSum
 }
 
 export async function getFinanceCashBook(): Promise<LoaderResult<CashBookEntry[]>> {
-  return fetchJson<unknown, CashBookEntry[]>("/api/v1/finance/cashbook", [], {
+  return fetchJson<unknown, CashBookEntry[]>("/api/v1/finance/cash-book", [], {
     revalidateSeconds: 30,
     telemetryKey: "finance.cashbook",
     responseSchema: CashBookEntryListSchema,
@@ -1938,7 +1938,7 @@ export async function getFinanceRevisedEstimates(): Promise<LoaderResult<Record<
 }
 
 export async function getFinanceOutcomeBudget(): Promise<LoaderResult<BudgetOutcomeSummary[]>> {
-  return fetchJson<unknown, BudgetOutcomeSummary[]>("/api/v1/finance/budgets/outcomes", [], {
+  return fetchJson<unknown, BudgetOutcomeSummary[]>("/api/v1/finance/budget-outcomes", [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.outcome-budget",
     responseSchema: BudgetOutcomeSummaryListSchema,
@@ -1947,7 +1947,7 @@ export async function getFinanceOutcomeBudget(): Promise<LoaderResult<BudgetOutc
 }
 
 export async function getFinanceAllocations(): Promise<LoaderResult<FinanceBudgetAllocationSummary[]>> {
-  return fetchJson<unknown, FinanceBudgetAllocationSummary[]>("/api/v1/finance/budgets/allocations", [], {
+  return fetchJson<unknown, FinanceBudgetAllocationSummary[]>("/api/v1/finance/budget-allocations", [], {
     revalidateSeconds: 120,
     telemetryKey: "finance.allocations",
     responseSchema: FinanceBudgetAllocationSummaryListSchema,
