@@ -5,6 +5,7 @@ import { KeyboardShortcuts } from "../KeyboardShortcuts";
 import { WhatsNewBanner } from "../WhatsNewBanner";
 import { FeedbackWidget } from "../FeedbackWidget";
 import { AskCivitasOne } from "../AskCivitasOne";
+import { RouteProgress } from "../RouteProgress";
 
 interface AppShellProps {
   children: ReactNode;
@@ -20,6 +21,7 @@ interface AppShellProps {
 export function AppShell({ children, crumb, enabledModules, userName, userRole }: AppShellProps) {
   return (
     <div className="app">
+      <RouteProgress />
       <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} />
       <div className="main">
         <TopBar crumb={crumb} userName={userName} />

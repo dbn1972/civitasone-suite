@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/formatters";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";

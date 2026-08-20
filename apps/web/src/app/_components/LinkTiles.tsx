@@ -62,22 +62,48 @@ function tileIcon(tile: NavTile): string {
 export function LinkTiles({ tiles, columns = "three" }: LinkTilesProps) {
   const gridClass = columns === "four" ? "g-4" : "g-3";
 
+  // Group tiles by their `section` label, preserving insertion order.
+  const sections: Array<{ label: string | null; tiles: NavTile[] }> = [];
+  for (const tile of tiles) {
+    const label = tile.section ?? null;
+    const last = sections[sections.length - 1];
+    if (last && last.label === label) {
+      last.tiles.push(tile);
+    } else {
+      sections.push({ label, tiles: [tile] });
+    }
+  }
+
+  let tileIndex = 0;
+
   return (
-    <div className={`grid ${gridClass}`}>
-      {tiles.map((tile, i) => (
-        <Link
-          key={tile.href}
-          href={tile.href}
-          className="mtile"
-          style={{ textDecoration: "none", color: "inherit", display: "block" }}
-        >
-          <div className="ic" style={{ background: TILE_BG[i % TILE_BG.length] }}>
-            {tileIcon(tile)}
+    <>
+      {sections.map((sec, si) => (
+        <div key={sec.label ?? `s${si}`} className="lt-section">
+          {sec.label && (
+            <h2 className="lt-section-hd" aria-label={sec.label}>{sec.label}</h2>
+          )}
+          <div className={`grid ${gridClass}`}>
+            {sec.tiles.map((tile) => {
+              const idx = tileIndex++;
+              return (
+                <Link
+                  key={tile.href}
+                  href={tile.href}
+                  className="mtile"
+                  style={{ textDecoration: "none", color: "inherit", display: "block" }}
+                >
+                  <div className="ic" style={{ background: TILE_BG[idx % TILE_BG.length] }}>
+                    {tileIcon(tile)}
+                  </div>
+                  <h3 className="v">{tile.title}</h3>
+                  {tile.description ? <div className="l">{tile.description}</div> : null}
+                </Link>
+              );
+            })}
           </div>
-          <h3 className="v">{tile.title}</h3>
-          {tile.description ? <div className="l">{tile.description}</div> : null}
-        </Link>
+        </div>
       ))}
-    </div>
+    </>
   );
 }
