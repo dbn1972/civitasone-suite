@@ -13,12 +13,13 @@ import {
   ScanSearch, Gavel,
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
   TrendingUp, BookMarked, ScrollText, MessageCircleQuestion, Bell, CreditCard, Building, Shield, Wrench,
+  LucideIcon,
 } from "lucide-react";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
 type NavItem = {
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: LucideIcon;
   label: string;
   href: string;
   moduleKey: string | null;
