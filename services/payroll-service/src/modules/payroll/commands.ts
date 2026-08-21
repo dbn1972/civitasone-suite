@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
-import { verifyEmployeeExists } from "../../shared/hrms-client.js";
+import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -158,9 +158,24 @@ export async function createPensioner(ctx: RequestContext, body: CreatePensioner
  * persisted. Verify existence in the caller's own tenant BEFORE publishing —
  * the same "reject synchronously, don't 202 into a silent async no-op"
  * principle as the run-creation duplicate guard elsewhere in this file.
+ *
+ * round2 review fix: remap HrmsUnavailableError to the same 502
+ * HRMS_UNAVAILABLE this service's other HRMS-dependent call sites already
+ * use (tax/routes.ts's Form 16 build, form16-pdf/routes.ts's PDF issuance)
+ * instead of letting it fall through to the generic 500 catch-all — bug 4
+ * in this same round was specifically about not doing that.
  */
 async function assertEmployeeExists(ctx: RequestContext, employeeId: string): Promise<void> {
-  if (!(await verifyEmployeeExists(ctx.tenantId, employeeId))) {
+  let exists: boolean;
+  try {
+    exists = await verifyEmployeeExists(ctx.tenantId, employeeId);
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify employee: HRMS identity source unreachable");
+    }
+    throw err;
+  }
+  if (!exists) {
     throw new HttpError(404, "NOT_FOUND", "employee not found");
   }
 }
