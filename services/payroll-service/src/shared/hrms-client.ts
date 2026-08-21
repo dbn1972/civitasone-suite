@@ -21,6 +21,14 @@ export type PayrollInputEmployee = {
   employeeNo: string;
   fullName: string;
   basicMinor: string;
+  /**
+   * BUG-1 fix: YYYY-MM-DD. Used to pro-rate a mid-month joiner's first slip —
+   * days before joining within the run month are unpaid. No symmetric
+   * dateOfLeaving here: a separated employee is dropped from the HRMS feed
+   * entirely (see routes.ts comment), so leaving-date proration for the
+   * regular run has no live case; separation pay is the FnF flow's job.
+   */
+  dateOfJoining: string;
   payStructureId: string | null;
   bankAccountNo: string | null;
   bankIfsc: string | null;

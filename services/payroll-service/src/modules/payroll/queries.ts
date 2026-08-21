@@ -54,13 +54,24 @@ export async function getRunDetail(id: string, tenantId: string) {
     netAmount: Number(run.totalNetMinor) / 100,
     deductions: Math.max(0, Number(run.totalGrossMinor - run.totalNetMinor) / 100),
     status: mapRunStatus(run.status),
+    // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
+    // already rupees (/100 of the minor-unit column), and the frontend's
+    // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
+    // slip fields with formatRupees(), not formatMoney() — i.e. it already
+    // expects rupees here too. The old `Number(s.grossMinor)` (raw paise, no
+    // /100) was a 100x mismatch against both the sibling run-level fields in
+    // this same response and what the frontend actually does with the value.
+    // NOT touched: listSalarySlips()/GET /v1/payroll/salary-slips below is a
+    // different endpoint, correctly consumed via formatMoney() (paise) by
+    // SalarySlipsTable.tsx's DataTable — that convention is independently
+    // correct and out of scope here.
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,
       employeeName: s.employeeNo,
-      gross: Number(s.grossMinor),
-      deductions: Number(s.totalDeductionsMinor),
-      net: Number(s.netPayMinor),
+      gross: Number(s.grossMinor) / 100,
+      deductions: Number(s.totalDeductionsMinor) / 100,
+      net: Number(s.netPayMinor) / 100,
       status: s.status,
     })),
   };

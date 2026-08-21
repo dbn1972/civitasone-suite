@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
@@ -25,14 +25,39 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
-  const existing = await db.execute(sql`
-    SELECT id FROM payroll.payroll_runs
-    WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
-      AND status <> 'failed' LIMIT 1
-  `);
-  if (existing[0]) {
-    throw new HttpError(409, "DUPLICATE_RUN",
-      `a payroll run already exists for ${body.month}: ${existing[0].id}`);
+  const runType = body.runType ?? "regular";
+  // BUG-3 fix: this fast-path pre-check must run through scopedRead (a
+  // properly RLS-scoped transaction), not a bare db.execute(). Per the doc
+  // comment on scopedRead in shared/db.ts, a plain db.execute()/db.select()
+  // has no app.tenant_id GUC set, so under the fail-closed RLS policy it
+  // always returned zero rows and this guard silently never fired — a
+  // second run for an already-`processing` month got 202 instead of 409.
+  // The async consumer's own duplicate check (consumer.ts COMMANDS.runCreate
+  // handler) is correctly scoped and already the real data-safety backstop;
+  // this only restores the synchronous fast-path contract.
+  //
+  // Also aligned the WHERE clause + error code to that consumer check
+  // (run_type = 'regular' AND COALESCE(ddo_code,'__ALL__') = ...,
+  // DUPLICATE_RUN_FOR_PERIOD): fixing only the RLS scoping while leaving the
+  // old tenant+month-only clause here would have swapped "guard never fires"
+  // for "guard now wrongly blocks" — the consumer (and the DB's partial-
+  // unique index) intentionally allow off-cycle runs (supplementary/
+  // arrears/pensioner) and a second regular run for a different DDO
+  // alongside an existing regular run in the same month; this pre-check was
+  // about to start rejecting all of those the moment it actually started
+  // seeing rows.
+  if (runType === "regular") {
+    const existing = await scopedRead((tx) => tx.execute(sql`
+      SELECT id FROM payroll.payroll_runs
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
+        AND status <> 'failed' AND run_type = 'regular'
+        AND COALESCE(ddo_code, '__ALL__') = ${body.ddoCode ?? "__ALL__"}
+      LIMIT 1
+    `));
+    if (existing[0]) {
+      throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD",
+        `a regular payroll run already exists for ${body.month}${body.ddoCode ? ` (DDO ${body.ddoCode})` : ""}: ${existing[0].id}`);
+    }
   }
   await queue.publish(COMMANDS.runCreate, {
     messageId: id, type: COMMANDS.runCreate,

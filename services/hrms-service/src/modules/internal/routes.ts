@@ -64,6 +64,17 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           employeeNo: e.employeeNo,
           fullName: e.fullName,
           basicMinor: e.basicMinor.toString(),
+          // BUG-1 fix: payroll-service needs this to pro-rate a mid-month joiner's
+          // first slip (days before joining, within the run month, are unpaid).
+          // There is no symmetric "date of leaving" column on hrms_employees — a
+          // separated employee's status flips to "separated" as part of the same
+          // lifecycle transaction that records the separation (see
+          // lifecycle/consumer.ts COMMANDS.lifecycleSeparate), so they are already
+          // excluded above (`status !== "separated"`) before this projection ever
+          // runs; their partial final month + terminal dues are priced by the
+          // Full & Final Settlement flow off its own separationDate, not by this
+          // endpoint or the regular payroll run.
+          dateOfJoining: e.dateOfJoining,
           payStructureId: e.payStructureId,
           bankAccountNo: e.bankAccountNo,
           bankIfsc: e.bankIfsc,
