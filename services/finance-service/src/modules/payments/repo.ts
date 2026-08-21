@@ -102,8 +102,16 @@ export async function listBillsByTenant(tenantId: string, limit: number, offset 
     .offset(offset));
 }
 
-export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
-  await tx.insert(financePayments).values(row);
+/**
+ * BUG FIX: returns the inserted row (via RETURNING) so the caller can prime
+ * the read cache with the FULL, real row instead of hand-rolling a partial
+ * placeholder object — see payments/consumer.ts's paymentInitiate handler and
+ * payments/queries.ts's getPayment for the cache-poisoning bug this closes.
+ */
+export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<PaymentRow> {
+  const [inserted] = await tx.insert(financePayments).values(row).returning();
+  if (!inserted) throw new Error(`insertPayment: RETURNING produced no row for payment ${row.id}`);
+  return inserted;
 }
 
 // ── Sample data ("try it") — clearly-marked example bills, safe to clear ──────

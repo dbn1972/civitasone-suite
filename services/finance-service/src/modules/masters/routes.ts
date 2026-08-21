@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { VendorRow } from "./schema.js";
 
@@ -152,19 +152,32 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
     const body = createVendorBody.parse(req.body);
-    const vendor = await repo.createVendor(ctx.tenantId, {
-      name: body.name,
-      category: body.category,
-      pan: body.pan,
-      gstin: body.gstin ?? null,
-      address: body.address,
-      contactPerson: body.contactPerson ?? null,
-      phone: body.phone ?? null,
-      email: body.email ?? null,
-      bankName: body.bankName,
-      bankAccountNo: body.bankAccount,
-      ifsc: body.ifsc,
-    }, ctx.actorId);
+    // FINDING: financeVendors has UNIQUE (tenant_id, pan) — a duplicate PAN
+    // previously propagated as a raw PostgresError (500) since vendor
+    // creation was blocked end-to-end before the PII_ENC_KEY fix and this
+    // path had never been exercised. Clean 409 now, matching the
+    // VERSION_CONFLICT 409 the PATCH handler below already gives.
+    let vendor;
+    try {
+      vendor = await repo.createVendor(ctx.tenantId, {
+        name: body.name,
+        category: body.category,
+        pan: body.pan,
+        gstin: body.gstin ?? null,
+        address: body.address,
+        contactPerson: body.contactPerson ?? null,
+        phone: body.phone ?? null,
+        email: body.email ?? null,
+        bankName: body.bankName,
+        bankAccountNo: body.bankAccount,
+        ifsc: body.ifsc,
+      }, ctx.actorId);
+    } catch (e) {
+      if (repo.isUniqueViolation(e)) {
+        throw new HttpError(409, "DUPLICATE_PAN", `a vendor with PAN ${body.pan} already exists for this tenant`);
+      }
+      throw e;
+    }
     // Always full detail: this route is already WRITER_ROLES-only.
     return reply.code(201).send(toVendorDetail(vendor, true));
   });
@@ -185,18 +198,5 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(toVendorDetail(updated, true));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

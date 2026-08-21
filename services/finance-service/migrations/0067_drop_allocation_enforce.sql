@@ -1,0 +1,32 @@
+-- Migration 0067: drop budget.finance_budget_allocation.enforce
+--
+-- BUG FIX (misleading dead flag): `enforce` was accepted on
+-- POST /v1/finance/budget-allocations (gated only by FINANCE_ROLES, no
+-- maker-checker — unlike sanction approval) and, when false, was meant to let
+-- the addCommittedGuarded UPDATE in allocation-repo.ts bypass the headroom
+-- check. But the unconditional CHECK chk_allocation_no_overcommit
+-- (0056_allocation_no_overcommit.sql) — "committed_minor + actual_minor <=
+-- allocated_minor", with no reference to `enforce` at all — makes it
+-- impossible for committed+actual to ever exceed allocated regardless of this
+-- flag. That migration's own comment notes CHECK constraints cannot be made
+-- DEFERRABLE in Postgres, so there is no way to make the constraint
+-- conditional either. Net effect: enforce=false never bypassed anything —
+-- the write was still rejected, just by a raw untriaged PostgresError
+-- (constraint violation) surfacing to the caller instead of the clean
+-- OVER_APPROPRIATION domain error the enforce=true path produces. Nothing was
+-- exploitable, but the flag lied about what it did.
+--
+-- Removed rather than "fixed to be truly conditional": a government
+-- appropriation ceiling that can be silently soft-disabled per-head doesn't
+-- fit this platform's compliance model — GFR Rule 10 re-appropriation
+-- (POST /v1/finance/budget-allocations/re-appropriate, zero-sum, audited) is
+-- the correct way to move headroom between heads. See the removal notes in
+-- src/modules/budget/allocation-routes.ts (setAllocBody) and
+-- src/modules/budget/allocation-repo.ts (addCommittedGuarded) for the app-side
+-- half of this change.
+--
+-- application code no longer reads or writes this column as of this same
+-- change, so it is safe to drop outright (not just stop using).
+
+ALTER TABLE budget.finance_budget_allocation
+  DROP COLUMN IF EXISTS enforce;

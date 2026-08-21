@@ -244,6 +244,19 @@ const VISITOR_PII_KEY = piiKey("VISITOR_PII_KEY", "visitor", "visitor-service");
 // looped both processes (117 restarts observed). Wiring it below stops the loop.
 const PROCUREMENT_PII_KEY = piiKey("PROCUREMENT_PII_KEY", "procurement", "procurement-service");
 
+// finance-service's app-layer PII crypto (src/shared/pii-crypto.ts) also reads
+// the generic `PII_ENC_KEY` env var name (same contract as hrms/procurement),
+// and was missing it entirely below — unlike hrms/procurement/citizen/crm,
+// finance never got a *_PII_KEY entry wired in. readMasterSecret() throws
+// synchronously the moment any PII field is touched (encryptedText columns:
+// vendor pan/bank details, bank-account master), so every POST /vendors and
+// every masters/bank-routes.ts call 500s. Same fix shape as PROCUREMENT_PII_KEY
+// above: own env-var name + host key-file slug via the shared piiKey()
+// factory (fail-closed in prod via IS_PROD, stable dev fallback otherwise),
+// plumbed into the generic `PII_ENC_KEY` env key both svc("finance") and
+// worker("finance") actually read.
+const FINANCE_PII_KEY = piiKey("FINANCE_PII_KEY", "finance", "finance-service");
+
 // NOTE on inspection-service: it validates a required-env allowlist at boot
 // (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
 // app.ts). All four are ALREADY supplied by its svc()/worker() entries below.
@@ -310,7 +323,7 @@ module.exports = {
     svc("notification", 3006, "notification_svc",  "civitas_notification"),
 
     // ── Finance & procurement ──────────────────────────────────────────────────
-    svc("finance",      3007, "finance_svc",       "civitas_finance"),
+    svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }),
     svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }),
     svc("contract",     3009, "contract_svc",      "civitas_contract"),
 
@@ -348,6 +361,7 @@ module.exports = {
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
     worker("finance",      "finance_svc",      "civitas_finance", {
+      PII_ENC_KEY: FINANCE_PII_KEY,
       FINANCE_SCANNER_DATABASE_URL: scannerDbUrl("finance_scanner", "civitas_finance", "FINANCE_SCANNER_DATABASE_URL"),
     }),
     worker("procurement",  "procurement_svc",  "civitas_procurement", {

@@ -251,24 +251,27 @@ describe("budget/allocation-domain — appropriationAvailable()", () => {
 describe("budget/allocation-domain — assertWithinAppropriation()", () => {
   it("passes when within limit", () => {
     expect(() => assertWithinAppropriation(
-      { allocatedMinor: 1000000n, committedMinor: 200000n, actualMinor: 100000n, enforce: true },
+      { allocatedMinor: 1000000n, committedMinor: 200000n, actualMinor: 100000n },
       500000n,
     )).not.toThrow();
   });
 
   it("throws OVER_APPROPRIATION when exceeds", () => {
     expect(() => assertWithinAppropriation(
-      { allocatedMinor: 1000000n, committedMinor: 800000n, actualMinor: 100000n, enforce: true },
+      { allocatedMinor: 1000000n, committedMinor: 800000n, actualMinor: 100000n },
       200000n,
     )).toThrow(BudgetDomainError);
   });
 
-  it("no-op when enforce is false", () => {
-    expect(() => assertWithinAppropriation(
-      { allocatedMinor: 100n, committedMinor: 90n, actualMinor: 90n, enforce: false },
-      999n,
-    )).not.toThrow();
-  });
+  // BUG FIX (misleading dead `enforce` flag, removed): this test verified
+  // enforce=false as a soft/non-blocking override. The `enforce` field is
+  // gone from Appropriation — see the removal note above setAllocBody in
+  // src/modules/budget/allocation-routes.ts for the full history (the
+  // unconditional DB CHECK chk_allocation_no_overcommit already made the
+  // flag inert everywhere except error presentation, so it was removed
+  // rather than "fixed" to still look configurable). Appropriation limits
+  // are now always enforced, with no bypass — the case this test exercised
+  // no longer exists.
 });
 
 describe("budget/allocation-domain — assertReappropriable()", () => {

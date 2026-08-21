@@ -7,8 +7,7 @@
  * Requirements: 11.6, 11.7
  */
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { anomalyListQuery, dismissBody, anomalyIdParam } from "./validators.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
@@ -82,22 +81,5 @@ export async function anomalyRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Scoped error handler for anomaly routes
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError || (err && typeof err === "object" && "name" in err && (err as { name: string }).name === "ZodError")) {
-      const zodErr = err as unknown as ZodError;
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED",
-        message: "invalid request",
-        correlationId,
-        retryable: false,
-        fieldErrors: zodErr.issues?.map((i) => ({ field: i.path.join("."), message: i.message })) ?? [],
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }
