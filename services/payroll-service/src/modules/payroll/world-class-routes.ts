@@ -290,6 +290,29 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
     }
+    // round2 fix: a framework-level error (e.g. Fastify's own body-parser
+    // errors like FST_ERR_CTP_EMPTY_JSON_BODY on an empty body, or a raw
+    // JSON.parse SyntaxError on a malformed one) is neither a ZodError nor an
+    // HttpError, but Fastify still stamps a real client-error statusCode (and
+    // usually an FST_ERR_* code) on it before it reaches here. Falling
+    // through to the generic 500 below told the client retryable:true for
+    // something that can never succeed on retry — a client that honors that
+    // flag loops forever on a request that was malformed the moment it was
+    // sent. Preserve the framework's own statusCode when it is a genuine 4xx,
+    // the same way ZodError/HttpError are special-cased above.
+    if (
+      typeof err === "object" && err !== null &&
+      "statusCode" in err && typeof (err as { statusCode: unknown }).statusCode === "number" &&
+      (err as { statusCode: number }).statusCode >= 400 && (err as { statusCode: number }).statusCode < 500
+    ) {
+      const fw = err as { statusCode: number; code?: string; message?: string };
+      return reply.code(fw.statusCode).send({
+        code: fw.code ?? "BAD_REQUEST",
+        message: fw.message ?? "invalid request",
+        correlationId,
+        retryable: false,
+      });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });

@@ -93,3 +93,34 @@ export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<stri
     return new Map();
   }
 }
+
+/**
+ * round2 fix: payroll and HRMS are separate databases (no DB-level FK is
+ * possible), and arrears/bonus/reimbursements accepted any well-formed UUID
+ * as employeeId with no check it corresponds to a real employee in the
+ * caller's tenant. Reuses the same internal employee-summaries projection as
+ * fetchEmployeeSummaries above, but — unlike that helper, which is used for
+ * display-only enrichment and intentionally fails OPEN to an empty Map so a
+ * flaky HRMS never blocks an unrelated read — this one fails CLOSED (throws
+ * HrmsUnavailableError) on an unreachable/erroring HRMS. Silently treating
+ * "HRMS unreachable" as "employee doesn't exist" would produce a
+ * false-positive rejection indistinguishable from a genuinely bad employeeId,
+ * and would defeat the point of the check during exactly the window it
+ * matters least to be wrong. Mirrors fetchPayrollInput's own fail-closed
+ * contract above for the same reason.
+ */
+export async function verifyEmployeeExists(tenantId: string, employeeId: string): Promise<boolean> {
+  const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms employee-summaries unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new HrmsUnavailableError(`hrms employee-summaries failed: ${res.status}`);
+  const rows = await res.json() as Array<{ id: string }>;
+  return rows.some((r) => r.id === employeeId);
+}

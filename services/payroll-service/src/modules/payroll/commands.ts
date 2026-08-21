@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
+import { verifyEmployeeExists } from "../../shared/hrms-client.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -149,8 +150,24 @@ export async function createPensioner(ctx: RequestContext, body: CreatePensioner
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * round2 fix: employeeId on arrears/bonus/reimbursements was never checked
+ * against a real employee — payroll and HRMS are separate databases (no
+ * DB-level FK possible), and no application-level check existed either. A
+ * fabricated, nowhere-existing employeeId was accepted and durably
+ * persisted. Verify existence in the caller's own tenant BEFORE publishing —
+ * the same "reject synchronously, don't 202 into a silent async no-op"
+ * principle as the run-creation duplicate guard elsewhere in this file.
+ */
+async function assertEmployeeExists(ctx: RequestContext, employeeId: string): Promise<void> {
+  if (!(await verifyEmployeeExists(ctx.tenantId, employeeId))) {
+    throw new HttpError(404, "NOT_FOUND", "employee not found");
+  }
+}
+
 /** Arrear create. */
 export async function createArrear(ctx: RequestContext, body: CreateArrearBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.arrearCreate, {
     messageId: id, type: COMMANDS.arrearCreate,
@@ -166,6 +183,7 @@ export async function createArrear(ctx: RequestContext, body: CreateArrearBody):
  * persisted row, rather than trusting a value computed in the HTTP handler.
  */
 export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.bonusCompute, {
     messageId: id, type: COMMANDS.bonusCompute,
@@ -177,6 +195,7 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,
