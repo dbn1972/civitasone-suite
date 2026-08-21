@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyBaseLogger } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -23,8 +24,14 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
  * Activates the rules engine for codes it knows (CL/EL/HPL/ML/PL/CCL/...);
  * codes outside the engine (e.g. EOL/MED) fall back to the consumer balance
  * check so nothing breaks. Throws 422 on a rule violation.
+ *
+ * Returns the rules-engine's computed day count (holiday/sandwich/prefix-suffix
+ * aware) when the CCS engine ran, or null when the leave code is outside the
+ * engine — callers should fall back to the client-submitted daysApplied in
+ * that case, matching the pre-existing "nothing breaks" behavior for EOL/MED.
  */
-async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof applyLeaveBody.parse>, log?: FastifyBaseLogger): Promise<void> {
+async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, log?: FastifyBaseLogger): Promise<number | null> {
+  const tenantId = ctx.tenantId;
   const alloc = await repo.findAllocById(body.allocId);
   if (!alloc) throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found");
   const types = await repo.listLeaveTypesByTenant(tenantId);
@@ -33,6 +40,21 @@ async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof ap
   const code = (lt.code ?? "").toUpperCase();
   const [emp] = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId)));
   if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
+  // IDOR guard: a bare "employee" actor may only apply for the employee record
+  // their own userRef links to — the same tenantId+userRef linkage self-service
+  // routes.ts already uses for "my profile" / "my leave" lookups, just never
+  // consulted here. HR and manager roles are exempt: HR entering leave for an
+  // employee who can't self-service, and a manager filing on behalf of a
+  // report, are both real supported workflows (see leave-applications route's
+  // ALL_ROLES, which already admits manager/HR to this endpoint).
+  const isPrivilegedActor = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (!isPrivilegedActor) {
+    const [linked] = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.userRef, ctx.actorId))));
+    if (!linked || linked.id !== body.employeeId) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only apply for leave on their own employee record");
+    }
+  }
   // DIC engagement gate — an engagement type not entitled to the salaried leave
   // scheme (consultant invoice-billed, third_party agency-deployed) cannot draw
   // on the DIC leave ledger. Runs for EVERY leave code, before the CCS-engine
@@ -64,7 +86,7 @@ async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof ap
       `leave dates ${body.fromDate}..${body.toDate} overlap an existing ${clash.status} application (${clash.fromDate}..${clash.toDate}, id ${clash.id})`,
     );
   }
-  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return;
+  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return null;
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
     ? (emp.employeeType as EmployeeType) : "permanent";
@@ -81,6 +103,9 @@ async function enforceCcsLeaveRules(tenantId: string, body: ReturnType<typeof ap
     isOnProbation: (emp.status ?? "") === "probation",
   });
   if (!result.valid) throw new HttpError(422, "LEAVE_RULE_VIOLATION", result.errors.join("; "));
+  // BUG-1 fix: hand back the rules-engine's validated day count so the caller
+  // persists/debits *this*, not the raw client-submitted daysApplied.
+  return result.computedDays;
 }
 
 export async function leaveRoutes(app: FastifyInstance): Promise<void> {
@@ -109,16 +134,20 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    await enforceCcsLeaveRules(ctx.tenantId, body, req.log);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
+    const computedDays = await enforceCcsLeaveRules(ctx, body, req.log);
+    // BUG-1 fix: persist/debit the validated computed day count, not the raw
+    // client-submitted one, when the CCS rules engine actually ran for this code.
+    const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
+    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
   });
 
   app.post("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    await enforceCcsLeaveRules(ctx.tenantId, body, req.log);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, body));
+    const computedDays = await enforceCcsLeaveRules(ctx, body, req.log);
+    const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
+    return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
   });
 
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
@@ -141,6 +170,11 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/leave-applications/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
+    // Managers without HR/super_admin roles must go through the workflow queue
+    // — same gate approve enforces; reject had no equivalent gate before this fix.
+    if (!ctx.roles.some((r: string) => HR_ROLES.includes(r))) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Direct rejection requires HR admin privileges. Use the workflow queue.");
+    }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     const body = rejectLeaveBody.parse(req.body);
@@ -167,6 +201,11 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/leave-requests/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
+    // Managers without HR/super_admin roles must go through the workflow queue
+    // — same gate approve's alias enforces; reject's alias had no equivalent gate.
+    if (!ctx.roles.some((r: string) => HR_ROLES.includes(r))) {
+      throw new HttpError(403, "WORKFLOW_REQUIRED", "Direct rejection requires HR admin privileges. Use the workflow queue.");
+    }
     await requirePermissionKey(ctx, "hrms.leave.approve");
     const { id } = idParam.parse(req.params);
     const body = rejectLeaveBody.parse(req.body);
