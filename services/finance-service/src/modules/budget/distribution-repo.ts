@@ -77,7 +77,7 @@ export async function lockAllocationByIdTx(tx: Writer, id: string, tenantId: str
     allocatedMinor: BigInt(r.allocated_minor as string),
     committedMinor: BigInt(r.committed_minor as string),
     actualMinor: BigInt(r.actual_minor as string),
-    enforce: r.enforce as boolean, currency: r.currency as string,
+    currency: r.currency as string,
     createdAt: r.created_at as Date, updatedAt: r.updated_at as Date,
     createdBy: r.created_by as string, updatedBy: r.updated_by as string,
     version: r.version as number,

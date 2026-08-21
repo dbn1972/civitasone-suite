@@ -2,8 +2,7 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import { postJournalBody, ledgerQueryParams, reverseParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -64,18 +63,5 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, FinancialStatementSummaryListSchema, await queries.listFinancialStatements(ctx.tenantId));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

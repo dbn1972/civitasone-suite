@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./supplementary-repo.js";
@@ -90,17 +89,7 @@ export async function supplementaryRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }
 
 function serialize(r: SupplementaryDemandRow) {

@@ -3,9 +3,25 @@ import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } 
 
 const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
 
+// BUG FIX: bigint-safe money fields, matching createBillBody.grossMinor's
+// established pattern below. A plain z.number() caps out at 2^53 — a large
+// value silently loses precision at the JSON.parse boundary BEFORE Zod ever
+// sees it, and z.number().int() still accepts the (already wrong) rounded
+// result since it's still an integer, just not the one that was sent.
+// Two variants preserve each field's original positive-vs-nonnegative bound.
+const moneyMinorField = z.union([
+  z.string().regex(/^\d+$/, "must be a positive integer string").transform((s) => BigInt(s)),
+  z.bigint().positive(),
+]).pipe(z.bigint().positive());
+
+const moneyMinorFieldNonNeg = z.union([
+  z.string().regex(/^\d+$/, "must be a non-negative integer string").transform((s) => BigInt(s)),
+  z.bigint().nonnegative(),
+]).pipe(z.bigint().nonnegative());
+
 const deduction = z.object({
   type:        z.string().min(1),
-  amountMinor: z.number().int().nonnegative(),
+  amountMinor: moneyMinorFieldNonNeg,
   description: z.string().optional(),
 });
 
@@ -56,7 +72,7 @@ export type InitiateEftBody = z.infer<typeof initiateEftBody>;
 export const gemInvoiceMatchBody = z.object({
   poRef:      z.string().min(1),
   invoiceRef: z.string().min(1),
-  amountMinor: z.number().int().positive(),
+  amountMinor: moneyMinorField,
 });
 export type GemInvoiceMatchBody = z.infer<typeof gemInvoiceMatchBody>;
 
@@ -65,7 +81,7 @@ export const createAdvanceBody = z.object({
   purpose:     z.string().min(1).max(500),
   payee:       z.string().max(200).optional(),
   type:        z.enum(["employee", "vendor", "other"]).default("employee"),
-  amountMinor: z.number().int().positive(),
+  amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dueDate must be YYYY-MM-DD").optional(),
 });
@@ -76,7 +92,7 @@ export const createUCBody = z.object({
   purpose:     z.string().min(1).max(500),
   scheme:      z.string().max(200).optional(),
   grantRef:    z.string().max(200).optional(),
-  amountMinor: z.number().int().positive(),
+  amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   periodFrom:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodFrom must be YYYY-MM-DD").optional(),
   periodTo:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodTo must be YYYY-MM-DD").optional(),
@@ -84,7 +100,7 @@ export const createUCBody = z.object({
 export type CreateUCBody = z.infer<typeof createUCBody>;
 
 export const adjustAdvanceBody = z.object({
-  adjustedMinor: z.number().int().positive(),
+  adjustedMinor: moneyMinorField,
   reason:        z.string().min(3).max(500),
 });
 export type AdjustAdvanceBody = z.infer<typeof adjustAdvanceBody>;

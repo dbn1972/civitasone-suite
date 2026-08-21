@@ -32,7 +32,15 @@ describe("appropriationAvailable", () => {
 });
 
 describe("assertWithinAppropriation", () => {
-  const base = { allocatedMinor: 1_000_000n, committedMinor: 200_000n, actualMinor: 300_000n, enforce: true };
+  // BUG FIX (misleading dead `enforce` flag, removed): Appropriation no
+  // longer carries an `enforce` field — see the removal note above
+  // setAllocBody in src/modules/budget/allocation-routes.ts for the full
+  // history. The unconditional DB CHECK chk_allocation_no_overcommit already
+  // made enforce=false inert everywhere except error presentation (a raw
+  // PostgresError instead of the clean OVER_APPROPRIATION this function
+  // throws), so it was removed rather than "fixed" to still look
+  // configurable. Appropriation limits are now always enforced.
+  const base = { allocatedMinor: 1_000_000n, committedMinor: 200_000n, actualMinor: 300_000n };
 
   it("passes when requested equals available (500_000)", () => {
     expect(() => assertWithinAppropriation(base, 500_000n)).not.toThrow();
@@ -47,11 +55,6 @@ describe("assertWithinAppropriation", () => {
     try { assertWithinAppropriation(base, 500_001n); } catch (e) {
       expect((e as DomainError).code).toBe("OVER_APPROPRIATION");
     }
-  });
-
-  it("no-ops when enforce=false (soft control)", () => {
-    const soft = { ...base, enforce: false };
-    expect(() => assertWithinAppropriation(soft, 999_999_999n)).not.toThrow();
   });
 
   it("zero requested always passes", () => {

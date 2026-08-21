@@ -54,7 +54,11 @@ describe("Finance — Cross-Tenant RLS Isolation", () => {
         sanctionNo: `RLS-${Date.now()}`,
         purpose: "RLS Isolation Test Sanction for cross-tenant verification",
         headId: "eeeeeeee-0001-0000-0000-000000000001",
-        amountMinor: 1000000,
+        // BUG FIX (bigint-safe money fields): amountMinor is now string-only
+        // (matches createBillBody.grossMinor's established precision-safe
+        // pattern) — a raw JSON number can silently lose precision above
+        // 2^53 before Zod ever sees it.
+        amountMinor: "1000000",
         currency: "INR",
       },
     });

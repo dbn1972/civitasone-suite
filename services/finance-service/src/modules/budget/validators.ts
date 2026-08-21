@@ -6,16 +6,32 @@ export const updateHeadHoABody = z.object({
 });
 export type UpdateHeadHoABody = z.infer<typeof updateHeadHoABody>;
 
+// BUG FIX: bigint-safe money fields, matching payments/validators.ts's
+// createBillBody.grossMinor pattern. Confirmed live: a 17-digit amountMinor
+// sent to createSanctionBody (below) was silently accepted and persisted
+// 1 paisa off from what was sent — z.number() loses precision above 2^53 at
+// the JSON.parse boundary, before Zod ever runs, and z.number().int() still
+// accepts the (already wrong) rounded result since it's still an integer.
+const moneyMinorField = z.union([
+  z.string().regex(/^\d+$/, "must be a positive integer string").transform((s) => BigInt(s)),
+  z.bigint().positive(),
+]).pipe(z.bigint().positive());
+
+const moneyMinorFieldNonNeg = z.union([
+  z.string().regex(/^\d+$/, "must be a non-negative integer string").transform((s) => BigInt(s)),
+  z.bigint().nonnegative(),
+]).pipe(z.bigint().nonnegative());
+
 export const createBudgetBody = z.object({
   headId:   z.string().uuid(),
   fy:       z.string().regex(/^\d{4}-\d{2}$/, "FY must be YYYY-YY"),
-  beMinor:  z.number().int().nonnegative(),
+  beMinor:  moneyMinorFieldNonNeg,
 });
 export type CreateBudgetBody = z.infer<typeof createBudgetBody>;
 
 export const reappropriateBody = z.object({
   fromBudgetId: z.string().uuid(),
-  amountMinor:  z.number().int().positive(),
+  amountMinor:  moneyMinorField,
   reason:       z.string().min(3).max(500),
 });
 export type ReappropriateBody = z.infer<typeof reappropriateBody>;
@@ -24,7 +40,7 @@ export const createSanctionBody = z.object({
   sanctionNo:  z.string().min(1).max(64),
   purpose:     z.string().min(3).max(500),
   headId:      z.string().uuid(),
-  amountMinor: z.number().int().positive(),
+  amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
 });
 export type CreateSanctionBody = z.infer<typeof createSanctionBody>;
@@ -51,7 +67,7 @@ export const submitReappropriationBody = z.object({
   fromBudgetId: z.string().uuid(),
   toBudgetId:   z.string().uuid(),
   headId:       z.string().uuid().optional(),
-  amountMinor:  z.number().int().positive(),
+  amountMinor:  moneyMinorField,
   reason:       z.string().min(3).max(500),
 });
 export type SubmitReappropriationBody = z.infer<typeof submitReappropriationBody>;

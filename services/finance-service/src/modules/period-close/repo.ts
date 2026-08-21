@@ -16,6 +16,18 @@ export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClo
   // M2: atomic ON CONFLICT eliminates the TOCTOU race of the previous
   // read-then-insert pattern. The WHERE guard prevents overwriting a
   // hard_close — if the row is hard-closed the DO UPDATE silently no-ops.
+  //
+  // BUG FIX: closedAt arrives as a live JS `Date` (or null, on reopen) from
+  // period-close/consumer.ts. Unlike drizzle's typed column builders, this raw
+  // `sql` template's param path does not accept a bare Date object here — it
+  // reached the driver as-is and blew up with
+  // `TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of type
+  // string...Received an instance of Date`, so this INSERT never once
+  // succeeded. Serialise to an ISO string and cast explicitly, matching the
+  // established convention for raw-sql timestamptz params elsewhere in the
+  // monorepo (e.g. workflow-service/src/modules/external-tasks/repo.ts's
+  // `lockExpiresIso`).
+  const closedAtIso = row.closedAt ? new Date(row.closedAt).toISOString() : null;
   await (tx as any).execute(sql`
     INSERT INTO gl.finance_period_close (tenant_id, period, fiscal_year, status, closed_by, closed_at)
     VALUES (
@@ -24,7 +36,7 @@ export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClo
       ${row.fiscalYear},
       ${row.status ?? "open"},
       ${row.closedBy ?? null}::uuid,
-      ${row.closedAt ?? null}
+      ${closedAtIso}::timestamptz
     )
     ON CONFLICT (tenant_id, fiscal_year, period) DO UPDATE
       SET status    = EXCLUDED.status,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError, z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { z } from "zod";
+import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import { parseHoA, validateHoA, HoaError } from "../../shared/hoa.js";
 import * as repo from "./repo.js";
 
@@ -47,20 +47,13 @@ export async function hoaRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
+    // HoaError is specific to this module — check it first, then delegate to
+    // the shared handler (ZodError/HttpError + the generic fallback that now
+    // preserves a real statusCode instead of flattening everything to 500).
     if (err instanceof HoaError) {
+      const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
       return reply.code(400).send({ code: err.code, message: err.message, correlationId, retryable: false });
     }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
+    return financeErrorHandler(err, req, reply);
   });
 }

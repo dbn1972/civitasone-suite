@@ -90,6 +90,20 @@ export async function createVendor(tenantId: string, input: VendorWriteInput, ac
 }
 
 /**
+ * FINDING (surfaced now that vendor creation is unblocked — see PII_ENC_KEY
+ * fix): financeVendors has UNIQUE (tenant_id, pan) (0065_vendor_master.sql),
+ * but createVendor did no pre-check and let a violation propagate as a raw
+ * PostgresError, 500ing instead of a clean 409. Mirrors the isUniqueViolation
+ * idiom already used in court-service (modules/config-registry/repo.ts,
+ * modules/cause-list/repo.ts) — masters/routes.ts's POST /v1/finance/vendors
+ * catches this and throws HttpError(409, "DUPLICATE_PAN", ...).
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string } | null | undefined)?.code;
+  return code === "23505" || code === "23P01";
+}
+
+/**
  * Optimistic-concurrency update, mirroring the guarded-UPDATE idiom in
  * modules/instruments/repo.ts's transition() (version bumped via
  * `sql\`${col} + 1\``, WHERE pins tenant + id + a guard condition). Here the
@@ -154,6 +168,21 @@ export async function ddoExists(tenantId: string, code: string, reader: Reader =
   const r = reader as typeof db;
   const rows = await r.select({ id: financeDdo.id }).from(financeDdo)
     .where(and(eq(financeDdo.tenantId, tenantId), eq(financeDdo.ddoCode, code), eq(financeDdo.isActive, true)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * BUG FIX (bill->vendor reference validation): mirrors ddoExists/paoExists
+ * above — a tenant-scoped, tx-participating existence check. Previously a
+ * bill's vendorId only got a UUID-format check (Zod) with no existence/tenant
+ * lookup, so a bill citing a vendor that doesn't exist anywhere (or belongs to
+ * a different tenant) was accepted, approved and paid with no error.
+ */
+export async function vendorExists(tenantId: string, id: string, reader: Reader = db): Promise<boolean> {
+  const r = reader as typeof db;
+  const rows = await r.select({ id: financeVendors.id }).from(financeVendors)
+    .where(and(eq(financeVendors.tenantId, tenantId), eq(financeVendors.id, id), eq(financeVendors.isActive, true)))
     .limit(1);
   return rows.length > 0;
 }
