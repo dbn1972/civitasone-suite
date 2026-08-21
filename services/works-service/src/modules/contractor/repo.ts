@@ -22,6 +22,23 @@ export async function findContractorById(tenantId: string, id: string): Promise<
   return rows[0] ?? null;
 }
 
+/**
+ * Bug fix (works-billing-integrity #4): case-insensitive exact-name lookup,
+ * used to validate an award's free-text contractorName against a real,
+ * registered contractor record when the caller doesn't supply contractorId.
+ */
+export async function findContractorByName(tenantId: string, name: string): Promise<ContractorRow | null> {
+  const trimmed = name.trim();
+  // Exact case-insensitive match (not a LIKE pattern — a contractor name
+  // containing "%" or "_" must not be treated as a wildcard).
+  const rows = await scopedRead((tx) =>
+    tx.select().from(contractors)
+      .where(and(eq(contractors.tenantId, tenantId), sql`lower(${contractors.name}) = lower(${trimmed})`))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 export async function listContractors(
   tenantId: string,
   opts?: { limit?: number; offset?: number },

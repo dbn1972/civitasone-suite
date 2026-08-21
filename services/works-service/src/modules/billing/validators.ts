@@ -26,7 +26,12 @@ export const finalizeMbSchema = z.object({
 export const createBillSchema = z.object({
   workId: z.string().uuid(),
   awardId: z.string().uuid(),
-  mbId: z.string().uuid().optional(),
+  // No-3-way-match fix: every bill (abstract or e_mb) must be backed by a
+  // real, finalized measurement-book entry — mbId is no longer optional.
+  // See billing/routes.ts and billing/consumer.ts for the full chain this
+  // now enforces: mb belongs to the same work+award, mb is do_finalized,
+  // and the bill's gross amount does not exceed the mb's measured value.
+  mbId: z.string().uuid(),
   billMode: z.enum(["abstract", "e_mb"]),
   billNumber: z.string().min(1).max(64),
   grossAmountMinor: zMoneyMinorString,

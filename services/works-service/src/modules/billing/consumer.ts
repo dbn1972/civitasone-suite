@@ -4,11 +4,16 @@ import { parseMinor } from "@civitasone/schemas";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
-import { measurementBooks, measurements, bills, accountCompilations } from "./schema.js";
-import { calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward, isTerminalBillStatus } from "./domain.js";
+import { measurementBooks, measurements, bills, billItems, accountCompilations } from "./schema.js";
+import {
+  calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward,
+  isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
+  computeMeasuredValueMinor,
+} from "./domain.js";
 import { boqItems } from "../boq/schema.js";
+import { calculateBoqAmount } from "../boq/domain.js";
 import { awards } from "../tender/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -19,11 +24,27 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      const workId = p.workId as string;
+      const awardId = p.awardId as string;
+
+      // Same family as the bug #2 award/work check on bill create: an MB
+      // must be issued against an award that actually belongs to the work,
+      // otherwise a later bill could (via mbBelongsToBill) launder a
+      // different work's measured value through this MB.
+      const awardRows = await tx.select().from(awards)
+        .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, awardId)))
+        .limit(1);
+      const award = awardRows[0];
+      if (!award) throw new NonRetryableError("AWARD_NOT_FOUND: award record not found for MB issue");
+      if (!awardBelongsToWork(award, workId)) {
+        throw new NonRetryableError("AWARD_WORK_MISMATCH: cited award does not belong to this work");
+      }
+
       await tx.insert(measurementBooks).values({
         id: p.id as string,
         tenantId: msg.tenantId,
-        workId: p.workId as string,
-        awardId: p.awardId as string,
+        workId,
+        awardId,
         mbNumber: p.mbNumber as string,
         issuedBy: msg.actorId,
         status: "draft",
@@ -69,35 +90,83 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
-
-      // canCreateBill gate (defense-in-depth — also enforced pre-enqueue in
-      // billing/routes.ts): if this bill references an MB, that MB must be
-      // fully finalized (do_finalized) before a bill can be persisted against it.
-      const mbId = p.mbId as string | undefined;
-      if (mbId) {
-        const mbRows = await tx.select().from(measurementBooks)
-          .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
-          .limit(1);
-        const mb = mbRows[0];
-        if (!mb || !canCreateBill(mb.status)) {
-          throw new NonRetryableError("MB_INVALID_STATUS: measurement book missing or not in allowed status for bill creation");
-        }
-      }
-
-      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
-      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
-      const netPayable = calculateNetPayable(gross, deductions);
-
       const workId = p.workId as string;
       const awardId = p.awardId as string;
+      const mbId = p.mbId as string | undefined;
 
-      // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.
+      // FR-BIL-012 + bug #2 (defense-in-depth — also enforced pre-enqueue in
+      // billing/routes.ts): the cited award must exist AND actually belong
+      // to the work being billed.
       const awardRows = await tx.select().from(awards)
         .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.id, awardId)))
         .limit(1);
       const award = awardRows[0];
       if (!award) throw new NonRetryableError("AWARD_NOT_FOUND: award record not found for bill create");
+      if (!awardBelongsToWork(award, workId)) {
+        throw new NonRetryableError("AWARD_WORK_MISMATCH: cited award does not belong to this work");
+      }
 
+      // No-3-way-match gate (bug #1, defense-in-depth): a bill must reference
+      // a real, finalized MB that belongs to this same work/award, and its
+      // gross amount must not exceed the value of work actually measured
+      // against that MB.
+      if (!mbId) {
+        throw new NonRetryableError("MB_REQUIRED: bill creation requires a valid mbId");
+      }
+      // Code-review fix (double-billing gap): lock the MB row for the rest
+      // of this transaction. Without this, two concurrent billCreate
+      // transactions citing the same mbId can each read "0 prior bills
+      // against this MB", both pass the measured-value check below, and
+      // both commit — double-billing the same measured work. FOR UPDATE
+      // serializes them: the second transaction blocks here until the
+      // first commits (or rolls back), then re-reads and sees the first
+      // transaction's already-inserted bill, so its own prior-bills-by-mb
+      // sum is correct and the check below closes the race. (This also
+      // naturally serializes against a concurrent mbFinalize on the same
+      // row, which takes an equivalent implicit lock via UPDATE.)
+      const mbRows = await tx.select().from(measurementBooks)
+        .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+        .for("update")
+        .limit(1);
+      const mb = mbRows[0];
+      if (!mb || !canCreateBill(mb.status)) {
+        throw new NonRetryableError("MB_INVALID_STATUS: measurement book missing or not in allowed status for bill creation");
+      }
+      if (!mbBelongsToBill(mb, workId, awardId)) {
+        throw new NonRetryableError("MB_WORK_MISMATCH: referenced measurement book does not belong to this work/award");
+      }
+
+      const mbMeasurements = await tx.select().from(measurements)
+        .where(and(eq(measurements.tenantId, msg.tenantId), eq(measurements.mbId, mbId)));
+      const boqItemIds = [...new Set(mbMeasurements.map((m) => m.boqItemId))];
+      const boqRows = boqItemIds.length > 0
+        ? await tx.select().from(boqItems)
+            .where(and(eq(boqItems.tenantId, msg.tenantId), inArray(boqItems.id, boqItemIds)))
+        : [];
+      const rateByBoqItem = new Map(boqRows.map((b) => [b.id, b.rate]));
+      const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
+
+      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
+      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
+      const netPayable = calculateNetPayable(gross, deductions);
+
+      // Code-review fix (double-billing gap): cumulative gross ALREADY
+      // billed against this SAME mbId (prior bills) + this bill must not
+      // exceed the MB's measured value — otherwise a second bill citing an
+      // already-fully-billed MB recomputes the identical measured value and
+      // passes independently. Read happens after the FOR UPDATE lock above,
+      // so this sees every previously-committed bill against this MB.
+      const priorBillsAgainstMb = await tx.select().from(bills)
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.mbId, mbId)));
+      const priorBilledAgainstMb = priorBillsAgainstMb.reduce(
+        (sum, row) => sum + (row.grossAmountMinor ?? 0n),
+        0n,
+      );
+      if (billAmountExceedsMeasuredValue(priorBilledAgainstMb, gross, measuredValueMinor)) {
+        throw new NonRetryableError("MEASURED_VALUE_EXCEEDED: bill gross amount plus amount already billed against this MB exceeds the value of work measured against it");
+      }
+
+      // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.
       const priorBillRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.workId, workId)));
       const priorBilledGross = priorBillRows.reduce(
@@ -108,12 +177,13 @@ export function registerBillingConsumers(q: Queue): void {
         throw new NonRetryableError("AWARD_CEILING_EXCEEDED: cumulative billed amount exceeds award ceiling");
       }
 
+      const billId = p.id as string;
       await tx.insert(bills).values({
-        id: p.id as string,
+        id: billId,
         tenantId: msg.tenantId,
         workId,
         awardId,
-        mbId: (p.mbId as string) ?? undefined,
+        mbId,
         billMode: p.billMode as string,
         billNumber: p.billNumber as string,
         grossAmountMinor: gross,
@@ -122,6 +192,24 @@ export function registerBillingConsumers(q: Queue): void {
         status: "draft",
         createdBy: msg.actorId,
       });
+
+      // No-3-way-match fix: populate bill_items from the MB's measurements —
+      // a real, queryable link from bill → BoQ item → measured quantity,
+      // not just a ceiling check.
+      for (const m of mbMeasurements) {
+        const rate = rateByBoqItem.get(m.boqItemId);
+        if (rate === undefined) continue;
+        const quantity = Number(m.quantity);
+        await tx.insert(billItems).values({
+          id: randomUUID(),
+          tenantId: msg.tenantId,
+          billId,
+          boqItemId: m.boqItemId,
+          quantity: String(quantity),
+          rate,
+          amountMinor: calculateBoqAmount(rate, quantity),
+        });
+      }
 
       await enqueue(tx, {
         topic: EVENTS.billCreated,

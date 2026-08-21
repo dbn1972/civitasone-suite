@@ -66,10 +66,10 @@ describe("BoQ update quantity guard", () => {
     mockSelectMap.set(boqItems, [{ id: "b-1", rate: 10000n, quantity: "10", workId: "w-1" }]);
     mockSelectMap.set(measurements, [{ id: "m-1", boqItemId: "b-1", quantity: "5" }]);
     const h = await boqHandlers();
-    await h[COMMANDS.boqUpdateItem]({
+    await expect(h[COMMANDS.boqUpdateItem]({
       ...queueMessage(TENANT_A, ACTOR_A, "msg-boq-upd-1"),
       payload: { id: "b-1", quantity: 15 },
-    });
+    })).rejects.toThrow(/BOQ_ITEM_QUANTITY_LOCKED/);
     expect(mockUpdated).toHaveLength(0);
     expect(mockEnqueued.some((e) => e.topic === EVENTS.boqItemUpdated)).toBe(false);
   });

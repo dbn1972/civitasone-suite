@@ -1,9 +1,10 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { preTenders, tenders, quotations, awards } from "./schema.js";
-import { eq, and } from "drizzle-orm";
+import { contractors } from "../contractor/schema.js";
+import { eq, and, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -45,11 +46,42 @@ export function registerTenderConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      const contractorName = p.contractorName as string;
+      const contractorId = p.contractorId as string | undefined;
+
+      // Bug #4 (defense-in-depth — also enforced pre-enqueue in
+      // tender/routes.ts): an award must reference a real, registered
+      // contractor, not just a free-text name. Resolve/validate against
+      // works.contractors either way so the award always ends up with a
+      // real contractor_id link.
+      let resolvedContractorId: string;
+      if (contractorId) {
+        const rows = await tx.select().from(contractors)
+          .where(and(eq(contractors.tenantId, msg.tenantId), eq(contractors.id, contractorId)))
+          .limit(1);
+        const contractor = rows[0];
+        if (!contractor) throw new NonRetryableError("CONTRACTOR_NOT_FOUND: contractor not found for contractorId");
+        if (contractor.name.trim().toLowerCase() !== contractorName.trim().toLowerCase()) {
+          throw new NonRetryableError("CONTRACTOR_NAME_MISMATCH: contractorName does not match the registered contractor record");
+        }
+        resolvedContractorId = contractorId;
+      } else {
+        const rows = await tx.select().from(contractors)
+          .where(and(
+            eq(contractors.tenantId, msg.tenantId),
+            sql`lower(${contractors.name}) = lower(${contractorName.trim()})`,
+          ))
+          .limit(1);
+        if (!rows[0]) throw new NonRetryableError("CONTRACTOR_NOT_FOUND: no registered contractor matches contractorName");
+        resolvedContractorId = rows[0].id;
+      }
+
       await tx.insert(awards).values({
         id: p.id as string,
         tenantId: msg.tenantId,
         workId: p.workId as string,
-        contractorName: p.contractorName as string,
+        contractorName,
+        contractorId: resolvedContractorId,
         agreementNumber: (p.agreementNumber as string) ?? null,
         workOrderNumber: (p.workOrderNumber as string) ?? null,
         workPeriodDays: (p.workPeriodDays as number) ?? null,
@@ -78,10 +110,28 @@ export function registerTenderConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      const tenderId = p.tenderId as string;
+
+      // Bug #4 (defense-in-depth — also enforced pre-enqueue in
+      // tender/routes.ts): tenderId must reference an existing tender or
+      // pre-tender (works.tenders currently has no producer, so pre_tenders
+      // is the entity actually populated in practice — see repo.ts).
+      const tenderRows = await tx.select({ id: tenders.id }).from(tenders)
+        .where(and(eq(tenders.tenantId, msg.tenantId), eq(tenders.id, tenderId)))
+        .limit(1);
+      if (tenderRows.length === 0) {
+        const preTenderRows = await tx.select({ id: preTenders.id }).from(preTenders)
+          .where(and(eq(preTenders.tenantId, msg.tenantId), eq(preTenders.id, tenderId)))
+          .limit(1);
+        if (preTenderRows.length === 0) {
+          throw new NonRetryableError("TENDER_NOT_FOUND: tenderId does not reference an existing tender or pre-tender");
+        }
+      }
+
       await tx.insert(quotations).values({
         id: p.id as string,
         tenantId: msg.tenantId,
-        tenderId: p.tenderId as string,
+        tenderId,
         contractorName: p.contractorName as string,
         method: p.method as string,
         quotedAmountMinor: p.quotedAmountMinor !== undefined ? BigInt(p.quotedAmountMinor as string | number) : null,

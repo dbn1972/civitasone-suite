@@ -4,8 +4,17 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listBoqItems, getRecapitulation, listAllBoqItems } from "./repo.js";
+import { listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById } from "./repo.js";
+import { canEnterBoq, canModifyBoq } from "./domain.js";
+import { hasFinalizedTsForWork } from "../approval/repo.js";
+import { hasTenderForWork, hasPreTenderForWork } from "../tender/repo.js";
 import { paginationSchema } from "../masters/validators.js";
+
+/** BR-015 input: "tender details exist" for the work (checks both the
+ * populated pre_tenders table and — future-proofing — tenders). */
+async function hasTenderDetailsForWork(tenantId: string, workId: string): Promise<boolean> {
+  return (await hasTenderForWork(tenantId, workId)) || (await hasPreTenderForWork(tenantId, workId));
+}
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "estimator", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -44,6 +53,13 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.addBoqItemSchema.parse(req.body);
+
+    // BR-013: BoQ entry requires a finalized technical sanction (TS) to exist.
+    const tsExists = await hasFinalizedTsForWork(ctx.tenantId, body.workId);
+    if (!canEnterBoq(tsExists)) {
+      throw new HttpError(422, "TS_REQUIRED", "BoQ entry requires a finalized technical sanction (TS) for this work");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.addBoqItemCommand(ctx, body));
   });
 
@@ -60,6 +76,14 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.updateBoqItemSchema.parse({ ...(req.body as object), id: v.idParamSchema.parse(req.params).id });
+
+    // BR-015: BoQ cannot be modified once tender details exist for the work.
+    const existing = await getBoqItemById(ctx.tenantId, body.id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "BoQ item not found");
+    if (!canModifyBoq(await hasTenderDetailsForWork(ctx.tenantId, existing.workId))) {
+      throw new HttpError(409, "BOQ_FROZEN", "BoQ cannot be modified once tender details exist for this work");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateBoqItemCommand(ctx, body));
   });
 
@@ -68,6 +92,15 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.deleteBoqItemSchema.parse({ id: v.idParamSchema.parse(req.params).id });
+
+    // BR-015: BoQ cannot be modified (including deleted) once tender
+    // details exist for the work.
+    const existing = await getBoqItemById(ctx.tenantId, body.id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "BoQ item not found");
+    if (!canModifyBoq(await hasTenderDetailsForWork(ctx.tenantId, existing.workId))) {
+      throw new HttpError(409, "BOQ_FROZEN", "BoQ cannot be modified once tender details exist for this work");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteBoqItemCommand(ctx, body.id));
   });
 }
