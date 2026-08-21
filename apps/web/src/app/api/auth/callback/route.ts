@@ -6,6 +6,16 @@ import { getOidcConfig, COOKIE } from "@/lib/auth/config";
 const SECURE = process.env.NODE_ENV === "production";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 
+// A failed or invalid callback must never leave the browser holding cookies
+// that would poison the next attempt: this attempt's PKCE verifier/state,
+// and any stale ACCESS/REFRESH left over from an earlier session.
+function clearAuthCookies(jar: ReturnType<typeof cookies>) {
+  jar.delete(COOKIE.PKCE_VERIFIER);
+  jar.delete(COOKIE.OAUTH_STATE);
+  jar.delete(COOKIE.ACCESS);
+  jar.delete(COOKIE.REFRESH);
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -15,6 +25,7 @@ export async function GET(req: Request) {
   const verifier = jar.get(COOKIE.PKCE_VERIFIER)?.value;
 
   if (!code || !state || !verifier || state !== savedState) {
+    clearAuthCookies(jar);
     return NextResponse.redirect(new URL("/auth/login?error=invalid_callback", APP_URL));
   }
 
@@ -27,7 +38,9 @@ export async function GET(req: Request) {
     jar.delete(COOKIE.PKCE_VERIFIER);
     jar.delete(COOKIE.OAUTH_STATE);
     return NextResponse.redirect(new URL("/dashboard", APP_URL));
-  } catch {
+  } catch (err) {
+    console.error("[auth/callback] token exchange failed", err);
+    clearAuthCookies(jar);
     return NextResponse.redirect(new URL("/auth/login?error=token_exchange_failed", APP_URL));
   }
 }
