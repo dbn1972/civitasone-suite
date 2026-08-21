@@ -57,7 +57,17 @@ export async function checkPermission(
     throw new AuthContextError(503, "POLICY_UNAVAILABLE", `policy evaluate failed: ${res.status}`);
   }
 
-  return res.json() as Promise<PermissionCheckResult>;
+  try {
+    return (await res.json()) as PermissionCheckResult;
+  } catch (err) {
+    // A 200 with a malformed/empty body (e.g. policy-service returned truncated
+    // JSON, or no body at all) is neither the connection-level nor the
+    // HTTP-level failure above, but it's the same underlying problem — the
+    // decision can't be trusted — so it gets the same clean result rather than
+    // a raw, unhandled SyntaxError from res.json().
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new AuthContextError(503, "POLICY_UNAVAILABLE", `policy evaluate returned a malformed response: ${detail}`);
+  }
 }
 
 export async function requirePermission(

@@ -130,8 +130,20 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // observed relay latency on this box ranges from ~1s up to ~40s. Rather than
 // block serially on each individual item (slow, and a slow poll timeout on
 // item N shouldn't abort items N+1..), this fires all the POSTs for a batch
-// up front, then does ONE shared poll-and-retry sweep at the end to confirm
-// (and, if truly still missing, re-request) anything that hasn't landed yet.
+// up front, then does ONE shared poll sweep at the end to confirm what's
+// landed.
+//
+// This is CONFIRM-ONLY — it does not itself re-POST anything on a false
+// negative (e.g. the GET-list endpoint's read-after-write staleness noted
+// below). It's a generic primitive shared by both the roles phase and the
+// permissions phase, and those two have different retry safety: a duplicate
+// addPermission is a safe no-op (idx_permissions_tenant_role_resource_action,
+// migrations/0009, backs repo.insertPermission's onConflictDoNothing), but a
+// duplicate createRole is NOT — insertRole has no onConflictDoNothing, so a
+// blind retry against an already-existing (tenant, name) would hit
+// idx_roles_tenant_name and throw inside policy-worker's transaction. Retry
+// is therefore opt-in per call site (see the permissions phase in main()),
+// not baked into this shared helper.
 async function waitUntilAllTrue(checks: Array<() => Promise<boolean>>, roundMs = 2000, maxRounds = 30): Promise<boolean[]> {
   let pending = checks.map((_, i) => i);
   const done = new Array(checks.length).fill(false);
@@ -211,8 +223,27 @@ async function main() {
       const results = await waitUntilAllTrue(
         pendingGrants.map((g) => () => permissionVisible(tenantId, g.roleId, g.resource, g.action)),
       );
-      results.forEach((ok, i) => { if (!ok) failures.push(`tenant ${tenantId}: grant ${pendingGrants[i]!.label} never became visible`); });
       log(`  ...${results.filter(Boolean).length}/${pendingGrants.length} newly-created grants confirmed visible`);
+
+      // Retry, once, anything the sweep above still couldn't confirm. This is
+      // deliberately safe to do blindly (unlike the roles phase): a duplicate
+      // addPermission for a grant that actually landed already (i.e. the
+      // "still missing" report was itself a stale-read false negative, as
+      // observed on this exact endpoint) becomes a DB-level no-op via
+      // idx_permissions_tenant_role_resource_action + onConflictDoNothing
+      // (migrations/0009) rather than a second row.
+      const stillMissing = pendingGrants.filter((_, i) => !results[i]);
+      if (stillMissing.length) {
+        log(`  ${stillMissing.length} grant(s) not yet confirmed — re-requesting once: ${stillMissing.map((g) => g.label).join(", ")}`);
+        for (const g of stillMissing) {
+          await api(tenantId, "POST", `/policy/roles/${g.roleId}/permissions`, { resource: g.resource, action: g.action, effect: "allow" });
+        }
+        const retryResults = await waitUntilAllTrue(
+          stillMissing.map((g) => () => permissionVisible(tenantId, g.roleId, g.resource, g.action)),
+        );
+        retryResults.forEach((ok, i) => { if (!ok) failures.push(`tenant ${tenantId}: grant ${stillMissing[i]!.label} never became visible, even after a re-request`); });
+        log(`  ...${retryResults.filter(Boolean).length}/${stillMissing.length} re-requested grants confirmed visible`);
+      }
     }
   }
 
