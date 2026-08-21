@@ -118,6 +118,21 @@ export function mbBelongsToBill(
   return mb.workId === workId && mb.awardId === awardId;
 }
 
+/**
+ * Bug fix (works-cross-entity-integrity #1, CRITICAL): the BoQ item cited on
+ * a measurement must belong to the same work as the MB it is being recorded
+ * against. Without this, the "measured value" ceiling that bills are later
+ * checked against (see computeMeasuredValueMinor / billAmountExceedsMeasuredValue
+ * above) can be computed from a completely unrelated work's BoQ item/rate —
+ * e.g. citing a high-rate BoQ item belonging to Work B while recording the
+ * measurement against Work A's MB, then billing Work A up to that borrowed
+ * ceiling even though Work A has no real BoQ items of its own. Same family as
+ * awardBelongsToWork / mbBelongsToBill above.
+ */
+export function boqItemBelongsToMbWork(boqItem: { workId: string }, mb: { workId: string }): boolean {
+  return boqItem.workId === mb.workId;
+}
+
 /** Terminal step in bill finalization — triggers finance hand-off. */
 export function isTerminalBillStatus(status: string): boolean {
   return status === "do_finalized";

@@ -327,7 +327,12 @@ describe("Execution orphan consumers", () => {
     mockSelectMap.set(workScopes, [{ id: "ws-1", targetValue: "100" }]);
     mockSelectMap.set(scopeProgress, [{ currentAchievement: "90" }]);
     const h = await load();
-    await h[COMMANDS.progressRecord]({ ...base, payload: { id: "pr-2", workScopeId: "ws-1", month: 5, year: 2026, currentAchievement: 20 } });
+    // Code-review fix (works-cross-entity-integrity #2, HIGH): previously the
+    // cap-exceeded path was a bare `return` — no throw, no trace of the
+    // dropped request. It now throws a real NonRetryableError (matching
+    // billing's dead-letter pattern) so a lost race is at least observable.
+    await expect(h[COMMANDS.progressRecord]({ ...base, payload: { id: "pr-2", workScopeId: "ws-1", month: 5, year: 2026, currentAchievement: 20 } }))
+      .rejects.toThrow(/PROGRESS_EXCEEDS_TARGET/);
     expect(mockInserted).toHaveLength(0);
   });
   it("photoUpload persists photo + emits photo.uploaded", async () => {
@@ -400,21 +405,24 @@ describe("Billing orphan consumers", () => {
   const load = () => handlers("registerBillingConsumers", "../src/modules/billing/consumer.js");
 
   it("measurementRecord within BoQ qty persists + emits measurement.recorded", async () => {
-    mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "10" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
     const h = await load();
     await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-1", mbId: "mb-1", boqItemId: "b-1", quantity: 5 } });
     expect(mockInserted).toHaveLength(1);
     expect(emitted(EVENTS.measurementRecorded)).toBe(true);
   });
   it("measurementRecord exceeding BoQ qty is rejected (no insert)", async () => {
-    mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "10" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
     const h = await load();
     await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 20 } }))
       .rejects.toThrow(/BOQ_QUANTITY_EXCEEDED/);
     expect(mockInserted).toHaveLength(0);
   });
   it("measurementRecord rejects the second when cumulative quantity exceeds BoQ qty", async () => {
-    mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "100" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "100" }]);
     const h = await load();
     // first 80-unit measurement: no priors → cumulative 80 <= 100 → persists
     mockSelectMap.set(measurements, []);
@@ -427,10 +435,37 @@ describe("Billing orphan consumers", () => {
     expect(mockInserted).toHaveLength(1); // still 1 — cumulative guard rejected the second
   });
   it("measurementRecord against a missing BoQ item is rejected (no insert)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
     mockSelectMap.set(boqItems, []);
     const h = await load();
     await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-3", mbId: "mb-1", boqItemId: "nope", quantity: 1 } }))
       .rejects.toThrow(/INVALID_BOQ_REF/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("measurementRecord against a missing MB is rejected (no insert)", async () => {
+    mockSelectMap.set(measurementBooks, []);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
+    const h = await load();
+    await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-4", mbId: "missing-mb", boqItemId: "b-1", quantity: 1 } }))
+      .rejects.toThrow(/MB_NOT_FOUND/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  // Bug #1 (CRITICAL, works-cross-entity-integrity): the ORIGINAL repro,
+  // precisely — a work with ZERO real BoQ items of its own has a measurement
+  // recorded against its MB, citing a DIFFERENT work's BoQ item (with its own
+  // rate). Previously this was accepted unconditionally: the measurement
+  // landed under this work's MB, and the borrowed BoQ item's rate silently
+  // became part of THIS work's measured-value ceiling — which a bill against
+  // this work is later checked against. No race condition needed; a plain
+  // two-call sequential exploit.
+  it("measurementRecord is rejected when the cited BoQ item belongs to a different work than the MB (bug #1)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(boqItems, [{ id: "b-borrowed", workId: "some-other-work", quantity: "10", rate: 1000000000n }]);
+    const h = await load();
+    await expect(h[COMMANDS.measurementRecord]({
+      ...base,
+      payload: { id: "m-5", mbId: "mb-1", boqItemId: "b-borrowed", quantity: 1 },
+    })).rejects.toThrow(/BOQ_WORK_MISMATCH/);
     expect(mockInserted).toHaveLength(0);
   });
   it("accountCompile persists compilation + emits account.compiled", async () => {

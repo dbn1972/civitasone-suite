@@ -8,7 +8,7 @@ import { measurementBooks, measurements, bills, billItems, accountCompilations }
 import {
   calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
-  computeMeasuredValueMinor,
+  computeMeasuredValueMinor, boqItemBelongsToMbWork,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
@@ -299,8 +299,17 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      const mbId = p.mbId as string;
       const boqItemId = p.boqItemId as string;
       const quantity = Number(p.quantity as number);
+
+      const mbRows = await tx.select().from(measurementBooks)
+        .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+        .limit(1);
+      const mb = mbRows[0];
+      if (!mb) {
+        throw new NonRetryableError("MB_NOT_FOUND: measurement references non-existent measurement book");
+      }
 
       const boqRows = await tx.select().from(boqItems)
         .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.id, boqItemId)))
@@ -308,6 +317,17 @@ export function registerBillingConsumers(q: Queue): void {
       const boq = boqRows[0];
       if (!boq) {
         throw new NonRetryableError("INVALID_BOQ_REF: measurement references non-existent BoQ item");
+      }
+
+      // Bug fix (works-cross-entity-integrity #1, CRITICAL, defense-in-depth
+      // — also enforced pre-enqueue in billing/routes.ts): the cited BoQ
+      // item must belong to the same work as the MB it's being recorded
+      // against. Without this, a caller can cite an unrelated work's BoQ
+      // item (with its own rate) while recording against THIS work's MB,
+      // laundering that borrowed rate into this MB's measured-value ceiling
+      // — which bills against this work are later checked against.
+      if (!boqItemBelongsToMbWork(boq, mb)) {
+        throw new NonRetryableError("BOQ_WORK_MISMATCH: cited BoQ item does not belong to this MB's work");
       }
 
       // FR-BIL-011: enforce the CUMULATIVE billing ceiling. Sum every prior
