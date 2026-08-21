@@ -915,7 +915,28 @@ async function processPayrollRun(
       // HRMS payroll-input feed. We never add the two together — that deducted
       // the same LOP twice.
       const ledgerLop = await lopRepo.getLopForMonth(p.tenantId, emp.id, p.month);
-      const lopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
+      const attendanceLopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
+      // BUG-1 fix: mid-month joining pro-ration. Days in the run month BEFORE
+      // dateOfJoining are unpaid, on top of (added to, not instead of) the
+      // leave/attendance LOP above. The two sources cannot legitimately overlap
+      // — no attendance/leave row can exist for a date before the employee's
+      // HRMS record was even created — but Math.min(daysInMonth, ...) below is
+      // a belt-and-suspenders cap so we never withhold pay for more days than
+      // the month actually has, however the two sources combine.
+      // Leaving mid-month is NOT handled here by design: a separated employee
+      // is dropped from the HRMS active-employee feed entirely (see
+      // hrms-client.ts / hrms routes.ts comments), so they never reach this
+      // loop — their last partial month + terminal dues are the Full & Final
+      // Settlement flow's job, priced off its own separationDate.
+      const doj = emp.dateOfJoining;
+      const joinedThisMonth = doj != null && doj.slice(0, 7) === p.month;
+      const joinedAfterThisMonth = doj != null && doj.slice(0, 7) > p.month;
+      const joiningUnpaidDays = joinedAfterThisMonth
+        ? Number(daysInMonth)
+        : joinedThisMonth
+        ? Math.max(0, Number(doj!.slice(8, 10)) - 1)
+        : 0;
+      const lopDays = Math.min(Number(daysInMonth), attendanceLopDays + joiningUnpaidDays);
       // LOP daily rate on (Basic + DA) over actual days in month.
       const dailyRate = (basicMinor + daMinor) / daysInMonth;
       const lopDeduction = dailyRate * BigInt(lopDays);
