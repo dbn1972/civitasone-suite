@@ -190,7 +190,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
     if (q.empId) {
-      sendValidated(reply, leaveListResponseSchema, { data: await queries.getLeaveApplicationsByEmp(ctx.tenantId, q.empId) });
+      sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplicationsByEmp(ctx.tenantId, q.empId));
       return;
     }
     sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset));
