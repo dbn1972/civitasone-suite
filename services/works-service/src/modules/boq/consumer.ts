@@ -1,12 +1,33 @@
 import { NonRetryableError, type Queue } from "@civitasone/queue";
-import { db } from "../../shared/db.js";
+import { db, type ScopedTx } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { boqItems, recapitulation } from "./schema.js";
 import { measurements } from "../billing/schema.js";
-import { awards } from "../tender/schema.js";
-import { calculateBoqAmount, calculateRecapitulation, isDuplicateBoqLine } from "./domain.js";
+import { awards, tenders, preTenders } from "../tender/schema.js";
+import { technicalSanctions } from "../approval/schema.js";
+import { calculateBoqAmount, calculateRecapitulation, isDuplicateBoqLine, canEnterBoq, canModifyBoq } from "./domain.js";
 import { eq, and } from "drizzle-orm";
+
+/** BR-015 (defense-in-depth — also enforced pre-enqueue in boq/routes.ts):
+ * does a tender or pre-tender already exist for this work? works.tenders
+ * has no producer yet in practice (see tender/repo.ts), so pre_tenders is
+ * the entity actually populated — checking both keeps this correct if that
+ * ever changes. */
+async function hasTenderDetailsForWorkTx(
+  tx: ScopedTx,
+  tenantId: string,
+  workId: string,
+): Promise<boolean> {
+  const tenderRows = await tx.select({ id: tenders.id }).from(tenders)
+    .where(and(eq(tenders.tenantId, tenantId), eq(tenders.workId, workId)))
+    .limit(1);
+  if (tenderRows.length > 0) return true;
+  const preTenderRows = await tx.select({ id: preTenders.id }).from(preTenders)
+    .where(and(eq(preTenders.tenantId, tenantId), eq(preTenders.workId, workId)))
+    .limit(1);
+  return preTenderRows.length > 0;
+}
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -20,6 +41,19 @@ export function registerBoqConsumers(q: Queue): void {
       const workId = p.workId as string;
       const itemCode = (p.itemCode as string) ?? null;
       const itemDescription = p.itemDescription as string;
+
+      // BR-013 (defense-in-depth — also enforced pre-enqueue in boq/routes.ts):
+      // BoQ entry requires a finalized technical sanction (TS) for the work.
+      const tsRows = await tx.select({ id: technicalSanctions.id }).from(technicalSanctions)
+        .where(and(
+          eq(technicalSanctions.tenantId, msg.tenantId),
+          eq(technicalSanctions.workId, workId),
+          eq(technicalSanctions.status, "finalized"),
+        ))
+        .limit(1);
+      if (!canEnterBoq(tsRows.length > 0)) {
+        throw new NonRetryableError("TS_REQUIRED: BoQ entry requires a finalized technical sanction for this work");
+      }
 
       const existingRows = await tx.select({
         workId: boqItems.workId,
@@ -125,6 +159,12 @@ export function registerBoqConsumers(q: Queue): void {
       const current = rows[0];
       if (!current) throw new NonRetryableError("BOQ_ITEM_NOT_FOUND: BoQ item not found for update");
 
+      // BR-015 (defense-in-depth — also enforced pre-enqueue in boq/routes.ts):
+      // BoQ cannot be modified once tender details exist for the work.
+      if (!canModifyBoq(await hasTenderDetailsForWorkTx(tx, msg.tenantId, current.workId as string))) {
+        throw new NonRetryableError("BOQ_FROZEN: BoQ cannot be modified once tender details exist for this work");
+      }
+
       // Do not allow the quantity of an already-billed BoQ item to change — a
       // measurement references it as the billing ceiling.
       if (p.quantity !== undefined && Number(p.quantity) !== Number(current.quantity)) {
@@ -179,6 +219,13 @@ export function registerBoqConsumers(q: Queue): void {
         .limit(1);
       const current = boqRows[0];
       if (current) {
+        // BR-015 (defense-in-depth — also enforced pre-enqueue in
+        // boq/routes.ts): BoQ cannot be modified (including deleted) once
+        // tender details exist for the work.
+        if (!canModifyBoq(await hasTenderDetailsForWorkTx(tx, msg.tenantId, current.workId as string))) {
+          throw new NonRetryableError("BOQ_FROZEN: BoQ cannot be modified once tender details exist for this work");
+        }
+
         const awardRefs = await tx.select().from(awards)
           .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.workId, current.workId)));
         const hasActiveAward = awardRefs.some(

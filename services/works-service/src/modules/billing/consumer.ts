@@ -113,8 +113,20 @@ export function registerBillingConsumers(q: Queue): void {
       if (!mbId) {
         throw new NonRetryableError("MB_REQUIRED: bill creation requires a valid mbId");
       }
+      // Code-review fix (double-billing gap): lock the MB row for the rest
+      // of this transaction. Without this, two concurrent billCreate
+      // transactions citing the same mbId can each read "0 prior bills
+      // against this MB", both pass the measured-value check below, and
+      // both commit — double-billing the same measured work. FOR UPDATE
+      // serializes them: the second transaction blocks here until the
+      // first commits (or rolls back), then re-reads and sees the first
+      // transaction's already-inserted bill, so its own prior-bills-by-mb
+      // sum is correct and the check below closes the race. (This also
+      // naturally serializes against a concurrent mbFinalize on the same
+      // row, which takes an equivalent implicit lock via UPDATE.)
       const mbRows = await tx.select().from(measurementBooks)
         .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+        .for("update")
         .limit(1);
       const mb = mbRows[0];
       if (!mb || !canCreateBill(mb.status)) {
@@ -138,8 +150,20 @@ export function registerBillingConsumers(q: Queue): void {
       const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);
 
-      if (billAmountExceedsMeasuredValue(gross, measuredValueMinor)) {
-        throw new NonRetryableError("MEASURED_VALUE_EXCEEDED: bill gross amount exceeds the value of work measured against this MB");
+      // Code-review fix (double-billing gap): cumulative gross ALREADY
+      // billed against this SAME mbId (prior bills) + this bill must not
+      // exceed the MB's measured value — otherwise a second bill citing an
+      // already-fully-billed MB recomputes the identical measured value and
+      // passes independently. Read happens after the FOR UPDATE lock above,
+      // so this sees every previously-committed bill against this MB.
+      const priorBillsAgainstMb = await tx.select().from(bills)
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.mbId, mbId)));
+      const priorBilledAgainstMb = priorBillsAgainstMb.reduce(
+        (sum, row) => sum + (row.grossAmountMinor ?? 0n),
+        0n,
+      );
+      if (billAmountExceedsMeasuredValue(priorBilledAgainstMb, gross, measuredValueMinor)) {
+        throw new NonRetryableError("MEASURED_VALUE_EXCEEDED: bill gross amount plus amount already billed against this MB exceeds the value of work measured against it");
       }
 
       // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.

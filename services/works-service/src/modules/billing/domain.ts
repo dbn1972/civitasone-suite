@@ -79,18 +79,30 @@ export function billAmountExceedsAward(
 }
 
 /**
- * No-3-way-match fix: a bill's gross amount must not exceed the value of the
- * work actually measured and recorded against its referenced MB (sum of
- * quantity × BoQ rate over every measurement line under that MB — see
- * boq/domain.ts calculateBoqAmount). This is the real "was the work done"
- * check; billAmountExceedsAward only bounds total spend against the award
- * ceiling and says nothing about whether any work was measured at all.
+ * No-3-way-match fix: cumulative gross billed AGAINST THIS MB (prior bills
+ * citing the same mbId + this bill) must not exceed the value of the work
+ * actually measured and recorded against that MB (sum of quantity × BoQ
+ * rate over every measurement line under it — see boq/domain.ts
+ * calculateBoqAmount). This is the real "was the work done" check;
+ * billAmountExceedsAward only bounds total spend against the award ceiling
+ * (sized for many sequential RA bills) and says nothing about whether the
+ * SAME measured work was already paid for.
+ *
+ * Cumulative by design, mirroring billAmountExceedsAward: a single MB may
+ * legitimately back more than one bill over time (partial/staged RA
+ * billing), so this must not reset per-bill — it must track how much of
+ * the MB's measured value has already been billed. Code-review fix
+ * (double-billing gap): the original single-arg form compared only this
+ * bill's own gross against the full measured value, so a second bill
+ * citing an MB already fully billed would recompute the same measured
+ * value and pass again.
  */
 export function billAmountExceedsMeasuredValue(
-  billGross: bigint,
+  priorBilledAgainstMbMinor: bigint,
+  newBillGross: bigint,
   measuredValueMinor: bigint,
 ): boolean {
-  return billGross > measuredValueMinor;
+  return priorBilledAgainstMbMinor + newBillGross > measuredValueMinor;
 }
 
 /**

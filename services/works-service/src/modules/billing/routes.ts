@@ -9,7 +9,10 @@ import {
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor,
 } from "./domain.js";
-import { getMb, getBill, listBillsForWork, listBills, listMeasurementsByMb, listMeasurementsByBoqItem } from "./repo.js";
+import {
+  getMb, getBill, listBillsForWork, listBills, listMeasurementsByMb, listMeasurementsByBoqItem,
+  listBillsByMb,
+} from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
 import { getBoqItemById, listBoqItemsByIds } from "../boq/repo.js";
 import { parseMinor } from "@civitasone/schemas";
@@ -119,12 +122,25 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const rateByBoqItem = new Map(boqItemRows.map((b) => [b.id, b.rate]));
     const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
 
+    // Code-review fix (double-billing gap): the measured-value ceiling is
+    // per-MB and cumulative — prior bills already citing this SAME mbId
+    // must be subtracted, or a second bill against an already-fully-billed
+    // MB would recompute the identical measured value and pass again. This
+    // route-level read is best-effort (see the locked, authoritative check
+    // in billing/consumer.ts billCreate for the real guarantee under
+    // concurrency).
+    const priorBillsAgainstMb = await listBillsByMb(ctx.tenantId, body.mbId);
+    const priorBilledAgainstMb = priorBillsAgainstMb.reduce(
+      (sum, row) => sum + (row.grossAmountMinor ?? 0n),
+      0n,
+    );
+
     const newGross = parseMinor(body.grossAmountMinor);
-    if (billAmountExceedsMeasuredValue(newGross, measuredValueMinor)) {
+    if (billAmountExceedsMeasuredValue(priorBilledAgainstMb, newGross, measuredValueMinor)) {
       throw new HttpError(
         422,
         "MEASURED_VALUE_EXCEEDED",
-        `Bill gross amount (${newGross}) exceeds the value of work measured against this MB (${measuredValueMinor})`,
+        `Bill gross amount (${newGross}) plus amount already billed against this MB (${priorBilledAgainstMb}) exceeds the value of work measured against it (${measuredValueMinor})`,
       );
     }
 

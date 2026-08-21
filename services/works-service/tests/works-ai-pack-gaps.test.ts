@@ -11,6 +11,7 @@ import { boqItems } from "../src/modules/boq/schema.js";
 import { bills, measurementBooks, measurements } from "../src/modules/billing/schema.js";
 import { awards } from "../src/modules/tender/schema.js";
 import { workIssues } from "../src/modules/execution/schema.js";
+import { technicalSanctions } from "../src/modules/approval/schema.js";
 import {
   billAmountExceedsAward,
   isTerminalBillStatus,
@@ -34,6 +35,10 @@ let mockMarkResult = true;
 function chainRows(rows: unknown[]) {
   const w: any = Promise.resolve(rows);
   w.limit = () => Promise.resolve(rows);
+  // Code-review fix (double-billing gap): the MB row lookup in billCreate
+  // now chains `.for("update")` before `.limit(1)` — return the same
+  // thenable so that chain still resolves to `rows`.
+  w.for = () => w;
   return w;
 }
 
@@ -152,14 +157,16 @@ describe("Gap 2 — Bill amount vs award ceiling (FR-BIL-012)", () => {
 
   it("billCreate rejects when cumulative gross exceeds award", async () => {
     // mbId is now required (bug #1) and must be a do_finalized MB belonging
-    // to this work/award (bug #2 family), with measured value covering the
-    // gross amount tested here — 1000 × 100 = 100000 paise, comfortably
-    // covering both the rejected (20000) and accepted (50000) amounts below,
-    // isolating this test to the award-ceiling rule specifically.
+    // to this work/award (bug #2 family). This mock is table-keyed (not
+    // WHERE-aware), so the seeded `bills` row is read for BOTH the
+    // award-ceiling "prior bills by work" sum and the double-billing-fix
+    // "prior bills by mb" sum — 2000 × 100 = 200000 paise measured value
+    // comfortably covers 90000+20000 either way, so only the award ceiling
+    // (100000) trips, isolating this test to that rule specifically.
     mockSelectMap.set(measurementBooks, [{ id: MB_ID, status: "do_finalized", workId: WORK_ID, awardId: AWARD_ID }]);
     mockSelectMap.set(awards, [{ id: AWARD_ID, workId: WORK_ID, acceptedAmountMinor: 100000n }]);
     mockSelectMap.set(bills, [{ grossAmountMinor: 90000n }]);
-    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "1000" }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "2000" }]);
     mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
 
     const h = await billingHandlers();
@@ -177,7 +184,7 @@ describe("Gap 2 — Bill amount vs award ceiling (FR-BIL-012)", () => {
     mockSelectMap.set(measurementBooks, [{ id: MB_ID, status: "do_finalized", workId: WORK_ID, awardId: AWARD_ID }]);
     mockSelectMap.set(awards, [{ id: AWARD_ID, workId: WORK_ID, acceptedAmountMinor: 100000n }]);
     mockSelectMap.set(bills, [{ grossAmountMinor: 40000n }]);
-    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "1000" }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "2000" }]);
     mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
 
     const h = await billingHandlers();
@@ -206,6 +213,9 @@ describe("Gap 3 — BoQ duplicate-line guard", () => {
   });
 
   it("boqAddItem rejects duplicate itemCode on same work", async () => {
+    // BR-013 (route-level backstop added while fixing the double-billing
+    // gap): BoQ entry now also requires a finalized TS for the work.
+    mockSelectMap.set(technicalSanctions, [{ workId: WORK_ID, status: "finalized" }]);
     mockSelectMap.set(boqItems, [{
       workId: WORK_ID, itemCode: "IT-001", itemDescription: "Existing line",
     }]);
@@ -221,6 +231,7 @@ describe("Gap 3 — BoQ duplicate-line guard", () => {
   });
 
   it("boqAddItem persists when itemCode is unique for the work", async () => {
+    mockSelectMap.set(technicalSanctions, [{ workId: WORK_ID, status: "finalized" }]);
     mockSelectMap.set(boqItems, []);
     const h = await boqHandlers();
     await h[COMMANDS.boqAddItem]({

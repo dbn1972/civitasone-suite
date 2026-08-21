@@ -14,6 +14,7 @@ import { physicalCompletions } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
 import { measurements, measurementBooks, bills, billItems } from "../src/modules/billing/schema.js";
 import { contractors } from "../src/modules/contractor/schema.js";
+import { technicalSanctions } from "../src/modules/approval/schema.js";
 import { vi } from "vitest";
 
 const mockInserted: unknown[] = [];
@@ -26,6 +27,10 @@ let mockMarkResult = true;
 function chainRows(rows: unknown[]) {
   const w: any = Promise.resolve(rows);
   w.limit = () => Promise.resolve(rows);
+  // Code-review fix (double-billing gap): the MB row lookup in billCreate
+  // now chains `.for("update")` before `.limit(1)` — return the same
+  // thenable so that chain still resolves to `rows`.
+  w.for = () => w;
   return w;
 }
 const mockTx: any = {
@@ -172,6 +177,46 @@ describe("BoQ orphan consumers", () => {
     const h = await load();
     await expect(h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } }))
       .rejects.toThrow(/BOQ_ITEM_DELETE_BLOCKED/);
+    expect(mockDeleted).toHaveLength(0);
+  });
+
+  // BR-013/BR-015 consumer-level backstop, added alongside the double-billing
+  // fix for defense-in-depth consistency with the rest of this PR.
+  it("boqAddItem is rejected when no finalized TS exists for the work (BR-013)", async () => {
+    mockSelectMap.set(technicalSanctions, []);
+    const h = await load();
+    await expect(h[COMMANDS.boqAddItem]({
+      ...base,
+      payload: { id: "b-new", workId: "w-1", itemDescription: "No TS item", unit: "cum", rate: "1000", quantity: 1 },
+    })).rejects.toThrow(/TS_REQUIRED/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("boqAddItem persists when a finalized TS exists for the work (BR-013)", async () => {
+    mockSelectMap.set(technicalSanctions, [{ workId: "w-1", status: "finalized" }]);
+    mockSelectMap.set(boqItems, []);
+    const h = await load();
+    await h[COMMANDS.boqAddItem]({
+      ...base,
+      payload: { id: "b-new", workId: "w-1", itemDescription: "Has TS item", unit: "cum", rate: "1000", quantity: 1 },
+    });
+    expect(mockInserted).toHaveLength(1);
+    expect(emitted(EVENTS.boqItemAdded)).toBe(true);
+  });
+  it("boqUpdateItem is blocked once a pre-tender exists for the work (BR-015)", async () => {
+    mockSelectMap.set(boqItems, [{ id: "b-1", rate: 100n, quantity: "5", workId: "w-1" }]);
+    mockSelectMap.set(preTenders, [{ id: "pt-1", workId: "w-1" }]);
+    const h = await load();
+    await expect(h[COMMANDS.boqUpdateItem]({ ...base, payload: { id: "b-1", remarks: "edit after tender" } }))
+      .rejects.toThrow(/BOQ_FROZEN/);
+    expect(mockUpdated).toHaveLength(0);
+  });
+  it("boqDeleteItem is blocked once a pre-tender exists for the work (BR-015)", async () => {
+    mockSelectMap.set(measurements, []);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1" }]);
+    mockSelectMap.set(preTenders, [{ id: "pt-1", workId: "w-1" }]);
+    const h = await load();
+    await expect(h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } }))
+      .rejects.toThrow(/BOQ_FROZEN/);
     expect(mockDeleted).toHaveLength(0);
   });
 });
@@ -538,5 +583,52 @@ describe("Billing orphan consumers", () => {
       },
     })).rejects.toThrow(/MEASURED_VALUE_EXCEEDED/);
     expect(mockInserted).toHaveLength(0);
+  });
+
+  // Code-review fix: the exact double-billing repro. MB-X measures 1,000,000
+  // paise of work. Bill A (gross 1,000,000) already cites MB-X and has been
+  // persisted. Bill B, citing the SAME mbId for another 1,000,000, must now
+  // be rejected — before this fix it recomputed the identical (unsubtracted)
+  // 1,000,000 measured value and passed again, double-paying for the same
+  // measured work.
+  it("billCreate is rejected when a bill already citing this mbId has already consumed its full measured value (double-billing fix)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "10000" }]); // 10000 × 100 = 1,000,000 measured
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
+    // Bill A already landed, citing mb-1, for the full measured value.
+    mockSelectMap.set(bills, [{ id: "bill-A", mbId: "mb-1", grossAmountMinor: 1000000n }]);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-B", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "BILL-B-DOUBLE", grossAmountMinor: "1000000",
+      },
+    })).rejects.toThrow(/MEASURED_VALUE_EXCEEDED/);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  // Same repro, but Bill B asks for only the small remainder of headroom —
+  // proves the fix is cumulative (subtracts prior bills against this mb),
+  // not a blanket "one bill per MB" block, so legitimate partial/staged RA
+  // billing against a single MB still works.
+  it("billCreate persists when a bill against a partially-billed mbId fits in the remaining measured-value headroom", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "10000" }]); // 1,000,000 measured
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
+    // Bill A already took 600,000 of the 1,000,000 measured value.
+    mockSelectMap.set(bills, [{ id: "bill-A", mbId: "mb-1", grossAmountMinor: 600000n }]);
+    const h = await load();
+    await h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-C", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "BILL-C-PARTIAL", grossAmountMinor: "400000",
+      },
+    });
+    expect(mockInserted).toHaveLength(2); // bills + bill_items
+    expect(emitted(EVENTS.billCreated)).toBe(true);
   });
 });

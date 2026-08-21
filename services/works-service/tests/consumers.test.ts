@@ -12,17 +12,22 @@ const mockTx = {
   update: mockUpdate,
   select: vi.fn().mockReturnValue({
     from: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({
+      where: vi.fn().mockImplementation(() => {
         // Shared fixture used for both the award lookup and the MB lookup
         // (this generic mock isn't table-aware) — carries the fields both
         // shapes need so the bug #1/#2 chain checks (awardBelongsToWork,
         // canCreateBill, mbBelongsToBill) pass for the "w-1"/"award-1" pair
-        // used below.
-        limit: vi.fn().mockResolvedValue([{
-          id: "award-1", workId: "w-1", awardId: "award-1",
-          acceptedAmountMinor: 999999999999n, status: "do_finalized",
-        }]),
-        then: (resolve: Function) => Promise.resolve([]).then(resolve),
+        // used below. `.for(...)` (code-review fix — MB row lock) returns
+        // the same chain so `.for("update").limit(1)` still resolves it.
+        const chain: any = {
+          limit: vi.fn().mockResolvedValue([{
+            id: "award-1", workId: "w-1", awardId: "award-1",
+            acceptedAmountMinor: 999999999999n, status: "do_finalized",
+          }]),
+          then: (resolve: Function) => Promise.resolve([]).then(resolve),
+        };
+        chain.for = vi.fn().mockReturnValue(chain);
+        return chain;
       }),
     }),
   }),

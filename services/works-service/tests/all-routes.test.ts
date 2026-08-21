@@ -224,6 +224,10 @@ vi.mock("../src/modules/billing/repo.js", () => ({
   // specific check (covered separately in orphan-consumers.test.ts).
   listMeasurementsByMb: vi.fn(async () => []),
   listMeasurementsByBoqItem: vi.fn(async () => []),
+  // Code-review fix (double-billing gap): no prior bills against any MB by
+  // default — the specific double-billing repro is covered in
+  // orphan-consumers.test.ts, where the mock can express "MB already billed".
+  listBillsByMb: vi.fn(async () => []),
 }));
 
 let app: FastifyInstance;

@@ -44,6 +44,19 @@ export async function listBillsForWork(tenantId: string, workId: string) {
   });
 }
 
+/**
+ * Code-review fix (double-billing gap): every bill that already cites this
+ * mbId — used to compute how much of the MB's measured value has already
+ * been billed, so a second bill against the same MB can't independently
+ * pass the same measured-value check the first one did.
+ */
+export async function listBillsByMb(tenantId: string, mbId: string) {
+  return scopedRead(async (tx) => {
+    return tx.select().from(bills)
+      .where(and(eq(bills.tenantId, tenantId), eq(bills.mbId, mbId)));
+  });
+}
+
 /** Tenant-wide bills register, newest first — backs the FE billing list page. */
 export async function listBills(tenantId: string, page: number, pageSize: number) {
   return scopedRead(async (tx) => {
