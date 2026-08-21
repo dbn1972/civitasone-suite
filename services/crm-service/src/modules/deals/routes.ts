@@ -8,7 +8,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as pipelineRepo from "../pipelines/repo.js";
-import { missingMandatoryFields, findStage } from "./stage-gate.js";
+import { missingMandatoryFields, findStage, skippedGateStage } from "./stage-gate.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
@@ -110,6 +110,18 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
    * field is unpopulated — enforcement is synchronous because a 202/consumer path could
    * not report the rejection. Optimistic-lock version conflicts are still resolved
    * asynchronously by the consumer.
+   *
+   * Sequence gate: a PATCH may not skip over an intervening stage whose pipeline config
+   * marks it `gate: true` (pipelines/schema.ts) — enforcement is by ordinal, exactly as
+   * that field's own doc comment promises (422 GATED_STAGE_SKIPPED). Backward moves
+   * (e.g. reopening a mistakenly-closed deal) are not treated as a skip — see
+   * stage-gate.ts's skippedGateStage. Like the mandatory-fields gate above, this is a
+   * request-time REJECT decision, so — same as that gate — it can only be enforced here,
+   * synchronously; a 202/consumer path has no way to report the rejection back.
+   *
+   * Field derivation (status/probability/closed_at) is deliberately NOT done here: it is
+   * resolved inside repo.updateStageWithVersion, at the actual write, so it applies no
+   * matter how the stage-change command reaches the consumer — not only via this route.
    */
   app.patch("/v1/crm/deals/:id/stage", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -131,6 +143,15 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
             422,
             "MANDATORY_STAGE_FIELDS_MISSING",
             `stage '${target.name}' requires: ${missing.join(", ")}`,
+          );
+        }
+        const current = findStage(stages, { stageId: snap.stageId ?? undefined, stageName: snap.stage });
+        const skipped = skippedGateStage(stages, current, target);
+        if (skipped) {
+          throw new HttpError(
+            422,
+            "GATED_STAGE_SKIPPED",
+            `stage '${target.name}' cannot be reached by skipping gated stage '${skipped.name}'`,
           );
         }
       }

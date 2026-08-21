@@ -1,7 +1,12 @@
 import { eq, desc, and, sql } from "drizzle-orm";
+import { pino } from "pino";
 import { db, scopedRead } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
+import { pipelines } from "../pipelines/schema.js";
+import { findStage, deriveStageFields, type PipelineStageLike } from "./stage-gate.js";
+
+const log = pino({ name: "crm-deals-repo" });
 
 /** Exact paise(bigint) -> "12,34,567.89" rupee string (Indian grouping). */
 function rupeesFromPaise(minor: bigint): string {
@@ -103,21 +108,6 @@ export async function insert(tx: Writer, row: DealInsert): Promise<void> {
   await tx.insert(deals).values(row);
 }
 
-export async function updateStage(tx: Writer, id: string, tenantId: string, stage: string, actorId: string, probability?: number): Promise<void> {
-  const status = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
-  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
-  const patch: Record<string, unknown> = {
-    stage, status, updatedAt: new Date(), updatedBy: actorId,
-    // OP-005: reset the ageing clock whenever the stage changes.
-    stageEnteredAt: new Date(),
-    version: sql`${deals.version} + 1`,
-  };
-  if (prob !== undefined) patch.probability = prob;
-  await (tx as typeof db).update(deals)
-    .set(patch)
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
-}
-
 export async function updateStageWithVersion(
   tx: Writer,
   id: string,
@@ -128,20 +118,53 @@ export async function updateStageWithVersion(
   actorId: string,
   probability?: number,
 ): Promise<{ updated: boolean; previousStage?: string }> {
-  const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version })
+  const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version, pipelineId: deals.pipelineId })
     .from(deals)
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
     .limit(1);
   if (!current[0]) return { updated: false };
 
   const previousStage = current[0].stage;
-  const dealStatus = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
-  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
   const now = new Date();
 
+  // Resolved HERE, at the actual write, using `tx` (already inside this write's own
+  // transaction) rather than pre-computed by a caller — so it applies no matter which
+  // code path published the update-stage command, not only the HTTP route (which also
+  // enforces the mandatory-fields/sequence gates, but as REJECT decisions those can only
+  // be checked synchronously there; this is a WRITE decision, so it belongs at the write).
+  let targetStageConfig: PipelineStageLike | undefined;
+  if (current[0].pipelineId) {
+    const pipelineRows = await (tx as typeof db).select({ stages: pipelines.stages })
+      .from(pipelines)
+      .where(and(eq(pipelines.id, current[0].pipelineId), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
+      .limit(1);
+    targetStageConfig = findStage(pipelineRows[0]?.stages ?? null, { stageId, stageName: stage });
+  }
+  const fields = deriveStageFields(stage, targetStageConfig, probability);
+
+  // Fail LOUD (matching missingMandatoryFields's documented philosophy), not just safe:
+  // a non-Won/Lost move with no caller-supplied probability and no resolvable stage
+  // config silently lands on 0. That's the correct fallback (never a stale carried-over
+  // value), but a stage config that fails to resolve is itself worth knowing about —
+  // it usually means the pipeline/stage was deleted or the deal's pipelineId is stale.
+  if (!fields.closesDeal && probability === undefined && targetStageConfig?.probability === undefined) {
+    log.warn(
+      { dealId: id, tenantId, stage, stageId, pipelineId: current[0].pipelineId },
+      "updateStageWithVersion: no explicit probability and no resolvable stage config — defaulting probability to 0",
+    );
+  }
+
+  // status/probability/closedAt are ALL written unconditionally, on every stage change —
+  // forward, backward, or lateral — straight from `fields` (stage-gate.ts's
+  // deriveStageFields, the single source of truth for what a stage means). Previously
+  // probability and closedAt were only patched in the Won/Lost direction, so moving a
+  // deal back off Won/Lost left both holding stale closed-era values; there is no
+  // "forward" vs "backward" branch left here to drift apart again.
   const patch: Record<string, unknown> = {
     stage,
-    status: dealStatus,
+    status: fields.status,
+    probability: fields.probability,
+    closedAt: fields.closesDeal ? now : null,
     updatedAt: now,
     updatedBy: actorId,
     // OP-005: stamp entry into the new stage (only meaningful when it actually moves,
@@ -150,8 +173,6 @@ export async function updateStageWithVersion(
     version: sql`${deals.version} + 1`,
   };
   if (stageId !== undefined) patch.stageId = stageId;
-  if (prob !== undefined) patch.probability = prob;
-  if (stage === "Won" || stage === "Lost") patch.closedAt = now;
 
   const result = await (tx as typeof db).update(deals)
     .set(patch)

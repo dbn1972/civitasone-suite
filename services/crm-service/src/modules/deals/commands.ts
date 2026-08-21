@@ -71,6 +71,9 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
       stage: body.stage,
       stageId: body.stageId,
       version: body.version,
+      // `probability` here is only ever a caller-REQUESTED override; the consumer's
+      // repo.updateStageWithVersion derives the real status/probability/closedAt from
+      // the target stage regardless of whether this key is present at all.
       ...(body.probability !== undefined ? { probability: body.probability } : {}),
     },
   });

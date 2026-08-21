@@ -4,6 +4,14 @@
  *   mandatory reason (for non-won outcomes) and, when the tenant policy requires it,
  *   a competitor on a loss. Closure is refused synchronously (422) when the deal is
  *   already closed so the caller gets a real answer, not a 202.
+ *
+ *   A close-as-WON is a stage transition into "Won" like any other, so it is subject
+ *   to the SAME sequence gate and mandatory-fields gate a PATCH /stage move would be
+ *   (422 GATED_STAGE_SKIPPED / MANDATORY_STAGE_FIELDS_MISSING) — you cannot close-won
+ *   a deal that never walked through its pipeline's gated stages by going through this
+ *   route instead of /stage. lost/cancelled/on_hold are deliberately NOT gated: losing
+ *   or parking a deal is legitimate from any stage and must not require satisfying a
+ *   later stage's mandatory fields first.
  * PUT /v1/crm/deals/close-policy — set the per-tenant close policy (competitor-on-loss).
  */
 import type { FastifyInstance } from "fastify";
@@ -14,6 +22,9 @@ import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
+import * as pipelineRepo from "../pipelines/repo.js";
+import { missingMandatoryFields, findStage, skippedGateStage } from "./stage-gate.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -79,6 +90,37 @@ export async function closeRoutes(app: FastifyInstance): Promise<void> {
 
     if (deal.stage === "Won" || deal.stage === "Lost" || deal.closeOutcome !== null) {
       throw new HttpError(422, "ALREADY_CLOSED", "deal is already closed");
+    }
+
+    // Close-as-won is a stage transition into "Won" — enforce the same gates a
+    // PATCH /stage move into Won would (see PATCH /v1/crm/deals/:id/stage for the
+    // identical block). lost/cancelled/on_hold intentionally skip this: those are not
+    // "entering a later stage" and must remain reachable from anywhere.
+    if (body.outcome === "won") {
+      const snap = await repo.gateSnapshot(id, ctx.tenantId);
+      if (snap && snap.pipelineId) {
+        const stages = await pipelineRepo.stagesOf(snap.pipelineId, ctx.tenantId);
+        const target = findStage(stages, { stageName: "Won" });
+        if (target) {
+          const missing = missingMandatoryFields(snap, target);
+          if (missing.length > 0) {
+            throw new HttpError(
+              422,
+              "MANDATORY_STAGE_FIELDS_MISSING",
+              `stage '${target.name}' requires: ${missing.join(", ")}`,
+            );
+          }
+          const current = findStage(stages, { stageName: snap.stage });
+          const skipped = skippedGateStage(stages, current, target);
+          if (skipped) {
+            throw new HttpError(
+              422,
+              "GATED_STAGE_SKIPPED",
+              `stage '${target.name}' cannot be reached by skipping gated stage '${skipped.name}'`,
+            );
+          }
+        }
+      }
     }
 
     // Competitor capture on a loss is a per-tenant policy (default off).
