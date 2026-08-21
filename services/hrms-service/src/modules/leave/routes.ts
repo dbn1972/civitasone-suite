@@ -1,13 +1,14 @@
-import type { FastifyInstance, FastifyBaseLogger } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
@@ -30,7 +31,7 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
  * engine — callers should fall back to the client-submitted daysApplied in
  * that case, matching the pre-existing "nothing breaks" behavior for EOL/MED.
  */
-async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, log?: FastifyBaseLogger): Promise<number | null> {
+async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, req: FastifyRequest): Promise<number | null> {
   const tenantId = ctx.tenantId;
   const alloc = await repo.findAllocById(body.allocId);
   if (!alloc) throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found");
@@ -40,19 +41,27 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   const code = (lt.code ?? "").toUpperCase();
   const [emp] = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, body.employeeId)));
   if (!emp) throw new HttpError(404, "EMP_NOT_FOUND", "employee not found");
-  // IDOR guard: a bare "employee" actor may only apply for the employee record
-  // their own userRef links to — the same tenantId+userRef linkage self-service
-  // routes.ts already uses for "my profile" / "my leave" lookups, just never
-  // consulted here. HR and manager roles are exempt: HR entering leave for an
-  // employee who can't self-service, and a manager filing on behalf of a
-  // report, are both real supported workflows (see leave-applications route's
-  // ALL_ROLES, which already admits manager/HR to this endpoint).
-  const isPrivilegedActor = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (!isPrivilegedActor) {
-    const [linked] = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
-      .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.userRef, ctx.actorId))));
-    if (!linked || linked.id !== body.employeeId) {
-      throw new HttpError(403, "FORBIDDEN", "employees may only apply for leave on their own employee record");
+  // IDOR guard + reporting-line-scoped manager exemption:
+  //  - HR roles: full exemption (existing "HR enters leave on behalf of an
+  //    employee who can't self-service" workflow).
+  //  - "manager" role: exempt ONLY for their own direct reports, checked via
+  //    hrmsEmployees.managerId — the real reporting-line field (already used
+  //    by orgchart/deputation for exactly this relationship), not just role
+  //    membership. A manager with no organizational relationship to the
+  //    target employee is not exempt merely for holding the role.
+  //  - everyone else (bare "employee"): only their own linked record.
+  // The actor's own employee record is resolved via resolveEmployeeForActor —
+  // userRef primary, email fallback + auto-link — the same single source of
+  // truth self-service/routes.ts's "my profile" family uses, so an employee
+  // whose userRef isn't linked yet doesn't get a spurious 403 applying for
+  // themselves just because /me/profile was never called first.
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (!isHrActor) {
+    const actorEmp = await resolveEmployeeForActor(tenantId, ctx.actorId, extractActorEmail(req));
+    const isSelf = actorEmp?.id === body.employeeId;
+    const isManagerOfTarget = ctx.roles.includes("manager") && actorEmp != null && emp.managerId === actorEmp.id;
+    if (!isSelf && !isManagerOfTarget) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only apply for leave on their own employee record (or, for managers, a direct report's)");
     }
   }
   // DIC engagement gate — an engagement type not entitled to the salaried leave
@@ -63,7 +72,7 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   const resolver = await loadTypeResolver(tenantId).catch((err: unknown) => {
     // Fail open, but make the control's failure observable — if the resolver
     // starts failing consistently the eligibility gate silently stops enforcing.
-    log?.error({ err, event: "leave.eligibility.resolver_failed", tenantId }, "leave eligibility resolver failed — failing open");
+    req.log.error({ err, event: "leave.eligibility.resolver_failed", tenantId }, "leave eligibility resolver failed — failing open");
     return null;
   });
   if (resolver && !leaveEligible(resolver(emp.employeeType ?? ""))) {
@@ -134,7 +143,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    const computedDays = await enforceCcsLeaveRules(ctx, body, req.log);
+    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
     // BUG-1 fix: persist/debit the validated computed day count, not the raw
     // client-submitted one, when the CCS rules engine actually ran for this code.
     const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
@@ -145,7 +154,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    const computedDays = await enforceCcsLeaveRules(ctx, body, req.log);
+    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
     const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
   });
