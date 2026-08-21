@@ -17,6 +17,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { billBucket, fmtDate, humanize, shortId } from "./format";
 import type { WorksStatusCount, WorksSummary } from "./types";
 
+/** Raw input row shape — genuinely unknown until validated, so this stays untyped. */
 type Row = Record<string, unknown>;
 
 function pickItems(payload: unknown): Row[] {
@@ -46,7 +47,25 @@ function num(v: unknown, fallback = 0): number {
 
 // ─── Billing ─────────────────────────────────────────────────────────────────
 
-function mapBillRow(r: Row): Row {
+/**
+ * Display-ready shape mapBillRow() produces for BillingTable — NOT the raw
+ * bills row (see types.ts Bill). Extends Record<string, unknown> so it
+ * satisfies BillingTable's existing `bills: Record<string, unknown>[]` prop
+ * without having to widen that component's typing too.
+ */
+export interface BillRow extends Record<string, unknown> {
+  id: string;
+  workId: string;
+  billNo: string;
+  work: string;
+  mode: string;
+  gross: string;
+  netPayable: string;
+  stage: string;
+  status: "draft" | "pending" | "finalized" | "submitted_ifms";
+}
+
+function mapBillRow(r: Row): BillRow {
   const status = str(r.status, "draft");
   return {
     id: str(r.id),
@@ -62,8 +81,8 @@ function mapBillRow(r: Row): Row {
 }
 
 /** Tenant-wide bills register — backs the /works/billing list page. */
-export function getBills(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/billing/bills?pageSize=100", [], {
+export function getBills(): Promise<LoaderResult<BillRow[]>> {
+  return fetchJson<unknown, BillRow[]>("/api/v1/works/billing/bills?pageSize=100", [], {
     telemetryKey: "works.billing",
     mapResponse: (p) => pickItems(p).map(mapBillRow),
   });
@@ -71,9 +90,32 @@ export function getBills(): Promise<LoaderResult<Row[]>> {
 
 // ─── Tenders ─────────────────────────────────────────────────────────────────
 
-function mapTenderRow(r: Row): Row {
+/**
+ * Display-ready shape mapTenderRow() produces for TendersTable.
+ *
+ * NOTE (verified against services/works-service/src/modules/tender/repo.ts
+ * listTenders()): the tenders list response has NO status field at all —
+ * `tenders` carries no status column (only `pre_tenders.status` does, and
+ * that table isn't joined here). So `status` below is always derived from
+ * the openingDate-vs-now heuristic, never from a backend value.
+ */
+export interface TenderRow extends Record<string, unknown> {
+  id: string;
+  work: string;
+  tenderType: string;
+  amount: string;
+  openingDate: string;
+  authority: string;
+  status: string;
+}
+
+function mapTenderRow(r: Row): TenderRow {
   const openingDate = strOrNull(r.openingDate);
   const isPast = !!openingDate && new Date(openingDate).getTime() < Date.now();
+  // preTenderStatus/status: neither is ever present on this endpoint's rows
+  // (see listTenders() — no status column selected or joinable). Kept as a
+  // defensive read in case the backend adds one later; today this is always
+  // null and `status` below always falls through to the isPast heuristic.
   const dbStatus = strOrNull(r.preTenderStatus) ?? strOrNull(r.status);
   return {
     id: str(r.id),
@@ -87,8 +129,8 @@ function mapTenderRow(r: Row): Row {
 }
 
 /** Tenant-wide tender register — backs the /works/tenders list page. */
-export function getTenders(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/tenders?pageSize=100", [], {
+export function getTenders(): Promise<LoaderResult<TenderRow[]>> {
+  return fetchJson<unknown, TenderRow[]>("/api/v1/works/tenders?pageSize=100", [], {
     telemetryKey: "works.tenders",
     mapResponse: (p) => pickItems(p).map(mapTenderRow),
   });
@@ -96,7 +138,31 @@ export function getTenders(): Promise<LoaderResult<Row[]>> {
 
 // ─── Approvals (AA / TS) ─────────────────────────────────────────────────────
 
-function mapAaRow(r: Row): Row {
+/** Display-ready shape mapAaRow() produces for ApprovalsTable (AA tab). */
+export interface AaRow extends Record<string, unknown> {
+  id: string;
+  workNumber: string;
+  approvalNumber: string;
+  date: string;
+  authority: string;
+  amount: string;
+  type: string;
+  status: string;
+}
+
+/** Display-ready shape mapTsRow() produces for ApprovalsTable (TS tab). */
+export interface TsRow extends Record<string, unknown> {
+  id: string;
+  workNumber: string;
+  approvalNumber: string;
+  date: string;
+  authority: string;
+  amount: string;
+  type: string;
+  status: string;
+}
+
+function mapAaRow(r: Row): AaRow {
   return {
     id: str(r.id),
     workNumber: shortId(strOrNull(r.workId)),
@@ -109,7 +175,7 @@ function mapAaRow(r: Row): Row {
   };
 }
 
-function mapTsRow(r: Row): Row {
+function mapTsRow(r: Row): TsRow {
   return {
     id: str(r.id),
     workNumber: shortId(strOrNull(r.workId)),
@@ -123,16 +189,16 @@ function mapTsRow(r: Row): Row {
 }
 
 /** Tenant-wide AA register — backs the /works/approvals list page. */
-export function getApprovalsAa(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/approvals/aa?pageSize=100", [], {
+export function getApprovalsAa(): Promise<LoaderResult<AaRow[]>> {
+  return fetchJson<unknown, AaRow[]>("/api/v1/works/approvals/aa?pageSize=100", [], {
     telemetryKey: "works.approvals.aa",
     mapResponse: (p) => pickItems(p).map(mapAaRow),
   });
 }
 
 /** Tenant-wide TS register — backs the /works/approvals list page. */
-export function getApprovalsTs(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/approvals/ts?pageSize=100", [], {
+export function getApprovalsTs(): Promise<LoaderResult<TsRow[]>> {
+  return fetchJson<unknown, TsRow[]>("/api/v1/works/approvals/ts?pageSize=100", [], {
     telemetryKey: "works.approvals.ts",
     mapResponse: (p) => pickItems(p).map(mapTsRow),
   });
@@ -140,7 +206,28 @@ export function getApprovalsTs(): Promise<LoaderResult<Row[]>> {
 
 // ─── Execution (progress + issues) ──────────────────────────────────────────
 
-function mapProgressRow(r: Row): Row {
+/** Display-ready shape mapProgressRow() produces for ExecutionTable (progress tab). */
+export interface ProgressRow extends Record<string, unknown> {
+  id: string;
+  workId: string;
+  work: string;
+  scope: string;
+  target: string;
+  achievement: string;
+  percentage: number;
+}
+
+/** Display-ready shape mapIssueRow() produces for ExecutionTable (issues tab). */
+export interface IssueRow extends Record<string, unknown> {
+  id: string;
+  workId: string;
+  work: string;
+  description: string;
+  raisedDate: string;
+  status: string;
+}
+
+function mapProgressRow(r: Row): ProgressRow {
   return {
     id: str(r.id),
     workId: str(r.workId),
@@ -152,7 +239,7 @@ function mapProgressRow(r: Row): Row {
   };
 }
 
-function mapIssueRow(r: Row): Row {
+function mapIssueRow(r: Row): IssueRow {
   return {
     id: str(r.id),
     workId: str(r.workId),
@@ -164,16 +251,16 @@ function mapIssueRow(r: Row): Row {
 }
 
 /** Tenant-wide scope-progress register — backs the /works/execution list page. */
-export function getExecutionProgress(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/execution/progress?pageSize=100", [], {
+export function getExecutionProgress(): Promise<LoaderResult<ProgressRow[]>> {
+  return fetchJson<unknown, ProgressRow[]>("/api/v1/works/execution/progress?pageSize=100", [], {
     telemetryKey: "works.execution.progress",
     mapResponse: (p) => pickItems(p).map(mapProgressRow),
   });
 }
 
 /** Tenant-wide issues register — backs the /works/execution issues tab. */
-export function getExecutionIssues(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/execution/issues?pageSize=100", [], {
+export function getExecutionIssues(): Promise<LoaderResult<IssueRow[]>> {
+  return fetchJson<unknown, IssueRow[]>("/api/v1/works/execution/issues?pageSize=100", [], {
     telemetryKey: "works.execution.issues",
     mapResponse: (p) => pickItems(p).map(mapIssueRow),
   });
@@ -181,7 +268,27 @@ export function getExecutionIssues(): Promise<LoaderResult<Row[]>> {
 
 // ─── Closure ─────────────────────────────────────────────────────────────────
 
-function mapClosureRow(r: Row): Row {
+/**
+ * Display-ready shape mapClosureRow() produces for ClosureTable.
+ *
+ * NOTE (verified against services/works-service/src/modules/execution/repo.ts
+ * listClosures()): `agreement` below always renders as the "—" fallback —
+ * the closure list response has no agreement-number field. `work_closures`
+ * carries no such column, and listClosures() doesn't join `awards` (the only
+ * table with `agreementNumber`) the way it joins `work_proposals` for
+ * workNumber/description. Would need a backend join to populate for real.
+ */
+export interface ClosureRow extends Record<string, unknown> {
+  id: string;
+  workNumber: string;
+  description: string;
+  agreement: string;
+  statusDate: string;
+  remarks: string;
+  status: string;
+}
+
+function mapClosureRow(r: Row): ClosureRow {
   return {
     id: str(r.id),
     workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
@@ -194,8 +301,8 @@ function mapClosureRow(r: Row): Row {
 }
 
 /** Tenant-wide closure register — backs the /works/closure list page. */
-export function getClosures(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/closure?pageSize=100", [], {
+export function getClosures(): Promise<LoaderResult<ClosureRow[]>> {
+  return fetchJson<unknown, ClosureRow[]>("/api/v1/works/closure?pageSize=100", [], {
     telemetryKey: "works.closure",
     mapResponse: (p) => pickItems(p).map(mapClosureRow),
   });
@@ -203,7 +310,20 @@ export function getClosures(): Promise<LoaderResult<Row[]>> {
 
 // ─── BoQ ─────────────────────────────────────────────────────────────────────
 
-function mapBoqRow(r: Row): Row {
+/** Display-ready shape mapBoqRow() produces for BoqTable. */
+export interface BoqRow extends Record<string, unknown> {
+  id: string;
+  workId: string;
+  itemCode: string;
+  description: string;
+  unit: string;
+  rate: string;
+  quantity: string;
+  amount: string;
+  scope: string;
+}
+
+function mapBoqRow(r: Row): BoqRow {
   return {
     id: str(r.id),
     workId: str(r.workId),
@@ -218,8 +338,8 @@ function mapBoqRow(r: Row): Row {
 }
 
 /** Tenant-wide BoQ index (all works) — backs the /works/boq list page. */
-export function getBoqItems(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/boq?pageSize=100", [], {
+export function getBoqItems(): Promise<LoaderResult<BoqRow[]>> {
+  return fetchJson<unknown, BoqRow[]>("/api/v1/works/boq?pageSize=100", [], {
     telemetryKey: "works.boq",
     mapResponse: (p) => pickItems(p).map(mapBoqRow),
   });
@@ -227,7 +347,19 @@ export function getBoqItems(): Promise<LoaderResult<Row[]>> {
 
 // ─── Proposals ──────────────────────────────────────────────────────────────────────
 
-function mapProposalRow(r: Row): Row {
+/** Display-ready shape mapProposalRow() produces for ProposalsTable. */
+export interface ProposalRow extends Record<string, unknown> {
+  id: string;
+  workNumber: string;
+  description: string;
+  category: string;
+  type: string;
+  estimatedCost: string;
+  status: string;
+  office: string;
+}
+
+function mapProposalRow(r: Row): ProposalRow {
   return {
     id: str(r.id),
     workNumber: str(r.workNumber),
@@ -241,8 +373,8 @@ function mapProposalRow(r: Row): Row {
 }
 
 /** Tenant-wide work-proposal register — backs the /works/proposals list page. */
-export function getProposals(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/works/proposals?pageSize=100", [], {
+export function getProposals(): Promise<LoaderResult<ProposalRow[]>> {
+  return fetchJson<unknown, ProposalRow[]>("/api/v1/works/proposals?pageSize=100", [], {
     telemetryKey: "works.proposals",
     mapResponse: (p) => pickItems(p).map(mapProposalRow),
   });
