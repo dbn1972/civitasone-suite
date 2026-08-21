@@ -18,6 +18,20 @@ export async function countTsForWork(tenantId: string, workId: string): Promise<
   });
 }
 
+/** BR-013 input: does a FINALIZED technical sanction exist for this work? */
+export async function hasFinalizedTsForWork(tenantId: string, workId: string): Promise<boolean> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(technicalSanctions)
+      .where(and(
+        eq(technicalSanctions.tenantId, tenantId),
+        eq(technicalSanctions.workId, workId),
+        eq(technicalSanctions.status, "finalized"),
+      ))
+      .limit(1);
+    return rows.length > 0;
+  });
+}
+
 export async function getAa(tenantId: string, id: string) {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(administrativeApprovals)

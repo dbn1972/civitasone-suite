@@ -4,9 +4,12 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures } from "./repo.js";
+import {
+  listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures,
+  getWorkScope, listScopeProgress,
+} from "./repo.js";
 import { getAward } from "../tender/repo.js";
-import { canRecordPhysicalCompletion } from "./domain.js";
+import { canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
@@ -71,6 +74,37 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.recordProgressSchema.parse(req.body);
+
+    // Bug #5: a negative delta (would take cumulative achievement backward)
+    // is only accepted when explicitly flagged as a correction.
+    if (!canApplyProgressDelta(body.currentAchievement, body.correctionReason)) {
+      throw new HttpError(
+        422,
+        "NEGATIVE_PROGRESS_REQUIRES_REASON",
+        "A negative progress delta requires a non-empty correctionReason",
+      );
+    }
+
+    // Bug #3: the progress-vs-target cap was previously enforced only inside
+    // the async consumer, so the route always returned 202 even when the
+    // write would be silently dropped. Enforce it synchronously here too —
+    // the consumer keeps its own check as defense in depth.
+    const scope = await getWorkScope(ctx.tenantId, body.workScopeId);
+    if (!scope) throw new HttpError(404, "NOT_FOUND", "work scope not found");
+    if (scope.targetValue != null) {
+      const priorRows = await listScopeProgress(ctx.tenantId, body.workScopeId);
+      const prior = priorRows.reduce((sum, r) => sum + Number(r.currentAchievement ?? 0), 0);
+      const cumulative = prior + body.currentAchievement;
+      const target = Number(scope.targetValue);
+      if (!validateProgressNotExceedTarget(cumulative, target)) {
+        throw new HttpError(
+          422,
+          "PROGRESS_EXCEEDS_TARGET",
+          `Cumulative progress (${cumulative}) would exceed scope target (${target})`,
+        );
+      }
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordProgressCommand(ctx, body));
   });
 

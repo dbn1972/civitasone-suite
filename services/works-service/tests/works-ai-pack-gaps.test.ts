@@ -4,11 +4,11 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import {
-  TENANT_A, ACTOR_A, AWARD_ID, WORK_ID, BILL_ID, bearerToken, jwtPayload, queueMessage,
+  TENANT_A, ACTOR_A, AWARD_ID, WORK_ID, BILL_ID, MB_ID, bearerToken, jwtPayload, queueMessage,
 } from "./fixtures/works-fixtures.js";
 import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../src/topics.js";
 import { boqItems } from "../src/modules/boq/schema.js";
-import { bills, measurementBooks } from "../src/modules/billing/schema.js";
+import { bills, measurementBooks, measurements } from "../src/modules/billing/schema.js";
 import { awards } from "../src/modules/tender/schema.js";
 import { workIssues } from "../src/modules/execution/schema.js";
 import {
@@ -151,35 +151,45 @@ describe("Gap 2 — Bill amount vs award ceiling (FR-BIL-012)", () => {
   });
 
   it("billCreate rejects when cumulative gross exceeds award", async () => {
-    mockSelectMap.set(measurementBooks, []);
-    mockSelectMap.set(awards, [{ id: AWARD_ID, acceptedAmountMinor: 100000n }]);
+    // mbId is now required (bug #1) and must be a do_finalized MB belonging
+    // to this work/award (bug #2 family), with measured value covering the
+    // gross amount tested here — 1000 × 100 = 100000 paise, comfortably
+    // covering both the rejected (20000) and accepted (50000) amounts below,
+    // isolating this test to the award-ceiling rule specifically.
+    mockSelectMap.set(measurementBooks, [{ id: MB_ID, status: "do_finalized", workId: WORK_ID, awardId: AWARD_ID }]);
+    mockSelectMap.set(awards, [{ id: AWARD_ID, workId: WORK_ID, acceptedAmountMinor: 100000n }]);
     mockSelectMap.set(bills, [{ grossAmountMinor: 90000n }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "1000" }]);
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
 
     const h = await billingHandlers();
-    await h[COMMANDS.billCreate]({
+    await expect(h[COMMANDS.billCreate]({
       ...queueMessage(TENANT_A, ACTOR_A, "msg-ceil-1"),
       payload: {
-        id: "bill-new", workId: WORK_ID, awardId: AWARD_ID,
+        id: "bill-new", workId: WORK_ID, awardId: AWARD_ID, mbId: MB_ID,
         billMode: "abstract", billNumber: "B-CEIL", grossAmountMinor: "20000",
       },
-    });
+    })).rejects.toThrow(/AWARD_CEILING_EXCEEDED/);
     expect(mockInserted).toHaveLength(0);
   });
 
   it("billCreate persists when cumulative gross is within award", async () => {
-    mockSelectMap.set(measurementBooks, []);
-    mockSelectMap.set(awards, [{ id: AWARD_ID, acceptedAmountMinor: 100000n }]);
+    mockSelectMap.set(measurementBooks, [{ id: MB_ID, status: "do_finalized", workId: WORK_ID, awardId: AWARD_ID }]);
+    mockSelectMap.set(awards, [{ id: AWARD_ID, workId: WORK_ID, acceptedAmountMinor: 100000n }]);
     mockSelectMap.set(bills, [{ grossAmountMinor: 40000n }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "1000" }]);
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
 
     const h = await billingHandlers();
     await h[COMMANDS.billCreate]({
       ...queueMessage(TENANT_A, ACTOR_A, "msg-ceil-2"),
       payload: {
-        id: "bill-ok", workId: WORK_ID, awardId: AWARD_ID,
+        id: "bill-ok", workId: WORK_ID, awardId: AWARD_ID, mbId: MB_ID,
         billMode: "abstract", billNumber: "B-OK", grossAmountMinor: "50000",
       },
     });
-    expect(mockInserted).toHaveLength(1);
+    // bills insert + bill_items insert (one measurement line).
+    expect(mockInserted).toHaveLength(2);
   });
 });
 
@@ -200,13 +210,13 @@ describe("Gap 3 — BoQ duplicate-line guard", () => {
       workId: WORK_ID, itemCode: "IT-001", itemDescription: "Existing line",
     }]);
     const h = await boqHandlers();
-    await h[COMMANDS.boqAddItem]({
+    await expect(h[COMMANDS.boqAddItem]({
       ...queueMessage(TENANT_A, ACTOR_A, "msg-dup-1"),
       payload: {
         id: "new-boq", workId: WORK_ID, itemCode: "IT-001",
         itemDescription: "Duplicate", unit: "cum", rate: "10000", quantity: 5,
       },
-    });
+    })).rejects.toThrow(/DUPLICATE_BOQ_LINE/);
     expect(mockInserted).toHaveLength(0);
   });
 
@@ -289,6 +299,12 @@ vi.mock("@civitasone/cache", () => ({
 vi.mock("@civitasone/queue", () => ({
   createQueue: () => ({ publish: vi.fn(), subscribe: vi.fn(), start: vi.fn(), stop: vi.fn() }),
   MemoryQueue: class { publish = vi.fn(); subscribe = vi.fn(); start = vi.fn(); stop = vi.fn(); },
+  // Pre-existing gap: this mock previously omitted NonRetryableError, so any
+  // consumer guard that throws it (billing/consumer.ts, boq/consumer.ts —
+  // both imported by the route-level describe blocks below) crashed with
+  // "NonRetryableError is not a constructor" instead of the intended
+  // rejection. Fixed in passing while touching this file for bug #1/#2.
+  NonRetryableError: class NonRetryableError extends Error {},
 }));
 vi.mock("@civitasone/observability", () => ({ registerOpsRoutes: vi.fn(), dbPing: vi.fn() }));
 vi.mock("@civitasone/outbox", () => ({

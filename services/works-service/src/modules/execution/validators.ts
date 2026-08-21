@@ -11,7 +11,11 @@ export const recordProgressSchema = z.object({
   workScopeId: z.string().uuid(),
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2000).max(2100),
+  // This is a DELTA added to the running cumulative achievement, not an
+  // absolute value (see execution/consumer.ts). A negative delta is only
+  // accepted when correctionReason is supplied — see canApplyProgressDelta.
   currentAchievement: z.number(),
+  correctionReason: z.string().min(1).max(2048).optional(),
 });
 
 export const uploadPhotoSchema = z.object({

@@ -8,11 +8,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { EVENTS, COMMANDS } from "../src/topics.js";
 import { workScopes, scopeProgress } from "../src/modules/execution/schema.js";
-import { awards } from "../src/modules/tender/schema.js";
+import { awards, tenders, preTenders } from "../src/modules/tender/schema.js";
 import { workSplits, workProposals } from "../src/modules/proposal/schema.js";
 import { physicalCompletions } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
-import { measurements, measurementBooks, bills } from "../src/modules/billing/schema.js";
+import { measurements, measurementBooks, bills, billItems } from "../src/modules/billing/schema.js";
+import { contractors } from "../src/modules/contractor/schema.js";
 import { vi } from "vitest";
 
 const mockInserted: unknown[] = [];
@@ -134,7 +135,8 @@ describe("BoQ orphan consumers", () => {
   it("boqUpdateItem rejects a missing row (no update)", async () => {
     mockSelectMap.set(boqItems, []);
     const h = await load();
-    await h[COMMANDS.boqUpdateItem]({ ...base, payload: { id: "missing", quantity: 8 } });
+    await expect(h[COMMANDS.boqUpdateItem]({ ...base, payload: { id: "missing", quantity: 8 } }))
+      .rejects.toThrow(/BOQ_ITEM_NOT_FOUND/);
     expect(mockUpdated).toHaveLength(0);
   });
   it("boqUpdateItem is idempotent", async () => {
@@ -158,7 +160,8 @@ describe("BoQ orphan consumers", () => {
   it("boqDeleteItem is blocked when a measurement references the item (row stays)", async () => {
     mockSelectMap.set(measurements, [{ id: "meas-1", boqItemId: "b-1" }]);
     const h = await load();
-    await h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } });
+    await expect(h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } }))
+      .rejects.toThrow(/BOQ_ITEM_DELETE_BLOCKED/);
     expect(mockDeleted).toHaveLength(0);
     expect(emitted(EVENTS.boqItemDeleted)).toBe(false);
   });
@@ -167,7 +170,8 @@ describe("BoQ orphan consumers", () => {
     mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1" }]);
     mockSelectMap.set(awards, [{ status: "do_finalized", workId: "w-1" }]);
     const h = await load();
-    await h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } });
+    await expect(h[COMMANDS.boqDeleteItem]({ ...base, payload: { id: "b-1" } }))
+      .rejects.toThrow(/BOQ_ITEM_DELETE_BLOCKED/);
     expect(mockDeleted).toHaveLength(0);
   });
 });
@@ -177,6 +181,8 @@ describe("Tender orphan consumers", () => {
   const load = () => handlers("registerTenderConsumers", "../src/modules/tender/consumer.js");
 
   it("quotationAdd persists quotation + emits quotation.added", async () => {
+    // Bug #4: tenderId must resolve to a real tender/pre-tender.
+    mockSelectMap.set(preTenders, [{ id: "t-1" }]);
     const h = await load();
     await h[COMMANDS.quotationAdd]({ ...base, payload: { id: "q-1", tenderId: "t-1", contractorName: "ACME", method: "percentage_rate" } });
     expect(mockInserted).toHaveLength(1);
@@ -186,6 +192,51 @@ describe("Tender orphan consumers", () => {
     mockMarkResult = false;
     const h = await load();
     await h[COMMANDS.quotationAdd]({ ...base, payload: { id: "q-1", tenderId: "t-1", contractorName: "ACME", method: "item_rate" } });
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("quotationAdd is rejected when tenderId references neither a tender nor a pre-tender (bug #4)", async () => {
+    mockSelectMap.set(tenders, []);
+    mockSelectMap.set(preTenders, []);
+    const h = await load();
+    await expect(h[COMMANDS.quotationAdd]({ ...base, payload: { id: "q-3", tenderId: "nope", contractorName: "ACME", method: "item_rate" } }))
+      .rejects.toThrow(/TENDER_NOT_FOUND/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("awardCreate persists and resolves contractorId when contractorName matches a registered contractor", async () => {
+    mockSelectMap.set(contractors, [{ id: "c-1", name: "ACME Works Ltd" }]);
+    const h = await load();
+    await h[COMMANDS.awardCreate]({
+      ...base,
+      payload: { id: "a-2", workId: "w-1", contractorName: "acme works ltd", acceptedAmountMinor: "500000" },
+    });
+    expect(mockInserted).toHaveLength(1);
+    expect(emitted(EVENTS.awardCreated)).toBe(true);
+  });
+  it("awardCreate is rejected when contractorName matches no registered contractor (bug #4)", async () => {
+    mockSelectMap.set(contractors, []);
+    const h = await load();
+    await expect(h[COMMANDS.awardCreate]({
+      ...base,
+      payload: { id: "a-3", workId: "w-1", contractorName: "Ghost Co", acceptedAmountMinor: "500000" },
+    })).rejects.toThrow(/CONTRACTOR_NOT_FOUND/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("awardCreate is rejected when contractorId does not resolve to a registered contractor (bug #4)", async () => {
+    mockSelectMap.set(contractors, []);
+    const h = await load();
+    await expect(h[COMMANDS.awardCreate]({
+      ...base,
+      payload: { id: "a-4", workId: "w-1", contractorName: "ACME", contractorId: "c-404", acceptedAmountMinor: "500000" },
+    })).rejects.toThrow(/CONTRACTOR_NOT_FOUND/);
+    expect(mockInserted).toHaveLength(0);
+  });
+  it("awardCreate is rejected when contractorId resolves but contractorName doesn't match it (bug #4)", async () => {
+    mockSelectMap.set(contractors, [{ id: "c-1", name: "ACME Works Ltd" }]);
+    const h = await load();
+    await expect(h[COMMANDS.awardCreate]({
+      ...base,
+      payload: { id: "a-5", workId: "w-1", contractorName: "Totally Different Co", contractorId: "c-1", acceptedAmountMinor: "500000" },
+    })).rejects.toThrow(/CONTRACTOR_NAME_MISMATCH/);
     expect(mockInserted).toHaveLength(0);
   });
   it("awardDaoFinalize transitions award + emits dao_finalized", async () => {
@@ -313,7 +364,8 @@ describe("Billing orphan consumers", () => {
   it("measurementRecord exceeding BoQ qty is rejected (no insert)", async () => {
     mockSelectMap.set(boqItems, [{ id: "b-1", quantity: "10" }]);
     const h = await load();
-    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 20 } });
+    await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 20 } }))
+      .rejects.toThrow(/BOQ_QUANTITY_EXCEEDED/);
     expect(mockInserted).toHaveLength(0);
   });
   it("measurementRecord rejects the second when cumulative quantity exceeds BoQ qty", async () => {
@@ -325,13 +377,15 @@ describe("Billing orphan consumers", () => {
     expect(mockInserted).toHaveLength(1);
     // second 80-unit measurement: prior 80 + 80 = 160 > 100 → rejected
     mockSelectMap.set(measurements, [{ quantity: "80" }]);
-    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 80 } });
+    await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 80 } }))
+      .rejects.toThrow(/BOQ_QUANTITY_EXCEEDED/);
     expect(mockInserted).toHaveLength(1); // still 1 — cumulative guard rejected the second
   });
   it("measurementRecord against a missing BoQ item is rejected (no insert)", async () => {
     mockSelectMap.set(boqItems, []);
     const h = await load();
-    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-3", mbId: "mb-1", boqItemId: "nope", quantity: 1 } });
+    await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-3", mbId: "mb-1", boqItemId: "nope", quantity: 1 } }))
+      .rejects.toThrow(/INVALID_BOQ_REF/);
     expect(mockInserted).toHaveLength(0);
   });
   it("accountCompile persists compilation + emits account.compiled", async () => {
@@ -347,42 +401,111 @@ describe("Billing orphan consumers", () => {
     expect(mockInserted).toHaveLength(0);
   });
 
-  // canCreateBill gate (defense-in-depth — primary enforcement is the 409 in
-  // billing/routes.ts): billCreate must reject a bill referencing an MB that
-  // is not fully finalized (do_finalized), even if the pre-enqueue check
-  // was somehow bypassed or the MB's status changed since the HTTP request.
-  it("billCreate is rejected when the referenced MB exists but is not do_finalized (canCreateBill gate)", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "draft" }]);
-    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
+  // Bug #2 (defense-in-depth — primary enforcement is the 422 in
+  // billing/routes.ts): the cited award must belong to the work being billed.
+  it("billCreate is rejected when the cited award does not belong to the work (bug #2)", async () => {
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "some-other-work", acceptedAmountMinor: 999999999999n }]);
     const h = await load();
-    await h[COMMANDS.billCreate]({
+    await expect(h[COMMANDS.billCreate]({
       ...base,
       payload: {
         id: "bill-1", workId: "w-1", awardId: "award-1", mbId: "mb-1",
         billMode: "e_mb", billNumber: "B1", grossAmountMinor: "1000",
       },
-    });
+    })).rejects.toThrow(/AWARD_WORK_MISMATCH/);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  // Bug #1 (no-3-way-match fix): mbId is now required — the ORIGINAL repro
+  // ("a work with zero BoQ items and zero measurements ever entered still
+  // accepted a bill for the full award value") started here.
+  it("billCreate is rejected when no mbId is referenced (bug #1)", async () => {
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(bills, []);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-4", workId: "w-1", awardId: "award-1",
+        billMode: "abstract", billNumber: "B4", grossAmountMinor: "1000",
+      },
+    })).rejects.toThrow(/MB_REQUIRED/);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  // canCreateBill gate (defense-in-depth — primary enforcement is the 409 in
+  // billing/routes.ts): billCreate must reject a bill referencing an MB that
+  // is not fully finalized (do_finalized), even if the pre-enqueue check
+  // was somehow bypassed or the MB's status changed since the HTTP request.
+  it("billCreate is rejected when the referenced MB exists but is not do_finalized (canCreateBill gate)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "draft", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-1", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "B1", grossAmountMinor: "1000",
+      },
+    })).rejects.toThrow(/MB_INVALID_STATUS/);
     expect(mockInserted).toHaveLength(0);
   });
 
   it("billCreate is rejected when the referenced MB does not exist (canCreateBill gate)", async () => {
     mockSelectMap.set(measurementBooks, []);
-    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
     const h = await load();
-    await h[COMMANDS.billCreate]({
+    await expect(h[COMMANDS.billCreate]({
       ...base,
       payload: {
         id: "bill-2", workId: "w-1", awardId: "award-1", mbId: "missing-mb",
         billMode: "e_mb", billNumber: "B2", grossAmountMinor: "1000",
       },
-    });
+    })).rejects.toThrow(/MB_INVALID_STATUS/);
     expect(mockInserted).toHaveLength(0);
   });
 
-  it("billCreate persists when the referenced MB is do_finalized", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized" }]);
-    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
+  // Bug #1: an MB belonging to a different work/award can't be cited to
+  // justify this bill's measured value.
+  it("billCreate is rejected when the referenced MB belongs to a different work/award (bug #1)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "some-other-work", awardId: "some-other-award" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-6", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "B6", grossAmountMinor: "1000",
+      },
+    })).rejects.toThrow(/MB_WORK_MISMATCH/);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  // The ORIGINAL repro, precisely: MB finalized and correctly linked, but
+  // zero measurements ever recorded against it — "the full award value"
+  // must not be billable against no measured work.
+  it("billCreate is rejected when the MB has zero measurements recorded (no work actually measured)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(measurements, []);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate]({
+      ...base,
+      payload: {
+        id: "bill-7", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "abstract", billNumber: "B7", grossAmountMinor: "999999999999",
+      },
+    })).rejects.toThrow(/MEASURED_VALUE_EXCEEDED/);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  it("billCreate persists when the MB is do_finalized and measured value covers the bill — and populates bill_items", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
     mockSelectMap.set(bills, []);
+    // 10 units at 100 paise/unit = 1000 paise measured value.
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "10" }]);
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
     const h = await load();
     await h[COMMANDS.billCreate]({
       ...base,
@@ -391,21 +514,29 @@ describe("Billing orphan consumers", () => {
         billMode: "e_mb", billNumber: "B3", grossAmountMinor: "1000",
       },
     });
-    expect(mockInserted).toHaveLength(1);
+    // One insert into `bills`, one into `bill_items` for the single
+    // measurement line — the real, queryable bill → BoQ item → measured
+    // quantity link the fix requires.
+    expect(mockInserted).toHaveLength(2);
+    expect(mockInserted).toContain(bills);
+    expect(mockInserted).toContain(billItems);
     expect(emitted(EVENTS.billCreated)).toBe(true);
   });
 
-  it("billCreate persists when no mbId is referenced at all (abstract bill)", async () => {
-    mockSelectMap.set(awards, [{ id: "award-1", acceptedAmountMinor: 999999999999n }]);
-    mockSelectMap.set(bills, []);
+  it("billCreate is rejected when gross amount exceeds the measured value (bug #1)", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    // Measured value is only 1000 paise (10 × 100) — billing 1001 must fail.
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "10" }]);
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
     const h = await load();
-    await h[COMMANDS.billCreate]({
+    await expect(h[COMMANDS.billCreate]({
       ...base,
       payload: {
-        id: "bill-4", workId: "w-1", awardId: "award-1",
-        billMode: "abstract", billNumber: "B4", grossAmountMinor: "1000",
+        id: "bill-8", workId: "w-1", awardId: "award-1", mbId: "mb-1",
+        billMode: "e_mb", billNumber: "B8", grossAmountMinor: "1001",
       },
-    });
-    expect(mockInserted).toHaveLength(1);
+    })).rejects.toThrow(/MEASURED_VALUE_EXCEEDED/);
+    expect(mockInserted).toHaveLength(0);
   });
 });

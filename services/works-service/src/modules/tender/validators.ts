@@ -31,6 +31,11 @@ export const addQuotationSchema = z.object({
 export const createAwardSchema = z.object({
   workId: z.string().uuid(),
   contractorName: z.string().min(1).max(256),
+  // Tender→contractor→award chain fix: when supplied, contractorId must
+  // resolve to a real works.contractors row (checked in routes.ts/consumer.ts).
+  // When omitted (legacy/free-text callers), contractorName must still match
+  // an existing contractor record by name — see findContractorByName.
+  contractorId: z.string().uuid().optional(),
   agreementNumber: z.string().max(128).optional(),
   workOrderNumber: z.string().max(128).optional(),
   workPeriodDays: z.number().int().optional(),
