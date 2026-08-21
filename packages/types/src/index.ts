@@ -2468,6 +2468,46 @@ export type FinanceAuditParaSummary = {
 };
 
 /**
+ * Backed by GET /v1/hrms/disciplinary-cases/:caseId
+ * (services/hrms-service/src/modules/disciplinary/routes.ts), which returns
+ * the Drizzle row (hrmsDisciplinaryCases.$inferSelect) directly with no
+ * serialize step — field names below are the exact schema property names,
+ * a runtime-verified contract, not a prediction. date/timestamp columns
+ * come back as ISO strings, matching this codebase's convention elsewhere.
+ */
+export type DisciplinaryCaseDetail = {
+  id: string;
+  tenantId: string;
+  employeeId: string;
+  caseNo: string;
+  proceedingType: string;
+  status: string;
+  allegation: string;
+  chargeMemoRef: string | null;
+  chargeMemoDate: string | null;
+  inquiryOfficerId: string | null;
+  inquiryOfficerName: string | null;
+  inquiryAppointedDate: string | null;
+  finding: string | null;
+  findingNotes: string | null;
+  findingDate: string | null;
+  penaltyClass: string | null;
+  penaltyType: string | null;
+  penaltyDetail: string | null;
+  penaltyDate: string | null;
+  appealFiledDate: string | null;
+  appealAuthority: string | null;
+  appealOutcome: string | null;
+  appealDecidedDate: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+  version: number;
+};
+
+/**
  * Backed by GET /v1/finance/vendors/:id (services/finance-service/src/modules/masters/routes.ts),
  * added alongside the payments.finance_vendors table (services/finance-service/migrations/
  * 0065_vendor_master.sql). Field names match the route's response mapping exactly — this is a

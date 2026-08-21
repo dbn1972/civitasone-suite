@@ -2357,6 +2357,38 @@ export const FinanceAuditParaSummarySchema = z.object({
 });
 export const FinanceAuditParaSummaryListSchema = z.array(FinanceAuditParaSummarySchema);
 
+export const DisciplinaryCaseDetailSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  employeeId: z.string(),
+  caseNo: z.string(),
+  proceedingType: z.string(),
+  status: z.string(),
+  allegation: z.string(),
+  chargeMemoRef: z.string().nullable(),
+  chargeMemoDate: z.string().nullable(),
+  inquiryOfficerId: z.string().nullable(),
+  inquiryOfficerName: z.string().nullable(),
+  inquiryAppointedDate: z.string().nullable(),
+  finding: z.string().nullable(),
+  findingNotes: z.string().nullable(),
+  findingDate: z.string().nullable(),
+  penaltyClass: z.string().nullable(),
+  penaltyType: z.string().nullable(),
+  penaltyDetail: z.string().nullable(),
+  penaltyDate: z.string().nullable(),
+  appealFiledDate: z.string().nullable(),
+  appealAuthority: z.string().nullable(),
+  appealOutcome: z.string().nullable(),
+  appealDecidedDate: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  createdBy: z.string(),
+  updatedBy: z.string(),
+  version: z.number(),
+});
+
 export const FinanceVendorDetailSchema = z.object({
   id: z.string(),
   name: z.string(),

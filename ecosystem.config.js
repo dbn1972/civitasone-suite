@@ -78,6 +78,23 @@ const AUTH_ENV = {
   DEVICE_TRUST_SECRET,
   JWT_AUDIENCE: process.env.JWT_AUDIENCE ?? "account",
   NODE_EXTRA_CA_CERTS: "/etc/certs/keycloak-ca.pem",
+  // /etc/certs/keycloak-ca.pem's fingerprint matches the live server cert
+  // exactly (verified 2026-08-20), so NODE_EXTRA_CA_CERTS alone establishes
+  // trust in the CA — but the cert's CN/SAN is the bare IP (65.2.205.201),
+  // while every service connects via the KC_HOSTNAME
+  // (civitasone.65-2-205-201.nip.io). That's a hostname-verification
+  // mismatch, which CA trust does not fix — confirmed by reproducing the
+  // JWKS fetch in isolation: NODE_EXTRA_CA_CERTS alone still fails with
+  // "Hostname/IP does not match certificate's altnames". This additional
+  // var is the same workaround already running (ad-hoc, un-persisted) on
+  // hrms/crm/payroll/gateway; adding it here makes it apply consistently
+  // and survive restarts, instead of silently vanishing whenever a
+  // service happens to restart without it (as finance/works currently
+  // do). This is NOT the correct long-term fix — the certificate itself
+  // needs a SAN entry for the nip.io hostname (or the app needs to
+  // address Keycloak by the bare IP everywhere). Tracked, not silently
+  // left as a permanent workaround.
+  NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? "0",
   ...(JWT_SECRET ? { JWT_SECRET } : {}),
 };
 
@@ -519,6 +536,10 @@ module.exports = {
         KEYCLOAK_REALM,
         KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID ?? "civitasone-web",
         NODE_EXTRA_CA_CERTS: "/etc/certs/keycloak-ca.pem",
+        // Same cert CN/SAN-vs-hostname mismatch as AUTH_ENV above — the
+        // server-side OAuth code exchange in /api/auth/callback calls
+        // Keycloak's token endpoint over HTTPS and needs this too.
+        NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? "0",
       },
     },
   ],

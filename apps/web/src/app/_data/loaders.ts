@@ -89,6 +89,7 @@ import type {
   FinanceSchemeSummary,
   FinanceDemandSummary,
   FinanceAuditParaSummary,
+  DisciplinaryCaseDetail,
   FinanceVendorDetail,
   FinanceVendorSummary,
   ProcurementDashboard,
@@ -254,6 +255,7 @@ import {
   FinanceDemandSummaryListSchema,
   FinanceAuditParaSummarySchema,
   FinanceAuditParaSummaryListSchema,
+  DisciplinaryCaseDetailSchema,
   FinanceVendorDetailSchema,
   FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
@@ -3284,11 +3286,12 @@ export async function getGrantDisbursementById(id: string): Promise<LoaderResult
   return { data: match, source };
 }
 
-export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/hrms/disciplinary-cases/${id}`, null, {
+export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<DisciplinaryCaseDetail | null>> {
+  return fetchJson<unknown, DisciplinaryCaseDetail | null>(`/api/v1/hrms/disciplinary-cases/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "hrms.disciplinary.detail",
-    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
+    responseSchema: DisciplinaryCaseDetailSchema,
+    mapResponse: (payload) => (isRecord(payload) ? (payload as DisciplinaryCaseDetail) : null),
   });
 }
 
