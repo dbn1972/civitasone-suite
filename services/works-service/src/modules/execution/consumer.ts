@@ -120,8 +120,20 @@ export function registerExecutionConsumers(q: Queue): void {
         throw new NonRetryableError("NEGATIVE_PROGRESS_REQUIRES_REASON: negative progress delta requires a correctionReason");
       }
 
+      // Code-review fix (works-cross-entity-integrity #2, HIGH — same family
+      // as the double-billing-gap fix in billing/consumer.ts billCreate):
+      // lock the scope row for the rest of this transaction. Without this,
+      // two concurrent progressRecord transactions against the same
+      // workScopeId can each read the same "prior achievement" sum, both
+      // pass the cap check below, and both commit — jointly exceeding the
+      // scope target with the loser leaving no trace. FOR UPDATE serializes
+      // them: the second transaction blocks here until the first commits (or
+      // rolls back), then re-reads and sees the first transaction's
+      // already-inserted progress row, so its own cumulative sum is correct
+      // and the check below closes the race.
       const scopeRows = await tx.select().from(workScopes)
         .where(and(eq(workScopes.tenantId, msg.tenantId), eq(workScopes.id, workScopeId)))
+        .for("update")
         .limit(1);
       const scope = scopeRows[0];
 
@@ -133,7 +145,15 @@ export function registerExecutionConsumers(q: Queue): void {
 
       const target = scope?.targetValue != null ? Number(scope.targetValue) : null;
       if (target != null && !validateProgressNotExceedTarget(cumulative, target)) {
-        return; // reject: cumulative progress would exceed the scope target
+        // Code-review fix (works-cross-entity-integrity #2, HIGH): previously
+        // a bare `return` here silently dropped the message on the floor —
+        // no throw, no error log, no dead-letter — so a request that lost
+        // the race left zero trace anywhere. Throw a real NonRetryableError
+        // (matching billing's pattern) so a dropped request is at least
+        // observable/dead-lettered for ops, even though the route-level
+        // pre-check in execution/routes.ts already returns 422 for the
+        // non-concurrent case.
+        throw new NonRetryableError("PROGRESS_EXCEEDS_TARGET: cumulative progress would exceed scope target");
       }
       const percentage = target != null && target > 0 ? ((cumulative / target) * 100).toFixed(2) : null;
 

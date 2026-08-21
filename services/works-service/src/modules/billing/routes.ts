@@ -7,7 +7,7 @@ import * as commands from "./commands.js";
 import {
   isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
-  billedQuantityExceedsBoq, computeMeasuredValueMinor,
+  billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
 } from "./domain.js";
 import {
   getMb, getBill, listBillsForWork, listBills, listMeasurementsByMb, listMeasurementsByBoqItem,
@@ -193,6 +193,9 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const body = v.recordMeasurementSchema.parse(req.body);
 
+    const mb = await getMb(ctx.tenantId, body.mbId);
+    if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
+
     // FR-BIL-011 gate (bug #3): the cumulative-vs-BoQ-approved-quantity
     // ceiling was previously enforced only inside the async consumer, so
     // the route always returned 202 even when the write would be silently
@@ -200,6 +203,19 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     // own check as defense in depth.
     const boqItem = await getBoqItemById(ctx.tenantId, body.boqItemId);
     if (!boqItem) throw new HttpError(404, "NOT_FOUND", "BoQ item not found");
+
+    // Bug fix (works-cross-entity-integrity #1, CRITICAL): the cited BoQ item
+    // must belong to the same work as the MB it's being recorded against —
+    // otherwise the "measured value" ceiling a bill is later checked against
+    // (see billing/domain.ts computeMeasuredValueMinor /
+    // billAmountExceedsMeasuredValue) can be computed from a completely
+    // unrelated work's BoQ item/rate, defeating the no-3-way-match fix.
+    // Enforced here (pre-enqueue) AND defensively in the consumer — see
+    // billing/consumer.ts measurementRecord.
+    if (!boqItemBelongsToMbWork(boqItem, mb)) {
+      throw new HttpError(422, "BOQ_WORK_MISMATCH", "The cited BoQ item does not belong to this MB's work");
+    }
+
     const priorMeasurements = await listMeasurementsByBoqItem(ctx.tenantId, body.boqItemId);
     const priorBilled = priorMeasurements.reduce((sum, r) => sum + Number(r.quantity ?? 0), 0);
     const cumulative = priorBilled + body.quantity;

@@ -61,11 +61,11 @@ export function registerProposalConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {
+    const { workId } = msg.payload as { workId: string };
+
     await db.transaction(async (tx) => {
       const ok = await markProcessed(tx, msg.messageId);
       if (!ok) return;
-
-      const { workId } = msg.payload as { workId: string };
 
       await tx.update(workProposals)
         .set({
@@ -90,6 +90,19 @@ export function registerProposalConsumers(rawQueue: Queue): void {
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "finalize", resourceType: "proposal_dao", resourceId: msg.messageId, outcome: "success" } });
     });
+
+    // Bug fix (works-cross-entity-integrity #3, MEDIUM): getProposal() caches
+    // under `works:{tenant}:proposal:{id}` (see proposal/repo.ts), keyed by
+    // the proposal's id, which IS the workId. This consumer previously did
+    // not invalidate that key at all, so the stale pre-finalize proposal
+    // (status: "draft") stayed cached for the full TTL (default 60s — see
+    // shared/infra.ts CACHE_TTL) even though the DB row was already
+    // correctly updated to "dao_finalized". That caused an immediate
+    // POST /v1/works/approvals/ts right after DAO-finalize to be falsely
+    // blocked with 422 DAO_GATE_BLOCKED until the cache naturally expired.
+    // Invalidate the correct per-id key here, same key updateProposal()
+    // invalidates in proposal/repo.ts.
+    await cache.invalidate(`works:${msg.tenantId}:proposal:${workId}`);
   });
 
   // ORPHAN FIX: proposal split — persist a child split of a parent work.
