@@ -105,18 +105,35 @@ export function missingMandatoryFields(
   return missing;
 }
 
-/** Find the target stage in a pipeline's stage list by id first, then by name. */
+/**
+ * Find the target stage in a pipeline's stage list.
+ *
+ * Resolves by NAME whenever `stageName` is supplied — the name is the one identifier
+ * every stage-changing write actually persists (`deals.stage`) and the one
+ * deriveStageFields keys Won/Lost off, so it is authoritative for "which stage is this
+ * request really about." `stageId` is consulted ONLY when no `stageName` is given at
+ * all; it can never override a supplied name.
+ *
+ * This is deliberate, not an oversight: a caller that supplies BOTH must not be able to
+ * pair a real stageId (e.g. the deal's own current stage) with an unrelated stageName
+ * and have that combination resolve to the id-matched stage. Earlier this function
+ * matched id first, so gate/mandatory-field checks (which call this with the caller's
+ * raw stageId+stage) could be evaluated against a stage the write was never going to
+ * apply — the write always uses the literal `stage` string regardless of what this
+ * function returned. That let a request with a mismatched stageId sail through every
+ * check while still writing whatever stage name it claimed. See stage-gate tests for
+ * the regression case ("a stageId belonging to a different stage does not win").
+ */
 export function findStage(
   stages: readonly PipelineStageLike[] | null | undefined,
   opts: { stageId?: string | undefined; stageName?: string | undefined },
 ): PipelineStageLike | undefined {
   if (!stages) return undefined;
-  if (opts.stageId) {
-    const byId = stages.find((s) => s.id === opts.stageId);
-    if (byId) return byId;
-  }
   if (opts.stageName) {
     return stages.find((s) => s.name === opts.stageName);
+  }
+  if (opts.stageId) {
+    return stages.find((s) => s.id === opts.stageId);
   }
   return undefined;
 }
