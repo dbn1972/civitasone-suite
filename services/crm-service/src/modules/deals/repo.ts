@@ -104,19 +104,15 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function insert(tx: Writer, row: DealInsert): Promise<void> {
-  await tx.insert(deals).values(row);
-}
-
 /**
  * Resolve the pipeline-configured stage matching `stageName`, by NAME — the same rule
  * `findStage` enforces everywhere else (stage-gate.ts) — so a write can persist that
  * stage's own real `id` as `deals.stage_id`. This is the ONLY trusted source for
  * stage_id: never a caller-supplied stageId, never the deal's previous value. Shared by
- * every write path that moves a deal's stage (updateStageWithVersion below, and
- * close-consumer.ts's won/lost close) so they can never drift apart on how stage_id is
- * derived. Returns undefined when there's no pipeline, it's missing/deleted, or
- * `stageName` isn't one of its configured stages — callers write `null` in that case
+ * every write path that sets or moves a deal's stage (insert below, updateStageWithVersion
+ * below, and close-consumer.ts's won/lost close) so they can never drift apart on how
+ * stage_id is derived. Returns undefined when there's no pipeline, it's missing/deleted,
+ * or `stageName` isn't one of its configured stages — callers write `null` in that case
  * (an honest "unresolved"), never a stale or raw fallback.
  */
 export async function resolveTargetStage(
@@ -131,6 +127,20 @@ export async function resolveTargetStage(
     .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
     .limit(1);
   return findStage(pipelineRows[0]?.stages ?? null, { stageName });
+}
+
+export async function insert(tx: Writer, row: DealInsert): Promise<void> {
+  // stage_id is derived the SAME way as every other stage-writing path — never the raw,
+  // client-supplied stageId a create request may carry. routes.ts's POST /v1/crm/deals
+  // handler calls findStage() to run the mandatory-fields gate on create, but that
+  // resolution was never reused for the write: a create with pipelineId + stage="Lead"
+  // but stageId=<some unrelated stage's real id> would otherwise persist that wrong id
+  // from the moment the row is born — the exact bug already fixed for the PATCH /stage
+  // and close write paths, reachable a third way. `row.stage` always carries a value by
+  // the time this is called (createDealBody defaults it to "Lead" at the HTTP boundary);
+  // the fallback here only guards DealInsert's own optionality.
+  const targetStageConfig = await resolveTargetStage(tx, row.pipelineId ?? null, row.tenantId, row.stage ?? "Lead");
+  await tx.insert(deals).values({ ...row, stageId: targetStageConfig?.id ?? null });
 }
 
 export async function updateStageWithVersion(
