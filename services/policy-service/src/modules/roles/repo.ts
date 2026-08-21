@@ -35,7 +35,14 @@ export async function updateRole(tx: Writer, id: string, tenantId: string, patch
     .where(and(eq(roles.id, id), eq(roles.tenantId, tenantId)));
 }
 export async function insertPermission(tx: Writer, row: PermInsert): Promise<void> {
-  await tx.insert(permissions).values(row);
+  // idx_permissions_tenant_role_resource_action (migrations/0009) backs this:
+  // a retried/duplicate addPermission command (e.g. a seed script re-POSTing
+  // after a stale-read false negative) becomes a safe no-op instead of a
+  // silent duplicate row, mirroring idx_roles_tenant_name's protection on
+  // roles.roles below.
+  await tx.insert(permissions).values(row).onConflictDoNothing({
+    target: [permissions.tenantId, permissions.roleId, permissions.resource, permissions.action],
+  });
 }
 export async function findRoleByIdTx(tx: Writer, id: string, tenantId: string): Promise<RoleView | null> {
   const rows = await tx.select().from(roles)
