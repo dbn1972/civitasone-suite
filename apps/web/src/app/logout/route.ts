@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
   cookieStore.delete(COOKIE.ACCESS);
   cookieStore.delete(COOKIE.REFRESH);
   cookieStore.delete(COOKIE.DEVICE_TRUST);
+  // Also clear any leftover OAuth-flow artifacts from a prior failed
+  // callback attempt, so logout always leaves a genuinely clean slate
+  // for the next login, not just a clean app-session.
+  cookieStore.delete(COOKIE.PKCE_VERIFIER);
+  cookieStore.delete(COOKIE.OAUTH_STATE);
 
   const oidc = getOidcConfig();
   const logoutUrl = new URL(`${oidc.issuerUrl}/protocol/openid-connect/logout`);
