@@ -36,6 +36,39 @@ export async function getLeaveApplicationsByEmp(
   }));
 }
 
+/**
+ * Same display shape as `listLeaveApplications` (id/employee/leaveType/status),
+ * scoped to a single employee — used by the *validated* `GET /v1/hrms/leave-applications?empId=`
+ * route, which parses the result against `leaveRequestSchema`.
+ *
+ * Deliberately does NOT reuse `getLeaveApplicationsByEmp`'s raw-row output as its
+ * own return shape: that function's raw `LeaveAppRow & {leaveTypeName}` shape is
+ * a separate, real contract already relied on by the *unvalidated*
+ * `GET /v1/hrms/leave/applications` route (and the leave-history web page, which
+ * reads `fromDate`/`toDate`/`daysApplied`/`reason`/lowercase `status` directly off
+ * it) — reshaping that function in place would silently break that consumer.
+ * Instead this wraps it and maps to the lightweight DTO on top, the same way
+ * `listLeaveApplications` maps `repo.findLeaveAppsByTenant` rows.
+ */
+export async function listLeaveApplicationsByEmp(
+  tenantId: string,
+  employeeId: string,
+): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
+  const [rows, employee] = await Promise.all([
+    getLeaveApplicationsByEmp(tenantId, employeeId),
+    employeeRepo.findById(employeeId, tenantId),
+  ]);
+  const employeeName = employee?.fullName ?? employeeId.slice(0, 8);
+  return {
+    data: rows.map((r) => ({
+      id: r.id,
+      employee: employeeName,
+      leaveType: r.leaveTypeName,
+      status: r.status === "approved" ? "Approved" as const : r.status === "rejected" ? "Rejected" as const : "Pending" as const,
+    })),
+  };
+}
+
 export async function listLeaveApplications(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
   const [rows, employees, leaveTypes] = await Promise.all([
     repo.findLeaveAppsByTenant(tenantId, limit, offset),
