@@ -12,14 +12,23 @@ import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllConsumers } from "../src/consumers.js";
+import { drainQueue } from "./consumer-harness.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
+// Must be a real UUID, not a placeholder like "user-001": every write projects this
+// into created_by/updated_by (uuid columns), so a non-UUID sub silently fails every
+// consumer write to the DLQ ("invalid input syntax for type uuid") while the route's
+// synchronous 202 still returns fine — which is exactly why this went unnoticed: no
+// test in this file previously drained the queue to check post-consumer DB state.
+const ACTOR = "bbbbbbbb-1111-4000-8000-000000000099";
 
 function token(tenantId = TENANT, roles = ["crm_admin"]) {
-  return signToken({ sub: "user-001", tid: tenantId, roles, sid: "sess-001" }, SECRET);
+  return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-001" }, SECRET);
 }
 
 function makeStages(count: number) {
@@ -35,6 +44,14 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   app = await buildApp();
+  // Needed so the stage_id-persistence assertion below can drain the real
+  // route -> bus -> consumer path (repo.insert) rather than only checking the
+  // synchronous 202 envelope. Registering all consumers + starting the queue
+  // is a no-op for every other test in this file — none of them assert on
+  // post-consumer DB state (they use random, non-existent ids), matching the
+  // same pattern already established in deal-close.test.ts.
+  registerAllConsumers(queue);
+  await queue.start();
 });
 
 afterAll(async () => {
@@ -159,9 +176,31 @@ describe("Pipeline CRUD", () => {
 });
 
 describe("Deal CRUD", () => {
-  it("POST /v1/crm/deals — creates deal with pipelineId and stageId (202)", async () => {
-    const pipelineId = randomUUID();
-    const stageId = randomUUID();
+  it("POST /v1/crm/deals — creates deal with pipelineId and stageId (202), persists the RESOLVED stage's own id, not a mismatched stageId", async () => {
+    // Two real, distinct stages (created via the actual pipeline-create path, so their
+    // ids are genuine) so a mismatched stageId (pointing at "Won") is distinguishable
+    // from the correctly resolved one (the deal's own requested stage, "Lead").
+    const leadStageId = randomUUID();
+    const wonStageId = randomUUID();
+    const pipelineRes = await app.inject({
+      method: "POST",
+      url: "/v1/crm/pipelines",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: {
+        name: "Stage-id Sync Test Pipeline",
+        stages: [
+          { id: leadStageId, name: "Lead", probability: 10, ordinal: 0 },
+          { id: wonStageId, name: "Won", probability: 100, ordinal: 1 },
+          { id: randomUUID(), name: "Lost", probability: 0, ordinal: 2 },
+        ],
+      },
+    });
+    expect(pipelineRes.statusCode).toBe(202);
+    const pipelineId = pipelineRes.json().id;
+    await drainQueue();
+
+    // Same exploit shape as the PATCH /stage and close bugs: stage="Lead" (the
+    // deal's real, intended stage) but stageId points at an unrelated stage ("Won").
     const res = await app.inject({
       method: "POST",
       url: "/v1/crm/deals",
@@ -169,7 +208,7 @@ describe("Deal CRUD", () => {
       payload: {
         name: "Big Deal",
         pipelineId,
-        stageId,
+        stageId: wonStageId,
         stage: "Lead",
         valueMinor: 5000000, // 50K INR in paise
         currency: "INR",
@@ -180,6 +219,20 @@ describe("Deal CRUD", () => {
     const body = res.json();
     expect(body.id).toBeDefined();
     expect(body.status).toBe("accepted");
+
+    await drainQueue();
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ stage: string; stageId: string | null }>>`
+        SELECT stage, stage_id AS "stageId" FROM crm.deals WHERE id = ${body.id} AND tenant_id = ${TENANT}
+      `;
+    });
+    expect(rows[0]?.stage).toBe("Lead");
+    // The RESOLVED Lead stage's own id — never the raw, mismatched stageId (Won's id)
+    // the request carried. This is the same bug class already fixed for PATCH /stage
+    // and close; this assertion is what would catch it regressing via deal creation.
+    expect(rows[0]?.stageId).toBe(leadStageId);
+    expect(rows[0]?.stageId).not.toBe(wonStageId);
   });
 
   it("POST /v1/crm/deals — creates deal without pipelineId (202)", async () => {

@@ -80,7 +80,24 @@ export function registerDealCloseConsumer(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const stageSet = stage !== null ? sql`stage = ${stage},` : sql``;
+        // stage_id must move in lockstep with `stage`, resolved by NAME through the
+        // SAME repo.resolveTargetStage the PATCH /stage write path uses (repo.ts's
+        // updateStageWithVersion) — never left pointing at whatever stage preceded the
+        // close. cancelled/on_hold don't move `stage` (see comment above), so — like
+        // stageSet below — they don't touch stage_id either. Looked up here rather than
+        // trusting any caller-supplied value: this consumer's payload doesn't carry a
+        // stageId at all, precisely so there is nothing raw to accidentally persist.
+        let targetStageId: string | null = null;
+        if (stage !== null) {
+          const dealRows = (await tx.execute(sql`
+            SELECT pipeline_id AS "pipelineId" FROM crm.deals
+            WHERE id = ${p.dealId} AND tenant_id = ${msg.tenantId}
+          `)) as unknown as Array<{ pipelineId: string | null }>;
+          const targetStageConfig = await repo.resolveTargetStage(tx, dealRows[0]?.pipelineId ?? null, msg.tenantId, stage);
+          targetStageId = targetStageConfig?.id ?? null;
+        }
+
+        const stageSet = stage !== null ? sql`stage = ${stage}, stage_id = ${targetStageId}::uuid,` : sql``;
         const probSet = derived ? sql`probability = ${derived.probability},` : sql``;
         const closedAtSet = derived?.closesDeal ? sql`closed_at = now(),` : sql``;
         const competitorJson = p.competitor == null ? null : JSON.stringify(p.competitor);

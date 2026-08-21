@@ -104,8 +104,43 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+/**
+ * Resolve the pipeline-configured stage matching `stageName`, by NAME — the same rule
+ * `findStage` enforces everywhere else (stage-gate.ts) — so a write can persist that
+ * stage's own real `id` as `deals.stage_id`. This is the ONLY trusted source for
+ * stage_id: never a caller-supplied stageId, never the deal's previous value. Shared by
+ * every write path that sets or moves a deal's stage (insert below, updateStageWithVersion
+ * below, and close-consumer.ts's won/lost close) so they can never drift apart on how
+ * stage_id is derived. Returns undefined when there's no pipeline, it's missing/deleted,
+ * or `stageName` isn't one of its configured stages — callers write `null` in that case
+ * (an honest "unresolved"), never a stale or raw fallback.
+ */
+export async function resolveTargetStage(
+  tx: Writer,
+  pipelineId: string | null,
+  tenantId: string,
+  stageName: string,
+): Promise<PipelineStageLike | undefined> {
+  if (!pipelineId) return undefined;
+  const pipelineRows = await (tx as typeof db).select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
+    .limit(1);
+  return findStage(pipelineRows[0]?.stages ?? null, { stageName });
+}
+
 export async function insert(tx: Writer, row: DealInsert): Promise<void> {
-  await tx.insert(deals).values(row);
+  // stage_id is derived the SAME way as every other stage-writing path — never the raw,
+  // client-supplied stageId a create request may carry. routes.ts's POST /v1/crm/deals
+  // handler calls findStage() to run the mandatory-fields gate on create, but that
+  // resolution was never reused for the write: a create with pipelineId + stage="Lead"
+  // but stageId=<some unrelated stage's real id> would otherwise persist that wrong id
+  // from the moment the row is born — the exact bug already fixed for the PATCH /stage
+  // and close write paths, reachable a third way. `row.stage` always carries a value by
+  // the time this is called (createDealBody defaults it to "Lead" at the HTTP boundary);
+  // the fallback here only guards DealInsert's own optionality.
+  const targetStageConfig = await resolveTargetStage(tx, row.pipelineId ?? null, row.tenantId, row.stage ?? "Lead");
+  await tx.insert(deals).values({ ...row, stageId: targetStageConfig?.id ?? null });
 }
 
 export async function updateStageWithVersion(
@@ -132,14 +167,9 @@ export async function updateStageWithVersion(
   // code path published the update-stage command, not only the HTTP route (which also
   // enforces the mandatory-fields/sequence gates, but as REJECT decisions those can only
   // be checked synchronously there; this is a WRITE decision, so it belongs at the write).
-  let targetStageConfig: PipelineStageLike | undefined;
-  if (current[0].pipelineId) {
-    const pipelineRows = await (tx as typeof db).select({ stages: pipelines.stages })
-      .from(pipelines)
-      .where(and(eq(pipelines.id, current[0].pipelineId), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
-      .limit(1);
-    targetStageConfig = findStage(pipelineRows[0]?.stages ?? null, { stageId, stageName: stage });
-  }
+  // By NAME only (never stageId — see findStage's doc comment: a caller-supplied stageId
+  // must never be able to pair with an unrelated stage name and win).
+  const targetStageConfig = await resolveTargetStage(tx, current[0].pipelineId, tenantId, stage);
   const fields = deriveStageFields(stage, targetStageConfig, probability);
 
   // Fail LOUD (matching missingMandatoryFields's documented philosophy), not just safe:
@@ -172,7 +202,14 @@ export async function updateStageWithVersion(
     stageEnteredAt: now,
     version: sql`${deals.version} + 1`,
   };
-  if (stageId !== undefined) patch.stageId = stageId;
+  // stage_id is ALWAYS derived from targetStageConfig — the same by-NAME resolution
+  // that already governs status/probability/closedAt above — never the raw `stageId`
+  // the caller supplied. A mismatched/unrelated stageId in the request must never reach
+  // the column; when no stage config resolves, stage_id is null (an honest "unresolved",
+  // matching the probability-defaults-to-0 fallback above), never a stale carry-over and
+  // never blind trust of client input. forecast-route.ts already excludes stage_id IS
+  // NULL deals from the forecast, which is exactly the safe behaviour this produces.
+  patch.stageId = targetStageConfig?.id ?? null;
 
   const result = await (tx as typeof db).update(deals)
     .set(patch)
