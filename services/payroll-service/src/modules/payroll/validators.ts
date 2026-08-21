@@ -87,11 +87,17 @@ export type CreateArrearBody = z.infer<typeof createArrearBody>;
 // Unlike an arrear delta, there is no legitimate business case for a
 // negative basic here, so the input itself gets the floor (no signed
 // "result" to preserve, unlike createArrearBody above).
+// round2 fix (regression re-test): bonusPct had no floor, unlike its sibling
+// basicMinor above — a negative bonusPct (e.g. -8.33) survived to the
+// consumer's bonusCompute handler and produced a negative bonus_amount_minor,
+// which collectAdHocEarnings (payroll/consumer.ts) then feeds in as a
+// negative "earning" line, bypassing the protected-net floor that only
+// guards recognized deductions. Same floor, same rationale as basicMinor.
 export const computeBonusBody = z.object({
   employeeId: z.string().uuid(),
   fy:         z.string(),
   basicMinor: z.number().int().nonnegative(),
-  bonusPct:   z.number().default(8.33),
+  bonusPct:   z.number().nonnegative().default(8.33),
 });
 export type ComputeBonusBody = z.infer<typeof computeBonusBody>;
 

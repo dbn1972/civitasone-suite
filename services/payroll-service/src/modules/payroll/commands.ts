@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
+import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -149,8 +150,39 @@ export async function createPensioner(ctx: RequestContext, body: CreatePensioner
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * round2 fix: employeeId on arrears/bonus/reimbursements was never checked
+ * against a real employee — payroll and HRMS are separate databases (no
+ * DB-level FK possible), and no application-level check existed either. A
+ * fabricated, nowhere-existing employeeId was accepted and durably
+ * persisted. Verify existence in the caller's own tenant BEFORE publishing —
+ * the same "reject synchronously, don't 202 into a silent async no-op"
+ * principle as the run-creation duplicate guard elsewhere in this file.
+ *
+ * round2 review fix: remap HrmsUnavailableError to the same 502
+ * HRMS_UNAVAILABLE this service's other HRMS-dependent call sites already
+ * use (tax/routes.ts's Form 16 build, form16-pdf/routes.ts's PDF issuance)
+ * instead of letting it fall through to the generic 500 catch-all — bug 4
+ * in this same round was specifically about not doing that.
+ */
+async function assertEmployeeExists(ctx: RequestContext, employeeId: string): Promise<void> {
+  let exists: boolean;
+  try {
+    exists = await verifyEmployeeExists(ctx.tenantId, employeeId);
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify employee: HRMS identity source unreachable");
+    }
+    throw err;
+  }
+  if (!exists) {
+    throw new HttpError(404, "NOT_FOUND", "employee not found");
+  }
+}
+
 /** Arrear create. */
 export async function createArrear(ctx: RequestContext, body: CreateArrearBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.arrearCreate, {
     messageId: id, type: COMMANDS.arrearCreate,
@@ -166,6 +198,7 @@ export async function createArrear(ctx: RequestContext, body: CreateArrearBody):
  * persisted row, rather than trusting a value computed in the HTTP handler.
  */
 export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.bonusCompute, {
     messageId: id, type: COMMANDS.bonusCompute,
@@ -177,6 +210,7 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,
