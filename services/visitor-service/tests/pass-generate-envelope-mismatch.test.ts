@@ -25,8 +25,11 @@
  * correct shape, digital-pass/commands.ts#passGenerate(), has zero call sites
  * anywhere in src besides its own definition — confirmed by repo-wide grep.
  *
- * Every "should" assertion below is wrapped in it.fails() because it fails
- * against the current code — that is the bug. Flip to plain it() once fixed.
+ * FIXED: all 3 sites now route through digital-pass/commands.ts#passGenerate()
+ * via visit-request/consumer.ts's triggerPassGenerate() helper, which mints a
+ * real UUID messageId and the full correct payload shape. The "what SHOULD
+ * happen" assertions below are flipped from it.fails() to plain it() — they
+ * now pass for real, not just in principle.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -158,21 +161,19 @@ describe("packages/events envelope contract vs. the actual passGenerate messageI
   });
 });
 
-describe("end-to-end: visitRequestApprove -> passGenerate (today's actual behavior)", () => {
-  it("dead-letters the cascaded passGenerate message with invalid_envelope before digital-pass's handler ever runs", async () => {
+describe("end-to-end: visitRequestApprove -> passGenerate (FIXED — was 'today's actual behavior')", () => {
+  it("FIXED: no longer dead-letters the cascaded passGenerate message — it carries a real UUID messageId and digital-pass's handler actually runs", async () => {
     const queue = freshVisitRequestQueue();
     await publishAndDrain(queue, COMMANDS.visitRequestApprove, { id: REQUEST_ID, tenantId: TENANT });
 
     const dlqEntry = infraQueue.dlq.find((e) => e.topic === COMMANDS.passGenerate);
-    expect(dlqEntry).toBeDefined();
-    expect(dlqEntry?.error).toContain("invalid_envelope");
-    expect(dlqEntry?.msg.messageId).toBe(`${REQUEST_ID}:pass-gen`);
-    expect(generatePassMock).not.toHaveBeenCalled();
+    expect(dlqEntry).toBeUndefined();
+    expect(generatePassMock).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("what SHOULD happen (fails today)", () => {
-  it.fails("approving a visit request actually generates a digital pass", async () => {
+describe("what SHOULD happen (FIXED)", () => {
+  it("approving a visit request actually generates a digital pass", async () => {
     const queue = freshVisitRequestQueue();
     await publishAndDrain(queue, COMMANDS.visitRequestApprove, { id: REQUEST_ID, tenantId: TENANT });
 
@@ -180,7 +181,7 @@ describe("what SHOULD happen (fails today)", () => {
     expect(generatePassMock).toHaveBeenCalledTimes(1);
   });
 
-  it.fails("VIP auto-approve on visitRequestCreate actually generates a digital pass (2nd publish site)", async () => {
+  it("VIP auto-approve on visitRequestCreate actually generates a digital pass (2nd publish site)", async () => {
     visitRequestRow = { ...visitRequestRow, visitorCategory: "vip" };
     const queue = freshVisitRequestQueue();
     await publishAndDrain(queue, COMMANDS.visitRequestCreate, {
@@ -195,7 +196,7 @@ describe("what SHOULD happen (fails today)", () => {
     expect(generatePassMock).toHaveBeenCalledTimes(1);
   });
 
-  it.fails("workflow approval of a restricted-area visit actually generates a digital pass (3rd publish site)", async () => {
+  it("workflow approval of a restricted-area visit actually generates a digital pass (3rd publish site)", async () => {
     visitRequestRow = { ...visitRequestRow, status: "pending_approval" };
     const queue = freshVisitRequestQueue();
     await publishAndDrain(queue, CONSUMED_EVENTS.workflowTaskCompleted, {
@@ -206,7 +207,7 @@ describe("what SHOULD happen (fails today)", () => {
     expect(generatePassMock).toHaveBeenCalledTimes(1);
   });
 
-  it.fails("the passGenerate payload includes every field digital-pass/consumer.ts's PassGeneratePayload requires", async () => {
+  it("the passGenerate payload includes every field digital-pass/consumer.ts's PassGeneratePayload requires", async () => {
     const publishSpy = vi.spyOn(infraQueue, "publish");
     const queue = freshVisitRequestQueue();
     await publishAndDrain(queue, COMMANDS.visitRequestApprove, { id: REQUEST_ID, tenantId: TENANT });

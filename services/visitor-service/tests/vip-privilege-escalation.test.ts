@@ -1,38 +1,47 @@
 /**
  * VIP-pass audit — privilege-escalation regression tests.
  *
- * Live-verified against the running audit instance (2026-08-25): an
- * "employee"-role JWT (the lowest-privilege role permitted to submit a visit
- * request at all) can POST /v1/visitor/visit-requests with
+ * ORIGINAL FINDING (2026-08-25, live-verified against the running audit
+ * instance): an "employee"-role JWT (the lowest-privilege role permitted to
+ * submit a visit request at all) could POST /v1/visitor/visit-requests with
  * `visitorCategory: "vip"` and receive an immediately `status: "approved"`
  * row — identical in every other field to a control request that, absent
- * the vip flag, correctly lands in `pending_approval`. There is no role
- * check anywhere between the HTTP boundary and the DB insert that restricts
- * who may set `visitorCategory`, so any authenticated employee can grant a
- * visit VIP status for themselves or a guest of their choosing:
- *   - bypasses the normal host-confirmation / approval queue entirely
- *     (Property 27's auto-approve set defaults to {vip} — see
- *     modules/visit-request/domain.ts#resolveInitialStatus, which takes no
- *     actor/role parameter at all),
- *   - triggers modules/vip/domain.ts#resolveVipPrivileges' dedicatedParking
- *     + fastTrack privileges and (per modules/check-in/consumer.ts) an
- *     immediate VIP-arrival alert to the host, on-duty protocol officer, and
- *     reception on check-in.
+ * the vip flag, correctly lands in `pending_approval`. There was no role
+ * check anywhere between the HTTP boundary and the DB insert that restricted
+ * who may set `visitorCategory`, so any authenticated employee could grant a
+ * visit VIP status for themselves or a guest of their choosing.
+ *
+ * FIXED: modules/visit-request/routes.ts now gates `visitorCategory: "vip"`
+ * behind VIP_GRANT_ROLES (protocol_officer/security_admin/tenant_admin/
+ * super_admin) and rejects any other WRITE_ROLES caller with 403 BEFORE
+ * `commands.visitRequestCreate` is ever called — i.e. before anything below
+ * this comment (resolveInitialStatus, the consumer, the DB insert) is ever
+ * reached for an unauthorized vip claim. That HTTP-boundary proof (403 for
+ * "employee", 202 for "protocol_officer") lives in
+ * tests/vip-privilege-escalation-route.test.ts (Part C).
+ *
+ * Parts A and B below intentionally still exercise the domain/consumer
+ * layers directly (bypassing the HTTP role gate) and their assertions are
+ * UNCHANGED on purpose: resolveInitialStatus is a pure function with no
+ * actor/role parameter by design (queue command envelopes carry
+ * tenantId/actorId/correlationId — see packages/events/src/envelope.ts —
+ * but never the actor's roles, so role authorization is structurally only
+ * possible once, at the HTTP boundary, while the JWT is still in hand).
+ * These lower-layer tests now document the TRUSTED-INPUT contract those
+ * layers correctly implement once routes.ts has already authorized a vip
+ * request — they are no longer an achievable end-to-end exploit path, since
+ * the only producer of `visitRequestCreate` commands (routes.ts) will no
+ * longer publish one with visitorCategory: "vip" on behalf of an
+ * unauthorized actor. Per the fix-wave instructions these are kept (not
+ * deleted) as regression coverage for that trusted-input contract.
  *
  * tests/vip-domain.test.ts already covers vip/domain.ts's own logic
  * (resolveVipPrivileges, canViewVipLog) in isolation — that logic is
- * correct. The gap is entirely upstream, at the visit-request HTTP/consumer
- * boundary that feeds it, which is why these tests live here rather than
- * duplicating vip-domain.test.ts. tests/visitor-comprehensive.test.ts even
- * flags this explicitly and left it unaddressed:
+ * correct. tests/visitor-comprehensive.test.ts flags the same root cause:
  *   "resolveInitialStatus requires the full VisitRequestInput type aligned
  *    to source; VIP/host bypass is validated at the route integration
- *    layer" / "VIP/host bypass is validated at the route integration
- *    layer" — no such route/integration test existed prior to this file
- *    (confirmed: tests/all-routes.test.ts's visit-request POST tests mock
- *    commands.ts entirely and never assert on visitorCategory, and no other
- *    test file publishes a real visitRequestCreate command with
- *    visitorCategory: "vip").
+ *    layer" — that route/integration coverage now exists in
+ *    tests/vip-privilege-escalation-route.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -59,11 +68,15 @@ describe("visit-request/domain#resolveInitialStatus — no actor/role input (Pro
     expect(resolveInitialStatus("portal", "standard")).toBe("pending_approval");
   });
 
-  it("the function signature carries no actor/role/requester parameter — category alone decides the bypass", () => {
+  it("the function signature carries no actor/role/requester parameter — category alone decides the bypass (by design: authorization now happens upstream in routes.ts, see Part C)", () => {
     // resolveInitialStatus(source, visitorCategory, autoApproveCategories?) — 3 params, none of
-    // which identify or authorize the caller. This is the root of the escalation: whoever is
-    // ALLOWED to set visitorCategory on the HTTP request (see Part C below — currently "employee",
-    // the lowest role that can submit a visit request at all) fully controls the approval bypass.
+    // which identify or authorize the caller. This was the root of the escalation: previously,
+    // WHOEVER was allowed to set visitorCategory on the HTTP request (formerly "employee", the
+    // lowest role that can submit a visit request at all) fully controlled the approval bypass.
+    // FIXED: routes.ts (VIP_GRANT_ROLES) now restricts who may set visitorCategory: "vip" to
+    // protocol_officer/security_admin/tenant_admin/super_admin BEFORE a command ever reaches this
+    // function, so resolveInitialStatus itself can safely stay a simple, actor-agnostic pure
+    // function — trusting its input is now correct, not a gap.
     expect(resolveInitialStatus.length).toBeLessThanOrEqual(3);
     expect(resolveInitialStatus("kiosk", "vip")).toBe("approved");
     expect(resolveInitialStatus("mobile", "vip")).toBe("approved");
@@ -157,8 +170,8 @@ beforeEach(() => {
   insertValuesMock.mockClear();
 });
 
-describe("visit-request consumer — visitRequestCreate persists the escalation (mirrors live curl proof)", () => {
-  it("an ordinary employee's self-service ('portal') request with visitorCategory='vip' is persisted as status='approved' — no approval step", async () => {
+describe("visit-request consumer — visitRequestCreate trusts an already-authorized visitorCategory (formerly: persisted the escalation unchecked, mirroring the live curl proof)", () => {
+  it("a visitRequestCreate command carrying visitorCategory='vip' is persisted as status='approved' — no approval step (in the real system this command can now only originate from routes.ts's VIP_GRANT_ROLES-gated authorized callers; the queue envelope carries no roles for the consumer to re-check, so this remains correct trusted-input behavior)", async () => {
     const queue = freshQueue();
     await submit(queue, basePayload({ visitorCategory: "vip", source: "portal" }));
 
@@ -173,7 +186,7 @@ describe("visit-request consumer — visitRequestCreate persists the escalation 
     expect(insertedStatus()).toBe("pending_approval");
   });
 
-  it("the persisted row's visitorCategory is whatever the submitter claimed, unchanged (no server-side normalization/authorization)", async () => {
+  it("the persisted row's visitorCategory is whatever the (now HTTP-authorized) submitter claimed, unchanged (no additional server-side normalization at this layer)", async () => {
     const queue = freshQueue();
     await submit(queue, basePayload({ visitorCategory: "vip" }));
 
@@ -182,8 +195,9 @@ describe("visit-request consumer — visitRequestCreate persists the escalation 
   });
 });
 
-// Part C (route-boundary proof: an "employee" token may POST visitorCategory
-// ="vip" and gets 202 not 403, contrasted with vip/log's correct read-side
-// gate) lives in tests/vip-privilege-escalation-route.test.ts — it needs the
-// REAL app + REAL db (many unrelated route modules pull in shared/db.js's
-// full export surface), which is incompatible with this file's db mock.
+// Part C (route-boundary proof: an "employee" token gets 403 (FIXED, was 202)
+// attempting visitorCategory="vip", a "protocol_officer" token still gets 202,
+// contrasted with vip/log's read-side gate) lives in
+// tests/vip-privilege-escalation-route.test.ts — it needs the REAL app + REAL
+// db (many unrelated route modules pull in shared/db.js's full export
+// surface), which is incompatible with this file's db mock.

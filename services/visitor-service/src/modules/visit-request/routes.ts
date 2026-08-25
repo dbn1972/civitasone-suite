@@ -15,6 +15,7 @@
  * `pending_approval` state).
  */
 import type { FastifyInstance } from "fastify";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { identityDocHash } from "../blacklist/blind-index.js";
@@ -43,11 +44,40 @@ const READ_ROLES = ["employee", "security_admin", "protocol_officer", "tenant_ad
 const WRITE_ROLES = ["employee", "security_admin", "protocol_officer", "tenant_admin", "super_admin"];
 const APPROVAL_ROLES = ["employee", "security_admin", "protocol_officer", "tenant_admin", "super_admin"];
 
+// SECURITY FIX (VIP privilege escalation): visitorCategory: "vip" is not an
+// ordinary field — per domain.ts's DEFAULT_AUTO_APPROVE_CATEGORIES it skips
+// the approval queue entirely (resolveInitialStatus -> "approved" straight
+// away) and grants vip/domain.ts#resolveVipPrivileges' dedicatedParking +
+// fastTrack privileges. WRITE_ROLES deliberately includes the low-privilege
+// "employee" role so any host can submit an ORDINARY visit request, but
+// granting VIP status is a privileged action and must be held to the same
+// standard vip/routes.ts already applies to reading the VIP log
+// (VIP_LOG_ALLOWED_ROLES = protocol_officer/security_admin) — extended here
+// with the two admin tiers that can already approve/reject any request
+// (APPROVAL_ROLES), since setting vip bypasses that exact approval step.
+// Deliberately excludes plain "employee": that is precisely the role the
+// audit proved could self-declare vip for instant approval.
+const VIP_GRANT_ROLES = ["protocol_officer", "security_admin", "tenant_admin", "super_admin"];
+
 export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/visitor/visit-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createVisitRequestBody.parse(req.body);
+
+    // SECURITY FIX: only an authorized role may set visitorCategory: "vip" on
+    // creation — see VIP_GRANT_ROLES above. Any other WRITE_ROLES caller
+    // (e.g. plain "employee") is rejected outright rather than silently
+    // downgraded, matching this module's existing requireRole/HttpError(403)
+    // convention (consistent, auditable behavior instead of a surprising
+    // silent field override).
+    if (body.visitorCategory === "vip" && !hasAnyRole(ctx, VIP_GRANT_ROLES)) {
+      throw new HttpError(
+        403,
+        "FORBIDDEN",
+        `visitorCategory 'vip' requires one of: ${VIP_GRANT_ROLES.join(", ")}`,
+      );
+    }
 
     // Fix 6: config-driven schedule-window validation. The lead-time bounds are
     // read from the tenant's `visitor_policy` config (visit_request.min_lead_hours
