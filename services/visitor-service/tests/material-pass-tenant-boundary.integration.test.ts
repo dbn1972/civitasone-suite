@@ -2,33 +2,44 @@
  * material-pass — cross-tenant referential-integrity gap + tenant isolation
  * (real DB, real consumer).
  *
- * Live-confirmed against the running audit instance (2026-08-25): a
- * `security_admin`-role JWT for TENANT B can POST
+ * Originally live-confirmed against the running audit instance (2026-08-25):
+ * a `security_admin`-role JWT for TENANT B could POST
  * /v1/visitor/material-passes with a `passId`/`locationId` that belong to a
- * DIFFERENT tenant (A) and have it succeed — the resulting row is persisted
+ * DIFFERENT tenant (A) and have it succeed — the resulting row was persisted
  * with `tenant_id = B` but `pass_id`/`location_id` pointing at tenant A's
- * real digital-pass/location rows. Neither modules/material-pass/consumer.ts
- * nor modules/vehicle-pass/consumer.ts (same pattern) verify that the
- * caller-supplied passId/locationId actually belong to the authenticated
- * caller's own tenant before inserting — only the new row's OWN tenant_id
- * column is set from the token. The FK constraints
+ * real digital-pass/location rows. modules/material-pass/consumer.ts did not
+ * verify that the caller-supplied passId/locationId actually belonged to the
+ * authenticated caller's own tenant before inserting — only the new row's
+ * OWN tenant_id column was set from the token. The FK constraints
  * (material_passes_pass_id_fkey -> digital_passes.id,
  * material_passes_location_id_fkey -> locations.id) only prove the target
  * EXISTS somewhere, not that it belongs to the caller.
  *
- * This is NOT a read-side data leak — RLS still scopes every SELECT by the
- * row's own tenant_id, so tenant A can never see tenant B's phantom row and
- * vice versa (confirmed below). It IS a write-side tenant-boundary/data-
- * integrity gap: tenant B can plant a record that references tenant A's
- * real internal resource ids merely by knowing/guessing a UUID, and any
- * future feature that joins across tenant_id without re-verifying ownership
- * (analytics, support tooling, audit correlation) would be corrupted by it.
- * modules/location/routes.ts already shows the correct pattern elsewhere in
+ * Fixed: the materialPassCreate handler now looks up both passId (against
+ * digital_passes) and locationId (against locations) scoped by
+ * `eq(..., msg.tenantId)` before inserting — the same "not found for this
+ * tenant" ownership check modules/check-in/consumer.ts already applies to
+ * passId. A cross-tenant reference now throws and the whole transaction
+ * (including markProcessed) rolls back, so no phantom row is ever
+ * persisted; the message lands in the queue's DLQ instead.
+ *
+ * This was never a read-side data leak — RLS always scoped every SELECT by
+ * the row's own tenant_id, so tenant A could never see tenant B's phantom
+ * row and vice versa (confirmed below, still true). It WAS a write-side
+ * tenant-boundary/data-integrity gap: tenant B could plant a record that
+ * referenced tenant A's real internal resource ids merely by
+ * knowing/guessing a UUID, and any future feature that joins across
+ * tenant_id without re-verifying ownership (analytics, support tooling,
+ * audit correlation) would have been corrupted by it.
+ * modules/location/routes.ts already showed the correct pattern elsewhere in
  * this same service — it calls `repo.getLocationById(ctx.tenantId, id)`
  * before allowing a nested area/parking write under that location id, i.e.
  * it verifies ownership before trusting a client-supplied foreign id.
- * material-pass/vehicle-pass consumers should apply the same discipline to
- * passId (and, for vehicle-pass, locationId).
+ *
+ * NOTE — scope: modules/vehicle-pass/consumer.ts has the identical
+ * unverified-FK pattern for its own passId/locationId and is NOT covered by
+ * this fix or this file; it is a separate, not-yet-fixed finding (flagged
+ * for follow-up).
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -59,14 +70,16 @@ const DIGITAL_PASS_A = randomUUID();
 function freshQueue() {
   // See tests/vehicle-pass-consumer.integration.test.ts's file header for why
   // createQueue() (not `new MemoryQueue()`) is required for RLS-scoped writes
-  // to work under the real DB in tests.
-  const queue = createQueue() as Queue & { drain(): Promise<void> };
+  // to work under the real DB in tests. `dlq` is exposed so the rejected
+  // cross-tenant command can be confirmed dead-lettered, not just silently
+  // dropped.
+  const queue = createQueue() as Queue & { dlq: unknown[]; drain(): Promise<void> };
   registerMaterialPassConsumers(queue);
   return queue;
 }
 
 async function publishCreate(
-  queue: Queue & { drain(): Promise<void> },
+  queue: Queue & { dlq: unknown[]; drain(): Promise<void> },
   tenantId: string,
   actorId: string,
   overrides: Record<string, unknown>,
@@ -135,7 +148,7 @@ describe("material-pass consumer — cross-tenant foreign-id reference (real DB,
     expect(rows).toHaveLength(1);
   });
 
-  it("BUG: tenant B can create a material-pass row referencing tenant A's real passId/locationId", async () => {
+  it("FIXED: tenant B can no longer create a material-pass row referencing tenant A's real passId/locationId", async () => {
     const queue = freshQueue();
     await publishCreate(queue, TENANT_B, ACTOR_B, {});
 
@@ -143,12 +156,14 @@ describe("material-pass consumer — cross-tenant foreign-id reference (real DB,
       db.transaction((tx) => tx.select().from(materialPasses).where(eq(materialPasses.tenantId, TENANT_B))),
     );
 
-    expect(crossTenantRows).toHaveLength(1);
-    const row = crossTenantRows[0]!;
-    expect(row.tenantId).toBe(TENANT_B);
-    // ... yet the FK targets are tenant A's REAL resources, not tenant B's.
-    expect(row.passId).toBe(DIGITAL_PASS_A);
-    expect(row.locationId).toBe(LOCATION_A);
+    // No phantom row: the tenant-ownership check rejected passId=DIGITAL_PASS_A
+    // (a real row, but tenant A's, not tenant B's) before any insert ran.
+    expect(crossTenantRows).toHaveLength(0);
+    // The rejected command was dead-lettered, not silently swallowed.
+    expect(queue.dlq).toHaveLength(1);
+    expect(queue.dlq[0]).toMatchObject({
+      error: expect.stringContaining(`digital pass '${DIGITAL_PASS_A}' not found for tenant '${TENANT_B}'`),
+    });
   });
 
   it("but this is NOT a read-side leak: tenant A cannot read tenant B's phantom row under tenant A's own RLS context (raw DB, cache bypassed)", async () => {
@@ -167,8 +182,9 @@ describe("material-pass consumer — cross-tenant foreign-id reference (real DB,
 
     const asTenantB = await materialPassesFor(TENANT_B);
     expect(asTenantB.some((r) => r.itemDescription === "AUDIT-TENANT-A-OWN item")).toBe(false);
-    // Tenant B still only ever sees its own single phantom row from the
-    // earlier test, never tenant A's.
+    // Tenant B has zero rows at all now (its earlier cross-tenant attempt
+    // was rejected, not just isolated on read) — vacuously, everything it
+    // does see (nothing) is tagged tenant_id = B.
     expect(asTenantB.every((r) => r.tenantId === TENANT_B)).toBe(true);
   });
 });

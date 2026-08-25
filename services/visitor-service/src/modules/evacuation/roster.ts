@@ -78,8 +78,10 @@ export interface RosterEntry {
  * rather than the shared `cache` singleton from `shared/infra.ts`.
  */
 interface RosterStore {
-  hset(key: string, field: string, value: string): Promise<void>;
-  hdel(key: string, field: string): Promise<void>;
+  /** Returns true iff `field` was newly created (Redis HSET semantics: 1 = new field, 0 = updated existing). */
+  hset(key: string, field: string, value: string): Promise<boolean>;
+  /** Returns true iff `field` actually existed and was removed (Redis HDEL semantics: >0 fields removed). */
+  hdel(key: string, field: string): Promise<boolean>;
   hgetall(key: string): Promise<Record<string, string>>;
   incr(key: string): Promise<void>;
   decr(key: string): Promise<void>;
@@ -89,11 +91,13 @@ interface RosterStore {
 /** Real Redis-backed store (Sentinel on-prem / ElastiCache on AWS via REDIS_URL). */
 class RedisRosterStore implements RosterStore {
   constructor(private redis: Redis) {}
-  async hset(key: string, field: string, value: string): Promise<void> {
-    await this.redis.hset(key, field, value);
+  async hset(key: string, field: string, value: string): Promise<boolean> {
+    // ioredis HSET resolves to the number of NEW fields added (1 = new, 0 = existing field overwritten).
+    return (await this.redis.hset(key, field, value)) > 0;
   }
-  async hdel(key: string, field: string): Promise<void> {
-    await this.redis.hdel(key, field);
+  async hdel(key: string, field: string): Promise<boolean> {
+    // ioredis HDEL resolves to the number of fields actually removed (0 if the field wasn't present).
+    return (await this.redis.hdel(key, field)) > 0;
   }
   async hgetall(key: string): Promise<Record<string, string>> {
     return this.redis.hgetall(key);
@@ -118,16 +122,19 @@ class MemoryRosterStore implements RosterStore {
   private hashes = new Map<string, Map<string, string>>();
   private counters = new Map<string, number>();
 
-  async hset(key: string, field: string, value: string): Promise<void> {
+  async hset(key: string, field: string, value: string): Promise<boolean> {
     let h = this.hashes.get(key);
     if (!h) {
       h = new Map();
       this.hashes.set(key, h);
     }
+    const isNew = !h.has(field);
     h.set(field, value);
+    return isNew;
   }
-  async hdel(key: string, field: string): Promise<void> {
-    this.hashes.get(key)?.delete(field);
+  async hdel(key: string, field: string): Promise<boolean> {
+    const h = this.hashes.get(key);
+    return h ? h.delete(field) : false;
   }
   async hgetall(key: string): Promise<Record<string, string>> {
     const h = this.hashes.get(key);
@@ -172,8 +179,16 @@ export function setRosterStoreForTests(store: RosterStore | null): void {
  */
 export async function addToRoster(tenantId: string, locationId: string, entry: RosterEntry): Promise<void> {
   const store = getStore();
-  await store.hset(ROSTER_KEY(tenantId, locationId), entry.passId, JSON.stringify(entry));
-  await store.incr(COUNT_KEY(tenantId, locationId));
+  const isNewMember = await store.hset(ROSTER_KEY(tenantId, locationId), entry.passId, JSON.stringify(entry));
+  // Property 23: only adjust the counter when the hash actually gained a new
+  // entry. A repeat addToRoster for a passId already on the roster (e.g. a
+  // multiEntryRecurring pass re-checking in without an intervening
+  // checkout) is an idempotent overwrite of that entry's fields, not a new
+  // occupant — incrementing here would desync the counter above the true
+  // hash entry count.
+  if (isNewMember) {
+    await store.incr(COUNT_KEY(tenantId, locationId));
+  }
 }
 
 /**
@@ -183,8 +198,16 @@ export async function addToRoster(tenantId: string, locationId: string, entry: R
  */
 export async function removeFromRoster(tenantId: string, locationId: string, passId: string): Promise<void> {
   const store = getStore();
-  await store.hdel(ROSTER_KEY(tenantId, locationId), passId);
-  await store.decr(COUNT_KEY(tenantId, locationId));
+  const wasMember = await store.hdel(ROSTER_KEY(tenantId, locationId), passId);
+  // Property 23, symmetric case: only decrement when hdel actually removed
+  // something. A checkout for a passId no longer (or never) on the roster
+  // (redelivered/duplicate checkOutRecord, or any check_ins/roster desync)
+  // is a no-op on the hash, not a departure — decrementing here would drive
+  // the counter BELOW true occupancy, the dangerous direction during a real
+  // emergency headcount.
+  if (wasMember) {
+    await store.decr(COUNT_KEY(tenantId, locationId));
+  }
 }
 
 /**

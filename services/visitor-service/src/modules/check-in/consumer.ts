@@ -36,7 +36,7 @@ import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
 import { locations } from "../location/schema.js";
 import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
-import { isOverCapacityThreshold } from "../location/domain.js";
+import { assertWithinCapacity, isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 import { isWatchlisted } from "../blacklist/screening-store.js";
 
@@ -141,8 +141,42 @@ export function registerCheckInConsumers(queue: Queue): void {
         payload: { passId: p.passId, locationId: pass.locationId, gateId: p.gateId, timestamp: timestamp.toISOString() },
       });
 
-      // Requirement 19.5 / Property 28: capacity-threshold check after check-in commits.
-      // Query current occupancy (roster count) and location's capacityThreshold.
+      // Requirement 19.5 / Property 28: capacity-threshold ENFORCEMENT, before
+      // this check-in commits. `assertWithinCapacity` (the throwing/
+      // enforcing variant in modules/location/domain.ts) previously sat
+      // dead code — only the boolean isOverCapacityThreshold was consulted,
+      // and only AFTER commit (see the post-commit block below), purely to
+      // fire an alert. That contradicted assertWithinCapacity's own doc
+      // comment ("reject new check-ins while the location is at/over its
+      // configured capacity threshold"). Throwing here rolls back this
+      // entire transaction (checkIns insert + digitalPasses status update
+      // included), so a location at/over capacityThreshold now actually
+      // blocks the new check-in instead of merely alerting after admitting
+      // it.
+      //
+      // Judgment call: `occupancy` is the roster count BEFORE this visitor
+      // is added (addToRoster runs after commit, per this module's
+      // graceful-degradation contract) — the SAME value this handler always
+      // computed for the post-commit alert below. Reusing that (rather than
+      // occupancy + 1, i.e. "would admitting this visitor reach the
+      // threshold") keeps a configured capacityThreshold meaning what the
+      // alert already established it to mean at this call site: the Nth
+      // concurrent occupant is admitted and the (N+1)th is turned away, not
+      // the (N-1)th. If the intended UX is actually the stricter "occupancy
+      // must never reach capacityThreshold at all" reading of
+      // assertWithinCapacity's own doc comment, this is the call to change
+      // (pass occupancy + 1 instead) — flagging that ambiguity plainly since
+      // it's a real behavioral choice, not just a wiring detail.
+      //
+      // Residual race: this read isn't lock-protected (getVisitorCount is a
+      // Redis call, not part of this Postgres transaction), and
+      // addToRoster for THIS visitor doesn't happen until after commit — so
+      // two check-ins at the same location, right at the threshold, can
+      // still both read the same pre-add occupancy and both be admitted.
+      // The post-commit alert below remains as a backstop notification for
+      // that case; closing the race itself would need atomic Redis
+      // check-and-incr or moving occupancy accounting into this
+      // transaction, out of scope for this fix.
       const locationRows = await tx
         .select({ capacityThreshold: locations.capacityThreshold })
         .from(locations)
@@ -150,8 +184,10 @@ export function registerCheckInConsumers(queue: Queue): void {
         .limit(1);
       const location = locationRows[0];
 
-      // We'll check capacity AFTER this transaction commits (using roster count).
-      // For now, capture location info needed for the capacity check.
+      if (location?.capacityThreshold != null) {
+        const occupancy = await getVisitorCount(msg.tenantId, pass.locationId);
+        assertWithinCapacity(occupancy, location.capacityThreshold);
+      }
 
       // Requirement 5.5: NOTIFICATION_SEND to host on visitor arrival (push)
       if (visit?.hostEmployeeId) {
@@ -243,11 +279,17 @@ export function registerCheckInConsumers(queue: Queue): void {
 
     if (!committed) return; // already processed (idempotent replay)
 
-    // Requirement 19.5 / Property 28: capacity-threshold check AFTER commit.
-    // Uses the roster counter (already incremented by addToRoster below or
-    // by a prior successful check-in) to decide whether occupancy exceeds
-    // the location's configured threshold. On breach, outbox a
-    // `capacityThresholdReached` event + NOTIFICATION_SEND to security.
+    // Requirement 19.5 / Property 28: capacity-threshold ALERT, after
+    // commit. Enforcement now happens pre-commit above (assertWithinCapacity)
+    // — this block remains a best-effort notification to security control
+    // room so they see the location cross the line, including for the
+    // residual race the pre-commit check can't close on its own (see the
+    // comment above it): two check-ins reading the same pre-add occupancy
+    // and both being admitted. Uses the roster counter (already incremented
+    // by addToRoster below, or by a prior successful check-in) to decide
+    // whether occupancy exceeds the location's configured threshold. On
+    // breach, outbox a `capacityThresholdReached` event + NOTIFICATION_SEND
+    // to security.
     try {
       if (committed.capacityThreshold != null) {
         const occupancy = await getVisitorCount(msg.tenantId, committed.locationId);

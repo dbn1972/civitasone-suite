@@ -89,9 +89,15 @@ describe("material-pass/consumer", () => {
 
   describe("materialPassCreate", () => {
     it("creates a material pass", async () => {
+      // Tenant-ownership check (fix): materialPassCreate now looks up
+      // passId (digital_passes) and locationId (locations) scoped to the
+      // caller's tenant before inserting. This fake select() returns the
+      // same `dbRows` regardless of which table is queried, so one non-empty
+      // row satisfies both existence checks.
+      dbRows = [{ id: "pass-1" }];
       const queue = freshQueue();
       await publishAndFlush(queue, COMMANDS.materialPassCreate, {
-        id: "mp-1", tenantId: TENANT, passId: "pass-1",
+        id: "mp-1", tenantId: TENANT, passId: "pass-1", locationId: "loc-1",
         items: [{ description: "Laptop", quantity: 1, serialNumber: "SN001" }],
         createdBy: ACTOR,
       });

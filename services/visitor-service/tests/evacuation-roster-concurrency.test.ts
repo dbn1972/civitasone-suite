@@ -4,9 +4,9 @@
  *
  * tests/evacuation-roster.test.ts already covers the well-behaved sequential
  * case (each passId added/removed at most once). This file targets the gap:
- * roster.ts's own public contract does NOT enforce Property 23 against a
- * REPEATED call for the same passId, and that repeat is reachable through a
- * documented, legitimate production code path — not just a hypothetical:
+ * roster.ts's public contract must also enforce Property 23 against a
+ * REPEATED call for the same passId, since that repeat is reachable through
+ * a documented, legitimate production code path — not just a hypothetical:
  *
  *   - modules/check-in/domain.ts#checkIn (lines ~210-219) explicitly ALLOWS a
  *     `passType: "recurring"` pass with `multiEntryRecurring: true` to check
@@ -16,21 +16,25 @@
  *     the pass is a multi-entry recurring pass").
  *   - modules/check-in/consumer.ts calls `addToRoster(...)` unconditionally
  *     on every successful check-in (no "already on roster" guard).
- *   - addToRoster does `hset` (idempotent overwrite for a repeat passId)
- *     THEN `incr` (NOT idempotent) — so that second, legitimate check-in
- *     increments COUNT_KEY a second time while the Hash gains no new entry.
+ *   - addToRoster's `hset` is an idempotent overwrite for a repeat passId, so
+ *     its paired counter adjustment must ALSO be conditioned on membership
+ *     actually changing (Redis HSET's return value: 1 = new field, 0 =
+ *     existing field overwritten) — otherwise a second, legitimate check-in
+ *     would increment COUNT_KEY a second time while the Hash gains no new
+ *     entry.
  *
- * Symmetrically, removeFromRoster unconditionally `decr`s even when `hdel`
- * on a non-member passId is a no-op (e.g. a checkout for a pass not
- * currently on the roster, or a redelivered/duplicate checkOutRecord) — this
- * drives the counter BELOW the true occupancy, which is the more dangerous
- * direction during an actual emergency headcount (undercounting who is
- * still inside).
+ * Symmetrically, removeFromRoster must not `decr` when `hdel` on a
+ * non-member passId is a no-op (e.g. a checkout for a pass not currently on
+ * the roster, or a redelivered/duplicate checkOutRecord) — an unconditional
+ * decr would drive the counter BELOW the true occupancy, which is the more
+ * dangerous direction during an actual emergency headcount (undercounting
+ * who is still inside). Redis HDEL's return value (>0 fields actually
+ * removed) is what gates the decr.
  *
- * Both are demonstrated below with plain sequential calls (no timing
- * flakiness required to prove the contract is violable), plus a genuine
- * Promise.all concurrency test showing the primitive IS safe for the normal
- * case of distinct passIds racing each other.
+ * Both are exercised below with plain sequential calls (no timing flakiness
+ * required to prove the contract), plus a genuine Promise.all concurrency
+ * test showing the primitive is fine for the normal case of distinct
+ * passIds racing each other.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -62,8 +66,8 @@ beforeEach(() => {
   setRosterStoreForTests(null);
 });
 
-describe("Property 23 violation — repeat addToRoster for an already-present passId (multi-entry recurring re-check-in path)", () => {
-  it("BUG: a second addToRoster for the SAME passId still on the roster desyncs the counter from the hash (over-count)", async () => {
+describe("Property 23 held — repeat addToRoster for an already-present passId (multi-entry recurring re-check-in path)", () => {
+  it("FIXED: a second addToRoster for the SAME passId still on the roster does not desync the counter from the hash (no over-count)", async () => {
     // First check-in.
     await addToRoster(TENANT, LOCATION, entry({ passId: "recurring-pass-1" }));
     expect(await getVisitorCount(TENANT, LOCATION)).toBe(1);
@@ -79,27 +83,27 @@ describe("Property 23 violation — repeat addToRoster for an already-present pa
     // The Hash correctly still has exactly ONE entry for this passId (hset
     // overwrote in place) ...
     expect(roster).toHaveLength(1);
-    // ... but the counter was incremented twice. This is the Property 23
-    // break: count no longer equals the hash's entry count. An evacuation
-    // headcount read via getVisitorCount() would now overstate occupancy by
-    // one for every multi-entry recurring visitor who re-entered without an
+    // ... and the counter was NOT incremented a second time, because hset
+    // reported the field already existed. Property 23 holds: an evacuation
+    // headcount read via getVisitorCount() no longer overstates occupancy
+    // for a multi-entry recurring visitor who re-entered without an
     // intervening checkout.
-    expect(count).toBe(2);
-    expect(count).not.toBe(roster.length); // <- the invariant roster.ts's own docs promise is broken
+    expect(count).toBe(1);
+    expect(count).toBe(roster.length); // <- the invariant roster.ts's own docs promise
   });
 
-  it("compounding: three re-entries of the same pass triples the drift", async () => {
+  it("compounding: three re-entries of the same pass do not drift the counter", async () => {
     await addToRoster(TENANT, LOCATION, entry({ passId: "p1" }));
     await addToRoster(TENANT, LOCATION, entry({ passId: "p1" }));
     await addToRoster(TENANT, LOCATION, entry({ passId: "p1" }));
 
     expect((await getFullRoster(TENANT, LOCATION)).length).toBe(1);
-    expect(await getVisitorCount(TENANT, LOCATION)).toBe(3);
+    expect(await getVisitorCount(TENANT, LOCATION)).toBe(1);
   });
 });
 
-describe("Property 23 violation — removeFromRoster for a passId NOT on the roster (undercount — the dangerous direction)", () => {
-  it("BUG: removing a passId that was never added drives the counter negative", async () => {
+describe("Property 23 held — removeFromRoster for a passId NOT on the roster (would otherwise undercount — the dangerous direction)", () => {
+  it("FIXED: removing a passId that was never added does not drive the counter negative", async () => {
     await addToRoster(TENANT, LOCATION, entry({ passId: "pass-1" }));
     expect(await getVisitorCount(TENANT, LOCATION)).toBe(1);
 
@@ -113,23 +117,24 @@ describe("Property 23 violation — removeFromRoster for a passId NOT on the ros
 
     // The one real visitor is still correctly on the roster ...
     expect(roster).toHaveLength(1);
-    // ... but the counter was decremented for an hdel that was a no-op.
-    expect(count).toBe(0);
-    expect(count).not.toBe(roster.length);
+    // ... and the counter was NOT decremented, because hdel reported no
+    // field was actually removed (a no-op).
+    expect(count).toBe(1);
+    expect(count).toBe(roster.length);
   });
 
-  it("BUG: a duplicate checkout (remove called twice for the same passId) drives the counter negative", async () => {
+  it("FIXED: a duplicate checkout (remove called twice for the same passId) does not drive the counter negative", async () => {
     await addToRoster(TENANT, LOCATION, entry({ passId: "pass-1" }));
     await removeFromRoster(TENANT, LOCATION, "pass-1");
     // Redelivery / retry of the same checkOutRecord command.
     await removeFromRoster(TENANT, LOCATION, "pass-1");
 
     expect(await getFullRoster(TENANT, LOCATION)).toEqual([]);
-    // A NEGATIVE headcount is a clearly-wrong, clearly-visible symptom in
-    // this contrived case — the dangerous real-world case is the OTHER
-    // undercounting scenario above, where the count silently reads too LOW
-    // by exactly one per stray removal while still looking plausible.
-    expect(await getVisitorCount(TENANT, LOCATION)).toBe(-1);
+    // The first removeFromRoster genuinely removed the entry and correctly
+    // decremented once; the redelivered second call found hdel a no-op and
+    // did NOT decrement again, so the count bottoms out at zero rather than
+    // going negative.
+    expect(await getVisitorCount(TENANT, LOCATION)).toBe(0);
   });
 });
 
