@@ -139,7 +139,7 @@ describe("check-in watchlist screening — raw identity ref vs. the real blind-i
     expect(await isWatchlisted(TENANT, RAW_DOC_REF)).toBe(false);
   });
 
-  it.fails("[BUG] a real check-in for a genuinely (correctly-hashed) watchlisted visitor should raise a security-control-room alert", async () => {
+  it("[FIXED] a real check-in for a genuinely (correctly-hashed) watchlisted visitor raises a security-control-room alert", async () => {
     // createQueue() (not `new MemoryQueue()` directly) so `.subscribe` gets
     // the production `withTenantConsumer` decoration — the consumer's own
     // db.transaction() calls need the AsyncLocalStorage tenant context that

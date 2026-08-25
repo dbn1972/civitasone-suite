@@ -179,8 +179,8 @@ describe("printJobCreate — revoked-pass guard (badge-print / digital-pass boun
     expect(insertedPrintJobs).toHaveLength(1);
   });
 
-  it.fails(
-    "[BUG] a REVOKED pass must NOT produce a printable badge, but printJobCreate creates one anyway",
+  it(
+    "[FIXED] a REVOKED pass must NOT produce a printable badge",
     async () => {
       // passRow is already revoked (status:"revoked", revoked:true) from beforeEach.
       const queue = freshQueue();

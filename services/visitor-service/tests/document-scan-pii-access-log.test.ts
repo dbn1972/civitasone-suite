@@ -78,8 +78,8 @@ describe("document-scan/repo.ts — PII access logging", () => {
     expect(result?.idDocumentNumber).toBe("123456789012");
   });
 
-  it.fails(
-    "[BUG] getOcrResult reads Aadhaar-grade PII but never calls logPiiAccess",
+  it(
+    "[FIXED] getOcrResult reads Aadhaar-grade PII and now calls logPiiAccess",
     async () => {
       vi.resetModules();
       const logPiiAccessSpy = vi.fn(async () => undefined);
@@ -101,8 +101,8 @@ describe("document-scan/repo.ts — PII access logging", () => {
     },
   );
 
-  it.fails(
-    "[BUG] getScanSession also never calls logPiiAccess",
+  it(
+    "[FIXED] getScanSession also now calls logPiiAccess",
     async () => {
       vi.resetModules();
       const logPiiAccessSpy = vi.fn(async () => undefined);

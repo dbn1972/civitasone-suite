@@ -42,6 +42,8 @@ import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../src/shared/db.js";
 import { scannerDb } from "../src/shared/scanner-db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDigitalPassConsumers } from "../src/modules/digital-pass/consumer.js";
 import { processPurgeCycle, PURGED_SENTINEL } from "../src/modules/dpdp/purge-worker.js";
 import { visitRequests } from "../src/modules/visit-request/schema.js";
 import { digitalPasses } from "../src/modules/digital-pass/schema.js";
@@ -197,11 +199,24 @@ beforeAll(async () => {
     ),
   );
 
+  // The cascade fix revokes any active digital pass for a purged visit
+  // request by publishing digital-pass's own passRevoke() command (see
+  // modules/dpdp/purge-worker.ts) rather than writing to digital_passes
+  // directly — register the real digital-pass consumer on the shared
+  // MemoryQueue so that command actually gets processed in this test.
+  registerDigitalPassConsumers(queue);
+
   purgeResult = await processPurgeCycle(db, scannerDb, {
     retentionPeriodMs: 365 * DAYS,
     erasureSlaMs: 72 * HOURS,
     batchSize: 500,
   });
+
+  // processPurgeCycle's post-commit pass-revocation is a fire-and-forget
+  // queue.publish() (fixed to reuse passRevoke() per the file header) —
+  // drain the in-process queue so the digital-pass consumer's DB write has
+  // actually completed before the assertions below read digital_passes.
+  await queue.drain();
 });
 
 afterAll(async () => {
@@ -238,19 +253,22 @@ describe("DPDP erasure cascade — one visitor's PII across module boundaries", 
     expect(vr?.photoRef).toBeNull();
   });
 
-  it("[FINDING] the erased visitor's digital pass is left fully active/unrevoked", async () => {
-    // Not a PII-cascade gap per se, but a directly related consequence:
-    // erasure only ever touches visit_requests, so nothing revokes the
-    // pass. The visitor's QR pass remains scannable/valid for check-in
-    // at every gate even after their DPDP erasure request is "processed".
+  it("[FIXED] the erased visitor's digital pass is now revoked, not left active/scannable", async () => {
+    // Previously erasure only ever touched visit_requests, so nothing
+    // revoked the pass and the visitor's QR pass remained scannable/valid
+    // for check-in at every gate even after their DPDP erasure request was
+    // "processed". processPurgeCycle now publishes digital-pass's own
+    // passRevoke() command (commands.ts) for any active pass on a purged
+    // visit request; the real digital-pass consumer (registered above)
+    // durably revokes it — see modules/dpdp/purge-worker.ts.
     const [pass] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, DIGITAL_PASS_ID))),
     );
-    expect(pass?.status).toBe("active");
-    expect(pass?.revoked).toBe(false);
+    expect(pass?.status).toBe("revoked");
+    expect(pass?.revoked).toBe(true);
   });
 
-  it.fails("[BUG] group_members PII for the same visitor should be purged too (group-visit)", async () => {
+  it("[FIXED] group_members PII for the same visitor is purged too (group-visit)", async () => {
     const [gm] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(groupMembers).where(eq(groupMembers.id, GROUP_MEMBER_ID))),
     );
@@ -258,21 +276,21 @@ describe("DPDP erasure cascade — one visitor's PII across module boundaries", 
     expect(gm?.identityDocRef).toBeNull();
   });
 
-  it.fails("[BUG] vehicle_passes.driverName for the same visitor should be purged too (vehicle-pass)", async () => {
+  it("[FIXED] vehicle_passes.driverName for the same visitor is purged too (vehicle-pass)", async () => {
     const [vp] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(vehiclePasses).where(eq(vehiclePasses.id, VEHICLE_PASS_ID))),
     );
     expect(vp?.driverName).not.toBe(VISITOR_NAME);
   });
 
-  it.fails("[BUG] print_jobs.renderedPayload still has the visitor's name in PLAINTEXT (badge-print)", async () => {
+  it("[FIXED] print_jobs.renderedPayload no longer has the visitor's name in PLAINTEXT (badge-print)", async () => {
     const [pj] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(printJobs).where(eq(printJobs.id, PRINT_JOB_ID))),
     );
     expect(pj?.renderedPayload ?? "").not.toContain(VISITOR_NAME);
   });
 
-  it.fails("[BUG] ocr_results PII (name/DOB/ID-number/address) for the same visitor should be purged too (document-scan)", async () => {
+  it("[FIXED] ocr_results PII (name/DOB/ID-number/address) for the same visitor is purged too (document-scan)", async () => {
     const [ocr] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(ocrResults).where(eq(ocrResults.id, OCR_RESULT_ID))),
     );

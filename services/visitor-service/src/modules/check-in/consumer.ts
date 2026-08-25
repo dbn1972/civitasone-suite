@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq, lt } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -33,12 +34,15 @@ import { notifyVipArrival } from "../vip/routes.js";
 import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
-import { visitRequests } from "../visit-request/schema.js";
+import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
 import { locations } from "../location/schema.js";
+import { devices } from "../device-registry/schema.js";
+import { securityIncidents } from "../identity/schema.js";
 import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
 import { isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
-import { isWatchlisted } from "../blacklist/screening-store.js";
+import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
+import { identityDocHash } from "../blacklist/blind-index.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -86,6 +90,14 @@ interface OvrstayDetectPayload {
   locationId?: string;
 }
 
+/** Payload shape published by document-scan/consumer.ts on a confirmed blacklist match. */
+interface ScanBlacklistMatchPayload {
+  sessionId: string;
+  ocrResultId: string;
+  deviceId: string;
+  idDocumentType?: string | null;
+}
+
 export function registerCheckInConsumers(queue: Queue): void {
   queue.subscribe<CheckInRecordPayload>(COMMANDS.checkInRecord, async (msg) => {
     const p = msg.payload;
@@ -101,6 +113,62 @@ export function registerCheckInConsumers(queue: Queue): void {
       const pass = passRows[0];
       if (!pass) {
         throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      // Visit request is loaded here (rather than later, as it was before)
+      // so the identity/blacklist gate below can run BEFORE any check-in
+      // side effect is written.
+      const visitRows = await tx
+        .select()
+        .from(visitRequests)
+        .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
+        .limit(1);
+      const visit: VisitRequestRow | undefined = visitRows[0];
+
+      // Identity-verification / blacklist gate. Previously a failed
+      // DigiLocker/Aadhaar verification (identity/consumer.ts) or a
+      // document-scan blacklist match (document-scan/consumer.ts) only
+      // ever logged an event for a human to notice later — nothing
+      // stopped the visit from being checked in. Two conditions block:
+      //
+      // 1. identityMethod is a REAL verification method ("digilocker" /
+      //    "aadhaar_face") AND identityVerified is still false. This
+      //    specifically means "a verification was attempted and did not
+      //    succeed" — NOT "verification was never required for this
+      //    visit" (identityMethod null/"none") and NOT "service was
+      //    unavailable, guard verifies manually" (identityMethod
+      //    "manual", a sanctioned degraded path). Blocking on bare
+      //    `identityVerified === false` would also block every visit that
+      //    never uses digital identity verification at all (the common
+      //    case), so that distinction matters.
+      // 2. The visit's own identity document hash is present in the
+      //    canonical blacklist screening set (the same
+      //    `visitor:{tid}:blacklist:hashes` set document-scan now
+      //    correctly screens against — see modules/blacklist/
+      //    screening-store.ts). This independently catches a blacklist
+      //    match regardless of whether a document-scan actually ran for
+      //    this visit, as long as the visit's own identityDocRef is the
+      //    blacklisted document.
+      //
+      // Non-retryable: retrying will never make a failed verification or
+      // an active blacklist match go away.
+      if (visit) {
+        const attemptedRealVerification =
+          visit.identityMethod === "digilocker" || visit.identityMethod === "aadhaar_face";
+        if (attemptedRealVerification && !visit.identityVerified) {
+          throw new NonRetryableError(
+            `visit request '${visit.id}' failed identity verification (method=${visit.identityMethod}) — refusing check-in for pass '${p.passId}'`,
+          );
+        }
+
+        if (visit.identityDocRef) {
+          const docHash = identityDocHash(visit.identityDocRef, visit.identityDocType);
+          if (await isBlacklisted(msg.tenantId, docHash)) {
+            throw new NonRetryableError(
+              `visit request '${visit.id}' identity document is blacklisted — refusing check-in for pass '${p.passId}'`,
+            );
+          }
+        }
       }
 
       const nextStatus = domainCheckIn(pass.status as CheckInStatus, { passType: pass.passType as never });
@@ -125,12 +193,7 @@ export function registerCheckInConsumers(queue: Queue): void {
         .set({ status: nextStatus, updatedAt: new Date(), updatedBy: msg.actorId })
         .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)));
 
-      const visitRows = await tx
-        .select()
-        .from(visitRequests)
-        .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
-        .limit(1);
-      const visit = visitRows[0];
+      // visit was already loaded above (before the identity/blacklist gate).
 
       await enqueue(tx, {
         topic: EVENTS.visitorCheckedIn,
@@ -236,7 +299,13 @@ export function registerCheckInConsumers(queue: Queue): void {
         hostEmployeeId: visit?.hostEmployeeId ?? "",
         contactNumber: visit?.visitorPhone ?? "",
         checkInTime: timestamp.toISOString(),
-        identityDocHash: visit?.identityDocRef ?? null,
+        // Previously this stored the raw decrypted identityDocRef itself
+        // (not a hash), so the isWatchlisted() call below was comparing a
+        // cleartext doc number against a Redis set of HMAC hashes — it
+        // could never match. identityDocHash() is the same canonical,
+        // doc-type-folded hash used by the blacklist add-path and by
+        // document-scan's screening (see modules/blacklist/blind-index.ts).
+        identityDocHash: visit?.identityDocRef ? identityDocHash(visit.identityDocRef, visit.identityDocType) : null,
         capacityThreshold: location?.capacityThreshold ?? null,
       };
     });
@@ -538,5 +607,94 @@ export function registerCheckInConsumers(queue: Queue): void {
         "overstay detection completed",
       );
     });
+  });
+
+  // ─── scanBlacklistMatch ─────────────────────────────────────────────────
+  // document-scan/consumer.ts publishes this when a kiosk scan's identity
+  // document hash matches the canonical blacklist set, but until now
+  // nothing in the service ever subscribed to it — the event was enqueued
+  // into the void (no security_incidents row, no alert, nothing the
+  // check-in flow could see). This mirrors identity/consumer.ts's
+  // face_match_fail handling: create a security_incidents row (incident
+  // type "blacklist_match", already documented in schema.ts's comment)
+  // and notify security control room, the same way check-in's own
+  // watchlist-match path above does. The actual check-in BLOCK for a
+  // blacklisted visitor is enforced independently in checkInRecord above
+  // (it re-derives and checks the same canonical hash from the visit's own
+  // identityDocRef), so this handler's job is purely to make the scan-time
+  // hit visible to security ops — it does not gate anything itself.
+  queue.subscribe<ScanBlacklistMatchPayload>(EVENTS.scanBlacklistMatch, async (msg) => {
+    const p = msg.payload;
+
+    const committed = await db.transaction(async (tx): Promise<{ locationId: string } | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null; // idempotent replay
+
+      const deviceRows = await tx
+        .select({ locationId: devices.locationId })
+        .from(devices)
+        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)))
+        .limit(1);
+      const locationId = deviceRows[0]?.locationId;
+      if (!locationId) {
+        log.warn(
+          { tenantId: msg.tenantId, deviceId: p.deviceId, sessionId: p.sessionId, event: "scan_blacklist_match_no_location" },
+          "scanBlacklistMatch: could not resolve scanner device to a location; security incident not recorded",
+        );
+        return null;
+      }
+
+      await tx.insert(securityIncidents).values({
+        tenantId: msg.tenantId,
+        locationId,
+        incidentType: "blacklist_match",
+        description: `Document scan matched an active blacklist entry (session ${p.sessionId}, doc type ${p.idDocumentType ?? "unknown"})`,
+        severity: "critical",
+        createdBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.securityIncidentCreated,
+        eventType: EVENTS.securityIncidentCreated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          locationId,
+          incidentType: "blacklist_match",
+          severity: "critical",
+          sessionId: p.sessionId,
+          ocrResultId: p.ocrResultId,
+        },
+      });
+
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND,
+        eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: EVENTS.scanBlacklistMatch,
+          recipient: "security_control_room",
+          channel: "push",
+          variables: {
+            sessionId: p.sessionId,
+            deviceId: p.deviceId,
+            locationId,
+          },
+        }),
+      });
+
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "security_incident", resourceId: msg.messageId, outcome: "success" } });
+
+      return { locationId };
+    });
+
+    if (!committed) return; // already processed, or location could not be resolved
+
+    log.info(
+      { tenantId: msg.tenantId, sessionId: p.sessionId, locationId: committed.locationId, event: "scan_blacklist_match_incident_created" },
+      "document-scan blacklist match recorded as a security incident",
+    );
   });
 }

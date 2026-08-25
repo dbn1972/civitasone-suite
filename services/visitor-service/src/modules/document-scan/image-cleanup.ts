@@ -22,8 +22,14 @@ const log = pino({ name: "document-scan-image-cleanup" });
 /** Cleanup interval in milliseconds (60 seconds). */
 const CLEANUP_INTERVAL_MS = 60_000;
 
-/** S3/MinIO client adapter — env-gated. */
-async function deleteFromStorage(key: string): Promise<void> {
+/**
+ * S3/MinIO client adapter — env-gated.
+ * Exported so other modules that need to delete a single stored object by
+ * key (e.g. dpdp/purge-worker.ts deleting a purged visitor's photoRef blob)
+ * reuse this exact client/approach instead of hand-rolling their own S3
+ * client construction.
+ */
+export async function deleteFromStorage(key: string): Promise<void> {
   const bucket = process.env.S3_BUCKET;
   if (!bucket) {
     log.warn({ key, event: "s3_bucket_not_configured" },

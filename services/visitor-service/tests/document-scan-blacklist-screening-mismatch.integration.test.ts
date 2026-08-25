@@ -170,7 +170,7 @@ describe("document-scan blacklist screening — real Redis key + hash algorithm 
     expect(SCAN_TIME_HASH).not.toBe(CANONICAL_HASH);
   });
 
-  it.fails("[BUG] scanning an actively blacklisted person's ID should set ocr_results.blacklistMatch", async () => {
+  it("[FIXED] scanning an actively blacklisted person's ID sets ocr_results.blacklistMatch", async () => {
     // createQueue(), not `new MemoryQueue()` — see check-in-watchlist-raw-hash-mismatch
     // test for why the consumer's own db.transaction() calls need the
     // withTenantConsumer decoration to satisfy RLS.
@@ -200,7 +200,7 @@ describe("document-scan blacklist screening — real Redis key + hash algorithm 
 });
 
 describe("document-scan EVENTS.scanBlacklistMatch — zero subscribers anywhere in this service", () => {
-  it.fails("[BUG] some consumer in this service subscribes to EVENTS.scanBlacklistMatch", () => {
+  it("[FIXED] some consumer in this service subscribes to EVENTS.scanBlacklistMatch", () => {
     const modulesDir = join(__dirname, "../src/modules");
     let found = false;
     let scannedAtLeastOne = false;
