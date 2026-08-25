@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as periodRepo from "./repo.js";
 import * as commands from "./commands.js";
 
@@ -72,15 +72,5 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows.slice(q.offset, q.offset + q.limit), total: rows.length });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

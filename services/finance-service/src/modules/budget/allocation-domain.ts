@@ -4,7 +4,6 @@ export interface Appropriation {
   allocatedMinor: bigint;
   committedMinor: bigint;
   actualMinor: bigint;
-  enforce: boolean;
 }
 
 /** Available appropriation = allocated - (committed + actual). */
@@ -14,10 +13,11 @@ export function appropriationAvailable(a: Pick<Appropriation, "allocatedMinor" |
 
 /**
  * Block over-appropriation: cumulative committed+actual+requested must not
- * exceed allocation. No-op when enforce=false (configurable soft control).
+ * exceed allocation. Always enforced — see the `enforce` flag removal note in
+ * allocation-routes.ts (a soft/non-blocking ceiling was never actually
+ * achievable once chk_allocation_no_overcommit was added at the DB level).
  */
 export function assertWithinAppropriation(a: Appropriation, requestedMinor: bigint): void {
-  if (!a.enforce) return;
   const available = appropriationAvailable(a);
   if (requestedMinor > available) {
     throw new DomainError(

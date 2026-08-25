@@ -4,11 +4,12 @@
  * New Utilization Certificate (UC).
  *
  * Wires to the canonical create endpoint POST /v1/finance/utilization-certificates
- * via the gateway proxy. NOTE (handoff): finance-service currently exposes only
- * GET /v1/finance/utilization-certificates — there is NO create route yet, so
- * this submit will return an error until the backend command is added. The form
- * is a real action with validation + accessible error reporting (not a dead
- * control); the failure is surfaced via aria-live.
+ * via the gateway proxy. amountMinor is a base-10 integer STRING (paise) --
+ * createUCBody is bigint-safe (matches createBillBody.grossMinor's
+ * convention) and rejects a raw JSON number, since a number can silently
+ * lose precision above 2^53 before Zod ever sees it. The form is a real
+ * action with validation + accessible error reporting (not a dead control);
+ * failures are surfaced via aria-live.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,10 @@ export default function NewUCPage() {
     setMessage("");
     setIsError(false);
     try {
-      const amountMinor = Math.round(Number(form.amount || "0") * 100);
+      // BUG FIX: amountMinor must be sent as a base-10 integer STRING -- the
+      // backend's createUCBody schema no longer accepts a raw number (see
+      // the file-header comment above).
+      const amountMinor = Math.round(Number(form.amount || "0") * 100).toString();
       const res = await fetch("/api/proxy/v1/finance/utilization-certificates", {
         method: "POST",
         headers: { "content-type": "application/json" },

@@ -150,14 +150,13 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
   sub(COMMANDS.budgetAllocationUpsert, async (msg) => {
     const { upsertAllocation } = await import("./allocation-repo.js");
     const p = msg.payload as {
-      id: string; tenantId: string; headId: string; fy: string; allocatedMinor: number; enforce?: boolean;
+      id: string; tenantId: string; headId: string; fy: string; allocatedMinor: number;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await upsertAllocation(tx, {
         id: p.id, tenantId: p.tenantId, headId: p.headId, fy: p.fy,
         allocatedMinor: BigInt(p.allocatedMinor),
-        ...(p.enforce !== undefined ? { enforce: p.enforce } : {}),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "upsert", "budget_allocation", p.id);

@@ -143,7 +143,10 @@ test_no_auth  "finance" "/api/v1/finance/budgets"
 
 # ─── Finance Write (CQRS) ────────────────────────────────────────────────────
 section "Finance Service — Write (CQRS)"
-BUDGET_BODY='{"headId":"dddddddd-0000-0000-0000-000000000001","fy":"2025-26","beMinor":5000000}'
+# BUG FIX: beMinor must be a base-10 integer STRING -- createBudgetBody is now
+# bigint-safe (matches createBillBody.grossMinor's convention) and rejects a
+# raw JSON number outright.
+BUDGET_BODY='{"headId":"dddddddd-0000-0000-0000-000000000001","fy":"2025-26","beMinor":"5000000"}'
 test_post "finance" "/api/v1/finance/budgets" "${BUDGET_BODY}" "202"
 
 # ─── HRMS Service ─────────────────────────────────────────────────────────────

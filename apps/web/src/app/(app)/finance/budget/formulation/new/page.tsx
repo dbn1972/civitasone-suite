@@ -3,7 +3,13 @@
 /**
  * New Budget Estimate (BE).
  * POSTs to the real finance-service endpoint POST /v1/finance/budgets
- * (body: { headId: uuid, fy: "YYYY-YY", beMinor: int }) via the gateway proxy.
+ * (body: { headId: uuid, fy: "YYYY-YY", beMinor: string }) via the gateway
+ * proxy. beMinor is a base-10 integer STRING (paise) -- the backend's
+ * createBudgetBody schema is bigint-safe (matches createBillBody.grossMinor's
+ * convention) and rejects a raw JSON number outright, since a number can
+ * silently lose precision above 2^53 before Zod ever sees it. Same
+ * rupees->paise->string conversion as revenue/assessments/
+ * AssessmentCreateForm.tsx's rupeesToPaiseString().
  * Heads are loaded from GET /v1/finance/accounts.
  */
 import { useEffect, useState } from "react";
@@ -52,7 +58,10 @@ export default function NewBudgetEstimatePage() {
     setMessage("");
     setIsError(false);
     try {
-      const beMinor = Math.round(Number(amount || "0") * 100);
+      // BUG FIX: beMinor must be sent as a base-10 integer STRING -- the
+      // backend's createBudgetBody schema no longer accepts a raw number
+      // (see the file-header comment above).
+      const beMinor = Math.round(Number(amount || "0") * 100).toString();
       const res = await fetch("/api/proxy/v1/finance/budgets", {
         method: "POST",
         headers: { "content-type": "application/json" },

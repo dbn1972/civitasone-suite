@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as allocRepo from "./allocation-repo.js";
 import {
   availableMinor, burnRateBps, utilisationBps, fractionElapsedBps,
@@ -94,17 +93,7 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
     return reply.send({ fy: q.fy, fractionElapsedBps: elapsedBps.toString(), totals: serializeTotals(summarisePortfolio(rows.map(lineOf), elapsedBps)) });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }
 
 function serializeTotals(t: ReturnType<typeof summarisePortfolio>) {

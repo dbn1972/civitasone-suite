@@ -1,10 +1,18 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, timestamp, boolean,
+  pgSchema, uuid, text, integer, bigint, char, timestamp,
 } from "drizzle-orm/pg-core";
 
 // Reuse the existing "budget" pg schema namespace.
 export const budgetAllocSchema = pgSchema("budget");
 
+// BUG FIX (misleading dead flag): `enforce` column removed — see the comment
+// above setAllocBody in allocation-routes.ts for the full history. The
+// unconditional DB CHECK chk_allocation_no_overcommit already makes
+// over-commitment impossible regardless of this flag; the app-level guard in
+// allocation-repo.ts's addCommittedGuarded now always enforces the same
+// ceiling, so the clean OVER_APPROPRIATION domain error fires before the DB
+// constraint ever would. DB column dropped in
+// migrations/0067_drop_allocation_enforce.sql.
 export const financeBudgetAllocation = budgetAllocSchema.table("finance_budget_allocation", {
   id:             uuid("id").primaryKey().defaultRandom(),
   tenantId:       uuid("tenant_id").notNull(),
@@ -13,7 +21,6 @@ export const financeBudgetAllocation = budgetAllocSchema.table("finance_budget_a
   allocatedMinor: bigint("allocated_minor", { mode: "bigint" }).notNull().default(0n),
   committedMinor: bigint("committed_minor", { mode: "bigint" }).notNull().default(0n),
   actualMinor:    bigint("actual_minor", { mode: "bigint" }).notNull().default(0n),
-  enforce:        boolean("enforce").notNull().default(true),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
