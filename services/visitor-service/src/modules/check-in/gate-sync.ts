@@ -75,8 +75,15 @@ export async function loadGateSyncSnapshot(
           ),
         ),
       // Revoked or suspended recurring passes at this location.
+      // BUG FIX: was `{ id: recurringPasses.id }` — the recurring_passes
+      // row's OWN primary key, which never appears on any scanned QR.
+      // revokedPassIds is matched against a pass's underlying digital-pass
+      // id (recurring_passes.pass_id, FK to digital_passes.id), so select
+      // that instead — same fix as recurring-pass/consumer.ts's dual-write
+      // (recurring-pass-gate-revocation-gap.test.ts), applied to the
+      // offline-terminal snapshot path.
       tx
-        .select({ id: recurringPasses.id })
+        .select({ id: recurringPasses.passId })
         .from(recurringPasses)
         .where(
           and(
