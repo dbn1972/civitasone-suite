@@ -29,8 +29,9 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -41,6 +42,16 @@ import { generatePass, computeValidityWindow } from "../digital-pass/domain.js";
 import { validateGroupSize, confirmBulkCheckIn } from "./domain.js";
 import { getPolicyNumber, MS_PER_DAY } from "../config-registry/policy.js";
 import { isBlacklisted } from "../blacklist/screening-store.js";
+// BUG FIX (group bulk check-in bypassed the evacuation roster and check-in
+// state machine): groupBulkCheckIn used to force-write digitalPasses.status
+// = "checked_in" directly, skipping every protection the single-visitor
+// check-in path (check-in/consumer.ts) enforces. Bring it to parity using
+// the exact same building blocks that path uses.
+import { checkIns } from "../check-in/schema.js";
+import { locations } from "../location/schema.js";
+import { checkIn as domainCheckIn, type CheckInStatus } from "../check-in/domain.js";
+import { isOverCapacityThreshold } from "../location/domain.js";
+import { addToRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -242,8 +253,12 @@ export function registerGroupVisitConsumers(q: Queue): void {
   q.subscribe<GroupBulkCheckInPayload>(COMMANDS.groupBulkCheckIn, async (msg) => {
     const p = msg.payload;
 
-    await db.transaction(async (tx): Promise<void> => {
-      if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+    const committed = await db.transaction(async (tx): Promise<{
+      locationId: string;
+      capacityThreshold: number | null;
+      checkedInMembers: Array<{ passId: string; visitorName: string; checkInTime: string }>;
+    } | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null; // idempotent replay
 
       // Load the group to get expected headcount.
       const groupRows = await tx
@@ -265,15 +280,68 @@ export function registerGroupVisitConsumers(q: Queue): void {
         .from(groupMembers)
         .where(and(eq(groupMembers.groupVisitId, p.groupVisitId), eq(groupMembers.blacklisted, false)));
 
-      const now = new Date();
+      // BUG FIX: read every member's CURRENT pass row (status + locationId)
+      // BEFORE writing anything — the original handler never read
+      // digital_passes at all, so it could silently reactivate an
+      // individually-revoked pass. One bulk query, not N, to keep this a
+      // single extra round-trip regardless of group size.
+      const passIds = members.map((m) => m.passId).filter((id): id is string => id != null);
+      const passRows = passIds.length > 0
+        ? await tx
+            .select()
+            .from(digitalPasses)
+            .where(and(inArray(digitalPasses.id, passIds), eq(digitalPasses.tenantId, p.tenantId)))
+        : [];
+      const passById = new Map(passRows.map((row) => [row.id, row]));
 
-      // Bulk-transition member passes to checked_in.
+      const now = new Date();
+      const checkedInMembers: Array<{ passId: string; visitorName: string; checkInTime: string }> = [];
+      let locationId = "";
+
       for (const member of members) {
         if (!member.passId) continue;
+        const pass = passById.get(member.passId);
+        if (!pass) {
+          log.warn(
+            { tenantId: p.tenantId, groupVisitId: p.groupVisitId, memberId: member.id, passId: member.passId, event: "group_bulk_checkin_pass_not_found" },
+            "group member's digital pass not found; skipping check-in for this member",
+          );
+          continue;
+        }
+
+        // BUG FIX: prior-status check — the SAME active|issued|checked_out ->
+        // checked_in state machine the single check-in path uses
+        // (check-in/consumer.ts). A member whose pass is e.g. "revoked" throws
+        // here and is skipped, not silently reactivated. One bad member does
+        // not fail the whole bulk operation, matching this handler's existing
+        // per-member graceful-degradation convention (see pass-gen above).
+        let nextStatus: "checked_in";
+        try {
+          nextStatus = domainCheckIn(pass.status as CheckInStatus, { passType: pass.passType as never });
+        } catch (err) {
+          log.warn(
+            { err, tenantId: p.tenantId, groupVisitId: p.groupVisitId, passId: member.passId, currentStatus: pass.status, event: "group_bulk_checkin_invalid_status" },
+            "group member's pass is not in a checkinable state; skipping rather than silently reactivating it",
+          );
+          continue;
+        }
+
+        // BUG FIX: audit insert — the single check-in path always records a
+        // check_ins row; bulk check-in previously never did.
+        await tx.insert(checkIns).values({
+          tenantId: p.tenantId,
+          passId: member.passId,
+          locationId: pass.locationId,
+          gateId: p.gateId ?? "",
+          direction: "in",
+          timestamp: now,
+          verificationMethod: "bulk",
+          createdBy: msg.actorId,
+        });
 
         await tx
           .update(digitalPasses)
-          .set({ status: "checked_in", updatedAt: now, updatedBy: msg.actorId })
+          .set({ status: nextStatus, updatedAt: now, updatedBy: msg.actorId })
           .where(and(eq(digitalPasses.id, member.passId), eq(digitalPasses.tenantId, p.tenantId)));
 
         // Mark member as checked in.
@@ -281,6 +349,9 @@ export function registerGroupVisitConsumers(q: Queue): void {
           .update(groupMembers)
           .set({ checkedIn: true })
           .where(eq(groupMembers.id, member.id));
+
+        checkedInMembers.push({ passId: member.passId, visitorName: member.memberName, checkInTime: now.toISOString() });
+        locationId = locationId || pass.locationId;
       }
 
       // Outbox: emit visitorCheckedIn for the group (single event, bulk).
@@ -292,14 +363,108 @@ export function registerGroupVisitConsumers(q: Queue): void {
         correlationId: msg.correlationId,
         payload: {
           groupVisitId: p.groupVisitId,
-          membersCheckedIn: members.filter((m) => m.passId).length,
+          membersCheckedIn: checkedInMembers.length,
           headcountMatched: reconciliation.matched,
           discrepancyCount: reconciliation.discrepancyCount,
           gateId: p.gateId,
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "group_visit", resourceId: msg.messageId, outcome: "success" } });
+
+      // Requirement 19.5 / Property 28 parity: resolve the location's
+      // capacityThreshold now (inside the tx) so the post-commit check below
+      // has it, same pattern as check-in/consumer.ts.
+      const locationRows = locationId
+        ? await tx
+            .select({ capacityThreshold: locations.capacityThreshold })
+            .from(locations)
+            .where(and(eq(locations.id, locationId), eq(locations.tenantId, p.tenantId)))
+            .limit(1)
+        : [];
+
+      return { locationId, capacityThreshold: locationRows[0]?.capacityThreshold ?? null, checkedInMembers };
     });
+
+    if (!committed) return; // already processed (idempotent replay)
+
+    // BUG FIX: evacuation roster — the single check-in path adds every
+    // checked-in pass to the roster immediately after commit; bulk check-in
+    // never did, so a whole group entering via this path was invisible to
+    // the emergency evacuation headcount. Best-effort per member: never fail
+    // an already-committed check-in because Redis is unavailable (same
+    // graceful-degradation convention as check-in/consumer.ts).
+    // Group visits do not currently collect a phone number per individual
+    // member (only the lead visitor's), so contactNumber is left blank
+    // rather than misattributing the lead's number to every member.
+    for (const m of committed.checkedInMembers) {
+      try {
+        const entry: RosterEntry = {
+          passId: m.passId,
+          visitorName: m.visitorName,
+          hostName: "",
+          checkInTime: m.checkInTime,
+          lastKnownGate: p.gateId ?? "",
+          contactNumber: "",
+          evacuated: false,
+        };
+        await addToRoster(p.tenantId, committed.locationId, entry);
+      } catch (err) {
+        log.warn(
+          { err, tenantId: p.tenantId, passId: m.passId, event: "group_bulk_checkin_roster_add_failed" },
+          "evacuation roster add failed for group member; check-in already committed, roster will self-heal on next check-in/out",
+        );
+      }
+    }
+
+    // BUG FIX: capacity-threshold check — same post-commit pattern as
+    // check-in/consumer.ts, run once for the group using the final occupancy.
+    try {
+      if (committed.capacityThreshold != null && committed.checkedInMembers.length > 0) {
+        const occupancy = await getVisitorCount(p.tenantId, committed.locationId);
+        if (isOverCapacityThreshold(occupancy, committed.capacityThreshold)) {
+          await db.transaction(async (tx) => {
+            await enqueue(tx, {
+              topic: EVENTS.capacityThresholdReached,
+              eventType: EVENTS.capacityThresholdReached,
+              tenantId: p.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: {
+                locationId: committed.locationId,
+                occupancy,
+                capacityThreshold: committed.capacityThreshold,
+              },
+            });
+            await enqueue(tx, {
+              topic: NOTIFICATION_SEND,
+              eventType: NOTIFICATION_SEND,
+              tenantId: p.tenantId,
+              actorId: msg.actorId,
+              correlationId: msg.correlationId,
+              payload: buildNotificationPayload({
+                eventType: EVENTS.capacityThresholdReached,
+                recipient: "security_control_room",
+                channel: "push",
+                variables: {
+                  locationId: committed.locationId,
+                  occupancy: String(occupancy),
+                  capacityThreshold: String(committed.capacityThreshold),
+                },
+              }),
+            });
+          });
+          log.info(
+            { tenantId: p.tenantId, locationId: committed.locationId, occupancy, threshold: committed.capacityThreshold },
+            "capacity threshold reached after group bulk check-in; alert dispatched",
+          );
+        }
+      }
+    } catch (err) {
+      log.warn(
+        { err, tenantId: p.tenantId, locationId: committed.locationId, event: "group_bulk_checkin_capacity_check_failed" },
+        "capacity-threshold check failed after group bulk check-in; check-in already committed",
+      );
+    }
 
     log.info(
       { tenantId: p.tenantId, groupVisitId: p.groupVisitId, actualHeadcount: p.actualHeadcount, event: "group_bulk_check_in" },
