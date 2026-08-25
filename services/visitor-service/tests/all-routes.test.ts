@@ -215,8 +215,10 @@ vi.mock("../src/modules/device-registry/commands.js", () => ({
 }));
 vi.mock("../src/modules/device-registry/device-auth.js", () => ({
   deviceAuth: vi.fn(async (req: any, _reply: any) => {
-    // Skip device auth for non-device endpoints — allow through
-    req.deviceContext = { tenantId: TENANT, deviceId: FAKE_ID };
+    // Skip device auth for non-device endpoints — allow through. gateId matches
+    // GATE_ID (Fix 5: turnstile-control/routes.ts now rejects a passage/
+    // tailgating body.gateId that does not match deviceContext.gateId).
+    req.deviceContext = { tenantId: TENANT, deviceId: FAKE_ID, gateId: GATE_ID };
   }),
 }));
 

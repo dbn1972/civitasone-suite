@@ -15,7 +15,7 @@ export const COMMANDS = {
 
   // Check-in / Check-out
   checkInRecord:               "visitor.check_in.record",
-  checkOutRecord:              "visitor.check_out.record",
+  checkOutRecord:               "visitor.check_out.record",
   overstayDetect:              "visitor.overstay.detect",
 
   // Identity
@@ -25,6 +25,10 @@ export const COMMANDS = {
   // Blacklist / Watchlist
   blacklistAdd:                "visitor.blacklist.add",
   blacklistApprove:            "visitor.blacklist.approve",
+  // Fix 3: lifts/removes an active blacklist entry (transitions active ->
+  // archived) — before this, there was no route/command anywhere that could
+  // release a block once granted, regardless of expiresAt.
+  blacklistDeactivate:         "visitor.blacklist.deactivate",
   watchlistAdd:                "visitor.watchlist.add",
 
   // Material / Vehicle
@@ -122,6 +126,9 @@ export const EVENTS = {
   blacklistMatched:            "visitor.blacklist.matched",
   watchlistMatched:            "visitor.watchlist.matched",
   securityIncidentCreated:     "visitor.security_incident.created",
+  // Fix 3 — emitted when an active blacklist entry is deactivated/archived
+  // and lifted from the live screening set.
+  blacklistDeactivated:        "visitor.blacklist.deactivated",
 
   // Group Visit
   groupVisitCreated:           "visitor.group_visit.created",

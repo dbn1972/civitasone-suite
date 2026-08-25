@@ -1,47 +1,34 @@
 /**
- * CROSS-MODULE INTEGRATION FINDING (HIGH) — a turnstile device's gate
- * binding is unenforced ALL THE WAY into a real, persisted check-in record
- * and the evacuation roster, not just at the route boundary.
+ * CROSS-MODULE INTEGRATION FINDING — device/gate binding enforcement now
+ * covers the real, persisted check-in record and evacuation roster, not
+ * just the route boundary (Fix 5).
  *
  * A companion PR (#700, security/access-control cluster) already proved
  * the entry point of this gap in isolation: `turnstile-gate-binding.test.ts`
- * shows `POST /v1/visitor/turnstiles/passage` takes `gateId` from the
- * client-supplied body and never compares it to the authenticated device's
- * own `deviceContext.gateId` (bound at auth time from `devices.gate_id` —
- * `modules/device-registry/device-auth.ts`), using a fully mocked
- * `publishPassageRecord` that never touches a real consumer or the DB.
+ * shows `POST /v1/visitor/turnstiles/passage` used to take `gateId` from
+ * the client-supplied body and never compare it to the authenticated
+ * device's own `deviceContext.gateId` (bound at auth time from
+ * `devices.gate_id` — `modules/device-registry/device-auth.ts`).
  *
- * This test answers the question that leaves open: what actually happens
- * once that mismatched command reaches the real system? It registers the
- * REAL `turnstile-control` and `check-in` consumers on the same queue,
- * drives a `passageRecord` command exactly as the (unenforced) route would
- * publish it — claiming a gate the device has no relationship to — through
- * the real transactional-outbox relay (`relayOnce`, the same helper
+ * This test answers the question that was left open: what happens once a
+ * mismatched command reaches the real system? It registers the REAL
+ * `turnstile-control` and `check-in` consumers on the same queue, drives a
+ * `passageRecord` command exactly as the route would have published it
+ * PRE-FIX — claiming a gate the device has no relationship to — through the
+ * real transactional-outbox relay (`relayOnce`, the same helper
  * `src/worker.ts` runs on an interval in production) into the real
- * `checkInRecord` consumer, against the live Postgres DB:
+ * `checkInRecord` consumer, against the live Postgres DB.
  *
- *   turnstile-control/consumer.ts (passageRecord):
- *     INSERT passage_events (gate_id = <claimed gate>)
- *     -> enqueue COMMANDS.checkInRecord (gate_id = <claimed gate>)   [consumer.ts:262-278]
- *   check-in/consumer.ts (checkInRecord):
- *     INSERT check_ins (gate_id = <claimed gate>)                   [consumer.ts:110-121]
- *     UPDATE digital_passes SET status = 'checked_in'
- *     addToRoster(..., lastKnownGate: <claimed gate>)               [consumer.ts:357]
- *
- * Neither consumer, nor the route, ever queries `devices` or compares the
- * claimed gate to anything — the fabricated gate flows straight through
- * into the check-in audit trail, the visitor's pass state, AND the
- * real-time evacuation roster used for life-safety accounting.
- *
- * Adjacent, non-duplicate finding: PR #702 (lifecycle cluster) separately
- * documents that `COMMANDS.checkInRecord` never re-validates a pass's
- * gate/location/area scope for ANY caller, including the direct
- * `POST /v1/visitor/check-ins` HTTP route under a broad "employee" role
- * with no device involved at all (`check-in-bypasses-gate-scope.test.ts`).
- * That is a different specific mechanism and threat model — general
- * scope-check bypass vs. this test's device-authentication/gate-binding
- * bypass — that happens to share the same root symptom (checkInRecord
- * trusts its `gateId` unconditionally).
+ * The fix (turnstile-control/consumer.ts's passageRecord handler): before
+ * doing anything else, it now resolves the claimed device's ACTUAL bound
+ * gate (device-registry/repo.js#getDeviceById, keyed by msg.actorId =
+ * deviceId) and rejects outright — no passage_events row, no downstream
+ * checkInRecord enqueue, no anti-passback/tailgating processing — when
+ * `device.gateId !== payload.gateId`. This is defense in depth alongside
+ * the route-level check (turnstile-control/routes.ts): this test publishes
+ * directly to the queue, bypassing the route entirely, to prove the
+ * consumer independently closes the gap even if something else were to
+ * publish a mismatched command.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -72,9 +59,9 @@ const VISIT_REQUEST_ID = randomUUID();
 const PASS_ID = randomUUID();
 const CORR = `corr-turnstile-${randomUUID()}`;
 
-// A second, independent visitor/pass so the "should have been rejected"
-// test below is self-contained rather than depending on the mutated state
-// left behind by the first test.
+// A second, independent visitor/pass so the "should be rejected" test below
+// is self-contained rather than depending on the mutated state left behind
+// by the first test.
 const VISIT_REQUEST_ID_2 = randomUUID();
 const PASS_ID_2 = randomUUID();
 const CORR_2 = `corr-turnstile-2-${randomUUID()}`;
@@ -150,15 +137,15 @@ afterAll(async () => {
   );
 });
 
-describe("turnstile passage -> check-in — device/gate binding unenforced end-to-end", () => {
-  it("BUG: a device bound to Gate A fabricates a real, persisted check-in at unrelated Gate B", async () => {
+describe("turnstile passage -> check-in — device/gate binding enforced end-to-end (Fix 5)", () => {
+  it("a device bound to Gate A is rejected claiming an unrelated Gate B — no passage_event, no check-in", async () => {
     const queue = createQueue() as MemoryQueue; // withTenantConsumer-decorated — see file docstring
     registerTurnstileControlConsumers(queue);
     registerCheckInConsumers(queue);
 
-    // Exactly what the (unenforced) route publishes: `actorId` is the
-    // authenticated device's id, `gateId` is whatever the client body
-    // claims — here, a gate the device has no relationship to.
+    // Exactly what the route WOULD publish if its own gate-binding check
+    // were somehow bypassed: `actorId` is the authenticated device's id,
+    // `gateId` is a gate the device has no relationship to.
     await queue.publish(COMMANDS.passageRecord, {
       type: COMMANDS.passageRecord,
       tenantId: TENANT,
@@ -175,17 +162,21 @@ describe("turnstile passage -> check-in — device/gate binding unenforced end-t
         offlineRecorded: false,
       },
     });
-    await queue.drain(); // turnstile-control consumer: passage_events row + outbox checkInRecord
+    await queue.drain(); // turnstile-control consumer: gate-binding check rejects, nothing enqueued
 
     // Drain the transactional outbox exactly as src/worker.ts's startRelay
-    // does on its interval in production — this is the real hop from
-    // "turnstile-control enqueued a command" to "check-in consumer runs it".
-    const relayed = await relayOnce(db, queue);
-    expect(relayed).toBeGreaterThanOrEqual(1);
-    await queue.drain(); // check-in consumer: check_ins row + pass status + roster
+    // does on its interval in production. The rejection path still writes
+    // an audit-trail outbox row (outcome: "rejected") — that's the one
+    // thing relayOnce finds and relays; it is NOT a checkInRecord command,
+    // which is the substantive property the assertions below confirm.
+    await relayOnce(db, queue);
+    await queue.drain();
 
     const [checkInRow] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(checkIns).where(and(eq(checkIns.passId, PASS_ID), eq(checkIns.gateId, GATE_B)))),
+    );
+    const [passageEventRow] = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(passageEvents).where(eq(passageEvents.passId, PASS_ID))),
     );
     const [pass] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, PASS_ID))),
@@ -193,16 +184,17 @@ describe("turnstile passage -> check-in — device/gate binding unenforced end-t
     const roster = await getFullRoster(TENANT, LOCATION);
     const rosterEntry = roster.find((r) => r.passId === PASS_ID);
 
-    // The exploit fully succeeds: a genuine, tenant-scoped, DB-durable
-    // check-in exists at a gate this device was never bound to, the
-    // visitor's pass is live-marked checked_in, and the real-time
-    // evacuation roster now attributes them to the WRONG physical gate.
-    expect(checkInRow).toBeDefined();
-    expect(pass?.status).toBe("checked_in");
-    expect(rosterEntry?.lastKnownGate).toBe(GATE_B);
-  });
+    // Fixed: the consumer's gate-binding check rejects the command outright
+    // — no passage_event row, no check-in, the visitor's pass stays
+    // untouched, and the evacuation roster does not attribute them to the
+    // wrong (or any) gate.
+    expect(passageEventRow).toBeUndefined();
+    expect(checkInRow).toBeUndefined();
+    expect(pass?.status).not.toBe("checked_in");
+    expect(rosterEntry).toBeUndefined();
+  }, 15000);
 
-  it.fails("[BUG] a passage event whose claimed gate does not match the device's registered gate should be rejected, not recorded as a check-in", async () => {
+  it("a passage event whose claimed gate does not match the device's registered gate is rejected, not recorded as a check-in", async () => {
     // Independent fixture (PASS_ID_2) so this assertion does not merely
     // restate the previous test's already-mutated state.
     const queue = createQueue() as MemoryQueue; // withTenantConsumer-decorated — see file docstring
@@ -232,11 +224,42 @@ describe("turnstile passage -> check-in — device/gate binding unenforced end-t
     const [pass2] = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, PASS_ID_2))),
     );
-    // Correct behavior: a device should only ever be able to produce
-    // passage/check-in events for the gate it is actually registered to
-    // (Gate A) — a claim of Gate B should be rejected outright, leaving
-    // the pass untouched. It is not rejected: the pass transitions to
-    // 'checked_in' exactly as it would for a legitimate Gate-A scan.
+    // Fixed: a device only ever produces passage/check-in events for the
+    // gate it is actually registered to (Gate A) — a claim of Gate B is
+    // rejected outright, leaving the pass untouched.
     expect(pass2?.status).not.toBe("checked_in");
-  });
+  }, 15000);
+
+  it("sanity check: the SAME device correctly claiming its OWN Gate A still produces a real check-in", async () => {
+    const queue = createQueue() as MemoryQueue;
+    registerTurnstileControlConsumers(queue);
+    registerCheckInConsumers(queue);
+
+    await queue.publish(COMMANDS.passageRecord, {
+      type: COMMANDS.passageRecord,
+      tenantId: TENANT,
+      actorId: DEVICE_ID,
+      correlationId: `corr-turnstile-sanity-${randomUUID()}`,
+      schemaVersion: "1.0",
+      payload: {
+        id: randomUUID(),
+        passId: PASS_ID_2,
+        gateId: GATE_A, // the device's REAL bound gate
+        direction: "in",
+        passageCount: 1,
+        eventTimestamp: new Date().toISOString(),
+        offlineRecorded: false,
+      },
+    });
+    await queue.drain();
+    await relayOnce(db, queue);
+    await queue.drain();
+
+    const [pass2] = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, PASS_ID_2))),
+    );
+    // Confirms Fix 5 rejects only the MISMATCH — legitimate same-gate
+    // passage still flows through to a real check-in exactly as before.
+    expect(pass2?.status).toBe("checked_in");
+  }, 15000);
 });

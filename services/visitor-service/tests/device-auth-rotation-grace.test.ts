@@ -1,39 +1,40 @@
 /**
- * device-auth — the credential-rotation grace period is defined but never
- * enforced.
+ * device-auth — the credential-rotation grace period is now enforced (Fix 4).
  *
- * SECURITY AUDIT FINDING (HIGH — revoked/rotated credential remains valid
- * indefinitely): device-registry/domain.ts defines
+ * SECURITY AUDIT FINDING, now fixed (was HIGH — revoked/rotated credential
+ * remained valid indefinitely): device-registry/domain.ts defines
  * `isInRotationGracePeriod(rotatedAt, gracePeriodMs, now)`,
  * `BEARER_ROTATION_GRACE_MS` (24h), and `MTLS_ROTATION_GRACE_MS` (7d) —
  * documented as: "During rotation, both the old and new credentials are
  * accepted for a configurable window: 24 hours for Bearer tokens, 7 days
- * for certificates." These are unit-tested in isolation
+ * for certificates." These were unit-tested in isolation
  * (device-registry-domain.test.ts's "isInRotationGracePeriod" describe
- * block) but grep across the ENTIRE src tree confirms they are never
- * imported anywhere outside domain.ts and its own test — in particular,
- * device-auth.ts (the actual authentication middleware) never references
- * `tokenRotatedAt`, `isInRotationGracePeriod`, or either grace-period
- * constant, despite `DeviceRecord`/`DeviceContext` carrying
- * `tokenRotatedAt` all the way through.
+ * block) but, before this fix, were never imported anywhere outside
+ * domain.ts and its own test — device-auth.ts (the actual authentication
+ * middleware) never referenced `tokenRotatedAt`, `isInRotationGracePeriod`,
+ * or either grace-period constant, despite `DeviceRecord`/`DeviceContext`
+ * carrying `tokenRotatedAt` all the way through.
  *
- * The real enforcement path is repo.ts#getDeviceByTokenHash:
+ * The real enforcement gap was repo.ts#getDeviceByTokenHash:
  *   `.where(or(eq(devices.deviceTokenHash, hash), eq(devices.oldTokenHash, hash)))`
  * — an UNCONDITIONAL match against `old_token_hash`, with no time bound
- * applied anywhere downstream in device-auth.ts's `deviceAuth()` (its only
- * expiry check, Step 3, reads `device.tokenExpiresAt` — the CURRENT
- * token's expiry, which `deviceRotateCredential` never sets — not
- * `tokenRotatedAt` + a grace window).
+ * applied anywhere downstream. The fix (device-auth.ts#deviceAuth): after
+ * resolving the device by Bearer token hash, the middleware now compares
+ * the presented token's hash against the record's CURRENT
+ * `deviceTokenHash` — if it matches the OLD hash instead (the only other
+ * way `resolveDevice` could have found this record), it applies
+ * `isInRotationGracePeriod(tokenRotatedAt, BEARER_ROTATION_GRACE_MS)` and
+ * rejects with 401 DEVICE_CREDENTIAL_REVOKED once that window has passed.
  *
- * Net effect: once a device's Bearer token is rotated (e.g. specifically
- * BECAUSE the old one leaked/was compromised — the normal reason to rotate
- * a credential), the OLD token keeps authenticating successfully FOREVER
- * (until the device is rotated a second time), not just for the documented
- * 24h grace window. This test proves it directly against the real
- * `deviceAuth()` middleware using an old-token rotation timestamp far
- * outside any documented grace period (999 days), following the exact
- * `setDeviceLoader` + `mockRequest`/`mockReply` conventions established in
- * device-auth.test.ts.
+ * Net effect before the fix: once a device's Bearer token was rotated (e.g.
+ * specifically BECAUSE the old one leaked/was compromised — the normal
+ * reason to rotate a credential), the OLD token kept authenticating
+ * successfully FOREVER (until the device was rotated a second time), not
+ * just for the documented 24h grace window. This test proves the fix
+ * directly against the real `deviceAuth()` middleware using an old-token
+ * rotation timestamp far outside any documented grace period (999 days),
+ * following the exact `setDeviceLoader` + `mockRequest`/`mockReply`
+ * conventions established in device-auth.test.ts.
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
@@ -51,9 +52,16 @@ const OLD_TOKEN_HASH = hashToken(OLD_RAW_TOKEN);
 const NEW_TOKEN_HASH = hashToken(NEW_RAW_TOKEN);
 
 // Rotated 999 days ago — far beyond BEARER_ROTATION_GRACE_MS (24h) and even
-// MTLS_ROTATION_GRACE_MS (7d). If the grace period were enforced, the old
-// token below would be rejected.
+// MTLS_ROTATION_GRACE_MS (7d). The old token below must now be rejected.
 const LONG_AGO_ROTATION = new Date(Date.now() - 999 * 24 * 60 * 60 * 1000).toISOString();
+
+// A second device rotated only 1 hour ago — still WITHIN the 24h Bearer
+// grace window, so its old token must still authenticate.
+const RECENT_ROTATION = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+const RECENT_OLD_RAW_TOKEN = "device_recent_old_token";
+const RECENT_NEW_RAW_TOKEN = "device_recent_new_token";
+const RECENT_OLD_TOKEN_HASH = hashToken(RECENT_OLD_RAW_TOKEN);
+const RECENT_NEW_TOKEN_HASH = hashToken(RECENT_NEW_RAW_TOKEN);
 
 const rotatedDevice: DeviceRecord = {
   id: "d-rotated-001",
@@ -70,6 +78,14 @@ const rotatedDevice: DeviceRecord = {
   tokenRotatedAt: LONG_AGO_ROTATION,
 };
 
+const recentlyRotatedDevice: DeviceRecord = {
+  ...rotatedDevice,
+  id: "d-rotated-002",
+  deviceTokenHash: RECENT_NEW_TOKEN_HASH,
+  oldTokenHash: RECENT_OLD_TOKEN_HASH,
+  tokenRotatedAt: RECENT_ROTATION,
+};
+
 function mockRequest(opts: { authorization?: string }) {
   return {
     headers: { authorization: opts.authorization },
@@ -82,13 +98,16 @@ function mockReply() {
   return {} as unknown as import("fastify").FastifyReply;
 }
 
-describe("device-auth — old (rotated) Bearer token grace period", () => {
+describe("device-auth — old (rotated) Bearer token grace period (Fix 4)", () => {
   beforeEach(async () => {
     resetDeviceAuthForTests();
     await invalidateDeviceCache(OLD_TOKEN_HASH, "token_hash");
     await invalidateDeviceCache(NEW_TOKEN_HASH, "token_hash");
+    await invalidateDeviceCache(RECENT_OLD_TOKEN_HASH, "token_hash");
+    await invalidateDeviceCache(RECENT_NEW_TOKEN_HASH, "token_hash");
     setDeviceLoader(async (lookupKey) => {
       if (lookupKey === OLD_TOKEN_HASH || lookupKey === NEW_TOKEN_HASH) return rotatedDevice;
+      if (lookupKey === RECENT_OLD_TOKEN_HASH || lookupKey === RECENT_NEW_TOKEN_HASH) return recentlyRotatedDevice;
       return null;
     });
   });
@@ -102,15 +121,23 @@ describe("device-auth — old (rotated) Bearer token grace period", () => {
     expect(req.deviceContext?.deviceId).toBe(rotatedDevice.id);
   });
 
-  it("BUG: the OLD token, rotated 999 days ago, STILL authenticates — no grace-period cutoff is enforced", async () => {
+  it("the OLD token, rotated 999 days ago, is rejected once the grace period has expired", async () => {
     const req = mockRequest({ authorization: `Bearer ${OLD_RAW_TOKEN}` });
 
-    // A correctly-enforced 24h Bearer grace period would reject this with
-    // DEVICE_CREDENTIAL_REVOKED. Instead deviceAuth() authenticates it
-    // exactly as if it were still current — the leaked/rotated-away
-    // credential never actually stops working.
+    // Fixed: the 24h Bearer grace period is now enforced. deviceAuth()
+    // rejects with DEVICE_CREDENTIAL_REVOKED instead of authenticating the
+    // leaked/rotated-away credential as if it were still current.
+    await expect(deviceAuth(req, mockReply())).rejects.toMatchObject({
+      status: 401,
+      code: "DEVICE_CREDENTIAL_REVOKED",
+    });
+    expect(req.deviceContext).toBeUndefined();
+  });
+
+  it("an OLD token rotated only 1 hour ago still authenticates (within the 24h grace window)", async () => {
+    const req = mockRequest({ authorization: `Bearer ${RECENT_OLD_RAW_TOKEN}` });
     await deviceAuth(req, mockReply());
-    expect(req.deviceContext?.deviceId).toBe(rotatedDevice.id);
+    expect(req.deviceContext?.deviceId).toBe(recentlyRotatedDevice.id);
     expect(req.deviceContext?.authType).toBe("bearer_token");
   });
 });
