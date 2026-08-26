@@ -22,9 +22,16 @@ import {
 const inputStyle = { width: "100%", padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
+/**
+ * services/crm-service leads/qualification-validators.ts requires a
+ * question's weight to be z.number().int().min(0).max(100) -- round + clamp
+ * here so a partial or fractional entry (this input allowed any 0.5-stepped
+ * value with no upper bound) never lands something the backend rejects.
+ */
 function sanitizeNumber(raw: string): number {
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(100, n);
 }
 
 function blankFramework(): QualificationFramework {
@@ -200,7 +207,7 @@ export function QualificationFrameworksEditor() {
                             <label className="sr-only" htmlFor={`${headingId}-w-${fi}-${qi}`}>Question {qi + 1} weight</label>
                             <input
                               id={`${headingId}-w-${fi}-${qi}`}
-                              type="number" min={0} step={0.5}
+                              type="number" min={0} max={100} step={1}
                               value={Number.isFinite(q.weight) ? q.weight : ""}
                               aria-invalid={Number.isFinite(q.weight) ? undefined : true}
                               onChange={(e) => updateQuestion(fi, qi, { weight: sanitizeNumber(e.target.value) })}

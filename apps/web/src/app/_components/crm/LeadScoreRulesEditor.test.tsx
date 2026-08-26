@@ -50,7 +50,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     render(<LeadScoreRulesEditor />);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    expect(await screen.findByText(/needs an attribute, a numeric weight/i)).toBeInTheDocument();
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 

@@ -21,23 +21,32 @@ const FIELD_OPTIONS: DedupField[] = ["email", "phone", "gstin", "pan", "name", "
 const MATCH_OPTIONS: DedupMatchType[] = ["exact", "fuzzy"];
 
 /**
- * Coerce a numeric-input string to a finite, non-negative number so a partial
- * or invalid entry ("", "-", "abc") never lands NaN in state and gets PUT.
+ * Coerce a numeric-input string to a finite integer 0-100 so a partial or
+ * invalid entry ("", "-", "1.5", "abc") never lands something the backend
+ * rejects. services/crm-service dedup-routes.ts requires both weight and
+ * threshold to be z.number().int().min(0).max(100) -- this editor used to
+ * offer fractional 0-1 inputs (step 0.1 / 0.05) that could only ever
+ * produce a value the server accepts by accident (exactly 0 or 1), so
+ * "Save rules" 400'd for any realistic weight/threshold.
  */
 function sanitizeNumber(raw: string, opts: { max?: number } = {}): number {
-  const n = Number(raw);
+  const n = Math.round(Number(raw));
+  const max = opts.max ?? 100;
   if (!Number.isFinite(n) || n < 0) return 0;
-  if (opts.max !== undefined && n > opts.max) return opts.max;
+  if (n > max) return max;
   return n;
 }
 
-/** True when a rule's weight/threshold are safe to persist. */
+/** True when a rule's weight/threshold are safe to persist (matches the
+ *  backend's z.number().int().min(0).max(100) contract exactly). */
 function ruleNumbersValid(rule: DedupRule): boolean {
   return (
-    Number.isFinite(rule.weight) &&
+    Number.isInteger(rule.weight) &&
     rule.weight >= 0 &&
-    Number.isFinite(rule.threshold) &&
-    rule.threshold >= 0
+    rule.weight <= 100 &&
+    Number.isInteger(rule.threshold) &&
+    rule.threshold >= 0 &&
+    rule.threshold <= 100
   );
 }
 
@@ -67,7 +76,7 @@ export function DedupRulesEditor() {
   function addRule() {
     setRules((prev) => [
       ...prev,
-      { field: "email", matchType: "exact", weight: 1, threshold: 0.9, enabled: true },
+      { field: "email", matchType: "exact", weight: 1, threshold: 90, enabled: true },
     ]);
   }
 
@@ -79,7 +88,7 @@ export function DedupRulesEditor() {
     setMessage("");
     setError("");
     if (!rules.every(ruleNumbersValid)) {
-      setError("Weight and threshold must be valid numbers (0 or more). Fix the highlighted rules before saving.");
+      setError("Weight and threshold must be whole numbers from 0 to 100. Fix the highlighted rules before saving.");
       return;
     }
     setBusy(true);
@@ -161,7 +170,7 @@ export function DedupRulesEditor() {
                   <label className="sr-only" htmlFor={`${headingId}-weight-${idx}`}>Weight for rule {idx + 1}</label>
                   <input
                     id={`${headingId}-weight-${idx}`}
-                    type="number" min={0} step={0.1}
+                    type="number" min={0} max={100} step={1}
                     value={Number.isFinite(rule.weight) ? rule.weight : ""}
                     aria-invalid={Number.isFinite(rule.weight) ? undefined : true}
                     onChange={(e) => update(idx, { weight: sanitizeNumber(e.target.value) })}
@@ -172,7 +181,7 @@ export function DedupRulesEditor() {
                   <label className="sr-only" htmlFor={`${headingId}-threshold-${idx}`}>Threshold for rule {idx + 1}</label>
                   <input
                     id={`${headingId}-threshold-${idx}`}
-                    type="number" min={0} max={1} step={0.05}
+                    type="number" min={0} max={100} step={1}
                     value={Number.isFinite(rule.threshold) ? rule.threshold : ""}
                     aria-invalid={Number.isFinite(rule.threshold) ? undefined : true}
                     onChange={(e) => update(idx, { threshold: sanitizeNumber(e.target.value, { max: 1 }) })}

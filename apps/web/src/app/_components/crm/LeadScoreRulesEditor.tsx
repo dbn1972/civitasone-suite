@@ -28,9 +28,17 @@ function toRow(r: LeadScoreRule): RuleRow {
   return { ...rest, paramsText: params && Object.keys(params).length > 0 ? JSON.stringify(params) : "" };
 }
 
+/**
+ * services/crm-service leads/score-rules-validators.ts requires weight to be
+ * z.number().int().min(0).max(100) -- round + clamp here so a partial or
+ * fractional entry never lands something the backend rejects (previously
+ * the input allowed any fractional/out-of-range value via a 0.1 step with
+ * no min/max, so anything but the exact starting integer 400'd on save).
+ */
 function sanitizeNumber(raw: string): number {
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : Number.NaN;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return Number.NaN;
+  return Math.min(100, Math.max(0, n));
 }
 
 /** Parse a params cell; empty → {}, otherwise must be a JSON object. */
@@ -48,7 +56,9 @@ function parseParams(text: string): Record<string, unknown> | null {
 function rowValid(row: RuleRow): boolean {
   return (
     row.attribute.trim().length > 0 &&
-    Number.isFinite(row.weight) &&
+    Number.isInteger(row.weight) &&
+    row.weight >= 0 &&
+    row.weight <= 100 &&
     parseParams(row.paramsText) !== null
   );
 }
@@ -91,7 +101,7 @@ export function LeadScoreRulesEditor() {
     setMessage("");
     setError("");
     if (!rows.every(rowValid)) {
-      setError("Each rule needs an attribute, a numeric weight, and valid JSON params. Fix the highlighted rules before saving.");
+      setError("Each rule needs an attribute, a whole-number weight from 0 to 100, and valid JSON params. Fix the highlighted rules before saving.");
       return;
     }
     setBusy(true);
@@ -175,7 +185,7 @@ export function LeadScoreRulesEditor() {
                     <label className="sr-only" htmlFor={`${headingId}-weight-${idx}`}>Weight for rule {idx + 1}</label>
                     <input
                       id={`${headingId}-weight-${idx}`}
-                      type="number" step={0.1}
+                      type="number" min={0} max={100} step={1}
                       value={Number.isFinite(row.weight) ? row.weight : ""}
                       aria-invalid={Number.isFinite(row.weight) ? undefined : true}
                       onChange={(e) => update(idx, { weight: sanitizeNumber(e.target.value) })}
