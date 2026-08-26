@@ -29,6 +29,10 @@ type LeaveContext = {
 
 type Props = {
   employees: EmployeeSummary[];
+  /** Preselects this employee when arriving via a deep link (e.g. an employee
+   *  profile's "Apply Leave" quick action, ?empId=...). Falls back to the
+   *  first employee in the list if not provided or not found in it. */
+  initialEmployeeId?: string;
 };
 
 // Shared field input class
@@ -36,8 +40,11 @@ const fieldCls =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500";
 const errorCls = "mt-1 text-xs text-red-600";
 
-export function ApplyLeaveForm({ employees }: Props) {
-  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
+export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
+  const preselected = initialEmployeeId && employees.some((e) => e.id === initialEmployeeId)
+    ? initialEmployeeId
+    : employees[0]?.id ?? "";
+  const [employeeId, setEmployeeId] = useState(preselected);
   const [leaveContext, setLeaveContext] = useState<LeaveContext | null>(null);
   const [status, setStatus] = useState<
     "idle" | "loading" | "submitting" | "accepted" | "error"

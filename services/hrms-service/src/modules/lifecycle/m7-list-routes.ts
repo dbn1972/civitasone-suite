@@ -5,7 +5,7 @@
  * the /lifecycle/ prefix the frontend doesn't include.
  */
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -111,11 +111,19 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Service book tenant-wide list — frontend calls GET /api/v1/hrms/service-book
+  // Optional ?employeeId= scopes it to one employee (used by the employee
+  // profile's "Service Book" quick-action deep link, which previously always
+  // showed the whole tenant's entries with no way to filter to just one person).
   app.get("/v1/hrms/service-book", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsServiceBookEntries).where(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId)).orderBy(hrmsServiceBookEntries.effectiveDate, hrmsServiceBookEntries.id).limit(1000),
+      tx.select().from(hrmsServiceBookEntries).where(
+        q.employeeId
+          ? and(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId), eq(hrmsServiceBookEntries.employeeId, q.employeeId))
+          : eq(hrmsServiceBookEntries.tenantId, ctx.tenantId),
+      ).orderBy(hrmsServiceBookEntries.effectiveDate, hrmsServiceBookEntries.id).limit(1000),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
