@@ -4,6 +4,7 @@ import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as paymentsRepo from "../payments/repo.js";
+import * as tdsRepo from "../tds/repo.js";
 import type { VendorRow } from "./schema.js";
 import type { BillRow } from "../payments/schema.js";
 
@@ -120,15 +121,19 @@ function toVendorDetail(r: VendorRow, showFullBankDetails: boolean) {
 // 0065's note explains why the FK constraint itself is deliberately
 // deferred pending a backfill/reconciliation pass), but a FK is only needed
 // to ENFORCE referential integrity, not to filter by it, so this rollup was
-// always buildable. TDS is read back out of the bill's own deductions ledger
-// (the same jsonb array tds/consumer.ts appends {type:"tds",...} onto)
-// rather than re-queried from the tds module, since a bill's own deductions
-// are already the source of truth for what was actually withheld against it.
-function toVendorBillHistory(bills: BillRow[]) {
+// always buildable.
+//
+// TDS is NOT read from the bill's own `deductions` jsonb: the only real
+// bill-creation path (integrations/consumer.ts's grnAccepted handler)
+// hardcodes deductions: [], and none of payments/consumer.ts's three
+// updateBill() call sites ever populate it either, so that column is always
+// empty in production. The real TDS ledger is gl.finance_vendor_tds (written
+// via POST /v1/finance/vendor-tds -> tds/consumer.ts), keyed by bill_id --
+// see tds/repo.ts's findTdsAmountsByBillIds, which this looks up by the ids
+// of the bills already fetched above.
+function toVendorBillHistory(bills: BillRow[], tdsByBillId: Map<string, bigint>) {
   return bills.map((b) => {
-    const tdsMinor = (b.deductions ?? [])
-      .filter((d) => d.type === "tds")
-      .reduce((sum, d) => sum + BigInt(d.amountMinor), 0n);
+    const tdsMinor = tdsByBillId.get(b.id) ?? 0n;
     return {
       id: b.id,
       billNo: b.billNo,
@@ -177,7 +182,9 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
     const showFullBankDetails = hasAnyRole(ctx, WRITER_ROLES);
     const bills = await paymentsRepo.findBillsByVendorAndTenant(id, ctx.tenantId);
-    return reply.send({ ...toVendorDetail(vendor, showFullBankDetails), bills: toVendorBillHistory(bills) });
+    const tdsRows = await tdsRepo.findTdsAmountsByBillIds(ctx.tenantId, bills.map((b) => b.id));
+    const tdsByBillId = new Map(tdsRows.map((r) => [r.billId, r.tdsAmountMinor]));
+    return reply.send({ ...toVendorDetail(vendor, showFullBankDetails), bills: toVendorBillHistory(bills, tdsByBillId) });
   });
 
   app.post("/v1/finance/vendors", async (req, reply) => {

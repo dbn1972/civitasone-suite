@@ -94,3 +94,37 @@ describe("assertOpeningBalancesBalanced — unbalanced sets are rejected", () =>
     ])).not.toThrow();
   });
 });
+
+// Mirrors gl/domain.ts's assertJournalBalances "too few lines" guard: a real
+// opening position always touches at least two different accounts, so a
+// single entry -- even one that trivially "balances" against itself -- is
+// rejected as a distinct, more specific error than OPENING_BALANCE_UNBALANCED.
+describe("assertOpeningBalancesBalanced — too-few-entries guard", () => {
+  it("rejects an empty entries array", () => {
+    expect(() => assertOpeningBalancesBalanced([])).toThrow(DomainError);
+    try {
+      assertOpeningBalancesBalanced([]);
+    } catch (err) {
+      expect((err as DomainError).code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
+    }
+  });
+
+  it("rejects a single entry even when it trivially balances against itself (debit == credit)", () => {
+    // Proves this is a genuinely separate guard, not just a restatement of
+    // the balance check: a lone {debit: 500, credit: 500} entry passes
+    // sum(debit) == sum(credit) but still isn't a real opening position.
+    expect(() => assertOpeningBalancesBalanced([entry("1100", 500, 500)])).toThrow(DomainError);
+    try {
+      assertOpeningBalancesBalanced([entry("1100", 500, 500)]);
+    } catch (err) {
+      expect((err as DomainError).code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
+    }
+  });
+
+  it("2 entries is enough -- the guard only rejects fewer than 2", () => {
+    expect(() => assertOpeningBalancesBalanced([
+      entry("1100", 500, 0),
+      entry("3100", 0, 500),
+    ])).not.toThrow();
+  });
+});

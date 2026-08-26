@@ -19,6 +19,16 @@ type BalanceEntry = { debitMinor: number | bigint; creditMinor: number | bigint 
  * 2^53 in aggregate across many entries.
  */
 export function assertOpeningBalancesBalanced(entries: BalanceEntry[]): void {
+  // Mirrors gl/domain.ts's assertJournalBalances: a single entry can never
+  // form a meaningful opening trial balance (one with equal debit/credit on
+  // the SAME entry is a self-cancelling no-op, not a real opening position)
+  // -- a real one always touches at least two different accounts.
+  if (!entries || entries.length < 2) {
+    throw new DomainError(
+      "OPENING_BALANCE_TOO_FEW_ENTRIES",
+      "an opening balance requires at least 2 entries",
+    );
+  }
   const totalDebit = entries.reduce((acc, e) => acc + BigInt(e.debitMinor), 0n);
   const totalCredit = entries.reduce((acc, e) => acc + BigInt(e.creditMinor), 0n);
   if (totalDebit !== totalCredit) {

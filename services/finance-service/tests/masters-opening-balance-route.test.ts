@@ -45,7 +45,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
     }
   });
 
-  it("rejects a single-entry unbalanced set the same way", async () => {
+  it("rejects a single-entry set as too few entries, even when unbalanced", async () => {
     const app = await buildApp();
     try {
       const res = await app.inject({
@@ -53,7 +53,21 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
         payload: { fyCode: "2026-27", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 0 }] },
       });
       expect(res.statusCode).toBe(400);
-      expect(res.json().code).toBe("OPENING_BALANCE_UNBALANCED");
+      expect(res.json().code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects a single-entry set even when it trivially balances against itself", async () => {
+    const app = await buildApp();
+    try {
+      const res = await app.inject({
+        method: "POST", url: "/v1/finance/opening-balances", headers: financeAdmin(),
+        payload: { fyCode: "2026-27", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 500 }] },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
     } finally {
       await app.close();
     }
