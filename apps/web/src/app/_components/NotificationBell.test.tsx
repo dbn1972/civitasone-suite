@@ -25,7 +25,7 @@ describe("NotificationBell", () => {
 
   it("does not show badge when count is 0", () => {
     const allRead: Notification[] = [{ id: "1", title: "Read", time: "now", read: true }];
-    const { container } = render(<NotificationBell notifications={allRead} />);
+    render(<NotificationBell notifications={allRead} />);
     // Button only has bell emoji, no count badge
     const button = screen.getByTitle("Notifications");
     expect(button.querySelector("span")).toBeNull();

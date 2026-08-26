@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+/* global console */
 // Regenerates src/app/_components/navRouteManifest.ts — the allowlist of ancestor
 // route paths that AutoBreadcrumb may safely turn into links (they have a real
 // index page.tsx). Run from apps/web:  node scripts/gen-nav-route-manifest.mjs
 import { readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const here = fileURLToPath(new URL(".", import.meta.url));
+const here = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = join(here, "..", "src", "app", "(app)");
 const OUT = join(here, "..", "src", "app", "_components", "navRouteManifest.ts");
 
