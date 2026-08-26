@@ -1,7 +1,10 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/app/_data/loaders";
+import { currentFinancialYear } from "@/lib/fiscalYear";
+import { FyFilter } from "../../_components/FyFilter";
 import { MonitoringTable } from "./MonitoringTable";
+
 
 function rupees(val: unknown): string {
   const n = Number(BigInt(String(val ?? "0"))) / 100;
@@ -10,11 +13,23 @@ function rupees(val: unknown): string {
   return `₹${n.toFixed(0)}`;
 }
 
-export default async function BudgetMonitoringPage() {
+export default async function BudgetMonitoringPage({
+  searchParams,
+}: {
+  searchParams?: { fy?: string };
+}) {
+  // These endpoints REQUIRE ?fy= and return HTTP 400 without it, so the page
+  // must resolve a concrete FY (honouring the FyFilter's ?fy=, else today's FY)
+  // instead of calling the loaders bare — which always errored to empty zeros.
+  const fy =
+    typeof searchParams?.fy === "string" && searchParams.fy.length > 0
+      ? searchParams.fy
+      : currentFinancialYear();
   const [{ data: summary, source }, { data: lines }] = await Promise.all([
-    getFinanceBudgetMonitoring(),
-    getFinanceBudgetMonitoringLines(),
+    getFinanceBudgetMonitoring(fy),
+    getFinanceBudgetMonitoringLines(fy),
   ]);
+
 
   const totals = (summary as Record<string, unknown> & { totals?: Record<string, unknown> })?.totals ?? {};
   const exceptions = (totals as Record<string, Record<string, number>>).exceptions ?? {};
@@ -31,7 +46,13 @@ export default async function BudgetMonitoringPage() {
         title="Budget Monitoring"
         subtitle="Real-time head-wise allocation, commitment, expenditure and forecast."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          <>
+            <FyFilter />
+            {source === "error" ? <DataSourceBadge source={source} /> : null}
+          </>
+        }
+
       />
 
       <StatGrid>
