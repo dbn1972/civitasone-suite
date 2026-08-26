@@ -14,7 +14,14 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-type Scope = { id: string; scopeName: string; targetQuantity: string; unit: string };
+// Shape returned by GET /v1/works/execution/:workId/scopes — a raw select from
+// work_scopes (see works-service execution/repo.ts listScopes / schema.ts):
+//   { id, tenantId, workId, scopeId, targetValue, description, plannedStart,
+//     plannedEnd, version }
+// There is no scopeName / unit column and no scope-catalog join, so the display
+// label comes from `description` (optional per addScopeSchema) with a
+// distinguishable fallback derived from scopeId, and the target from `targetValue`.
+type Scope = { id: string; label: string; target: string };
 
 function pickScopes(payload: unknown): Scope[] {
   const arr =
@@ -22,15 +29,19 @@ function pickScopes(payload: unknown): Scope[] {
       ? (payload as { data: unknown }).data
       : payload;
   if (!Array.isArray(arr)) return [];
-  return arr.map((r) => {
-    const o = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
-    return {
-      id: String(o.id ?? ""),
-      scopeName: String(o.scopeName ?? "Scope"),
-      targetQuantity: String(o.targetQuantity ?? ""),
-      unit: String(o.unit ?? ""),
-    };
-  }).filter((s) => s.id);
+  return arr
+    .map((r, i) => {
+      const o = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+      const id = String(o.id ?? "");
+      const scopeId = typeof o.scopeId === "string" ? o.scopeId : "";
+      const description = typeof o.description === "string" ? o.description.trim() : "";
+      const target = o.targetValue == null ? "" : String(o.targetValue);
+      // description is optional — fall back to a scope-specific label so two
+      // scopes are never rendered as the same string.
+      const label = description || (scopeId ? `Scope ${scopeId.slice(0, 8)}…` : `Scope ${i + 1}`);
+      return { id, label, target };
+    })
+    .filter((s) => s.id);
 }
 
 function RecordProgressForm() {
@@ -160,8 +171,8 @@ function RecordProgressForm() {
                 <option value="">Select a scope…</option>
                 {scopes.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.scopeName}
-                    {s.targetQuantity ? ` — target ${s.targetQuantity}${s.unit ? " " + s.unit : ""}` : ""}
+                    {s.label}
+                    {s.target ? ` — target ${s.target}` : ""}
                   </option>
                 ))}
               </select>
