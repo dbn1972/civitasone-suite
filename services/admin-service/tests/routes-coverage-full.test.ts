@@ -1133,6 +1133,30 @@ describe("POST /v1/admin/uploads/presign", () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  // Regression: procurement_officer/procurement_admin had zero overlap with ALL_ROLES, so the
+  // PR #726 tender-document-upload fix could never start an upload for its real users.
+  // Matches procurement-service tender routes' PROC_ROLES (the endpoint this upload feeds).
+  it("returns 200 for procurement_officer (tender document upload, PR #726)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/uploads/presign",
+      headers: authHeader(["procurement_officer"]),
+      payload: { category: "document", filename: "tender-notice.pdf", contentType: "application/pdf" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  // Regression: works execution roles (dao/do/sdo/section_officer/works_admin/works_operator)
+  // had zero overlap with ALL_ROLES, so the works-photos upload flow could never start for its
+  // real users. Matches works-service execution routes' WRITE_ROLES (the endpoint this feeds).
+  it("returns 200 for section_officer (works site-photo upload)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/uploads/presign",
+      headers: authHeader(["section_officer"]),
+      payload: { category: "photo", filename: "site.jpg", contentType: "image/jpeg" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe("GET /v1/admin/uploads/:key", () => {
@@ -1165,6 +1189,17 @@ describe("GET /v1/admin/uploads/:key", () => {
       headers: authHeader(["employee"]),
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  // Regression: procurement_officer could presign an upload but never download it back —
+  // ALL_ROLES gates both routes, so widening it fixes both halves of the same flow.
+  it("returns 200 for procurement_officer downloading a tenant-owned key", async () => {
+    const key = `uploads/${TENANT}/document/tender-notice.pdf`;
+    const res = await app.inject({
+      method: "GET", url: `/v1/admin/uploads/${encodeURIComponent(key)}`,
+      headers: authHeader(["procurement_officer"]),
+    });
+    expect(res.statusCode).toBe(200);
   });
 });
 
