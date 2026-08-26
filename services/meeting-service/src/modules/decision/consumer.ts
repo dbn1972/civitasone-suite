@@ -40,7 +40,7 @@
  */
 import { randomUUID, createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, eq, ne, isNull, asc, desc, gte } from "drizzle-orm";
+import { and, eq, ne, isNull, isNotNull, asc, desc, gte } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { parseMinor } from "@civitasone/schemas";
@@ -58,6 +58,11 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { votes } from "../voting/schema.js";
+import { attendanceRecords } from "../attendance/schema.js";
+import { minutes } from "../minutes/schema.js";
+import { isMinutesLocked } from "../minutes/domain.js";
+import { countQuorumEligible, requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
+import { isQuorumMetAtVoteTime, assertVotesWithinPresent } from "../voting/domain.js";
 import { decisions, resolutions } from "./schema.js";
 import {
   computeFinancialYear,
@@ -66,6 +71,8 @@ import {
   nextResolutionSequence,
   requiredResponseCount,
   routeDecisionEvents,
+  assertAcyclicLineage,
+  type LineageEdge,
   type MajorityRule,
 } from "./domain.js";
 
@@ -345,6 +352,45 @@ async function countActiveMembers(tx: DrizzleTx, tenantId: string, committeeId: 
   return rows.length;
 }
 
+/**
+ * Re-derive quorum LIVE at resolution-record time (Gap 2). `meeting.quorumEstablished` is a
+ * ONE-WAY LATCH — attendance/consumer.ts sets it true exactly once and never clears it when members
+ * simply leave (only an explicit adjourn→resume cycle resets it) — so a numbered, "effective"
+ * resolution with an arbitrary invented tally could otherwise still be recorded long after every
+ * real attendee has left. This is the SAME live-attendance quorum recomputation voting/consumer.ts
+ * fix 11 applies at conclude (`computeVoteTimeQuorum`): count quorum-eligible present attendees and
+ * the committee's required quorum through the shared committee-domain helpers, so the
+ * count/percentage/VC-exclusion logic matches quorum establishment exactly. Returns null when the
+ * meeting has no committee (no formal quorum rule to apply — the caller then falls back to the
+ * latched flag, preserving the existing no-committee aggregate-record path).
+ */
+async function computeResolutionTimeQuorum(
+  tx: DrizzleTx,
+  meetingId: string,
+  tenantId: string,
+  committeeId: string | null,
+): Promise<{ membersPresent: number; requiredQuorum: number } | null> {
+  if (!committeeId) return null;
+  const committeeRows = await tx
+    .select({ quorumRule: committees.quorumRule })
+    .from(committees)
+    .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
+    .limit(1);
+  const committee = committeeRows[0];
+  if (!committee) return null;
+  const rule = committee.quorumRule as QuorumRule;
+
+  const activeMembers = await countActiveMembers(tx, tenantId, committeeId);
+  const attendance = await tx
+    .select({ status: attendanceRecords.status, mode: attendanceRecords.mode })
+    .from(attendanceRecords)
+    .where(and(eq(attendanceRecords.meetingId, meetingId), eq(attendanceRecords.tenantId, tenantId)));
+
+  const membersPresent = countQuorumEligible(attendance, rule);
+  const requiredQuorum = requiredQuorumCount(rule, activeMembers);
+  return { membersPresent, requiredQuorum };
+}
+
 // ─── DSC signing of the resolution document (Req 11.5) ──────────────────────────
 
 /** Signed-resolution artifacts persisted onto the resolution row. */
@@ -560,13 +606,109 @@ async function handleDecisionUpdate(msg: CommandEnvelope<DecisionUpdatePayload>)
     if (!(await markProcessed(tx, msg.messageId))) return;
 
     const rows = await tx
-      .select({ id: decisions.id })
+      .select({ id: decisions.id, meetingId: decisions.meetingId })
       .from(decisions)
       .where(and(eq(decisions.id, p.decisionId), eq(decisions.tenantId, msg.tenantId)))
       .limit(1);
-    if (rows.length === 0) return;
+    const existing = rows[0];
+    if (!existing) return;
 
     const patch = p.patch;
+
+    // Fix (Gap 3 — supersession must survive the minutes lock): a supersede-ONLY patch (only
+    // status:"superseded" and/or supersededById, touching NO substantive field) is exempt from the
+    // minutes-lock guard below. Superseding a minuted decision — which fix 9 supports, and which
+    // normally happens at a LATER meeting — only ADDS a forward supersession pointer; it does not
+    // rewrite the substance the locked minutes recorded. Any patch that touches a substantive field
+    // (text/type/authority/effectiveDate/responsibleOfficer/deadline/financialImplication/currency),
+    // or changes status to anything OTHER than "superseded", stays blocked once minutes are locked.
+    // The supersede path further down STILL enforces fix 9's target-exists + acyclic-lineage checks.
+    const substantivePatchFields = [
+      "text",
+      "type",
+      "authority",
+      "effectiveDate",
+      "responsibleOfficer",
+      "deadline",
+      "financialImplication",
+      "currency",
+    ] as const;
+    const touchesSubstantiveField = substantivePatchFields.some((f) => patch[f] !== undefined);
+    const changesStatusToNonSuperseded = patch.status !== undefined && patch.status !== "superseded";
+    const isSupersedeOnlyPatch = !touchesSubstantiveField && !changesStatusToNonSuperseded;
+
+    // Fix (decision amendable after its minutes are signed): once a meeting's minutes are
+    // approved/signed/circulated, the decisions they recorded must not be silently rewritten —
+    // the legally-binding, hash-anchored minutes and the "live" decision record would otherwise
+    // permanently disagree with nothing surfacing it. Mirrors minutes/consumer.ts's own
+    // `assertMinutesEditable` guard, applied from the decision side since this handler previously
+    // never queried `minutes` at all. A supersede-only patch (above) is exempt — it appends a
+    // forward supersession pointer without a substantive rewrite (Gap 3).
+    const minutesRows = await tx
+      .select({ status: minutes.status })
+      .from(minutes)
+      .where(and(eq(minutes.meetingId, existing.meetingId), eq(minutes.tenantId, msg.tenantId)));
+    if (!isSupersedeOnlyPatch && minutesRows.some((m) => isMinutesLocked(m.status))) {
+      throw new NonRetryableError(
+        `decision ${p.decisionId} cannot be amended: its meeting's minutes are already approved/signed/circulated`,
+      );
+    }
+
+    // Fix (decision.status/resolution-outcome drift): a decision cannot be marked "effective"
+    // while its own linked resolution's real, voting-computed outcome says otherwise — "passed"
+    // is the only outcome consistent with "effective" (a linked "rejected"/"invalid" resolution
+    // would openly contradict it in the official minutes). A decision with no linked resolution
+    // at all is unaffected (not every decision arises from a formal vote).
+    if (patch.status === "effective") {
+      const linkedResolutions = await tx
+        .select({ result: resolutions.result })
+        .from(resolutions)
+        .where(and(eq(resolutions.tenantId, msg.tenantId), eq(resolutions.decisionId, p.decisionId)));
+      const contradicted = linkedResolutions.some((r) => r.result !== "passed");
+      if (contradicted) {
+        throw new NonRetryableError(
+          `decision ${p.decisionId} cannot be marked effective: its linked resolution did not pass`,
+        );
+      }
+    }
+
+    // Fix (acyclic-lineage guard never wired in + dangling supersededById): `supersededById`
+    // must reference a real, same-tenant decision, and the new edge must keep the decision
+    // register's supersedes graph acyclic — domain.ts already implements and unit-tests this
+    // guard (`assertAcyclicLineage`/`wouldCreateCycle`), it was simply never called from here.
+    if (patch.supersededById != null) {
+      const target = await tx
+        .select({ id: decisions.id })
+        .from(decisions)
+        .where(and(eq(decisions.id, patch.supersededById), eq(decisions.tenantId, msg.tenantId)))
+        .limit(1);
+      if (target.length === 0) {
+        throw new NonRetryableError(
+          `decision ${p.decisionId} cannot supersede unknown decision ${patch.supersededById}`,
+        );
+      }
+
+      const edgeRows = await tx
+        .select({ id: decisions.id, supersededById: decisions.supersededById })
+        .from(decisions)
+        .where(
+          and(
+            eq(decisions.tenantId, msg.tenantId),
+            ne(decisions.id, p.decisionId),
+            isNotNull(decisions.supersededById),
+          ),
+        );
+      const existingLineage: LineageEdge[] = edgeRows
+        .filter((r): r is { id: string; supersededById: string } => r.supersededById != null)
+        .map((r) => ({ from: r.id, to: r.supersededById, relation: "supersedes" }));
+
+      try {
+        assertAcyclicLineage(existingLineage, { from: p.decisionId, to: patch.supersededById, relation: "supersedes" });
+      } catch (err) {
+        throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+      }
+    }
+
     const set: Record<string, unknown> = { updatedBy: msg.actorId, updatedAt: new Date() };
     if (patch.text !== undefined) set.text = patch.text;
     if (patch.type !== undefined) set.type = patch.type;
@@ -609,6 +751,66 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       throw new NonRetryableError(`meeting ${p.meetingId} not found for resolution ${p.resolutionId}`);
     }
 
+    // Fix (resolution fabrication bypass + Gap 2 stale quorum latch): a resolution can only be
+    // recorded while quorum genuinely holds. `meeting.quorumEstablished` is a ONE-WAY LATCH — set
+    // true once and never cleared when members simply leave (attendance/consumer.ts) — so trusting
+    // it alone let an official, numbered, "effective" resolution with an invented tally be recorded
+    // after the room had actually dropped below quorum. Re-derive quorum LIVE from attendance the
+    // SAME way voting's fix 11 does at conclude (computeResolutionTimeQuorum). A no-committee
+    // meeting has no quorum rule to apply, so fall back to the latched flag there — unchanged for
+    // the legitimate no-roster aggregate-record path (tests/resolution-fabrication-bypass.test.ts).
+    const liveQuorum = await computeResolutionTimeQuorum(tx, meeting.id, msg.tenantId, meeting.committeeId);
+    const quorumMet = liveQuorum ? isQuorumMetAtVoteTime(liveQuorum) : meeting.quorumEstablished;
+    if (!quorumMet) {
+      throw new NonRetryableError(
+        `resolution ${p.resolutionId} cannot be recorded: quorum is not currently met for meeting ${p.meetingId}`,
+      );
+    }
+
+    // Don't blindly trust client-supplied vote counts: when real, per-member ballots already
+    // exist for this resolution (meeting.votes — the voting module's tracked-ballot flow used
+    // for roll_call/electronic_poll), the tally is computed from THOSE rows, never from the
+    // client. Only when no such rows exist — the legitimate case for an aggregate-only vote type
+    // (show_of_hands/secret_ballot), where the secretary manually records the count the chair
+    // read out — is the client-supplied count used, and only now that quorum is verified above.
+    const realVoteRows = await tx
+      .select({ position: votes.position })
+      .from(votes)
+      .where(and(eq(votes.resolutionId, p.resolutionId), eq(votes.tenantId, msg.tenantId)));
+    const tally =
+      realVoteRows.length > 0
+        ? realVoteRows.reduce(
+            (acc, v) => {
+              if (v.position === "for") acc.votesFor += 1;
+              else if (v.position === "against") acc.votesAgainst += 1;
+              else acc.votesAbstain += 1;
+              return acc;
+            },
+            { votesFor: 0, votesAgainst: 0, votesAbstain: 0 },
+          )
+        : { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain };
+
+    // Fix (Gap 2 — bound the client tally against the live headcount): on the aggregate fallback
+    // path (no real meeting.votes rows — the show_of_hands/secret_ballot case where the client tally
+    // is trusted verbatim), a claimed tally can never exceed the members actually present. Enforce
+    // the same P15 invariant voting applies at conclude (assertVotesWithinPresent), bounding the
+    // TOTAL claimed positions (for + against + abstain) against the live present-member headcount.
+    // Only when the meeting is committee-backed (liveQuorum non-null yields a real headcount): a
+    // no-committee meeting has no roster to bound against, so that path is left unchanged.
+    // Invariant (Gap 2 re-review): this no-committee path is unreachable via production writes —
+    // quorum_established can only flip true for committee-backed meetings (attendance/consumer
+    // maybeEstablishQuorum early-returns when !committeeId), so a no-committee resolution.record
+    // is already rejected by the quorum gate above (liveQuorum null → quorumMet = latched flag =
+    // false → throw). The bound is omitted here only because there is no roster to count.
+    if (realVoteRows.length === 0 && liveQuorum) {
+      const claimedTotal = tally.votesFor + tally.votesAgainst + tally.votesAbstain;
+      try {
+        assertVotesWithinPresent(claimedTotal, liveQuorum.membersPresent);
+      } catch (err) {
+        throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+      }
+    }
+
     const financialYear = meeting.financialYear ?? computeFinancialYear(meeting.scheduledAt ?? new Date());
     const resolutionNumber = await computeResolutionNumber(tx, {
       tenantId: msg.tenantId,
@@ -616,10 +818,7 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       financialYear,
     });
 
-    const result = computeVoteResult(
-      { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain },
-      p.majorityRule,
-    );
+    const result = computeVoteResult(tally, p.majorityRule);
 
     await tx.insert(resolutions).values({
       id: p.resolutionId,
@@ -629,9 +828,9 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       resolutionNumber,
       text: p.text,
       voteType: p.voteType,
-      votesFor: p.votesFor,
-      votesAgainst: p.votesAgainst,
-      votesAbstain: p.votesAbstain,
+      votesFor: tally.votesFor,
+      votesAgainst: tally.votesAgainst,
+      votesAbstain: tally.votesAbstain,
       majorityRule: p.majorityRule,
       result,
       effectiveDate: p.effectiveDate ?? null,
@@ -652,9 +851,9 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
         resolutionId: p.resolutionId,
         meetingId: p.meetingId,
         resolutionNumber,
-        votesFor: p.votesFor,
-        votesAgainst: p.votesAgainst,
-        votesAbstain: p.votesAbstain,
+        votesFor: tally.votesFor,
+        votesAgainst: tally.votesAgainst,
+        votesAbstain: tally.votesAbstain,
       },
     });
     await audit(tx, msg, "record", "resolution", p.resolutionId, { result, resolutionNumber });

@@ -58,19 +58,48 @@ export interface InvitedParticipant {
   meetingId: string;
   /** Invitation lifecycle: pending | accepted | tentative | declined (see participant module). */
   invitationStatus: string;
+  /** The participant's real-world identity (participants.employee_id) — compared against the
+   * caller's actorId so a check-in can be verified as self-service or secretariat-authorized. */
+  employeeId: string;
 }
 
 /**
- * Assert a participant is an invited member of the meeting and so may check in (Req 6.2).
+ * The authenticated caller attempting a check-in/manual-mark, and who else (besides the
+ * participant being marked) is authorized to act on their behalf (Req 6.2).
+ */
+export interface CheckInAuthorization {
+  /** The caller's identity (ctx.actorId / msg.actorId). */
+  actorId: string;
+  /**
+   * Identities authorized to check in/mark ANY invited participant of this meeting on their
+   * behalf — e.g. the meeting's own secretary, chairperson, or the actor who created/administers
+   * it (a secretary conducting roll call is the canonical case). `null`/`undefined` entries are
+   * ignored so callers can pass optional meeting fields (e.g. `meeting.secretaryId`) directly
+   * without pre-filtering.
+   */
+  authorizedAgentIds?: ReadonlyArray<string | null | undefined>;
+}
+
+/**
+ * Assert a participant is an invited member of the meeting and so may check in (Req 6.2), AND
+ * that the caller is authorized to record it: either the participant themselves, or an
+ * authorized agent of the meeting (its secretary/chairperson/creator — see `CheckInAuthorization`).
  *
  * `participant` is the row resolved by the consumer/route for `(meetingId, participantId)`.
  * A missing participant, a participant belonging to a different meeting, or one whose invitation
  * was declined/withdrawn is rejected with `PARTICIPANT_NOT_MEMBER` (422). Being invited — not the
  * RSVP answer — is what gates check-in: a `pending`/`tentative` invitee who shows up is still valid.
+ *
+ * The identity check is deliberately NOT a strict "must be yourself" rule: a real roll-call flow
+ * has the secretary (or chairperson) marking attendance for the whole room, so an unrelated actor
+ * (never the participant, never staffing this meeting) is who this actually rejects — mapped to
+ * `MEETING_UNAUTHORIZED_ACCESS` (404), matching this codebase's convention of not leaking a
+ * resource's existence/state to a caller who was never authorized to act on it.
  */
 export function assertParticipantInvited(
   participant: InvitedParticipant | null | undefined,
   meetingId: string,
+  actor: CheckInAuthorization,
 ): asserts participant is InvitedParticipant {
   if (!participant) {
     throw httpError("PARTICIPANT_NOT_MEMBER", "participant is not an invited member of this meeting", { meetingId });
@@ -86,6 +115,14 @@ export function assertParticipantInvited(
       meetingId,
       participantId: participant.id,
       invitationStatus: participant.invitationStatus,
+    });
+  }
+  const isSelf = actor.actorId === participant.employeeId;
+  const isAuthorizedAgent = (actor.authorizedAgentIds ?? []).some((id) => id != null && id === actor.actorId);
+  if (!isSelf && !isAuthorizedAgent) {
+    throw httpError("MEETING_UNAUTHORIZED_ACCESS", "caller is not authorized to check in this participant", {
+      meetingId,
+      participantId: participant.id,
     });
   }
 }

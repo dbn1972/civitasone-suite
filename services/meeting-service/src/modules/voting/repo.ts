@@ -111,6 +111,38 @@ export interface ResolutionRef {
   isCirculation: boolean;
 }
 
+/** An actor's own committee-membership row, for the per-committee ownership check on write routes. */
+export interface CommitteeMembershipRef {
+  role: string;
+  status: string;
+}
+
+/**
+ * Direct (uncached) lookup of `actorId`'s own ACTIVE membership on `committeeId` (Gap: systemic
+ * cross-committee IDOR — `voting/routes.ts` initiate/conclude used to authorize purely on the
+ * caller's flat, tenant-wide role claim). Returns null when the caller has no active roster row
+ * on this SPECIFIC committee at all.
+ */
+export async function getActiveMembership(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+): Promise<CommitteeMembershipRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({ role: committeeMembers.role, status: committeeMembers.status })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 /**
  * Direct (uncached) resolution existence lookup, tenant-scoped. Returns null when the resolution
  * is unknown / belongs to another tenant so the cast + conclude routes can 404 (and confirm the

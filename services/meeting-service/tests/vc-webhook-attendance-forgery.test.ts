@@ -157,7 +157,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("BUG: vc.webhook records quorum-relevant attendance with no live-session check", () => {
+describe("FIXED: vc.webhook no longer records attendance for a named-but-not-live VC session", () => {
   it("a meeting that NEVER had a VC session provisioned still accepts a webhook 'joined' claim (vcSessionId omitted entirely, exactly like the happy-path test in vc-consumer.test.ts)", async () => {
     expect(await vcSessionCount(MEETING_NO_SESSION)).toBe(0); // no vc_sessions row exists at all
 
@@ -183,7 +183,7 @@ describe("BUG: vc.webhook records quorum-relevant attendance with no live-sessio
     // otherwise, was ever associated with this meeting.
   });
 
-  it("a webhook claiming a specific, ALREADY-ENDED vcSessionId is still accepted — the id is never resolved or checked", async () => {
+  it("a webhook claiming a specific, ALREADY-ENDED vcSessionId is now refused — no attendance is recorded", async () => {
     __setVcChainFactory(() => servingChain());
     const vcSessionId = randomUUID();
     await run(msg(COMMANDS.vcSessionCreate, { vcSessionId, meetingId: MEETING_ENDED_SESSION, tenantId: TENANT, recordingEnabled: false }));
@@ -199,28 +199,30 @@ describe("BUG: vc.webhook records quorum-relevant attendance with no live-sessio
 
     // A webhook arrives "late" (replay, race, or a forged call from anyone holding
     // meeting_admin/tenant_admin/super_admin — all ordinary human roles per VC_WEBHOOK_ROLES)
-    // naming the now-ended session. handleWebhook never loads it, so nothing rejects this.
-    await run(
-      msg(COMMANDS.vcWebhook, {
-        meetingId: MEETING_ENDED_SESSION,
-        tenantId: TENANT,
-        participantId: PARTICIPANT_B,
-        vcSessionId, // the ENDED session's id — sibling handlers would refuse to act on this
-        event: "participant.joined",
-        joinedAt: new Date().toISOString(),
-      }),
-    );
+    // naming the now-ended session. handleWebhook now loads it and applies the SAME
+    // terminal-status guard its three siblings already had — this is a no-op, not an error.
+    await expect(
+      run(
+        msg(COMMANDS.vcWebhook, {
+          meetingId: MEETING_ENDED_SESSION,
+          tenantId: TENANT,
+          participantId: PARTICIPANT_B,
+          vcSessionId, // the ENDED session's id — sibling handlers already refuse to act on this
+          event: "participant.joined",
+          joinedAt: new Date().toISOString(),
+        }),
+      ),
+    ).resolves.toBeUndefined();
 
     const rows = await attendanceRows(MEETING_ENDED_SESSION);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].status).toBe("attending_via_vc");
+    expect(rows).toHaveLength(0); // no phantom "attended" record was fabricated
 
-    // Contrast: handleRecordingStart / handleRecordingStop DO refuse to act on this exact same
-    // ended session (the terminal-status guard) — proving the omission in handleWebhook is a
-    // real inconsistency, not a deliberate design choice applied uniformly across the module.
+    // Contrast: handleRecordingStart DOES (and always did) refuse to act on this exact same ended
+    // session (the terminal-status guard) — proving handleWebhook now behaves consistently with
+    // its siblings instead of being the one omission in the module.
     await expect(
       run(msg(COMMANDS.vcRecordingStart, { vcSessionId, meetingId: MEETING_ENDED_SESSION, tenantId: TENANT })),
-    ).resolves.toBeUndefined(); // resolves — but as a documented terminal no-op, not an error
+    ).resolves.toBeUndefined(); // resolves — a documented terminal no-op, not an error
     const stillEnded = await runWithTenant(TENANT, () =>
       sqlClient.begin(async (sql) => {
         await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
@@ -228,7 +230,7 @@ describe("BUG: vc.webhook records quorum-relevant attendance with no live-sessio
       }),
     );
     expect(stillEnded[0].status).toBe("ended"); // recording-start correctly refused to reactivate it
-    expect(await outboxHas(EVENTS.attendanceMarked, MEETING_ENDED_SESSION)).toBe(true);
+    expect(await outboxHas(EVENTS.attendanceMarked, MEETING_ENDED_SESSION)).toBe(false);
   });
 });
 
