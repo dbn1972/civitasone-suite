@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 
 
 interface ProposalExtActionsProps {
@@ -47,15 +47,6 @@ const labelStyle: React.CSSProperties = {
   color: "var(--muted)",
   marginBottom: 4,
   fontWeight: 600,
-};
-
-const errBanner: React.CSSProperties = {
-  background: "#fef2f2",
-  color: "#b42318",
-  padding: 12,
-  borderRadius: 12,
-  marginBottom: 16,
-  fontSize: 13,
 };
 
 const formPad: React.CSSProperties = {
@@ -107,18 +98,15 @@ function SplitProposalForm({
 }) {
   const { toast } = useToast();
   const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [splitResult, setSplitResult] = useState<{
     id: string;
     workNumber?: string;
   } | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
+  // Splitting is irreversible — it creates a new, permanent child work record —
+  // so the POST is gated behind an accessible ConfirmDialog (maker-checker).
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
       const res = await fetch("/api/proxy/v1/works/proposals/split", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,11 +132,12 @@ function SplitProposalForm({
         setSplitResult({ id: childId, workNumber: childNo });
       }
       toast.success("Split initiated.");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    trigger();
   }
 
   // Success state — show child work link
@@ -201,7 +190,6 @@ function SplitProposalForm({
 
   return (
     <div style={formPad}>
-      {error && <div style={errBanner}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label style={labelStyle}>Parent Work</label>
@@ -233,6 +221,17 @@ function SplitProposalForm({
         </div>
         <SubmitBtn busy={busy} label="Split Proposal" />
       </form>
+      <ConfirmDialog
+        open={open}
+        title="Split this proposal?"
+        description="This creates a new permanent child work record from the split lines — it cannot be undone."
+        confirmLabel="Confirm Split"
+        danger
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => confirm()}
+        onCancel={cancel}
+      />
     </div>
   );
 }
@@ -253,14 +252,11 @@ function MapCOAForm({
   const [subHead, setSubHead] = useState("");
   const [detailHead, setDetailHead] = useState("");
   const [objectHead, setObjectHead] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
+  // COA mapping is append-only — the API has no update/delete for it, so a
+  // wrong mapping becomes permanent history. Gate it behind ConfirmDialog.
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
       const payload: Record<string, string> = { workId, majorHead };
       if (subMajorHead) payload.subMajorHead = subMajorHead;
       if (minorHead)    payload.minorHead    = minorHead;
@@ -278,12 +274,13 @@ function MapCOAForm({
         throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
       }
       toast.success("COA mapped.");
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
+    },
+    onSuccess: onClose,
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    trigger();
   }
 
   const optionalInput = (
@@ -307,7 +304,6 @@ function MapCOAForm({
 
   return (
     <div style={formPad}>
-      {error && <div style={errBanner}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label style={labelStyle}>
@@ -332,6 +328,17 @@ function MapCOAForm({
         </div>
         <SubmitBtn busy={busy} label="Map COA" />
       </form>
+      <ConfirmDialog
+        open={open}
+        title="Map this chart of accounts?"
+        description="This records a permanent chart-of-accounts mapping for this work. Mappings cannot be edited or removed once submitted — it cannot be undone."
+        confirmLabel="Confirm COA Mapping"
+        danger
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => confirm()}
+        onCancel={cancel}
+      />
     </div>
   );
 }
@@ -350,14 +357,11 @@ function MapOfficeForm({
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
   const [isNodal, setIsNodal]           = useState(false);
-  const [busy, setBusy]                 = useState(false);
-  const [error, setError]               = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
+  // Office mapping is append-only — the API has no update/delete for it, so a
+  // wrong mapping becomes permanent history. Gate it behind ConfirmDialog.
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
       const payload: Record<string, unknown> = { workId, divisionId, isNodal };
       if (subDivisionId) payload.subDivisionId = subDivisionId;
       if (sectionId)     payload.sectionId     = sectionId;
@@ -372,17 +376,17 @@ function MapOfficeForm({
         throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
       }
       toast.success("Office mapped.");
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
+    },
+    onSuccess: onClose,
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    trigger();
   }
 
   return (
     <div style={formPad}>
-      {error && <div style={errBanner}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label style={labelStyle}>
@@ -431,6 +435,17 @@ function MapOfficeForm({
         </div>
         <SubmitBtn busy={busy} label="Map Office" />
       </form>
+      <ConfirmDialog
+        open={open}
+        title="Map this office / division?"
+        description="This records a permanent office mapping for this work. Mappings cannot be edited or removed once submitted — it cannot be undone."
+        confirmLabel="Confirm Office Mapping"
+        danger
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => confirm()}
+        onCancel={cancel}
+      />
     </div>
   );
 }
