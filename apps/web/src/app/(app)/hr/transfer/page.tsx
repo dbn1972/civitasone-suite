@@ -6,28 +6,33 @@ import { TransferOrderCard, type TransferRow } from "./_components/TransferOrder
 import { TransferListFilters } from "./_components/TransferListFilters";
 
 async function getData(): Promise<LoaderResult<TransferRow[]>> {
-  const r = await fetchJson<unknown, TransferRow[]>("/api/v1/hrms/lifecycle/transfers", [], {
+  // NOTE: this used to fall back to GET /api/v1/hrms/transfers whenever the
+  // lifecycle endpoint's array came back empty -- but that fallback path
+  // does not exist as a backend route at all, so it always failed. Net
+  // effect: a genuinely-empty (successful, zero-transfers) result from the
+  // real endpoint was silently overwritten by a guaranteed error, turning a
+  // true "no transfers" empty state into a false "couldn't load" one. Call
+  // the one real endpoint directly.
+  return fetchJson<unknown, TransferRow[]>("/api/v1/hrms/lifecycle/transfers", [], {
     telemetryKey: "hr.transfer",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: TransferRow[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  // Fallback to the non-lifecycle endpoint if the lifecycle endpoint returns nothing
-  if (r.data.length === 0) {
-    return fetchJson<unknown, TransferRow[]>("/api/v1/hrms/transfers", [], {
-      telemetryKey: "hr.transfer.fallback",
-      mapResponse: (p) => {
-        const arr = Array.isArray(p) ? p : (p as { data?: TransferRow[] })?.data;
-        return Array.isArray(arr) ? arr : null;
-      },
-    });
-  }
-  return r;
 }
 
 export default async function TransferPage() {
-  const { data: items, source } = await getData();
+  const { data: raw, source } = await getData();
+  // The raw backend row only carries employeeId/fromDeptId/toDeptId (no
+  // joined names yet) -- degrade to the id rather than rendering a blank
+  // DataTable cell, matching the fallback TransferOrderCard already uses.
+  const items: TransferRow[] = raw.map((i) => ({
+    ...i,
+    employee: i.employee ?? i.employeeId ?? "Unknown",
+    fromOffice: i.fromOffice ?? i.fromDeptId ?? "—",
+    toOffice: i.toOffice ?? i.toDeptId ?? "—",
+  }));
 
   const completed = items.filter((i) => ["completed", "joined"].includes(i.status)).length;
   const pending   = items.filter((i) => ["pending", "initiated"].includes(i.status)).length;
@@ -52,7 +57,7 @@ export default async function TransferPage() {
         back="/hr"
         actions={<TransferWithApproval />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
 
       <StatGrid>
         <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Transfers"    value={items.length} />
@@ -78,7 +83,7 @@ export default async function TransferPage() {
           pageSize={15}
           emptyIcon="📍"
           emptyTitle="No transfer orders"
-          emptyMessage="Transfer orders appear here once issued. Use '+ Initiate Transfer' to move an employee to another office."
+          emptyMessage="Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office."
         />
       </Card>
     </main>
