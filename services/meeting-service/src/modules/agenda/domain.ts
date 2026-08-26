@@ -16,6 +16,7 @@
  * _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
  */
 import { httpError } from "../../shared/context.js";
+import { TERMINAL_STATES } from "../meeting-core/domain.js";
 
 // ─── Domain vocabularies (mirror the migration CHECK-able value sets) ────────
 
@@ -168,13 +169,17 @@ export function applyReorder(order: readonly ReorderEntry[]): ReorderEntry[] {
 // ─── Lock enforcement (Req 3.4) ──────────────────────────────────────────────
 
 /**
- * Guard structural agenda mutations (add / reorder) against a locked agenda. Once a meeting
- * reaches `agenda_locked`, only an explicit chairperson unlock re-opens it (Req 3.4).
- * Throws `MEETING_AGENDA_LOCKED` (422) when the meeting status is agenda_locked.
+ * Guard structural agenda mutations (add / reorder) against a locked OR terminal meeting.
+ * Once a meeting reaches `agenda_locked`, only an explicit chairperson unlock re-opens it
+ * (Req 3.4). Once a meeting reaches a TERMINAL state — meeting-core's `TERMINAL_STATES`
+ * (`cancelled`, `archived`) — its agenda can never be mutated again either: previously this
+ * checked only the single literal `"agenda_locked"`, so a `cancelled` meeting's agenda stayed
+ * fully editable forever (the bug this fix closes). Throws `MEETING_AGENDA_LOCKED` (422) in
+ * both cases.
  */
 export function assertAgendaNotLocked(meetingStatus: string): void {
-  if (meetingStatus === "agenda_locked") {
-    throw httpError("MEETING_AGENDA_LOCKED", "agenda is locked; chairperson must unlock before modifying", {
+  if (meetingStatus === "agenda_locked" || (TERMINAL_STATES as readonly string[]).includes(meetingStatus)) {
+    throw httpError("MEETING_AGENDA_LOCKED", "agenda is locked or the meeting is in a terminal state; cannot modify", {
       meetingStatus,
     });
   }

@@ -71,19 +71,22 @@ function tenantQuery<T>(fn: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
 
 beforeAll(async () => {
   await tenantQuery(async (sql) => {
+    // chairperson_id: ACTOR — IDOR fix (Req 1.1): handleMeetingCancel now requires the caller to
+    // be this meeting's own chairperson/secretary; this file's writes all publish as ACTOR, so
+    // ACTOR is seeded as the chair directly on both fixture meetings below.
     await sql`
       insert into meeting.meetings
-        (id, tenant_id, type, title, status, financial_year, scheduled_at, meeting_number, created_by, updated_by)
+        (id, tenant_id, type, title, status, financial_year, scheduled_at, meeting_number, chairperson_id, created_by, updated_by)
       values (${MEETING_NEVER_STARTED}, ${TENANT}, 'committee', 'Never-Started Test Meeting', 'draft',
-        '2025-26', ${new Date(Date.now() + 7 * 86400000).toISOString()}, ${"NS/2025-26/" + MEETING_NEVER_STARTED.slice(0, 8)}, ${ACTOR}, ${ACTOR})`;
+        '2025-26', ${new Date(Date.now() + 7 * 86400000).toISOString()}, ${"NS/2025-26/" + MEETING_NEVER_STARTED.slice(0, 8)}, ${ACTOR}, ${ACTOR}, ${ACTOR})`;
 
     await sql`
       insert into meeting.meetings
         (id, tenant_id, type, title, status, financial_year, scheduled_at, actual_start_at,
-         quorum_established, adjournment_reason, meeting_number, created_by, updated_by)
+         quorum_established, adjournment_reason, meeting_number, chairperson_id, created_by, updated_by)
       values (${MEETING_STARTED_THEN_CANCELLED}, ${TENANT}, 'committee', 'Started-Then-Cancelled Test Meeting', 'adjourned',
         '2025-26', '2025-06-15T10:00:00Z', '2025-06-15T10:05:00Z', true, 'called off',
-        ${"SC/2025-26/" + MEETING_STARTED_THEN_CANCELLED.slice(0, 8)}, ${ACTOR}, ${ACTOR})`;
+        ${"SC/2025-26/" + MEETING_STARTED_THEN_CANCELLED.slice(0, 8)}, ${ACTOR}, ${ACTOR}, ${ACTOR})`;
   });
 });
 

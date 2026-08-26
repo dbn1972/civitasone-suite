@@ -21,6 +21,38 @@
  */
 import { httpError } from "../../shared/context.js";
 
+// ─── Self-or-standing check (IDOR fix, Req 5.2, 5.5, 5.6) ─────────────────────
+
+/**
+ * True iff `actorId` may RSVP/nominate on behalf of the participant identified by
+ * `participantEmployeeId`. `routes.ts`'s own doc comment states the intended model — "the
+ * invited member acts on their own invitation" — but the route never checked it (any
+ * `committee_member` in the tenant could respond/nominate for a stranger). Two ways to pass:
+ *   1. Self: `actorId === participantEmployeeId` — the invitee acting for themselves.
+ *   2. On-behalf-of: `actorId` is recorded as the MEETING's own chairperson or secretary.
+ *      `participant/routes.ts` already deliberately admits `committee_secretary` /
+ *      `committee_chairperson` / admins alongside `committee_member` into
+ *      `MEMBER_ACTION_ROLES` for these two endpoints (RBAC doc comment: "members + chairperson
+ *      + secretariat + admins) may call these") — real-world precedent for a secretariat
+ *      recording an RSVP received by phone/paper on behalf of a member. This on-behalf-of
+ *      branch is grounded in DB-verifiable meeting ownership (not a bare role claim) so it
+ *      stays meaningful even where role information is unavailable (the consumer — see
+ *      `consumer.ts`'s `assertCanActOnParticipant`, which additionally allows committee-roster
+ *      chair/secretary standing, not just the meeting's own stamped `chairpersonId`/
+ *      `secretaryId`).
+ * A `null` `meeting` (defensive; should not happen once the parent-existence guard has run)
+ * falls through to self-only.
+ */
+export function canActOnParticipant(
+  actorId: string,
+  participantEmployeeId: string,
+  meeting: { chairpersonId: string | null; secretaryId: string | null } | null,
+): boolean {
+  if (actorId === participantEmployeeId) return true;
+  if (!meeting) return false;
+  return actorId === meeting.chairpersonId || actorId === meeting.secretaryId;
+}
+
 // ─── Domain vocabularies (mirror the migration value sets) ───────────────────
 
 /** Participant role within a meeting (Req 5.1). */

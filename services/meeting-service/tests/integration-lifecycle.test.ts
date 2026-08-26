@@ -38,15 +38,25 @@ import { registerDecisionConsumers } from "../src/modules/decision/consumer.js";
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "e1a1a1a1-2201-4000-8000-000000000001";
 const COMMITTEE = "e2b2b2b2-2201-4000-8000-000000000001";
-const ACTOR = "e3c3c3c3-2201-4000-8000-000000000001";
 const CHAIR = "e4d4d4d4-2201-4000-8000-000000000001";
 const SECRETARY = "e5e5e5e5-2201-4000-8000-000000000001";
+// IDOR fix (Req 1.1): update/transition/cancel now require the caller to actually be the
+// meeting's own chairperson/secretary. This suite's fixtures always set chairpersonId: CHAIR,
+// so ACTOR is aliased to CHAIR here (rather than a distinct identity) purely so every existing
+// write in this file keeps passing the new ownership check — none of these tests are ABOUT
+// ownership (that's integration-ownership-gaps.test.ts), they exercise the state machine.
+const ACTOR = CHAIR;
 const MEMBER_A = "e6f6f6f6-2201-4000-8000-000000000001";
 const MEMBER_B = "e6f6f6f6-2201-4000-8000-000000000002";
 const MEMBER_C = "e6f6f6f6-2201-4000-8000-000000000003";
 
 // IDs generated during lifecycle
 let MEETING_ID: string;
+// The meeting's own scheduledAt (set in Step 1) — fix 7's attendance check-in bound (Req 6.1)
+// requires checkInAt to be within 24h of it, so Step 6 stamps check-ins near THIS instant
+// instead of real wall-clock "now" (the meeting is deliberately scheduled 14 days out, for
+// agenda's own submission-deadline prerequisite in Step 2).
+let MEETING_SCHEDULED_AT: string;
 let AGENDA_ITEM_ID: string;
 let PARTICIPANT_IDS: string[];
 let DECISION_ID: string;
@@ -225,7 +235,12 @@ describe("Full meeting lifecycle (create → schedule → conduct → close)", (
   // ───── Step 1: Create Meeting ─────────────────────────────────────────────
   it("Step 1: creates a meeting (route → 202, then consumer writes to DB)", async () => {
     MEETING_ID = randomUUID();
+    // Back to 14d out: agenda/domain.ts's submission deadline (default 7 days before the
+    // meeting) needs real lead time, so scheduledAt can't be moved close to "now". Fix 7's
+    // attendance timestamp bound is instead satisfied at Step 6 by stamping checkInAt near
+    // MEETING_SCHEDULED_AT itself (not real wall-clock "now") — see that step below.
     const scheduledAt = new Date(Date.now() + 14 * 86400000).toISOString();
+    MEETING_SCHEDULED_AT = scheduledAt;
 
     // Route returns 202 (command queued)
     const res = await app.inject({
@@ -399,7 +414,9 @@ describe("Full meeting lifecycle (create → schedule → conduct → close)", (
   it("Step 6: starts the meeting with quorum verification via attendance", async () => {
     // First: mark attendance for enough members to meet quorum (2 required)
     const attendanceIds = [randomUUID(), randomUUID()];
-    const now = new Date().toISOString();
+    // 10 minutes before the meeting's own scheduledAt — comfortably inside fix 7's 24h
+    // tolerance window (real wall-clock "now" is ~14 days away from it, which is not).
+    const now = new Date(Date.parse(MEETING_SCHEDULED_AT) - 10 * 60000).toISOString();
 
     await run(msg(COMMANDS.attendanceCheckIn, {
       attendanceId: attendanceIds[0],

@@ -118,14 +118,25 @@ beforeAll(async () => {
       VALUES (${randomUUID()}, ${TENANT}, ${COMMITTEE}, ${m.memberId}, ${m.role}, '2025-01-01', 'active', true, ${ACTOR}, ${ACTOR})`;
     });
   }
+
+  // Fix 5 (timezone): config-registry's `meeting.tenant_timezone` defaults to "+00:00"
+  // (behavior-preserving for a tenant that has configured nothing), so this tenant explicitly
+  // configures IST — the platform's real deployment timezone — to prove the fix actually
+  // converts `time_of_day` using it, rather than only exercising the (unchanged) UTC default.
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    await sql`
+    INSERT INTO meeting.config_entries (id, tenant_id, namespace, config_key, value, created_by, updated_by)
+    VALUES (${randomUUID()}, ${TENANT}, 'meeting_policy', 'meeting.tenant_timezone', ${'"+05:30"'}::jsonb, ${ACTOR}, ${ACTOR})`;
+  });
 });
 
 afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("meeting series: time_of_day is silently treated as UTC", () => {
-  it("BUG: a series configured for '10:00' materialises instances at 10:00 UTC, not 10:00 tenant-local", async () => {
+describe("meeting series: time_of_day is converted using the tenant's configured timezone", () => {
+  it("a series configured for '10:00' with tenant timezone +05:30 (IST) materialises instances at 04:30 UTC (10:00 IST), not 10:00 UTC", async () => {
     const seriesId = randomUUID();
     await run(
       msg(COMMANDS.meetingSeriesCreate, {
@@ -150,18 +161,17 @@ describe("meeting series: time_of_day is silently treated as UTC", () => {
 
     for (const row of instances) {
       const d = new Date(row.scheduled_at);
-      // The persisted instant is EXACTLY 10:00:00.000 UTC — i.e. "10:00" was written straight
-      // through with a hardcoded Z, not converted from any tenant-local zone. For an IST
-      // deployment (UTC+5:30) this is 15:30 local, not the 10:00 a secretary configured.
-      expect(d.getUTCHours()).toBe(10);
-      expect(d.getUTCMinutes()).toBe(0);
+      // 10:00 IST (+05:30) = 04:30 UTC. Fixed: the tenant's configured offset is now applied
+      // instead of a hardcoded literal "Z" (UTC).
+      expect(d.getUTCHours()).toBe(4);
+      expect(d.getUTCMinutes()).toBe(30);
       expect(d.getUTCSeconds()).toBe(0);
     }
   });
 });
 
-describe("meeting series: dayOfMonth/dayOfWeek are captured but never used to compute instance dates", () => {
-  it("BUG: dayOfMonth=15 has no effect — every monthly instance lands on startDate's day (the 5th)", async () => {
+describe("meeting series: dayOfMonth/dayOfWeek are honoured when computing instance dates", () => {
+  it("dayOfMonth=15 is honoured — every monthly instance lands on the 15th, not startDate's day (the 5th)", async () => {
     const seriesId = randomUUID();
     await run(
       msg(COMMANDS.meetingSeriesCreate, {
@@ -191,13 +201,13 @@ describe("meeting series: dayOfMonth/dayOfWeek are captured but never used to co
 
     for (const row of instances) {
       const d = new Date(row.scheduled_at);
-      // BUG: every instance is on day 5 (startDate's day), never day 15 (the configured
-      // dayOfMonth). If dayOfMonth were honoured, this would be 15.
-      expect(d.getUTCDate()).toBe(5);
+      // Fixed: every instance lands on day 15 (the configured dayOfMonth), not day 5
+      // (startDate's own day).
+      expect(d.getUTCDate()).toBe(15);
     }
   });
 
-  it("BUG: dayOfWeek is similarly ignored for weekly recurrence — instances stay pinned to startDate's weekday", async () => {
+  it("dayOfWeek is honoured for weekly recurrence — instances land on the configured weekday, not startDate's", async () => {
     const seriesId = randomUUID();
     // startDate 2027-07-05 is a Monday (UTC). Configure dayOfWeek=5 (Friday) — intent:
     // "every Friday" — but nothing in generateInstanceDates ever reads it.
@@ -227,8 +237,8 @@ describe("meeting series: dayOfMonth/dayOfWeek are captured but never used to co
 
     for (const row of instances) {
       const d = new Date(row.scheduled_at);
-      // BUG: every instance falls on Monday (1), never Friday (5) as dayOfWeek requested.
-      expect(d.getUTCDay()).toBe(1);
+      // Fixed: every instance falls on Friday (5), as dayOfWeek requested — never Monday (1).
+      expect(d.getUTCDay()).toBe(5);
     }
   });
 });

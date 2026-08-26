@@ -84,6 +84,12 @@ async function meetingStatus(meetingId: string): Promise<string> {
 
 beforeAll(async () => {
   await query(async (sql) => {
+    // Fix 8: meeting.meetings.committee_id now carries a real FK to meeting.committees — this
+    // fixture's meetings reference COMMITTEE, so a row for it must actually exist.
+    await sql`
+      insert into meeting.committees (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
+      values (${COMMITTEE}, ${TENANT}, 'Agenda Consumer Test Committee', 'ACC', 'standing', '2025-01-01', ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})
+      on conflict (id) do nothing`;
     await sql`
       insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, scheduled_at, duration_minutes, created_by, updated_by)
       values

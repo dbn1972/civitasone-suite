@@ -174,17 +174,39 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
     const room = await repo.getRoomById(ctx.tenantId, body.roomId);
     if (!room) throw httpError("MEETING_NOT_FOUND", "room not found");
 
-    // Synchronous fast conflict pre-check (Req 14.3): a room double-booking → 409. The consumer +
-    // the DB EXCLUDE constraint remain the ultimate race guard.
+    // Synchronous fast conflict pre-check (Req 14.3, P28): a room double-booking → 409, always
+    // (hard block; the consumer + the DB EXCLUDE constraint remain the ultimate race guard). A
+    // mandatory-PARTICIPANT clash is also a 409 by default — but only a WARNING the caller must
+    // explicitly acknowledge to proceed (`acknowledgeConflicts`), mirroring this service's
+    // existing warn-with-waiver precedent for short-notice scheduling
+    // (`meeting-core`'s `shortNoticeWaiver`) rather than a hard, unconditional block: unlike a
+    // room, a person's OWN calendar conflict is their call to accept (double-booked chairs are
+    // common in practice), so "blocking is the safer default... unless acknowledged" fits better
+    // here than an unconditional hard block.
     const report = await repo.checkConflicts(ctx.tenantId, {
       window: { start: new Date(body.startAt), end: new Date(body.endAt) },
       roomId: body.roomId,
+      ...(body.participantIds && body.participantIds.length > 0 ? { participantIds: body.participantIds } : {}),
     });
     if (report.room.length > 0) {
       throw httpError("ROOM_DOUBLE_BOOKED", "room is already booked for an overlapping period", {
         roomId: body.roomId,
         conflicts: report.room.map((c) => ({ bookingId: c.id ?? null, startAt: c.startAt.toISOString(), endAt: c.endAt.toISOString() })),
       });
+    }
+    if (report.participants.length > 0 && !body.acknowledgeConflicts) {
+      throw httpError(
+        "CALENDAR_CONFLICT",
+        "one or more mandatory participants have a conflicting commitment in this window; pass acknowledgeConflicts to book anyway",
+        {
+          conflicts: report.participants.map((c) => ({
+            participantId: c.participantId,
+            startAt: c.start.toISOString(),
+            endAt: c.end.toISOString(),
+            ...(c.ref ? { ref: c.ref } : {}),
+          })),
+        },
+      );
     }
 
     const accepted = await commands.roomBook(ctx, body);

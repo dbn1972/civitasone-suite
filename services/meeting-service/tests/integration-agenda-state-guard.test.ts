@@ -38,9 +38,13 @@ import { registerMeetingCoreConsumers } from "../src/modules/meeting-core/consum
 import { registerAgendaConsumers } from "../src/modules/agenda/consumer.js";
 
 const TENANT = randomUUID();
-const ACTOR = randomUUID();
 const CHAIR = randomUUID();
 const SECRETARY = randomUUID();
+// IDOR fix (Req 1.1): meetingTransition/meetingCancel now require the caller to be this
+// meeting's own chairperson/secretary. Both fixture meetings below are chaired by CHAIR, so
+// ACTOR is aliased to it — this file is about the agenda-lock/terminal-state guard, not
+// ownership (that's integration-ownership-gaps.test.ts).
+const ACTOR = CHAIR;
 
 const handlers = new Map<string, (msg: CommandEnvelope<any>) => Promise<void>>();
 registerMeetingCoreConsumers((topic, h) => handlers.set(topic, h as any));
@@ -148,53 +152,67 @@ describe("agenda: mutations survive a cancelled meeting (only 'agenda_locked' is
     expect((transitionsOut as any[])[0].n).toBe(0);
   });
 
-  it("BUG: a NEW agenda item can still be submitted onto the cancelled meeting", async () => {
+  it("a NEW agenda item is rejected on the cancelled meeting", async () => {
     const newItemId = randomUUID();
-    await run(
-      msg(COMMANDS.agendaItemSubmit, {
-        agendaItemId: newItemId,
-        meetingId,
-        tenantId: TENANT,
-        title: "Submitted AFTER cancellation",
-        outcomeType: "information",
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.agendaItemSubmit, {
+          agendaItemId: newItemId,
+          meetingId,
+          tenantId: TENANT,
+          title: "Submitted AFTER cancellation",
+          outcomeType: "information",
+        }),
+      ),
+    ).rejects.toThrow();
     const item = await readAgendaItem(newItemId);
-    // A cancelled meeting accepted a brand-new agenda item with no error, no rejection.
-    expect(item).toBeTruthy();
-    expect(item.status).toBe("proposed");
+    // A cancelled meeting must never accept a brand-new agenda item.
+    expect(item).toBeFalsy();
   });
 
-  it("BUG: an existing agenda item can still be edited on the cancelled meeting", async () => {
-    await run(
-      msg(COMMANDS.agendaItemUpdate, {
-        meetingId,
-        tenantId: TENANT,
-        agendaItemId: survivingItemId,
-        version: 1,
-        patch: { title: "Edited AFTER cancellation", durationMinutes: 99 },
-      }),
-    );
+  it("an existing agenda item can no longer be edited on the cancelled meeting", async () => {
+    await expect(
+      run(
+        msg(COMMANDS.agendaItemUpdate, {
+          meetingId,
+          tenantId: TENANT,
+          agendaItemId: survivingItemId,
+          version: 1,
+          patch: { title: "Edited AFTER cancellation", durationMinutes: 99 },
+        }),
+      ),
+    ).rejects.toThrow();
     const item = await readAgendaItem(survivingItemId);
-    expect(item.title).toBe("Edited AFTER cancellation");
-    expect(item.duration_minutes).toBe(99);
+    expect(item.title).not.toBe("Edited AFTER cancellation");
+    expect(item.duration_minutes).not.toBe(99);
   });
 
-  it("BUG: an agenda item can still be withdrawn on the cancelled meeting", async () => {
-    await run(
-      msg(COMMANDS.agendaItemWithdraw, {
-        meetingId,
-        tenantId: TENANT,
-        agendaItemId: survivingItemId,
-        version: 2,
-        reason: "withdrawn AFTER cancellation",
-      }),
-    );
-    const item = await readAgendaItem(survivingItemId);
-    expect(item.status).toBe("withdrawn");
+  it("an agenda item can no longer be withdrawn (even redundantly) on the cancelled meeting", async () => {
+    // By this point survivingItemId is ALREADY "withdrawn" — fix 6's cancel cascade
+    // (meeting-core/consumer.ts's `cascadeMeetingCancel`) marks every surviving agenda item
+    // moot the instant its meeting is cancelled, in the "sets up" step above. This test proves
+    // the terminal-state guard independently blocks the mutation too (defense in depth: the
+    // guard must reject the write BEFORE any version/bijection check, not rely on the cascade
+    // alone) — so it captures the item's version beforehand and asserts the rejected call never
+    // bumped it further, rather than asserting a status that's already true for another reason.
+    const before = await readAgendaItem(survivingItemId);
+    expect(before.status).toBe("withdrawn"); // sanity: the cascade already did this
+    await expect(
+      run(
+        msg(COMMANDS.agendaItemWithdraw, {
+          meetingId,
+          tenantId: TENANT,
+          agendaItemId: survivingItemId,
+          version: before.version,
+          reason: "withdrawn AFTER cancellation",
+        }),
+      ),
+    ).rejects.toThrow();
+    const after = await readAgendaItem(survivingItemId);
+    expect(after.version).toBe(before.version); // rejected before any write — no further bump
   });
 
-  it("BUG: the agenda can still be reordered on a (separately isolated) cancelled meeting", async () => {
+  it("the agenda can no longer be reordered on a (separately isolated) cancelled meeting", async () => {
     // Isolated fixture (its own meeting) rather than reusing `meetingId`: the reorder command
     // requires its payload to be an exact bijection over ALL of the meeting's non-withdrawn
     // items (agenda/consumer.ts ~449-462), so a fresh two-item meeting keeps this test's
@@ -224,21 +242,33 @@ describe("agenda: mutations survive a cancelled meeting (only 'agenda_locked' is
     reorderMeeting = await readMeeting(reorderMeetingId);
     expect(reorderMeeting.status).toBe("cancelled");
 
-    await run(
-      msg(COMMANDS.agendaReorder, {
-        meetingId: reorderMeetingId,
-        tenantId: TENANT,
-        order: [
-          { agendaItemId: itemY, sequence: 1 },
-          { agendaItemId: itemX, sequence: 2 },
-        ],
-      }),
-    );
+    // Fix 6's cancel cascade already marked both items "withdrawn" as part of the cancel above
+    // (same mechanism as the previous test) — the reorder attempt below must still be rejected
+    // by the terminal-state guard itself (not merely by the bijection check finding no
+    // non-withdrawn items left to reorder).
+    const xBefore = await readAgendaItem(itemX);
+    const yBefore = await readAgendaItem(itemY);
+    expect(xBefore.status).toBe("withdrawn");
+    expect(yBefore.status).toBe("withdrawn");
+
+    await expect(
+      run(
+        msg(COMMANDS.agendaReorder, {
+          meetingId: reorderMeetingId,
+          tenantId: TENANT,
+          order: [
+            { agendaItemId: itemY, sequence: 1 },
+            { agendaItemId: itemX, sequence: 2 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow();
 
     const y = await readAgendaItem(itemY);
     const x = await readAgendaItem(itemX);
-    // The reorder was accepted and applied on a cancelled meeting.
-    expect(y.sequence).toBe(1);
-    expect(x.sequence).toBe(2);
+    // The reorder was rejected outright — sequences remain whatever they were (submission
+    // order: X=1, Y=2), never the attempted swap (Y=1, X=2).
+    expect(x.sequence).toBe(1);
+    expect(y.sequence).toBe(2);
   });
 });

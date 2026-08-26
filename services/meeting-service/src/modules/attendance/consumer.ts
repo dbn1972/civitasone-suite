@@ -56,6 +56,7 @@ import {
   type QuorumAttendee,
   type QuorumRule,
 } from "./domain.js";
+import { assertWithinMeetingWindow, assertCheckOutAfterCheckIn } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "attendance";
@@ -126,6 +127,7 @@ interface MeetingContext {
   type: string;
   committeeId: string | null;
   actualStartAt: Date | null;
+  scheduledAt: Date | null;
   quorumEstablished: boolean;
 }
 
@@ -138,6 +140,7 @@ async function loadMeeting(tx: DrizzleTx, meetingId: string, tenantId: string): 
       type: meetings.type,
       committeeId: meetings.committeeId,
       actualStartAt: meetings.actualStartAt,
+      scheduledAt: meetings.scheduledAt,
       quorumEstablished: meetings.quorumEstablished,
     })
     .from(meetings)
@@ -341,6 +344,13 @@ async function handleCheckIn(msg: CommandEnvelope<CheckInPayload>): Promise<void
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return; // unknown meeting → nothing to do (route 404s before publishing)
 
+    // Req 6.1 timestamp-bounds fix: checkInAt had no relation to the meeting's own schedule.
+    try {
+      assertWithinMeetingWindow(checkInAt, meeting.scheduledAt, "checkInAt");
+    } catch (err) {
+      asPermanent(err);
+    }
+
     // Req 6.2: only an invited participant may check in.
     const participant = await loadParticipant(tx, p.meetingId, p.participantId, msg.tenantId);
     try {
@@ -416,13 +426,41 @@ async function handleCheckIn(msg: CommandEnvelope<CheckInPayload>): Promise<void
   await cache.invalidate(cache.makeKey(msg.tenantId, MEETING_RESOURCE, p.meetingId));
 }
 
-/** attendance.check_out — stamp `check_out_at` on the participant's existing record (Req 6.6). */
+/**
+ * attendance.check_out — stamp `check_out_at` on the participant's existing record (Req 6.6).
+ * Req 6.6 timestamp-bounds fix: previously a blind UPDATE with no read of the existing
+ * `check_in_at` and no comparison — a check-out strictly BEFORE its own check-in (a negative
+ * attendance duration) was accepted. Now reads the record first and validates order + the
+ * meeting-window bound before applying the write.
+ */
 async function handleCheckOut(msg: CommandEnvelope<CheckOutPayload>): Promise<void> {
   const p = msg.payload;
   const checkOutAt = new Date(p.checkOutAt);
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const existing = await tx
+      .select({ id: attendanceRecords.id, checkInAt: attendanceRecords.checkInAt })
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.tenantId, msg.tenantId),
+          eq(attendanceRecords.meetingId, p.meetingId),
+          eq(attendanceRecords.participantId, p.participantId),
+        ),
+      )
+      .limit(1);
+    const record = existing[0];
+    if (!record) return; // no check-in on record → nothing to check out
+
+    const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
+    try {
+      assertCheckOutAfterCheckIn(record.checkInAt, checkOutAt);
+      assertWithinMeetingWindow(checkOutAt, meeting?.scheduledAt ?? null, "checkOutAt");
+    } catch (err) {
+      asPermanent(err);
+    }
 
     const updated = await tx
       .update(attendanceRecords)
@@ -432,17 +470,11 @@ async function handleCheckOut(msg: CommandEnvelope<CheckOutPayload>): Promise<vo
         updatedAt: new Date(),
         version: sql`${attendanceRecords.version} + 1`,
       })
-      .where(
-        and(
-          eq(attendanceRecords.tenantId, msg.tenantId),
-          eq(attendanceRecords.meetingId, p.meetingId),
-          eq(attendanceRecords.participantId, p.participantId),
-        ),
-      )
+      .where(eq(attendanceRecords.id, record.id))
       .returning({ id: attendanceRecords.id });
 
     const recordId = updated[0]?.id;
-    if (!recordId) return; // no check-in on record → nothing to check out
+    if (!recordId) return;
 
     await audit(tx, msg, "check_out", recordId);
   });

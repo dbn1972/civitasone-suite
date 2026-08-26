@@ -116,64 +116,68 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("attendance: checkInAt/checkOutAt accept any value, with no relation to the meeting or each other", () => {
-  it("BUG: a participant can be checked in for a meeting scheduled far in the future, right now", async () => {
+describe("attendance: checkInAt/checkOutAt are bounded against the meeting and each other", () => {
+  it("a check-in for a meeting scheduled far in the future is rejected", async () => {
     const farFuture = new Date(Date.now() + 365 * 86_400_000); // one year from now
     const { meetingId, participantId } = await seedMeetingWithParticipant(farFuture);
 
     const bogusCheckInAt = new Date().toISOString(); // "now" -- a year before the meeting happens
     const attendanceId = randomUUID();
-    await run(
-      msg(COMMANDS.attendanceCheckIn, {
-        attendanceId,
-        meetingId,
-        tenantId: TENANT,
-        participantId,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: bogusCheckInAt,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, {
+          attendanceId,
+          meetingId,
+          tenantId: TENANT,
+          participantId,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: bogusCheckInAt,
+        }),
+      ),
+    ).rejects.toThrow();
 
     const rows = await tenantQuery(
       (sql) => sql`SELECT check_in_at FROM meeting.attendance_records WHERE id = ${attendanceId} AND tenant_id = ${TENANT}`,
     );
-    // Accepted with no rejection, even though check_in_at is ~1 year before the meeting's
-    // own scheduled_at -- no bound was ever compared.
-    expect((rows as any[]).length).toBe(1);
-    expect(new Date((rows as any[])[0].check_in_at).toISOString()).toBe(new Date(bogusCheckInAt).toISOString());
+    // Fixed: rejected before any row was persisted -- check_in_at ~1 year before the meeting's
+    // own scheduled_at is now outside the sane bound (attendance/validators.ts, Req 6.1).
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: checkInAt can be backdated years into the past, for a meeting scheduled today", async () => {
+  it("checkInAt backdated years into the past, for a meeting scheduled today, is rejected", async () => {
     const { meetingId, participantId } = await seedMeetingWithParticipant(new Date(Date.now() + 3_600_000));
 
     const yearsAgo = new Date("2015-01-01T09:00:00.000Z").toISOString();
     const attendanceId = randomUUID();
-    await run(
-      msg(COMMANDS.attendanceCheckIn, {
-        attendanceId,
-        meetingId,
-        tenantId: TENANT,
-        participantId,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: yearsAgo,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, {
+          attendanceId,
+          meetingId,
+          tenantId: TENANT,
+          participantId,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: yearsAgo,
+        }),
+      ),
+    ).rejects.toThrow();
 
     const rows = await tenantQuery(
       (sql) => sql`SELECT check_in_at FROM meeting.attendance_records WHERE id = ${attendanceId} AND tenant_id = ${TENANT}`,
     );
-    expect(new Date((rows as any[])[0].check_in_at).getUTCFullYear()).toBe(2015);
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: checkOutAt can be set strictly BEFORE checkInAt — a negative attendance duration persists", async () => {
+  it("checkOutAt strictly BEFORE checkInAt is rejected -- no negative attendance duration persists", async () => {
     const { meetingId, participantId } = await seedMeetingWithParticipant(new Date(Date.now() + 3_600_000));
 
     const checkInAt = new Date();
     const checkOutAt = new Date(checkInAt.getTime() - 60 * 60_000); // one hour BEFORE check-in
 
     const attendanceId = randomUUID();
+    // The check-in ITSELF is legitimate (well within the meeting's window) and must succeed.
     await run(
       msg(COMMANDS.attendanceCheckIn, {
         attendanceId,
@@ -185,43 +189,47 @@ describe("attendance: checkInAt/checkOutAt accept any value, with no relation to
         checkInAt: checkInAt.toISOString(),
       }),
     );
-    await run(
-      msg(COMMANDS.attendanceCheckOut, {
-        meetingId,
-        tenantId: TENANT,
-        participantId,
-        checkOutAt: checkOutAt.toISOString(),
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckOut, {
+          meetingId,
+          tenantId: TENANT,
+          participantId,
+          checkOutAt: checkOutAt.toISOString(),
+        }),
+      ),
+    ).rejects.toThrow();
 
     const rows = await tenantQuery(
       (sql) => sql`SELECT check_in_at, check_out_at FROM meeting.attendance_records WHERE id = ${attendanceId} AND tenant_id = ${TENANT}`,
     );
     const row = (rows as any[])[0];
-    const persistedIn = new Date(row.check_in_at).getTime();
-    const persistedOut = new Date(row.check_out_at).getTime();
-    // BUG: the UPDATE succeeded with check_out_at < check_in_at -- a negative duration, with
-    // no application-level or database-level rejection.
-    expect(persistedOut).toBeLessThan(persistedIn);
+    // Fixed: the check-in persisted (it was valid), but check_out_at was never written -- the
+    // rejected checkout leaves it NULL rather than a negative duration.
+    expect(row.check_in_at).not.toBeNull();
+    expect(row.check_out_at).toBeNull();
   });
 
-  it("the database itself has no CHECK constraint preventing check_out_at < check_in_at (defense-in-depth gap)", async () => {
+  it("the database itself now rejects check_out_at < check_in_at (fix 8 CHECK constraint, defense-in-depth)", async () => {
     const { meetingId, participantId } = await seedMeetingWithParticipant(new Date(Date.now() + 3_600_000));
     const id = randomUUID();
     const checkIn = new Date();
     const checkOut = new Date(checkIn.getTime() - 5 * 3_600_000); // 5 hours before check-in
 
     // Direct INSERT against the schema, bypassing the application layer entirely -- proves the
-    // invariant is not enforced at the data layer either.
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.attendance_records
-        (id, tenant_id, meeting_id, participant_id, method, check_in_at, check_out_at, mode, status, created_by, updated_by)
-      VALUES
-        (${id}, ${TENANT}, ${meetingId}, ${participantId}, 'manual', ${checkIn.toISOString()}, ${checkOut.toISOString()}, 'in_person', 'present', ${ACTOR}, ${ACTOR})`,
-    );
+    // invariant is now enforced at the data layer too (chk_attendance_checkout_after_checkin,
+    // migrations/0009_core_lifecycle_constraints.sql).
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.attendance_records
+          (id, tenant_id, meeting_id, participant_id, method, check_in_at, check_out_at, mode, status, created_by, updated_by)
+        VALUES
+          (${id}, ${TENANT}, ${meetingId}, ${participantId}, 'manual', ${checkIn.toISOString()}, ${checkOut.toISOString()}, 'in_person', 'present', ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
 
     const rows = await tenantQuery((sql) => sql`SELECT check_in_at, check_out_at FROM meeting.attendance_records WHERE id = ${id}`);
-    expect((rows as any[]).length).toBe(1); // the DB accepted it -- no CHECK constraint fired
+    expect((rows as any[]).length).toBe(0); // the INSERT never committed
   });
 });
