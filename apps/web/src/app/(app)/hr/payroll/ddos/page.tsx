@@ -37,7 +37,7 @@ export default async function DdosPage() {
         subtitle="Drawing & Disbursing Officer (DDO) master data and department mapping for multi-DDO payroll."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="🏛️" iconBg="var(--infobg)" label="Total DDOs" value={ddos.length} />

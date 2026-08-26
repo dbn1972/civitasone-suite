@@ -5,6 +5,10 @@ import { RequestAdvanceForm } from "./RequestAdvanceForm";
 
 type ApiAdvance = {
   id: string;
+  employeeId?: string;
+  // The backend (services/hrms-service's hrms_salary_advances table) never
+  // actually nests this -- it only ever returns a flat employeeId -- but
+  // keep the optional nested shape too in case a future join adds it.
   employee?: { name?: string; employeeNo?: string };
   amountMinor: number;
   purpose: string;
@@ -31,12 +35,15 @@ function formatINR(minor: number | undefined): string {
   return `₹${(minor / 100).toLocaleString("en-IN")}`;
 }
 
-function mapAdvances(rows: ApiAdvance[]): Row[] {
+export function mapAdvances(rows: ApiAdvance[]): Row[] {
   return rows.map((a) => ({
     id: a.id,
+    // Regression: the backend never nests an "employee" object (only a
+    // flat employeeId), so this always rendered "--" for every row. Fall
+    // back to the id so the row is at least identifiable instead of blank.
     employee: a.employee?.name
       ? `${a.employee.name} (${a.employee.employeeNo ?? "—"})`
-      : "—",
+      : a.employeeId ?? "—",
     amount: formatINR(a.amountMinor),
     purpose: a.purpose ?? "—",
     recoveryMonths: `${String(a.recoveryMonths).padStart(2, "0")} mo`,
@@ -77,7 +84,7 @@ export default async function AdvancesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />

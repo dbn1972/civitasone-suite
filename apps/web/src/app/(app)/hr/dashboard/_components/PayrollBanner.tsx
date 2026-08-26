@@ -12,7 +12,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
         <div className="pb-label">Payroll Processing</div>
         <div className="pb-sub">{monthName} cycle · {headcount.toLocaleString("en-IN")} employees · Deadline in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>
       </div>
-      <Link href="/hr/payroll/period" className="pb-btn">Start Run →</Link>
+      <Link href="/hr/payroll" className="pb-btn">Start Run →</Link>
       <style>{`
         .payroll-banner { margin:10px 0 0;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px; }
         .pb-icon { flex-shrink:0; }

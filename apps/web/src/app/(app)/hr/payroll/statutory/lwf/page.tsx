@@ -41,7 +41,7 @@ export default async function LwfPage() {
         subtitle="State-wise LWF employee/employer contribution configuration."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🤝" iconBg="var(--infobg)" label="States Configured" value={rows.length} />
         <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Emp Contribution" value={formatMoney(totalEmpContribMinor)} />

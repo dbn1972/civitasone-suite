@@ -73,7 +73,7 @@ export default async function CtcConfigPage() {
         subtitle="Cost-to-Company component rules used to break a CTC figure into pay components."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="⚙️" iconBg="var(--infobg)" label="Configured Components" value={config.length} />
         <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Employer-Cost" value={employerComponents} />

@@ -50,7 +50,7 @@ export default async function GratuityPage() {
         subtitle="Gratuity computation on separation (Payment of Gratuity Act, 1972)."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={rows.length} />

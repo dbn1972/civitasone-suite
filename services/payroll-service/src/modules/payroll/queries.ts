@@ -13,11 +13,43 @@ function mapRunStatus(status: string): "draft" | "processing" | "completed" | "p
   return "processing";
 }
 
-export async function getSlip(id: string, tenantId: string): Promise<PayrollSlipRow | null> {
-  return cache.getOrLoad<PayrollSlipRow>(
+export async function getSlip(id: string, tenantId: string) {
+  // The raw PayrollSlipRow (below) is a straight DB row: it has
+  // netPayMinor (not netMinor), and no employeeName/department at all --
+  // only employeeId/employeeNo. The frontend detail pages
+  // (hr/payroll/slips/[id] and hr/payroll/salary-slips/[id]) read
+  // employeeName/department and slip.netMinor, matching the *list*
+  // endpoint's enriched/renamed shape (listSalarySlips, above) instead --
+  // so a single slip rendered "Rs.NaN" for Net Pay and fell back to the raw
+  // employeeId for identity. Apply the same hrms-client enrichment and the
+  // same field rename here so a single slip and a listed slip agree.
+  const row = await cache.getOrLoad<PayrollSlipRow>(
     cache.makeKey(tenantId, "payroll_slip", id),
     () => repo.findSlipById(id, tenantId)
   );
+  if (!row) return null;
+  const empMap = await fetchEmployeeSummaries(tenantId);
+  const emp = empMap.get(row.employeeId);
+  return {
+    ...row,
+    employeeName: emp?.fullName ?? row.employeeNo,
+    department: emp?.departmentName ?? "—",
+    // Two frontend consumers of this one endpoint expect two different
+    // naming conventions for the same minor-unit values -- hr/payroll/
+    // salary-slips/[id]/page.tsx reads *Minor-suffixed names, while
+    // hr/payroll/slips/[id]/page.tsx (via getSlipById -> SalarySlipSummary)
+    // reads the unsuffixed names listSalarySlips already returns for the
+    // list view. Provide both rather than picking one and leaving the
+    // other page broken; the two frontend surfaces should eventually be
+    // consolidated onto one shape (see PR notes).
+    netMinor: Number(row.netPayMinor),
+    net: Number(row.netPayMinor),
+    grossMinor: Number(row.grossMinor),
+    gross: Number(row.grossMinor),
+    basicMinor: Number(row.basicMinor),
+    totalDeductionsMinor: Number(row.totalDeductionsMinor),
+    deductions: Number(row.totalDeductionsMinor),
+  };
 }
 
 export async function getRun(id: string, tenantId: string): Promise<PayrollRunRow | null> {

@@ -40,7 +40,7 @@ export default async function ArrearsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Arrears Computation" subtitle="Arrears due to DA revision, promotions, and pay fixation." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={items.filter((i) => i.status === "pending").length} />

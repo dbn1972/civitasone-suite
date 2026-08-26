@@ -57,7 +57,7 @@ export default async function DisciplinaryListPage() {
         back="/hr"
         actions={<Link href="/hr/vigilance" className="btn-outline">Vigilance Only</Link>}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
         <StatCard icon="🔴" iconBg="#fff1f0" label="Major (Vigilance)" value={major} />
@@ -65,9 +65,15 @@ export default async function DisciplinaryListPage() {
         <StatCard icon="📋" iconBg="#f5f5f5" label="Active / Open" value={open} />
       </StatGrid>
       <Card title="All Disciplinary Cases">
+        {/* Regression fix: this table had no row-link props at all, so the
+            fully-built disciplinary/[id] detail page (breadcrumbs, case
+            fields, e-Office raise action) was completely unreachable except
+            by hand-typing a case UUID into the URL. */}
         <DataTable<Row>
           columns={columns}
           rows={items}
+          rowLinkKey="id"
+          rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
           filterPlaceholder="Filter by employee, department or charge…"

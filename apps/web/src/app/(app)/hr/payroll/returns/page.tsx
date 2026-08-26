@@ -196,7 +196,7 @@ export default async function ReturnsPage({
         back="/hr/payroll"
       />
 
-      <DataSourceBadge source={overallSource} />
+      <DataSourceBadge source={overallSource} message="Couldn't load — showing nothing" />
       {force && <StripForceParam />}
 
       {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
@@ -217,7 +217,7 @@ export default async function ReturnsPage({
             </>
           ) : f24Lookup.state === "error" ? (
             <>
-              <DataSourceBadge source="error" />
+              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
               <EmptyState
                 icon="⚠️"
                 title={"Could not load Form-24Q for FY " + fy + " " + quarter}
@@ -273,7 +273,7 @@ export default async function ReturnsPage({
         <div className="pad">
           {f26 === null ? (
             <>
-              <DataSourceBadge source="error" />
+              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
               <EmptyState
                 icon="⚠️"
                 title={"Could not load Form-26Q for FY " + fy + " " + quarter}
@@ -284,7 +284,7 @@ export default async function ReturnsPage({
             <EmptyState icon="🧾" title="Non-salary TDS not yet populated" message={f26.note} />
           ) : (
             <>
-              <DataSourceBadge source={src26 === "error" ? "error" : "api"} />
+              <DataSourceBadge source={src26 === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
               <StatGrid>
                 <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f26.deducteeCount} />
                 <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
