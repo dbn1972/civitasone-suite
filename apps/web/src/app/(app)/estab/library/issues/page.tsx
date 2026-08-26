@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getLibraryBooks, getLibraryIssues } from "@/app/_data/loaders";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { IssueBookForm } from "./IssueBookForm";
 import { IssuesTable } from "./IssuesTable";
 
@@ -40,7 +41,15 @@ export default async function LibraryIssuesPage({
         <StatCard icon="✅" iconBg="#ecfdf3" label="Returned" value={errored ? "—" : returnedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
-      <IssueBookForm books={issuableBooks} defaultBookId={searchParams?.bookId} />
+      {booksSource === "error" ? (
+        // The catalogue failed to load — do NOT let the form claim "no copies
+        // are available to issue", which is a different (false) statement.
+        <Card title="Issue a book">
+          <RefreshErrorState error={toHumanError("load", { area: "book catalogue" })} backHref="/estab/library" />
+        </Card>
+      ) : (
+        <IssueBookForm books={issuableBooks} defaultBookId={searchParams?.bookId} />
+      )}
 
       <Card title="Loans">
         {issuesSource === "error" && issues.length === 0 ? (
