@@ -57,7 +57,7 @@ describe("PeriodCloseCockpitPage", () => {
     const ui = await PeriodCloseCockpitPage();
     render(ui);
 
-    const badges = screen.getAllByText("Showing saved information");
+    const badges = screen.getAllByText("Couldn't load — showing nothing");
     expect(badges.length).toBeGreaterThan(0);
     expect(screen.queryByText("No periods tracked yet")).not.toBeInTheDocument();
   });

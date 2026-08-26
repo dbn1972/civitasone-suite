@@ -101,12 +101,12 @@ describe("RateConfigConsole", () => {
   it("renders an empty state (not the error badge) when rate heads are genuinely empty", () => {
     render(<RateConfigConsole {...baseProps()} rateHeads={[]} selectedRateHeadId={null} />);
     expect(screen.getByText("No rate heads configured")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the saved-information badge (not an empty state) when rate heads source is 'error'", () => {
     render(<RateConfigConsole {...baseProps()} rateHeads={[]} rateHeadsSource="error" selectedRateHeadId={null} />);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByText("No rate heads configured")).not.toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe("RateConfigConsole", () => {
   it("renders the saved-information badge for rate slabs on source 'error'", () => {
     render(<RateConfigConsole {...baseProps()} slabsSource="error" />);
     fireEvent.click(screen.getByText("Rate Slabs"));
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("renders penalty rules with the annual rate formatted as a percent", () => {
@@ -150,7 +150,7 @@ describe("RateConfigConsole", () => {
   it("renders the saved-information badge for penalty rules on source 'error'", () => {
     render(<RateConfigConsole {...baseProps()} penaltyRulesSource="error" />);
     fireEvent.click(screen.getByText("Penalty Rules"));
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("renders rebate rules with the discount formatted as a percent", () => {
@@ -162,7 +162,7 @@ describe("RateConfigConsole", () => {
   it("renders the saved-information badge for rebate rules on source 'error'", () => {
     render(<RateConfigConsole {...baseProps()} rebateRulesSource="error" />);
     fireEvent.click(screen.getByText("Rebate Rules"));
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("prompts to select a rate head on scoped tabs when none is selected", () => {

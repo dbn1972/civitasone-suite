@@ -63,7 +63,7 @@ describe("InsuranceClaimsPage", () => {
     const ui = await InsuranceClaimsPage({});
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.queryByText("Total Claims")).not.toBeInTheDocument();
   });
 });

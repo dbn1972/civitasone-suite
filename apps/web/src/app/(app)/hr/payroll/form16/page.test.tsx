@@ -50,7 +50,7 @@ describe("Form16Page", () => {
     render(ui);
 
     expect(screen.getByText("No Form-16 filing run for FY 2025-26")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the error affordance (not the empty-state copy) on a real failure like 403", async () => {
@@ -59,7 +59,7 @@ describe("Form16Page", () => {
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.getByText("Could not load the Form-16 filing run for FY 2025-26")).toBeInTheDocument();
     expect(screen.queryByText("No Form-16 filing run for FY 2025-26")).not.toBeInTheDocument();
   });

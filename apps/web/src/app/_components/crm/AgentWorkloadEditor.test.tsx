@@ -17,7 +17,7 @@ describe("AgentWorkloadEditor (AS-003 admin)", () => {
   it("gates open-lead counts on a failed load (dash + saved-info badge)", async () => {
     vi.mocked(as.getAgents).mockResolvedValue({ data: [], source: "error" });
     render(<AgentWorkloadEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument());
     expect(screen.getByText(/workload unavailable/i)).toBeInTheDocument();
   });
 

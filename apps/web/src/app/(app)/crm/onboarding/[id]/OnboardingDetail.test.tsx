@@ -130,7 +130,7 @@ describe("OnboardingDetail (P1-9)", () => {
   it("shows the saved-info badge when the case fails to load", async () => {
     vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: null, source: "error" });
     render(<OnboardingDetail id="c1" />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
   });
 });

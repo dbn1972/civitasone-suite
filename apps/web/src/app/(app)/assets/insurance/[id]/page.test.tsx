@@ -83,7 +83,7 @@ describe("PolicyDetailPage", () => {
     const ui = await PolicyDetailPage({ params: { id: "p1" } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(
       screen.queryByText("The requested policy could not be found. It may have lapsed or the link is incorrect."),
     ).not.toBeInTheDocument();

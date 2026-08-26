@@ -21,7 +21,7 @@ describe("AddressesEditor (CM-001)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getAddresses).mockResolvedValue({ data: [], source: "error" });
     render(<AddressesEditor ownerType="contact" ownerId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
   });
 
   it("blocks save when PIN is not a valid 6 digits", async () => {

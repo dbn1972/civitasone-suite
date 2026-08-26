@@ -34,6 +34,6 @@ describe("GratuityPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await GratuityPage();
     render(ui);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

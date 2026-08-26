@@ -9,7 +9,7 @@ vi.mock("./ThemeTable", () => ({
 }));
 vi.mock("../../../_components/DataSourceBadge", () => ({
   DataSourceBadge: ({ source }: { source: string }) =>
-    source === "error" ? <div>Showing saved information</div> : null,
+    source === "error" ? <div>Couldn't load — showing nothing</div> : null,
 }));
 
 import VoiceOfCitizenPage from "./page";
@@ -74,6 +74,6 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
       source: "error" as const,
     });
     render(await VoiceOfCitizenPage());
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

@@ -60,7 +60,7 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [], source: "error" });
     render(<QuotationBuilder />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("builds a line and computes the grand total with tax via money.ts", async () => {

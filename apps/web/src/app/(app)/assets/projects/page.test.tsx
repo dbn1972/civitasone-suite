@@ -64,7 +64,7 @@ describe("ProjectsAucPage", () => {
     const ui = await ProjectsAucPage();
     render(ui);
 
-    const badges = screen.getAllByText("Showing saved information");
+    const badges = screen.getAllByText("Couldn't load — showing nothing");
     expect(badges.length).toBeGreaterThan(0);
     expect(screen.queryByText("No AUC projects yet")).not.toBeInTheDocument();
   });

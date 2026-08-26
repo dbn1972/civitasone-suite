@@ -19,7 +19,7 @@ describe("Customer360Panel (CM-004)", () => {
   it("gates every stat on error → shows dashes + saved-info badge, never a 0", async () => {
     vi.mocked(aa.getContact360).mockResolvedValue({ data: empty, source: "error" });
     render(<Customer360Panel subjectType="contact" subjectId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     // Stat values render "—" not "0" on error
     expect(screen.queryByText("0")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
@@ -125,7 +125,7 @@ describe("Customer360Panel (CM-004)", () => {
     const section = await screen.findByRole("region", { name: /communication and campaign activity/i });
     // Real zeros render "0", and the block is NOT the saved-info error state.
     expect(within(section).getAllByText("0").length).toBeGreaterThan(0);
-    expect(within(section).queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(within(section).queryByText(/couldn.t load/i)).not.toBeInTheDocument();
     expect(within(section).getByText("₹0.00")).toBeInTheDocument();
     // The still-external stub remains a "—" link-across, never fabricated.
     const cases = screen.getByText(/Cases \(Helpdesk\)/i).parentElement!;
@@ -136,7 +136,7 @@ describe("Customer360Panel (CM-004)", () => {
     vi.mocked(aa.getContact360).mockResolvedValue({ data: empty, source: "error" });
     render(<Customer360Panel subjectType="contact" subjectId="c1" />);
     const section = await screen.findByRole("region", { name: /communication and campaign activity/i });
-    expect(within(section).getByText(/showing saved information/i)).toBeInTheDocument();
+    expect(within(section).getByText(/couldn.t load/i)).toBeInTheDocument();
     // No fabricated zero and no synced marker in the error state.
     expect(within(section).queryByText("0")).not.toBeInTheDocument();
     expect(within(section).queryByText(/In CRM · synced/i)).not.toBeInTheDocument();

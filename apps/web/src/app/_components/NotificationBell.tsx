@@ -5,6 +5,25 @@ import Link from "next/link";
 import { useSSEConnection } from "./useSSEConnection";
 import { SSEConnectionStatus } from "./SSEConnectionStatus";
 
+/**
+ * Where a notification's "Review" action should navigate. A truthful
+ * `metadata.reviewUrl` supplied by the service wins; otherwise we map known
+ * notification types to their REAL in-app route. These must resolve: there is
+ * no `/payroll/*` surface (payroll lives under `/hr/payroll`), so a payroll-run
+ * alert points at `/hr/payroll/runs`, never a 404.
+ */
+export function notificationActionUrl(
+  type: string | undefined,
+  metadata: Record<string, unknown> | undefined,
+): string | undefined {
+  const reviewUrl = metadata?.reviewUrl;
+  if (typeof reviewUrl === "string" && reviewUrl) return reviewUrl;
+  const kind = type?.split(".")[0];
+  if (kind === "leave_approval") return "/hr/leave";
+  if (kind === "payroll_run") return "/hr/payroll/runs";
+  return undefined;
+}
+
 export interface Notification {
   id: string;
   title: string;
@@ -104,14 +123,10 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         createdAt: payload.createdAt,
         read: false,
         icon: MODULE_ICONS[payload.type?.split(".")[0] ?? ""] ?? "🔔",
-        actionUrl: ((): string | undefined => {
-          const _u = (payload.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined;
-          if (_u) return _u;
-          const _t = payload.type?.split(".")[0];
-          if (_t === "leave_approval") return "/hr/leave";
-          if (_t === "payroll_run") return "/payroll/runs";
-          return undefined;
-        })()
+        actionUrl: notificationActionUrl(
+          payload.type,
+          payload.metadata as Record<string, unknown> | undefined,
+        )
       };
       setItems((prev) => [newNotification, ...prev].slice(0, MAX_DROPDOWN_ITEMS));
       setLocalUnreadCount((prev) => prev + 1);
@@ -156,9 +171,10 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
             createdAt: n.createdAt,
             read: !!n.readAt,
             icon: MODULE_ICONS[n.type?.split(".")[0] ?? ""] ?? "🔔",
-            actionUrl: (n.metadata as Record<string, unknown> | undefined)?.reviewUrl as string | undefined
-              ?? (n.type?.split(".")[0] === "leave_approval" ? "/hr/leave"
-              : n.type?.split(".")[0] === "payroll_run" ? "/payroll/runs" : undefined),
+            actionUrl: notificationActionUrl(
+              n.type,
+              n.metadata as Record<string, unknown> | undefined,
+            ),
           }));
         setItems(mapped);
         setLocalUnreadCount(mapped.filter((n) => !n.read).length);

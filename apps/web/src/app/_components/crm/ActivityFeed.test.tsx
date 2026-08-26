@@ -17,7 +17,7 @@ describe("ActivityFeed (AC-001)", () => {
   it("shows the saved-info badge on a failed load and no fabricated timeline", async () => {
     vi.mocked(aa.getActivities).mockResolvedValue({ data: [], source: "error" });
     render(<ActivityFeed subjectType="contact" subjectId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/timeline unavailable/i)).toBeInTheDocument();
   });
 

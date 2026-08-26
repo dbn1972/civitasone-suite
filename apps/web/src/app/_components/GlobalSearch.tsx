@@ -82,9 +82,29 @@ const MODULE_PATH_MAP: Record<string, string> = {
   admin: "/admin",
 };
 
+// Modules whose detail record actually lives at `/<base>/<id>`. The gateway
+// search-route (services/gateway-service/src/search-route.ts) returns only
+// `{ module, id }` with NO canonical URL, and for every OTHER module
+// `/<base>/<id>` is not a real App Router route — navigating there 404s. So we
+// deep-link only where the detail route exists, and otherwise send the clerk to
+// the module's real landing page (all MODULE_PATH_MAP base paths resolve).
+// Verified against the (app) route tree on 2026-08-26.
+// HANDOFF: if the gateway search-route is extended to return a canonical `url`
+// per hit, prefer that here and this allowlist becomes removable.
+const MODULES_WITH_DETAIL_ROUTE = new Set<string>([
+  "payroll",
+  "projects",
+  "assets",
+  "grants",
+  "reports",
+  "contracts",
+]);
+
 function buildResultHref(result: SearchResult): string {
   const basePath = MODULE_PATH_MAP[result.module] ?? `/${result.module}`;
-  return `${basePath}/${result.id}`;
+  return MODULES_WITH_DETAIL_ROUTE.has(result.module)
+    ? `${basePath}/${result.id}`
+    : basePath;
 }
 
 // ── Debounce hook ─────────────────────────────────────────────────────────────

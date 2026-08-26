@@ -70,6 +70,6 @@ describe("OpeningBalancesPage", () => {
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

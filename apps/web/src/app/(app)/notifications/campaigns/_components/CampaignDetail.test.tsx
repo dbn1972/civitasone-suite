@@ -68,7 +68,7 @@ describe("CampaignDetail (MK-001 / MK-004)", () => {
   it("shows the saved-information badge on a failed metrics load, not fabricated zeros", async () => {
     vi.mocked(api.getCampaignMetrics).mockResolvedValue({ data: null, source: "error" });
     render(<CampaignDetail campaignId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
     // no fabricated "Recipients 0" tile when metrics failed
     expect(screen.queryByText("Recipients")).not.toBeInTheDocument();
   });
@@ -105,6 +105,6 @@ describe("CampaignDetail (MK-001 / MK-004)", () => {
   it("gates campaign fields on a failed load", async () => {
     vi.mocked(api.getCampaign).mockResolvedValue({ data: null, source: "error" });
     render(<CampaignDetail campaignId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
   });
 });
