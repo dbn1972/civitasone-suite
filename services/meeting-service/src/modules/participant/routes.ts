@@ -49,6 +49,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   participantAddSchema,
@@ -77,6 +78,14 @@ const MEMBER_ACTION_ROLES = [
   "super_admin",
   "admin",
 ];
+/**
+ * `MEMBER_ACTION_ROLES` minus `committee_member` (IDOR fix, Req 5.2, 5.5, 5.6): these roles
+ * already have documented "on behalf of" standing to manage RSVPs (this file's own RBAC
+ * comment above: "members + chairperson + secretariat + admins) may call these"), so they are
+ * exempt from the self-only check `domain.canActOnParticipant` otherwise enforces. A caller
+ * holding ONLY `committee_member` must be the invited participant themselves.
+ */
+const ON_BEHALF_ROLES = ["meeting_admin", "committee_secretary", "committee_chairperson", "tenant_admin", "super_admin", "admin"];
 /** Read access to the participant roster + quorum status (all meeting roles within the tenant). */
 const READ_ROLES = [
   "meeting_admin",
@@ -127,6 +136,20 @@ function listMeta(offset: number, limit: number, total: number) {
 async function assertMeetingExists(tenantId: string, meetingId: string): Promise<void> {
   const meeting = await repo.getMeetingRef(tenantId, meetingId);
   if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+}
+
+/**
+ * Self-or-on-behalf-of check (IDOR fix, Req 5.2, 5.5, 5.6): `requireRole(MEMBER_ACTION_ROLES)`
+ * alone only proved the caller holds a relevant role somewhere in the tenant — it never
+ * compared them to the target participant's own `employeeId`, so any `committee_member` could
+ * RSVP/nominate for a stranger. `ON_BEHALF_ROLES` callers (secretariat/chair/admins) keep
+ * their documented on-behalf-of standing tenant-wide; a plain `committee_member` must be the
+ * invited participant themselves.
+ */
+function assertCanActOnParticipant(ctx: RequestContext, participantEmployeeId: string): void {
+  if (hasAnyRole(ctx, ON_BEHALF_ROLES)) return;
+  if (ctx.actorId === participantEmployeeId) return;
+  throw new HttpError(403, "FORBIDDEN", "you may only act on your own invitation");
 }
 
 export async function participantRoutes(app: FastifyInstance): Promise<void> {
@@ -250,6 +273,7 @@ export async function participantRoutes(app: FastifyInstance): Promise<void> {
     const body = participantRespondSchema.parse(req.body);
     const existing = await repo.getParticipant(ctx.tenantId, meetingId, participantId);
     if (!existing) throw new HttpError(404, "MEETING_NOT_FOUND", "participant not found");
+    assertCanActOnParticipant(ctx, existing.employeeId);
     const accepted = await commands.participantRespond(ctx, meetingId, participantId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -264,6 +288,7 @@ export async function participantRoutes(app: FastifyInstance): Promise<void> {
     const body = participantNominateSchema.parse(req.body);
     const existing = await repo.getParticipant(ctx.tenantId, meetingId, participantId);
     if (!existing) throw new HttpError(404, "MEETING_NOT_FOUND", "participant not found");
+    assertCanActOnParticipant(ctx, existing.employeeId);
     const accepted = await commands.participantNominate(ctx, meetingId, participantId, body);
     return reply.code(202).send({ data: accepted });
   });

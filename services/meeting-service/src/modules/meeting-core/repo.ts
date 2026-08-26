@@ -39,6 +39,7 @@ import {
   type MeetingSeriesRow,
   type MeetingStateTransitionRow,
 } from "./schema.js";
+import { committeeMembers } from "../committee/schema.js";
 import type {
   ListMeetingsQuery,
   ListMeetingTypesQuery,
@@ -122,6 +123,38 @@ async function loadMeetingById(tenantId: string, meetingId: string): Promise<Mee
     .where(and(eq(meetings.tenantId, tenantId), eq(meetings.id, meetingId)))
     .limit(1));
   return rows[0] ?? null;
+}
+
+/**
+ * Ownership/standing check (IDOR fix, Req 1.1): true iff `actorId` holds one of `roles` on
+ * `committeeId`'s ACTIVE roster. Extends direct `chairperson_id`/`secretary_id` ownership
+ * (`domain.isDirectMeetingOwner`) to committee members serving the same function (a deputy
+ * secretary or co-chair not yet the single name stamped on the meeting row) — not to "any
+ * `committee_secretary`/`committee_chairperson` in the tenant", which is the exact gap this
+ * fix closes. Route-side helper (uses the module `db`, outside a transaction); the consumer's
+ * write-side check runs the equivalent query inline on its own `tx` (mirrors this module's
+ * existing cross-module committee_members reads, e.g. `computeLiveQuorum`).
+ */
+export async function hasCommitteeStanding(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+  roles: readonly string[],
+): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: committeeMembers.id })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+        inArray(committeeMembers.role, [...roles]),
+      ),
+    )
+    .limit(1));
+  return rows.length > 0;
 }
 
 /**

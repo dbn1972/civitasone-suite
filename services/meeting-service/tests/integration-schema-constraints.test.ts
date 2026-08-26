@@ -75,62 +75,67 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("meeting.meetings: no CHECK on enum columns, no FK on committee_id/series_id", () => {
-  it("BUG: an invalid `status` (outside the 10-state vocabulary) is accepted by the database", async () => {
+describe("meeting.meetings: CHECK on enum columns + FK on committee_id/series_id (fix 8)", () => {
+  it("an invalid `status` (outside the 10-state vocabulary) is rejected by the database", async () => {
     const id = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.meetings (id, tenant_id, type, title, status, chairperson_id, secretary_id, created_by, updated_by)
-      VALUES (${id}, ${TENANT}, 'committee', 'Constraint-gap fixture', 'not_a_real_status', ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.meetings (id, tenant_id, type, title, status, chairperson_id, secretary_id, created_by, updated_by)
+        VALUES (${id}, ${TENANT}, 'committee', 'Constraint-gap fixture', 'not_a_real_status', ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT status FROM meeting.meetings WHERE id = ${id}`);
-    // meeting-core/domain.ts's MEETING_STATES (draft|scheduled|agenda_locked|in_progress|
-    // adjourned|minutes_pending|minutes_approved|closed|archived|cancelled) would reject this
-    // at the Zod/domain layer -- the database happily stored it.
-    expect((rows as any[])[0].status).toBe("not_a_real_status");
+    // chk_meetings_status (migrations/0009) now echoes meeting-core/domain.ts's MEETING_STATES.
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: an invalid `type` and `confidentiality_level` are both accepted", async () => {
+  it("an invalid `type` and `confidentiality_level` are both rejected", async () => {
     const id = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.meetings (id, tenant_id, type, title, confidentiality_level, chairperson_id, secretary_id, created_by, updated_by)
-      VALUES (${id}, ${TENANT}, 'not_a_real_type', 'Constraint-gap fixture 2', 'not_a_real_level', ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.meetings (id, tenant_id, type, title, confidentiality_level, chairperson_id, secretary_id, created_by, updated_by)
+        VALUES (${id}, ${TENANT}, 'not_a_real_type', 'Constraint-gap fixture 2', 'not_a_real_level', ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT type, confidentiality_level FROM meeting.meetings WHERE id = ${id}`);
-    expect((rows as any[])[0].type).toBe("not_a_real_type");
-    expect((rows as any[])[0].confidentiality_level).toBe("not_a_real_level");
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: committee_id pointing at a non-existent committee is accepted (no FK)", async () => {
+  it("committee_id pointing at a non-existent committee is rejected (fk_meetings_committee_id)", async () => {
     const id = randomUUID();
     const ghostCommitteeId = randomUUID(); // guaranteed not to exist in meeting.committees
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.meetings (id, tenant_id, type, title, committee_id, chairperson_id, secretary_id, created_by, updated_by)
-      VALUES (${id}, ${TENANT}, 'committee', 'Orphan committee_id fixture', ${ghostCommitteeId}, ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
-    );
-    const rows = await tenantQuery((sql) => sql`SELECT committee_id FROM meeting.meetings WHERE id = ${id}`);
-    expect((rows as any[])[0].committee_id).toBe(ghostCommitteeId);
     const committeeExists = await tenantQuery((sql) => sql`SELECT 1 AS x FROM meeting.committees WHERE id = ${ghostCommitteeId}`);
     expect((committeeExists as any[]).length).toBe(0); // confirmed: truly does not exist
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.meetings (id, tenant_id, type, title, committee_id, chairperson_id, secretary_id, created_by, updated_by)
+        VALUES (${id}, ${TENANT}, 'committee', 'Orphan committee_id fixture', ${ghostCommitteeId}, ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
+    const rows = await tenantQuery((sql) => sql`SELECT committee_id FROM meeting.meetings WHERE id = ${id}`);
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: series_id pointing at a non-existent series is accepted (no FK)", async () => {
+  it("series_id pointing at a non-existent series is rejected (fk_meetings_series_id)", async () => {
     const id = randomUUID();
     const ghostSeriesId = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.meetings (id, tenant_id, type, title, series_id, chairperson_id, secretary_id, created_by, updated_by)
-      VALUES (${id}, ${TENANT}, 'committee', 'Orphan series_id fixture', ${ghostSeriesId}, ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.meetings (id, tenant_id, type, title, series_id, chairperson_id, secretary_id, created_by, updated_by)
+        VALUES (${id}, ${TENANT}, 'committee', 'Orphan series_id fixture', ${ghostSeriesId}, ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT series_id FROM meeting.meetings WHERE id = ${id}`);
-    expect((rows as any[])[0].series_id).toBe(ghostSeriesId);
+    expect((rows as any[]).length).toBe(0);
   });
 });
 
-describe("meeting.participants: no CHECK on role/invitation_status/attendance_mode", () => {
-  it("BUG: an invalid role and invitation_status are both accepted", async () => {
+describe("meeting.participants: CHECK on role/invitation_status/attendance_mode (fix 8)", () => {
+  it("an invalid role and invitation_status are both rejected", async () => {
     const meetingId = randomUUID();
     await tenantQuery(
       (sql) => sql`
@@ -139,23 +144,24 @@ describe("meeting.participants: no CHECK on role/invitation_status/attendance_mo
     );
     const participantId = randomUUID();
     // NOTE: kept under 16 chars deliberately -- invitation_status is VARCHAR(16), and a
-    // longer bogus string would be rejected by the column WIDTH, not by any semantic CHECK.
-    // The point being proven is the absence of an enum CHECK, so the fixture must stay short
-    // enough to isolate that from the incidental width limit.
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.participants (id, tenant_id, meeting_id, employee_id, role, invitation_status, created_by, updated_by)
-      VALUES (${participantId}, ${TENANT}, ${meetingId}, ${randomUUID()}, 'bogus_role', 'bogus', ${ACTOR}, ${ACTOR})`,
-    );
+    // longer bogus string would be rejected by the column WIDTH, not by the semantic CHECK
+    // being proven here.
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.participants (id, tenant_id, meeting_id, employee_id, role, invitation_status, created_by, updated_by)
+        VALUES (${participantId}, ${TENANT}, ${meetingId}, ${randomUUID()}, 'bogus_role', 'bogus', ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT role, invitation_status FROM meeting.participants WHERE id = ${participantId}`);
-    // participant/domain.ts PARTICIPANT_ROLES / INVITATION_STATUSES would reject both values.
-    expect((rows as any[])[0].role).toBe("bogus_role");
-    expect((rows as any[])[0].invitation_status).toBe("bogus");
+    // chk_participants_role / chk_participants_invitation_status (migrations/0009) now echo
+    // participant/domain.ts's PARTICIPANT_ROLES / INVITATION_STATUSES.
+    expect((rows as any[]).length).toBe(0);
   });
 });
 
-describe("meeting.agenda_items: no CHECK on status/outcome_type, no FK on deferred_to", () => {
-  it("BUG: an invalid status and outcome_type are both accepted", async () => {
+describe("meeting.agenda_items: CHECK on status/outcome_type + FK on deferred_to (fix 8)", () => {
+  it("an invalid status and outcome_type are both rejected", async () => {
     const meetingId = randomUUID();
     await tenantQuery(
       (sql) => sql`
@@ -163,20 +169,21 @@ describe("meeting.agenda_items: no CHECK on status/outcome_type, no FK on deferr
       VALUES (${meetingId}, ${TENANT}, 'committee', 'Agenda constraint-gap fixture', ${randomUUID()}, ${randomUUID()}, ${ACTOR}, ${ACTOR})`,
     );
     // NOTE: bogus values kept under 16 chars deliberately -- outcome_type/status are both
-    // VARCHAR(16); a longer string would hit the column WIDTH, not a semantic CHECK, which
-    // would muddy the point (absence of an enum CHECK) being proven here.
+    // VARCHAR(16); a longer string would hit the column WIDTH, not the semantic CHECK being
+    // proven here.
     const itemId = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.agenda_items (id, tenant_id, meeting_id, sequence, title, outcome_type, status, created_by, updated_by)
-      VALUES (${itemId}, ${TENANT}, ${meetingId}, 1, 'Bad enum fixture', 'bogus_outcome', 'bogus', ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.agenda_items (id, tenant_id, meeting_id, sequence, title, outcome_type, status, created_by, updated_by)
+        VALUES (${itemId}, ${TENANT}, ${meetingId}, 1, 'Bad enum fixture', 'bogus_outcome', 'bogus', ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT outcome_type, status FROM meeting.agenda_items WHERE id = ${itemId}`);
-    expect((rows as any[])[0].outcome_type).toBe("bogus_outcome");
-    expect((rows as any[])[0].status).toBe("bogus");
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: deferred_to pointing at a non-existent agenda item is accepted (no self-referential FK)", async () => {
+  it("deferred_to pointing at a non-existent agenda item is rejected (fk_agenda_items_deferred_to)", async () => {
     const meetingId = randomUUID();
     await tenantQuery(
       (sql) => sql`
@@ -185,18 +192,20 @@ describe("meeting.agenda_items: no CHECK on status/outcome_type, no FK on deferr
     );
     const itemId = randomUUID();
     const ghostItemId = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.agenda_items (id, tenant_id, meeting_id, sequence, title, outcome_type, status, deferred_to, created_by, updated_by)
-      VALUES (${itemId}, ${TENANT}, ${meetingId}, 1, 'Orphan deferred_to fixture', 'discussion', 'deferred', ${ghostItemId}, ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.agenda_items (id, tenant_id, meeting_id, sequence, title, outcome_type, status, deferred_to, created_by, updated_by)
+        VALUES (${itemId}, ${TENANT}, ${meetingId}, 1, 'Orphan deferred_to fixture', 'discussion', 'deferred', ${ghostItemId}, ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery((sql) => sql`SELECT deferred_to FROM meeting.agenda_items WHERE id = ${itemId}`);
-    expect((rows as any[])[0].deferred_to).toBe(ghostItemId);
+    expect((rows as any[]).length).toBe(0);
   });
 });
 
-describe("meeting.attendance_records: no CHECK on method/mode/status", () => {
-  it("BUG: an invalid method, mode, and status are all accepted", async () => {
+describe("meeting.attendance_records: CHECK on method/mode/status (fix 8)", () => {
+  it("an invalid method, mode, and status are all rejected", async () => {
     const meetingId = randomUUID();
     await tenantQuery(
       (sql) => sql`
@@ -210,21 +219,21 @@ describe("meeting.attendance_records: no CHECK on method/mode/status", () => {
       VALUES (${participantId}, ${TENANT}, ${meetingId}, ${randomUUID()}, 'member', ${ACTOR}, ${ACTOR})`,
     );
     // NOTE: bogus values kept under 16 chars deliberately -- method/mode/status are all
-    // VARCHAR(16); a longer string would hit the column WIDTH, not a semantic CHECK, which
-    // would muddy the point (absence of an enum CHECK) being proven here.
+    // VARCHAR(16); a longer string would hit the column WIDTH, not the semantic CHECK being
+    // proven here.
     const attendanceId = randomUUID();
-    await tenantQuery(
-      (sql) => sql`
-      INSERT INTO meeting.attendance_records (id, tenant_id, meeting_id, participant_id, method, check_in_at, mode, status, created_by, updated_by)
-      VALUES (${attendanceId}, ${TENANT}, ${meetingId}, ${participantId}, 'bogus_method', now(), 'bogus_mode', 'bogus', ${ACTOR}, ${ACTOR})`,
-    );
+    await expect(
+      tenantQuery(
+        (sql) => sql`
+        INSERT INTO meeting.attendance_records (id, tenant_id, meeting_id, participant_id, method, check_in_at, mode, status, created_by, updated_by)
+        VALUES (${attendanceId}, ${TENANT}, ${meetingId}, ${participantId}, 'bogus_method', now(), 'bogus_mode', 'bogus', ${ACTOR}, ${ACTOR})`,
+      ),
+    ).rejects.toThrow();
     const rows = await tenantQuery(
       (sql) => sql`SELECT method, mode, status FROM meeting.attendance_records WHERE id = ${attendanceId}`,
     );
-    // attendance/domain.ts ATTENDANCE_METHODS / ATTENDANCE_MODES / ATTENDANCE_STATUSES would
-    // reject all three values -- the database stored them without complaint.
-    expect((rows as any[])[0].method).toBe("bogus_method");
-    expect((rows as any[])[0].mode).toBe("bogus_mode");
-    expect((rows as any[])[0].status).toBe("bogus");
+    // chk_attendance_method / chk_attendance_mode / chk_attendance_status (migrations/0009)
+    // now echo attendance/domain.ts's ATTENDANCE_METHODS / ATTENDANCE_MODES / ATTENDANCE_STATUSES.
+    expect((rows as any[]).length).toBe(0);
   });
 });

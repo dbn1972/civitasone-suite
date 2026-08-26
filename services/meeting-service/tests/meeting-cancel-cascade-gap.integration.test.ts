@@ -109,13 +109,15 @@ beforeAll(async () => {
     // open resolution, room booking, and VC session can already exist (in_progress -> adjourned
     // -> cancelled is a legal path per BASE_TRANSITIONS; cancel is not legal from in_progress
     // directly, so a real caller MUST pass through adjourned to get here with this state).
+    // chairperson_id: ACTOR — IDOR fix (Req 1.1): handleMeetingCancel (exercised in the "sanity"
+    // test below) now requires the caller to be this meeting's own chairperson/secretary.
     await sql`
       insert into meeting.meetings
         (id, tenant_id, type, title, status, committee_id, financial_year, scheduled_at,
-         actual_start_at, quorum_established, adjournment_reason, meeting_number, created_by, updated_by)
+         actual_start_at, quorum_established, adjournment_reason, meeting_number, chairperson_id, created_by, updated_by)
       values (${MEETING}, ${TENANT}, 'committee', 'Cancel-Cascade Test Meeting', 'adjourned', ${COMMITTEE},
         '2025-26', '2025-06-15T10:00:00Z', '2025-06-15T10:05:00Z', true, 'lunch break',
-        ${"CCT/2025-26/" + MEETING.slice(0, 8)}, ${ACTOR}, ${ACTOR})`;
+        ${"CCT/2025-26/" + MEETING.slice(0, 8)}, ${ACTOR}, ${ACTOR}, ${ACTOR})`;
 
     // Agenda item, still "accepted" — nothing should ever mark it moot.
     await sql`
@@ -168,50 +170,51 @@ describe("meeting cancel -> nothing downstream is cascaded", () => {
     expect(await meetingStatus()).toBe("cancelled");
   });
 
-  it.fails("[BUG] the agenda item should be marked moot/withdrawn once its meeting is cancelled", async () => {
+  it("the agenda item is marked moot (withdrawn) once its meeting is cancelled", async () => {
     const rows = await tenantQuery((sql) => sql`select status from meeting.agenda_items where id = ${AGENDA_ITEM}`);
-    // This currently stays "accepted" — proves the point either way, but frame the assertion
-    // as an explicit affirmative check so a future fix (any non-"accepted" moot-like status)
-    // makes this test fail loudly rather than silently no-op.
-    expect((rows as any[])[0].status).not.toBe("accepted");
+    // Framed as an explicit affirmative check (not just "not accepted") so a future regression
+    // that picks some OTHER non-"accepted" status fails loudly rather than silently passing.
+    expect((rows as any[])[0].status).toBe("withdrawn");
   });
 
-  it.fails("[BUG] the open resolution should be voided, not left voting_open, once its meeting is cancelled", async () => {
+  it("the open resolution is voided, not left voting_open, once its meeting is cancelled", async () => {
     const rows = await tenantQuery((sql) => sql`select status from meeting.resolutions where id = ${RESOLUTION}`);
-    expect((rows as any[])[0].status).not.toBe("voting_open");
+    expect((rows as any[])[0].status).toBe("invalid");
   });
 
-  it.fails("[BUG] the confirmed room booking should be released once its meeting is cancelled", async () => {
+  it("the confirmed room booking is released once its meeting is cancelled", async () => {
     const rows = await tenantQuery((sql) => sql`select status from meeting.room_bookings where id = ${ROOM_BOOKING}`);
-    expect((rows as any[])[0].status).not.toBe("confirmed");
+    expect((rows as any[])[0].status).toBe("cancelled");
   });
 
-  it.fails("[BUG] the active VC session should be ended once its meeting is cancelled", async () => {
-    const rows = await tenantQuery((sql) => sql`select status from meeting.vc_sessions where id = ${VC_SESSION}`);
-    expect((rows as any[])[0].status).not.toBe("active");
+  it("the active VC session is ended once its meeting is cancelled", async () => {
+    const rows = await tenantQuery((sql) => sql`select status, ended_at from meeting.vc_sessions where id = ${VC_SESSION}`);
+    expect((rows as any[])[0].status).toBe("ended");
+    expect((rows as any[])[0].ended_at).not.toBeNull();
   });
 
-  it("[BUG] participants should be notified that their meeting was cancelled", async () => {
+  it("participants are notified that their meeting was cancelled", async () => {
     // Contrast: participant/consumer.ts's invitationsSend path DOES emit notification.send
-    // correctly (Req 15.3) — the mechanism works. meeting-core's cancel handler just never
-    // calls it: zero notification.send rows were enqueued by the cancel above.
-    expect(await outboxCount("notification.send")).toBe(0);
+    // correctly (Req 15.3) — the mechanism works; meeting-core's cancel handler now uses it
+    // too. This fixture seeds no `meeting.participants` rows (only `committee_members`), so the
+    // cascade's committee-roster fallback is what fires here — MEMBER_A/MEMBER_B, at minimum.
+    expect(await outboxCount("notification.send")).toBeGreaterThanOrEqual(2);
   });
 
-  it("BUG: a member can still successfully cast a vote on the cancelled meeting's still-open resolution", async () => {
-    // handleVoteCast (voting/consumer.ts) only checks resolution.status === "voting_open" — it
-    // never looks at the parent meeting's status at all. Since cancel never touched the
-    // resolution, this exploit fully succeeds: a formal vote is cast, recorded, and will tally
-    // into a resolution NUMBER + DSC-hash-anchored official record on conclude, all on behalf of
-    // a meeting the system itself has recorded as "cancelled".
-    await run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBER_A, position: "for", tenantId: TENANT }));
+  it("a member can no longer cast a vote on the cancelled meeting's voided resolution", async () => {
+    // handleVoteCast (voting/consumer.ts) checks resolution.status === "voting_open" — the
+    // cascade above already flipped it to "invalid", so this is now rejected before a vote row
+    // is ever written, and the resolution stays "invalid" (never reverts to "voting_open").
+    await expect(
+      run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBER_A, position: "for", tenantId: TENANT })),
+    ).rejects.toThrow();
 
     const voteRows = await tenantQuery(
       (sql) => sql`select position from meeting.votes where resolution_id = ${RESOLUTION} and member_id = ${MEMBER_A} and tenant_id = ${TENANT}`,
     );
-    expect((voteRows as any[])[0]?.position).toBe("for");
+    expect((voteRows as any[]).length).toBe(0);
 
     const resRows = await tenantQuery((sql) => sql`select status from meeting.resolutions where id = ${RESOLUTION}`);
-    expect((resRows as any[])[0].status).toBe("voting_open"); // still open — conclude would succeed too
+    expect((resRows as any[])[0].status).toBe("invalid");
   });
 });

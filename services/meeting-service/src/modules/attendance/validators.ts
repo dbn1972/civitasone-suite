@@ -9,6 +9,7 @@
  * _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
  */
 import { z } from "zod";
+import { httpError } from "../../shared/context.js";
 import { ATTENDANCE_METHODS, ATTENDANCE_MODES, ATTENDANCE_STATUSES } from "./domain.js";
 
 const uuid = z.string().uuid();
@@ -102,6 +103,56 @@ export const generateQrSchema = z
   })
   .strict();
 export type GenerateQrInput = z.infer<typeof generateQrSchema>;
+
+// ─── Timestamp sanity bounds (Req 6.1, 6.6 — audit finding: previously unbounded) ─────────────
+//
+// These two asserts need the parent MEETING's `scheduledAt` (check-in/out) and, for a
+// check-out, the EXISTING record's `checkInAt` — neither is available to a Zod object schema
+// (which only sees the current request body), so they are plain exported functions the
+// consumer calls once it has loaded that context (mirrors `meeting-core/domain.ts`'s
+// `TransitionContext`-as-argument shape: pure, given its inputs).
+
+/**
+ * POLICY CALL: how far a check-in/check-out timestamp may sit from the meeting's own
+ * `scheduledAt` before it's rejected as clearly-wrong data. Deliberately generous (24h each
+ * side, not tied to `durationMinutes`) — early arrivals, marathon/multi-day sittings, VC clock
+ * skew, and next-day secretary corrections are all legitimate; the bound exists to catch
+ * obviously-bad data (a check-in a year off, a backdate to a past decade — this fix's own
+ * regression cases), not to police punctuality.
+ */
+export const ATTENDANCE_TIMESTAMP_TOLERANCE_HOURS = 24;
+const TOLERANCE_MS = ATTENDANCE_TIMESTAMP_TOLERANCE_HOURS * 60 * 60 * 1000;
+
+/**
+ * Assert `at` (a check-in or check-out instant) falls within the tolerance window of the
+ * meeting's own `scheduledAt`. A meeting with no `scheduledAt` (defensive; the column is
+ * nullable) has nothing to bound against and is always accepted. Throws
+ * `ATTENDANCE_INVALID_TIMESTAMP` (422).
+ */
+export function assertWithinMeetingWindow(at: Date, scheduledAt: Date | null, label: "checkInAt" | "checkOutAt"): void {
+  if (!scheduledAt) return;
+  if (Math.abs(at.getTime() - scheduledAt.getTime()) > TOLERANCE_MS) {
+    throw httpError(
+      "ATTENDANCE_INVALID_TIMESTAMP",
+      `${label} ${at.toISOString()} is more than ${ATTENDANCE_TIMESTAMP_TOLERANCE_HOURS}h from the meeting's scheduled time ${scheduledAt.toISOString()}`,
+      { label, at: at.toISOString(), scheduledAt: scheduledAt.toISOString(), toleranceHours: ATTENDANCE_TIMESTAMP_TOLERANCE_HOURS },
+    );
+  }
+}
+
+/**
+ * Assert `checkOutAt` is strictly after `checkInAt` (a negative attendance duration is never
+ * valid). Throws `ATTENDANCE_INVALID_TIMESTAMP` (422).
+ */
+export function assertCheckOutAfterCheckIn(checkInAt: Date, checkOutAt: Date): void {
+  if (checkOutAt.getTime() <= checkInAt.getTime()) {
+    throw httpError(
+      "ATTENDANCE_INVALID_TIMESTAMP",
+      `checkOutAt ${checkOutAt.toISOString()} must be strictly after checkInAt ${checkInAt.toISOString()}`,
+      { checkInAt: checkInAt.toISOString(), checkOutAt: checkOutAt.toISOString() },
+    );
+  }
+}
 
 // ─── Path / query params ─────────────────────────────────────────────────────
 

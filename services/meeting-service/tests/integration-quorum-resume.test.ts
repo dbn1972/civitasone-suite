@@ -61,7 +61,9 @@ beforeAll(async () => {
   await app.ready();
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
-    for (const t of ["attendance_records", "participants", "committee_members", "committees", "meeting_state_transitions", "meetings"]) {
+    // Order matters (fix 8: meeting.meetings.committee_id now carries a real FK to
+    // meeting.committees) — delete meetings (the child) before committees (the parent).
+    for (const t of ["attendance_records", "participants", "committee_members", "meeting_state_transitions", "meetings", "committees"]) {
       await sql.unsafe(`delete from meeting.${t} where tenant_id = '${TENANT}'`);
     }
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
@@ -77,11 +79,14 @@ beforeAll(async () => {
         values (${randomUUID()}, ${TENANT}, ${COMMITTEE}, ${m}, 'member', '2025-01-01', 'active', ${ACTOR}, ${ACTOR})`;
     }
     // Meeting is ADJOURNED but still carries a STALE quorum_established = true from when it started.
+    // chairperson_id: ACTOR — IDOR fix (Req 1.1): handleMeetingTransition (used below to resume
+    // in_progress) now requires the caller to be this meeting's own chairperson/secretary; this
+    // file's writes all publish as ACTOR, so ACTOR is seeded as the chair directly.
     await sql`
       insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, financial_year,
-        scheduled_at, actual_start_at, quorum_established, adjournment_reason, meeting_number, created_by, updated_by)
+        scheduled_at, actual_start_at, quorum_established, adjournment_reason, meeting_number, chairperson_id, created_by, updated_by)
       values (${MEETING}, ${TENANT}, 'committee', 'SC sitting', 'adjourned', ${COMMITTEE}, '2025-26',
-        '2025-06-15T10:00:00Z', '2025-06-15T10:05:00Z', true, 'lunch break', 'SC/2025-26/001', ${ACTOR}, ${ACTOR})`;
+        '2025-06-15T10:00:00Z', '2025-06-15T10:05:00Z', true, 'lunch break', 'SC/2025-26/001', ${ACTOR}, ${ACTOR}, ${ACTOR})`;
   });
   // Only 2 members remain present after the break (below the quorum of 3).
   await addPresentAttendee(MEMBERS[0]);
@@ -91,7 +96,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
-    for (const t of ["attendance_records", "participants", "committee_members", "committees", "meeting_state_transitions", "meetings"]) {
+    // Order matters (fix 8: meeting.meetings.committee_id now carries a real FK to
+    // meeting.committees) — delete meetings (the child) before committees (the parent).
+    for (const t of ["attendance_records", "participants", "committee_members", "meeting_state_transitions", "meetings", "committees"]) {
       await sql.unsafe(`delete from meeting.${t} where tenant_id = '${TENANT}'`);
     }
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;

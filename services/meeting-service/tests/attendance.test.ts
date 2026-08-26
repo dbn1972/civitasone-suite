@@ -140,8 +140,9 @@ afterAll(async () => {
     await tx.delete(attendanceRecords).where(eq(attendanceRecords.tenantId, TENANT));
     await tx.delete(participants).where(eq(participants.tenantId, TENANT));
     await tx.delete(committeeMembers).where(eq(committeeMembers.tenantId, TENANT));
-    await tx.delete(committees).where(eq(committees.tenantId, TENANT));
+    // meetings before committees (fix 8: meeting.meetings.committee_id now carries a real FK).
     await tx.delete(meetings).where(and(eq(meetings.tenantId, TENANT), eq(meetings.id, MEETING)));
+    await tx.delete(committees).where(eq(committees.tenantId, TENANT));
   }));
   await sqlClient.end();
 });

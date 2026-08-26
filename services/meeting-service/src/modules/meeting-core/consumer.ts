@@ -23,9 +23,10 @@
  * _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 14.5_
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, count } from "drizzle-orm";
+import { and, eq, isNull, inArray, notInArray, count, sql } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed, versionedUpdate, type DrizzleTx } from "../../shared/outbox.js";
@@ -35,17 +36,24 @@ import { meetings, meetingSeries, meetingStateTransitions, meetingTypes } from "
 import { agendaItems } from "../agenda/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { attendanceRecords } from "../attendance/schema.js";
+import { participants } from "../participant/schema.js";
+import { resolutions } from "../decision/schema.js";
+import { roomBookings } from "../calendar/schema.js";
+import { vcSessions } from "../vc-integration/schema.js";
 import { evaluateQuorum, type QuorumRule } from "../committee/domain.js";
 import {
   assertTransition,
   computeFinancialYear,
   computeNoticeDays,
   generateMeetingNumber,
+  isDirectMeetingOwner,
   isMeetingState,
   nextMeetingSequence,
+  CHAIR_STANDING_ROLES,
+  SECRETARIAL_STANDING_ROLES,
   type MeetingState,
 } from "./domain.js";
-import { getPolicyNumber, getPolicyBool } from "../config-registry/policy.js";
+import { getPolicyNumber, getPolicyBool, getPolicyString } from "../config-registry/policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "meeting";
@@ -195,6 +203,50 @@ function asPermanent(err: unknown): never {
   throw err;
 }
 
+/**
+ * Ownership/standing check (IDOR fix, Req 1.1, 1.3–1.6) — consumer-side defense-in-depth.
+ * `meeting-core/routes.ts`'s `assertMeetingOwnership` guards the HTTP boundary (where JWT
+ * roles are available, so admins get the documented bypass); THIS function guards the write
+ * itself, reachable independently of the route (this fix's own regression test invokes the
+ * handler directly to prove it). A `CommandEnvelope` carries only `actorId` — no role claim
+ * (see services/queue-service/src/bus.ts's `CommandEnvelope` shape) — so there is nothing
+ * here to safely trust for an admin bypass; this enforces the DB-verifiable ownership
+ * invariant (chairperson/secretary of THIS meeting, or matching committee standing)
+ * unconditionally for every caller. JUDGMENT CALL: this means a `meeting_admin`/
+ * `tenant_admin`/`super_admin` acting on a meeting they have no chair/secretary/committee
+ * relationship to is rejected here even though the route would have let them through — see
+ * the PR description for the full writeup of this tradeoff.
+ */
+async function assertMeetingOwnership(
+  tx: DrizzleTx,
+  actorId: string,
+  meeting: { id: string; tenantId: string; committeeId: string | null; chairpersonId: string | null; secretaryId: string | null },
+  standingRoles: readonly string[],
+): Promise<void> {
+  if (isDirectMeetingOwner(actorId, meeting)) return;
+  if (meeting.committeeId) {
+    const rows = await tx
+      .select({ id: committeeMembers.id })
+      .from(committeeMembers)
+      .where(
+        and(
+          eq(committeeMembers.tenantId, meeting.tenantId),
+          eq(committeeMembers.committeeId, meeting.committeeId),
+          eq(committeeMembers.memberId, actorId),
+          eq(committeeMembers.status, "active"),
+          inArray(committeeMembers.role, [...standingRoles]),
+        ),
+      )
+      .limit(1);
+    if (rows.length > 0) return;
+  }
+  throw new HttpError(
+    403,
+    "FORBIDDEN",
+    `actor ${actorId} lacks ownership standing (chairperson/secretary or committee standing) over meeting ${meeting.id}`,
+  );
+}
+
 /** Load the parent meeting row (full) within the tx. */
 async function loadMeeting(tx: DrizzleTx, meetingId: string, tenantId: string) {
   const rows = await tx
@@ -306,35 +358,102 @@ function advance(d: Date, pattern: string): Date {
   return next;
 }
 
+/** Whole days in a given UTC year/zero-based-month (28–31). */
+function daysInUtcMonth(year: number, month0: number): number {
+  return new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+}
+
+/**
+ * Move `d` FORWARD (never back) to the next date landing on UTC weekday `targetDow`
+ * (0=Sunday … 6=Saturday, matching `Date#getUTCDay`). A no-op when `d` already matches.
+ */
+function alignToDayOfWeek(d: Date, targetDow: number): Date {
+  const delta = (((targetDow - d.getUTCDay()) % 7) + 7) % 7;
+  if (delta === 0) return d;
+  const next = new Date(d.getTime());
+  next.setUTCDate(next.getUTCDate() + delta);
+  return next;
+}
+
+/**
+ * Move `d` to `targetDom` (1-based) within its own UTC month, clamped to that month's actual
+ * length (e.g. 31 in a 30-day month → the 30th, not an overflow into next month). If that
+ * clamped date falls BEFORE `d`, roll forward to `targetDom` in the FOLLOWING month instead
+ * (never moves backward relative to `d`).
+ */
+function alignToDayOfMonth(d: Date, targetDom: number): Date {
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const wanted = Math.min(Math.max(1, Math.trunc(targetDom)), daysInUtcMonth(year, month));
+  const candidate = new Date(Date.UTC(year, month, wanted));
+  if (candidate.getTime() >= d.getTime()) return candidate;
+
+  const nextMonthIndex = month + 1;
+  const ny = year + Math.floor(nextMonthIndex / 12);
+  const nm = ((nextMonthIndex % 12) + 12) % 12;
+  const nextWanted = Math.min(Math.max(1, Math.trunc(targetDom)), daysInUtcMonth(ny, nm));
+  return new Date(Date.UTC(ny, nm, nextWanted));
+}
+
 /**
  * Materialise the recurrence dates (ISO `YYYY-MM-DD`) for a series: starting at `fromIso`,
  * stepping by `pattern`, up to and including `upToIso`, bounded by an optional `endIso` and a
  * hard `MAX_SERIES_INSTANCES` cap. Returns `[]` when the window is empty.
+ *
+ * Req 14.5 dead-config fix: `dayOfWeek` (weekly/fortnightly) / `dayOfMonth` (monthly/quarterly/
+ * half_yearly/annual) were persisted on the series but never consulted here — every instance
+ * silently landed on `fromIso`'s own weekday/day-of-month regardless of what was configured.
+ * When the relevant field is set, EVERY generated date (including the first) is re-aligned to
+ * it via `alignToDayOfWeek`/`alignToDayOfMonth`; re-aligning an already-aligned date is a no-op,
+ * so this is safe to apply unconditionally after each `advance()` step too (guards month-length
+ * edge cases, e.g. `dayOfMonth: 31` rolling through February).
  */
 function generateInstanceDates(args: {
   pattern: string;
   fromIso: string;
   upToIso: string;
   endIso: string | null;
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
 }): string[] {
-  const { pattern, fromIso, upToIso, endIso } = args;
+  const { pattern, fromIso, upToIso, endIso, dayOfWeek, dayOfMonth } = args;
   const upTo = Date.parse(`${upToIso}T00:00:00Z`);
   const end = endIso ? Date.parse(`${endIso}T00:00:00Z`) : Number.POSITIVE_INFINITY;
   const ceiling = Math.min(upTo, end);
 
+  const isWeeklyFamily = pattern === "weekly" || pattern === "fortnightly";
+  const isMonthlyFamily = pattern === "monthly" || pattern === "quarterly" || pattern === "half_yearly" || pattern === "annual";
+  const align = (d: Date): Date => {
+    if (isWeeklyFamily && dayOfWeek !== undefined && dayOfWeek !== null) return alignToDayOfWeek(d, dayOfWeek);
+    if (isMonthlyFamily && dayOfMonth !== undefined && dayOfMonth !== null) return alignToDayOfMonth(d, dayOfMonth);
+    return d;
+  };
+
   const out: string[] = [];
-  let cursor = new Date(Date.parse(`${fromIso}T00:00:00Z`));
+  let cursor = align(new Date(Date.parse(`${fromIso}T00:00:00Z`)));
   while (cursor.getTime() <= ceiling && out.length < MAX_SERIES_INSTANCES) {
     out.push(cursor.toISOString().slice(0, 10));
-    cursor = advance(cursor, pattern);
+    cursor = align(advance(cursor, pattern));
   }
   return out;
 }
 
-/** Combine an ISO date + optional `HH:MM` time-of-day into a timestamptz (UTC). */
-function toScheduledAt(dateIso: string, timeOfDay: string | null): Date {
+/**
+ * Combine an ISO date + optional `HH:MM` time-of-day + the tenant's configured UTC offset into
+ * a timestamptz (Req 14.5 timezone fix). Previously hardcoded a literal `Z` (UTC) with no
+ * tenant-timezone concept anywhere in the service — a secretary configuring "10:00" got every
+ * instance scheduled at 10:00 UTC regardless of their actual local time. `utcOffset` is a
+ * `±HH:MM` numeric offset (same representation `validators.ts`'s plain-meeting `scheduledAt`
+ * already requires via `z.string().datetime({ offset: true })` — this mirrors that existing
+ * convention rather than introducing an IANA-zone dependency) resolved by the caller from
+ * `config-registry` (`meeting.tenant_timezone`, default `"+00:00"` — see `handleSeriesGenerate`).
+ * An invalid offset falls back to `+00:00`, matching `timeOfDay`'s existing fallback-on-garbage
+ * behavior below.
+ */
+function toScheduledAt(dateIso: string, timeOfDay: string | null, utcOffset: string): Date {
   const time = timeOfDay && /^([01]\d|2[0-3]):[0-5]\d$/.test(timeOfDay) ? timeOfDay : "00:00";
-  return new Date(`${dateIso}T${time}:00Z`);
+  const offset = /^[+-]([01]\d|2[0-3]):[0-5]\d$/.test(utcOffset) ? utcOffset : "+00:00";
+  return new Date(`${dateIso}T${time}:00${offset}`);
 }
 
 // ─── Handlers ──────────────────────────────────────────────────────────────────
@@ -395,6 +514,11 @@ async function handleMeetingUpdate(msg: CommandEnvelope<MeetingUpdatePayload>): 
     if (!(await markProcessed(tx, msg.messageId))) return;
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
+    try {
+      await assertMeetingOwnership(tx, msg.actorId, meeting, SECRETARIAL_STANDING_ROLES);
+    } catch (err) {
+      asPermanent(err);
+    }
 
     const set: Record<string, unknown> = { updatedBy: msg.actorId, updatedAt: new Date() };
     for (const [k, v] of Object.entries(p.patch)) {
@@ -631,6 +755,11 @@ async function handleMeetingTransition(msg: CommandEnvelope<MeetingTransitionPay
     if (!(await markProcessed(tx, msg.messageId))) return;
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
+    try {
+      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES);
+    } catch (err) {
+      asPermanent(err);
+    }
 
     await applyTransition(tx, { ...msg }, {
       meeting,
@@ -645,13 +774,185 @@ async function handleMeetingTransition(msg: CommandEnvelope<MeetingTransitionPay
   await invalidate(msg.tenantId, CACHE_RESOURCE, p.meetingId);
 }
 
-/** meeting.cancel → soft-cancel to the terminal `cancelled` state (Req 1.6, 1.7). */
+// ─── Cancel cascade (Req 1.6 completeness fix) ────────────────────────────────
+//
+// Cross-referenced literals mirrored from sibling modules that own them (this module does
+// not import their consumer/domain files — see the module-scope rule at the top of this
+// file). Each is the exact value that module's OWN gate already checks against:
+//   - RESOLUTION_STATUS_VOID / RESOLUTION_OPEN_STATUSES: voting/consumer.ts's local
+//     `STATUS_VOTING_OPEN`/`STATUS_CIRCULATING`/`TERMINAL_STATUSES` (= {effective, rejected,
+//     invalid}) are not exported; "invalid" is the correct terminal member for a resolution
+//     that never reached a real conclusion because its meeting was cancelled — NOT
+//     decision/domain.ts's separate (also unexported-for-this-purpose) RESOLUTION_STATUSES
+//     lifecycle-record vocabulary, which has no "cancelled" analogue.
+//   - ROOM_BOOKING_CONFIRMED / ROOM_BOOKING_CANCELLED: calendar/domain.ts's exported
+//     `ROOM_BOOKING_STATUSES = ["confirmed", "cancelled"]`, mirrored as literals (matches
+//     calendar/consumer.ts's own local `BOOKING_CONFIRMED`/`BOOKING_CANCELLED` treatment).
+//   - VC_SESSION_STATUS_ENDED: vc-integration/consumer.ts's local `STATUS_ENDED`, unexported.
+//   - AGENDA_ITEM_STATUS_MOOT: this module's OWN sibling, agenda/domain.ts `AGENDA_STATUSES`
+//     (exported; "withdrawn" already means "no longer active").
+
+/** voting/consumer.ts TERMINAL_STATUSES' "never concluded" member (see comment above). */
+const RESOLUTION_STATUS_VOID = "invalid";
+/** voting/repo.ts ACTIVE_STATUSES (resolutions still open to a vote). */
+const RESOLUTION_OPEN_STATUSES = ["voting_open", "circulating"];
+/** calendar/domain.ts ROOM_BOOKING_STATUSES members (see comment above). */
+const ROOM_BOOKING_CONFIRMED = "confirmed";
+const ROOM_BOOKING_CANCELLED = "cancelled";
+/** vc-integration/consumer.ts STATUS_ENDED. */
+const VC_SESSION_STATUS_ENDED = "ended";
+/** agenda/domain.ts AGENDA_STATUSES member meaning "no longer active" — reused for "moot". */
+const AGENDA_ITEM_STATUS_MOOT = "withdrawn";
+/** Agenda statuses that already have their own disposition; left untouched by the cascade. */
+const AGENDA_ITEM_CASCADE_EXEMPT_STATUSES = [AGENDA_ITEM_STATUS_MOOT, "carried_forward"];
+
+/**
+ * Cascade a meeting's cancellation to everything that was depending on it happening (Req 1.6
+ * completeness fix — previously `handleMeetingCancel` flipped only `meetings.status`, leaving
+ * an open resolution still votable, a confirmed room booking, a live VC session, moot-but-
+ * "accepted" agenda items, and zero notifications). Runs in the SAME tx as the cancel itself
+ * so the whole cascade is atomic with the state transition. Writes other modules' tables
+ * directly (this codebase's established cross-module-write convention — see e.g.
+ * `computeLiveQuorum` above reading `committee_members`); does not touch voting/decision/
+ * calendar/vc-integration/agenda's own route/consumer/domain files.
+ */
+async function cascadeMeetingCancel(
+  tx: DrizzleTx,
+  msg: MsgMeta,
+  meetingId: string,
+  committeeId: string | null,
+): Promise<void> {
+  const now = new Date();
+
+  // Void any still-open resolution — blocks voting/consumer.ts's `status !== "voting_open"`
+  // cast gate and its `TERMINAL_STATUSES.has(status)` idempotent-no-op conclude guard from
+  // ever treating this resolution as live again. Existing cast votes remain as historical
+  // record (a ledger, not a mutable tally); nothing further can be cast or concluded on it.
+  await tx
+    .update(resolutions)
+    .set({
+      status: RESOLUTION_STATUS_VOID,
+      updatedBy: msg.actorId,
+      updatedAt: now,
+      version: sql`${resolutions.version} + 1`,
+    })
+    .where(
+      and(
+        eq(resolutions.tenantId, msg.tenantId),
+        eq(resolutions.meetingId, meetingId),
+        inArray(resolutions.status, RESOLUTION_OPEN_STATUSES),
+      ),
+    );
+
+  // Release the confirmed room booking.
+  await tx
+    .update(roomBookings)
+    .set({
+      status: ROOM_BOOKING_CANCELLED,
+      updatedBy: msg.actorId,
+      updatedAt: now,
+      version: sql`${roomBookings.version} + 1`,
+    })
+    .where(
+      and(
+        eq(roomBookings.tenantId, msg.tenantId),
+        eq(roomBookings.meetingId, meetingId),
+        eq(roomBookings.status, ROOM_BOOKING_CONFIRMED),
+      ),
+    );
+
+  // End the live VC session.
+  await tx
+    .update(vcSessions)
+    .set({
+      status: VC_SESSION_STATUS_ENDED,
+      endedAt: now,
+      updatedBy: msg.actorId,
+      updatedAt: now,
+      version: sql`${vcSessions.version} + 1`,
+    })
+    .where(
+      and(
+        eq(vcSessions.tenantId, msg.tenantId),
+        eq(vcSessions.meetingId, meetingId),
+        eq(vcSessions.status, "active"),
+      ),
+    );
+
+  // Mark surviving agenda items moot — the agenda is now frozen (fix for `assertAgendaNotLocked`
+  // separately blocks further edits); items that already carry their own disposition
+  // (withdrawn / carried_forward) are left untouched.
+  await tx
+    .update(agendaItems)
+    .set({
+      status: AGENDA_ITEM_STATUS_MOOT,
+      updatedBy: msg.actorId,
+      updatedAt: now,
+      version: sql`${agendaItems.version} + 1`,
+    })
+    .where(
+      and(
+        eq(agendaItems.tenantId, msg.tenantId),
+        eq(agendaItems.meetingId, meetingId),
+        notInArray(agendaItems.status, AGENDA_ITEM_CASCADE_EXEMPT_STATUSES),
+      ),
+    );
+
+  // Notify everyone with a stake in this meeting (mirrors participant/consumer.ts's `notify()`
+  // convention — `NOTIFICATION_SEND` / `buildNotificationPayload` — which this module never
+  // previously used). Unions the meeting's own invited roster (`meeting.participants`, the
+  // normal case) with its committee's active membership (`committee_members`) — a meeting can
+  // legitimately reach `adjourned`/cancellable with committee members who were never
+  // individually added as `participants` rows, and they still have a stake in knowing their
+  // committee's meeting was cancelled.
+  const rosterRows = await tx
+    .select({ employeeId: participants.employeeId })
+    .from(participants)
+    .where(and(eq(participants.tenantId, msg.tenantId), eq(participants.meetingId, meetingId)));
+  const recipientIds = new Set(rosterRows.map((r) => r.employeeId));
+  if (committeeId) {
+    const memberRows = await tx
+      .select({ memberId: committeeMembers.memberId })
+      .from(committeeMembers)
+      .where(
+        and(
+          eq(committeeMembers.tenantId, msg.tenantId),
+          eq(committeeMembers.committeeId, committeeId),
+          eq(committeeMembers.status, "active"),
+        ),
+      );
+    for (const { memberId } of memberRows) recipientIds.add(memberId);
+  }
+  for (const employeeId of recipientIds) {
+    await enqueue(tx, {
+      topic: NOTIFICATION_SEND,
+      eventType: NOTIFICATION_SEND,
+      tenantId: msg.tenantId,
+      actorId: msg.actorId,
+      correlationId: msg.correlationId,
+      payload: buildNotificationPayload({
+        eventType: EVENTS.meetingCancelled,
+        recipient: employeeId,
+        recipientId: employeeId,
+        channel: "email",
+        variables: { meetingId },
+      }),
+    });
+  }
+}
+
+/** meeting.cancel → soft-cancel to the terminal `cancelled` state (Req 1.6, 1.7) + full cascade. */
 async function handleMeetingCancel(msg: CommandEnvelope<MeetingCancelPayload>): Promise<void> {
   const p = msg.payload;
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
+    try {
+      await assertMeetingOwnership(tx, msg.actorId, meeting, CHAIR_STANDING_ROLES);
+    } catch (err) {
+      asPermanent(err);
+    }
 
     await applyTransition(tx, { ...msg }, {
       meeting,
@@ -661,6 +962,7 @@ async function handleMeetingCancel(msg: CommandEnvelope<MeetingCancelPayload>): 
       nextMeetingDate: null,
     });
     await audit(tx, msg, "cancel", "meeting", p.meetingId);
+    await cascadeMeetingCancel(tx, msg, p.meetingId, meeting.committeeId);
   });
   await invalidate(msg.tenantId, CACHE_RESOURCE, p.meetingId);
 }
@@ -754,8 +1056,15 @@ async function handleSeriesGenerate(msg: CommandEnvelope<SeriesGeneratePayload>)
       fromIso,
       upToIso: p.upToDate,
       endIso: series.endDate ?? null,
+      dayOfWeek: series.dayOfWeek,
+      dayOfMonth: series.dayOfMonth,
     });
     if (dates.length === 0) return;
+
+    // Req 14.5 timezone fix: resolve the tenant's configured UTC offset (default "+00:00" —
+    // behavior-preserving for a tenant that has configured nothing, matching every other
+    // config-registry policy's stated migration contract).
+    const utcOffset = await getPolicyString(tx, msg.tenantId, "meeting.tenant_timezone");
 
     // Committee membership carry-forward: resolve chairperson/secretary from the active roster.
     const members = await tx
@@ -780,7 +1089,7 @@ async function handleSeriesGenerate(msg: CommandEnvelope<SeriesGeneratePayload>)
 
     for (const dateIso of dates) {
       const meetingId = randomUUID();
-      const scheduledAt = toScheduledAt(dateIso, series.timeOfDay);
+      const scheduledAt = toScheduledAt(dateIso, series.timeOfDay, utcOffset);
       await tx.insert(meetings).values({
         id: meetingId,
         tenantId: msg.tenantId,

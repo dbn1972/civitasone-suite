@@ -30,7 +30,7 @@
  *
  * _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
@@ -46,10 +46,51 @@ import {
   assertValidRoleAssignment,
   resolveRsvp,
   assertNomineeAllowed,
+  canActOnParticipant,
   computeQuorumConfirmation,
   isQuorumCountingRole,
   type RsvpResponse,
 } from "./domain.js";
+
+/** Committee-member roles carrying chair/secretary standing for the on-behalf-of RSVP/nominate
+ * extension (IDOR fix, Req 5.2, 5.5, 5.6) — mirrors meeting-core's CHAIR_STANDING_ROLES /
+ * SECRETARIAL_STANDING_ROLES union, since either standing suffices for these two actions. */
+const PARTICIPANT_ACTION_STANDING_ROLES = ["chairperson", "secretary"];
+
+/**
+ * Self-or-standing check (IDOR fix, Req 5.2, 5.5, 5.6) — consumer-side defense-in-depth,
+ * reachable independently of the route (a `CommandEnvelope` carries only `actorId`, no role
+ * claim — see `meeting-core/consumer.ts`'s `assertMeetingOwnership` for the full rationale,
+ * which applies identically here). Extends `domain.canActOnParticipant`'s direct
+ * chairperson_id/secretary_id check with committee-roster standing (a deputy secretary /
+ * co-chair not yet the literal name stamped on the meeting row).
+ */
+async function assertCanActOnParticipant(
+  tx: DrizzleTx,
+  tenantId: string,
+  actorId: string,
+  participantEmployeeId: string,
+  meeting: { committeeId: string | null; chairpersonId: string | null; secretaryId: string | null } | null,
+): Promise<void> {
+  if (canActOnParticipant(actorId, participantEmployeeId, meeting)) return;
+  if (meeting?.committeeId) {
+    const rows = await tx
+      .select({ id: committeeMembers.id })
+      .from(committeeMembers)
+      .where(
+        and(
+          eq(committeeMembers.tenantId, tenantId),
+          eq(committeeMembers.committeeId, meeting.committeeId),
+          eq(committeeMembers.memberId, actorId),
+          eq(committeeMembers.status, "active"),
+          inArray(committeeMembers.role, PARTICIPANT_ACTION_STANDING_ROLES),
+        ),
+      )
+      .limit(1);
+    if (rows.length > 0) return;
+  }
+  throw new HttpError(403, "FORBIDDEN", `actor ${actorId} may not act on participant ${participantEmployeeId}'s invitation`);
+}
 import { requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -529,6 +570,12 @@ async function handleParticipantRespond(msg: CommandEnvelope<ParticipantRespondP
     if (!participant) {
       throw new NonRetryableError(`participant ${p.participantId} not found on meeting ${p.meetingId}`);
     }
+    const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
+    try {
+      await assertCanActOnParticipant(tx, msg.tenantId, msg.actorId, participant.employeeId, meeting);
+    } catch (err) {
+      asNonRetryable(err);
+    }
 
     let status: ReturnType<typeof resolveRsvp>;
     try {
@@ -566,8 +613,6 @@ async function handleParticipantRespond(msg: CommandEnvelope<ParticipantRespondP
       },
     });
 
-    const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
-
     // Req 5.6: a decline is surfaced to the secretary for rescheduling consideration.
     if (isDecline && meeting?.secretaryId) {
       await notify(tx, msg, {
@@ -603,6 +648,11 @@ async function handleParticipantNominate(msg: CommandEnvelope<ParticipantNominat
     const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) {
       throw new NonRetryableError(`meeting ${p.meetingId} not found`);
+    }
+    try {
+      await assertCanActOnParticipant(tx, msg.tenantId, msg.actorId, participant.employeeId, meeting);
+    } catch (err) {
+      asNonRetryable(err);
     }
 
     // The approved nominee list is the committee's active member roster (Req 5.5).
