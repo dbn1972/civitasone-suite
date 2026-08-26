@@ -44,7 +44,7 @@ export default function NewRtiPage() {
     };
 
     try {
-      const res = await fetch("/api/v1/crm/rti", {
+      const res = await fetch("/api/proxy/v1/crm/rti", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
