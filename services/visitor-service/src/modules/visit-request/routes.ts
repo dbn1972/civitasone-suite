@@ -15,6 +15,7 @@
  * `pending_approval` state).
  */
 import type { FastifyInstance } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
@@ -58,6 +59,40 @@ const APPROVAL_ROLES = ["employee", "security_admin", "protocol_officer", "tenan
 // Deliberately excludes plain "employee": that is precisely the role the
 // audit proved could self-declare vip for instant approval.
 const VIP_GRANT_ROLES = ["protocol_officer", "security_admin", "tenant_admin", "super_admin"];
+
+// SECURITY FIX (cross-host IDOR, CWE-639): APPROVAL_ROLES/WRITE_ROLES both
+// include the generic, broadly-held "employee" role — this module's own
+// docstring justifies that breadth for CREATE/LIST visibility only ("any
+// authenticated employee/host can create and see requests"), not for
+// unscoped approve/reject/cancel of a request some OTHER employee is
+// hosting. Previously none of the three handlers below (nor the consumer)
+// ever compared the caller to the row's `hostEmployeeId`, so any
+// "employee"-role actor in the tenant could approve/reject/cancel any other
+// employee's hosted visit request — mirrors the IDOR class the security
+// cluster found in the `identity` module (PR #700). The elevated tiers
+// (ELEVATED_APPROVAL_ROLES) retain unscoped, tenant-wide authority — they
+// already have blanket visibility via READ_ROLES and are the roles this
+// module trusts to approve/reject ANY request as part of their normal
+// oversight duties (same set already trusted with VIP_GRANT_ROLES above);
+// restricting the base "employee" role to its own hosted requests is the
+// meaningful boundary here.
+const ELEVATED_APPROVAL_ROLES = ["protocol_officer", "security_admin", "tenant_admin", "super_admin"];
+
+/**
+ * Throws 403 unless `ctx` holds an elevated role or is the request's own
+ * host. Called after the 404 check in approve/reject/cancel so a
+ * non-existent id still 404s rather than leaking a 403 first.
+ */
+function assertOwnsRequest(ctx: RequestContext, row: { hostEmployeeId: string }): void {
+  if (hasAnyRole(ctx, ELEVATED_APPROVAL_ROLES)) return;
+  if (ctx.actorId !== row.hostEmployeeId) {
+    throw new HttpError(
+      403,
+      "FORBIDDEN",
+      "only the visit request's own host (or an elevated role) may perform this action",
+    );
+  }
+}
 
 export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/visitor/visit-requests", async (req, reply) => {
@@ -184,6 +219,7 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const row = await repo.getVisitRequestById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "visit request not found");
+    assertOwnsRequest(ctx, row);
     const accepted = await commands.visitRequestApprove(ctx, { requestId: id });
     return reply.code(202).send({ data: accepted });
   });
@@ -194,6 +230,7 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const row = await repo.getVisitRequestById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "visit request not found");
+    assertOwnsRequest(ctx, row);
     const body = rejectVisitRequestBody.parse(req.body);
     const accepted = await commands.visitRequestReject(ctx, { requestId: id, reason: body.reason });
     return reply.code(202).send({ data: accepted });
@@ -207,6 +244,7 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const row = await repo.getVisitRequestById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "visit request not found");
+    assertOwnsRequest(ctx, row);
     const accepted = await commands.visitRequestCancel(ctx, { requestId: id });
     return reply.code(202).send({ data: accepted });
   });
