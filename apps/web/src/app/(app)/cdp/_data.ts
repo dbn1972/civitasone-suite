@@ -100,7 +100,6 @@ export const getCdpProfiles = moduleLoader("/api/v1/cdp/profiles", "cdp.profiles
 export const getCdpIdentity = moduleLoader("/api/v1/cdp/identity/anonymous-visitors", "cdp.identity");
 export const getCdpSegments = moduleLoader("/api/v1/cdp/segments", "cdp.segments");
 export const getCdpEvents = moduleLoader("/api/v1/cdp/events/taxonomy", "cdp.events");
-export const getCdpSteward = moduleLoader("/api/v1/cdp/steward/queue", "cdp.steward");
 
 /**
  * Golden profiles, typed rather than flattened to generic rows, so the list can
