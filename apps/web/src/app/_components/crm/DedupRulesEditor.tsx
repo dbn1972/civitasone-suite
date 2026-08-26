@@ -184,7 +184,7 @@ export function DedupRulesEditor() {
                     type="number" min={0} max={100} step={1}
                     value={Number.isFinite(rule.threshold) ? rule.threshold : ""}
                     aria-invalid={Number.isFinite(rule.threshold) ? undefined : true}
-                    onChange={(e) => update(idx, { threshold: sanitizeNumber(e.target.value, { max: 1 }) })}
+                    onChange={(e) => update(idx, { threshold: sanitizeNumber(e.target.value) })}
                     style={{ width: 80, padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", textAlign: "right" }}
                   />
                 </td>

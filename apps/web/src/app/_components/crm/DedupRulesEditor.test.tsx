@@ -102,5 +102,29 @@ describe("DedupRulesEditor (DQ-001 admin)", () => {
     expect(Number.isInteger(saved[0].threshold)).toBe(true);
     expect(Number.isInteger(saved[0].weight)).toBe(true);
   });
+
+  // Regression test for a stale leftover of the old 0-1 scale: the threshold
+  // input's onChange still called sanitizeNumber(value, { max: 1 }) after the
+  // rest of this editor was migrated to the real 0-100 integer contract.
+  // Because sanitizeNumber defaults max to 100 only when no override is
+  // given, that stray { max: 1 } silently collapsed ANY typed threshold above
+  // 1 down to 1 -- "match almost anything" -- with no validation error (1 is
+  // still a valid int 0-100). A threshold in the middle of the real range
+  // must round-trip unchanged, not just extremes like "150"/"0.9" that can
+  // pass by coincidence under either ceiling.
+  it("preserves a typical in-range threshold exactly instead of collapsing it to 1 (stale 0-1 ceiling)", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(dq.saveDedupRules).mockResolvedValue(undefined);
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/threshold for rule 1/i), { target: { value: "72" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+
+    await waitFor(() => expect(dq.saveDedupRules).toHaveBeenCalled());
+    const saved = vi.mocked(dq.saveDedupRules).mock.calls[0][0];
+    expect(saved[0].threshold).toBe(72);
+  });
 });
+
 
