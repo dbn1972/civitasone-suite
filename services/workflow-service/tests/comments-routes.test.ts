@@ -71,3 +71,42 @@ describe("CAP-038 comments", () => {
     await app.close();
   });
 });
+
+// Regression: USER previously excluded every task-completion role (hr_admin, manager,
+// payroll_admin, procurement_admin/officer, estab_*), so the PR #730 leave-approval fix
+// (which records the approve/reject reason as a comment right after task completion) 403'd
+// for the real approver and the reason never persisted. See tasks/routes.ts's ROLES.
+describe("role-gate regression — comments align with task-completion roles", () => {
+  it("returns 202 for hr_admin (leave-approval reason, PR #730)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/workflow/comments",
+      headers: { authorization: `Bearer ${tok(["hr_admin"])}` },
+      payload: { entityType: "leave_app", entityId: randomUUID(), body: "Approved: sufficient leave balance." },
+    });
+    expect(res.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("returns 202 for manager (leave-approval reason, PR #730)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/workflow/comments",
+      headers: { authorization: `Bearer ${tok(["manager"])}` },
+      payload: { entityType: "leave_app", entityId: randomUUID(), body: "Rejected: clashes with team deadline." },
+    });
+    expect(res.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("still returns 403 for a non-workflow role (reader)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/workflow/comments",
+      headers: { authorization: `Bearer ${tok(["reader"])}` },
+      payload: { entityType: "leave_app", entityId: randomUUID(), body: "should not pass" },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});

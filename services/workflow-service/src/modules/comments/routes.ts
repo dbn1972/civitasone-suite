@@ -7,7 +7,22 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { visibleTo, buildThreads, validateBody } from "./domain.js";
 
-const USER = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin", "case_manager"];
+// Anyone who can complete a workflow task (tasks/routes.ts ROLES) must also be able to
+// comment — PR #730 records the leave-approve/reject reason as a comment right after
+// completion, so the approver (hr_admin/manager/etc.) needs write access here too, or the
+// reason silently fails to save. This is a superset union, not a straight copy of tasks.ts's
+// ROLES: it keeps the pre-existing tenant_admin/case_manager (generic workflow admins who
+// were never part of the task-completion list but could already comment) and adds every
+// task-completion role. Deliberately NOT switched to tasks.ts's requirePermissionKey/
+// REF_PERMISSION gate — that keys off a specific per-refType *approve* permission and would
+// wrongly block a plain participant (e.g. the leave applicant, who typically only holds the
+// generic workflow_user role) from ever commenting on their own request; comment write access
+// should track workflow participation, not entity-specific approval authority.
+const USER = [
+  "workflow_user", "workflow_admin", "super_admin", "tenant_admin", "case_manager",
+  "hr_admin", "manager", "payroll_admin", "procurement_admin", "procurement_officer",
+  "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
+];
 
 export async function commentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/comments", async (req, reply) => {
