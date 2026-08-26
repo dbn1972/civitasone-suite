@@ -1,4 +1,4 @@
-import { and, eq, sql, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
@@ -51,6 +51,24 @@ export async function findBillsByIds(ids: string[], tenantId: string): Promise<B
   return scopedRead((tx) =>
     tx.select().from(financeBills)
       .where(and(inArray(financeBills.id, ids), eq(financeBills.tenantId, tenantId)))
+  );
+}
+
+/**
+ * All bills issued against a vendor, newest first -- backs the
+ * finance/vendors/[id] detail page's bill-history rollup (Total Bills/Total
+ * Paid/TDS Deducted stat cards + Bill History table). Filters on the
+ * existing vendor_id column directly: a FK constraint is only needed to
+ * ENFORCE referential integrity, not to filter by it (see migration 0065's
+ * note on why that FK is deliberately deferred pending a backfill pass), so
+ * this rollup was always buildable with a plain WHERE.
+ */
+export async function findBillsByVendorAndTenant(vendorId: string, tenantId: string, limit = 500): Promise<BillRow[]> {
+  return scopedRead((tx) =>
+    tx.select().from(financeBills)
+      .where(and(eq(financeBills.vendorId, vendorId), eq(financeBills.tenantId, tenantId)))
+      .orderBy(desc(financeBills.createdAt))
+      .limit(limit)
   );
 }
 

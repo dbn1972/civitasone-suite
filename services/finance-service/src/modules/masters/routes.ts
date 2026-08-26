@@ -3,7 +3,9 @@ import { z } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as paymentsRepo from "../payments/repo.js";
 import type { VendorRow } from "./schema.js";
+import type { BillRow } from "../payments/schema.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 // Vendor master is financial system-of-record data (bank account/IFSC feed
@@ -77,10 +79,11 @@ function toVendorSummary(r: VendorRow) {
 // contactPerson, email, phone, bankName, ifsc, bankAccount), plus id/status/
 // isActive/version/timestamps. "status" is derived from isActive (this table
 // has no separate approval workflow) rather than adding an unrequested
-// status enum. Bill-history (bills/billHistory on the detail page) is
-// intentionally not populated here — that's a vendor<->bills join with no
-// FK to join on yet (see migration 0065's note) and is out of this task's
-// scope; the frontend already renders a clean "No bills yet" empty state.
+// status enum. Bill history is NOT built in here: this function is also
+// reused by the POST/PATCH handlers below, which never need a bill lookup
+// for a create/update echo. The GET /:id route fetches it separately (via
+// findBillsByVendorAndTenant + toVendorBillHistory, below) and spreads it
+// into the response it sends.
 // showFullBankDetails gates the cleartext account number/IFSC to
 // WRITER_ROLES (finance_admin/super_admin — the roles that actually submit
 // PFMS payments and need the real value); finance_officer/audit_officer get
@@ -107,6 +110,34 @@ function toVendorDetail(r: VendorRow, showFullBankDetails: boolean) {
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
+}
+
+// Vendor bill-rollup: the vendor<->bills join the frontend's Total Bills /
+// Total Paid / TDS Deducted stat cards and Bill History table need (all
+// three stats are derived client-side from this same array, so it's the
+// only new field required). Filters on finance_bills.vendor_id directly --
+// that column has existed since before the vendor table did (migration
+// 0065's note explains why the FK constraint itself is deliberately
+// deferred pending a backfill/reconciliation pass), but a FK is only needed
+// to ENFORCE referential integrity, not to filter by it, so this rollup was
+// always buildable. TDS is read back out of the bill's own deductions ledger
+// (the same jsonb array tds/consumer.ts appends {type:"tds",...} onto)
+// rather than re-queried from the tds module, since a bill's own deductions
+// are already the source of truth for what was actually withheld against it.
+function toVendorBillHistory(bills: BillRow[]) {
+  return bills.map((b) => {
+    const tdsMinor = (b.deductions ?? [])
+      .filter((d) => d.type === "tds")
+      .reduce((sum, d) => sum + BigInt(d.amountMinor), 0n);
+    return {
+      id: b.id,
+      billNo: b.billNo,
+      date: b.billDate ? String(b.billDate) : new Date(b.createdAt as unknown as string).toISOString().slice(0, 10),
+      amount: b.netMinor.toString(),
+      tds: tdsMinor.toString(),
+      status: b.status,
+    };
+  });
 }
 
 export async function mastersRoutes(app: FastifyInstance): Promise<void> {
@@ -145,7 +176,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const vendor = await repo.getVendorById(ctx.tenantId, id);
     if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
     const showFullBankDetails = hasAnyRole(ctx, WRITER_ROLES);
-    return reply.send(toVendorDetail(vendor, showFullBankDetails));
+    const bills = await paymentsRepo.findBillsByVendorAndTenant(id, ctx.tenantId);
+    return reply.send({ ...toVendorDetail(vendor, showFullBankDetails), bills: toVendorBillHistory(bills) });
   });
 
   app.post("/v1/finance/vendors", async (req, reply) => {
