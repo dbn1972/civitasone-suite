@@ -46,6 +46,16 @@
  *    plate.sql: UNIQUE (tenant_id, registration_number) WHERE status =
  *    'active') as the real backstop against the same TOCTOU shape as #1.
  *
+ *    Follow-up review found #3 itself incomplete: registration_number was
+ *    never normalized anywhere in the pipeline, so the SAME physical plate
+ *    entered with different case/whitespace (e.g. by two different guards)
+ *    validated as two distinct strings and both persisted as separate
+ *    'active' rows — defeating the protection above under ordinary
+ *    manual-entry variance, not just deliberate abuse. Fixed by
+ *    normalizing (uppercase, strip [\s-] separators) in validators.ts's
+ *    vehiclePassCreateBody via .transform() — the sole write path into
+ *    this column.
+ *
  * Both 2 and 3 were originally live-confirmed against the running instance
  * by creating real persisted rows (registration_number = "@@ #!", and two
  * simultaneously-active rows sharing registration_number = "AUDIT-DUP-002"
@@ -313,6 +323,49 @@ describe("vehicle-pass consumer — duplicate-plate detection (real DB, real con
     // silently dropped or, worse, silently persisted.
     expect(queue.dlq.length).toBeGreaterThanOrEqual(1);
     expect(queue.dlq.some((d) => (d as { error?: string }).error?.includes("AUDIT-DUP-XYZ"))).toBe(true);
+  });
+
+  it("FIXED: registration numbers differing only in case/whitespace normalize to the SAME plate — the second is rejected as a duplicate, not persisted as a separate 'active' row", async () => {
+    const f = makeFixture();
+    fixtures.push(f);
+    await seed(f);
+    await seedParkingSlots(f, 2, "two_wheeler", "two_wheeler");
+
+    // Two guards enter the identical physical plate slightly differently.
+    // Both pass vehiclePassCreateBody's case-insensitive, separator-
+    // tolerant regex — going through the REAL validator (rather than
+    // createMsg's raw payload shortcut) is the point here: it's what
+    // exercises the .transform() fix, not just the consumer's pre-existing
+    // exact-match pre-check.
+    const first = vehiclePassCreateBody.parse({
+      passId: randomUUID(), locationId: randomUUID(),
+      registrationNumber: "MH01AB1234", vehicleType: "two_wheeler", visitorCategory: "standard",
+    });
+    const second = vehiclePassCreateBody.parse({
+      passId: randomUUID(), locationId: randomUUID(),
+      registrationNumber: "mh 01-ab 1234", vehicleType: "two_wheeler", visitorCategory: "standard",
+    });
+    // The normalization itself: differently-formatted input for the same
+    // plate converges on an identical canonical string.
+    expect(first.registrationNumber).toBe("MH01AB1234");
+    expect(second.registrationNumber).toBe(first.registrationNumber);
+
+    const queue = freshQueue();
+    await queue.publish(COMMANDS.vehiclePassCreate, createMsg(f, { registrationNumber: first.registrationNumber, vehicleType: "two_wheeler", visitorCategory: "standard" }));
+    await queue.drain();
+    await queue.publish(COMMANDS.vehiclePassCreate, createMsg(f, { registrationNumber: second.registrationNumber, vehicleType: "two_wheeler", visitorCategory: "standard" }));
+    await queue.drain();
+
+    // Only the first create persisted, under the canonical plate; the
+    // second was rejected as a duplicate of it — proving the case/
+    // whitespace variance that made this fix necessary no longer defeats
+    // duplicate-plate detection.
+    const dupRows = await vehiclePassesFor(f, "MH01AB1234");
+    expect(dupRows).toHaveLength(1);
+    expect(dupRows[0]?.status).toBe("active");
+
+    expect(queue.dlq.length).toBeGreaterThanOrEqual(1);
+    expect(queue.dlq.some((d) => (d as { error?: string }).error?.includes("MH01AB1234"))).toBe(true);
   });
 
   it("the same registration number CAN be reused once the earlier pass is no longer active", async () => {

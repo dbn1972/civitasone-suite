@@ -80,6 +80,19 @@ export function registerVehiclePassConsumers(queue: Queue): void {
       // (tenant_id, registration_number WHERE status = 'active') is the
       // real backstop against the same TOCTOU shape as the parking-slot
       // race below — see the catch around the insert further down.
+      //
+      // p.registrationNumber arrives here already canonical (uppercased,
+      // [\s-] separators stripped): validators.ts's vehiclePassCreateBody
+      // normalizes it via .transform() before this message is ever
+      // published, and that validator is the only entry point into this
+      // field (verified by repo-wide grep). That's why the comparison and
+      // the index above deliberately still operate on the raw (now-always-
+      // canonical) column rather than a matching functional
+      // upper(regexp_replace(...)) expression: a second normalization
+      // layer here would be redundant given the single write path, and
+      // switching the index to a functional expression would risk failing
+      // to build against any pre-existing non-canonical duplicate rows
+      // predating this normalization.
       const duplicateActive = await tx
         .select({ id: vehiclePasses.id })
         .from(vehiclePasses)
