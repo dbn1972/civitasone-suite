@@ -1,6 +1,15 @@
 import { PageHeader, Card } from "../../../../_components/ds";
 import { ImportForm } from "./ImportForm";
 
+// No backend template-generation route exists (GET .../import/template 404s
+// — confirmed live and matches the "no /import route anywhere" finding in
+// ImportForm.tsx). The template is static and small, so it's generated here
+// as a data: URI instead of linking to a route that was never built.
+const TEMPLATE_CSV =
+  "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
+  "EMP-001,Ravi Kumar,ravi@office.gov.in,9876543210,FIN,JC,permanent,2024-01-15,44900,male\n";
+const TEMPLATE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE_CSV)}`;
+
 export default function BulkImportPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -34,12 +43,18 @@ export default function BulkImportPage() {
           </tbody>
         </table>
         <a
-          href="/api/proxy/v1/hrms/employees/import/template"
+          href={TEMPLATE_HREF}
+          download="employee-import-template.csv"
           className="btn ghost"
           style={{ marginBottom: 16, display: "inline-block" }}
         >
           ⬇️ Download CSV template
         </a>
+        <p style={{ color: "var(--mut)", fontSize: 12.5, marginTop: -8, marginBottom: 16 }}>
+          Department and designation codes must match exactly what&apos;s configured on the{" "}
+          <a href="/hr/departments" style={{ color: "inherit", textDecoration: "underline" }}>Departments</a> and{" "}
+          <a href="/hr/designations" style={{ color: "inherit", textDecoration: "underline" }}>Designations</a> pages.
+        </p>
       </Card>
 
       <Card padding>

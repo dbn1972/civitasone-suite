@@ -127,8 +127,10 @@ export function EditEmployeeForm({ employee }: Props) {
         throw new Error(detail || `Update failed (${res.status})`);
       }
 
+      // PATCH /v1/hrms/employees/:id returns 202 (queued command) -- the
+      // update is being applied, not already confirmed done.
       setTone("success");
-      setMessage("Employee updated successfully. Redirecting…");
+      setMessage("Update submitted. Redirecting…");
       setTimeout(() => {
         router.push(`/hr/employees/${employee.id}`);
         router.refresh();
