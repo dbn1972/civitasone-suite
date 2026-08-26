@@ -30,6 +30,25 @@ export type MeetingType =
   | "ad_hoc"
   | "statutory";
 
+/** Runtime list mirroring MeetingType, for building <select> options. */
+export const MEETING_TYPES: MeetingType[] = [
+  "committee",
+  "board",
+  "departmental",
+  "ad_hoc",
+  "statutory",
+];
+
+/** Mirrors meeting-core/validators.ts CONFIDENTIALITY_LEVELS. */
+export const CONFIDENTIALITY_LEVELS = [
+  "public",
+  "internal",
+  "confidential",
+  "secret",
+  "top_secret",
+] as const;
+export type ConfidentialityLevel = (typeof CONFIDENTIALITY_LEVELS)[number];
+
 export interface Meeting {
   id: string;
   type: string;
@@ -233,3 +252,34 @@ export const MAJORITY_RULES = [
   "unanimous",
 ] as const;
 export type MajorityRule = (typeof MAJORITY_RULES)[number];
+
+/**
+ * Payload for COMMANDS.meetingCreate (services/meeting-service/src/topics.ts),
+ * matching createMeetingSchema (meeting-core/validators.ts) field-for-field:
+ * required title/type/scheduledAt/durationMinutes/chairpersonId/secretaryId;
+ * everything else optional. `scheduledAt` must be a full ISO-8601 instant
+ * with an offset (zod .datetime({offset:true})) — Date#toISOString() output
+ * (which is UTC "Z") satisfies this.
+ */
+export interface CreateMeetingInput {
+  title: string;
+  type: MeetingType;
+  scheduledAt: string;
+  durationMinutes: number;
+  chairpersonId: string;
+  secretaryId: string;
+  description?: string;
+  committeeId?: string;
+  convenerId?: string;
+  venue?: string;
+  vcEnabled?: boolean;
+  confidentialityLevel?: ConfidentialityLevel;
+}
+
+/** Minimal shape read from GET /v1/meeting/committees — id + label fields only. */
+export interface CommitteeSummary {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { getMeetings } from "../_data/loaders";
 import { fmtDateTime, humanize, meetingPillStatus } from "../_data/format";
 
@@ -31,15 +31,24 @@ export default async function MeetingsListPage() {
         subtitle="Every convened meeting. Open one to run the live console — agenda, attendance, quorum and voting."
         back="/meeting"
         backLabel="Meeting"
+        actions={
+          <Link className="btn primary" href="/meeting/meetings/new">
+            + New meeting
+          </Link>
+        }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {source === "error" && (
+        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      )}
 
       <Card title={`All meetings (${meetings.data.length})`} padding>
         {source === "error" ? (
-          <EmptyState
-            icon="🗂️"
-            title="Could not load meetings"
-            message="Live data couldn't be reached. Try again shortly."
+          <RefreshErrorState
+            error={{
+              what: "We couldn't load the meetings list.",
+              next: "Check your connection and try again.",
+              actions: ["retry", "help"],
+            }}
           />
         ) : meetings.data.length === 0 ? (
           <EmptyState

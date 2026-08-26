@@ -1,5 +1,4 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { getMeeting, getMinutes, getResolutions } from "../../../_data/loaders";
 import { humanize, votePillStatus } from "../../../_data/format";
 import { MinutesPanel } from "./MinutesPanel";
@@ -55,7 +54,13 @@ export default async function MinutesPage({
       {/* Vote records for this meeting (Req 11.4) */}
       <Card title={`Vote records (${resolutions.source === "api" ? resolutions.data.length : "—"})`} padding>
         {resolutions.source === "error" ? (
-          <DataSourceBadge source="error" />
+          <RefreshErrorState
+            error={{
+              what: "We couldn't load the vote records.",
+              next: "Check your connection and try again.",
+              actions: ["retry", "help"],
+            }}
+          />
         ) : resolutions.data.length === 0 ? (
           <EmptyState
             icon="🗳️"

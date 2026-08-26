@@ -32,7 +32,10 @@ export default async function MeetingHomePage() {
   const minutesPending = all.data.filter(
     (m) => m.status === "minutes_pending" || m.status === "adjourned",
   ).length;
-  const source = all.source === "error" ? "error" : "api";
+  // Both queries must succeed for the stats above to be trustworthy — if only
+  // "in progress" fails, the count silently shows 0 with no error indication
+  // unless we check its source too (fixes silent-zero bug).
+  const source = all.source === "error" || inProgress.source === "error" ? "error" : "api";
 
   return (
     <>
@@ -40,7 +43,9 @@ export default async function MeetingHomePage() {
         title="Meeting Management"
         subtitle="Convene, conduct and record committee and board meetings — agenda to minutes, one place."
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {source === "error" && (
+        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      )}
       <StatGrid>
         <StatCard
           icon="📋"
