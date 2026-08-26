@@ -137,7 +137,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
     const deviceCtx = req.deviceContext!;
     const { sessionId } = getResultParams.parse(req.params);
 
-    const result = await getOcrResult(deviceCtx.tenantId, sessionId);
+    const result = await getOcrResult(deviceCtx.tenantId, sessionId, { actorId: deviceCtx.deviceId });
     if (!result) {
       throw new HttpError(404, "OCR_RESULT_NOT_FOUND", "OCR result not yet available for this session");
     }
@@ -182,7 +182,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
     requireRole(ctx, ADMIN_ROLES);
     const { sessionId } = getResultParams.parse(req.params);
 
-    const session = await getScanSession(ctx.tenantId, sessionId);
+    const session = await getScanSession(ctx.tenantId, sessionId, { actorId: ctx.actorId, correlationId: ctx.correlationId });
     if (!session) {
       throw new HttpError(404, "SCAN_SESSION_NOT_FOUND", "scan session not found");
     }

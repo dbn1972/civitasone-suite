@@ -147,8 +147,8 @@ describe("nightly aggregation — hand-verified correctness for one known visit"
     );
   });
 
-  it.fails(
-    "[BUG A] a daily_metrics row should exist for tenant after a nightly run over one known visit",
+  it(
+    "[FIXED] a daily_metrics row exists for tenant after a nightly run over one known visit",
     async () => {
       const result = await processNightlyAggregation(db, undefined, scannerDb);
 

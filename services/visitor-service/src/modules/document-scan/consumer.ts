@@ -22,7 +22,6 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { eq, and } from "drizzle-orm";
-import { Redis } from "ioredis";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -31,7 +30,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { scanSessions, ocrResults } from "./schema.js";
 import { performOcr } from "./ocr-adapter.js";
 import { isLowConfidence, detectDocumentType, mapOcrFields, shouldScreenBlacklist } from "./domain.js";
-import { blindIndex } from "../../shared/pii-crypto.js";
+import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
+import { identityDocHash } from "../blacklist/blind-index.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -40,28 +40,6 @@ const log = pino({ name: "document-scan-consumer" });
 /** Cache resource keys for document-scan records. */
 const RESOURCE_SCAN_SESSION = "scan_session";
 const RESOURCE_OCR_RESULT = "ocr_result";
-
-// ── Redis Client for Blacklist Screening ──────────────────────────────────
-
-let _redis: Redis | null = null;
-
-function getRedis(): Redis | null {
-  if (_redis) return _redis;
-  const url = process.env.REDIS_URL;
-  if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
-  return _redis;
-}
-
-/** Blacklist set key for tenant. */
-function blacklistKey(tenantId: string): string {
-  return `visitor:${tenantId}:blacklist:docs`;
-}
-
-/** Watchlist set key for tenant. */
-function watchlistKey(tenantId: string): string {
-  return `visitor:${tenantId}:watchlist:docs`;
-}
 
 // ── S3/MinIO client for image download ────────────────────────────────────
 
@@ -206,22 +184,29 @@ export function registerDocumentScanConsumers(queue: Queue): void {
       // 5. Check confidence
       const lowConf = isLowConfidence(mapped.confidenceScores);
 
-      // 6. Blacklist/watchlist screening via Redis SISMEMBER
+      // 6. Blacklist/watchlist screening via the canonical screening store.
+      // Reuses modules/blacklist/screening-store.ts's isBlacklisted/
+      // isWatchlisted (the same SISMEMBER lookups visit-request/routes.ts
+      // and check-in/consumer.ts use) and modules/blacklist/blind-index.ts's
+      // identityDocHash(docNumber, docType) — the ONLY hash function that
+      // ever lands in the real `visitor:{tid}:blacklist:hashes` /
+      // `...:watchlist:hashes` sets populated by blacklistApprove/
+      // watchlistAdd. Previously this block talked to its own,
+      // locally-defined `:docs` Redis keys (which nothing ever wrote to)
+      // via a bare blindIndex(docNumber) with no doc-type prefix (which
+      // never matched the canonical hash even if the keys had been right).
       let blacklistMatch = false;
       let watchlistMatch = false;
 
       if (shouldScreenBlacklist(mapped)) {
-        const docHash = blindIndex(mapped.idDocumentNumber!);
+        const docHash = identityDocHash(mapped.idDocumentNumber!, docType);
         try {
-          const redis = getRedis();
-          if (redis) {
-            const [blResult, wlResult] = await Promise.all([
-              redis.sismember(blacklistKey(p.tenantId), docHash),
-              redis.sismember(watchlistKey(p.tenantId), docHash),
-            ]);
-            blacklistMatch = blResult === 1;
-            watchlistMatch = wlResult === 1;
-          }
+          const [blResult, wlResult] = await Promise.all([
+            isBlacklisted(p.tenantId, docHash),
+            isWatchlisted(p.tenantId, docHash),
+          ]);
+          blacklistMatch = blResult;
+          watchlistMatch = wlResult;
         } catch (err) {
           log.warn({ err, sessionId: p.sessionId, event: "screening_failed" },
             "blacklist/watchlist screening failed — continuing without match");
@@ -287,7 +272,11 @@ export function registerDocumentScanConsumers(queue: Queue): void {
         });
       }
 
-      // Emit specific event for blacklist match
+      // Emit specific event for blacklist match. deviceId is included so a
+      // downstream subscriber can resolve the scanner's location (devices
+      // has locationId; scan_sessions/ocr_results do not) when creating a
+      // security_incidents row — see check-in/consumer.ts's
+      // EVENTS.scanBlacklistMatch subscriber.
       if (blacklistMatch) {
         await enqueue(tx, {
           topic: EVENTS.scanBlacklistMatch,
@@ -298,6 +287,7 @@ export function registerDocumentScanConsumers(queue: Queue): void {
           payload: {
             sessionId: p.sessionId,
             ocrResultId,
+            deviceId: p.deviceId,
             idDocumentType: docType,
           },
         });
