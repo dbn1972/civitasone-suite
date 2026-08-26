@@ -76,10 +76,25 @@ export const idParam = z.object({ id: z.string().uuid() });
 
 // ── DM-002 document_types admin ─────────────────────────────────────────────
 
+// A document type can genuinely apply to more than one subject type (e.g. a PAN card
+// or company registration certificate is just as relevant for a lead, a contact and an
+// account), and an EMPTY array is a deliberate wildcard meaning "applies to every
+// subject type" (DocumentTypesEditor.tsx's checkbox UI, apps/web/src/lib/crm/
+// documents.ts's computeAlerts, and that file's own tests already assume exactly this —
+// this used to be a scalar z.enum() that rejected every array the editor ever sent,
+// including a single checked box). Deduplicated defensively — the CHECK on
+// crm.document_types.applies_to (migration 0088) only constrains membership, not
+// uniqueness, so nothing downstream depends on this, but there's no reason to persist
+// repeats of the same subject type.
+const appliesTo = z
+  .array(z.enum(SUBJECT_TYPES))
+  .max(SUBJECT_TYPES.length)
+  .transform((arr) => Array.from(new Set(arr)));
+
 export const createDocumentTypeBody = z.object({
   code: z.string().min(1).max(64).regex(/^[a-z0-9_]+$/u, "code must be lower_snake"),
   name: z.string().min(1).max(200),
-  appliesTo: z.enum(SUBJECT_TYPES),
+  appliesTo,
   mandatory: z.boolean().default(false),
   expiryRequired: z.boolean().default(false),
   verificationRequired: z.boolean().default(false),
@@ -90,7 +105,7 @@ export type CreateDocumentTypeBody = z.infer<typeof createDocumentTypeBody>;
 export const updateDocumentTypeBody = z
   .object({
     name: z.string().min(1).max(200).optional(),
-    appliesTo: z.enum(SUBJECT_TYPES).optional(),
+    appliesTo: appliesTo.optional(),
     mandatory: z.boolean().optional(),
     expiryRequired: z.boolean().optional(),
     verificationRequired: z.boolean().optional(),

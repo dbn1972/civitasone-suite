@@ -25,6 +25,20 @@ const SELECT_COLS = sql`
   verification_required AS "verificationRequired", enabled,
   created_at AS "createdAt", updated_at AS "updatedAt", version`;
 
+/**
+ * Format a JS string array as a Postgres array literal for binding into a raw `sql`
+ * template. Passing the array value itself as a parameter does NOT work here — it
+ * arrives at Postgres as the bare joined string (e.g. `["contact"]` becomes just
+ * `contact`, not `{contact}`), which fails as "malformed array literal" even with an
+ * explicit `::varchar(16)[]` cast on the parameter. Same technique already used by
+ * workflow-service's external-tasks/repo.ts for the identical problem. `appliesTo`
+ * values are already validated against the fixed 6-item SUBJECT_TYPES enum (no commas,
+ * quotes or braces possible), but this escapes them anyway rather than assume that.
+ */
+function pgArrayLiteral(values: readonly string[]): string {
+  return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
+}
+
 export async function documentTypeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/document-types", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -44,7 +58,7 @@ export async function documentTypeRoutes(app: FastifyInstance): Promise<void> {
       const inserted = (await tx.execute(sql`
         INSERT INTO crm.document_types
           (tenant_id, code, name, applies_to, mandatory, expiry_required, verification_required, enabled, created_by, updated_by)
-        VALUES (${ctx.tenantId}, ${b.code}, ${b.name}, ${b.appliesTo}, ${b.mandatory},
+        VALUES (${ctx.tenantId}, ${b.code}, ${b.name}, ${pgArrayLiteral(b.appliesTo)}::varchar(16)[], ${b.mandatory},
                 ${b.expiryRequired}, ${b.verificationRequired}, ${b.enabled}, ${ctx.actorId}, ${ctx.actorId})
         ON CONFLICT (tenant_id, code) DO NOTHING
         RETURNING ${SELECT_COLS}
@@ -67,7 +81,7 @@ export async function documentTypeRoutes(app: FastifyInstance): Promise<void> {
     const b = updateDocumentTypeBody.parse(req.body);
     const sets = [] as ReturnType<typeof sql>[];
     if (b.name !== undefined) sets.push(sql`name = ${b.name}`);
-    if (b.appliesTo !== undefined) sets.push(sql`applies_to = ${b.appliesTo}`);
+    if (b.appliesTo !== undefined) sets.push(sql`applies_to = ${pgArrayLiteral(b.appliesTo)}::varchar(16)[]`);
     if (b.mandatory !== undefined) sets.push(sql`mandatory = ${b.mandatory}`);
     if (b.expiryRequired !== undefined) sets.push(sql`expiry_required = ${b.expiryRequired}`);
     if (b.verificationRequired !== undefined) sets.push(sql`verification_required = ${b.verificationRequired}`);
