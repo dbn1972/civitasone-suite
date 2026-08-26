@@ -4,10 +4,6 @@ import { useSeededResource } from "@/lib/sync/resource";
 
 type Row = Record<string, unknown>;
 
-function pct(val: unknown): string {
-  const n = Number(val ?? 0);
-  return isNaN(n) ? "0%" : `${(n / 100).toFixed(1)}%`;
-}
 
 function rupees(val: unknown): string {
   const n = Number(BigInt(String(val ?? "0"))) / 100;
