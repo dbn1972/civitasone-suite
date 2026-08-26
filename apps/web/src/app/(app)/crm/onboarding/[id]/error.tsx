@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/crm/onboarding"
       backLabel="Back"
-      area="CRM [Id]"
+      area="onboarding case"
     />
   );
 }

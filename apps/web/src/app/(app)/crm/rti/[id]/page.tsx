@@ -44,7 +44,7 @@ export default async function RtiDetailPage({
   const { data: r, source } = await fetchJson<unknown, RtiDetail | null>(
     `/api/v1/crm/rti/${params.id}`,
     null,
-    { revalidateSeconds: 30, telemetryKey: "crm.rti.detail",
+    { revalidateSeconds: 0, telemetryKey: "crm.rti.detail",
       mapResponse: (p) => {
         if (p && typeof p === "object" && "data" in (p as object)) {
           return (p as { data: RtiDetail }).data;
