@@ -44,7 +44,7 @@ export default async function EsiStatutoryPage() {
         subtitle="ESI contribution records for covered employees."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🩺" iconBg="var(--infobg)" label="ESI Records" value={rows.length} />
         <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Employee Contribution" value={formatMoney(totalEmpContribMinor)} />

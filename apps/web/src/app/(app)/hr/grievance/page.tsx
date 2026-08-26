@@ -55,7 +55,7 @@ export default async function GrievancePage() {
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
         <StatCard icon="🔴" iconBg="#fff1f0" label="Open" value={opened} />

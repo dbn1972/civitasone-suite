@@ -54,7 +54,7 @@ export default async function IdCardsPage() {
         subtitle="Issue, manage, and verify digital identity cards for employees and vendor staff."
         back="/hr"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🆔" iconBg="#e6f0ff" label="Total Cards"    value={items.length} />
         <StatCard icon="✅"          iconBg="#e6f7f0" label="Active"         value={active} />

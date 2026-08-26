@@ -87,7 +87,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         subtitle="Challan ingestion and deducted-vs-deposited TDS reconciliation, ahead of 24Q/26Q filing."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} />
+      <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
 
       <PeriodSelector period={period} />
 

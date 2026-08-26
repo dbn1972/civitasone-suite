@@ -81,7 +81,7 @@ describe("ReturnsPage", () => {
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.getByText("Could not load Form-24Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("File anyway — bypass reconciliation (force)")).not.toBeInTheDocument();
     expect(screen.queryByText("Form-24Q blocked for FY 2025-26 Q1")).not.toBeInTheDocument();

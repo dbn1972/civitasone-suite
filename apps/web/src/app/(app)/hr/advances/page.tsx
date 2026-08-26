@@ -77,7 +77,7 @@ export default async function AdvancesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />

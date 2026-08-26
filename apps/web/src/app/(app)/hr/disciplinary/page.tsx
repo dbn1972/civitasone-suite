@@ -57,7 +57,7 @@ export default async function DisciplinaryListPage() {
         back="/hr"
         actions={<Link href="/hr/vigilance" className="btn-outline">Vigilance Only</Link>}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
         <StatCard icon="🔴" iconBg="#fff1f0" label="Major (Vigilance)" value={major} />

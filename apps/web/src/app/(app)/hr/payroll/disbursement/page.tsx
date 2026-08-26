@@ -118,7 +118,7 @@ export default async function DisbursementPage() {
         subtitle="Employee bank transfers, NACH mandates, bank file generation, DSC signing."
         back="/hr/payroll"
       />
-      {anyError && <DataSourceBadge source="error" />}
+      {anyError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
 
       <StatGrid>
         <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={eligibleRuns.length} />

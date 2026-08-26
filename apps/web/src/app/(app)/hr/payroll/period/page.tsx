@@ -40,7 +40,7 @@ export default async function PayrollPeriodPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Completed" value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />

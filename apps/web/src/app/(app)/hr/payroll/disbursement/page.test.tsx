@@ -75,7 +75,7 @@ describe("DisbursementPage", () => {
     const ui = await DisbursementPage();
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("notes the mandate list endpoint is not available, without fabricating data", async () => {

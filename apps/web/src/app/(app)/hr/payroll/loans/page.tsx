@@ -32,7 +32,7 @@ export default async function LoansPage({
         subtitle="Search, create and disburse employee loans and view the sanctioned amount, EMI and outstanding balance."
         back="/hr/payroll"
       />
-      {empId && <DataSourceBadge source={result.source} />}
+      {empId && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
 
       {empId && (
         <StatGrid>

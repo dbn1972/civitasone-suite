@@ -50,7 +50,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
         back="/hr/vigilance"
         actions={<StatusPill status={status} />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={status.replace(/_/g, " ")} />

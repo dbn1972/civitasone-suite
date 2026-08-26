@@ -42,7 +42,7 @@ describe("LoansPage", () => {
     const ui = await LoansPage({ searchParams: { empId: "11111111-1111-1111-1111-111111111111" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("notes the recovery schedule endpoint is not available", async () => {

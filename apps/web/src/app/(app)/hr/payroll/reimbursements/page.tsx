@@ -48,7 +48,7 @@ export default async function ReimbursementsPage() {
         subtitle="Employee expense reimbursement claims (medical, travel, LTA, and more)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />

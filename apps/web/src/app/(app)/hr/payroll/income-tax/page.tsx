@@ -41,7 +41,7 @@ export default async function IncomeTaxPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Income Tax Computation" subtitle="Annual IT computation summary for FY 2024-25." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />

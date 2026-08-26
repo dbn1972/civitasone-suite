@@ -48,7 +48,7 @@ export default async function RtiPage() {
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📂" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
         <StatCard icon="🔔" iconBg="#fffbe6" label="Pending (Filed)" value={filed} />

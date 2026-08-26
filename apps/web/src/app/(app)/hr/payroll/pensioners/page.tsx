@@ -40,7 +40,7 @@ export default async function PensionersPage() {
           <Link href="/hr/payroll/pensioners/new" className="btn primary">+ Add Pensioner</Link>
         }
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="👴" iconBg="var(--panel)" label="Total Pensioners" value={total} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />

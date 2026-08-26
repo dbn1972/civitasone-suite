@@ -55,6 +55,6 @@ describe("PayrollRegisterPage", () => {
     const ui = await PayrollRegisterPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

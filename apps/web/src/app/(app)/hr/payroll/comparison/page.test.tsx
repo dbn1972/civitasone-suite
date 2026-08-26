@@ -43,7 +43,7 @@ describe("PayrollComparisonPage", () => {
     const ui = await PayrollComparisonPage({ searchParams: { period1: "2025-05", period2: "2025-06" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByText("No comparison data")).not.toBeInTheDocument();
   });
 

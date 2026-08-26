@@ -60,7 +60,7 @@ export default async function Form16Page({
         subtitle="Generate, review deductions, and issue statutory Form-16 (Sec 203) certificates."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       {/* Wizard: 3-step — select FY / review deductions / generate & download */}
       <Card title="Form-16 Wizard">
@@ -79,7 +79,7 @@ export default async function Form16Page({
             />
           ) : lookup.state === "error" ? (
             <>
-              <DataSourceBadge source="error" />
+              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
               <EmptyState
                 icon="⚠️"
                 title={`Could not load filing run for FY ${fy}`}

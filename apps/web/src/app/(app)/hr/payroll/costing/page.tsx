@@ -106,8 +106,8 @@ export default async function CostingPage({
         subtitle="Define cost-center allocation rules and view the monthly costing report."
         back="/hr/payroll"
       />
-      {period && <DataSourceBadge source={result.source} />}
-      <DataSourceBadge source={rulesResult.source} />
+      {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
+      <DataSourceBadge source={rulesResult.source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total Rules" value={ruleRows.length} />
