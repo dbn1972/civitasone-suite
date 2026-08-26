@@ -28,10 +28,10 @@ export default function NewFilePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const year = new Date().getFullYear();
-      const fileNo = `F/${year}/${String(Math.floor(Math.random() * 9000) + 1000)}`;
+      // Do NOT invent a file number on the client — the gapless CSMOP file
+      // number is allocated server-side (per section + year). Sending a random
+      // one both showed the officer a wrong number and risked persisting it.
       const payload = {
-        fileNo,
         subject,
         dept: department || "ADMIN",
         classification: CLASS_MAP[classification] ?? "public",
@@ -47,7 +47,7 @@ export default function NewFilePage() {
       });
       if (res.status === 202 || res.ok) {
         const body = await res.json().catch(() => ({})) as { id?: string };
-        setToast({ type: "success", message: `File ${fileNo} created with yellow note.` });
+        setToast({ type: "success", message: "File created with an opening yellow note. Opening it now…" });
         if (body.id) {
           setTimeout(() => router.push(`/estab/files/${body.id}`), 800);
         }

@@ -1,10 +1,11 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { FilesTable, type FileRow } from "./FilesTable";
 
 export default async function EstabFilesListPage() {
   const { data: files, source } = await getEstabFiles();
+  const errored = source === "error";
   const active = files.filter((f) => f.status === "active").length;
   const pending = files.filter((f) => f.status === "pending").length;
   const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
@@ -36,7 +37,6 @@ export default async function EstabFilesListPage() {
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Digital File Tracking (eOffice)"
         subtitle="Create, route and track files with note sheets & movement trail."
@@ -71,18 +71,24 @@ export default async function EstabFilesListPage() {
       >
         <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail and SLA on pendency — no physical files.
       </div>
+      {/* "Pending" (not "SLA Breached"): there is no due-date/SLA field here, so
+          this is the count of pending files, not a breach count. Show "—" rather
+          than a fabricated 0 when the load failed. */}
       <StatGrid>
-        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={active.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={avgPendencyDisplay} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="SLA Breached" value={pending.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#eff6ff" label="Closed (MTD)" value={closed.toLocaleString("en-IN")} />
+        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
+        <StatCard icon="🟡" iconBg="#fffaeb" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#eff6ff" label="Closed (MTD)" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        {files.length === 0 ? (
+        {errored ? (
           <>
-            <div className="card-h">
-              <h3>File register &amp; tracking</h3>
-            </div>
+            <div className="card-h"><h3>File register &amp; tracking</h3></div>
+            <div className="pad"><RefreshErrorState error={toHumanError("load", { area: "file register" })} /></div>
+          </>
+        ) : files.length === 0 ? (
+          <>
+            <div className="card-h"><h3>File register &amp; tracking</h3></div>
             <EmptyState icon="📁" title="No files found" message="No eOffice files created yet." />
           </>
         ) : (

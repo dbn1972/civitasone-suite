@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatusPill, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type InwardRow = {
   id: string;
@@ -27,17 +28,21 @@ export default function DakRegistryPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ dakNo: "", fromAddress: "", subject: "" });
   const [message, setMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/inward?limit=100", { signal });
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json() as { data?: InwardRow[] };
       setRows(body.data ?? []);
     } catch (e) {
+      // A failed load must not masquerade as an empty register.
       if (e instanceof Error && e.name !== 'AbortError') {
-        setMessage(e.message || "Load failed");
+        setLoadError(true);
       }
     } finally {
       setLoading(false);
@@ -53,6 +58,7 @@ export default function DakRegistryPage() {
   async function registerDak(e: React.FormEvent) {
     e.preventDefault();
     setMessage("");
+    setActionError("");
     try {
       const res = await fetch("/api/proxy/v1/estab/inward", {
         method: "POST",
@@ -64,12 +70,13 @@ export default function DakRegistryPage() {
       setMessage("DAK registered.");
       await load();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Register failed");
+      setActionError(e instanceof Error ? e.message : "Register failed");
     }
   }
 
   async function openFile(inwardId: string) {
     setMessage("");
+    setActionError("");
     try {
       const res = await fetch(`/api/proxy/v1/estab/inward/${inwardId}/open-file`, {
         method: "POST",
@@ -80,15 +87,18 @@ export default function DakRegistryPage() {
           classification: "public",
         }),
       });
-      const body = await res.json().catch(() => ({})) as { id?: string };
-      if (!res.ok) throw new Error(await res.text());
+      // Read the body exactly once — reading json() then text() throws
+      // "body stream already read", which masked the real server error.
+      const raw = await res.text();
+      if (!res.ok) throw new Error(raw || "Open file failed");
+      const body = (raw ? JSON.parse(raw) : {}) as { id?: string };
       if (body.id) router.push(`/estab/files/${body.id}`);
       else {
         setMessage("File opening — refresh in a moment.");
         await load();
       }
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Open file failed");
+      setActionError(e instanceof Error ? e.message : "Open file failed");
     }
   }
 
@@ -102,10 +112,17 @@ export default function DakRegistryPage() {
         back="/estab/list"
       />
 
-      <div role="alert" aria-live="polite">
+      <div role="status" aria-live="polite">
         {message ? (
           <div className="banner" style={{ background: "#ecfdf3", border: "1px solid #6ee7b7", borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
             {message}
+          </div>
+        ) : null}
+      </div>
+      <div role="alert" aria-live="assertive">
+        {actionError ? (
+          <div className="banner" style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+            {actionError}
           </div>
         ) : null}
       </div>
@@ -137,6 +154,8 @@ export default function DakRegistryPage() {
         </div>
         {loading ? (
           <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : loadError ? (
+          <div className="pad"><ErrorState error={toHumanError("load", { area: "inward register" })} onRetry={() => void load()} /></div>
         ) : rows.length === 0 ? (
           <EmptyState icon="📥" title="No DAK registered yet" message="Register incoming dak above to start tracking it here." />
         ) : (

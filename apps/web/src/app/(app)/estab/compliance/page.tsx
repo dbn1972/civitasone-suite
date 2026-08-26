@@ -1,12 +1,12 @@
-import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabCompliance } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { ComplianceTable, type ComplianceRow } from "./ComplianceTable";
 
 export default async function CompliancePage() {
   const { data: items, source } = await getEstabCompliance();
+  const errored = source === "error";
   const today = new Date().toISOString().split("T")[0];
   const complianceRate = items.length > 0
     ? Math.round((items.filter((c) => c.status === "complied").length / items.length) * 100)
@@ -27,20 +27,25 @@ export default async function CompliancePage() {
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Action / Decision Compliance"
         subtitle="Track closure of meeting action items & decisions."
-        actions={<Link href="/estab/compliance?tab=reminders" className="btn primary" style={{ minHeight: 44 }}>Reminders</Link>}
       />
+      {/* delta removed — it was a hardcoded "+3%", not a real period-over-period
+          change; and counts show "—" rather than a fabricated 0 on load failure. */}
       <StatGrid>
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Compliance Rate" value={`${complianceRate}%`} delta="+3%" up />
-        <StatCard icon="📋" iconBg="#e6f7f5" label="Open Actions" value={openActions.toLocaleString("en-IN")} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Overdue" value={overdue.toLocaleString("en-IN")} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Escalated" value={escalated.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Compliance Rate" value={errored ? "—" : `${complianceRate}%`} />
+        <StatCard icon="📋" iconBg="#e6f7f5" label="Open Actions" value={errored ? "—" : openActions.toLocaleString("en-IN")} />
+        <StatCard icon="⏰" iconBg="#fffaeb" label="Overdue" value={errored ? "—" : overdue.toLocaleString("en-IN")} />
+        <StatCard icon="🔴" iconBg="#fef3f2" label="Escalated" value={errored ? "—" : escalated.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        {items.length === 0 ? (
+        {errored ? (
+          <>
+            <div className="card-h"><h3>Action items across meetings</h3></div>
+            <div className="pad"><RefreshErrorState error={toHumanError("load", { area: "compliance items" })} /></div>
+          </>
+        ) : items.length === 0 ? (
           <>
             <div className="card-h">
               <h3>Action items across meetings</h3>

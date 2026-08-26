@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type Notification = {
   id: string;
@@ -42,9 +44,12 @@ export function NotificationsPanel() {
 
   return (
     <div style={{ marginTop: 18 }}>
-      {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+      ) : error ? (
+        // A failed load must NOT show "All clear" — that would tell an officer
+        // nothing is pending when we simply couldn't check.
+        <div className="card"><div className="pad"><ErrorState error={toHumanError("load", { area: "notifications" })} onRetry={() => void load()} /></div></div>
       ) : items.length === 0 ? (
         <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>All clear — nothing needs your attention.</p></div>
       ) : (
@@ -59,7 +64,11 @@ export function NotificationsPanel() {
                 }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.dot, marginTop: 5, flexShrink: 0 }} aria-hidden="true" />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>{n.title}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.9375rem", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      {/* Severity by text + colour, never colour alone (WCAG). */}
+                      <span style={{ fontSize: "0.625rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: s.dot }}>{n.severity}</span>
+                      <span>{n.title}</span>
+                    </div>
                     <div style={{ fontSize: "0.8125rem", color: "#475569" }}>{n.detail}</div>
                   </div>
                   <time style={{ fontSize: "0.75rem", color: "#94a3b8", whiteSpace: "nowrap" }}>

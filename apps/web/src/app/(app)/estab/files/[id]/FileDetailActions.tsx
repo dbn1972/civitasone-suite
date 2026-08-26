@@ -37,6 +37,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   const [referRemarks, setReferRemarks] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   // Operator picker — the valid "mark/forward to" candidates (X10).
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -67,11 +68,13 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
 
   async function addYellowNote() {
     if (!noteBody.trim()) {
-      setMessage("Write a yellow note before saving.");
+      setMessage("");
+      setError("Write a yellow note before saving.");
       return;
     }
     setBusy(true);
     setMessage("");
+    setError("");
     try {
       const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings`, {
         method: "POST",
@@ -88,7 +91,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       setMessage("Yellow note saved.");
       router.refresh();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Failed to save note");
+      setError(e instanceof Error ? e.message : "Failed to save note");
     } finally {
       setBusy(false);
     }
@@ -96,10 +99,10 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
 
   async function submitForApproval(remarks?: string) {
     if (!draftNotingId) {
-      setMessage("No draft yellow note to submit.");
       throw new Error("No draft yellow note to submit.");
     }
     setMessage("");
+    setError("");
     const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/submit-for-approval`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -114,55 +117,61 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     onConfirm: (reason) => submitForApproval(reason),
   });
 
-  async function signNote() {
-    if (!draftNotingId) {
-      setMessage("No draft note to sign.");
-      return;
-    }
-    setBusy(true);
+  // Signing is irreversible — it writes a green, hash-chained note in the
+  // officer's name — so it is gated behind a ConfirmDialog (see signConfirm).
+  async function signNoteAction() {
+    if (!draftNotingId) throw new Error("No draft note to sign.");
     setMessage("");
-    try {
-      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings/${draftNotingId}/sign`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setMessage("Note signed — recorded as a green note in the file's hash-chained noting trail.");
-      router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Sign failed");
-    } finally {
-      setBusy(false);
-    }
+    setError("");
+    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings/${draftNotingId}/sign`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    if (!res.ok) throw new Error(await res.text());
+    setMessage("Note signed — recorded as a green note in the file's hash-chained noting trail.");
+    router.refresh();
   }
 
-  async function referBack() {
+  const signConfirm = useConfirmAction({ onConfirm: () => signNoteAction() });
+
+  // Referring a file changes its custody — gated behind a ConfirmDialog that
+  // names the destination officer.
+  async function referBackAction() {
     const target = toOfficer.trim() || DEFAULT_OFFICER;
-    if (!/^[0-9a-f-]{36}$/i.test(target)) {
-      setMessage("Pick an officer or enter a valid officer ID before referring back.");
+    setMessage("");
+    setError("");
+    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/move`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        toOfficer: target,
+        remarks: referRemarks.trim() || "Referred back",
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    setReferRemarks("");
+    setMessage("File referred back.");
+    router.refresh();
+  }
+
+  const referConfirm = useConfirmAction({ onConfirm: () => referBackAction() });
+
+  const referTarget = toOfficer.trim() || DEFAULT_OFFICER;
+  const referTargetValid = /^[0-9a-f-]{36}$/i.test(referTarget);
+  const referTargetOperator = operators.find((o) => o.employeeId === referTarget);
+  const referTargetLabel = referTargetOperator
+    ? operatorLabel(referTargetOperator)
+    : `officer ${referTarget.slice(0, 8)}…`;
+
+  // Validate before opening the confirm dialog so we never confirm an invalid id.
+  function onReferBackClick() {
+    if (!referTargetValid) {
+      setMessage("");
+      setError("Pick an officer or enter a valid officer ID before referring back.");
       return;
     }
-    setBusy(true);
-    setMessage("");
-    try {
-      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/move`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          toOfficer: target,
-          remarks: referRemarks.trim() || "Referred back",
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setReferRemarks("");
-      setMessage("File referred back.");
-      router.refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Refer back failed");
-    } finally {
-      setBusy(false);
-    }
+    referConfirm.trigger();
   }
 
   if (status === "closed") return null;
@@ -191,7 +200,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           <button type="button" className="btn primary" disabled={busy || submitConfirm.busy || !draftNotingId} onClick={submitConfirm.trigger}>
             Submit for approval
           </button>
-          <button type="button" className="btn ghost" disabled={busy || !draftNotingId} onClick={() => void signNote()}
+          <button type="button" className="btn ghost" disabled={busy || signConfirm.busy || !draftNotingId} onClick={signConfirm.trigger}
             title="Sign this note at your level — adds a green, hash-chained note (SO → US → DS)">
             Sign note (green)
           </button>
@@ -226,10 +235,15 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
             placeholder="Refer-back remarks"
             style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
           />
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void referBack()}>
+          <button type="button" className="btn ghost" disabled={busy || referConfirm.busy} onClick={onReferBackClick}>
             Refer back
           </button>
         </div>
+        {error ? (
+          <div role="alert" aria-live="assertive">
+            <p style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{error}</p>
+          </div>
+        ) : null}
         <div role="status" aria-live="polite">
           {message ? <p style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
         </div>
@@ -245,6 +259,28 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
         errorMessage={submitConfirm.error}
         onConfirm={submitConfirm.confirm}
         onCancel={submitConfirm.cancel}
+      />
+      <ConfirmDialog
+        open={signConfirm.open}
+        title="Sign this note as a green note?"
+        description="This records your e-signature into the file's tamper-evident (hash-chained) noting trail as a green note in your name. A signed note cannot be edited or withdrawn."
+        confirmLabel="Sign note"
+        danger
+        busy={signConfirm.busy}
+        errorMessage={signConfirm.error}
+        onConfirm={signConfirm.confirm}
+        onCancel={signConfirm.cancel}
+      />
+      <ConfirmDialog
+        open={referConfirm.open}
+        title="Refer this file to another officer?"
+        description={`This moves the file off your desk to ${referTargetLabel}. They take custody and it leaves your pending list.`}
+        confirmLabel="Refer file"
+        danger
+        busy={referConfirm.busy}
+        errorMessage={referConfirm.error}
+        onConfirm={referConfirm.confirm}
+        onCancel={referConfirm.cancel}
       />
     </div>
   );

@@ -80,7 +80,7 @@ export function DfaPanel() {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error((await res.text()) || "Create failed");
-      setMessage("Draft created. Edit it, then submit for approval.");
+      setMessage("Draft created. Submit it for approval when ready.");
       setCurrentStepTitle(stepTitleFor("draft"));
       setForm({ ...EMPTY }); setShowForm(false);
       setTimeout(() => void load(), 800);
