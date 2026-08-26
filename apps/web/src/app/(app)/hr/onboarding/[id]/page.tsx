@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
@@ -11,53 +11,58 @@ import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 // Types
 // ---------------------------------------------------------------------------
 
+// Matches the real shape of GET /v1/hrms/onboarding (hrms-service
+// modules/lifecycle/onboarding-routes.ts) — it returns exactly these fields.
+// There is no checklist/documents/tasks/reportingManager/officeLocation in
+// the response; a previous version of this page invented those and always
+// rendered fabricated placeholder progress for every joinee (see PR notes).
 type ApiRow = {
   id: string;
   employee: string;
-  employeeName?: string;
   department: string;
   joiningDate: string;
-  reportingManager?: string;
-  officeLocation?: string;
-  stepsCompleted: number;
-  totalSteps: number;
-  overdue: number;
+  stepsCompleted: string | number;
+  totalSteps: string | number;
   progress: string | number;
   status: string;
-  checklist?: ChecklistStep[];
-  documents?: OnboardingDocument[];
-  tasks?: CalendarTask[];
-} & Record<string, unknown>;
+};
 
-// ---------------------------------------------------------------------------
-// Default fallback data (used when API returns a minimal Row)
-// ---------------------------------------------------------------------------
+// Matches GET /v1/hrms/employees/:id/onboarding-tasks (hrms_onboarding_tasks
+// table: id, employeeId, title, dueByDay, status, completedAt, ...).
+type OnboardingTaskRow = {
+  id: string;
+  title: string;
+  dueByDay: number;
+  status: string; // only ever "pending" or "completed" — the backend never writes "in_progress"/"overdue"
+};
 
-const DEFAULT_CHECKLIST: ChecklistStep[] = [
-  { id: "docs", label: "Documents Submitted", description: "All required KYC and joining documents uploaded.", status: "completed", dueDay: 1 },
-  { id: "id-card", label: "ID Card Issued", description: "Employee photo ID card printed and issued by admin.", status: "in_progress", dueDay: 3 },
-  { id: "workstation", label: "Workstation Assigned", description: "Desk, laptop, and peripherals provisioned.", status: "pending", dueDay: 3 },
-  { id: "it-access", label: "IT Access Created", description: "Email, VPN, and system accounts activated.", status: "pending", dueDay: 7 },
-  { id: "induction", label: "Induction Completed", description: "HR induction, code-of-conduct briefing, and department introduction.", status: "pending", dueDay: 7 },
-  { id: "probation-review", label: "Probation Review Scheduled", description: "30-day probation check-in meeting scheduled with reporting manager.", status: "pending", dueDay: 30 },
-];
+const CALENDAR_MILESTONES = [1, 3, 7, 30] as const;
 
+function nearestMilestone(day: number): (typeof CALENDAR_MILESTONES)[number] {
+  return CALENDAR_MILESTONES.reduce((best, m) => (Math.abs(m - day) < Math.abs(best - day) ? m : best));
+}
+
+/** A "pending" task becomes "overdue" once its due date (joining date + dueByDay) has passed. */
+function deriveStatus(task: OnboardingTaskRow, joiningDate: string): ChecklistStep["status"] {
+  if (task.status === "completed") return "completed";
+  const join = new Date(`${joiningDate}T00:00:00Z`);
+  if (Number.isNaN(join.getTime())) return "pending";
+  const due = new Date(join);
+  due.setUTCDate(due.getUTCDate() + task.dueByDay);
+  return due.toISOString().slice(0, 10) < new Date().toISOString().slice(0, 10) ? "overdue" : "pending";
+}
+
+// Standard KYC checklist we ask HR to collect. There is no backend record of
+// per-document collection status yet (no onboarding-document routes exist),
+// so every item starts "pending" rather than inventing which ones are
+// already "verified"/"uploaded" for a given joinee.
 const DEFAULT_DOCUMENTS: OnboardingDocument[] = [
-  { id: "doc-appt", name: "Appointment Letter", description: "Signed copy of the appointment / offer letter.", required: true, status: "verified", category: "document" },
-  { id: "doc-id", name: "Government ID Proof", description: "Aadhaar card, Voter ID, or Passport (self-attested).", required: true, status: "uploaded", category: "document" },
+  { id: "doc-appt", name: "Appointment Letter", description: "Signed copy of the appointment / offer letter.", required: true, status: "pending", category: "document" },
+  { id: "doc-id", name: "Government ID Proof", description: "Aadhaar card, Voter ID, or Passport (self-attested).", required: true, status: "pending", category: "document" },
   { id: "doc-address", name: "Address Proof", description: "Aadhaar, utility bill, or bank statement (not older than 3 months).", required: true, status: "pending", category: "document" },
   { id: "doc-education", name: "Education Certificate", description: "Highest qualification marksheet and degree certificate.", required: true, status: "pending", category: "document" },
-  { id: "doc-pan", name: "PAN Card", description: "Permanent Account Number card copy for payroll.", required: true, status: "uploaded", category: "document" },
+  { id: "doc-pan", name: "PAN Card", description: "Permanent Account Number card copy for payroll.", required: true, status: "pending", category: "document" },
   { id: "doc-bank", name: "Bank Account Details", description: "Cancelled cheque or passbook copy (Name + IFSC + Account No).", required: true, status: "pending", category: "document" },
-];
-
-const DEFAULT_TASKS: CalendarTask[] = [
-  { id: "t1", title: "Complete document submission", description: "Upload all 6 required KYC documents.", milestoneDay: 1, status: "completed", category: "Documents" },
-  { id: "t2", title: "Collect ID card", description: "Visit Admin desk, Block B, Ground Floor.", milestoneDay: 3, status: "in_progress", category: "Admin" },
-  { id: "t3", title: "Workstation setup", description: "Laptop imaging and email configuration.", milestoneDay: 3, status: "pending", category: "IT" },
-  { id: "t4", title: "IT access & VPN setup", description: "Activate SSO, VPN, and directory access.", milestoneDay: 7, status: "pending", category: "IT" },
-  { id: "t5", title: "HR induction session", description: "2-hour induction — policies, leave, payroll.", milestoneDay: 7, status: "pending", category: "HR" },
-  { id: "t6", title: "Probation review meeting", description: "Performance check-in with reporting manager.", milestoneDay: 30, status: "pending", category: "HR" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -71,7 +76,7 @@ interface Props {
 export default async function OnboardingDetailPage({ params }: Props) {
   const { id } = await params;
 
-  const { data: rows, source } = await fetchJson<unknown, ApiRow[]>(
+  const { data: rows, source: summarySource } = await fetchJson<unknown, ApiRow[]>(
     "/api/v1/hrms/onboarding",
     [],
     {
@@ -86,10 +91,39 @@ export default async function OnboardingDetailPage({ params }: Props) {
   const row = rows.find((r) => r.id === id);
   if (!row) notFound();
 
+  // Real per-employee tasks — the only genuine source for checklist/calendar
+  // content. `id` here IS the employee id (the summary route keys rows by
+  // employeeId, confirmed against hrms-service onboarding-routes.ts).
+  const { data: taskRows, source: tasksSource } = await fetchJson<unknown, OnboardingTaskRow[]>(
+    `/api/v1/hrms/employees/${id}/onboarding-tasks`,
+    [],
+    {
+      telemetryKey: "hr.onboarding.detail.tasks",
+      mapResponse: (p) => {
+        const arr = Array.isArray(p) ? p : (p as { data?: OnboardingTaskRow[] })?.data;
+        return Array.isArray(arr) ? arr : null;
+      },
+    },
+  );
+  const source = summarySource === "error" || tasksSource === "error" ? "error" : "api";
+
   const pct = Math.min(100, Math.max(0, Number(String(row.progress).replace("%", ""))));
-  const checklist: ChecklistStep[] = row.checklist ?? DEFAULT_CHECKLIST;
-  const documents: OnboardingDocument[] = row.documents ?? DEFAULT_DOCUMENTS;
-  const tasks: CalendarTask[] = row.tasks ?? DEFAULT_TASKS;
+
+  const checklist: ChecklistStep[] = taskRows.map((t) => ({
+    id: t.id,
+    label: t.title,
+    status: deriveStatus(t, row.joiningDate),
+    dueDay: t.dueByDay,
+  }));
+
+  const tasks: CalendarTask[] = taskRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    milestoneDay: nearestMilestone(t.dueByDay),
+    status: deriveStatus(t, row.joiningDate),
+  }));
+
+  const documents: OnboardingDocument[] = DEFAULT_DOCUMENTS;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -103,48 +137,66 @@ export default async function OnboardingDetailPage({ params }: Props) {
 
       {/* Welcome banner */}
       <JoineeWelcomeHeader
-        name={row.employeeName ?? row.employee}
+        name={row.employee}
         startDate={row.joiningDate}
         department={row.department}
-        reportingManager={row.reportingManager ?? "Department Head"}
-        officeLocation={row.officeLocation ?? "Head Office, New Delhi — 110 001"}
+        reportingManager="Not yet assigned"
+        officeLocation="Not specified"
         overallProgress={pct}
       />
 
       {/* Two-column: checklist | task calendar */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          marginBottom: 24,
-        }}
-        className="onboarding-grid"
-      >
-        {/* Checklist */}
+      {checklist.length === 0 ? (
         <div
           style={{
             border: "1px solid var(--border, #e2e8f0)",
             borderRadius: 12,
             padding: 20,
             background: "var(--card-bg, #fff)",
+            marginBottom: 24,
           }}
         >
-          <OnboardingChecklist steps={checklist} />
+          <EmptyState
+            icon="🗒️"
+            title="No onboarding tasks set up yet"
+            message="HR hasn't added any onboarding tasks for this joinee. Once tasks are added, their checklist and due-date calendar will appear here."
+          />
         </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 20,
+            marginBottom: 24,
+          }}
+          className="onboarding-grid"
+        >
+          {/* Checklist */}
+          <div
+            style={{
+              border: "1px solid var(--border, #e2e8f0)",
+              borderRadius: 12,
+              padding: 20,
+              background: "var(--card-bg, #fff)",
+            }}
+          >
+            <OnboardingChecklist steps={checklist} />
+          </div>
 
-        {/* Task calendar */}
-        <div
-          style={{
-            border: "1px solid var(--border, #e2e8f0)",
-            borderRadius: 12,
-            padding: 20,
-            background: "var(--card-bg, #fff)",
-          }}
-        >
-          <TaskCalendar tasks={tasks} joiningDate={row.joiningDate} />
+          {/* Task calendar */}
+          <div
+            style={{
+              border: "1px solid var(--border, #e2e8f0)",
+              borderRadius: 12,
+              padding: 20,
+              background: "var(--card-bg, #fff)",
+            }}
+          >
+            <TaskCalendar tasks={tasks} joiningDate={row.joiningDate} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Document upload section */}
       <div

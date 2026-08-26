@@ -59,9 +59,9 @@ export default async function TalentPoolPage({
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\U0001f465" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
-        <StatCard icon="\U0001f4a1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
-        <StatCard icon="\U0001f9e0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
+        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
+        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
+        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
         <StatCard icon="\u2705"       iconBg="var(--line2)" label="Active Stages"     value={activeStage} />
       </StatGrid>
 

@@ -59,7 +59,7 @@ export default async function OnboardingPage() {
         subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
         back="/hr"
         actions={
-          <Link href="/hr/onboarding/new" className="btn primary" aria-label="Add new joinee">
+          <Link href="/hr/employees/new" className="btn primary" aria-label="Add new joinee">
             + Add New Joinee
           </Link>
         }
@@ -90,7 +90,7 @@ export default async function OnboardingPage() {
             message="New joinee onboarding checklists appear here once a joining is initiated. Checklists track document collection, IT access setup, workstation assignment, ID card issuance, and induction completion."
             action={
               <Link
-                href="/hr/onboarding/new"
+                href="/hr/employees/new"
                 className="btn primary"
                 style={{ marginTop: 12, display: "inline-block" }}
                 aria-label="Add new joinee to start onboarding"
