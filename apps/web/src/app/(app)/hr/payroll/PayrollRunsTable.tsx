@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import type { ReactNode } from "react";
 import { DataTable } from "../../../_components/ds";
 import type { PayrollRunDetail } from "@civitasone/types";
@@ -52,9 +50,9 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
         emptyMessage="Payroll runs process and disburse monthly salaries. Create your first run to get started."
         emptyAction={
           canAdminister ? (
-            <Link href="/hr/payroll/period" className="btn primary" style={{ marginTop: 10 }}>
-              Create first run
-            </Link>
+            <p style={{ marginTop: 10, fontSize: 13, color: "var(--ink2)" }}>
+              Use the &quot;New Payroll Run&quot; form above to create your first run.
+            </p>
           ) : undefined
         }
       />
