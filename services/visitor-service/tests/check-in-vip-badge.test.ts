@@ -27,8 +27,14 @@ let autoPrintEnabled = false;
 
 let passRow: Record<string, unknown> | undefined;
 let visitRow: Record<string, unknown> | undefined;
+// SECURITY FIX follow-up: checkInRecord now looks up `gates` (gate/location/
+// area scope check — Property 26/19, see check-in-bypasses-gate-scope.test.ts)
+// right after loading the pass. A perimeter gate (areaId null) at the pass's
+// own location always passes that check without perturbing anything this
+// suite actually tests (VIP-arrival alert + badge auto-handoff).
+let gateRow: Record<string, unknown> | undefined;
 
-// Ordered select responses: 1=digitalPasses, 2=visitRequests, 3=locations.
+// Ordered select responses: 1=digitalPasses, 2=gates, 3=visitRequests, 4=locations.
 function makeChain(rows: Record<string, unknown>[]) {
   return { from: () => ({ where: () => ({ limit: async () => rows }) }) };
 }
@@ -38,7 +44,8 @@ const fakeTx = {
     if (!fakeTx.__n) fakeTx.__n = 0;
     fakeTx.__n++;
     if (fakeTx.__n === 1) return makeChain(passRow ? [passRow] : []);
-    if (fakeTx.__n === 2) return makeChain(visitRow ? [visitRow] : []);
+    if (fakeTx.__n === 2) return makeChain(gateRow ? [gateRow] : []);
+    if (fakeTx.__n === 3) return makeChain(visitRow ? [visitRow] : []);
     return makeChain([{ capacityThreshold: null }]);
   }) as unknown as (() => ReturnType<typeof makeChain>) & { __n?: number },
   insert: vi.fn(() => ({ values: async () => undefined })),
@@ -131,6 +138,9 @@ beforeEach(() => {
     visitorPhone: "9999999999", hostEmployeeId: HOST_ID,
     visitorCategory: "standard", identityDocRef: null,
   };
+  // A real, tenant-scoped perimeter gate (areaId null) at the pass's own
+  // location — always clears the Property 26/19 scope check trivially.
+  gateRow = { id: GATE_ID, tenantId: TENANT, locationId: LOCATION_ID, areaId: null };
 });
 
 describe("Fix 1 — VIP arrival alert", () => {

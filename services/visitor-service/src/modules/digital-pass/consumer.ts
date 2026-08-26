@@ -307,11 +307,30 @@ export function registerDigitalPassConsumers(queue: Queue): void {
       // Revoke original
       const revocationFields = revokePass(originalPass, p.reason);
 
+      // BUG FIX: look up the visit request BEFORE generating the replacement
+      // so its visitor_id can source the replacement's QR visitor_id claim
+      // correctly. Previously this used originalPass.createdBy — the
+      // actor/employee/system account that created the pass ROW (e.g. a
+      // receptionist keying in a walk-in, or SYSTEM for an auto-approved VIP
+      // pass), never the visitor — so a replaced pass's QR JWT embedded the
+      // wrong identity entirely. Same `visitorId ?? visitRequestId` fallback
+      // convention as visit-request/consumer.ts#triggerPassGenerate:
+      // visit_requests.visitor_id is populated later by the
+      // identity-verification flow (DigiLocker/Aadhaar-Face) and may still
+      // be null at replace time, in which case the visit request's own id
+      // (always available and stable) is used, exactly as passGenerate does.
+      const visitRows = await tx
+        .select()
+        .from(visitRequests)
+        .where(and(eq(visitRequests.id, originalPass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
+        .limit(1);
+      const visit = visitRows[0];
+
       // Generate replacement pass with same parameters as original
       const newPass = await replacePass(
         {
           visitId: originalPass.visitRequestId,
-          visitorId: originalPass.createdBy, // visitor identified by creator context
+          visitorId: visit?.visitorId ?? originalPass.visitRequestId,
           tenantId: msg.tenantId,
           locationId: originalPass.locationId,
           validFrom: originalPass.validFrom,
@@ -369,14 +388,8 @@ export function registerDigitalPassConsumers(queue: Queue): void {
         },
       });
 
-      // Look up visitor contact for replacement notification
-      const visitRows = await tx
-        .select()
-        .from(visitRequests)
-        .where(and(eq(visitRequests.id, originalPass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
-        .limit(1);
-      const visit = visitRows[0];
-
+      // visitorPhone for the replacement notification reuses the `visit`
+      // row already looked up above (before replacePass()) — no second query.
       const visitorPhone = visit?.visitorPhone ?? "";
       if (visitorPhone) {
         await enqueue(tx, {

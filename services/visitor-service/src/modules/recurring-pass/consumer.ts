@@ -40,6 +40,15 @@ import { COMMANDS } from "../../topics.js";
 import { recurringPasses } from "./schema.js";
 import { validateValidityWindow, suspend, revoke, type RecurringPassStatus } from "./domain.js";
 import { addToRevocationSet } from "./revocation-store.js";
+// BUG FIX: gate verification (check-in/routes.ts) checks ONLY
+// digital-pass/revocation-store.ts's set, never this module's own
+// `visitor:{tid}:recurring_pass:revoked` set — so a suspended/revoked
+// recurring pass previously never actually blocked at the gate. Dual-write
+// into the canonical digital-pass store too (keyed by the same
+// `entry.passId` / `revoked.passId` — the underlying digital_passes.id —
+// already used for this module's own set below) so there is one real
+// source of truth check-in's verification can rely on.
+import { addToRevokedSet as addToDigitalPassRevokedSet } from "../digital-pass/revocation-store.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -206,6 +215,9 @@ export function registerRecurringPassConsumers(queue: Queue): void {
     // committed suspend because Redis is unavailable.
     try {
       await addToRevocationSet(msg.tenantId, suspended.passId);
+      // BUG FIX: also write into the canonical digital-pass revocation set
+      // that gate verification actually checks (see import comment above).
+      await addToDigitalPassRevokedSet(msg.tenantId, suspended.passId);
     } catch (err) {
       log.warn(
         { err, tenantId: msg.tenantId, passId: p.id, event: "recurring_pass_revocation_sync_failed" },
@@ -288,6 +300,9 @@ export function registerRecurringPassConsumers(queue: Queue): void {
     // committed revoke because Redis is unavailable.
     try {
       await addToRevocationSet(msg.tenantId, revoked.passId);
+      // BUG FIX: also write into the canonical digital-pass revocation set
+      // that gate verification actually checks (see import comment above).
+      await addToDigitalPassRevokedSet(msg.tenantId, revoked.passId);
     } catch (err) {
       log.warn(
         { err, tenantId: msg.tenantId, passId: p.id, event: "recurring_pass_revocation_sync_failed" },

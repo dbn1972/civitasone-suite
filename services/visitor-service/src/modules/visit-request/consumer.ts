@@ -37,10 +37,10 @@
 import { pino } from "pino";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
+import type { RequestContext } from "@civitasone/types";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
-import { queue as queueSingleton } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
 import { areas } from "../location/schema.js";
@@ -53,6 +53,19 @@ import {
 } from "./domain.js";
 import { getAutoApproveCategories } from "../config-registry/policy.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+// BUG FIX (CRITICAL — approving a visit request never produced a digital
+// pass): all 3 pass-generation trigger sites below used to hand-roll a
+// `COMMANDS.passGenerate` envelope directly via the raw infra `queue`
+// singleton, with `messageId: `${id}:pass-gen`` (not a UUID) and a payload
+// shape digital-pass/consumer.ts's PassGeneratePayload never accepted.
+// packages/events/src/envelope.ts's `z.string().uuid()` check on messageId
+// dead-lettered every one of these before digital-pass's handler ever ran.
+// Fixed by routing through digital-pass/commands.ts's own passGenerate()
+// builder (previously dead code — zero call sites anywhere in src besides
+// its own definition) — it mints a real UUID messageId and the correct
+// payload shape from a single source of truth. See triggerPassGenerate()
+// below.
+import { passGenerate as publishPassGenerateCommand } from "../digital-pass/commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -60,6 +73,79 @@ const log = pino({ name: "visit-request-consumer" });
 
 /** Restricted area threshold — areas with securityLevel > 1 need workflow approval. */
 const RESTRICTED_SECURITY_LEVEL = 1;
+
+/** Interim default span for pass validity when only a single `scheduledAt`
+ * instant is known (visit-request creation never collects a distinct "valid
+ * until" date). computeValidityWindow() in digital-pass/domain.ts ignores
+ * `validUntil` entirely for pass_type "single" (the common case here); for
+ * multi_day/recurring/event it requires validUntil strictly after validFrom,
+ * so a flat +1 day avoids an INVALID_WINDOW domain error. A real "requested
+ * until" field on visit requests is a follow-up, not in scope here. */
+const DEFAULT_VALIDITY_SPAN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Resolves the tenant's digital-pass QR-signing private key. There is no
+ * per-tenant key-management store in this service yet (confirmed: no such
+ * lookup exists anywhere in visitor-service or the shared packages) — every
+ * other passGenerate/passReplace call site (digital-pass/routes.ts) treats
+ * this as caller-supplied via the HTTP request body. For this
+ * system-originated cascade (visit-request approval, not a direct HTTP
+ * call) there is no caller to supply it, so it is read from a single
+ * service-level signing key. A real per-tenant KMS-backed key store is a
+ * follow-up, out of scope for this fix.
+ */
+function tenantSigningKeyPem(): string {
+  const pem = process.env.VISITOR_TENANT_SIGNING_KEY_PEM;
+  if (!pem) {
+    throw new Error("VISITOR_TENANT_SIGNING_KEY_PEM is not configured — cannot sign a digital pass QR");
+  }
+  return pem;
+}
+
+/**
+ * Triggers digital-pass generation via the correct, shared builder
+ * (digital-pass/commands.ts#passGenerate) instead of hand-assembling the
+ * command. Shared by all 3 call sites (visitRequestCreate auto-approve,
+ * visitRequestApprove, workflowTaskCompleted).
+ *
+ * passGenerate() takes a RequestContext, but these are queue-consumer
+ * continuations (no HTTP request in hand) — construct a minimal
+ * service-account context carrying just the fields passGenerate() actually
+ * reads (tenantId/actorId/correlationId).
+ *
+ * `visitorId`: visit_requests.visitor_id is populated later by the
+ * identity-verification flow (DigiLocker/Aadhaar-Face) and is null until
+ * then; falls back to the visit request's own id, which is always
+ * available and stable for the life of this specific visit.
+ */
+async function triggerPassGenerate(
+  ctxFields: { tenantId: string; actorId: string; correlationId: string },
+  input: {
+    visitRequestId: string;
+    visitorId: string | null;
+    locationId: string;
+    passType: "single" | "multi_day" | "recurring" | "event";
+    scheduledAt: string; // ISO
+    permittedAreas: string[];
+    escortEmployeeId?: string | null;
+  },
+): Promise<void> {
+  const ctx: RequestContext = { ...ctxFields, actorType: "service_account", roles: [] };
+  const validFrom = input.scheduledAt;
+  const validUntil = new Date(new Date(input.scheduledAt).getTime() + DEFAULT_VALIDITY_SPAN_MS).toISOString();
+
+  await publishPassGenerateCommand(ctx, {
+    visitRequestId: input.visitRequestId,
+    visitorId: input.visitorId ?? input.visitRequestId,
+    locationId: input.locationId,
+    passType: input.passType,
+    validFrom,
+    validUntil,
+    permittedAreas: input.permittedAreas,
+    tenantPrivateKeyPem: tenantSigningKeyPem(),
+    escortEmployeeId: input.escortEmployeeId ?? null,
+  });
+}
 
 // ── Payload Types ────────────────────────────────────────────────────────
 
@@ -294,26 +380,22 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
     // generation immediately.
     if (autoApproved) {
       try {
-        await queueSingleton.publish(COMMANDS.passGenerate, {
-          messageId: `${p.id}:pass-gen`,
-          type: COMMANDS.passGenerate,
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          schemaVersion: "1.0",
-          payload: {
+        // BUG FIX: was a hand-rolled queueSingleton.publish with a non-UUID
+        // messageId and the wrong payload shape (see triggerPassGenerate doc).
+        // visitorId is never part of the creation payload (no separate
+        // visitor identity yet at this point) — the helper falls back to
+        // p.id (the visit request's own id).
+        await triggerPassGenerate(
+          { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+          {
             visitRequestId: p.id,
-            tenantId: msg.tenantId,
+            visitorId: null,
             locationId: p.locationId,
-            visitorName: p.visitorName,
-            visitorPhone: p.visitorPhone,
-            visitorEmail: p.visitorEmail,
-            hostEmployeeId: p.hostEmployeeId,
             passType: p.passType,
-            permittedAreas: p.permittedAreas,
             scheduledAt: p.scheduledAt,
+            permittedAreas: p.permittedAreas,
           },
-        });
+        );
       } catch (err) {
         log.warn(
           { err, tenantId: msg.tenantId, visitRequestId: p.id, event: "pass_generate_publish_failed" },
@@ -332,6 +414,7 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
       workflowRequired: boolean;
       visitRequest: {
         locationId: string;
+        visitorId: string | null;
         visitorName: string;
         visitorPhone: string;
         visitorEmail: string | null;
@@ -472,6 +555,7 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
         workflowRequired: false,
         visitRequest: {
           locationId: request.locationId,
+          visitorId: request.visitorId ?? null,
           visitorName: request.visitorName,
           visitorPhone: request.visitorPhone,
           visitorEmail: request.visitorEmail ?? null,
@@ -488,26 +572,19 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
     // Post-commit: trigger visitor.pass.generate command (Requirement 3.2)
     if (result.visitRequest) {
       try {
-        await queueSingleton.publish(COMMANDS.passGenerate, {
-          messageId: `${p.id}:pass-gen`,
-          type: COMMANDS.passGenerate,
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          schemaVersion: "1.0",
-          payload: {
+        // BUG FIX: was a hand-rolled queueSingleton.publish (see
+        // triggerPassGenerate doc for the full root cause).
+        await triggerPassGenerate(
+          { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+          {
             visitRequestId: p.id,
-            tenantId: msg.tenantId,
+            visitorId: result.visitRequest.visitorId,
             locationId: result.visitRequest.locationId,
-            visitorName: result.visitRequest.visitorName,
-            visitorPhone: result.visitRequest.visitorPhone,
-            visitorEmail: result.visitRequest.visitorEmail,
-            hostEmployeeId: result.visitRequest.hostEmployeeId,
-            passType: result.visitRequest.passType,
+            passType: result.visitRequest.passType as "single" | "multi_day" | "recurring" | "event",
+            scheduledAt: result.visitRequest.scheduledAt?.toISOString() ?? new Date().toISOString(),
             permittedAreas: result.visitRequest.permittedAreas,
-            scheduledAt: result.visitRequest.scheduledAt?.toISOString() ?? "",
           },
-        });
+        );
       } catch (err) {
         log.warn(
           { err, tenantId: msg.tenantId, visitRequestId: p.id, event: "pass_generate_publish_failed" },
@@ -767,6 +844,7 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
       approved: boolean;
       visitRequest: {
         locationId: string;
+        visitorId: string | null;
         visitorName: string;
         visitorPhone: string;
         visitorEmail: string | null;
@@ -882,6 +960,7 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
         approved: true,
         visitRequest: {
           locationId: request.locationId,
+          visitorId: request.visitorId ?? null,
           visitorName: request.visitorName,
           visitorPhone: request.visitorPhone,
           visitorEmail: request.visitorEmail ?? null,
@@ -897,26 +976,19 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
 
     // Post-commit: trigger visitor.pass.generate command
     try {
-      await queueSingleton.publish(COMMANDS.passGenerate, {
-        messageId: `${visitRequestId}:pass-gen`,
-        type: COMMANDS.passGenerate,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        schemaVersion: "1.0",
-        payload: {
+      // BUG FIX: was a hand-rolled queueSingleton.publish (see
+      // triggerPassGenerate doc for the full root cause).
+      await triggerPassGenerate(
+        { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        {
           visitRequestId,
-          tenantId: msg.tenantId,
+          visitorId: result.visitRequest.visitorId,
           locationId: result.visitRequest.locationId,
-          visitorName: result.visitRequest.visitorName,
-          visitorPhone: result.visitRequest.visitorPhone,
-          visitorEmail: result.visitRequest.visitorEmail,
-          hostEmployeeId: result.visitRequest.hostEmployeeId,
-          passType: result.visitRequest.passType,
+          passType: result.visitRequest.passType as "single" | "multi_day" | "recurring" | "event",
+          scheduledAt: result.visitRequest.scheduledAt?.toISOString() ?? new Date().toISOString(),
           permittedAreas: result.visitRequest.permittedAreas,
-          scheduledAt: result.visitRequest.scheduledAt?.toISOString() ?? "",
         },
-      });
+      );
     } catch (err) {
       log.warn(
         { err, tenantId: msg.tenantId, visitRequestId, event: "pass_generate_publish_failed" },

@@ -25,6 +25,12 @@ const removeFromRosterMock = vi.fn(async () => undefined);
 // without a real Postgres connection.
 let passRow: Record<string, unknown> | undefined;
 let visitRow: Record<string, unknown> | undefined;
+// SECURITY FIX follow-up: checkInRecord now looks up `gates` (gate/location/
+// area scope check — Property 26/19, see check-in-bypasses-gate-scope.test.ts)
+// right after loading the pass. A perimeter gate (areaId null) at the pass's
+// own location always passes that check without perturbing anything this
+// suite actually tests (roster wiring).
+let gateRow: Record<string, unknown> | undefined;
 
 function makeChain(rows: Record<string, unknown>[]) {
   return {
@@ -38,14 +44,18 @@ function makeChain(rows: Record<string, unknown>[]) {
 
 const fakeTx = {
   select: vi.fn((...args: unknown[]) => {
-    // Determine which table is being selected by peeking at call order:
-    // consumer.ts selects digitalPasses first, then visitRequests.
+    // Determine which table is being selected by peeking at call order.
+    // checkInRecord selects, in order: digitalPasses, gates, visitRequests,
+    // locations. checkOutRecord (unaffected by the gate-scope fix) selects
+    // only digitalPasses. The 3rd-and-beyond fallback to visitRow matches
+    // checkInRecord's original locations lookup (capacityThreshold, not
+    // exercised by this suite — an empty/undefined visitRow-shaped result
+    // there is harmless, same as before this comment).
     void args;
     if (!fakeTx.__selectCallCount) fakeTx.__selectCallCount = 0;
     fakeTx.__selectCallCount++;
-    if (fakeTx.__selectCallCount % 2 === 1) {
-      return makeChain(passRow ? [passRow] : []);
-    }
+    if (fakeTx.__selectCallCount === 1) return makeChain(passRow ? [passRow] : []);
+    if (fakeTx.__selectCallCount === 2) return makeChain(gateRow ? [gateRow] : []);
     return makeChain(visitRow ? [visitRow] : []);
   }) as unknown as (() => ReturnType<typeof makeChain>) & { __selectCallCount?: number },
   insert: vi.fn(() => ({ values: async () => undefined })),
@@ -129,6 +139,11 @@ beforeEach(() => {
     visitorName: "Jane Visitor",
     visitorPhone: "9999999999",
   };
+  // A real, tenant-scoped perimeter gate (areaId null) at the pass's own
+  // location — always clears the Property 26/19 scope check trivially, so
+  // this suite's roster-wiring assertions exercise the same behavior as
+  // before that check existed.
+  gateRow = { id: GATE_ID, tenantId: TENANT, locationId: LOCATION_ID, areaId: null };
 });
 
 describe("checkInRecord -> evacuation roster", () => {

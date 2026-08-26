@@ -60,6 +60,15 @@ const BLACKLISTED_HASH = identityDocHash(BLACKLISTED_DOC_REF, DOC_TYPE);
 
 let passRow: Record<string, unknown> | undefined;
 let visitRow: Record<string, unknown> | undefined;
+// Reconciliation note (post-rebase): checkInRecord now ALSO looks up `gates`
+// (Property 26/19 gate/location/area scope re-assertion — see
+// check-in-bypasses-gate-scope.test.ts) right after loading the pass, before
+// the identity-verification/blacklist gate this file tests. A real,
+// tenant-scoped perimeter gate (areaId null) at the pass's own location
+// clears that check trivially, so it doesn't mask what this file tests —
+// without it, every check-in below would dead-letter on the gate lookup
+// before ever reaching the identity/blacklist gate.
+let gateRow: Record<string, unknown> | undefined;
 
 function makeChain(rows: Record<string, unknown>[]) {
   return { from: () => ({ where: () => ({ limit: async () => rows }) }) };
@@ -69,9 +78,12 @@ const fakeTx = {
   select: vi.fn(() => {
     if (!fakeTx.__count) fakeTx.__count = 0;
     fakeTx.__count++;
-    // consumer.ts selects digitalPasses first, then visitRequests (the gate
-    // runs immediately after, before any further select).
-    return fakeTx.__count % 2 === 1 ? makeChain(passRow ? [passRow] : []) : makeChain(visitRow ? [visitRow] : []);
+    // consumer.ts's actual query order: digitalPasses, then gates (scope
+    // check), then visitRequests (the identity/blacklist gate runs
+    // immediately after, before any further select).
+    if (fakeTx.__count === 1) return makeChain(passRow ? [passRow] : []);
+    if (fakeTx.__count === 2) return makeChain(gateRow ? [gateRow] : []);
+    return makeChain(visitRow ? [visitRow] : []);
   }) as unknown as (() => ReturnType<typeof makeChain>) & { __count?: number },
   insert: vi.fn(() => ({ values: async () => undefined })),
   update: vi.fn(() => ({ set: () => ({ where: async () => undefined }) })),
@@ -140,9 +152,10 @@ beforeEach(() => {
 
   passRow = {
     id: PASS_ID, tenantId: TENANT, locationId: LOCATION_ID, visitRequestId: VISIT_REQUEST_ID,
-    status: "active", passType: "single",
+    status: "active", passType: "single", permittedAreas: [],
   };
   visitRow = baseVisitRow();
+  gateRow = { id: GATE_ID, tenantId: TENANT, locationId: LOCATION_ID, areaId: null };
 });
 
 describe("checkInRecord identity-verification gate", () => {

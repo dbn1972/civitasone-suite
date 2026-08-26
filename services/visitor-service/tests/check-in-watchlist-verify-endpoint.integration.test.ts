@@ -1,6 +1,7 @@
 /**
  * check-in/routes.ts's synchronous POST /v1/visitor/passes/verify endpoint
- * hardcodes watchlist screening off entirely (routes.ts, watchlist block):
+ * used to hardcode watchlist screening off entirely (routes.ts, watchlist
+ * block):
  *
  *   if (body.identityDocHash) {
  *     const blocked = await isBlacklisted(ctx.tenantId, body.identityDocHash);
@@ -14,14 +15,18 @@
  *     }
  *   }
  *
- * That comment is stale: `isWatchlisted()` already exists on
+ * That comment was stale: `isWatchlisted()` already existed on
  * blacklist/screening-store.ts and is used elsewhere in this very service
  * (check-in/consumer.ts, post-commit — see
  * check-in-watchlist-consumer-hash.test.ts for that path's own, independent
- * bug). The synchronous verify endpoint — the real-time gate response,
- * Requirement 5.7 — never calls it. `watchlistFlagged` in the verify
- * response is unconditionally false no matter what is actually on the
- * watchlist.
+ * bug, covered separately). The synchronous verify endpoint — the real-time
+ * gate response, Requirement 5.7 — never called it, so `watchlistFlagged` in
+ * the verify response was unconditionally false no matter what was actually
+ * on the watchlist.
+ *
+ * FIXED: routes.ts now calls `isWatchlisted(ctx.tenantId, body.identityDocHash)`
+ * (same call shape as the existing `isBlacklisted` check right above it) and
+ * assigns the real result to `screening.flagged`.
  *
  * Driven against the live app + DB (buildApp(), a real JWT, a real
  * watchlist-store entry). Only `verifyPassQr` is mocked, to stand in for
@@ -104,8 +109,8 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("POST /v1/visitor/passes/verify — watchlist screening (today's actual behavior)", () => {
-  it("returns watchlistFlagged: false even though the presented identityDocHash IS on the watchlist", async () => {
+describe("POST /v1/visitor/passes/verify — watchlist screening (FIXED)", () => {
+  it("returns watchlistFlagged: true for a presented identityDocHash that IS on the watchlist", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -118,12 +123,27 @@ describe("POST /v1/visitor/passes/verify — watchlist screening (today's actual
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.data.valid).toBe(true);
+    expect(body.data.watchlistFlagged).toBe(true);
+  });
+
+  it("negative control: returns watchlistFlagged: false for an identityDocHash that is NOT on the watchlist — proves the fix actually checks the store rather than hardcoding true", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/visitor/passes/verify",
+      headers: authHeader(),
+      payload: { qrToken: "mocked", gateId: GATE, identityDocHash: identityDocHash("NOT-WATCHLISTED-9999", DOC_TYPE) },
+    });
+    await app.close();
+
+    const body = res.json();
+    expect(body.data.valid).toBe(true);
     expect(body.data.watchlistFlagged).toBe(false);
   });
 });
 
-describe("what SHOULD happen (fails today)", () => {
-  it.fails("a watchlisted identityDocHash is surfaced as watchlistFlagged: true in the verify response", async () => {
+describe("what SHOULD happen (FIXED)", () => {
+  it("a watchlisted identityDocHash is surfaced as watchlistFlagged: true in the verify response", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",

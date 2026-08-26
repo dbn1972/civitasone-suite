@@ -1,31 +1,30 @@
 /**
- * CRITICAL — suspending or revoking a Recurring_Pass never blocks it at the
- * gate.
+ * CRITICAL (FIXED) — suspending or revoking a Recurring_Pass never blocked it
+ * at the gate.
  *
- * modules/recurring-pass/consumer.ts's recurringPassSuspend/recurringPassRevoke
- * handlers only ever write to the `recurring_passes` table and to their OWN
- * Redis set (recurring-pass/revocation-store.ts, key
- * `visitor:{tid}:recurring_pass:revoked`) — confirmed by reading the full
- * consumer: neither handler touches `digital_passes` or
- * digital-pass/revocation-store.ts in any way.
+ * ORIGINAL BUG: modules/recurring-pass/consumer.ts's
+ * recurringPassSuspend/recurringPassRevoke handlers only ever wrote to the
+ * `recurring_passes` table and to their OWN Redis set
+ * (recurring-pass/revocation-store.ts, key
+ * `visitor:{tid}:recurring_pass:revoked`) — never touched `digital_passes`
+ * or digital-pass/revocation-store.ts.
  *
  * But gate verification (modules/check-in/routes.ts's POST
  * /v1/visitor/passes/verify, the ONLY place a scanned QR is actually
- * checked) imports and calls exclusively
- * `../digital-pass/revocation-store.js`'s `isRevoked` — it never imports
- * anything from recurring-pass/revocation-store.ts. The two revocation sets
- * are entirely separate Redis keys tracking entirely separate entities
- * (`recurring_passes.id` vs. `digital_passes.id`, which is what a scanned
- * QR's `visit_id` claim actually is).
+ * checked) imports and calls exclusively `../digital-pass/revocation-store.js`'s
+ * `isRevoked` — it never imported anything from
+ * recurring-pass/revocation-store.ts. The two revocation sets are entirely
+ * separate Redis keys tracking entirely separate entities.
  *
- * Net effect: a facility manager suspends/revokes a contractor's recurring
- * pass, the DB row and the recurring-pass revocation set update correctly,
- * but the visitor's physical badge continues to scan as valid at every gate
- * indefinitely, because gate verification was never told to look at
- * recurring-pass revocation at all.
+ * FIXED: recurring-pass/consumer.ts's suspend/revoke handlers now ALSO call
+ * digital-pass/revocation-store.ts's addToRevokedSet(), keyed by the same
+ * underlying digital-pass id (`entry.passId`) already used for this
+ * module's own set — a single dual-write, not a new "source of truth"
+ * concept, so gate verification's existing isRevoked() check (unchanged)
+ * now actually sees these revocations.
  *
  * See also recurring-pass-gate-sync-id-mismatch.integration.test.ts for the
- * matching bug in the OFFLINE gate-sync snapshot.
+ * matching (also fixed) bug in the OFFLINE gate-sync snapshot.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -96,37 +95,37 @@ beforeEach(() => {
   };
 });
 
-describe("recurringPassSuspend (today's actual behavior)", () => {
-  it("adds the recurring pass to ITS OWN revocation set (correctly keyed by the underlying digital-pass id), but never touches the digital-pass revocation set gate verification actually checks", async () => {
+describe("recurringPassSuspend (FIXED)", () => {
+  it("adds the recurring pass to its OWN revocation set AND the canonical digital-pass revocation set gate verification actually checks — both keyed by the underlying digital-pass id", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.recurringPassSuspend, { id: RECURRING_PASS_ID, tenantId: TENANT, reason: "policy violation" });
 
     // recurring-pass/consumer.ts calls addToRevocationSet(tenantId, entry.passId)
-    // — the id space is right, it's the SET NAME that's wrong.
+    // AND (FIXED) addToDigitalPassRevokedSet(tenantId, entry.passId).
     await expect(recurringPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(true);
-    await expect(digitalPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(false);
+    await expect(digitalPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(true);
   });
 });
 
-describe("recurringPassRevoke (today's actual behavior)", () => {
-  it("adds the recurring pass to ITS OWN revocation set (correctly keyed by the underlying digital-pass id), but never touches the digital-pass revocation set gate verification actually checks", async () => {
+describe("recurringPassRevoke (FIXED)", () => {
+  it("adds the recurring pass to its OWN revocation set AND the canonical digital-pass revocation set gate verification actually checks — both keyed by the underlying digital-pass id", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.recurringPassRevoke, { id: RECURRING_PASS_ID, tenantId: TENANT, reason: "terminated" });
 
     await expect(recurringPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(true);
-    await expect(digitalPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(false);
+    await expect(digitalPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(true);
   });
 });
 
-describe("what SHOULD happen (fails today)", () => {
-  it.fails("suspending a recurring pass also blocks its underlying digital pass at the gate", async () => {
+describe("what SHOULD happen (FIXED)", () => {
+  it("suspending a recurring pass also blocks its underlying digital pass at the gate", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.recurringPassSuspend, { id: RECURRING_PASS_ID, tenantId: TENANT, reason: "policy violation" });
 
     await expect(digitalPassRevocation.isRevoked(TENANT, UNDERLYING_DIGITAL_PASS_ID)).resolves.toBe(true);
   });
 
-  it.fails("revoking a recurring pass also blocks its underlying digital pass at the gate", async () => {
+  it("revoking a recurring pass also blocks its underlying digital pass at the gate", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.recurringPassRevoke, { id: RECURRING_PASS_ID, tenantId: TENANT, reason: "terminated" });
 

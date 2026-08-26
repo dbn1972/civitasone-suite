@@ -24,8 +24,7 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq, lt } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
-import { NonRetryableError } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -35,14 +34,21 @@ import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
-import { locations } from "../location/schema.js";
+import { locations, gates } from "../location/schema.js";
 import { devices } from "../device-registry/schema.js";
 import { securityIncidents } from "../identity/schema.js";
-import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
+import {
+  checkIn as domainCheckIn,
+  checkOut as domainCheckOut,
+  isLocationScopeValid,
+  isAreaPermitted,
+  type CheckInStatus,
+} from "./domain.js";
 import { assertWithinCapacity, isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
 import { identityDocHash } from "../blacklist/blind-index.js";
+import { isRevoked } from "../digital-pass/revocation-store.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -115,6 +121,67 @@ export function registerCheckInConsumers(queue: Queue): void {
         throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
       }
 
+      // SECURITY FIX (gate/location/area scope bypass): the synchronous
+      // /passes/verify endpoint (check-in/routes.ts) enforces Property 26
+      // (isLocationScopeValid) and Property 19 (isAreaPermitted) before ever
+      // returning "valid" — but this consumer, which is what actually
+      // COMMITS the check-in, previously trusted a bare {passId, gateId}
+      // completely: no gate lookup, no location/area comparison. Reachable
+      // by the broad "employee" role (check-in/routes.ts's WRITE_ROLES), not
+      // only a gate_terminal device identity, a caller could check in any
+      // pass at any gate string, including one matching no real gate row at
+      // all. Fail closed: dead-letter (NonRetryableError, matching this
+      // codebase's convention — see config-registry/consumer.ts) rather than
+      // silently committing a scope-violating check-in. checkInRecord's
+      // payload carries no QR token to re-verify a signature against (that
+      // already happened at /passes/verify); the gate/location/area scope is
+      // the part of Property 9 this write path CAN and now does re-assert.
+      const gateRows = await tx
+        .select()
+        .from(gates)
+        .where(and(eq(gates.id, p.gateId), eq(gates.tenantId, msg.tenantId)))
+        .limit(1);
+      const gate = gateRows[0];
+      if (!gate) {
+        throw new NonRetryableError(`gate '${p.gateId}' not found for tenant '${msg.tenantId}'`);
+      }
+      if (!isLocationScopeValid(pass.locationId, gate.locationId)) {
+        throw new NonRetryableError(
+          `pass '${p.passId}' is scoped to location '${pass.locationId}', not gate location '${gate.locationId}'`,
+        );
+      }
+      if (!isAreaPermitted(gate.areaId, pass.permittedAreas as string[])) {
+        throw new NonRetryableError(
+          `gate '${p.gateId}' area '${gate.areaId ?? "(perimeter)"}' is not among pass '${p.passId}''s permitted areas`,
+        );
+      }
+
+      // SECURITY FIX (revocation bypass at commit time): the synchronous
+      // /passes/verify endpoint (check-in/routes.ts) enforces Property 9
+      // condition (b) isRevoked before ever returning "valid" — but,
+      // exactly like the gate/location/area scope above before that fix,
+      // this consumer referenced neither isRevoked nor pass.revoked at
+      // all. A DIRECTLY-revoked pass (digital-pass/consumer.ts's
+      // passRevoke handler) happens to also flip digitalPasses.status to
+      // "revoked", which domainCheckIn (below) rejects via
+      // INVALID_TRANSITION — but a suspended/revoked recurring pass
+      // (recurring-pass/consumer.ts's suspend/revoke handlers) never
+      // touches digitalPasses.status at all; it only dual-writes into
+      // this same Redis revocation set (see commit 25949e30,
+      // "recurring-pass revocation now blocks at the gate") — a write
+      // that "only matters if something at commit time reads it", and
+      // nothing did. POST /v1/visitor/check-ins (check-in/routes.ts)
+      // publishes checkInRecord straight from {passId, gateId} with no
+      // precondition that /passes/verify was ever called, reachable by
+      // the broad "employee" role — so an employee-role caller who knows
+      // a passId+gateId could check in a revoked pass by hitting this
+      // endpoint directly, skipping verify entirely. Fail closed:
+      // NonRetryableError, the same convention the scope check above
+      // established for this exact commit path.
+      if (await isRevoked(msg.tenantId, p.passId)) {
+        throw new NonRetryableError(`pass '${p.passId}' has been revoked`);
+      }
+
       // Visit request is loaded here (rather than later, as it was before)
       // so the identity/blacklist gate below can run BEFORE any check-in
       // side effect is written.
@@ -148,7 +215,14 @@ export function registerCheckInConsumers(queue: Queue): void {
       //    screening-store.ts). This independently catches a blacklist
       //    match regardless of whether a document-scan actually ran for
       //    this visit, as long as the visit's own identityDocRef is the
-      //    blacklisted document.
+      //    blacklisted document. identityDocRef is an encryptedText()
+      //    column (visit-request/schema.ts) — DPDP ciphertext at rest,
+      //    but transparently decrypted on read — so it MUST be rehashed
+      //    via identityDocHash() before ever reaching isBlacklisted,
+      //    never compared/forwarded raw (see
+      //    tests/check-in-watchlist-consumer-hash.test.ts for the
+      //    separate, now-fixed bug this same mistake caused elsewhere in
+      //    this handler).
       //
       // Non-retryable: retrying will never make a failed verification or
       // an active blacklist match go away.

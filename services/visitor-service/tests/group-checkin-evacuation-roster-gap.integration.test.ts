@@ -1,9 +1,13 @@
 /**
- * CROSS-MODULE INTEGRATION FINDING (CRITICAL — life-safety) — group bulk
- * check-in marks every member's digital pass `checked_in` but never
- * touches the real-time evacuation roster or the check-in audit trail,
- * and skips the capacity-threshold alert that individual check-in always
- * runs.
+ * CROSS-MODULE INTEGRATION FINDING (CRITICAL — life-safety, FIXED) — group
+ * bulk check-in used to mark every member's digital pass `checked_in` but
+ * never touch the real-time evacuation roster or the check-in audit trail,
+ * and skipped the capacity-threshold alert that individual check-in always
+ * runs. group-visit/consumer.ts's groupBulkCheckIn now reads each member's
+ * pass status first (state-machine parity), inserts a check_ins row,
+ * adds each member to the evacuation roster, and runs the same post-commit
+ * capacity-threshold check as check-in/consumer.ts — see that file's
+ * "BUG FIX" comments for the implementation.
  *
  * `modules/group-visit/consumer.ts`'s `groupBulkCheckIn` handler
  * (COMMANDS.groupBulkCheckIn) does its own, parallel, ad-hoc version of
@@ -198,14 +202,14 @@ describe("group bulk check-in vs. individual check-in — evacuation roster pari
     expect(rows.every((r) => r.status === "checked_in")).toBe(true);
   });
 
-  it.fails("[BUG] both group members should appear on the real-time evacuation roster after check-in", async () => {
+  it("[FIXED] both group members appear on the real-time evacuation roster after check-in", async () => {
     const roster = await getFullRoster(TENANT, LOCATION);
     const rosterPassIds = new Set(roster.map((r) => r.passId));
     expect(rosterPassIds.has(MEMBER_1_PASS_ID)).toBe(true);
     expect(rosterPassIds.has(MEMBER_2_PASS_ID)).toBe(true);
   });
 
-  it.fails("[BUG] group bulk check-in should leave a check_ins audit-trail row per member, same as individual check-in", async () => {
+  it("[FIXED] group bulk check-in leaves a check_ins audit-trail row per member, same as individual check-in", async () => {
     const rows = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(checkIns).where(eq(checkIns.locationId, LOCATION))),
     );
@@ -214,7 +218,7 @@ describe("group bulk check-in vs. individual check-in — evacuation roster pari
     expect(passIdsWithCheckIn.has(MEMBER_2_PASS_ID)).toBe(true);
   });
 
-  it.fails("[BUG] a group bulk check-in that breaches the location's capacity threshold should alert security, same as individual check-in", async () => {
+  it("[FIXED] a group bulk check-in that breaches the location's capacity threshold alerts security, same as individual check-in", async () => {
     const rows = await runWithTenant(TENANT, () =>
       scopedRead((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))),
     );
@@ -223,8 +227,8 @@ describe("group bulk check-in vs. individual check-in — evacuation roster pari
       return r.eventType === EVENTS.capacityThresholdReached && payload.locationId === LOCATION;
     });
     // capacityThreshold=1 and 2 members just checked in at this location —
-    // this should have fired. It never does: groupBulkCheckIn never calls
-    // isOverCapacityThreshold() at all.
+    // groupBulkCheckIn now calls isOverCapacityThreshold() post-commit, same
+    // as check-in/consumer.ts.
     expect(capacityAlert).toBeDefined();
   });
 

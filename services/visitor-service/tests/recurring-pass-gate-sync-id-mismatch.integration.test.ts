@@ -1,20 +1,22 @@
 /**
- * check-in/gate-sync.ts's offline-terminal snapshot is the ONE place that
- * tries to account for recurring-pass revocation (it queries
+ * FIXED — check-in/gate-sync.ts's offline-terminal snapshot is the ONE place
+ * that tries to account for recurring-pass revocation (it queries
  * `recurring_passes` directly rather than relying on the Redis set — see
  * recurring-pass-gate-revocation-gap.test.ts for the online-path version of
- * this bug). But it selects the wrong column:
+ * this bug, also fixed). It was selecting the wrong column:
  *
  *   modules/check-in/gate-sync.ts ("Revoked or suspended recurring passes"):
  *     tx.select({ id: recurringPasses.id }).from(recurringPasses)...
  *     revokedPassIds: [...dpRows.map(r => r.id), ...rpRows.map(r => r.id)]
  *
- * `revokedPassIds` is matched against a scanned pass's `visit_id` claim,
- * which is the DIGITAL pass's id (`recurring_passes.pass_id`), not the
- * recurring_pass row's OWN primary key. Because the query selects
- * `recurringPasses.id` instead of `recurringPasses.passId`, a suspended or
- * revoked recurring pass's entry in the offline snapshot can never match any
- * real scanned QR — it ships a UUID that will never appear on any badge.
+ * `revokedPassIds` is matched against a scanned pass's underlying digital
+ * pass id (`recurring_passes.pass_id`, FK to `digital_passes.id`), not the
+ * recurring_pass row's OWN primary key. Selecting `recurringPasses.id`
+ * instead of `recurringPasses.passId` meant a suspended or revoked
+ * recurring pass's entry in the offline snapshot could never match any real
+ * scanned QR — it shipped a UUID that would never appear on any badge.
+ *
+ * FIXED: the select now reads `recurringPasses.passId`.
  *
  * Driven against the live DB, matching the existing
  * gate-sync.integration.test.ts pattern.
@@ -92,17 +94,17 @@ afterAll(async () => {
   );
 });
 
-describe("gate-sync snapshot for a suspended recurring pass (today's actual behavior)", () => {
-  it("includes the recurring_passes row's own id, not its underlying digital pass id", async () => {
+describe("gate-sync snapshot for a suspended recurring pass (FIXED)", () => {
+  it("includes the underlying digital pass id, not the recurring_passes row's own id", async () => {
     const snapshot = await runWithTenant(TENANT, () => loadGateSyncSnapshot(TENANT, LOCATION));
 
-    expect(snapshot.revokedPassIds).toContain(RECURRING_PASS_ROW_ID);
-    expect(snapshot.revokedPassIds).not.toContain(UNDERLYING_DIGITAL_PASS_ID);
+    expect(snapshot.revokedPassIds).toContain(UNDERLYING_DIGITAL_PASS_ID);
+    expect(snapshot.revokedPassIds).not.toContain(RECURRING_PASS_ROW_ID);
   });
 });
 
-describe("what SHOULD happen (fails today)", () => {
-  it.fails("the suspended recurring pass's underlying digital-pass id is present, so an offline gate terminal actually rejects it", async () => {
+describe("what SHOULD happen (FIXED)", () => {
+  it("the suspended recurring pass's underlying digital-pass id is present, so an offline gate terminal actually rejects it", async () => {
     const snapshot = await runWithTenant(TENANT, () => loadGateSyncSnapshot(TENANT, LOCATION));
 
     expect(snapshot.revokedPassIds).toContain(UNDERLYING_DIGITAL_PASS_ID);
