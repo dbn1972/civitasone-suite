@@ -32,6 +32,13 @@ const SECRETARY = "11111111-0000-4000-8000-0000000000a1";
 const CHAIR = "22222222-0000-4000-8000-0000000000a1";
 const ASSIGNEE = "33333333-0000-4000-8000-0000000000a1";
 
+// Dedicated, otherwise-untouched tenant for the tenant-configured escalation-chain seed test
+// (PR #714 follow-up) — isolated so its config override can never leak into the default-chain
+// assertions above (and vice-versa), independent of test order or the config read-through cache.
+const TENANT_CFG = "c9c9c9c9-0000-4000-8000-0000000000b2";
+const MEETING_CFG = "e9e9e9e9-0000-4000-8000-0000000000b2";
+const L1_OVERRIDE_HOURS = 4; // deliberately shorter than DEFAULT_ESCALATION_CHAIN's L1 (24h)
+
 const handlers = new Map<string, (msg: CommandEnvelope<any>) => Promise<void>>();
 registerActionItemConsumers((topic, h) => handlers.set(topic, h as any));
 
@@ -146,6 +153,14 @@ afterAll(async () => {
     await sql`delete from meeting.agenda_items where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
+  });
+  // Clean up the dedicated escalation-config tenant too (folded here so it runs before end()).
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT_CFG}, true)`;
+    await sql`delete from meeting.action_items where tenant_id = ${TENANT_CFG}`;
+    await sql`delete from meeting.config_entries where tenant_id = ${TENANT_CFG}`;
+    await sql`delete from meeting.meetings where tenant_id = ${TENANT_CFG}`;
+    await sql`delete from _outbox.messages where tenant_id = ${TENANT_CFG}`;
   });
   await sqlClient.end();
 });
@@ -352,5 +367,72 @@ describe("action_item escalate (Req 9.5, 9.6, 9.8)", () => {
       run(msg(COMMANDS.actionItemEscalate, { actionItemId: id, tenantId: TENANT, toLevel: 1 })),
     ).rejects.toBeInstanceOf(NonRetryableError);
     expect((await readItem(id)).escalation_level).toBe(2);
+  });
+});
+
+describe("action_item escalation seed honors the tenant's CONFIGURED chain (PR #714 follow-up)", () => {
+  /**
+   * PR #714 wired resolveEscalationChain into the escalation WORKER, so re-anchoring of the second
+   * escalation rung onward already used each tenant's configured L1/L2/L3 windows — but the FIRST
+   * next_escalation_at trigger that action-item/consumer.ts seeds (on assign, and on a deadline
+   * change) still came off the hardcoded DEFAULT_ESCALATION_CHAIN. A tenant with a
+   * shorter-than-default L1 window therefore had its very first escalation anchored to the default
+   * 24h clock. handleAssign / handleUpdate now resolve the tenant's chain (config-registry
+   * getEscalationChain) on their GUC-scoped tx and seed from it — proven end-to-end here.
+   */
+  it("seeds the first next_escalation_at from the tenant's configured L1 window, not the 24h default", async () => {
+    // Fixtures for the isolated config tenant: an in-progress meeting (so the deadline validates,
+    // P19) + an ACTIVE L1-hours override (4h) in the meeting_policy namespace.
+    await runWithTenant(TENANT_CFG, () =>
+      sqlClient.begin(async (sql) => {
+        await sql`select set_config('app.tenant_id', ${TENANT_CFG}, true)`;
+        await sql`
+          insert into meeting.meetings
+            (id, tenant_id, type, title, status, scheduled_at, actual_start_at, created_by, updated_by)
+          values (${MEETING_CFG}, ${TENANT_CFG}, 'committee', 'Configured Escalation Source', 'in_progress',
+                  now() - interval '2 hours', now() - interval '1 hour', ${ACTOR}, ${ACTOR})
+          on conflict (id) do nothing`;
+        await sql`delete from meeting.config_entries
+                  where tenant_id = ${TENANT_CFG} and namespace = 'meeting_policy'
+                    and config_key = 'action_item.escalation_l1_hours'`;
+        await sql`
+          insert into meeting.config_entries
+            (id, tenant_id, namespace, config_key, value, active, created_by, updated_by)
+          values (gen_random_uuid(), ${TENANT_CFG}, 'meeting_policy', 'action_item.escalation_l1_hours',
+                  ${JSON.stringify(L1_OVERRIDE_HOURS)}::jsonb, true, ${ACTOR}, ${ACTOR})`;
+      }),
+    );
+
+    const id = randomUUID();
+    const deadlineMs = Date.now() + 24 * HOUR;
+    const assignForCfg = {
+      messageId: id,
+      type: COMMANDS.actionItemAssign,
+      tenantId: TENANT_CFG,
+      actorId: ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: {
+        actionItemId: id,
+        meetingId: MEETING_CFG,
+        tenantId: TENANT_CFG,
+        description: "Configured-chain escalation seed",
+        assigneeId: ASSIGNEE,
+        deadline: new Date(deadlineMs).toISOString(),
+        priority: "high",
+      },
+    } as CommandEnvelope<any>;
+    await runWithTenant(TENANT_CFG, () => handlers.get(COMMANDS.actionItemAssign)!(assignForCfg));
+
+    const rows = await runWithTenant(TENANT_CFG, () =>
+      sqlClient.begin(async (sql) => {
+        await sql`select set_config('app.tenant_id', ${TENANT_CFG}, true)`;
+        return sql`select next_escalation_at from meeting.action_items where id = ${id}`;
+      }),
+    );
+    const seededMs = new Date(rows[0].next_escalation_at).getTime();
+    // Configured L1 = 4h → first trigger at deadline + 4h, NOT the default deadline + 24h.
+    expect(Math.abs(seededMs - (deadlineMs + L1_OVERRIDE_HOURS * HOUR))).toBeLessThan(1000);
+    expect(seededMs).toBeLessThan(deadlineMs + 24 * HOUR); // strictly earlier than the default clock
   });
 });

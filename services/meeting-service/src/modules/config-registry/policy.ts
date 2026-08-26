@@ -110,6 +110,36 @@ export async function getPolicyNumber(
 }
 
 /**
+ * The tenant's action-item escalation chain resolved on a GUC-scoped `tx` — the
+ * consumer / HTTP-path sibling of `resolveEscalationChain` (which resolves from the
+ * worker's pre-loaded cross-tenant override map). It builds the IDENTICAL three-rung
+ * shape from per-key `getPolicyNumber` reads, each rung's window falling back to its
+ * literal default when the tenant has not configured it, and is passed straight into
+ * the action-item domain planner (`nextEscalationAt`).
+ *
+ * Its purpose is symmetry with the worker: `action-item/consumer.ts` seeds the FIRST
+ * `next_escalation_at` trigger (on assignment and on a deadline change), and without
+ * this it seeded that trigger from the hardcoded DEFAULT_ESCALATION_CHAIN, so a tenant
+ * with a shorter-than-default L1 window had its first escalation anchored to the
+ * default clock. The worker already re-anchors subsequent rungs per-tenant; this closes
+ * the same gap for the first one.
+ */
+export async function getEscalationChain(
+  tx: Writer, tenantId: string,
+): Promise<ResolvedEscalationRung[]> {
+  // Sequential (not Promise.all): these three reads share one GUC-scoped connection, and
+  // getConfigValueOnTx is read-through cached, so the cost is negligible.
+  const l1 = await getPolicyNumber(tx, tenantId, "action_item.escalation_l1_hours");
+  const l2 = await getPolicyNumber(tx, tenantId, "action_item.escalation_l2_hours");
+  const l3 = await getPolicyNumber(tx, tenantId, "action_item.escalation_l3_hours");
+  return [
+    { level: 1, afterDeadlineHours: l1, notify: "supervisor" },
+    { level: 2, afterDeadlineHours: l2, notify: "department_head" },
+    { level: 3, afterDeadlineHours: l3, notify: "chairperson" },
+  ];
+}
+
+/**
  * The tenant's effective set of permitted committee body types (effectiveAllowed):
  * the set of active keys in the `meeting_committee_types` namespace REPLACES the
  * default {standing, ad_hoc, statutory, board} when the tenant has configured any;

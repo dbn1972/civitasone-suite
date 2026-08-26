@@ -57,6 +57,7 @@ import {
   assertEvidenceBeforeVerification,
   isSettledStatus,
 } from "./domain.js";
+import { getEscalationChain } from "../config-registry/policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const ACTION_ITEM_RESOURCE = "action_item";
@@ -316,7 +317,12 @@ async function handleAssign(msg: CommandEnvelope<AssignPayload>): Promise<void> 
     }
 
     const slaHours = p.slaHours ?? computeSlaHours(assignedAt, deadline);
-    const firstEscalation = nextEscalationAt(deadline, 0);
+    // Seed the first escalation trigger from the tenant's CONFIGURED escalation chain (not the
+    // hardcoded default), so a tenant with a shorter-than-default L1 window has its first
+    // escalation anchored to its own clock. Mirrors the worker's per-tenant re-anchoring of
+    // subsequent rungs (workers/action-item-escalation.ts); unconfigured ⇒ default ⇒ unchanged.
+    const escalationChain = await getEscalationChain(tx, msg.tenantId);
+    const firstEscalation = nextEscalationAt(deadline, 0, escalationChain);
 
     await tx.insert(actionItems).values({
       id: p.actionItemId,
@@ -384,8 +390,11 @@ async function handleUpdate(msg: CommandEnvelope<UpdatePayload>): Promise<void> 
       set.deadline = newDeadline;
       // Recompute the SLA window (unless an explicit slaHours override was supplied in the patch).
       if (p.patch.slaHours === undefined) set.slaHours = computeSlaHours(row.createdAt, newDeadline);
-      // Re-anchor the next (un-fired) escalation trigger to the new deadline at the current level.
-      set.nextEscalationAt = nextEscalationAt(newDeadline, row.escalationLevel);
+      // Re-anchor the next (un-fired) escalation trigger to the new deadline at the current level,
+      // using the tenant's CONFIGURED escalation chain (not the hardcoded default) — same reason
+      // as the assignment seed above.
+      const escalationChain = await getEscalationChain(tx, msg.tenantId);
+      set.nextEscalationAt = nextEscalationAt(newDeadline, row.escalationLevel, escalationChain);
     }
 
     await versionedUpdate(tx, actionItems, {

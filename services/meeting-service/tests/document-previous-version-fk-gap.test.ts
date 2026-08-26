@@ -144,4 +144,74 @@ describe("schema gap: meeting_documents.previous_version_id has no FK constraint
     expect(rows[0].version_num).toBe(1); // predecessor lookup missed -> falls back to "first version"
     expect(rows[0].previous_version_id).toBeNull(); // the dangling pointer is now discarded, not kept
   });
+
+  it("makes the discard OBSERVABLE — the upload audit fact records the dropped predecessor id (CERT-In trail)", async () => {
+    const doc = "d4d40003-0000-4000-8000-0000000c1a58";
+    const pdfBytes = Buffer.from("%PDF-1.4 dangling-audit-note", "utf8");
+    objects.set(`meeting/${TENANT}/documents/${doc}`, pdfBytes);
+
+    await run(
+      msg(COMMANDS.documentUpload, {
+        documentId: doc,
+        tenantId: TENANT,
+        meetingId: MEETING,
+        fileName: "dangling-audit.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: pdfBytes.length,
+        storageKey: `meeting/${TENANT}/documents/${doc}`,
+        classification: "internal",
+        previousVersionId: NONEXISTENT_PREV_ID, // never existed — the consumer's own lookup misses
+      }),
+    );
+
+    // Without this the discard was silent; now the upload audit event carries the dropped id, so
+    // the trail shows the row became "version 1" because its predecessor did not resolve — not
+    // because the caller intended a first upload. (Predecessor-drop provenance, Req 15.4.)
+    const rows = await runWithTenant(TENANT, () =>
+      sqlClient.begin(async (sql) => {
+        await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+        return sql`select payload from _outbox.messages
+                   where tenant_id = ${TENANT} and topic = 'audit.event.record'
+                     and payload->>'resourceId' = ${doc} and payload->>'action' = 'upload'
+                   limit 1`;
+      }),
+    );
+    expect(rows[0]).toBeTruthy();
+    expect(rows[0].payload.droppedPreviousVersionId).toBe(NONEXISTENT_PREV_ID);
+    expect(rows[0].payload.versionNum).toBe(1);
+  });
+
+  it("does NOT add the dropped-predecessor note when previousVersionId resolves normally", async () => {
+    // A genuine v1, then a replacement that names it: the predecessor resolves (version 2) and the
+    // audit fact must NOT carry the dropped-predecessor note — the note is specific to the miss.
+    const base = "d4d40004-0000-4000-8000-0000000c1a58";
+    const repl = "d4d40005-0000-4000-8000-0000000c1a58";
+    for (const d of [base, repl]) objects.set(`meeting/${TENANT}/documents/${d}`, Buffer.from(`%PDF-1.4 ${d}`, "utf8"));
+
+    await run(
+      msg(COMMANDS.documentUpload, {
+        documentId: base, tenantId: TENANT, meetingId: MEETING, fileName: "base.pdf",
+        mimeType: "application/pdf", sizeBytes: 32, storageKey: `meeting/${TENANT}/documents/${base}`,
+        classification: "internal",
+      }),
+    );
+    await run(
+      msg(COMMANDS.documentUpload, {
+        documentId: repl, tenantId: TENANT, meetingId: MEETING, fileName: "replacement.pdf",
+        mimeType: "application/pdf", sizeBytes: 32, storageKey: `meeting/${TENANT}/documents/${repl}`,
+        classification: "internal", previousVersionId: base, // resolves → version 2, no note
+      }),
+    );
+
+    const rows = await runWithTenant(TENANT, () =>
+      sqlClient.begin(async (sql) => {
+        await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+        return sql`select payload from _outbox.messages
+                   where tenant_id = ${TENANT} and topic = 'audit.event.record'
+                     and payload->>'resourceId' = ${repl} and payload->>'action' = 'upload' limit 1`;
+      }),
+    );
+    expect(rows[0].payload.versionNum).toBe(2); // predecessor resolved
+    expect(rows[0].payload.droppedPreviousVersionId).toBeUndefined(); // no note on the happy path
+  });
 });

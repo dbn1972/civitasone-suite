@@ -349,11 +349,11 @@ export async function runActionItemEscalation(
   // resolution entirely (escape hatch — see the ActionItemEscalationDeps doc comment).
   // Otherwise resolve PER TENANT from config-registry so a tenant-configured escalation chain
   // actually takes effect instead of silently being ignored, which is the bug this wiring
-  // closes. Note: the FIRST next_escalation_at trigger for a new/updated action item is seeded
-  // by action-item/consumer.ts using the hardcoded DEFAULT_ESCALATION_CHAIN (sibling-owned,
-  // out of scope here) — this worker's own re-anchoring of subsequent rungs (below, via
-  // planEscalations' derived nextEscalationAt) DOES correctly use the tenant-resolved chain
-  // from the second escalation onward.
+  // closes. The FIRST next_escalation_at trigger for a new/updated action item is seeded by
+  // action-item/consumer.ts, which now resolves the SAME tenant chain on its GUC-scoped tx
+  // (config-registry getEscalationChain); this worker's own re-anchoring of subsequent rungs
+  // (below, via planEscalations' derived nextEscalationAt) uses the tenant-resolved chain too,
+  // so every rung — the first trigger included — honors the tenant's configured windows.
   let actions: EscalationAction[];
   if (deps.chain) {
     actions = planEscalations(candidates, now, deps.chain);
