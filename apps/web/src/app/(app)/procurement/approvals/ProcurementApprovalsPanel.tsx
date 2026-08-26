@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
-import { ConfirmDialog, DataTable, EmptyState } from "@/app/_components/ds";
+import { ConfirmDialog, DataTable, EmptyState, ErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type WorkflowTask = {
   id: string;
@@ -48,7 +49,13 @@ export function ProcurementApprovalsPanel() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
 
-  const { data: tasks, loading, offline, source, cachedAt, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
+  // L3 fix: `error` was never destructured, so a genuine fetch failure (not
+  // offline, just failed, and nothing cached yet) fell straight through to
+  // the tasks.length===0 branch below and rendered "No pending tasks" — the
+  // same "lying empty state" bug class already fixed for DataSourceBadge
+  // elsewhere in this cluster, here hiding real outstanding approvals from an
+  // officer behind what looks like a clean inbox.
+  const { data: tasks, loading, offline, source, cachedAt, error, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
     "procurement.approvals.tasks",
     "/v1/workflow/tasks?status=pending&limit=50",
     { map: toTasks, initialData: [] },
@@ -183,6 +190,8 @@ export function ProcurementApprovalsPanel() {
 
       {loading && tasks.length === 0 ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading workflow tasks…</p>
+      ) : error && tasks.length === 0 ? (
+        <ErrorState error={toHumanError("load", { area: "workflow approval queue" })} onRetry={refresh} />
       ) : tasks.length === 0 ? (
         <EmptyState icon="✅" title="No pending tasks" message="No pending procurement workflow tasks at this time." />
       ) : (

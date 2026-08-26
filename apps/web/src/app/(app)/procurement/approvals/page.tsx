@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementApprovals } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { ProcurementApprovalsPanel } from "./ProcurementApprovalsPanel";
 
 type ApprovalRow = {
@@ -45,12 +46,11 @@ export default async function ApprovalsPage() {
 
       <Card title="Pending approvals">
         {source === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn’t load approvals"
-            message="The approvals service didn’t respond. Check your connection and try again."
-            action={<Link href="/procurement/approvals" className="btn ghost">Retry</Link>}
-          />
+          // L4 fix: see tenders/page.tsx for the same fix and rationale. Note
+          // this page ALSO renders <ProcurementApprovalsPanel/> below, which
+          // is a second, independent data source with its own error handling
+          // (fixed separately) — this ErrorState covers only the table above.
+          <ErrorState error={toHumanError("load", { area: "approvals" })} backHref="/procurement/approvals" />
         ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="No pending approvals" message="All items are up to date." />
         ) : (

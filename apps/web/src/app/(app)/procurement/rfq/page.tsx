@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getRFQs } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type RFQRow = {
   id: string;
@@ -56,12 +57,8 @@ export default async function RFQPage() {
 
       <Card title="Requests for quotation">
         {source === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn’t load RFQs"
-            message="The RFQ service didn’t respond. Check your connection and try again."
-            action={<Link href="/procurement/rfq" className="btn ghost">Retry</Link>}
-          />
+          // L4 fix: see tenders/page.tsx for the same fix and rationale.
+          <ErrorState error={toHumanError("load", { area: "RFQs" })} backHref="/procurement/rfq" />
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📝"

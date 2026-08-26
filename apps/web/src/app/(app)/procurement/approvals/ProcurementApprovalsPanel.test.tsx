@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 // useOfflineResource touches IndexedDB via responseCache — mock it directly so
 // this test exercises only ProcurementApprovalsPanel's own filtering/linking
@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 // initialData})) — this mock does the same by actually invoking `opts.map`
 // on the raw payload the test supplies, so the REAL (unexported) toTasks
 // filter is genuinely exercised, not bypassed.
+const mockRefresh = vi.fn();
 const mockUseOfflineResource = vi.fn((_key: string, _path: string, opts: { map: (raw: unknown) => unknown }) => ({
   data: opts.map(rawPayload),
   loading: false,
@@ -16,8 +17,8 @@ const mockUseOfflineResource = vi.fn((_key: string, _path: string, opts: { map: 
   offline: false,
   source: "live" as const,
   cachedAt: null,
-  error: null,
-  refresh: vi.fn(),
+  error: mockError,
+  refresh: mockRefresh,
 }));
 vi.mock("@/lib/sync/resource", () => ({
   useOfflineResource: (...args: [string, string, { map: (raw: unknown) => unknown }]) => mockUseOfflineResource(...args),
@@ -43,12 +44,15 @@ type RawTask = {
 // Set by each test before rendering — read by the mocked useOfflineResource
 // above so `opts.map` (the component's real toTasks) runs against it.
 let rawPayload: RawTask[] = [];
+let mockError: string | null = null;
 
 describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => {
   beforeEach(() => {
     mockUseOfflineResource.mockClear();
     mockFetchOrQueue.mockReset();
+    mockRefresh.mockReset();
     rawPayload = [];
+    mockError = null;
   });
 
   // Bug: REF_TYPES used to be Set(["procurement_indent", "procurement_po"]).
@@ -114,5 +118,25 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
 
     expect(screen.getByRole("link", { name: "ind-1" })).toHaveAttribute("href", "/procurement/indents/ind-1");
     expect(screen.getByRole("link", { name: "po-1" })).toHaveAttribute("href", "/procurement/orders/po-1");
+  });
+
+  // Regression test for a second, distinct L3 bug in this same file: `error`
+  // from useOfflineResource was never destructured, so a genuine fetch
+  // failure (not offline, nothing cached) fell through to the
+  // tasks.length===0 branch and rendered "No pending tasks" — indistinguishable
+  // from a genuinely empty, healthy queue. An officer had no way to tell "you
+  // have no work" from "we couldn't check your work".
+  it("shows a real error state (not 'No pending tasks') when the fetch fails with nothing cached, with working retry", () => {
+    rawPayload = [];
+    mockError = "HTTP_500";
+
+    render(<ProcurementApprovalsPanel />);
+
+    expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/couldn.t (load|check)/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 });
