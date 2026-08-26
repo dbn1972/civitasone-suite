@@ -16,9 +16,7 @@
  * ID to the SAME Redis revocation set isRevoked() reads (commit 25949e30,
  * "recurring-pass revocation now blocks at the gate") — a write that only
  * matters if something at commit time reads it, and until this fix nothing
- * did. Blacklist screening has no status-machine proxy whatsoever: it is a
- * property of the visitor's identity document, not the pass's lifecycle
- * state, so no combination of digitalPasses columns could ever catch it.
+ * did.
  *
  * ORIGINAL BUG: POST /v1/visitor/check-ins (check-in/routes.ts) publishes
  * checkInRecord straight from {passId, gateId} with no precondition that
@@ -27,14 +25,27 @@
  * a passId+gateId could check in a revoked or blacklisted pass by hitting
  * this endpoint directly, skipping verify entirely.
  *
- * FIXED: checkInRecord now calls isRevoked(tenantId, passId) and, when the
- * visit captured an identity document, isBlacklisted(tenantId,
- * identityDocHash(ref, type)) — the SAME blind-index hash /passes/verify's
- * caller and visit-request/routes.ts's synchronous screen both use, never
- * the raw decrypted reference — immediately after the gate/location/area
- * scope re-assertion (item 7) and before any write. Any failure throws
- * NonRetryableError — dead-lettered, the same convention item 7 established
- * for this exact commit path.
+ * FIXED (revocation): checkInRecord now calls isRevoked(tenantId, passId)
+ * immediately after the gate/location/area scope re-assertion (item 7) and
+ * before any write, throwing NonRetryableError on a hit — dead-lettered,
+ * the same convention item 7 established for this exact commit path.
+ *
+ * FIXED (blacklist — landed independently): while this branch was in
+ * flight, PR #706 (merged to main, then reconciled into this branch via
+ * rebase) independently added its own identity-verification/blacklist gate
+ * to this same function — see check-in/consumer.ts's "Identity-verification
+ * / blacklist gate" comment block and its dedicated coverage in
+ * tests/check-in-identity-blacklist-gate.test.ts. It calls
+ * isBlacklisted(tenantId, identityDocHash(ref, type)) — the SAME blind-index
+ * hash /passes/verify's caller and visit-request/routes.ts's synchronous
+ * screen both use, never the raw decrypted reference. This branch's own
+ * (near-identical) blacklist check was dropped during reconciliation to
+ * avoid double-querying isBlacklisted for the same thing; the blacklist
+ * tests below now exercise #706's gate and remain here to confirm the
+ * revocation and blacklist checks compose correctly at the SAME commit
+ * path after the merge (e.g. revocation short-circuits before the
+ * blacklist gate even runs), not to claim ownership of the blacklist logic
+ * itself.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -175,7 +186,7 @@ describe("checkInRecord revocation check (FIXED)", () => {
   });
 });
 
-describe("checkInRecord blacklist check (FIXED)", () => {
+describe("checkInRecord blacklist check (from #706, confirmed intact after reconciliation)", () => {
   it("rejects (dead-letters) a check-in whose visitor's identity document is on the blacklist — screened via the blind-index hash, not the raw reference", async () => {
     isBlacklistedMock.mockImplementation(async (_tenant: string, hash: string) => hash === CORRECT_HASH);
 
@@ -187,8 +198,8 @@ describe("checkInRecord blacklist check (FIXED)", () => {
     expect(isBlacklistedMock).toHaveBeenCalledWith(TENANT, CORRECT_HASH);
     // Never the raw reference straight through — the exact mistake
     // tests/check-in-watchlist-consumer-hash.test.ts documents the
-    // separate, pre-existing, best-effort post-commit isWatchlisted() call
-    // still making (not touched by this fix).
+    // separate post-commit isWatchlisted() call once also made (fixed by
+    // #706 too, alongside this pre-commit blacklist gate).
     expect(isBlacklistedMock).not.toHaveBeenCalledWith(TENANT, RAW_IDENTITY_DOC_REF);
     expect(fakeTx.update).not.toHaveBeenCalled();
     expect(fakeTx.insert).not.toHaveBeenCalled();
