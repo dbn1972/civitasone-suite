@@ -23,6 +23,8 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { materialPasses } from "./schema.js";
+import { digitalPasses } from "../digital-pass/schema.js";
+import { locations } from "../location/schema.js";
 import { reconcileOnExit, handleUndeclaredItemOnExit, type DeclaredItem } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -64,6 +66,36 @@ export function registerMaterialPassConsumers(queue: Queue): void {
 
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+
+      // Tenant-boundary check: passId/locationId are caller-supplied foreign
+      // ids. The material_passes FK constraints (pass_id -> digital_passes.id,
+      // location_id -> locations.id) only prove the target exists SOMEWHERE,
+      // not that it belongs to the caller's own tenant — without this check,
+      // any tenant could plant a material_passes row (tagged with its own
+      // tenant_id, so it reads back fine under that tenant's own RLS) that
+      // references another tenant's real digital-pass/location rows, which
+      // would corrupt any future feature that joins across tenant_id without
+      // re-verifying ownership (analytics, support tooling, audit
+      // correlation). Mirrors the identical ownership check
+      // modules/check-in/consumer.ts already does for passId before it will
+      // touch a digital pass.
+      const passRows = await tx
+        .select({ id: digitalPasses.id })
+        .from(digitalPasses)
+        .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)))
+        .limit(1);
+      if (!passRows[0]) {
+        throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      const locationRows = await tx
+        .select({ id: locations.id })
+        .from(locations)
+        .where(and(eq(locations.id, p.locationId), eq(locations.tenantId, msg.tenantId)))
+        .limit(1);
+      if (!locationRows[0]) {
+        throw new Error(`location '${p.locationId}' not found for tenant '${msg.tenantId}'`);
+      }
 
       // Insert one row per declared item with direction = "in".
       for (const item of p.items) {

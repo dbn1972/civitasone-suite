@@ -27,6 +27,7 @@ import { parkingSlots } from "../location/schema.js";
 import {
   allocateParkingSlotOrThrow,
   releaseParkingSlot,
+  DomainError,
   type VehicleType,
   type VisitorCategory,
   type ParkingSlotCandidate,
@@ -35,6 +36,12 @@ import {
 const AUDIT_TOPIC = "audit.event.record";
 
 const log = pino({ name: "vehicle-pass-consumer" });
+
+/** True for a Postgres unique/exclusion violation (SQLSTATE 23505 / 23P01). Mirrors modules/config-registry/repo.ts's helper of the same name. */
+function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string } | null | undefined)?.code;
+  return code === "23505" || code === "23P01";
+}
 
 // ── Payload Types ────────────────────────────────────────────────────────
 
@@ -65,6 +72,45 @@ export function registerVehiclePassConsumers(queue: Queue): void {
     await db.transaction(async (tx): Promise<void> => {
       if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
 
+      // No two ACTIVE vehicle passes may share a registration number — a
+      // plate can only be "in" at one place at a time. This pre-check gives
+      // a clear, specific error on the common (non-racing) path; the
+      // partial unique index added in
+      // migrations/0015_vehicle_passes_unique_active_plate.sql
+      // (tenant_id, registration_number WHERE status = 'active') is the
+      // real backstop against the same TOCTOU shape as the parking-slot
+      // race below — see the catch around the insert further down.
+      //
+      // p.registrationNumber arrives here already canonical (uppercased,
+      // [\s-] separators stripped): validators.ts's vehiclePassCreateBody
+      // normalizes it via .transform() before this message is ever
+      // published, and that validator is the only entry point into this
+      // field (verified by repo-wide grep). That's why the comparison and
+      // the index above deliberately still operate on the raw (now-always-
+      // canonical) column rather than a matching functional
+      // upper(regexp_replace(...)) expression: a second normalization
+      // layer here would be redundant given the single write path, and
+      // switching the index to a functional expression would risk failing
+      // to build against any pre-existing non-canonical duplicate rows
+      // predating this normalization.
+      const duplicateActive = await tx
+        .select({ id: vehiclePasses.id })
+        .from(vehiclePasses)
+        .where(
+          and(
+            eq(vehiclePasses.tenantId, msg.tenantId),
+            eq(vehiclePasses.registrationNumber, p.registrationNumber),
+            eq(vehiclePasses.status, "active"),
+          ),
+        )
+        .limit(1);
+      if (duplicateActive.length > 0) {
+        throw new DomainError(
+          "DUPLICATE_PLATE",
+          `registration number '${p.registrationNumber}' already has an active vehicle pass`,
+        );
+      }
+
       // Load candidate slots for this location (ordered by slot_number for
       // stable, predictable allocation — per domain.ts JSDoc).
       const candidateRows = await tx
@@ -89,30 +135,65 @@ export function registerVehiclePassConsumers(queue: Queue): void {
       // Domain allocation — throws PARKING_UNAVAILABLE (422) if no slot available.
       const allocated = allocateParkingSlotOrThrow(candidates, p.vehicleType, p.visitorCategory);
 
-      // Mark slot occupied in DB.
-      await tx
+      // Mark slot occupied in DB — conditional on the slot STILL being free
+      // at write time. Previously this UPDATE had no `AND occupied = false`
+      // guard and no row lock, so two concurrent transactions that both read
+      // the slot as free (above) before either wrote could both "win" it —
+      // see this module's audit test file header for the reproduction. The
+      // WHERE clause + `.returning()` row count turns the allocation from
+      // "the caller observed it free a moment ago" into "the caller just
+      // now atomically claimed it" — Postgres serializes concurrent UPDATEs
+      // to the same row, so a loser's WHERE re-evaluates against the
+      // now-committed `occupied = true` and matches zero rows.
+      const updatedSlot = await tx
         .update(parkingSlots)
         .set({
           occupied: true,
           occupiedBy: p.id,
           updatedAt: new Date(),
         })
-        .where(eq(parkingSlots.id, allocated.id));
+        .where(and(eq(parkingSlots.id, allocated.id), eq(parkingSlots.occupied, false)))
+        .returning({ id: parkingSlots.id });
+
+      if (updatedSlot.length === 0) {
+        // Lost the race: another concurrent request claimed this exact slot
+        // between our SELECT and this UPDATE. Same error/code a caller
+        // would see if the read-time check above had found no candidates.
+        throw new DomainError(
+          "PARKING_UNAVAILABLE",
+          `parking slot ${allocated.id} was claimed by another request before this allocation could commit`,
+        );
+      }
 
       // Insert vehicle_passes row.
-      await tx.insert(vehiclePasses).values({
-        id: p.id,
-        tenantId: msg.tenantId,
-        passId: p.passId,
-        locationId: p.locationId,
-        registrationNumber: p.registrationNumber,
-        vehicleType: p.vehicleType,
-        driverName: p.driverName,
-        parkingSlotId: allocated.id,
-        status: "active",
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
+      try {
+        await tx.insert(vehiclePasses).values({
+          id: p.id,
+          tenantId: msg.tenantId,
+          passId: p.passId,
+          locationId: p.locationId,
+          registrationNumber: p.registrationNumber,
+          vehicleType: p.vehicleType,
+          driverName: p.driverName,
+          parkingSlotId: allocated.id,
+          status: "active",
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      } catch (e) {
+        if (isUniqueViolation(e)) {
+          // TOCTOU backstop: the pre-check above raced with a concurrent
+          // insert for the same plate and lost. migrations/0015's partial
+          // unique index is what actually enforces this; translate its raw
+          // constraint violation into the same clear error the pre-check
+          // gives on the common path.
+          throw new DomainError(
+            "DUPLICATE_PLATE",
+            `registration number '${p.registrationNumber}' already has an active vehicle pass`,
+          );
+        }
+        throw e;
+      }
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "vehicle_pass", resourceId: p.locationId, outcome: "success" } });
     });
 
