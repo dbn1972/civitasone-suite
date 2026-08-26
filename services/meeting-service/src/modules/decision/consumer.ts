@@ -797,6 +797,11 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
     // TOTAL claimed positions (for + against + abstain) against the live present-member headcount.
     // Only when the meeting is committee-backed (liveQuorum non-null yields a real headcount): a
     // no-committee meeting has no roster to bound against, so that path is left unchanged.
+    // Invariant (Gap 2 re-review): this no-committee path is unreachable via production writes —
+    // quorum_established can only flip true for committee-backed meetings (attendance/consumer
+    // maybeEstablishQuorum early-returns when !committeeId), so a no-committee resolution.record
+    // is already rejected by the quorum gate above (liveQuorum null → quorumMet = latched flag =
+    // false → throw). The bound is omitted here only because there is no roster to count.
     if (realVoteRows.length === 0 && liveQuorum) {
       const claimedTotal = tally.votesFor + tally.votesAgainst + tally.votesAbstain;
       try {
