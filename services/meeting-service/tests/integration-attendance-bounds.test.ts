@@ -218,7 +218,7 @@ describe("attendance: checkInAt/checkOutAt are bounded against the meeting and e
 
     // Direct INSERT against the schema, bypassing the application layer entirely -- proves the
     // invariant is now enforced at the data layer too (chk_attendance_checkout_after_checkin,
-    // migrations/0009_core_lifecycle_constraints.sql).
+    // migrations/0010_core_lifecycle_constraints.sql).
     await expect(
       tenantQuery(
         (sql) => sql`
