@@ -35,6 +35,15 @@ describe("quotation normalisers & money math (QP-001..005)", () => {
     expect(b!.entries).toEqual([{ productId: "p1", priceMinor: "9900" }]);
   });
 
+  // The real backend response shape is `items`, not `entries` (GET /v1/crm/price-books
+  // and GET /v1/crm/price-books/:id both attach `items` — see price-books/routes.ts).
+  // This is the shape the editor actually receives; the "entries"-keyed case above only
+  // covered a shape the real API never sends.
+  it("normalises a price book from the real API shape (keyed 'items', not 'entries')", () => {
+    const b = normalisePriceBook({ id: "b1", name: "Gov", segment: "government", items: [{ productId: "p1", priceMinor: "9900" }] });
+    expect(b!.entries).toEqual([{ productId: "p1", priceMinor: "9900" }]);
+  });
+
   it("computes line net, tax and grand total with BigInt (no float drift)", () => {
     const line: QuotationLine = { productId: "p1", quantity: 3, unitPriceMinor: "10000", taxRateBps: 1800 };
     expect(lineNetMinor(line)).toBe("30000"); // 300.00
