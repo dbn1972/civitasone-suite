@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import type { RequestContext } from "@civitasone/types";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
@@ -29,6 +30,22 @@ const perquisiteComponentBody = z.object({
   description: z.string().max(255).optional(),
   valueByEmployer: z.number().finite().nonnegative().max(1_000_000_000_000),
   amountRecovered: z.number().finite().nonnegative().max(1_000_000_000_000).optional(),
+});
+
+/**
+ * SEC FIX (force-file GET→POST): the reconciliation-bypass filing of Form-24Q
+ * used to trigger off a bare `?force=1` GET query param, so any prefetch,
+ * link-preview crawler, or shared/bookmarked URL could silently fire a
+ * statutory-filing audit event with no user confirmation at all. This body
+ * schema is the ONLY way to reach that bypass now: `confirmForce` must be
+ * the literal `true`, and `reason` is mandatory so the override is never
+ * silent — see POST /v1/payroll/statutory/form24q/force-file below.
+ */
+const forceFileBody = z.object({
+  fy: z.string().trim().min(1, "fy is required (e.g. 2026-27)"),
+  quarter: z.string().trim().min(1, "quarter is required"),
+  confirmForce: z.literal(true),
+  reason: z.string().trim().min(1, "reason is required").max(500),
 });
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
@@ -86,165 +103,194 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   return byEmp;
 }
 
+/**
+ * Builds the Form-24Q structured payload shared by the plain GET (read-only,
+ * `force` always `false`) and the confirmed POST force-file action below.
+ *
+ * `force` may ONLY ever be `true` when called from the POST handler, which
+ * gates it behind a validated `{ confirmForce: true, reason }` body — this is
+ * the fix for a prior bug where a bare GET `?force=1` query param could
+ * trigger the same reconciliation bypass + audit event from a prefetch, link
+ * preview, crawler, or shared URL with no user confirmation at all.
+ */
+async function buildForm24Q(
+  ctx: RequestContext,
+  fyRaw: string | undefined,
+  quarterRaw: string | undefined,
+  force: boolean,
+  reason?: string,
+) {
+  if (!fyRaw) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
+  const q = (quarterRaw ?? "").toUpperCase() as Quarter;
+  if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
+
+  const { startYear, endYear } = parseFyOr400(fyRaw);
+  const months = quarterMonths(startYear, q);
+
+  // P1: TRACES reconciliation gate. Sum TDS deducted (payroll_tds, finalised
+  // runs) vs deposited (challans) per month. Block 24Q when they do not
+  // match; `force` bypasses the block (flag, don't block) but — per the SEC
+  // FIX above — is only ever true from the confirmed POST .../force-file
+  // action. The plain GET below always calls this with `force: false`, so an
+  // unreconciled quarter can no longer be bypassed by any GET request.
+  const reconciliation: Reconciliation[] = [];
+  for (const mo of months) reconciliation.push(await reconcilePeriod(ctx.tenantId, mo, "24Q"));
+  const reconciled = reconciliation.every((r) => r.matched);
+  if (!reconciled && !force) {
+    throw new HttpError(409, "TDS_RECONCILIATION_FAILED",
+      "24Q blocked: TDS deducted does not match deposited challans for " +
+      reconciliation.filter((r) => !r.matched).map((r) => `${r.period}(${r.status})`).join(", ") +
+      ". Ingest/correct challans, or POST /v1/payroll/statutory/form24q/force-file " +
+      "with a confirmed reason to file a flagged return.");
+  }
+  // H3: a forced filing bypasses the reconciliation gate (unreconciled TDS).
+  // This is a high-risk override — record an audit/outbox event with the
+  // actor, period, per-period variance, and the caller-supplied reason so the
+  // forced filing is never silent.
+  if (!reconciled && force) {
+    const unmatched = reconciliation.filter((r) => !r.matched);
+    const totalVariance = unmatched.reduce((acc, r) => acc + BigInt(r.varianceMinor), 0n);
+    // Exception: this read-side export performs no entity mutation; the
+    // transaction persists only its mandatory audit outbox record.
+    await queue.publish(AUDIT_TOPIC, {
+      messageId: randomUUID(),
+      type: AUDIT_TOPIC,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "payroll",
+        action: "force_file_24q",
+        resourceType: "statutory_return",
+        resourceId: `24Q:${fyRaw}:${q}`,
+        outcome: "forced",
+        fy: fyRaw, quarter: q,
+        reason,
+        varianceMinor: totalVariance.toString(),
+        unreconciledPeriods: unmatched.map((r) => ({
+          period: r.period, status: r.status, varianceMinor: r.varianceMinor,
+        })),
+      },
+    });
+  }
+
+  const byEmp = await deducteeWiseTds(ctx.tenantId, months);
+
+  // Employee master for PAN + name. M4: HRMS-unreachable must FAIL the return
+  // (502) rather than emit blank PANs that look like genuine PANNOTAVBL flags.
+  let master = new Map<string, PayrollInputEmployee>();
+  try {
+    const input = await fetchPayrollInput(ctx.tenantId, months[months.length - 1] ?? `${endYear}-03`);
+    master = new Map(input.employees.map((e) => [e.id, e]));
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q: HRMS identity source unreachable");
+    }
+    throw err;
+  }
+
+  const deductees = [...byEmp.entries()].map(([employeeId, agg]) => {
+    const emp = master.get(employeeId);
+    const tdsDeducted = Math.round(agg.tds);
+    return {
+      employeeId,
+      pan: emp?.pan ?? "",
+      panFlag: emp?.pan ? "" : "PANNOTAVBL",
+      name: emp?.fullName ?? "",
+      tdsDeductedMinor: Math.round(agg.tds * 100),
+      tdsDeducted,
+      tdsDeposited: tdsDeducted, // deposited == deducted in this model
+      periods: [...agg.periods].sort(),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const totalTdsDeducted = deductees.reduce((s, d) => s + d.tdsDeducted, 0);
+
+  // Challan summary: one challan per month (TDS deposited for that month),
+  // restricted to approved/disbursed runs.
+  const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
+    .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
+  const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
+  const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
+    .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
+  const challans = months.map((month) => ({
+    month,
+    tdsDeposited: Math.round(challanTdsRows
+      .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
+      .reduce((s, t) => s + Number(t.tdsMinor) / 100, 0)),
+  }));
+
+  // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
+  let annexureII: Array<Record<string, unknown>> | undefined;
+  if (q === "Q4") {
+    annexureII = [];
+    for (const d of deductees) {
+      try {
+        const f16 = await buildForm16(ctx.tenantId, d.employeeId, fyRaw);
+        annexureII.push({
+          employeeId: d.employeeId,
+          pan: f16.form16PartA.deductee.pan,
+          name: f16.form16PartA.deductee.name,
+          ...f16.form16PartB,
+        });
+      } catch (err) {
+        // M4: never silently drop a deductee because HRMS is down — fail the export.
+        if (err instanceof HrmsUnavailableError) {
+          throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q Annexure II: HRMS identity source unreachable");
+        }
+        /* other errors: skip employees that genuinely cannot be built */
+      }
+    }
+  }
+
+  return {
+    formType: "24Q",
+    fy: fyRaw,
+    assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
+    quarter: q,
+    deductor: employerIdentity(),
+    deducteeCount: deductees.length,
+    deductees,
+    challanSummary: challans,
+    totalTdsDeducted,
+    totalTdsDeposited: challans.reduce((s, c) => s + c.tdsDeposited, 0),
+    ...(annexureII ? { annexureII } : {}),
+    reconciliation: {
+      matched: reconciled,
+      perPeriod: reconciliation,
+      ...(reconciled ? {} : { warning: "FILED WITH UNRECONCILED TDS (forced override)" }),
+    },
+    note: reconciled
+      ? "TDS deducted reconciled against deposited challans (BSR/CIN). Safe to file."
+      : "WARNING: TDS deducted does NOT match deposited challans; verify BSR/CIN against TRACES before filing.",
+  };
+}
+
 export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void> {
   /**
    * GET /v1/payroll/statutory/form24q?fy=2026-27&quarter=Q1[&format=file]
    * Quarterly e-TDS return (salary): deductee-wise TDS + challan summary.
    * Q4 also includes Annexure II (salary detail = Form 16 Part B figures).
+   *
+   * Read-only: this can NEVER bypass the reconciliation gate. There is no
+   * `force` query param any more — see POST .../form24q/force-file below.
    */
   app.get("/v1/payroll/statutory/form24q", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, RETURN_FILER_ROLES);
 
     const { fy, quarter, format } = req.query as { fy?: string; quarter?: string; format?: string };
-    if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
-    const q = (quarter ?? "").toUpperCase() as Quarter;
-    if (!QUARTERS.includes(q)) throw new HttpError(400, "VALIDATION_FAILED", "quarter must be one of Q1,Q2,Q3,Q4");
-
-    const { startYear, endYear } = parseFyOr400(fy);
-    const months = quarterMonths(startYear, q);
-
-    // P1: TRACES reconciliation gate. Sum TDS deducted (payroll_tds, finalised
-    // runs) vs deposited (challans) per month. Block 24Q when they do not match
-    // unless the caller explicitly passes ?force=1 (then we flag, not block).
-    const { force } = req.query as { force?: string };
-    const reconciliation: Reconciliation[] = [];
-    for (const mo of months) reconciliation.push(await reconcilePeriod(ctx.tenantId, mo, "24Q"));
-    const reconciled = reconciliation.every((r) => r.matched);
-    if (!reconciled && force !== "1") {
-      throw new HttpError(409, "TDS_RECONCILIATION_FAILED",
-        "24Q blocked: TDS deducted does not match deposited challans for " +
-        reconciliation.filter((r) => !r.matched).map((r) => `${r.period}(${r.status})`).join(", ") +
-        ". Ingest/correct challans or pass force=1 to generate a flagged return.");
-    }
-    // H3: a force=1 filing bypasses the reconciliation gate (unreconciled TDS).
-    // This is a high-risk override — record an audit/outbox event with the actor,
-    // period, and per-period variance so the forced filing is never silent.
-    if (!reconciled && force === "1") {
-      const unmatched = reconciliation.filter((r) => !r.matched);
-      const totalVariance = unmatched.reduce((acc, r) => acc + BigInt(r.varianceMinor), 0n);
-      // Exception: this read-side export performs no entity mutation; the
-      // transaction persists only its mandatory audit outbox record.
-      await queue.publish(AUDIT_TOPIC, {
-        messageId: randomUUID(),
-        type: AUDIT_TOPIC,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        schemaVersion: "1.0",
-        payload: {
-          service: "payroll",
-          action: "force_file_24q",
-          resourceType: "statutory_return",
-          resourceId: `24Q:${fy}:${q}`,
-          outcome: "forced",
-          fy, quarter: q,
-          varianceMinor: totalVariance.toString(),
-          unreconciledPeriods: unmatched.map((r) => ({
-            period: r.period, status: r.status, varianceMinor: r.varianceMinor,
-          })),
-        },
-      });
-    }
-
-    const byEmp = await deducteeWiseTds(ctx.tenantId, months);
-
-    // Employee master for PAN + name. M4: HRMS-unreachable must FAIL the return
-    // (502) rather than emit blank PANs that look like genuine PANNOTAVBL flags.
-    let master = new Map<string, PayrollInputEmployee>();
-    try {
-      const input = await fetchPayrollInput(ctx.tenantId, months[months.length - 1] ?? `${endYear}-03`);
-      master = new Map(input.employees.map((e) => [e.id, e]));
-    } catch (err) {
-      if (err instanceof HrmsUnavailableError) {
-        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q: HRMS identity source unreachable");
-      }
-      throw err;
-    }
-
-    const deductees = [...byEmp.entries()].map(([employeeId, agg]) => {
-      const emp = master.get(employeeId);
-      const tdsDeducted = Math.round(agg.tds);
-      return {
-        employeeId,
-        pan: emp?.pan ?? "",
-        panFlag: emp?.pan ? "" : "PANNOTAVBL",
-        name: emp?.fullName ?? "",
-        tdsDeductedMinor: Math.round(agg.tds * 100),
-        tdsDeducted,
-        tdsDeposited: tdsDeducted, // deposited == deducted in this model
-        periods: [...agg.periods].sort(),
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-
-    const totalTdsDeducted = deductees.reduce((s, d) => s + d.tdsDeducted, 0);
-
-    // Challan summary: one challan per month (TDS deposited for that month),
-    // restricted to approved/disbursed runs.
-    const challanRuns = await scopedRead((tx) => tx.select().from(payrollRuns)
-      .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
-    const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
-    const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
-      .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
-    const challans = months.map((month) => ({
-      month,
-      tdsDeposited: Math.round(challanTdsRows
-        .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
-        .reduce((s, t) => s + Number(t.tdsMinor) / 100, 0)),
-    }));
-
-    // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
-    let annexureII: Array<Record<string, unknown>> | undefined;
-    if (q === "Q4") {
-      annexureII = [];
-      for (const d of deductees) {
-        try {
-          const f16 = await buildForm16(ctx.tenantId, d.employeeId, fy);
-          annexureII.push({
-            employeeId: d.employeeId,
-            pan: f16.form16PartA.deductee.pan,
-            name: f16.form16PartA.deductee.name,
-            ...f16.form16PartB,
-          });
-        } catch (err) {
-          // M4: never silently drop a deductee because HRMS is down — fail the export.
-          if (err instanceof HrmsUnavailableError) {
-            throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot generate Form 24Q Annexure II: HRMS identity source unreachable");
-          }
-          /* other errors: skip employees that genuinely cannot be built */
-        }
-      }
-    }
-
-    const structured = {
-      formType: "24Q",
-      fy,
-      assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
-      quarter: q,
-      deductor: employerIdentity(),
-      deducteeCount: deductees.length,
-      deductees,
-      challanSummary: challans,
-      totalTdsDeducted,
-      totalTdsDeposited: challans.reduce((s, c) => s + c.tdsDeposited, 0),
-      ...(annexureII ? { annexureII } : {}),
-      reconciliation: {
-        matched: reconciled,
-        perPeriod: reconciliation,
-        ...(reconciled ? {} : { warning: "FILED WITH UNRECONCILED TDS (force=1)" }),
-      },
-      note: reconciled
-        ? "TDS deducted reconciled against deposited challans (BSR/CIN). Safe to file."
-        : "WARNING: TDS deducted does NOT match deposited challans; verify BSR/CIN against TRACES before filing.",
-    };
+    const structured = await buildForm24Q(ctx, fy, quarter, false);
 
     if (format !== "file") return reply.send(structured);
 
     // NSDL/EPFO-style pipe-delimited flat file (RPU-like line records).
+    const { deductees, challanSummary: challans, totalTdsDeducted, annexureII, fy: resolvedFy, quarter: q } = structured;
     const emp = employerIdentity();
     const lines: string[] = [];
     // File Header (FH)
-    lines.push(["FH", "24Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
+    lines.push(["FH", "24Q", resolvedFy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     // Challan records (CD): batch, month, deposited amount
     challans.forEach((c, i) => {
       lines.push(["CD", i + 1, c.month, c.tdsDeposited.toFixed(2)].join("|"));
@@ -263,11 +309,48 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     // File Trailer (FT)
     lines.push(["FT", lines.length + 1, totalTdsDeducted.toFixed(2)].join("|"));
 
-    const filename = `24Q_${fy.replace("-", "")}_${q}.txt`;
+    const filename = `24Q_${resolvedFy.replace("-", "")}_${q}.txt`;
     return reply
       .header("content-type", "text/plain; charset=utf-8")
       .header("content-disposition", `attachment; filename="${filename}"`)
       .send(lines.join("\r\n"));
+  });
+
+  /**
+   * POST /v1/payroll/statutory/form24q/force-file
+   * Body: { fy, quarter, confirmForce: true, reason }
+   *
+   * The ONLY way to file Form-24Q past the TRACES reconciliation gate.
+   * `confirmForce` must be the literal `true` and `reason` must be a
+   * non-empty string, or this 400s (VALIDATION_FAILED) — see `forceFileBody`.
+   * Same role gate as the GET above (RETURN_FILER_ROLES); nothing broader.
+   *
+   * SEC FIX: this replaces a GET `?force=1` query param on the endpoint above
+   * that fired the identical bypass + audit event on ANY GET — including
+   * browser prefetch, link-preview crawlers, and bookmarked/shared URLs, with
+   * no user confirmation. See ForceFileButton.tsx for the frontend side.
+   */
+  app.post("/v1/payroll/statutory/form24q/force-file", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, RETURN_FILER_ROLES);
+
+    // Explicit local catch (matches nach/routes.ts, dsc-config/routes.ts, etc.)
+    // rather than relying solely on the shared registerSchemaErrorHandler's
+    // ZodError detection — HttpError is what this file already uses for every
+    // other 400 here (parseFyOr400, the fy/quarter checks above), and unlike
+    // ZodError it doesn't depend on cross-package instanceof/shape checks.
+    let body: z.infer<typeof forceFileBody>;
+    try {
+      body = forceFileBody.parse(req.body);
+    } catch (err) {
+      if (err instanceof ZodError) {
+        throw new HttpError(400, "VALIDATION_FAILED",
+          err.issues.map((i) => `${i.path.join(".") || "(body)"}: ${i.message}`).join("; "));
+      }
+      throw err;
+    }
+    const structured = await buildForm24Q(ctx, body.fy, body.quarter, true, body.reason);
+    return reply.send(structured);
   });
 
   /**

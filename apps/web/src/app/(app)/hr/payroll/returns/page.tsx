@@ -5,7 +5,6 @@ import { formatMoney } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
-import { StripForceParam } from "./StripForceParam";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
@@ -95,10 +94,14 @@ function toForm24Q(raw: unknown): Form24Q | null {
   };
 }
 
-async function getForm24Q(fy: string, quarter: Quarter, force: boolean): Promise<Form24QLookup> {
-  const forceParam = force ? "&force=1" : "";
+/**
+ * Plain read — never bypasses the TRACES reconciliation gate. Forcing past it
+ * is a separate, explicit action (see ForceFileButton.tsx), not a query param
+ * on this GET, so this loader has nothing to pass through for it any more.
+ */
+async function getForm24Q(fy: string, quarter: Quarter): Promise<Form24QLookup> {
   const r = await statusAwareGet(
-    "/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + forceParam,
+    "/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter,
   );
   if (r.kind === "ok") {
     const data = toForm24Q(r.body);
@@ -128,7 +131,7 @@ async function getForm26Q(fy: string, quarter: Quarter): Promise<LoaderResult<Fo
 export default async function ReturnsPage({
   searchParams,
 }: {
-  searchParams: { fy?: string; quarter?: string; force?: string };
+  searchParams: { fy?: string; quarter?: string };
 }) {
   const { fy: defFy, quarter: defQuarter } = currentFyQuarter();
   const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : defFy;
@@ -136,10 +139,8 @@ export default async function ReturnsPage({
     ? (searchParams.quarter as Quarter)
     : defQuarter;
 
-  const force = searchParams.force === "1";
-
   const [f24Lookup, { data: f26, source: src26 }] = await Promise.all([
-    getForm24Q(fy, quarter, force),
+    getForm24Q(fy, quarter),
     getForm26Q(fy, quarter),
   ]);
 
@@ -197,7 +198,6 @@ export default async function ReturnsPage({
       />
 
       <DataSourceBadge source={overallSource} message="Couldn't load — showing nothing" />
-      {force && <StripForceParam />}
 
       {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
       <Card title={"Annual TDS Returns Overview — FY " + fy}>
