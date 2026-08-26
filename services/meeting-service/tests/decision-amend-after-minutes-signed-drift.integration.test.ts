@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerDecisionConsumers } from "../src/modules/decision/consumer.js";
@@ -33,6 +33,15 @@ const DECISION = randomUUID();
 const MINUTES = randomUUID();
 const ACTOR = randomUUID();
 const CHAIR = randomUUID();
+
+// Gap 3 fixtures: supersession normally happens at a LATER meeting. LATER_MEETING is NOT
+// minutes-locked and holds the forward supersession targets.
+const LATER_MEETING = randomUUID();
+const SUPERSEDER = randomUUID(); // a real, later decision the locked DECISION may point to (acyclic)
+// Cycle fixtures: DEC_CYCLE lives in the LOCKED meeting; DEC_CYCLE_TARGET already points back at it,
+// so a supersede-only patch DEC_CYCLE → DEC_CYCLE_TARGET would close a 2-cycle in the register.
+const DEC_CYCLE = randomUUID();
+const DEC_CYCLE_TARGET = randomUUID();
 
 const ORIGINAL_TEXT = "Approve Rs 10 lakh for emergency roof repairs";
 const ORIGINAL_CONTENT = `Minutes of meeting.\n\nDecision recorded: "${ORIGINAL_TEXT}"\n`;
@@ -80,6 +89,31 @@ beforeAll(async () => {
          approved_by, approved_at, hash_current, created_by, updated_by)
       values (${MINUTES}, ${TENANT}, ${MEETING}, 'summary', ${ORIGINAL_CONTENT}, 'approved', 1,
         ${CHAIR}, now(), ${FIXED_HASH}, ${ACTOR}, ${ACTOR})`;
+
+    // ── Gap 3 fixtures ──────────────────────────────────────────────────────────────────────
+    // A LATER meeting with NO minutes lock, holding the forward supersession targets.
+    await sql`
+      insert into meeting.meetings
+        (id, tenant_id, type, title, status, financial_year, scheduled_at, meeting_number, created_by, updated_by)
+      values (${LATER_MEETING}, ${TENANT}, 'committee', 'Later Decision Meeting', 'in_progress', '2025-26',
+        '2025-09-15T10:00:00Z', ${"DD/2025-26/" + LATER_MEETING.slice(0, 8)}, ${ACTOR}, ${ACTOR})`;
+
+    // A real later decision that the locked DECISION may legitimately be superseded BY (acyclic).
+    await sql`
+      insert into meeting.decisions (id, tenant_id, meeting_id, text, type, status, created_by, updated_by)
+      values (${SUPERSEDER}, ${TENANT}, ${LATER_MEETING}, 'Later decision superseding the roof-repair sanction',
+        'financial', 'effective', ${ACTOR}, ${ACTOR})`;
+
+    // Cycle setup: DEC_CYCLE sits inside the LOCKED meeting; DEC_CYCLE_TARGET already supersedes it,
+    // so a supersede-only patch DEC_CYCLE → DEC_CYCLE_TARGET would close a 2-cycle in the register.
+    await sql`
+      insert into meeting.decisions (id, tenant_id, meeting_id, text, type, status, created_by, updated_by)
+      values (${DEC_CYCLE}, ${TENANT}, ${MEETING}, 'A minuted decision used by the lineage-cycle case',
+        'administrative', 'effective', ${ACTOR}, ${ACTOR})`;
+    await sql`
+      insert into meeting.decisions (id, tenant_id, meeting_id, text, type, status, superseded_by_id, created_by, updated_by)
+      values (${DEC_CYCLE_TARGET}, ${TENANT}, ${LATER_MEETING}, 'Already superseded by DEC_CYCLE',
+        'administrative', 'effective', ${DEC_CYCLE}, ${ACTOR}, ${ACTOR})`;
   });
 });
 
@@ -118,5 +152,67 @@ describe("an approved minutes' content is locked, and so is the decision it reco
     expect((rows as any[])[0].text).toBe(ORIGINAL_TEXT);
     expect((rows as any[])[0].text).not.toBe(AMENDED_TEXT);
     expect((rows as any[])[0].version).toBe(1);
+  });
+});
+
+describe("[FIXED, Gap 3] a supersede-only patch survives the minutes lock, but substance stays locked", () => {
+  it("still BLOCKS a patch that mixes a substantive field (text) in with the supersession, once minutes are locked", async () => {
+    // Supersession fields are present, but so is `text` — a substantive rewrite of a minuted
+    // decision, which must stay blocked exactly as a plain text patch is. The exemption is narrow.
+    await expect(
+      run(msg(COMMANDS.decisionUpdate, {
+        decisionId: DECISION,
+        version: 1,
+        patch: { status: "superseded", supersededById: SUPERSEDER, text: "Sneak a rewrite in under cover of a supersession" },
+      })),
+    ).rejects.toThrow(/minutes are already approved/);
+
+    const rows = await tenantQuery((sql) => sql`select text, status, superseded_by_id, version from meeting.decisions where id = ${DECISION}`);
+    expect((rows as any[])[0].text).toBe(ORIGINAL_TEXT);
+    expect((rows as any[])[0].status).toBe("effective");
+    expect((rows as any[])[0].superseded_by_id).toBeNull();
+    expect((rows as any[])[0].version).toBe(1);
+  });
+
+  it("still runs fix 9's acyclic-lineage guard on the supersede path even when minutes are locked (rejects a cycle, NOT via the minutes gate)", async () => {
+    // DEC_CYCLE is inside the LOCKED meeting; DEC_CYCLE_TARGET already supersedes it. A supersede-
+    // only patch closing the loop must be rejected by assertAcyclicLineage — proving the exemption
+    // lifts ONLY the minutes-lock gate, not fix 9's integrity checks.
+    let caught: unknown;
+    await run(msg(COMMANDS.decisionUpdate, {
+      decisionId: DEC_CYCLE,
+      version: 1,
+      patch: { status: "superseded", supersededById: DEC_CYCLE_TARGET },
+    })).catch((e) => {
+      caught = e;
+    });
+
+    expect(caught).toBeInstanceOf(NonRetryableError);
+    expect((caught as Error).message).toMatch(/cycle/i);
+    // Crucially NOT rejected by the minutes-lock gate — the supersede path was reached.
+    expect((caught as Error).message).not.toMatch(/minutes are already approved/);
+
+    // DEC_CYCLE is untouched — the cycle was refused.
+    const rows = await tenantQuery((sql) => sql`select status, superseded_by_id from meeting.decisions where id = ${DEC_CYCLE}`);
+    expect((rows as any[])[0].status).toBe("effective");
+    expect((rows as any[])[0].superseded_by_id).toBeNull();
+  });
+
+  it("ALLOWS a supersede-only patch (status=superseded + supersededById → a real decision) even though the minutes are locked", async () => {
+    // The core Gap 3 fix: superseding a minuted decision at a later meeting adds a forward pointer
+    // without rewriting the minuted substance, so it must NOT be permanently blocked by the lock.
+    await run(msg(COMMANDS.decisionUpdate, {
+      decisionId: DECISION,
+      version: 1,
+      patch: { status: "superseded", supersededById: SUPERSEDER },
+    }));
+
+    const rows = await tenantQuery((sql) => sql`select text, status, superseded_by_id, version from meeting.decisions where id = ${DECISION}`);
+    // Forward supersession pointer recorded...
+    expect((rows as any[])[0].status).toBe("superseded");
+    expect((rows as any[])[0].superseded_by_id).toBe(SUPERSEDER);
+    expect((rows as any[])[0].version).toBe(2);
+    // ...and the minuted SUBSTANCE is untouched — no drift with the signed-off minutes.
+    expect((rows as any[])[0].text).toBe(ORIGINAL_TEXT);
   });
 });

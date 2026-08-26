@@ -613,23 +613,46 @@ async function handleDecisionUpdate(msg: CommandEnvelope<DecisionUpdatePayload>)
     const existing = rows[0];
     if (!existing) return;
 
+    const patch = p.patch;
+
+    // Fix (Gap 3 — supersession must survive the minutes lock): a supersede-ONLY patch (only
+    // status:"superseded" and/or supersededById, touching NO substantive field) is exempt from the
+    // minutes-lock guard below. Superseding a minuted decision — which fix 9 supports, and which
+    // normally happens at a LATER meeting — only ADDS a forward supersession pointer; it does not
+    // rewrite the substance the locked minutes recorded. Any patch that touches a substantive field
+    // (text/type/authority/effectiveDate/responsibleOfficer/deadline/financialImplication/currency),
+    // or changes status to anything OTHER than "superseded", stays blocked once minutes are locked.
+    // The supersede path further down STILL enforces fix 9's target-exists + acyclic-lineage checks.
+    const substantivePatchFields = [
+      "text",
+      "type",
+      "authority",
+      "effectiveDate",
+      "responsibleOfficer",
+      "deadline",
+      "financialImplication",
+      "currency",
+    ] as const;
+    const touchesSubstantiveField = substantivePatchFields.some((f) => patch[f] !== undefined);
+    const changesStatusToNonSuperseded = patch.status !== undefined && patch.status !== "superseded";
+    const isSupersedeOnlyPatch = !touchesSubstantiveField && !changesStatusToNonSuperseded;
+
     // Fix (decision amendable after its minutes are signed): once a meeting's minutes are
     // approved/signed/circulated, the decisions they recorded must not be silently rewritten —
     // the legally-binding, hash-anchored minutes and the "live" decision record would otherwise
     // permanently disagree with nothing surfacing it. Mirrors minutes/consumer.ts's own
-    // `assertMinutesEditable` guard, applied from the decision side since this handler
-    // previously never queried `minutes` at all.
+    // `assertMinutesEditable` guard, applied from the decision side since this handler previously
+    // never queried `minutes` at all. A supersede-only patch (above) is exempt — it appends a
+    // forward supersession pointer without a substantive rewrite (Gap 3).
     const minutesRows = await tx
       .select({ status: minutes.status })
       .from(minutes)
       .where(and(eq(minutes.meetingId, existing.meetingId), eq(minutes.tenantId, msg.tenantId)));
-    if (minutesRows.some((m) => isMinutesLocked(m.status))) {
+    if (!isSupersedeOnlyPatch && minutesRows.some((m) => isMinutesLocked(m.status))) {
       throw new NonRetryableError(
         `decision ${p.decisionId} cannot be amended: its meeting's minutes are already approved/signed/circulated`,
       );
     }
-
-    const patch = p.patch;
 
     // Fix (decision.status/resolution-outcome drift): a decision cannot be marked "effective"
     // while its own linked resolution's real, voting-computed outcome says otherwise — "passed"
