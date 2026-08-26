@@ -3,14 +3,56 @@ import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache, queue } from "../../shared/infra.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 /**
  * Social Feed Module — peer recognition (kudos), birthdays, new joinees,
  * announcements, travel requests, and expense claims.
  *
- * Tables live in hrms.social_* schema.
+ * Tables live in employee.hrms_social_* / employee.hrms_push_devices
+ * (migration 0115_social_feed.sql) and claims.hrms_travel_requests /
+ * claims.hrms_expense_claims (same migration; claims schema chosen to match
+ * the shape of sibling claims.hrms_cea_claims / claims.hrms_ltc_claims).
+ *
+ * employee.hrms_employees, employee.hrms_social_*, claims.hrms_travel_requests,
+ * claims.hrms_expense_claims and employee.hrms_push_devices all have RLS
+ * ENABLEd and FORCEd, and this module talks to `sqlClient` directly via the
+ * classic `pg` query(text, params) shape (no Drizzle schema attached here, so
+ * there is no db.transaction() — where wrapWithTenantGuc injects
+ * app.tenant_id — anywhere in the call path). Without this, every query
+ * below ran with no GUC set and the connecting role (`hrms_svc`, NOBYPASSRLS
+ * non-superuser) got zero rows back / a row-security violation on write,
+ * silently: RLS fails CLOSED. This affected every handler in this file, not
+ * just the two that were reported 500ing — birthdays and the org chart, for
+ * example, queried employee.hrms_employees the same unwrapped way and simply
+ * returned empty results with no error. See @civitasone/db's
+ * withRawTenantGuc for the shared fix (already applied the same way in this
+ * service's medical and workforce-planning modules).
  */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, async (tx) => {
+    // Bridges postgres-js's tagged-template `tx` back to the classic
+    // `query(text, params)` / `{ rows, rowCount }` shape this file already
+    // uses everywhere, exactly like shared/db.ts's own `sqlPool` bridges the
+    // top-level (unscoped) client — same logic, just scoped to this
+    // GUC-bearing transaction instead of the pool.
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
 
 // ─── Validation Schemas ─────────────────────────────────────────────────────
 
@@ -58,30 +100,34 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    // Get receiver name for feed display
-    const receiverRow = await sqlClient.query(
-      `SELECT first_name, last_name, employee_code FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
-      [body.receiverId, ctx.tenantId],
-    );
-    const receiver = receiverRow.rows[0];
-    if (!receiver) throw new HttpError(404, "RECEIVER_NOT_FOUND", "Employee not found");
+    const { receiverName, giverName } = await withTenantGuc(ctx.tenantId, async (pool) => {
+      // Get receiver name for feed display
+      const receiverRow = await pool.query(
+        `SELECT first_name, last_name, employee_code FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
+        [body.receiverId, ctx.tenantId],
+      );
+      const receiver = receiverRow.rows[0];
+      if (!receiver) throw new HttpError(404, "RECEIVER_NOT_FOUND", "Employee not found");
 
-    const receiverName = `${receiver.first_name} ${receiver.last_name}`.trim();
+      const receiverName = `${receiver.first_name} ${receiver.last_name}`.trim();
 
-    // Get giver name
-    const giverRow = await sqlClient.query(
-      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.actorId, ctx.tenantId],
-    );
-    const giverName = giverRow.rows[0]
-      ? `${giverRow.rows[0].first_name} ${giverRow.rows[0].last_name}`.trim()
-      : "Unknown";
+      // Get giver name
+      const giverRow = await pool.query(
+        `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+        [ctx.actorId, ctx.tenantId],
+      );
+      const giverName = giverRow.rows[0]
+        ? `${giverRow.rows[0].first_name} ${giverRow.rows[0].last_name}`.trim()
+        : "Unknown";
 
-    await sqlClient.query(
-      `INSERT INTO hrms.social_kudos (id, tenant_id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, ctx.tenantId, ctx.actorId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
-    );
+      await pool.query(
+        `INSERT INTO employee.hrms_social_kudos (id, tenant_id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, ctx.tenantId, ctx.actorId, body.receiverId, giverName, receiverName, body.badge, body.message, now],
+      );
+
+      return { receiverName, giverName };
+    });
 
     // Emit notification event
     await queue.publish("notification.send", {
@@ -113,23 +159,27 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const limit = Math.min(Number((req.query as any)?.limit ?? 50), 100);
 
-    const rows = await sqlClient.query(
-      `SELECT id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at,
-              (SELECT COUNT(*) FROM hrms.social_kudos_reactions r WHERE r.kudos_id = k.id) AS reactions
-       FROM hrms.social_kudos k
-       WHERE tenant_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2`,
-      [ctx.tenantId, limit],
-    );
+    const { rows, myStats } = await withTenantGuc(ctx.tenantId, async (pool) => {
+      const rows = await pool.query(
+        `SELECT id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at,
+                (SELECT COUNT(*) FROM employee.hrms_social_kudos_reactions r WHERE r.kudos_id = k.id) AS reactions
+         FROM employee.hrms_social_kudos k
+         WHERE tenant_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [ctx.tenantId, limit],
+      );
 
-    // Count for current user
-    const myStats = await sqlClient.query(
-      `SELECT 
-         (SELECT COUNT(*) FROM hrms.social_kudos WHERE receiver_id = $1 AND tenant_id = $2) AS received,
-         (SELECT COUNT(*) FROM hrms.social_kudos WHERE giver_id = $1 AND tenant_id = $2) AS given`,
-      [ctx.actorId, ctx.tenantId],
-    );
+      // Count for current user
+      const myStats = await pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM employee.hrms_social_kudos WHERE receiver_id = $1 AND tenant_id = $2) AS received,
+           (SELECT COUNT(*) FROM employee.hrms_social_kudos WHERE giver_id = $1 AND tenant_id = $2) AS given`,
+        [ctx.actorId, ctx.tenantId],
+      );
+
+      return { rows, myStats };
+    });
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
@@ -156,29 +206,55 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const limit = Math.min(Number((req.query as any)?.limit ?? 30), 50);
     const feed: any[] = [];
 
-    // 1. Recent kudos (last 7 days)
-    const kudos = await sqlClient.query(
-      `SELECT id, giver_name, receiver_name, badge, message, created_at
-       FROM hrms.social_kudos WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days'
-       ORDER BY created_at DESC LIMIT 10`,
-      [ctx.tenantId],
-    );
+    const { kudos, birthdays, newJoinees, announcements } = await withTenantGuc(ctx.tenantId, async (pool) => {
+      // 1. Recent kudos (last 7 days)
+      const kudos = await pool.query(
+        `SELECT id, giver_name, receiver_name, badge, message, created_at
+         FROM employee.hrms_social_kudos WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days'
+         ORDER BY created_at DESC LIMIT 10`,
+        [ctx.tenantId],
+      );
+
+      // 2. Today's birthdays
+      const today = new Date();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const birthdays = await pool.query(
+        `SELECT id, first_name, last_name, department, designation, photo_url
+         FROM employee.hrms_employees
+         WHERE tenant_id = $1 AND status = 'active'
+           AND EXTRACT(MONTH FROM date_of_birth) = $2
+           AND EXTRACT(DAY FROM date_of_birth) = $3`,
+        [ctx.tenantId, Number(mm), Number(dd)],
+      );
+
+      // 3. New joinees (last 30 days)
+      const newJoinees = await pool.query(
+        `SELECT id, first_name, last_name, department, designation, joining_date, photo_url
+         FROM employee.hrms_employees
+         WHERE tenant_id = $1 AND status = 'active'
+           AND joining_date > NOW() - INTERVAL '30 days'
+         ORDER BY joining_date DESC LIMIT 5`,
+        [ctx.tenantId],
+      );
+
+      // 4. Announcements
+      const announcements = await pool.query(
+        `SELECT id, title, body, category, pinned, created_by_name, created_at
+         FROM employee.hrms_social_announcements
+         WHERE tenant_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY pinned DESC, created_at DESC LIMIT 10`,
+        [ctx.tenantId],
+      );
+
+      return { kudos, birthdays, newJoinees, announcements };
+    });
+
     for (const k of kudos.rows) {
       feed.push({ type: "kudos", ...k, createdAt: k.created_at });
     }
 
-    // 2. Today's birthdays
     const today = new Date();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    const birthdays = await sqlClient.query(
-      `SELECT id, first_name, last_name, department, designation, photo_url
-       FROM employee.hrms_employees
-       WHERE tenant_id = $1 AND status = 'active'
-         AND EXTRACT(MONTH FROM date_of_birth) = $2
-         AND EXTRACT(DAY FROM date_of_birth) = $3`,
-      [ctx.tenantId, Number(mm), Number(dd)],
-    );
     for (const b of birthdays.rows) {
       feed.push({
         type: "birthday",
@@ -191,15 +267,6 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // 3. New joinees (last 30 days)
-    const newJoinees = await sqlClient.query(
-      `SELECT id, first_name, last_name, department, designation, joining_date, photo_url
-       FROM employee.hrms_employees
-       WHERE tenant_id = $1 AND status = 'active'
-         AND joining_date > NOW() - INTERVAL '30 days'
-       ORDER BY joining_date DESC LIMIT 5`,
-      [ctx.tenantId],
-    );
     for (const j of newJoinees.rows) {
       feed.push({
         type: "new_joinee",
@@ -213,14 +280,6 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // 4. Announcements
-    const announcements = await sqlClient.query(
-      `SELECT id, title, body, category, pinned, created_by_name, created_at
-       FROM hrms.social_announcements
-       WHERE tenant_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
-       ORDER BY pinned DESC, created_at DESC LIMIT 10`,
-      [ctx.tenantId],
-    );
     for (const a of announcements.rows) {
       feed.push({
         type: "announcement",
@@ -249,20 +308,34 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    // Get author name
-    const authorRow = await sqlClient.query(
-      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.actorId, ctx.tenantId],
-    );
-    const authorName = authorRow.rows[0]
-      ? `${authorRow.rows[0].first_name} ${authorRow.rows[0].last_name}`.trim()
-      : "Admin";
+    // Author-name lookup is best-effort and deliberately kept OUTSIDE the
+    // write below (its own withTenantGuc call) and fault-tolerant: this
+    // already had a not-found fallback to "Admin", now extended to also
+    // cover a thrown lookup error, since this environment's
+    // employee.hrms_employees has drifted from the column names this lookup
+    // was written against (see PR notes — a separate, pre-existing bug, out
+    // of scope here). The announcement itself must still be creatable
+    // either way.
+    let authorName = "Admin";
+    try {
+      authorName = await withTenantGuc(ctx.tenantId, async (pool) => {
+        const authorRow = await pool.query(
+          `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+          [ctx.actorId, ctx.tenantId],
+        );
+        return authorRow.rows[0]
+          ? `${authorRow.rows[0].first_name} ${authorRow.rows[0].last_name}`.trim()
+          : "Admin";
+      });
+    } catch (err) {
+      req.log.warn({ err }, "announcement author lookup failed; falling back to 'Admin'");
+    }
 
-    await sqlClient.query(
-      `INSERT INTO hrms.social_announcements (id, tenant_id, title, body, category, pinned, created_by, created_by_name, created_at, expires_at)
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `INSERT INTO employee.hrms_social_announcements (id, tenant_id, title, body, category, pinned, created_by, created_by_name, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [id, ctx.tenantId, body.title, body.body, body.category, body.pinned ?? false, ctx.actorId, authorName, now, body.expiresAt ?? null],
-    );
+    ));
 
     await cache.invalidate(`social:feed:${ctx.tenantId}`);
 
@@ -272,13 +345,13 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/announcements — list announcements */
   app.get("/v1/hrms/announcements", async (req, reply) => {
     const ctx = resolveContext(req);
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, title, body, category, pinned, created_by_name AS author, created_at AS "createdAt"
-       FROM hrms.social_announcements
+       FROM employee.hrms_social_announcements
        WHERE tenant_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
        ORDER BY pinned DESC, created_at DESC LIMIT 50`,
       [ctx.tenantId],
-    );
+    ));
     return reply.send({ data: rows.rows });
   });
 
@@ -291,14 +364,14 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const mm = today.getMonth() + 1;
     const dd = today.getDate();
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, first_name, last_name, department, designation, photo_url
        FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
          AND EXTRACT(MONTH FROM date_of_birth) = $2
          AND EXTRACT(DAY FROM date_of_birth) = $3`,
       [ctx.tenantId, mm, dd],
-    );
+    ));
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
@@ -348,18 +421,34 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    await sqlClient.query(
-      `INSERT INTO hrms.travel_requests (id, tenant_id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, updated_at)
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `INSERT INTO claims.hrms_travel_requests (id, tenant_id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
       [id, ctx.tenantId, ctx.actorId, body.purpose, body.destination, body.fromDate, body.toDate, body.advanceRequired ?? 0, body.mode ?? "rail", now],
-    );
+    ));
 
-    // Queue for reporting manager approval notification
-    const manager = await sqlClient.query(
-      `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
-      [ctx.actorId, ctx.tenantId],
-    );
-    if (manager.rows[0]?.reporting_to) {
+    // Reporting-manager lookup for the approval notification is best-effort
+    // and deliberately kept OUTSIDE the write above (its own withTenantGuc
+    // call, not the same transaction) and fault-tolerant: this environment's
+    // employee.hrms_employees has drifted from the column names this lookup
+    // was written against (see PR notes — a separate, pre-existing bug, out
+    // of scope here), so it currently cannot succeed. The travel request
+    // itself must still be created either way; only the notification is
+    // allowed to silently no-op.
+    let reportingTo: string | undefined;
+    try {
+      reportingTo = await withTenantGuc(ctx.tenantId, async (pool) => {
+        const manager = await pool.query(
+          `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+          [ctx.actorId, ctx.tenantId],
+        );
+        return manager.rows[0]?.reporting_to as string | undefined;
+      });
+    } catch (err) {
+      req.log.warn({ err }, "travel-request manager lookup failed; skipping approval notification");
+    }
+
+    if (reportingTo) {
       await queue.publish("notification.send", {
         messageId: randomUUID(),
         type: "hrms.travel.requested",
@@ -370,8 +459,8 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         timestamp: now,
         payload: {
           templateId: "00000000-0000-4000-8001-000000000000",
-          recipient: manager.rows[0].reporting_to,
-          recipientId: manager.rows[0].reporting_to,
+          recipient: reportingTo,
+          recipientId: reportingTo,
           channel: "push",
           eventType: "hrms.travel.requested",
           variables: { destination: body.destination, fromDate: body.fromDate, toDate: body.toDate },
@@ -385,13 +474,13 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/travel-requests — list my travel requests */
   app.get("/v1/hrms/travel-requests", async (req, reply) => {
     const ctx = resolveContext(req);
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at
-       FROM hrms.travel_requests
+       FROM claims.hrms_travel_requests
        WHERE tenant_id = $1 AND employee_id = $2
        ORDER BY created_at DESC`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
     return reply.send({ data: rows.rows });
   });
 
@@ -402,21 +491,24 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
 
-    // SoD: verify approver is not the submitter
-    const check = await sqlClient.query(
-      `SELECT employee_id FROM hrms.travel_requests WHERE id = $1 AND tenant_id = $2`,
-      [id, ctx.tenantId],
-    );
-    if (check.rows[0]?.employee_id === ctx.actorId) {
-      throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own travel request");
-    }
+    const employeeId = await withTenantGuc(ctx.tenantId, async (pool) => {
+      // SoD: verify approver is not the submitter
+      const check = await pool.query(
+        `SELECT employee_id FROM claims.hrms_travel_requests WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      );
+      if (check.rows[0]?.employee_id === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own travel request");
+      }
 
-    const result = await sqlClient.query(
-      `UPDATE hrms.travel_requests SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
-       WHERE id = $3 AND tenant_id = $4 AND status = 'pending' RETURNING employee_id`,
-      [ctx.actorId, now, id, ctx.tenantId],
-    );
-    if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+      const result = await pool.query(
+        `UPDATE claims.hrms_travel_requests SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
+         WHERE id = $3 AND tenant_id = $4 AND status = 'pending' RETURNING employee_id`,
+        [ctx.actorId, now, id, ctx.tenantId],
+      );
+      if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+      return result.rows[0].employee_id as string;
+    });
 
     // Notify employee
     await queue.publish("notification.send", {
@@ -429,8 +521,8 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       timestamp: now,
       payload: {
         templateId: "00000000-0000-4000-8001-000000000000",
-        recipient: result.rows[0].employee_id,
-        recipientId: result.rows[0].employee_id,
+        recipient: employeeId,
+        recipientId: employeeId,
         channel: "push",
         eventType: "hrms.travel.approved",
       },
@@ -447,12 +539,14 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const { reason } = (req.body as any) ?? {};
     const now = new Date().toISOString();
 
-    const result = await sqlClient.query(
-      `UPDATE hrms.travel_requests SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = $3, updated_at = $3
-       WHERE id = $4 AND tenant_id = $5 AND status = 'pending' RETURNING employee_id`,
-      [reason ?? "", ctx.actorId, now, id, ctx.tenantId],
-    );
-    if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      const result = await pool.query(
+        `UPDATE claims.hrms_travel_requests SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = $3, updated_at = $3
+         WHERE id = $4 AND tenant_id = $5 AND status = 'pending' RETURNING employee_id`,
+        [reason ?? "", ctx.actorId, now, id, ctx.tenantId],
+      );
+      if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+    });
 
     return reply.send({ id, status: "rejected" });
   });
@@ -466,11 +560,11 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    await sqlClient.query(
-      `INSERT INTO hrms.expense_claims (id, tenant_id, employee_id, category, amount, description, expense_date, receipt_key, travel_request_id, status, created_at, updated_at)
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `INSERT INTO claims.hrms_expense_claims (id, tenant_id, employee_id, category, amount, description, expense_date, receipt_key, travel_request_id, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $10)`,
       [id, ctx.tenantId, ctx.actorId, body.category, body.amount, body.description ?? "", body.date, body.receiptKey ?? null, body.travelRequestId ?? null, now],
-    );
+    ));
 
     return reply.code(202).send({ id, status: "pending" });
   });
@@ -478,13 +572,13 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/expenses — list my expense claims */
   app.get("/v1/hrms/expenses", async (req, reply) => {
     const ctx = resolveContext(req);
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, category, amount, description, expense_date AS date, receipt_key AS "receiptKey", status, created_at
-       FROM hrms.expense_claims
+       FROM claims.hrms_expense_claims
        WHERE tenant_id = $1 AND employee_id = $2
        ORDER BY created_at DESC`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
     return reply.send({ data: rows.rows });
   });
 
@@ -495,20 +589,28 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
 
-    // SoD: verify approver is not the submitter
-    const check = await sqlClient.query(
-      `SELECT employee_id FROM hrms.expense_claims WHERE id = $1 AND tenant_id = $2`,
-      [id, ctx.tenantId],
-    );
-    if (check.rows[0]?.employee_id === ctx.actorId) {
-      throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own expense claim");
-    }
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      // SoD: verify approver is not the submitter
+      const check = await pool.query(
+        `SELECT employee_id FROM claims.hrms_expense_claims WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      );
+      if (check.rows[0]?.employee_id === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own expense claim");
+      }
 
-    await sqlClient.query(
-      `UPDATE hrms.expense_claims SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
-       WHERE id = $3 AND tenant_id = $4 AND status = 'pending'`,
-      [ctx.actorId, now, id, ctx.tenantId],
-    );
+      // NOTE: previously this UPDATE had no RETURNING / rowCount check, so
+      // approving a nonexistent or already-processed claim silently
+      // "succeeded" with 0 rows changed instead of 404ing — inconsistent
+      // with the travel-requests approve/reject handlers just above, which
+      // already do this correctly. Matched to that existing pattern.
+      const result = await pool.query(
+        `UPDATE claims.hrms_expense_claims SET status = 'approved', approved_by = $1, approved_at = $2, updated_at = $2
+         WHERE id = $3 AND tenant_id = $4 AND status = 'pending' RETURNING id`,
+        [ctx.actorId, now, id, ctx.tenantId],
+      );
+      if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Expense claim not found or already processed");
+    });
 
     return reply.send({ id, status: "approved" });
   });
@@ -524,12 +626,12 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_INPUT", "token, platform, and deviceId are required");
     }
 
-    await sqlClient.query(
-      `INSERT INTO hrms.push_devices (id, tenant_id, user_id, device_id, token, platform, registered_at, last_seen_at)
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `INSERT INTO employee.hrms_push_devices (id, tenant_id, user_id, device_id, token, platform, registered_at, last_seen_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
        ON CONFLICT (tenant_id, user_id, device_id) DO UPDATE SET token = $5, last_seen_at = NOW()`,
       [randomUUID(), ctx.tenantId, ctx.actorId, deviceId, token, platform],
-    );
+    ));
 
     return reply.send({ status: "registered" });
   });
@@ -541,13 +643,13 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const rootId = (req.query as any)?.rootId;
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, first_name, last_name, designation, department, reporting_to, photo_url, employee_code
        FROM employee.hrms_employees
        WHERE tenant_id = $1 AND status = 'active'
        ORDER BY designation`,
       [ctx.tenantId],
-    );
+    ));
 
     // Build tree
     const employees = rows.rows.map((r: any) => ({
