@@ -46,6 +46,14 @@ const CORRECT_WATCHLIST_HASH = identityDocHash(RAW_IDENTITY_DOC_REF, DOC_TYPE);
 
 let passRow: Record<string, unknown> | undefined;
 let visitRow: Record<string, unknown> | undefined;
+// Unrelated fix (gate/location/area scope check, Property 26/19 — see
+// check-in-bypasses-gate-scope.test.ts): checkInRecord now looks up `gates`
+// right after loading the pass. A perimeter gate (areaId null) at the
+// pass's own location always clears that check trivially, so it doesn't
+// mask the (separate, not-yet-fixed-here) watchlist-hash bug this file
+// documents — without this fixture, the check-in would dead-letter on the
+// gate lookup before ever reaching the watchlist code this file tests.
+let gateRow: Record<string, unknown> | undefined;
 
 function makeChain(rows: Record<string, unknown>[]) {
   return { from: () => ({ where: () => ({ limit: async () => rows }) }) };
@@ -55,7 +63,9 @@ const fakeTx = {
   select: vi.fn(() => {
     if (!fakeTx.__count) fakeTx.__count = 0;
     fakeTx.__count++;
-    return fakeTx.__count % 2 === 1 ? makeChain(passRow ? [passRow] : []) : makeChain(visitRow ? [visitRow] : []);
+    if (fakeTx.__count === 1) return makeChain(passRow ? [passRow] : []);
+    if (fakeTx.__count === 2) return makeChain(gateRow ? [gateRow] : []);
+    return makeChain(visitRow ? [visitRow] : []);
   }) as unknown as (() => ReturnType<typeof makeChain>) & { __count?: number },
   insert: vi.fn(() => ({ values: async () => undefined })),
   update: vi.fn(() => ({ set: () => ({ where: async () => undefined }) })),
@@ -115,6 +125,7 @@ beforeEach(() => {
     visitorPhone: "9999999999", visitorEmail: null, visitorCategory: "standard",
     identityDocRef: RAW_IDENTITY_DOC_REF, identityDocType: DOC_TYPE,
   };
+  gateRow = { id: GATE_ID, tenantId: TENANT, locationId: LOCATION_ID, areaId: null };
 });
 
 describe("checkInRecord watchlist screening (fixed behavior)", () => {

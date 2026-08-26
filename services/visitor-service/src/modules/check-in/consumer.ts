@@ -24,8 +24,7 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq, lt } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
-import { NonRetryableError } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -35,10 +34,16 @@ import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
-import { locations } from "../location/schema.js";
+import { locations, gates } from "../location/schema.js";
 import { devices } from "../device-registry/schema.js";
 import { securityIncidents } from "../identity/schema.js";
-import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
+import {
+  checkIn as domainCheckIn,
+  checkOut as domainCheckOut,
+  isLocationScopeValid,
+  isAreaPermitted,
+  type CheckInStatus,
+} from "./domain.js";
 import { assertWithinCapacity, isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
 import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
@@ -113,6 +118,41 @@ export function registerCheckInConsumers(queue: Queue): void {
       const pass = passRows[0];
       if (!pass) {
         throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      // SECURITY FIX (gate/location/area scope bypass): the synchronous
+      // /passes/verify endpoint (check-in/routes.ts) enforces Property 26
+      // (isLocationScopeValid) and Property 19 (isAreaPermitted) before ever
+      // returning "valid" — but this consumer, which is what actually
+      // COMMITS the check-in, previously trusted a bare {passId, gateId}
+      // completely: no gate lookup, no location/area comparison. Reachable
+      // by the broad "employee" role (check-in/routes.ts's WRITE_ROLES), not
+      // only a gate_terminal device identity, a caller could check in any
+      // pass at any gate string, including one matching no real gate row at
+      // all. Fail closed: dead-letter (NonRetryableError, matching this
+      // codebase's convention — see config-registry/consumer.ts) rather than
+      // silently committing a scope-violating check-in. checkInRecord's
+      // payload carries no QR token to re-verify a signature against (that
+      // already happened at /passes/verify); the gate/location/area scope is
+      // the part of Property 9 this write path CAN and now does re-assert.
+      const gateRows = await tx
+        .select()
+        .from(gates)
+        .where(and(eq(gates.id, p.gateId), eq(gates.tenantId, msg.tenantId)))
+        .limit(1);
+      const gate = gateRows[0];
+      if (!gate) {
+        throw new NonRetryableError(`gate '${p.gateId}' not found for tenant '${msg.tenantId}'`);
+      }
+      if (!isLocationScopeValid(pass.locationId, gate.locationId)) {
+        throw new NonRetryableError(
+          `pass '${p.passId}' is scoped to location '${pass.locationId}', not gate location '${gate.locationId}'`,
+        );
+      }
+      if (!isAreaPermitted(gate.areaId, pass.permittedAreas as string[])) {
+        throw new NonRetryableError(
+          `gate '${p.gateId}' area '${gate.areaId ?? "(perimeter)"}' is not among pass '${p.passId}''s permitted areas`,
+        );
       }
 
       // Visit request is loaded here (rather than later, as it was before)
