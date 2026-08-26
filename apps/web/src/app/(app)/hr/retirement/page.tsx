@@ -7,8 +7,8 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { RetirementDashboard, type RetirementRow } from "./_components/RetirementDashboard";
-import { RetirementProcessWizard } from "./_components/RetirementProcessWizard";
+import type { RetirementRow } from "./_components/RetirementDashboard";
+import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
 
 async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {
@@ -49,7 +49,7 @@ export default async function RetirementPage() {
         subtitle="Upcoming retirements within 6 months, processing wizard, and full separation register."
         back="/hr"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
 
       {/* KPI strip */}
       <StatGrid>
@@ -59,21 +59,8 @@ export default async function RetirementPage() {
         <StatCard icon="📝" iconBg="#f5f5f5" label="VRS"            value={vrs} />
       </StatGrid>
 
-      {/* Card grid — upcoming retirements */}
-      <Card title="Retiring in Next 6 Months">
-        <div style={{ padding: "16px" }}>
-          <RetirementDashboard rows={items} />
-        </div>
-      </Card>
-
-      {/* 5-step processing wizard */}
-      <div style={{ marginTop: 16 }}>
-        <Card title="Retirement Processing Wizard — 5-Step Checklist">
-          <div style={{ padding: 16 }}>
-            <RetirementProcessWizard />
-          </div>
-        </Card>
-      </div>
+      {/* Card grid + wizard, bound to the same selected retiree */}
+      <RetirementCaseWorkspace rows={items} />
 
       {/* Full register */}
       <div style={{ marginTop: 16 }}>

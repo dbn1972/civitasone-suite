@@ -70,9 +70,15 @@ function borderColor(days: number): string {
   return "#2563eb";
 }
 
-interface Props { rows: RetirementRow[] }
+interface Props {
+  rows: RetirementRow[];
+  /** Currently selected retiree (for the processing wizard below), if any. */
+  selectedId?: string;
+  /** Called when the officer picks a retiree to process. */
+  onSelect?: (row: RetirementRow) => void;
+}
 
-export function RetirementDashboard({ rows }: Props) {
+export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() + 6);
   const upcoming = rows
@@ -110,12 +116,19 @@ export function RetirementDashboard({ rows }: Props) {
       {upcoming.map((row) => {
         const days = daysLeft(row.superannuationDate);
         const yos  = calcYOS(row);
+        const selected = row.id === selectedId;
         return (
           <article
             key={row.id}
             className="card"
-            style={{ marginBottom: 0, borderLeft: `4px solid ${borderColor(days)}` }}
+            style={{
+              marginBottom: 0,
+              borderLeft: `4px solid ${borderColor(days)}`,
+              outline: selected ? "2px solid var(--primary, #2563eb)" : "none",
+              outlineOffset: -1,
+            }}
             aria-label={`Retirement: ${row.employee}`}
+            aria-current={selected ? "true" : undefined}
           >
             {/* Header */}
             <div className="card-h" style={{ alignItems: "flex-start", gap: 10 }}>
@@ -210,6 +223,19 @@ export function RetirementDashboard({ rows }: Props) {
                 ))}
               </div>
             </div>
+            {onSelect && (
+              <div style={{ padding: "0 16px 14px" }}>
+                <button
+                  type="button"
+                  className={selected ? "btn primary" : "btn ghost"}
+                  style={{ width: "100%", minHeight: 40, fontSize: "0.8125rem" }}
+                  aria-pressed={selected}
+                  onClick={() => onSelect(row)}
+                >
+                  {selected ? "✓ Processing this retirement" : "Process this retirement →"}
+                </button>
+              </div>
+            )}
           </article>
         );
       })}
