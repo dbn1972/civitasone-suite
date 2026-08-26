@@ -1,18 +1,22 @@
 /**
- * digital-pass/consumer.ts's passReplace handler sources the replacement
- * pass's visitor identity from `originalPass.createdBy` (consumer.ts:314-315:
- * `visitorId: originalPass.createdBy, // visitor identified by creator
- * context`) instead of the actual visitor. `createdBy` is `msg.actorId` from
- * whichever command originally created the pass row — the issuing
- * employee/host/system actor, not the visitor — so a replaced pass's QR JWT
- * embeds the wrong `visitor_id` claim.
+ * digital-pass/consumer.ts's passReplace handler used to source the
+ * replacement pass's visitor identity from `originalPass.createdBy`
+ * (consumer.ts:314-315: `visitorId: originalPass.createdBy, // visitor
+ * identified by creator context`) instead of the actual visitor.
+ * `createdBy` is `msg.actorId` from whichever command originally created the
+ * pass row — the issuing employee/host/system actor, not the visitor — so a
+ * replaced pass's QR JWT embedded the wrong `visitor_id` claim.
  *
- * There is no visitor-identity column on `digital_passes` at all (schema.ts
- * has no `visitorId` field), so this test proves the negative that IS
- * checkable without inventing a ground truth this codebase doesn't have:
- * the replacement must not be issued to the pass's *creating actor* — that
- * is categorically the wrong source, whatever the eventual correct fix reads
- * instead (e.g. resolving the visit request's own identity).
+ * There is no visitor-identity column on `digital_passes` itself (schema.ts
+ * has no `visitorId` field) — the real source is `visit_requests.visitor_id`,
+ * reached via the pass's `visitRequestId`.
+ *
+ * FIXED: the handler now looks up the visit request BEFORE calling
+ * `replacePass()` and sources `visitorId: visit?.visitorId ??
+ * originalPass.visitRequestId` — the same `visitorId ?? visitRequestId`
+ * fallback convention visit-request/consumer.ts#triggerPassGenerate already
+ * established for passGenerate (visit_requests.visitor_id is populated later
+ * by identity verification and may still be null at replace time).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -80,6 +84,11 @@ const LOCATION_ID = "66666666-6666-6666-6666-666666666666";
 // an auto-approved VIP pass, or a receptionist keying in a walk-in. Never
 // the visitor.
 const PASS_CREATOR = "77777777-7777-7777-7777-777777777777";
+// The actual visitor — visit_requests.visitor_id — the correct source for
+// the replacement's visitorId. Deliberately distinct from both PASS_CREATOR
+// and VISIT_ID so a test asserting `toBe(VISITOR_ID)` cannot pass by
+// accident via either the old wrong source or the visitRequestId fallback.
+const VISITOR_ID = "88888888-8888-8888-8888-888888888888";
 
 function freshQueue(): MemoryQueue {
   const queue = new MemoryQueue();
@@ -107,7 +116,10 @@ beforeEach(() => {
     permittedAreas: ["area-1"], revoked: false, escortEmployeeId: null,
     createdBy: PASS_CREATOR,
   };
-  visitRow = { id: VISIT_ID, tenantId: TENANT, visitorName: "Jane Visitor", visitorPhone: "9876543210", visitorEmail: "jane@example.com" };
+  visitRow = {
+    id: VISIT_ID, tenantId: TENANT, visitorId: VISITOR_ID, visitorName: "Jane Visitor",
+    visitorPhone: "9876543210", visitorEmail: "jane@example.com",
+  };
 });
 
 const replacePayload = {
@@ -115,19 +127,30 @@ const replacePayload = {
   tenantPrivateKeyPem: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
 };
 
-describe("passReplace visitor identity (today's actual behavior)", () => {
-  it("sources the replacement's visitorId from the original pass's createdBy (the issuing actor, not the visitor)", async () => {
+describe("passReplace visitor identity (FIXED)", () => {
+  it("sources the replacement's visitorId from the visit request's own visitor_id — not the original pass's createdBy (the issuing actor)", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.passReplace, replacePayload);
 
     expect(replacePassMock).toHaveBeenCalledTimes(1);
     const params = replacePassMock.mock.calls[0]?.[0] as { visitorId?: string };
-    expect(params.visitorId).toBe(PASS_CREATOR);
+    expect(params.visitorId).toBe(VISITOR_ID);
+    expect(params.visitorId).not.toBe(PASS_CREATOR);
+  });
+
+  it("falls back to the visit request's own id (not the pass creator) when visit_requests.visitor_id is still null — same convention as triggerPassGenerate", async () => {
+    visitRow = { id: VISIT_ID, tenantId: TENANT, visitorId: null, visitorName: "Jane Visitor", visitorPhone: "9876543210", visitorEmail: "jane@example.com" };
+    const queue = freshQueue();
+    await publishAndFlush(queue, COMMANDS.passReplace, replacePayload);
+
+    const params = replacePassMock.mock.calls[0]?.[0] as { visitorId?: string };
+    expect(params.visitorId).toBe(VISIT_ID);
+    expect(params.visitorId).not.toBe(PASS_CREATOR);
   });
 });
 
-describe("what SHOULD happen (fails today)", () => {
-  it.fails("a replacement pass is not issued to whichever actor happened to create the original pass row", async () => {
+describe("what SHOULD happen (FIXED)", () => {
+  it("a replacement pass is not issued to whichever actor happened to create the original pass row", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.passReplace, replacePayload);
 
