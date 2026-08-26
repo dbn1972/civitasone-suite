@@ -1,6 +1,6 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
 
@@ -9,11 +9,12 @@ const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marg
 const errBanner = { background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
 const okBanner = { background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
 
-export default function NewBoqItemPage() {
+function NewBoqItemForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [form, setForm] = useState({
-    workId: "",
+    workId: searchParams.get("workId") ?? "",
     itemDescription: "",
     itemCode: "",
     unit: "",
@@ -59,7 +60,7 @@ export default function NewBoqItemPage() {
       if (!res.ok) throw new Error(data?.message ?? "Create failed");
       setMessage("BoQ item added.");
       toast.success("BoQ item added.");
-      setTimeout(() => router.push("/works/boq"), 600);
+      setTimeout(() => router.push(form.workId.trim() ? `/works/boq/${form.workId.trim()}` : "/works/boq"), 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -72,7 +73,7 @@ export default function NewBoqItemPage() {
       <PageHeader
         title="Add BoQ Item"
         subtitle="Add a Bill of Quantities item to a work."
-        back="/works/boq"
+        back={form.workId.trim() ? `/works/boq/${form.workId.trim()}` : "/works/boq"}
         backLabel="BoQ"
       />
       {message ? (
@@ -206,7 +207,7 @@ export default function NewBoqItemPage() {
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
             <button
               type="button"
-              onClick={() => router.push("/works/boq")}
+              onClick={() => router.push(form.workId.trim() ? `/works/boq/${form.workId.trim()}` : "/works/boq")}
               style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", cursor: "pointer" }}
               disabled={busy}
             >
@@ -223,5 +224,13 @@ export default function NewBoqItemPage() {
         </form>
       </div>
     </>
+  );
+}
+
+export default function NewBoqItemPage() {
+  return (
+    <Suspense>
+      <NewBoqItemForm />
+    </Suspense>
   );
 }

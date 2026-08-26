@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard, ProgressBar } from "@/app/_components/ds";
 import { fmtDate } from "../../_data/format";
 import { ExecutionActions } from "./ExecutionActions";
@@ -103,6 +104,7 @@ export default async function ExecutionDetailPage({
 
   const scopes = scopesResult.data;
   const issues = issuesResult.data;
+  const loadFailed = scopesResult.source === "error" || issuesResult.source === "error";
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const totalScopes     = scopes.length;
@@ -139,6 +141,9 @@ export default async function ExecutionDetailPage({
         backLabel="Execution"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {loadFailed && (
+              <DataSourceBadge source="error" message="Couldn't load this work — some details may be missing." />
+            )}
             <Link
               href={"/works/execution/record-progress?workId=" + params.workId}
               className="btn primary"
