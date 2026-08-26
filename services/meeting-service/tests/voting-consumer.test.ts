@@ -371,6 +371,119 @@ describe("vote.circulation_respond", () => {
   });
 });
 
+describe("vote eligibility — committee-membership enforcement (SECURITY GAP)", () => {
+  /**
+   * AUDIT FINDING (CRITICAL): `handleVoteCast` / `handleCirculationRespond` never verify that the
+   * voting `memberId` is an ACTIVE member of the committee that owns the resolution
+   * (`meeting.committee_members`, status='active'). `handleVoteCast`'s own `getMemberVoteWeight`
+   * queries that EXACT roster — but only to resolve the ballot's WEIGHT, silently defaulting to 1
+   * when the id is absent from the roster instead of rejecting the ballot. `meeting.votes.member_id`
+   * also carries no FK (migrations/0001_meeting_core.sql). Route-level RBAC only checks the coarse,
+   * tenant-wide `committee_member` role claim — never that the caller sits on THIS committee's
+   * roster — and `voting/commands.ts`'s `voteCirculationRespond` publisher pins `memberId` to
+   * `ctx.actorId` (good) while `decision/routes.ts`'s `publishCirculationVote` does NOT — it takes
+   * `memberId` straight from the request body (see the existing, already-merged
+   * `tests/decision-routes.test.ts` "202 records a circulation vote" case, which authenticates as
+   * `ACTOR` and submits `{ memberId: MEMBER_B, ... }`, i.e. already demonstrates impersonation is
+   * *accepted* at the route layer). Contrast the sibling, CORRECTLY-implemented checks elsewhere in
+   * this very module set: attendance/domain.ts `assertParticipantInvited` (`PARTICIPANT_NOT_MEMBER`,
+   * wired at attendance/consumer.ts:347,472) and vc-integration/consumer.ts's webhook handler
+   * ("the external VC identity must map to an INVITED participant of THIS meeting", line ~532) both
+   * gate on real membership before recording a governance-relevant fact. Voting has no analogous
+   * gate at the one place it matters most — who gets to decide a binding resolution.
+   *
+   * The `it.fails()` cases below assert the CORRECT behavior (a non-member's ballot, or a ballot
+   * attributed to someone other than the authenticated actor, must be rejected); they currently
+   * FAIL because the real behavior is silent acceptance — that is the point of `it.fails()`: the
+   * suite stays green today, and each case should be flipped to a plain `it()` once the consumer
+   * gains a membership + actor-binding check. The plain `it()` "[BLAST RADIUS]" cases document the
+   * actual current (vulnerable) behavior: a resolution can be decided entirely by phantom,
+   * unaffiliated identities.
+   */
+  it.fails("rejects a roll-call ballot from a memberId that is not on the committee roster", async () => {
+    const rid = randomUUID();
+    await seedOpenResolution(rid, MEETING_OK);
+    const NON_MEMBER = randomUUID(); // never inserted into meeting.committee_members for COMMITTEE
+    await expect(
+      run(msg(COMMANDS.voteCast, { meetingId: MEETING_OK, resolutionId: rid, memberId: NON_MEMBER, position: "for", tenantId: TENANT })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[BLAST RADIUS] three phantom (non-member) voters alone can pass a resolution with zero real committee members ever voting", async () => {
+    const rid = randomUUID();
+    await seedOpenResolution(rid, MEETING_OK);
+    const phantoms = [randomUUID(), randomUUID(), randomUUID()]; // none are MEMBER_A/B/C, none on any roster
+    for (const phantom of phantoms) {
+      await run(msg(COMMANDS.voteCast, { meetingId: MEETING_OK, resolutionId: rid, memberId: phantom, position: "for", tenantId: TENANT }));
+    }
+    await run(msg(COMMANDS.voteConclude, { meetingId: MEETING_OK, resolutionId: rid, tenantId: TENANT }));
+    const row = await readResolution(rid);
+    expect(row?.status).toBe("effective");
+    expect(row?.result).toBe("passed"); // 3-0, entirely on fabricated identities
+    expect(row?.votes_for).toBe(3);
+    expect(await voteCount(rid)).toBe(3);
+  });
+
+  /** Seed a circulation resolution with a chosen deadline (mirrors the describe block above). */
+  async function seedCirculationEligibility(resolutionId: string, deadline: Date): Promise<void> {
+    await tenantQuery(
+      (sql) => sql`
+        insert into meeting.resolutions
+          (id, tenant_id, meeting_id, resolution_number, text, vote_type, majority_rule, result, status, is_circulation, circulation_deadline, created_by, updated_by)
+        values (${resolutionId}, ${TENANT}, ${MEETING_OK}, ${"GB/RES/2025-26/eligibility-" + resolutionId.slice(0, 8)}, 'Circulation motion',
+                'circulation_resolution', 'simple_majority', 'invalid', 'circulating', true, ${deadline.toISOString()}, ${ACTOR}, ${ACTOR})`,
+    );
+  }
+
+  it.fails("rejects a circulation response from a memberId that is not on the committee roster", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    const NON_MEMBER = randomUUID();
+    await expect(
+      run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: NON_MEMBER, position: "approve", tenantId: TENANT })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[BLAST RADIUS] a circulation resolution concludes on responses from three phantom voters — MEMBER_A/B/C never respond", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    const phantoms = [randomUUID(), randomUUID(), randomUUID()];
+    for (const phantom of phantoms) {
+      await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: phantom, position: "approve", tenantId: TENANT }));
+    }
+    // Conclusion fires on `responded >= totalMembers` (a headcount of 3) — never checking WHOSE
+    // three ids they were, so three phantoms substitute perfectly for the real three-member roster.
+    const row = await readResolution(rid);
+    expect(row?.status).toBe("effective");
+    expect(row?.result).toBe("passed");
+    expect(row?.response_rate).toBe(100);
+  });
+
+  it.fails("rejects a circulation response whose memberId does not match the authenticated actor (impersonation)", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    // `msg()` always sets `actorId: ACTOR` — simulating decision/routes.ts's publishCirculationVote,
+    // which publishes whatever `memberId` the REQUEST BODY names with no binding to `ctx.actorId`.
+    // Here ACTOR (the real, authenticated sender) is impersonating MEMBER_A.
+    const command = msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT });
+    expect(command.actorId).not.toBe(MEMBER_A); // sanity: the sender really is a distinct identity
+    await expect(run(command)).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[BLAST RADIUS] the authenticated actor is recorded as MEMBER_A's own vote — misattribution succeeds silently", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT }));
+    const rows = await tenantQuery(
+      (sql) => sql`select member_id, position from meeting.votes where resolution_id = ${rid} and tenant_id = ${TENANT}`,
+    );
+    // The persisted governance record now says "MEMBER_A approved this" — MEMBER_A never called the API.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].member_id).toBe(MEMBER_A);
+    expect(rows[0].position).toBe("approve");
+  });
+});
+
 describe("circulationReminderTimes (Req 12.6)", () => {
   it("computes the 50% and 80% instants of the voting window", () => {
     const start = new Date("2025-06-01T00:00:00Z");
