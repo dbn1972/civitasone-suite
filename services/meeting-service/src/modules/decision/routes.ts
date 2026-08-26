@@ -36,6 +36,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue, cache } from "../../shared/infra.js";
@@ -95,6 +96,18 @@ const CIRCULATION_VOTE_ROLES = [
   "super_admin",
 ];
 
+// ─── Per-committee standing gate (Gap: fix 6 added `requireCommitteeStanding` to committee/ and
+//     voting/routes.ts but never to decision/routes.ts — the route family that owns the real
+//     resolution-recording + DSC-signing endpoints. A flat `committee_secretary` with ZERO
+//     committee_members rows could record a fabricated resolution for a committee they never
+//     served, and a flat `committee_chairperson` could then sign it — the exact governance-chain
+//     exploit this PR closes elsewhere, via the one route family fix 6 missed.) Mirrors the
+//     identical helper + bypass/officer sets in voting/routes.ts so decision routes gate the same.
+// Roles that legitimately act tenant/platform-wide, exempt from the per-committee check.
+const COMMITTEE_SCOPE_BYPASS_ROLES = ["meeting_admin", "tenant_admin", "super_admin"];
+/** committee_members.role values that constitute officer standing to record/sign/update/circulate. */
+const DECISION_OFFICER_ROLES = ["chairperson", "secretary"];
+
 const SCHEMA_VERSION = "1.0";
 
 // ─── Path-param + query schemas (validated at the boundary) ──────────────────
@@ -142,6 +155,26 @@ async function assertMeetingExists(tenantId: string, meetingId: string): Promise
   if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
 }
 
+/**
+ * Assert the caller has real standing on `committeeId` — either a tenant-wide bypass role, or an
+ * ACTIVE `committee_members` row on THIS SPECIFIC committee holding one of `officerRoles` (Gap:
+ * systemic cross-committee IDOR — a flat `committee_secretary`/`committee_chairperson` role claim
+ * used to be sufficient to record/sign a resolution or update a decision for ANY committee in the
+ * tenant, not just one the caller actually serves). Byte-for-byte the same logic fix 6 applied in
+ * voting/routes.ts + committee/routes.ts. No-op for a meeting/route with no committee to scope to.
+ */
+async function requireCommitteeStanding(
+  ctx: RequestContext,
+  committeeId: string,
+  officerRoles: readonly string[],
+): Promise<void> {
+  if (ctx.roles.some((r) => COMMITTEE_SCOPE_BYPASS_ROLES.includes(r))) return;
+  const membership = await repo.getActiveMembership(ctx.tenantId, committeeId, ctx.actorId);
+  if (!membership || !officerRoles.includes(membership.role)) {
+    throw new HttpError(403, "FORBIDDEN", "caller does not have standing on this committee");
+  }
+}
+
 export async function decisionRoutes(app: FastifyInstance): Promise<void> {
   // ── Record a decision (Req 11.1, 22.x) ───────────────────────────────────
   app.post("/v1/meetings/:meetingId/decisions", async (req, reply) => {
@@ -174,6 +207,12 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     if (!decision || decision.meetingId !== meetingId) {
       throw new HttpError(404, "NOT_FOUND", "decision not found");
     }
+    // Gap 1: updating a decision (incl. status/supersession changes) requires officer standing on
+    // the owning meeting's committee — resolved via the meeting, mirroring voting's pattern.
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (meetingRef?.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, DECISION_OFFICER_ROLES);
+    }
     const accepted = await commands.decisionUpdate(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -184,7 +223,13 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, RECORD_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const body = resolutionRecordSchema.parse(req.body);
-    await assertMeetingExists(ctx.tenantId, meetingId);
+    // Resolve the meeting's committee, then require the caller actually serve on it as an officer
+    // (Gap 1). Keyed by meetingId, so mirror voting/routes.ts's initiate/conclude pattern exactly.
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (!meetingRef) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+    if (meetingRef.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, DECISION_OFFICER_ROLES);
+    }
     const accepted = await commands.resolutionRecord(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -208,6 +253,13 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     const resolution = await repo.getResolution(ctx.tenantId, resolutionId);
     if (!resolution || resolution.meetingId !== meetingId) {
       throw new HttpError(404, "NOT_FOUND", "resolution not found");
+    }
+    // Gap 1: the DSC-signing endpoint must also require the caller serve on the meeting's
+    // committee as an officer — resolving the committee via the meeting, exactly as voting's
+    // conclude does (assertResolutionInMeeting → getMeetingRef → requireCommitteeStanding).
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (meetingRef?.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, DECISION_OFFICER_ROLES);
     }
     const accepted = await commands.resolutionSign(ctx, meetingId, resolutionId, body);
     return reply.code(202).send({ data: accepted });
@@ -257,6 +309,9 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     if (!(await repo.committeeExists(ctx.tenantId, body.committeeId))) {
       throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee not found");
     }
+    // Gap 1: this route already carries `committeeId` directly — require officer standing on it
+    // before a circulation resolution can be initiated (it was previously only an existence check).
+    await requireCommitteeStanding(ctx, body.committeeId, DECISION_OFFICER_ROLES);
     const accepted = await commands.resolutionCirculationInit(ctx, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -313,6 +368,11 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
  * by the voting module (topics.ts); the decision-module route publishes it directly (no local
  * command helper) so the write path is stable, then best-effort invalidates the circulation
  * status read cache for read-your-writes.
+ *
+ * The responding member is the authenticated actor (`ctx.actorId`), matching the correct,
+ * already-established pattern in `voting/commands.ts`'s `voteCast`/`voteCirculationRespond` —
+ * NOT trusted from the request body (Gap: circulation-vote memberId impersonation, since a
+ * caller could otherwise name any other member's id and have the response recorded as theirs).
  */
 async function publishCirculationVote(
   ctx: { tenantId: string; actorId: string; correlationId: string },
@@ -329,7 +389,7 @@ async function publishCirculationVote(
     payload: {
       resolutionId,
       tenantId: ctx.tenantId,
-      memberId: body.memberId,
+      memberId: ctx.actorId,
       position: body.position,
       ...(body.comment !== undefined ? { comment: body.comment } : {}),
     },

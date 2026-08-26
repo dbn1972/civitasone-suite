@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, ActionButton, EmptyState } from "../../../_components/ds";
+import { DataTable, ActionButton, EmptyState, ErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type WorkflowTask = {
   id: string;
@@ -18,18 +19,22 @@ export function EstabApprovalsPanel() {
   const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
   const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50");
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json() as { data?: WorkflowTask[] } | WorkflowTask[];
       const rows = Array.isArray(body) ? body : (body.data ?? []);
       setTasks(rows.filter((t) => t.refType === "estab_file" && t.status === "pending"));
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to load tasks");
+    } catch {
+      // A failed load must not read as "No approvals pending" — an approver
+      // would wrongly believe there is nothing to sign.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -72,6 +77,8 @@ export function EstabApprovalsPanel() {
       </div>
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+      ) : loadError ? (
+        <div className="pad"><ErrorState error={toHumanError("load", { area: "approval queue" })} onRetry={() => void loadTasks()} /></div>
       ) : tasks.length === 0 ? (
         <EmptyState icon="✅" title="No approvals pending" message="File notings awaiting your approval will appear here." />
       ) : (

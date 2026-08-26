@@ -352,10 +352,13 @@ describe("POST /v1/meetings/:meetingId/resolutions", () => {
   const body = { text: "Resolved to adopt the annual plan", voteType: "electronic_poll", votesFor: 4, votesAgainst: 1 };
 
   it("202 accepts a recorded resolution", async () => {
+    // meeting_admin is a committee-scope bypass role (Gap 1): it exercises this route's happy path
+    // without needing a per-committee roster row. The genuine committee-officer-with-standing path
+    // (and the no-standing 403) is covered by tests/decision-membership-idor.test.ts.
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING_ID}/resolutions`,
-      headers: auth(["committee_secretary"]),
+      headers: auth(["meeting_admin"]),
       payload: body,
     });
     expect(res.statusCode).toBe(202);
@@ -425,10 +428,12 @@ describe("POST /v1/meetings/:meetingId/resolutions/:resolutionId/sign", () => {
   const body = { signerId: ACTOR };
 
   it("202 accepts a sign request from the chairperson", async () => {
+    // meeting_admin bypasses the per-committee standing gate (Gap 1); the genuine chairperson-with-
+    // standing path and the no-standing 403 are covered by tests/decision-membership-idor.test.ts.
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING_ID}/resolutions/${RESOLUTION_ID}/sign`,
-      headers: auth(["committee_chairperson"]),
+      headers: auth(["meeting_admin"]),
       payload: body,
     });
     expect(res.statusCode).toBe(202);
@@ -648,10 +653,12 @@ describe("POST /v1/meetings/resolutions/circulation", () => {
   });
 
   it("202 initiates a circulation resolution", async () => {
+    // meeting_admin bypasses the per-committee standing gate (Gap 1); officer-standing + the 403
+    // no-standing case are covered by tests/decision-membership-idor.test.ts.
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/resolutions/circulation`,
-      headers: auth(["committee_secretary"]),
+      headers: auth(["meeting_admin"]),
       payload: body(),
     });
     expect(res.statusCode).toBe(202);

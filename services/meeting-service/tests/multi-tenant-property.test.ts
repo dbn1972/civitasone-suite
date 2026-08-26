@@ -112,6 +112,8 @@ beforeAll(async () => {
       await sql`delete from meeting.decisions where tenant_id = ${tid}`;
       await sql`delete from meeting.agenda_items where tenant_id = ${tid}`;
       await sql`delete from meeting.meeting_state_transitions where tenant_id = ${tid}`;
+      await sql`delete from meeting.attendance_records where tenant_id = ${tid}`;
+      await sql`delete from meeting.participants where tenant_id = ${tid}`;
       await sql`delete from meeting.meetings where tenant_id = ${tid}`;
       await sql`delete from meeting.committee_members where tenant_id = ${tid}`;
       await sql`delete from meeting.committees where tenant_id = ${tid}`;
@@ -134,6 +136,19 @@ beforeAll(async () => {
       values (${MEETING_A_QUORUM}, ${TENANT_A}, 'committee', 'A Quorum Meeting', 'in_progress',
               ${COMMITTEE_A}, true, '2025-26', 'TAC/2025-26/001', '2026-06-01T09:00:00Z',
               '2026-06-01T09:05:00Z', ${ACTOR_A}, ${ACTOR_A})`;
+    // Gap 2: resolution.record re-derives quorum LIVE from attendance and bounds the claimed tally
+    // by the present headcount. Seed present attendees covering quorum (minMembers 2) and the
+    // idempotency test's tally (total 4) so a genuinely-quorate record still succeeds.
+    for (let i = 0; i < 4; i++) {
+      const participantId = randomUUID();
+      await sql`
+        insert into meeting.participants (id, tenant_id, meeting_id, employee_id, role, created_by, updated_by)
+        values (${participantId}, ${TENANT_A}, ${MEETING_A_QUORUM}, ${randomUUID()}, 'member', ${ACTOR_A}, ${ACTOR_A})`;
+      await sql`
+        insert into meeting.attendance_records
+          (id, tenant_id, meeting_id, participant_id, method, check_in_at, mode, status, created_by, updated_by)
+        values (${randomUUID()}, ${TENANT_A}, ${MEETING_A_QUORUM}, ${participantId}, 'manual', '2026-06-01T09:05:00Z', 'in_person', 'present', ${ACTOR_A}, ${ACTOR_A})`;
+    }
     // Meeting WITHOUT quorum (draft)
     await sql`
       insert into meeting.meetings
@@ -183,6 +198,8 @@ afterAll(async () => {
       await sql`delete from meeting.decisions where tenant_id = ${tid}`;
       await sql`delete from meeting.agenda_items where tenant_id = ${tid}`;
       await sql`delete from meeting.meeting_state_transitions where tenant_id = ${tid}`;
+      await sql`delete from meeting.attendance_records where tenant_id = ${tid}`;
+      await sql`delete from meeting.participants where tenant_id = ${tid}`;
       await sql`delete from meeting.meetings where tenant_id = ${tid}`;
       await sql`delete from meeting.committee_members where tenant_id = ${tid}`;
       await sql`delete from meeting.committees where tenant_id = ${tid}`;

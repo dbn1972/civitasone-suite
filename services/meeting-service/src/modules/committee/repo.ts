@@ -124,6 +124,38 @@ export async function getMembers(tenantId: string, committeeId: string): Promise
     .orderBy(desc(committeeMembers.appointmentDate)));
 }
 
+/** An actor's own committee-membership row, for the per-committee ownership check on write routes. */
+export interface CommitteeMembershipRef {
+  role: string;
+  status: string;
+}
+
+/**
+ * Direct (uncached) lookup of `actorId`'s own ACTIVE membership on `committeeId` (Gap: systemic
+ * cross-committee IDOR — member add/remove/PATCH used to authorize purely on the caller's flat,
+ * tenant-wide role claim, e.g. `committee_secretary`, with no check that the caller actually
+ * serves THIS committee). Returns null when the caller has no active roster row on it at all.
+ */
+export async function getActiveMembership(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+): Promise<CommitteeMembershipRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({ role: committeeMembers.role, status: committeeMembers.status })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 /**
  * A single membership row by its id, scoped to the committee + tenant. Returns null
  * when absent (used by the member PATCH/DELETE routes to 404 and to read the current

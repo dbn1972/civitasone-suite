@@ -34,7 +34,7 @@ const MODULES: Array<{ href: string; label: string; icon: string; desc: string }
   { href: "/works/contractors", label: "Contractors",      icon: "🏢", desc: "Registered firms & ratings" },
   { href: "/works/execution",   label: "Execution",        icon: "🏗️", desc: "Progress, issues, photos" },
   { href: "/works/billing",     label: "Bills & MB",       icon: "💰", desc: "MBs, bills and disbursement" },
-  { href: "/works/procurement", label: "Procurement",      icon: "📦", desc: "Purchase orders" },
+  { href: "/procurement",       label: "Procurement",      icon: "📦", desc: "Purchase orders" },
   { href: "/works/masters",     label: "Masters Registry", icon: "📚", desc: "Lookup values & categories" },
   { href: "/works/reports",     label: "Reports",          icon: "📊", desc: "Analytics and work register" },
 ];

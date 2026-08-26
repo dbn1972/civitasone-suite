@@ -5,6 +5,7 @@ import { Card, DataTable, Segmented } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Payment = {
+  id?: string;
   referenceId: string;
   beneficiary: string;
   amountDisplay: string;
@@ -12,6 +13,7 @@ type Payment = {
 };
 
 type Row = {
+  id?: string;
   reference: string;
   beneficiary: string;
   amountDisplay: string;
@@ -48,6 +50,7 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
   const tableRows: Row[] = useMemo(
     () =>
       filtered.map((p) => ({
+        ...(p.id ? { id: p.id } : {}),
         reference: formatReference(p.referenceId),
         beneficiary: p.beneficiary,
         amountDisplay: p.amountDisplay,
@@ -85,6 +88,9 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={tableRows}
+        // Open the payment detail (UTR, submit-for-approval) — only for rows
+        // that carry a real id; id-less rows stay non-clickable (no dead link).
+        rowHref={(row) => (row.id ? `/finance/payments/${row.id}` : "")}
         sortable
         filterable
         filterPlaceholder="Search payments…"

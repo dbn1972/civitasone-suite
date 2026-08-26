@@ -40,7 +40,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerVotingConsumers } from "../src/modules/voting/consumer.js";
@@ -155,33 +155,31 @@ describe("committee member removed mid-vote can still cast and decide the outcom
     expect((rows as any[])[0].n).toBe(2);
   });
 
-  it("BUG: C, now REMOVED from the committee, still successfully casts a vote", async () => {
-    await run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBER_C, position: "for", tenantId: TENANT }));
+  it("FIXED: C, now REMOVED from the committee, cannot cast a vote", async () => {
+    await expect(
+      run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBER_C, position: "for", tenantId: TENANT })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const rows = await tenantQuery(
       (sql) => sql`select position, weight from meeting.votes where resolution_id = ${RESOLUTION} and member_id = ${MEMBER_C} and tenant_id = ${TENANT}`,
     );
-    expect((rows as any[])[0]?.position).toBe("for");
-    // getMemberVoteWeight's active-membership WHERE clause misses C (removed), so it silently
-    // falls back to weight 1 instead of rejecting the ballot outright.
-    expect((rows as any[])[0]?.weight).toBe(1);
+    // getMemberVoteWeight now REJECTS instead of silently defaulting a non-active member to
+    // weight 1 — no ballot was ever inserted for C.
+    expect((rows as any[]).length).toBe(0);
   });
 
-  it("BUG: the removed member's vote flips the resolution from rejected to PASSED on conclude", async () => {
+  it("FIXED: without the removed member's vote, the resolution concludes as a tie — REJECTED, not passed", async () => {
     await run(msg(COMMANDS.voteConclude, { meetingId: MEETING, resolutionId: RESOLUTION, tenantId: TENANT }));
 
     const rows = await tenantQuery(
-      (sql) => sql`select result, status, votes_for, votes_against, resolution_number, hash_current from meeting.resolutions where id = ${RESOLUTION}`,
+      (sql) => sql`select result, status, votes_for, votes_against, resolution_number from meeting.resolutions where id = ${RESOLUTION}`,
     );
     const r = (rows as any[])[0];
-    // Without C's ballot this is 1-for/1-against — a tie, rejected under simple majority.
-    // With it, it's 2-for/1-against (66.7%) — PASSED, numbered, and hash-anchored as an
-    // official resolution, decided by someone who was off the committee roster when they voted.
-    expect(r.votes_for).toBe(2);
+    // Only A's and B's real ballots ever counted — 1-for/1-against, a tie, rejected under simple
+    // majority. C's vote was never recorded, so it can no longer flip the outcome.
+    expect(r.votes_for).toBe(1);
     expect(r.votes_against).toBe(1);
-    expect(r.result).toBe("passed");
-    expect(r.status).toBe("effective");
-    expect(r.resolution_number).toMatch(/^RMV\/RES\/\d{4}-\d{2}\/\d+$/);
-    expect(r.hash_current).toMatch(/^[0-9a-f]{64}$/);
+    expect(r.result).toBe("rejected");
+    expect(r.status).toBe("rejected");
   });
 });

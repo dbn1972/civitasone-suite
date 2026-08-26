@@ -59,13 +59,16 @@ describe("LibraryBookDetailPage", () => {
     expect(screen.getByText("No copies currently available to issue.")).toBeInTheDocument();
   });
 
-  it("shows the not-found message when the book does not exist", async () => {
+  it("shows a retryable load error (NOT a false 'Book not found') when the fetch fails", async () => {
+    // The loader returns {data:null, source:"error"} for 404, 5xx and network
+    // errors alike, so we must not claim the book does not exist.
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error" });
 
-    const ui = await LibraryBookDetailPage({ params: { id: "unknown" } });
+    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
     render(ui);
 
-    expect(screen.getByText("Book not found")).toBeInTheDocument();
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Book not found")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

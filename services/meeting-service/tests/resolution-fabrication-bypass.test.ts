@@ -51,7 +51,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerDecisionConsumers } from "../src/modules/decision/consumer.js";
@@ -132,16 +132,19 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("[BUG] voting vs. decision module compute contradictory results for the same tally", () => {
-  // for:3 against:2 abstain:2 — deliberately chosen so the two modules' documented, opposite
-  // abstention conventions flip the outcome:
-  //   voting:   total = 7 (abstain counted in the base) → 3*2=6 is NOT > 7        → "rejected"
-  //   decision: decisive = 5 (abstain excluded)         → 3 > 2                    → "passed"
+describe("[FIXED] voting and decision modules now agree on the result for the same tally", () => {
+  // for:3 against:2 abstain:2 — deliberately chosen so the two modules' PREVIOUSLY documented,
+  // opposite abstention conventions used to flip the outcome:
+  //   voting (before the fix):   total = 7 (abstain counted in the base) → 3*2=6 is NOT > 7  → "rejected"
+  //   decision (always):         decisive = 5 (abstain excluded)        → 3 > 2              → "passed"
+  // voting/domain.ts's computeVoteResult now delegates to decision/domain.ts's implementation
+  // (the decisive-votes-only convention — standard parliamentary procedure), so both modules
+  // compute "passed" for this tally.
   const tally = { votesFor: 3, votesAgainst: 2, votesAbstain: 2 };
 
-  it("sanity: voting/domain.ts computeVoteResult rejects this tally under simple_majority", () => {
+  it("sanity: voting/domain.ts computeVoteResult now AGREES with decision/domain.ts — passes this tally under simple_majority", () => {
     const result = votingComputeVoteResult({ ...tally, total: 7 }, "simple_majority");
-    expect(result).toBe("rejected");
+    expect(result).toBe("passed");
   });
 
   it("sanity: decision/domain.ts computeVoteResult passes this SAME tally under simple_majority", () => {
@@ -149,81 +152,96 @@ describe("[BUG] voting vs. decision module compute contradictory results for the
     expect(result).toBe("passed");
   });
 
-  it.fails(
-    "[BUG] the two modules must agree on pass/fail for one committee's resolution outcome",
+  it(
+    "[FIXED] the two modules now agree on pass/fail for one committee's resolution outcome",
     () => {
       const votingResult = votingComputeVoteResult({ ...tally, total: 7 }, "simple_majority");
       const decisionResult = decisionComputeVoteResult(tally, "simple_majority");
-      // Today: votingResult = "rejected", decisionResult = "passed" — same official record,
-      // two contradictory outcomes depending purely on which of the two live HTTP routes wrote it.
+      // Both "passed" — the same official record can no longer read differently depending on
+      // which of the two live HTTP routes wrote it.
       expect(decisionResult).toBe(votingResult);
+      expect(votingResult).toBe("passed");
     },
   );
 });
 
-describe("[BUG] resolution.record fabricates an official, numbered resolution with no real votes", () => {
-  it.fails(
-    "[BUG] must not accept a votesFor/against/abstain tally with zero matching meeting.votes rows",
+describe("[FIXED] resolution.record can no longer fabricate an official, numbered resolution with no real votes", () => {
+  it(
+    "rejects a votesFor/against/abstain tally for a meeting with quorum_established = false, even with zero matching meeting.votes rows",
     async () => {
       const resolutionId = randomUUID();
-      await run(
-        msg(COMMANDS.resolutionRecord, {
-          resolutionId,
-          meetingId: MEETING,
-          tenantId: TENANT,
-          text: "Resolved: sanction the fabricated expenditure",
-          voteType: "roll_call",
-          majorityRule: "simple_majority",
-          // Claimed 9-for / 1-against — there is no committee, no roster, no attendee, and (see
-          // below) zero rows in meeting.votes for this resolution. Nothing here is real.
-          votesFor: 9,
-          votesAgainst: 1,
-          votesAbstain: 0,
-        }),
-      );
+      await expect(
+        run(
+          msg(COMMANDS.resolutionRecord, {
+            resolutionId,
+            meetingId: MEETING,
+            tenantId: TENANT,
+            text: "Resolved: sanction the fabricated expenditure",
+            voteType: "roll_call",
+            majorityRule: "simple_majority",
+            // Claimed 9-for / 1-against — there is no committee, no roster, no attendee, and (see
+            // below) zero rows in meeting.votes for this resolution. Nothing here is real.
+            votesFor: 9,
+            votesAgainst: 1,
+            votesAbstain: 0,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(NonRetryableError);
 
       const zeroRealVotes = await voteRowCount(resolutionId);
-      expect(zeroRealVotes).toBe(0); // true today — this alone should have blocked the write
+      expect(zeroRealVotes).toBe(0);
 
       const row = await readResolution(resolutionId);
-      // Correct behavior: a resolution with no backing ballots and no quorum should never be
-      // persisted as an official, numbered, "effective" record. Today it is exactly that.
+      // Correct behavior: a resolution with no backing ballots and no quorum is never persisted
+      // as an official, numbered, "effective" record.
       expect(row).toBeNull();
     },
   );
 
-  it.fails(
-    "[BUG] must not record a resolution for a meeting with quorum_established = false",
+  it(
+    "rejects recording a resolution for a meeting with quorum_established = false",
     async () => {
       const resolutionId = randomUUID();
-      await run(
-        msg(COMMANDS.resolutionRecord, {
-          resolutionId,
-          meetingId: MEETING, // quorum_established: false, seeded in beforeAll
-          tenantId: TENANT,
-          text: "Resolved: business conducted without quorum",
-          voteType: "show_of_hands",
-          majorityRule: "simple_majority",
-          votesFor: 2,
-          votesAgainst: 0,
-          votesAbstain: 0,
-        }),
-      );
+      await expect(
+        run(
+          msg(COMMANDS.resolutionRecord, {
+            resolutionId,
+            meetingId: MEETING, // quorum_established: false, seeded in beforeAll
+            tenantId: TENANT,
+            text: "Resolved: business conducted without quorum",
+            voteType: "show_of_hands",
+            majorityRule: "simple_majority",
+            votesFor: 2,
+            votesAgainst: 0,
+            votesAbstain: 0,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(NonRetryableError);
 
       const row = await readResolution(resolutionId);
-      expect(row).toBeNull(); // fails today: it is inserted with status "effective" regardless
+      expect(row).toBeNull();
     },
   );
 
-  it("characterizes today's actual (buggy) behavior: the fabricated resolution IS persisted, numbered, and 'effective'", async () => {
+  it("confirms the fix: once quorum IS established, an aggregate-tally resolution (show_of_hands/secret_ballot's legitimate use case) IS still recordable", async () => {
+    const quorateMeeting = randomUUID();
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`
+        insert into meeting.meetings
+          (id, tenant_id, type, title, status, committee_id, financial_year, scheduled_at, quorum_established, created_by, updated_by)
+        values (${quorateMeeting}, ${TENANT}, 'committee', 'Quorate meeting for the fixed path', 'in_progress', NULL, '2025-26',
+                '2025-06-01T09:00:00Z', true, ${ACTOR}, ${ACTOR})`;
+    });
+
     const resolutionId = randomUUID();
     await run(
       msg(COMMANDS.resolutionRecord, {
         resolutionId,
-        meetingId: MEETING,
+        meetingId: quorateMeeting,
         tenantId: TENANT,
-        text: "Resolved: characterization of current behavior",
-        voteType: "roll_call",
+        text: "Resolved: business conducted with quorum, aggregate show-of-hands count",
+        voteType: "show_of_hands",
         majorityRule: "simple_majority",
         votesFor: 5,
         votesAgainst: 0,
@@ -237,9 +255,12 @@ describe("[BUG] resolution.record fabricates an official, numbered resolution wi
     expect(row.result).toBe("passed");
     expect(typeof row.resolution_number).toBe("string");
     expect(row.resolution_number.length).toBeGreaterThan(0);
-    // The resolution_number came from the SAME sequential-numbering pool (P25) used by
-    // legitimately-concluded resolutions — a downstream reader (minutes, resolution register,
-    // DSC signing) cannot distinguish this from a real vote by its number or status alone.
-    expect(await voteRowCount(resolutionId)).toBe(0);
+    expect(row.votes_for).toBe(5);
+
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`delete from meeting.resolutions where meeting_id = ${quorateMeeting}`;
+      await sql`delete from meeting.meetings where id = ${quorateMeeting}`;
+    });
   });
 });

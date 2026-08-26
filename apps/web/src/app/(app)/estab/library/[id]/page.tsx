@@ -1,20 +1,28 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getLibraryBookById } from "@/app/_data/loaders";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatusPill, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 
 export default async function LibraryBookDetailPage({ params }: { params: { id: string } }) {
   const { data: book, source } = await getLibraryBookById(params.id);
 
   if (!book) {
+    // The loader can't tell a genuine 404 from a transient failure (both become
+    // source:"error"), so on error we offer a retry rather than falsely stating
+    // the book does not exist.
+    if (source === "error") {
+      return (
+        <main className="page-main wrap" aria-labelledby="page-heading">
+          <PageHeader title="Book" back="/estab/library" />
+          <RefreshErrorState error={toHumanError("load", { area: "book" })} backHref="/estab/library" />
+        </main>
+      );
+    }
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Book not found" back="/estab/library" />
-        {source === "error" ? (
-          <DataSourceBadge source="error" />
-        ) : (
-          <p className="sub">The requested book could not be found in the catalogue.</p>
-        )}
+        <p className="sub">The requested book could not be found in the catalogue.</p>
       </main>
     );
   }

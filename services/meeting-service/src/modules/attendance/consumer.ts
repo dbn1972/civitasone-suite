@@ -129,6 +129,9 @@ interface MeetingContext {
   actualStartAt: Date | null;
   scheduledAt: Date | null;
   quorumEstablished: boolean;
+  secretaryId: string | null;
+  chairpersonId: string | null;
+  createdBy: string;
 }
 
 /** Load the parent meeting within the tx (null when missing / other tenant). */
@@ -142,11 +145,25 @@ async function loadMeeting(tx: DrizzleTx, meetingId: string, tenantId: string): 
       actualStartAt: meetings.actualStartAt,
       scheduledAt: meetings.scheduledAt,
       quorumEstablished: meetings.quorumEstablished,
+      secretaryId: meetings.secretaryId,
+      chairpersonId: meetings.chairpersonId,
+      createdBy: meetings.createdBy,
     })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Who (besides the participant themselves) is authorized to check in / manually mark another
+ * invited participant of this meeting on their behalf (Req 6.2) — the meeting's own secretary,
+ * chairperson, or the actor who created/administers it (the closest available proxy for
+ * "secretariat staff" when the named roles are unset). See `attendance/domain.ts`
+ * `assertParticipantInvited`.
+ */
+function checkInAgentsFor(meeting: Pick<MeetingContext, "secretaryId" | "chairpersonId" | "createdBy">) {
+  return [meeting.secretaryId, meeting.chairpersonId, meeting.createdBy];
 }
 
 /** Load the participant row for check-in authorisation (null when missing / other tenant). */
@@ -157,6 +174,7 @@ async function loadParticipant(tx: DrizzleTx, meetingId: string, participantId: 
       meetingId: participants.meetingId,
       invitationStatus: participants.invitationStatus,
       role: participants.role,
+      employeeId: participants.employeeId,
     })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.tenantId, tenantId)))
@@ -351,10 +369,14 @@ async function handleCheckIn(msg: CommandEnvelope<CheckInPayload>): Promise<void
       asPermanent(err);
     }
 
-    // Req 6.2: only an invited participant may check in.
+    // Req 6.2: only an invited participant may check in, recorded only by themselves or an
+    // authorized agent of the meeting (secretary/chairperson/creator — see checkInAgentsFor).
     const participant = await loadParticipant(tx, p.meetingId, p.participantId, msg.tenantId);
     try {
-      assertParticipantInvited(participant, p.meetingId);
+      assertParticipantInvited(participant, p.meetingId, {
+        actorId: msg.actorId,
+        authorizedAgentIds: checkInAgentsFor(meeting),
+      });
     } catch (err) {
       asPermanent(err);
     }
@@ -498,10 +520,14 @@ async function handleManualMark(msg: CommandEnvelope<ManualMarkPayload>): Promis
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
 
-    // Req 6.2: the manually-marked person must still be an invited participant of the meeting.
+    // Req 6.2: the manually-marked person must still be an invited participant of the meeting,
+    // and the marker must be themselves or an authorized agent (secretariat) of the meeting.
     const participant = await loadParticipant(tx, p.meetingId, p.participantId, msg.tenantId);
     try {
-      assertParticipantInvited(participant, p.meetingId);
+      assertParticipantInvited(participant, p.meetingId, {
+        actorId: msg.actorId,
+        authorizedAgentIds: checkInAgentsFor(meeting),
+      });
     } catch (err) {
       asPermanent(err);
     }
