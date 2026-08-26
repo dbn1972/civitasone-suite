@@ -589,7 +589,6 @@ export interface PaymentSummary {
    *  partial/legacy payloads still satisfy the type. */
   id?: string;
   referenceId: string;
-
   beneficiary: string;
   amountDisplay: string;
   status: 'Queued' | 'Released' | 'Pending Approval' | 'Failed';

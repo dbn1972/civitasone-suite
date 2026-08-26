@@ -5,7 +5,6 @@ import { currentFinancialYear } from "@/lib/fiscalYear";
 import { FyFilter } from "../../_components/FyFilter";
 import { MonitoringTable } from "./MonitoringTable";
 
-
 function rupees(val: unknown): string {
   const n = Number(BigInt(String(val ?? "0"))) / 100;
   if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
@@ -30,7 +29,6 @@ export default async function BudgetMonitoringPage({
     getFinanceBudgetMonitoringLines(fy),
   ]);
 
-
   const totals = (summary as Record<string, unknown> & { totals?: Record<string, unknown> })?.totals ?? {};
   const exceptions = (totals as Record<string, Record<string, number>>).exceptions ?? {};
   const overCommitted = exceptions.over_committed ?? 0;
@@ -52,7 +50,6 @@ export default async function BudgetMonitoringPage({
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
-
       />
 
       <StatGrid>

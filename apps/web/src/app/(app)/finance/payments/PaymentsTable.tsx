@@ -7,7 +7,6 @@ import { useSeededResource } from "@/lib/sync/resource";
 type Payment = {
   id?: string;
   referenceId: string;
-
   beneficiary: string;
   amountDisplay: string;
   status: string;
@@ -16,7 +15,6 @@ type Payment = {
 type Row = {
   id?: string;
   reference: string;
-
   beneficiary: string;
   amountDisplay: string;
   status: string;
@@ -54,7 +52,6 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
       filtered.map((p) => ({
         ...(p.id ? { id: p.id } : {}),
         reference: formatReference(p.referenceId),
-
         beneficiary: p.beneficiary,
         amountDisplay: p.amountDisplay,
         status: p.status,
@@ -95,7 +92,6 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
         // that carry a real id; id-less rows stay non-clickable (no dead link).
         rowHref={(row) => (row.id ? `/finance/payments/${row.id}` : "")}
         sortable
-
         filterable
         filterPlaceholder="Search payments…"
         pageSize={15}

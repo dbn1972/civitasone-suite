@@ -496,14 +496,12 @@ function mapPayments(payload: unknown): PaymentSummary[] | null {
     if (!isRecord(row)) continue;
     const id = toText(row.id);
     const referenceId = toText(row.referenceId) ?? toText(row.ref) ?? toText(row.id);
-
     const beneficiary = toText(row.beneficiary) ?? toText(row.payee);
     const amountDisplay = toText(row.amountDisplay) ?? toText(row.amount);
     const status = row.status;
     if (!referenceId || !beneficiary || !amountDisplay) continue;
     if (status !== "Queued" && status !== "Released" && status !== "Pending Approval" && status !== "Failed") continue;
     mapped.push({ ...(id ? { id } : {}), referenceId, beneficiary, amountDisplay, status });
-
   }
   return mapped.length > 0 ? mapped : null;
 }

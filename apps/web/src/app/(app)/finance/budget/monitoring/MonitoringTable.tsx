@@ -4,7 +4,6 @@ import { useSeededResource } from "@/lib/sync/resource";
 
 type Row = Record<string, unknown>;
 
-
 function rupees(val: unknown): string {
   const n = Number(BigInt(String(val ?? "0"))) / 100;
   if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
@@ -29,14 +28,12 @@ function progressBar(utilisationBps: unknown): React.ReactNode {
   const barWidth = Math.min(100, Math.max(0, actualPct));
   const overBudget = actualPct > 100;
   const color = actualPct > 90 ? "var(--bad)" : actualPct > 60 ? "var(--warn)" : "var(--good)";
-
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{
         width: 100, height: 8, background: "var(--line)", borderRadius: 4, overflow: "hidden",
       }}>
         <div style={{ width: `${barWidth}%`, height: "100%", background: color, borderRadius: 4, transition: "width .3s" }} />
-
       </div>
       <span
         style={{ fontSize: 12, color: overBudget ? "var(--bad)" : "var(--ink2)", fontWeight: overBudget ? 700 : 400 }}
@@ -44,7 +41,6 @@ function progressBar(utilisationBps: unknown): React.ReactNode {
       >
         {actualPct.toFixed(1)}%{overBudget ? " ⚠ over budget" : ""}
       </span>
-
     </div>
   );
 }
@@ -68,7 +64,6 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
     _exception: exceptionBadge(r.exception),
   }));
 
-
   return (
     <>
       {cacheNote && (
@@ -88,7 +83,6 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
           // ReactNode cell value (would show "[object Object]"); key stays a real
           // numeric field so the column still sorts by true utilisation.
           { key: "utilisationBps", label: "Utilisation", render: (r) => progressBar(r.utilisationBps) },
-
           { key: "_exception", label: "Status" },
         ]}
         rows={enriched}
