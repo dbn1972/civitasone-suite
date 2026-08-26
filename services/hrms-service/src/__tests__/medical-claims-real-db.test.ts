@@ -118,7 +118,10 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
       SELECT id, tenant_id, employee_id, status, hospital_name
       FROM medical.hrms_medical_claims WHERE id = ${claimId}
     `);
-    expect(dbRow).toBeTruthy();
+    // `expect(...).toBeTruthy()` does not narrow for tsc — dbRow stays
+    // `Row | undefined` afterwards and every property access below would be
+    // TS18048. A real control-flow guard (throw) is required to narrow it.
+    if (!dbRow) throw new Error(`expected a row in medical.hrms_medical_claims for id ${claimId}`);
     expect(dbRow.tenant_id).toBe(TENANT);
     expect(dbRow.employee_id).toBe(EMPLOYEE_ID);
     expect(dbRow.status).toBe("pending");
@@ -181,6 +184,7 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
       SELECT status, approved_by, approved_at, approved_amount_minor::text AS approved_amount_minor
       FROM medical.hrms_medical_claims WHERE id = ${claimId}
     `);
+    if (!dbRow) throw new Error(`expected a row in medical.hrms_medical_claims for id ${claimId}`);
     expect(dbRow.status).toBe("approved");
     expect(dbRow.approved_by).toBeTruthy();
     expect(dbRow.approved_at).toBeTruthy();
