@@ -27,16 +27,28 @@ function exceptionBadge(kind: unknown): string {
 
 function progressBar(utilisationBps: unknown): React.ReactNode {
   const bps = Number(utilisationBps ?? 0);
-  const pctVal = Math.min(100, bps / 100);
-  const color = pctVal > 90 ? "var(--bad)" : pctVal > 60 ? "var(--warn)" : "var(--good)";
+  // TRUE utilisation — a head can exceed 100% (overspend). Never cap the number
+  // we SHOW the officer; only the bar's fill width is clamped to the track.
+  const actualPct = bps / 100;
+  const barWidth = Math.min(100, Math.max(0, actualPct));
+  const overBudget = actualPct > 100;
+  const color = actualPct > 90 ? "var(--bad)" : actualPct > 60 ? "var(--warn)" : "var(--good)";
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{
         width: 100, height: 8, background: "var(--line)", borderRadius: 4, overflow: "hidden",
       }}>
-        <div style={{ width: `${pctVal}%`, height: "100%", background: color, borderRadius: 4, transition: "width .3s" }} />
+        <div style={{ width: `${barWidth}%`, height: "100%", background: color, borderRadius: 4, transition: "width .3s" }} />
+
       </div>
-      <span style={{ fontSize: 12, color: "var(--ink2)" }}>{pctVal.toFixed(1)}%</span>
+      <span
+        style={{ fontSize: 12, color: overBudget ? "var(--bad)" : "var(--ink2)", fontWeight: overBudget ? 700 : 400 }}
+        title={overBudget ? "Expenditure has exceeded the allocation for this head" : undefined}
+      >
+        {actualPct.toFixed(1)}%{overBudget ? " ⚠ over budget" : ""}
+      </span>
+
     </div>
   );
 }
@@ -58,8 +70,8 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
     _actual:    rupees(r.actualMinor),
     _available: rupees(r.availableMinor),
     _exception: exceptionBadge(r.exception),
-    _utilBar:   progressBar(r.utilisationBps),
   }));
+
 
   return (
     <>
@@ -76,7 +88,11 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
           { key: "_committed", label: "Committed",  align: "right" },
           { key: "_actual",    label: "Expended",   align: "right" },
           { key: "_available", label: "Available",  align: "right" },
-          { key: "_utilBar",   label: "Utilisation" },
+          // Render the bar via the column API — DataTable String()-ifies a bare
+          // ReactNode cell value (would show "[object Object]"); key stays a real
+          // numeric field so the column still sorts by true utilisation.
+          { key: "utilisationBps", label: "Utilisation", render: (r) => progressBar(r.utilisationBps) },
+
           { key: "_exception", label: "Status" },
         ]}
         rows={enriched}
