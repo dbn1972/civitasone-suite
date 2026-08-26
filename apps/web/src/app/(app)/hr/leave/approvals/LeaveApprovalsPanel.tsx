@@ -108,14 +108,20 @@ export function LeaveApprovalsPanel() {
     [tasks, leaveById],
   );
 
-  async function complete(taskId: string, decision: Decision, reason?: string) {
+  async function complete(task: EnrichedTask, decision: Decision, reason?: string) {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await fetch(`/api/proxy/v1/workflow/tasks/${taskId}/complete`, {
+      const res = await fetch(`/api/proxy/v1/workflow/tasks/${task.id}/complete`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ decision, reason }),
+        // NOTE: workflow-service's completeTaskBody only accepts { decision } —
+        // `reason` here is silently dropped by zod (no .strict()), never
+        // persisted, never passed to commands.completeTask (see
+        // services/workflow-service/src/modules/tasks/{validators,commands}.ts).
+        // The reason is instead recorded as a comment on the leave application
+        // below, via the task/comments module that already exists for this.
+        body: JSON.stringify({ decision }),
       });
       const text = await res.text();
       if (!res.ok) {
@@ -125,11 +131,35 @@ export function LeaveApprovalsPanel() {
         setDialogError(errMsg || `${decision} failed (${res.status})`);
         return;
       }
+
+      let reasonSaved = true;
+      if (reason && reason.trim().length > 0) {
+        try {
+          const commentRes = await fetch("/api/proxy/v1/workflow/comments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              entityType: task.refType || "workflow_task",
+              entityId: task.refId || task.id,
+              body: `${decision === "approve" ? "Approved" : "Rejected"}: ${reason.trim()}`,
+              visibility: "internal",
+            }),
+          });
+          reasonSaved = commentRes.ok;
+        } catch {
+          reasonSaved = false;
+        }
+      }
+
       setPending(null);
-      setToast({
-        tone: "good",
-        text: decision === "approve" ? "Leave approved via workflow." : "Leave rejected.",
-      });
+      setToast(
+        reasonSaved
+          ? { tone: "good", text: decision === "approve" ? "Leave approved via workflow." : "Leave rejected." }
+          : {
+              tone: "bad",
+              text: `Leave ${decision === "approve" ? "approved" : "rejected"}, but the reason could not be saved. Add it as a comment on the request.`,
+            },
+      );
       await loadTasks();
       router.refresh();
     } catch (err) {
@@ -253,7 +283,7 @@ export function LeaveApprovalsPanel() {
             </>
           ) : null
         }
-        onConfirm={(reason) => pending && void complete(pending.task.id, pending.decision, reason)}
+        onConfirm={(reason) => pending && void complete(pending.task, pending.decision, reason)}
         onCancel={() => !busy && setPending(null)}
       />
     </>

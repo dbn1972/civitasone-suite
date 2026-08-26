@@ -135,10 +135,10 @@ export default function LeavePoliciesPage() {
       <DataSourceBadge source={state === "error" ? "error" : "api"} />
       {state === "ready" && policies.length > 0 && (
         <StatGrid>
-          <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
+          <StatCard icon="\ud83d\udccb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
           <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Active"           value={policies.filter((p) => p.isActive).length} />
-          <StatCard icon="\U0001f501" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
-          <StatCard icon="\U0001f4b0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
+          <StatCard icon="\ud83d\udd01" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
+          <StatCard icon="\ud83d\udcb0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
         </StatGrid>
       )}
 

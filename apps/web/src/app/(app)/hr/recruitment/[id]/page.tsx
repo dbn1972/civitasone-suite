@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useId, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard } from "../_components/GOIReservationCard";
+import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 
 type JobOpening = {
   id: string;
@@ -56,34 +58,56 @@ const DECISION_COLOR: Record<string, string> = {
 };
 
 /** Valid next actions per application stage */
+type ConfirmConfig = {
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  requireReason?: boolean;
+};
+
 type ActionDef = {
   label: string;
   key: string;
   variant: "primary" | "danger" | "ghost";
   disabled?: boolean;
   disabledReason?: string;
+  /** Present for actions that must be gated behind a ConfirmDialog (L4 — irreversible action). */
+  confirm?: ConfirmConfig;
+};
+
+const REJECT_CONFIRM: ConfirmConfig = {
+  title: "Reject this application?",
+  description: "The applicant will be marked ineligible for this vacancy and removed from further pipeline stages. This cannot be undone from here.",
+  confirmLabel: "Reject application",
+};
+
+const WITHDRAW_CONFIRM: ConfirmConfig = {
+  title: "Withdraw this application?",
+  description: "The application will be marked withdrawn and taken out of the selection pipeline for this vacancy.",
+  confirmLabel: "Withdraw application",
+  requireReason: true,
 };
 
 const STAGE_ACTIONS: Record<string, ActionDef[]> = {
   applied: [
     { label: "Shortlist",         key: "shortlist",   variant: "primary" },
-    { label: "Reject",            key: "reject",      variant: "danger"  },
+    { label: "Reject",            key: "reject",      variant: "danger", confirm: REJECT_CONFIRM },
   ],
   shortlisted: [
-    { label: "Schedule Interview", key: "schedule_interview", variant: "primary", disabled: true, disabledReason: "Open Interview module to schedule" },
-    { label: "Reject",             key: "reject",             variant: "danger"  },
+    { label: "Schedule Interview", key: "schedule_interview", variant: "primary", disabled: true, disabledReason: "Interview scheduling isn't available in this release yet" },
+    { label: "Reject",             key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
   ],
   interviewing: [
-    { label: "Send Offer", key: "send_offer", variant: "primary", disabled: true, disabledReason: "Open Offer module to send" },
-    { label: "Reject",     key: "reject",     variant: "danger"  },
+    { label: "Send Offer", key: "send_offer", variant: "primary", disabled: true, disabledReason: "Offer management isn't available in this release yet" },
+    { label: "Reject",     key: "reject",     variant: "danger", confirm: REJECT_CONFIRM },
   ],
   selected: [
-    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Use application detail to complete hire" },
-    { label: "Withdraw",    key: "withdraw",    variant: "danger"  },
+    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Open this applicant to complete the hire" },
+    { label: "Withdraw",    key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
   ],
   offered: [
-    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Use application detail to complete hire" },
-    { label: "Withdraw",    key: "withdraw",    variant: "danger"  },
+    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Open this applicant to complete the hire" },
+    { label: "Withdraw",    key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
   ],
   hired:     [],
   rejected:  [],
@@ -96,12 +120,28 @@ function ContextMenu({
   actionState,
 }: {
   app: Application;
-  onAction: (appId: string, key: string) => Promise<void>;
+  onAction: (appId: string, key: string, reason?: string) => Promise<void>;
   actionState: "idle" | "submitting" | "done" | "error";
 }) {
   const [open, setOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ActionDef | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const actions = STAGE_ACTIONS[app.stage] ?? [];
+
+  const {
+    open: confirmOpen,
+    busy: confirmBusy,
+    error: confirmError,
+    trigger: triggerConfirm,
+    cancel: cancelConfirm,
+    confirm: confirmAction,
+  } = useConfirmAction({
+    onConfirm: async (reason) => {
+      if (!pendingAction) return;
+      await onAction(app.id, pendingAction.key, reason);
+    },
+    onSuccess: () => setPendingAction(null),
+  });
 
   // Close on outside click
   useEffect(() => {
@@ -143,10 +183,23 @@ function ContextMenu({
               <button
                 type="button"
                 role="menuitem"
-                disabled={act.disabled}
+                disabled={act.disabled || actionState === "submitting"}
                 onClick={async () => {
-                  setOpen(false);
-                  await onAction(app.id, act.key);
+                  if (act.confirm) {
+                    setOpen(false);
+                    setPendingAction(act);
+                    triggerConfirm();
+                    return;
+                  }
+                  try {
+                    await onAction(app.id, act.key);
+                    setOpen(false);
+                  } catch {
+                    // Leave the menu open on failure — closing it immediately (the
+                    // previous behavior) made the "Action failed — try again" hint
+                    // below unreachable, so a failed request looked identical to a
+                    // successful one from the officer's point of view.
+                  }
                 }}
                 className={[
                   "w-full text-left px-4 py-2 text-xs font-medium transition-colors",
@@ -173,6 +226,25 @@ function ContextMenu({
             <p className="px-4 py-1 text-[10px] text-red-500">Action failed — try again</p>
           )}
         </div>
+      )}
+
+      {pendingAction?.confirm && (
+        <ConfirmDialog
+          open={confirmOpen}
+          title={pendingAction.confirm.title}
+          description={pendingAction.confirm.description}
+          confirmLabel={pendingAction.confirm.confirmLabel}
+          danger
+          requireReason={pendingAction.confirm.requireReason}
+          reasonLabel="Reason"
+          busy={confirmBusy}
+          errorMessage={confirmError}
+          onConfirm={confirmAction}
+          onCancel={() => {
+            cancelConfirm();
+            setPendingAction(null);
+          }}
+        />
       )}
     </div>
   );
@@ -228,7 +300,7 @@ export default function JobOpeningDetailPage() {
     return () => controller.abort();
   }, [loadOpening, loadApplications]);
 
-  const handleAction = useCallback(async (appId: string, actionKey: string) => {
+  const handleAction = useCallback(async (appId: string, actionKey: string, reason?: string) => {
     setDecisionStates((s) => ({ ...s, [appId]: "submitting" }));
     try {
       let res: Response;
@@ -242,19 +314,24 @@ export default function JobOpeningDetailPage() {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "shortlisted", stage: "shortlisted" } : a));
         }
       } else if (actionKey === "reject") {
+        // reasonCode must be one of REJECTION_REASON_CODES (hrms-service
+        // modules/recruitment/screening.ts) — "eligibility" is the closest
+        // structured fit for an HR-initiated reject from the pipeline view.
         res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ decision: "ineligible", reasonCode: "does_not_meet_eligibility" }),
+          body: JSON.stringify({ decision: "ineligible", reasonCode: "eligibility" }),
         });
         if (res.ok) {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "ineligible", stage: "rejected" } : a));
         }
       } else if (actionKey === "withdraw") {
-        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/stage`, {
+        // Real endpoint is POST .../withdraw with a required {reason}; there is
+        // no .../stage route (confirmed 404 against the live gateway).
+        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/withdraw`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ stage: "withdrawn" }),
+          body: JSON.stringify({ reason: reason && reason.trim().length > 0 ? reason.trim() : "Withdrawn by HR" }),
         });
         if (res.ok) {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "withdrawn" } : a));
@@ -264,9 +341,14 @@ export default function JobOpeningDetailPage() {
         setDecisionStates((s) => ({ ...s, [appId]: "idle" }));
         return;
       }
+      if (!res.ok) {
+        setDecisionStates((s) => ({ ...s, [appId]: "error" }));
+        throw new Error(`Action failed (HTTP ${res.status})`);
+      }
       setDecisionStates((s) => ({ ...s, [appId]: "done" }));
-    } catch {
+    } catch (e) {
       setDecisionStates((s) => ({ ...s, [appId]: "error" }));
+      throw e instanceof Error ? e : new Error("Action failed. Please try again.");
     }
   }, []);
 
@@ -415,7 +497,12 @@ export default function JobOpeningDetailPage() {
                 <div key={app.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-800 text-sm truncate">{app.applicantName}</p>
+                      <Link
+                        href={`/hr/recruitment/${id}/applications/${app.id}`}
+                        className="font-semibold text-slate-800 text-sm truncate hover:underline hover:text-indigo-700 block"
+                      >
+                        {app.applicantName}
+                      </Link>
                       <p className="text-xs text-slate-500 mt-0.5 truncate">
                         {app.email}{app.mobile ? ` · ${app.mobile}` : ""}
                       </p>
@@ -471,7 +558,10 @@ export default function JobOpeningDetailPage() {
             onClick={() => {
               const pending = applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied");
               if (pending.length === 0) return;
-              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist")));
+              // Per-row failures are already reflected in decisionStates (and the
+              // per-row "Action failed" hint); this just avoids an unhandled
+              // rejection when some (but not all) calls in the batch fail.
+              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist"))).catch(() => {});
             }}
             className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
           >
