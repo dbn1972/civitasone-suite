@@ -36,7 +36,10 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
         setErrorMessage(text);
         return;
       }
-      toast.success("Proposal finalized for DAO approval.");
+      // HTTP 202 Accepted — the DAO-finalize is queued, not yet applied, so we
+      // say "submitted", not "finalized". The refresh below reflects the real,
+      // server-confirmed status once the consumer has processed it.
+      toast.success("Proposal submitted for DAO finalization. It will show as finalized once processed.");
       setOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {

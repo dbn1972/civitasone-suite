@@ -13,10 +13,6 @@ interface TenderActionsProps {
 type QuotationMethod = "percentage_rate" | "item_rate";
 type AboveBelow = "above" | "below" | "at_par";
 
-function formatLabel(s: string): string {
-  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -52,7 +48,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         setQuotError(await res.text().catch(() => "Request failed"));
         return;
       }
-      toast.success("Quotation recorded.");
+      toast.success("Quotation submitted.");
       setContractorName("");
       setQuotedAmountRs("");
       setQuotedPercentage("");
@@ -103,7 +99,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         setAwardError(await res.text().catch(() => "Request failed"));
         return;
       }
-      toast.success("Work awarded successfully.");
+      toast.success("Work award submitted. It will be recorded once processed.");
       setAwardOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
@@ -137,7 +133,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         setDialogError(await res.text().catch(() => "Request failed"));
         return;
       }
-      toast.success(`Award ${level.toUpperCase()} finalized.`);
+      toast.success(`Award ${level.toUpperCase()} finalization submitted. It will show as finalized once processed.`);
       setDialogOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
