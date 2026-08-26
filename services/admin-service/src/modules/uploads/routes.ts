@@ -16,8 +16,13 @@ import { presignedPutUrl, presignedGetUrl } from "@civitasone/storage";
 // HR admin/officer (onboarding docs), finance/admin/super_admin/officer/manager (general),
 // procurement_officer/procurement_admin (tender documents — matches procurement-service
 // tender routes' PROC_ROLES, the endpoint that actually records the uploaded document),
-// and works_admin/works_operator/dao/do/sdo/section_officer (site-photo uploads — matches
-// works-service execution routes' WRITE_ROLES, the endpoint that records the photo).
+// works_admin/works_operator/dao/do/sdo/section_officer (site-photo uploads — matches
+// works-service execution routes' WRITE_ROLES, the endpoint that records the photo),
+// and estab_officer/estab_admin/estab_deputy_secretary (case-file attachment uploads —
+// matches estab-service files routes' ESTAB_ROLES, the gate on the same
+// POST /v1/estab/files/:id/attachments endpoint this presign call feeds; PR #729 wired
+// the estab file-attachment UI to this shared presign endpoint but never widened this
+// list, so a real estab officer 403'd before ever reaching their own attachments endpoint).
 // Kept as an in-place, service-local list rather than a shared constant: it is deliberately
 // broader than any single domain's write-role set (it is the union of everyone who uploads
 // something via this one presign endpoint), so a shared cross-service constant would not
@@ -26,6 +31,7 @@ const ALL_ROLES = [
   "hr_admin", "finance_admin", "admin", "super_admin", "officer", "manager", "hr_officer",
   "procurement_officer", "procurement_admin",
   "works_admin", "works_operator", "dao", "do", "sdo", "section_officer",
+  "estab_officer", "estab_admin", "estab_deputy_secretary",
 ];
 
 const ALLOWED_TYPES: Record<string, { maxSizeMb: number; extensions: string[] }> = {

@@ -1157,6 +1157,19 @@ describe("POST /v1/admin/uploads/presign", () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  // Regression: estab_officer/estab_admin/estab_deputy_secretary had zero overlap with
+  // ALL_ROLES, so the PR #729 estab file-attachment upload flow 403'd before a real estab
+  // officer could ever reach their own POST /v1/estab/files/:id/attachments endpoint.
+  // Matches estab-service files routes' ESTAB_ROLES (the endpoint this upload feeds).
+  it("returns 200 for estab_officer (estab file-attachment upload, PR #729)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/uploads/presign",
+      headers: authHeader(["estab_officer"]),
+      payload: { category: "attachment", filename: "annexure.pdf", contentType: "application/pdf" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe("GET /v1/admin/uploads/:key", () => {
@@ -1198,6 +1211,18 @@ describe("GET /v1/admin/uploads/:key", () => {
     const res = await app.inject({
       method: "GET", url: `/v1/admin/uploads/${encodeURIComponent(key)}`,
       headers: authHeader(["procurement_officer"]),
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  // Regression: same estab role widening as the presign test above — ALL_ROLES gates
+  // both routes, so an estab officer who could presign an attachment upload still
+  // couldn't download it back until this list was widened.
+  it("returns 200 for estab_officer downloading a tenant-owned key", async () => {
+    const key = `uploads/${TENANT}/attachment/annexure.pdf`;
+    const res = await app.inject({
+      method: "GET", url: `/v1/admin/uploads/${encodeURIComponent(key)}`,
+      headers: authHeader(["estab_officer"]),
     });
     expect(res.statusCode).toBe(200);
   });
