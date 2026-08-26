@@ -17,4 +17,15 @@ describe("DataSourceBadge", () => {
     render(<DataSourceBadge source="error" />);
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
+
+  it("renders a custom message when provided", () => {
+    render(<DataSourceBadge source="error" message="Couldn't load — showing nothing" />);
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the historic copy when no message is given (back-compat)", () => {
+    render(<DataSourceBadge source="error" />);
+    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+  });
 });

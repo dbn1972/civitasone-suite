@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, EmptyState, Card } from "@/app/_components/ds";
+import { PageHeader, RefreshErrorState } from "@/app/_components/ds";
 import {
   getMeeting,
   getAgenda,
@@ -25,6 +24,11 @@ export default async function MeetingConsolePage({
   ]);
 
   if (meeting.source === "error" || !meeting.data) {
+    // Note: the loader (fetchJson) folds a real 404 ("this meeting doesn't
+    // exist / was cancelled") and a transient failure (network/gateway down)
+    // into the same source:"error" signal — there isn't enough information
+    // at this layer to tell them apart, so we show one message that's
+    // truthful for both and offer a real retry via RefreshErrorState.
     return (
       <>
         <PageHeader
@@ -33,19 +37,14 @@ export default async function MeetingConsolePage({
           back="/meeting/meetings"
           backLabel="Meetings"
         />
-        <DataSourceBadge source="error" />
-        <Card padding>
-          <EmptyState
-            icon="🗂️"
-            title="Meeting not available"
-            message="This meeting couldn't be loaded. It may have been cancelled, or live data couldn't be reached. Go back and pick another meeting."
-          />
-          <div style={{ marginTop: 12 }}>
-            <Link className="btn ghost sm" href="/meeting/meetings">
-              ← Back to meetings
-            </Link>
-          </div>
-        </Card>
+        <RefreshErrorState
+          error={{
+            what: "This meeting couldn't be loaded.",
+            next: "It may have been cancelled, or live data couldn't be reached. Try again, or go back and pick another meeting.",
+            actions: ["retry", "back", "help"],
+          }}
+          backHref="/meeting/meetings"
+        />
       </>
     );
   }
@@ -63,7 +62,12 @@ export default async function MeetingConsolePage({
         back="/meeting/meetings"
         backLabel="Meetings"
       />
-      {degraded && <DataSourceBadge source="error" />}
+      {degraded && (
+        <DataSourceBadge
+          source="error"
+          message="Some panels below couldn't load — showing nothing for those"
+        />
+      )}
       <MeetingConsole
         meeting={meeting.data}
         agenda={agenda.data}

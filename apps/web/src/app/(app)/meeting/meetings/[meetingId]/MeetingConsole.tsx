@@ -2,13 +2,14 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, EmptyState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
+import { useRouter } from "next/navigation";
+import { Card, ConfirmDialog, EmptyState, ErrorState, StatCard, StatGrid, StatusPill } from "@/app/_components/ds";
+import type { HumanError } from "@/lib/messages";
 import {
   fmtTime,
   humanize,
   meetingPillStatus,
   presentForQuorum,
-  votePillStatus,
 } from "../../_data/format";
 import {
   MAJORITY_RULES,
@@ -82,6 +83,40 @@ function nextTransitions(status: string): { toState: string; label: string; dang
   }
 }
 
+/**
+ * Consequence copy for a danger-marked transition's confirmation dialog.
+ * Known states get specific, plain-language wording (matching the tone of
+ * MinutesPanel's approve-minutes confirmation); any other future
+ * danger-marked transition falls back to a generic-but-still-specific line
+ * naming the destination state, rather than a blank/omitted description.
+ */
+function transitionConsequence(toState: string): string {
+  switch (toState) {
+    case "adjourned":
+      return "Adjourning ends the live session — attendance and voting close, and the meeting moves toward minutes. This can't be undone.";
+    default:
+      return `This moves the meeting to "${humanize(toState)}" and can't be undone.`;
+  }
+}
+
+const AGENDA_LOAD_ERROR: HumanError = {
+  what: "The agenda couldn't be reached.",
+  next: "Check your connection and try again.",
+  actions: ["retry", "help"],
+};
+
+const VOTES_LOAD_ERROR: HumanError = {
+  what: "The voting panel couldn't be reached.",
+  next: "Check your connection and try again.",
+  actions: ["retry", "help"],
+};
+
+const ATTENDANCE_LOAD_ERROR: HumanError = {
+  what: "The live attendance dashboard couldn't be reached.",
+  next: "Check your connection and try again.",
+  actions: ["retry", "help"],
+};
+
 function TallyBar({
   votesFor,
   votesAgainst,
@@ -128,15 +163,28 @@ export function MeetingConsole({
   initialActiveVotes,
   activeVotesSource,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState(meeting.status);
   const [attendance, setAttendance] = useState<LiveAttendance | null>(initialAttendance);
   const [attState, setAttState] = useState<Src>(attendanceSource);
   const [votes, setVotes] = useState<ActiveVote[]>(initialActiveVotes);
   const [votesState, setVotesState] = useState<Src>(activeVotesSource);
+  /** This browser's own recorded position per resolution (Req: "my vote" indicator).
+   *  Set optimistically right after a successful (202-accepted) cast — see the
+   *  file-level note on VotePanel for why this is honest, not invented, state. */
+  const [myVotes, setMyVotes] = useState<Record<string, VotePosition>>({});
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Danger-transition confirmation (Adjourn meeting, and any future
+  // danger-marked transition) — gated the same way MinutesPanel gates
+  // approve/reject: a pending choice + its own dialog-scoped error.
+  const [pendingTransition, setPendingTransition] = useState<{ toState: string; label: string } | null>(
+    null,
+  );
+  const [transitionErr, setTransitionErr] = useState<string | undefined>(undefined);
 
   const counts = attendance?.counts ?? {
     present: 0,
@@ -178,6 +226,27 @@ export function MeetingConsole({
       setToast(`Meeting moved to “${humanize(toState)}”.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not change the meeting state.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Danger-transition path: runs only after the user confirms in the dialog. */
+  async function onConfirmTransition() {
+    if (!pendingTransition) return;
+    const { toState } = pendingTransition;
+    setBusy(`transition:${toState}`);
+    setTransitionErr(undefined);
+    setToast(null);
+    try {
+      await transitionMeeting(meeting.id, toState);
+      setStatus(toState as Meeting["status"]);
+      setToast(`Meeting moved to “${humanize(toState)}”.`);
+      setPendingTransition(null);
+    } catch (err) {
+      setTransitionErr(
+        err instanceof Error ? err.message : "Could not change the meeting state.",
+      );
     } finally {
       setBusy(null);
     }
@@ -252,9 +321,16 @@ export function MeetingConsole({
               <button
                 key={t.toState}
                 type="button"
-                className={t.danger ? "btn ghost" : "btn primary"}
+                className={t.danger ? "btn danger" : "btn primary"}
                 disabled={busy !== null}
-                onClick={() => void onTransition(t.toState)}
+                onClick={() => {
+                  if (t.danger) {
+                    setTransitionErr(undefined);
+                    setPendingTransition({ toState: t.toState, label: t.label });
+                  } else {
+                    void onTransition(t.toState);
+                  }
+                }}
               >
                 {busy === `transition:${t.toState}` ? "…" : t.label}
               </button>
@@ -304,11 +380,7 @@ export function MeetingConsole({
         padding
       >
         {votesState === "error" ? (
-          <EmptyState
-            icon="🗳️"
-            title="Voting unavailable"
-            message="The voting panel couldn't be reached. Try refreshing shortly."
-          />
+          <ErrorState error={VOTES_LOAD_ERROR} onRetry={() => void refreshVotes()} />
         ) : votes.length === 0 ? (
           <EmptyState
             icon="🗳️"
@@ -327,6 +399,10 @@ export function MeetingConsole({
                 setError={setError}
                 setToast={setToast}
                 onChanged={refreshVotes}
+                myPosition={myVotes[v.resolutionId]}
+                onVoted={(position) =>
+                  setMyVotes((prev) => ({ ...prev, [v.resolutionId]: position }))
+                }
               />
             ))}
           </div>
@@ -346,11 +422,11 @@ export function MeetingConsole({
       {/* Agenda */}
       <Card title={`Agenda (${agendaSource === "api" ? agenda.length : "—"})`} padding>
         {agendaSource === "error" ? (
-          <EmptyState
-            icon="📋"
-            title="Agenda unavailable"
-            message="The agenda couldn't be reached. Try again shortly."
-          />
+          // Agenda has no dedicated client-side refetch (unlike attendance/votes
+          // below) — router.refresh() re-runs the server component that loads
+          // it, which is a genuine retry, just coarser (it also re-fetches
+          // meeting/attendance/votes props).
+          <ErrorState error={AGENDA_LOAD_ERROR} onRetry={() => router.refresh()} />
         ) : agenda.length === 0 ? (
           <EmptyState
             icon="📋"
@@ -418,11 +494,7 @@ export function MeetingConsole({
         padding
       >
         {attState === "error" ? (
-          <EmptyState
-            icon="👥"
-            title="Attendance unavailable"
-            message="The live attendance dashboard couldn't be reached. Try refreshing shortly."
-          />
+          <ErrorState error={ATTENDANCE_LOAD_ERROR} onRetry={() => void refreshAttendance()} />
         ) : !attendance || attendance.participants.length === 0 ? (
           <EmptyState
             icon="👥"
@@ -525,6 +597,20 @@ export function MeetingConsole({
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={pendingTransition !== null}
+        title={`${pendingTransition?.label ?? "Change meeting state"}?`}
+        description={pendingTransition ? transitionConsequence(pendingTransition.toState) : undefined}
+        confirmLabel={pendingTransition?.label}
+        danger
+        busy={busy !== null}
+        errorMessage={transitionErr}
+        onConfirm={() => void onConfirmTransition()}
+        onCancel={() => {
+          if (busy === null) setPendingTransition(null);
+        }}
+      />
     </>
   );
 }
@@ -546,19 +632,44 @@ function VotePanel({
   setError,
   setToast,
   onChanged,
-}: PanelCtl & { meetingId: string; vote: ActiveVote; onChanged: () => Promise<void> }) {
+  myPosition,
+  onVoted,
+}: PanelCtl & {
+  meetingId: string;
+  vote: ActiveVote;
+  onChanged: () => Promise<void>;
+  /** This browser's own recorded position for this resolution, if any (Req 7). */
+  myPosition?: VotePosition;
+  onVoted: (position: VotePosition) => void;
+}) {
   const secret = vote.voteType === "secret_ballot";
+  // Cast is gated behind a confirmation: a ballot can't be changed once cast
+  // (see the dialog copy below), so it needs the same protect-from-mistakes
+  // treatment as MinutesPanel's approve/reject actions.
+  const [confirmPosition, setConfirmPosition] = useState<VotePosition | null>(null);
+  const [castErr, setCastErr] = useState<string | undefined>(undefined);
 
-  async function cast(position: VotePosition) {
+  async function castConfirmed() {
+    if (!confirmPosition) return;
+    const position = confirmPosition;
     setBusy(`cast:${vote.resolutionId}:${position}`);
-    setError(null);
+    setCastErr(undefined);
     setToast(null);
     try {
       await castVote(meetingId, { resolutionId: vote.resolutionId, position });
       setToast("Ballot recorded.");
+      setConfirmPosition(null);
+      // The 202-accepted write queues the ballot; the read model (active
+      // votes / results) only reflects it a beat later and never exposes
+      // "my own position" per resolution today (Req 7 note: this is the one
+      // bit of genuinely fabricated-looking state in this file, and it
+      // isn't — it mirrors the SAME optimistic-on-202 pattern already used
+      // for the toast above. It resets on reload; a server-confirmed
+      // equivalent needs the vote read model to add a myPosition field).
+      onVoted(position);
       await onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not record the ballot.");
+      setCastErr(err instanceof Error ? err.message : "Could not record the ballot.");
     } finally {
       setBusy(null);
     }
@@ -604,31 +715,57 @@ function VotePanel({
         votesAbstain={vote.tally.votesAbstain}
       />
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="btn ghost sm"
-          disabled={busy !== null}
-          onClick={() => void cast("for")}
-        >
-          Cast: For
-        </button>
-        <button
-          type="button"
-          className="btn ghost sm"
-          disabled={busy !== null}
-          onClick={() => void cast("against")}
-        >
-          Cast: Against
-        </button>
-        <button
-          type="button"
-          className="btn ghost sm"
-          disabled={busy !== null}
-          onClick={() => void cast("abstain")}
-        >
-          Cast: Abstain
-        </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {myPosition ? (
+          <span
+            style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: "#16a34a",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            ✓ You voted: {humanize(myPosition)}
+          </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={busy !== null}
+              onClick={() => {
+                setCastErr(undefined);
+                setConfirmPosition("for");
+              }}
+            >
+              Cast: For
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={busy !== null}
+              onClick={() => {
+                setCastErr(undefined);
+                setConfirmPosition("against");
+              }}
+            >
+              Cast: Against
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={busy !== null}
+              onClick={() => {
+                setCastErr(undefined);
+                setConfirmPosition("abstain");
+              }}
+            >
+              Cast: Abstain
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="btn primary sm"
@@ -644,6 +781,23 @@ function VotePanel({
           Secret ballot — individual positions are withheld; only the aggregate tally is shown.
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmPosition !== null}
+        title={`Cast your vote: ${confirmPosition ? humanize(confirmPosition) : ""}?`}
+        description={
+          secret
+            ? `Casting "${confirmPosition ? humanize(confirmPosition) : ""}" is final and cannot be changed. This is a secret ballot — your individual position is withheld; only the aggregate tally is shown.`
+            : `Casting "${confirmPosition ? humanize(confirmPosition) : ""}" records your position against your name in the resolution register. Votes cannot be changed once cast.`
+        }
+        confirmLabel={`Cast: ${confirmPosition ? humanize(confirmPosition) : ""}`}
+        busy={busy !== null}
+        errorMessage={castErr}
+        onConfirm={() => void castConfirmed()}
+        onCancel={() => {
+          if (busy === null) setConfirmPosition(null);
+        }}
+      />
     </div>
   );
 }
