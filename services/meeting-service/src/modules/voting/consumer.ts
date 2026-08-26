@@ -49,8 +49,11 @@ import {
   computeWeightedTally,
   computeVoteResult,
   assertQuorumAtVoteTime,
+  isQuorumMetAtVoteTime,
   assertNoDuplicateVote,
   assertNotRecused,
+  assertTallyConsistent,
+  assertVotesWithinPresent,
   isMajorityRule,
 } from "./domain.js";
 import { getPolicyBool, getPolicyString } from "../config-registry/policy.js";
@@ -224,9 +227,16 @@ async function getResolution(tx: DrizzleTx, resolutionId: string, tenantId: stri
 }
 
 /**
- * The member's per-seat vote weight from the committee roster (weighted voting). Defaults to 1
- * when the member is not on the roster or the meeting has no committee — so an unconfigured
- * weight is exactly headcount (1 member = 1 vote).
+ * The member's per-seat vote weight from the committee roster (weighted voting), AND the
+ * committee-membership eligibility gate (Gap: systemic committee-membership IDOR — a ballot may
+ * only be cast/counted by an ACTIVE member of the committee that owns the resolution).
+ *
+ * A meeting with no committee at all has no roster to check against, so weight defaults to 1
+ * (headcount) with no membership check — quorum/eligibility for a committee-less meeting is
+ * governed elsewhere. When the meeting DOES have a committee, `memberId` MUST resolve to an
+ * active `committee_members` row for it — this used to silently default an absent/removed
+ * member to weight 1 instead of rejecting the ballot outright; it now rejects (`MEETING_UNAUTHORIZED_ACCESS`),
+ * closing both the "never was a member" and the "removed mid-vote" (stale permission) variants.
  */
 async function getMemberVoteWeight(
   tx: DrizzleTx,
@@ -247,8 +257,76 @@ async function getMemberVoteWeight(
       ),
     )
     .limit(1);
-  const w = rows[0]?.voteWeight;
+  const row = rows[0];
+  if (!row) {
+    throw httpError("MEETING_UNAUTHORIZED_ACCESS", "member is not an active member of this committee and may not vote", {
+      committeeId,
+      memberId,
+    });
+  }
+  const w = row.voteWeight;
   return typeof w === "number" && Number.isFinite(w) && w > 0 ? w : 1;
+}
+
+/**
+ * Assert `memberId` is an ACTIVE member of `committeeId` (Gap: systemic committee-membership
+ * IDOR) — the circulation-respond counterpart to `getMemberVoteWeight`'s in-meeting-vote gate,
+ * used where no per-seat weight is resolved. A meeting with no committee has no roster to check
+ * against, so this is a no-op then (mirrors `getMemberVoteWeight`'s `!committeeId` fallback).
+ */
+async function assertActiveCommitteeMember(
+  tx: DrizzleTx,
+  tenantId: string,
+  committeeId: string | null,
+  memberId: string,
+): Promise<void> {
+  if (!committeeId) return;
+  const rows = await tx
+    .select({ id: committeeMembers.id })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, memberId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1);
+  if (rows.length === 0) {
+    throw httpError("MEETING_UNAUTHORIZED_ACCESS", "member is not an active member of this committee", {
+      committeeId,
+      memberId,
+    });
+  }
+}
+
+/**
+ * Assert `committeeId`'s specific member/role has authority over a motion on behalf of someone
+ * else — used by `handleVoteRecuse` (Gap 3: recusal has no relationship check) so only the
+ * member themselves, or that committee's own chairperson/secretary, can record a recusal.
+ */
+async function isCommitteeOfficer(
+  tx: DrizzleTx,
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+  roles: readonly string[],
+): Promise<boolean> {
+  const rows = await tx
+    .select({ role: committeeMembers.role })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1);
+  const role = rows[0]?.role;
+  return typeof role === "string" && roles.includes(role);
 }
 
 /** Active committee member ids (Req 12.1 notification fan-out; roster size for quorum). */
@@ -543,10 +621,18 @@ async function handleVoteCast(msg: CommandEnvelope<VoteCastPayload>): Promise<vo
       throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
     }
 
-    // Weighted voting (Gap 2): capture the member's per-seat weight onto the ballot so the
-    // weighted tally sums without re-joining the roster. Defaults to 1 (headcount) when unset.
+    // Weighted voting (Gap 2) + committee-membership eligibility (Gap: cross-committee IDOR):
+    // capture the member's per-seat weight onto the ballot so the weighted tally sums without
+    // re-joining the roster, AND reject a ballot from anyone who isn't an active member of the
+    // resolution's committee (never on the roster, or removed mid-vote). Weight defaults to 1
+    // (headcount) only when the meeting has no committee at all.
     const meetingForWeight = await getMeeting(tx, p.meetingId, msg.tenantId);
-    const weight = await getMemberVoteWeight(tx, msg.tenantId, meetingForWeight?.committeeId ?? null, p.memberId);
+    let weight: number;
+    try {
+      weight = await getMemberVoteWeight(tx, msg.tenantId, meetingForWeight?.committeeId ?? null, p.memberId);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
 
     await tx.insert(votes).values({
       id: randomUUID(),
@@ -611,6 +697,33 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
       );
     // Headcount tally is ALWAYS the authoritative votes_for/_against/_abstain (P14 invariant).
     const tally = computeTally(voteRows.map((v) => v.position));
+    try {
+      assertTallyConsistent(tally, voteRows.length);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
+
+    // Req 11.2 (fix): quorum was only ever re-verified at vote.initiate, never again here — a
+    // vote that loses quorum mid-flight (members leaving/checking out) could still conclude as a
+    // fully "effective", numbered, hash-anchored resolution. Re-run the SAME live-attendance
+    // quorum check `handleVoteInitiate` uses. When quorum still holds, also guard P15 (votes
+    // cast can never exceed the live quorum-eligible headcount) as a data-integrity check.
+    let quorumOk = true;
+    if (meeting) {
+      const quorum = await computeVoteTimeQuorum(tx, resolution.meetingId, msg.tenantId, meeting.committeeId);
+      if (quorum) {
+        quorumOk = isQuorumMetAtVoteTime(quorum);
+        if (quorumOk) {
+          try {
+            assertVotesWithinPresent(voteRows.length, quorum.membersPresent);
+          } catch (err) {
+            throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+          }
+        }
+      } else {
+        quorumOk = meeting.quorumEstablished;
+      }
+    }
 
     // Weighted voting (Gap 2): when the tenant enables `voting.weighted_enabled`, the RESULT is
     // decided on summed WEIGHT, not headcount. Otherwise the headcount tally decides (unchanged).
@@ -621,18 +734,28 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
     const resultTally = weightedTally ?? tally;
 
     const rule = isMajorityRule(resolution.majorityRule) ? resolution.majorityRule : "simple_majority";
-    const result = computeVoteResult(resultTally, rule);
+    // A vote that has lost quorum by conclude time can never be validly decided — it concludes
+    // `invalid` (the same terminal outcome already used for a circulation resolution that never
+    // reached its required response rate) rather than a fabricated passed/rejected result.
+    const result = quorumOk ? computeVoteResult(resultTally, rule) : "invalid";
     const passed = result === "passed";
+    const concludedInvalid = result === "invalid";
 
     const when = p.effectiveDate ? new Date(p.effectiveDate) : new Date();
-    const resolutionNumber = await assignResolutionNumber(
-      tx,
-      msg.tenantId,
-      { id: resolution.meetingId, committeeId: meeting?.committeeId ?? null },
-      when,
-    );
+    // An invalid (quorum-lost) conclusion never consumes a real sequential resolution number —
+    // numbering (P25) is reserved for resolutions that reach a genuinely valid outcome.
+    const resolutionNumber = concludedInvalid
+      ? resolution.resolutionNumber
+      : await assignResolutionNumber(
+          tx,
+          msg.tenantId,
+          { id: resolution.meetingId, committeeId: meeting?.committeeId ?? null },
+          when,
+        );
 
-    const effectiveDate = p.effectiveDate ?? resolution.effectiveDate ?? (passed ? isoDate(when) : null);
+    const effectiveDate = concludedInvalid
+      ? resolution.effectiveDate
+      : p.effectiveDate ?? resolution.effectiveDate ?? (passed ? isoDate(when) : null);
     const hashCurrent = passed
       ? resolutionContentHash({
           resolutionNumber,
@@ -650,7 +773,7 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
       votesAbstain: tally.votesAbstain,
       result,
       resolutionNumber,
-      status: passed ? STATUS_EFFECTIVE : STATUS_REJECTED,
+      status: concludedInvalid ? STATUS_INVALID : passed ? STATUS_EFFECTIVE : STATUS_REJECTED,
       effectiveDate,
       updatedBy: msg.actorId,
       updatedAt: new Date(),
@@ -679,21 +802,37 @@ async function handleVoteConclude(msg: CommandEnvelope<VoteConcludePayload>): Pr
       correlationId: msg.correlationId,
       payload: { meetingId: resolution.meetingId, resolutionId: resolution.id, result },
     });
-    await enqueue(tx, {
-      topic: passed ? EVENTS.resolutionPassed : EVENTS.resolutionRejected,
-      eventType: passed ? EVENTS.resolutionPassed : EVENTS.resolutionRejected,
-      tenantId: msg.tenantId,
-      actorId: msg.actorId,
-      correlationId: msg.correlationId,
-      payload: {
-        resolutionId: resolution.id,
-        meetingId: resolution.meetingId,
-        resolutionNumber,
-        votesFor: tally.votesFor,
-        votesAgainst: tally.votesAgainst,
-        votesAbstain: tally.votesAbstain,
-      },
-    });
+    if (concludedInvalid) {
+      await enqueue(tx, {
+        topic: EVENTS.complianceAlert,
+        eventType: EVENTS.complianceAlert,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          meetingId: resolution.meetingId,
+          committeeId: meeting?.committeeId ?? null,
+          alertType: "vote_quorum_lost_at_conclude",
+          detail: { resolutionId: resolution.id },
+        },
+      });
+    } else {
+      await enqueue(tx, {
+        topic: passed ? EVENTS.resolutionPassed : EVENTS.resolutionRejected,
+        eventType: passed ? EVENTS.resolutionPassed : EVENTS.resolutionRejected,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          resolutionId: resolution.id,
+          meetingId: resolution.meetingId,
+          resolutionNumber,
+          votesFor: tally.votesFor,
+          votesAgainst: tally.votesAgainst,
+          votesAbstain: tally.votesAbstain,
+        },
+      });
+    }
     await audit(tx, msg, "vote_conclude", resolution.id, { result, resolutionNumber });
   });
 
@@ -720,6 +859,27 @@ async function handleCirculationRespond(msg: CommandEnvelope<CirculationRespondP
     }
     if (TERMINAL_STATUSES.has(resolution.status)) return; // already concluded — idempotent no-op
     meetingIdForCache = resolution.meetingId;
+
+    // Impersonation guard (Gap: circulation-vote memberId impersonation): the responding member
+    // MUST be the authenticated caller. `voting/commands.ts`'s own `voteCirculationRespond`
+    // publisher already pins `memberId: ctx.actorId`, and `decision/routes.ts`'s
+    // `publishCirculationVote` now does too — this is defense-in-depth so the consumer itself
+    // never trusts a mismatched envelope regardless of which caller produced it.
+    if (p.memberId !== msg.actorId) {
+      throw new NonRetryableError(
+        `circulation response memberId ${p.memberId} does not match the authenticated actor ${msg.actorId}`,
+      );
+    }
+
+    // Committee-membership eligibility (Gap: systemic committee-membership IDOR) — mirrors
+    // handleVoteCast's gate via getMemberVoteWeight; circulation ballots carry no per-seat
+    // weight, so the check is explicit here instead.
+    const meeting = await getMeeting(tx, resolution.meetingId, msg.tenantId);
+    try {
+      await assertActiveCommitteeMember(tx, msg.tenantId, meeting?.committeeId ?? null, p.memberId);
+    } catch (err) {
+      throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+    }
 
     // Duplicate-response pre-check (P17): one response per member per circulation resolution.
     const responders = await tx
@@ -751,7 +911,6 @@ async function handleCirculationRespond(msg: CommandEnvelope<CirculationRespondP
       isCirculation: true,
     });
 
-    const meeting = await getMeeting(tx, resolution.meetingId, msg.tenantId);
     const totalMembers = meeting?.committeeId
       ? (await getActiveMemberIds(tx, meeting.committeeId, msg.tenantId)).length
       : 0;
@@ -869,6 +1028,22 @@ async function handleVoteRecuse(msg: CommandEnvelope<VoteRecusePayload>): Promis
     if (!resolution) throw new NonRetryableError(`resolution ${p.resolutionId} not found`);
     if (resolution.status !== STATUS_VOTING_OPEN && resolution.status !== STATUS_CIRCULATING) {
       throw new NonRetryableError(`resolution ${p.resolutionId} is not open for recusal (status=${resolution.status})`);
+    }
+
+    // Relationship check (Gap 3: vote.recuse has no check tying the caller to the member being
+    // recused): a recusal may only be recorded by the member themselves, or by that specific
+    // committee's own chairperson/secretary — never by an arbitrary caller naming a different
+    // member, which would let anyone forcibly disqualify anyone else from voting.
+    if (msg.actorId !== p.memberId) {
+      const meeting = await getMeeting(tx, p.meetingId, msg.tenantId);
+      const authorized = meeting?.committeeId
+        ? await isCommitteeOfficer(tx, msg.tenantId, meeting.committeeId, msg.actorId, ["chairperson", "secretary"])
+        : false;
+      if (!authorized) {
+        throw new NonRetryableError(
+          `caller ${msg.actorId} is not authorized to record a recusal for member ${p.memberId} on resolution ${p.resolutionId}`,
+        );
+      }
     }
 
     // A member who already cast a ballot on this motion cannot then recuse from it.

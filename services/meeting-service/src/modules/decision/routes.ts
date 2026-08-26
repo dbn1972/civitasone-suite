@@ -313,6 +313,11 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
  * by the voting module (topics.ts); the decision-module route publishes it directly (no local
  * command helper) so the write path is stable, then best-effort invalidates the circulation
  * status read cache for read-your-writes.
+ *
+ * The responding member is the authenticated actor (`ctx.actorId`), matching the correct,
+ * already-established pattern in `voting/commands.ts`'s `voteCast`/`voteCirculationRespond` —
+ * NOT trusted from the request body (Gap: circulation-vote memberId impersonation, since a
+ * caller could otherwise name any other member's id and have the response recorded as theirs).
  */
 async function publishCirculationVote(
   ctx: { tenantId: string; actorId: string; correlationId: string },
@@ -329,7 +334,7 @@ async function publishCirculationVote(
     payload: {
       resolutionId,
       tenantId: ctx.tenantId,
-      memberId: body.memberId,
+      memberId: ctx.actorId,
       position: body.position,
       ...(body.comment !== undefined ? { comment: body.comment } : {}),
     },

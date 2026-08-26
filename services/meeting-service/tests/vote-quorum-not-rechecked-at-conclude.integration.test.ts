@@ -143,8 +143,9 @@ describe("vote quorum is checked once at initiate and never re-verified before c
     expect(await liveEligibleCount()).toBe(0);
   });
 
-  it("BUG: votes are still accepted and the resolution still concludes PASSED with 0 members live-present", async () => {
-    // Only 2 of the 4 committee members bother to cast — cast doesn't check attendance either.
+  it("FIXED: votes are still accepted (cast doesn't check attendance), but conclude now re-verifies live quorum and refuses to record a passed/effective outcome with 0 members live-present", async () => {
+    // Only 2 of the 4 committee members bother to cast — cast doesn't check attendance either
+    // (that's not this gap; vote.cast's own committee-membership check is a separate fix).
     await run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBERS[0], position: "for", tenantId: TENANT }));
     await run(msg(COMMANDS.voteCast, { meetingId: MEETING, resolutionId: RESOLUTION, memberId: MEMBERS[1], position: "for", tenantId: TENANT }));
 
@@ -158,12 +159,14 @@ describe("vote quorum is checked once at initiate and never re-verified before c
       (sql) => sql`select result, status, votes_for, resolution_number, hash_current from meeting.resolutions where id = ${RESOLUTION}`,
     );
     const r = (rows as any[])[0];
-    expect(r.result).toBe("passed");
-    expect(r.status).toBe("effective");
-    expect(r.votes_for).toBe(2);
-    // A real, numbered, hash-anchored official resolution — concluded with 0 of the 3
-    // constitutionally-required members actually in the room.
-    expect(r.resolution_number).toMatch(/^SQT\/RES\/\d{4}-\d{2}\/\d+$/);
-    expect(r.hash_current).toMatch(/^[0-9a-f]{64}$/);
+    // handleVoteConclude now re-runs the SAME live-attendance quorum check handleVoteInitiate
+    // uses. With 0 of the 3 constitutionally-required members actually in the room, the vote
+    // cannot be recorded passed/effective — it concludes `invalid` (the same terminal outcome
+    // already used for a circulation resolution that never reached its required response rate),
+    // never claims a real sequential resolution number, and is never hash-anchored.
+    expect(r.result).toBe("invalid");
+    expect(r.status).toBe("invalid");
+    expect(r.resolution_number).toBe(`PENDING-${RESOLUTION}`);
+    expect(r.hash_current).toBeNull();
   });
 });

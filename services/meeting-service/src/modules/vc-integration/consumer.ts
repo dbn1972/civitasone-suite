@@ -529,6 +529,19 @@ async function handleWebhook(msg: CommandEnvelope<WebhookPayload>): Promise<void
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
 
+    // When the webhook names a specific VC session, it must be a real, still-live session for
+    // THIS meeting — the same existence + terminal-status guard its three siblings
+    // (handleRecordingStart/handleRecordingStop/handleSessionEnd) already enforce. A webhook
+    // that omits vcSessionId entirely is unaffected (legitimate — not every provider echoes it
+    // back) and is unchanged from before.
+    if (p.vcSessionId) {
+      const session = await loadSession(tx, p.vcSessionId, msg.tenantId);
+      if (!session || session.meetingId !== p.meetingId) {
+        throw new NonRetryableError(`vc webhook: session ${p.vcSessionId} not found for meeting ${p.meetingId}`);
+      }
+      if (session.status === STATUS_ENDED || session.status === STATUS_FAILED) return; // terminal — no-op
+    }
+
     // The external VC identity must map to an INVITED participant of THIS meeting.
     const rows = await tx
       .select({ id: participants.id, meetingId: participants.meetingId })

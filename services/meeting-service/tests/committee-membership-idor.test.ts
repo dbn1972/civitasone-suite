@@ -124,7 +124,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("[BUG, HTTP layer] committee_secretary of Committee A can act on Committee B", () => {
+describe("[FIXED, HTTP layer] committee_secretary of Committee A can no longer act on Committee B", () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     app = await buildApp();
@@ -139,7 +139,7 @@ describe("[BUG, HTTP layer] committee_secretary of Committee A can act on Commit
     };
   }
 
-  it.fails("must reject adding a member to a committee the secretary has no standing on", async () => {
+  it("rejects adding a member to a committee the secretary has no standing on", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/committees/${COMMITTEE_B}/members`,
@@ -147,19 +147,20 @@ describe("[BUG, HTTP layer] committee_secretary of Committee A can act on Commit
       payload: { memberId: NEW_HIRE, role: "member", appointmentDate: "2025-06-01" },
     });
     expect(res.statusCode).not.toBe(202);
+    expect(res.statusCode).toBe(403);
   });
 
-  it("characterizes today's actual (buggy) behavior: the route accepts it (202)", async () => {
+  it("confirms the fix: the SAME secretary CAN add a member to their own Committee A", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/v1/meetings/committees/${COMMITTEE_B}/members`,
+      url: `/v1/meetings/committees/${COMMITTEE_A}/members`,
       headers: secretaryAuth(),
-      payload: { memberId: NEW_HIRE, role: "member", appointmentDate: "2025-06-01" },
+      payload: { memberId: randomUUID(), role: "member", appointmentDate: "2025-06-01" },
     });
     expect(res.statusCode).toBe(202);
   });
 
-  it.fails("must reject removing an EXISTING member of a committee the secretary has no standing on", async () => {
+  it("rejects removing an EXISTING member of a committee the secretary has no standing on", async () => {
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/meetings/committees/${COMMITTEE_B}/members/${membershipBId}`,
@@ -167,6 +168,7 @@ describe("[BUG, HTTP layer] committee_secretary of Committee A can act on Commit
       payload: { version: 1, reason: "unrelated secretary purging a rival committee's roster" },
     });
     expect(res.statusCode).not.toBe(202);
+    expect(res.statusCode).toBe(403);
   });
 });
 

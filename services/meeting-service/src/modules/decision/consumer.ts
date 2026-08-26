@@ -40,7 +40,7 @@
  */
 import { randomUUID, createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, eq, ne, isNull, asc, desc, gte } from "drizzle-orm";
+import { and, eq, ne, isNull, isNotNull, asc, desc, gte } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { parseMinor } from "@civitasone/schemas";
@@ -66,6 +66,8 @@ import {
   nextResolutionSequence,
   requiredResponseCount,
   routeDecisionEvents,
+  assertAcyclicLineage,
+  type LineageEdge,
   type MajorityRule,
 } from "./domain.js";
 
@@ -567,6 +569,62 @@ async function handleDecisionUpdate(msg: CommandEnvelope<DecisionUpdatePayload>)
     if (rows.length === 0) return;
 
     const patch = p.patch;
+
+    // Fix (decision.status/resolution-outcome drift): a decision cannot be marked "effective"
+    // while its own linked resolution's real, voting-computed outcome says otherwise — "passed"
+    // is the only outcome consistent with "effective" (a linked "rejected"/"invalid" resolution
+    // would openly contradict it in the official minutes). A decision with no linked resolution
+    // at all is unaffected (not every decision arises from a formal vote).
+    if (patch.status === "effective") {
+      const linkedResolutions = await tx
+        .select({ result: resolutions.result })
+        .from(resolutions)
+        .where(and(eq(resolutions.tenantId, msg.tenantId), eq(resolutions.decisionId, p.decisionId)));
+      const contradicted = linkedResolutions.some((r) => r.result !== "passed");
+      if (contradicted) {
+        throw new NonRetryableError(
+          `decision ${p.decisionId} cannot be marked effective: its linked resolution did not pass`,
+        );
+      }
+    }
+
+    // Fix (acyclic-lineage guard never wired in + dangling supersededById): `supersededById`
+    // must reference a real, same-tenant decision, and the new edge must keep the decision
+    // register's supersedes graph acyclic — domain.ts already implements and unit-tests this
+    // guard (`assertAcyclicLineage`/`wouldCreateCycle`), it was simply never called from here.
+    if (patch.supersededById != null) {
+      const target = await tx
+        .select({ id: decisions.id })
+        .from(decisions)
+        .where(and(eq(decisions.id, patch.supersededById), eq(decisions.tenantId, msg.tenantId)))
+        .limit(1);
+      if (target.length === 0) {
+        throw new NonRetryableError(
+          `decision ${p.decisionId} cannot supersede unknown decision ${patch.supersededById}`,
+        );
+      }
+
+      const edgeRows = await tx
+        .select({ id: decisions.id, supersededById: decisions.supersededById })
+        .from(decisions)
+        .where(
+          and(
+            eq(decisions.tenantId, msg.tenantId),
+            ne(decisions.id, p.decisionId),
+            isNotNull(decisions.supersededById),
+          ),
+        );
+      const existingLineage: LineageEdge[] = edgeRows
+        .filter((r): r is { id: string; supersededById: string } => r.supersededById != null)
+        .map((r) => ({ from: r.id, to: r.supersededById, relation: "supersedes" }));
+
+      try {
+        assertAcyclicLineage(existingLineage, { from: p.decisionId, to: patch.supersededById, relation: "supersedes" });
+      } catch (err) {
+        throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+      }
+    }
+
     const set: Record<string, unknown> = { updatedBy: msg.actorId, updatedAt: new Date() };
     if (patch.text !== undefined) set.text = patch.text;
     if (patch.type !== undefined) set.type = patch.type;
@@ -609,6 +667,39 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       throw new NonRetryableError(`meeting ${p.meetingId} not found for resolution ${p.resolutionId}`);
     }
 
+    // Fix (resolution fabrication bypass): a resolution can only ever be recorded once quorum
+    // was genuinely established for the meeting — closes the "no committee, no roster, zero
+    // attendance, fabricate any tally you like" gap this handler used to have no defence
+    // against at all (see tests/resolution-fabrication-bypass.test.ts).
+    if (!meeting.quorumEstablished) {
+      throw new NonRetryableError(
+        `resolution ${p.resolutionId} cannot be recorded: quorum was never established for meeting ${p.meetingId}`,
+      );
+    }
+
+    // Don't blindly trust client-supplied vote counts: when real, per-member ballots already
+    // exist for this resolution (meeting.votes — the voting module's tracked-ballot flow used
+    // for roll_call/electronic_poll), the tally is computed from THOSE rows, never from the
+    // client. Only when no such rows exist — the legitimate case for an aggregate-only vote type
+    // (show_of_hands/secret_ballot), where the secretary manually records the count the chair
+    // read out — is the client-supplied count used, and only now that quorum is verified above.
+    const realVoteRows = await tx
+      .select({ position: votes.position })
+      .from(votes)
+      .where(and(eq(votes.resolutionId, p.resolutionId), eq(votes.tenantId, msg.tenantId)));
+    const tally =
+      realVoteRows.length > 0
+        ? realVoteRows.reduce(
+            (acc, v) => {
+              if (v.position === "for") acc.votesFor += 1;
+              else if (v.position === "against") acc.votesAgainst += 1;
+              else acc.votesAbstain += 1;
+              return acc;
+            },
+            { votesFor: 0, votesAgainst: 0, votesAbstain: 0 },
+          )
+        : { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain };
+
     const financialYear = meeting.financialYear ?? computeFinancialYear(meeting.scheduledAt ?? new Date());
     const resolutionNumber = await computeResolutionNumber(tx, {
       tenantId: msg.tenantId,
@@ -616,10 +707,7 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       financialYear,
     });
 
-    const result = computeVoteResult(
-      { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain },
-      p.majorityRule,
-    );
+    const result = computeVoteResult(tally, p.majorityRule);
 
     await tx.insert(resolutions).values({
       id: p.resolutionId,
@@ -629,9 +717,9 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       resolutionNumber,
       text: p.text,
       voteType: p.voteType,
-      votesFor: p.votesFor,
-      votesAgainst: p.votesAgainst,
-      votesAbstain: p.votesAbstain,
+      votesFor: tally.votesFor,
+      votesAgainst: tally.votesAgainst,
+      votesAbstain: tally.votesAbstain,
       majorityRule: p.majorityRule,
       result,
       effectiveDate: p.effectiveDate ?? null,
@@ -652,9 +740,9 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
         resolutionId: p.resolutionId,
         meetingId: p.meetingId,
         resolutionNumber,
-        votesFor: p.votesFor,
-        votesAgainst: p.votesAgainst,
-        votesAbstain: p.votesAbstain,
+        votesFor: tally.votesFor,
+        votesAgainst: tally.votesAgainst,
+        votesAbstain: tally.votesAbstain,
       },
     });
     await audit(tx, msg, "record", "resolution", p.resolutionId, { result, resolutionNumber });

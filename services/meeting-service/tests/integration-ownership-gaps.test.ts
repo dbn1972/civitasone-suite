@@ -28,11 +28,15 @@
  *      (schedule, cancel, ...) of a meeting they do not chair.
  *   3. Any `committee_member` can RSVP-decline or nominate a proxy on behalf of a
  *      completely different participant, silently, without that participant's knowledge.
- *   4. Any `committee_member` can mark ANY OTHER invited participant "present" via
- *      check-in/manual-mark — including participants they have no relationship to beyond
- *      sharing a meeting — which is sufficient, on its own, to fabricate quorum: this test
- *      shows a single unrelated actor single-handedly flips `quorum_established` to true by
- *      "checking in" two other people who never actually attended.
+ *   4. [FIXED — see the third describe block below] Attendance check-in/manual-mark used to
+ *      have no identity check at all: any `committee_member` could mark ANY OTHER invited
+ *      participant "present" — including participants they had no relationship to beyond
+ *      sharing a meeting — which was sufficient, on its own, to fabricate quorum.
+ *      `attendance/domain.ts#assertParticipantInvited` now also verifies the caller is either
+ *      the participant themselves or an authorized agent of the meeting (its secretary,
+ *      chairperson, or creator — the roll-call case); an unrelated actor's check-in is accepted
+ *      at the HTTP boundary (202, CQRS) but rejected by the consumer, so no attendance record is
+ *      persisted and quorum is never fabricated.
  *
  * Verified live via the real consumer + real Postgres (this file), matching the visitor-
  * service audit's identity-verify-ownership.integration.test.ts methodology and the local
@@ -45,7 +49,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -461,8 +465,8 @@ describe("participant: RSVP/nominate ignore the documented 'act on your own invi
   });
 });
 
-describe("attendance: check-in has no self/identity check — quorum can be fabricated (IDOR)", () => {
-  it("a single unrelated actor checks in two other participants and single-handedly establishes quorum", async () => {
+describe("attendance: check-in now has a self/identity check — quorum can no longer be fabricated by a stranger (Req 6.2)", () => {
+  it("a single unrelated actor's check-in of two other participants is accepted at the HTTP boundary (202, CQRS) but rejected by the consumer — no records, no fabricated quorum", async () => {
     const meetingId = await createMeeting({
       chairpersonId: OWNER_CHAIR,
       secretaryId: OWNER_SECRETARY,
@@ -482,29 +486,35 @@ describe("attendance: check-in has no self/identity check — quorum can be fabr
     expect(meeting.quorum_established).toBe(false);
 
     // ATTACKER_MEMBER holds CHECKIN_ROLES (committee_member) but is not VICTIM_A, not
-    // VICTIM_B, and has no relationship to either participant row. attendance/domain.ts's
-    // assertParticipantInvited only checks that the *target* participantId is an invited
-    // member of *this meeting* — it never checks who is making the HTTP call.
+    // VICTIM_B, is not this meeting's secretary/chairperson/creator (OWNER_SECRETARY /
+    // OWNER_CHAIR), and has no relationship to either participant row.
+    //
+    // The route still accepts the write at 202 (CQRS: routes never reject a domain-rule
+    // violation synchronously, they just queue the command) — the actual authorization decision
+    // is made by attendance/domain.ts#assertParticipantInvited inside the consumer, so the
+    // corresponding `run()` call below rejects instead of persisting anything.
     const res1 = await app.inject({
       method: "POST",
       url: `/v1/meetings/${meetingId}/attendance/check-in`,
       headers: writeHeaders(ATTACKER_MEMBER, ["committee_member"]),
       payload: { participantId: participantA, method: "manual", mode: "in_person" },
     });
-    expect(res1.statusCode).toBe(202); // NOT 403, NOT "you may only check yourself in"
+    expect(res1.statusCode).toBe(202);
 
     const now = new Date().toISOString();
-    await run(
-      msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
-        attendanceId: randomUUID(),
-        meetingId,
-        tenantId: TENANT,
-        participantId: participantA,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: now,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
+          attendanceId: randomUUID(),
+          meetingId,
+          tenantId: TENANT,
+          participantId: participantA,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: now,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const res2 = await app.inject({
       method: "POST",
@@ -514,30 +524,64 @@ describe("attendance: check-in has no self/identity check — quorum can be fabr
     });
     expect(res2.statusCode).toBe(202);
 
-    await run(
-      msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
-        attendanceId: randomUUID(),
-        meetingId,
-        tenantId: TENANT,
-        participantId: participantB,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: now,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
+          attendanceId: randomUUID(),
+          meetingId,
+          tenantId: TENANT,
+          participantId: participantB,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: now,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
-    // BUG: neither VICTIM_A nor VICTIM_B ever called the API themselves — a single unrelated
-    // actor "checked in" both of them from one HTTP identity — yet the meeting now reads as
-    // quorate, which downstream governance modules (voting, decision) treat as trustworthy.
+    // FIXED: neither VICTIM_A nor VICTIM_B ever called the API themselves, and ATTACKER_MEMBER
+    // is not authorized to act for either of them — no attendance record was persisted, and the
+    // meeting does NOT read as quorate.
     meeting = await readMeeting(meetingId);
-    expect(meeting.quorum_established).toBe(true);
+    expect(meeting.quorum_established).toBe(false);
 
     const records = await tenantQuery(
       (sql) => sql`SELECT participant_id, created_by, status FROM meeting.attendance_records
                    WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT} ORDER BY created_at ASC`,
     );
-    expect((records as any[]).length).toBe(2);
-    expect((records as any[]).every((r) => r.created_by === ATTACKER_MEMBER)).toBe(true);
-    expect((records as any[]).every((r) => r.status === "present")).toBe(true);
+    expect((records as any[]).length).toBe(0);
   }, 15000);
+
+  it("the meeting's own secretary CAN check in another participant on their behalf (roll call)", async () => {
+    const meetingId = await createMeeting({
+      chairpersonId: OWNER_CHAIR,
+      secretaryId: OWNER_SECRETARY,
+      scheduledAt: new Date(Date.now() + 60_000),
+    });
+    await tenantQuery(
+      (sql) => sql`UPDATE meeting.meetings SET committee_id = ${COMMITTEE} WHERE id = ${meetingId} AND tenant_id = ${TENANT}`,
+    );
+    const participantA = randomUUID();
+    await addParticipant(meetingId, participantA, VICTIM_A);
+
+    // OWNER_SECRETARY is THIS meeting's named secretary — a legitimate roll-call check-in.
+    await run(
+      msg(COMMANDS.attendanceCheckIn, OWNER_SECRETARY, {
+        attendanceId: randomUUID(),
+        meetingId,
+        tenantId: TENANT,
+        participantId: participantA,
+        method: "manual",
+        mode: "in_person",
+        checkInAt: new Date().toISOString(),
+      }),
+    );
+
+    const records = await tenantQuery(
+      (sql) => sql`SELECT participant_id, created_by, status FROM meeting.attendance_records
+                   WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT}`,
+    );
+    expect((records as any[]).length).toBe(1);
+    expect((records as any[])[0].created_by).toBe(OWNER_SECRETARY);
+    expect((records as any[])[0].status).toBe("present");
+  });
 });
