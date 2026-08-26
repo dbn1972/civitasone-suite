@@ -65,7 +65,7 @@ describe("InsurancePoliciesPage", () => {
     const ui = await InsurancePoliciesPage();
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     // The StatGrid (which would show a "0" count) must not render on error.
     expect(screen.queryByText("Total Policies")).not.toBeInTheDocument();
   });

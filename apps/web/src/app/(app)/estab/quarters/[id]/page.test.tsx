@@ -62,7 +62,7 @@ describe("QuarterDetailPage — allotment history source masking", () => {
     // Stale row still renders...
     expect(screen.getByText("Section Officer")).toBeInTheDocument();
     // ...but the error must still be visibly flagged, not silently hidden because length > 0.
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 
   it("shows no badge when the allotment list loads cleanly", async () => {
@@ -74,6 +74,6 @@ describe("QuarterDetailPage — allotment history source masking", () => {
     const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
     render(ui);
 
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 });

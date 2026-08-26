@@ -66,6 +66,6 @@ describe("LibraryBookDetailPage", () => {
     render(ui);
 
     expect(screen.getByText("Book not found")).toBeInTheDocument();
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 });

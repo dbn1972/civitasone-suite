@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isLinkableCrumb } from "./navRouteManifest";
 
 /** Human-readable label overrides for URL segments. */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -121,13 +122,17 @@ export function AutoBreadcrumb() {
             )}
             {isLast ? (
               <b aria-current="page">{crumb.label}</b>
-            ) : (
+            ) : isLinkableCrumb(crumb.href) ? (
               <Link
                 href={crumb.href}
                 style={{ color: "var(--ink2, #667085)", textDecoration: "none" }}
               >
                 {crumb.label}
               </Link>
+            ) : (
+              // Ancestor segment with no index route (a pure grouping like
+              // /finance/budget): show it for context but never as a dead link.
+              <span style={{ color: "var(--ink2, #667085)" }}>{crumb.label}</span>
             )}
           </li>
         );

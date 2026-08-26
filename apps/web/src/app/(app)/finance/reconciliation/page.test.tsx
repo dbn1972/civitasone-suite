@@ -119,7 +119,7 @@ describe("ReconciliationWorkbenchPage", () => {
     const ui = await ReconciliationWorkbenchPage();
     render(ui);
 
-    const badges = screen.getAllByText("Showing saved information");
+    const badges = screen.getAllByText("Couldn't load — showing nothing");
     expect(badges.length).toBeGreaterThan(0);
     expect(screen.queryByText("No reconciliation runs yet")).not.toBeInTheDocument();
   });

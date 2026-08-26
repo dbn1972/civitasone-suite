@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { NotificationBell, type Notification } from "./NotificationBell";
+import { NotificationBell, notificationActionUrl, type Notification } from "./NotificationBell";
 
 describe("NotificationBell", () => {
   const notifications: Notification[] = [
@@ -76,5 +76,30 @@ describe("NotificationBell", () => {
     // Shows loading or empty state (no hardcoded sample notifications)
     const dropdown = screen.getByRole("menu");
     expect(dropdown).toBeInTheDocument();
+  });
+});
+
+
+describe("notificationActionUrl", () => {
+  it("prefers a truthful reviewUrl from the service metadata", () => {
+    expect(notificationActionUrl("payroll_run.completed", { reviewUrl: "/hr/payroll/runs/abc" }))
+      .toBe("/hr/payroll/runs/abc");
+  });
+
+  it("maps a leave-approval alert to the real leave route", () => {
+    expect(notificationActionUrl("leave_approval.requested", undefined)).toBe("/hr/leave");
+  });
+
+  // Fails-before / passes-after: the old mapping returned "/payroll/runs", a
+  // route that does not exist (there is no /payroll surface), so the "Review"
+  // action on a payroll-run alert dead-ended in a 404.
+  it("maps a payroll-run alert to a REAL route, never /payroll/runs", () => {
+    const href = notificationActionUrl("payroll_run.completed", undefined);
+    expect(href).toBe("/hr/payroll/runs");
+    expect(href).not.toBe("/payroll/runs");
+  });
+
+  it("returns undefined for an unknown type with no reviewUrl", () => {
+    expect(notificationActionUrl("something.else", {})).toBeUndefined();
   });
 });
