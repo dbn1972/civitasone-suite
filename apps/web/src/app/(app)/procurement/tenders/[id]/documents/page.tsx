@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { FileUpload } from "../../../../../_components/ds";
 
 type TenderDoc = {
   id: string;
@@ -28,12 +29,18 @@ export default function TenderDocumentsPage({ params }: { params: { id: string }
   const [docs, setDocs] = useState<TenderDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   const [title, setTitle] = useState("");
   const [docType, setDocType] = useState<string>("other");
-  const [file, setFile] = useState<File | null>(null);
+  // Set once FileUpload's presigned S3 upload actually completes (see
+  // onUploaded below) — this is the durable pointer we persist, never the
+  // file's raw bytes.
+  const [fileKey, setFileKey] = useState("");
+  const [fileUploadNonce, setFileUploadNonce] = useState(0);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -50,41 +57,73 @@ export default function TenderDocumentsPage({ params }: { params: { id: string }
 
   useEffect(() => { void load(); }, [params.id]);
 
-  async function handleUpload(e: React.FormEvent) {
+  // L2 fix: storageRef is now a real S3 object key (see handleSave below),
+  // not a URL — it was never directly linkable even before this fix (the old
+  // "base64:name:truncatedcontent" value wasn't a valid href either). Resolve
+  // it to a short-lived presigned GET URL via the same admin-uploads service
+  // FileUpload's presign call uses, then navigate there.
+  async function handleDownload(storageRef: string, docId: string) {
+    setDownloadError("");
+    setDownloadingId(docId);
+    try {
+      const res = await fetch("/api/proxy/v1/admin/uploads/" + encodeURIComponent(storageRef));
+      if (!res.ok) {
+        setDownloadError((await res.text()) || "Could not prepare the download link.");
+        return;
+      }
+      const { downloadUrl } = await res.json() as { downloadUrl?: string };
+      if (!downloadUrl) {
+        setDownloadError("Could not prepare the download link.");
+        return;
+      }
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Network error preparing the download.");
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !file) {
-      setUploadMsg("Title and file are required.");
+    if (!title.trim() || !fileKey) {
+      setSaveMsg("Title and an uploaded file are required.");
       return;
     }
-    setUploading(true);
-    setUploadMsg("");
+    setSaving(true);
+    setSaveMsg("");
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-      const storageRef = "base64:" + file.name + ":" + base64.slice(0, 200);
+      // L2/L3 fix: this used to base64-encode the whole file client-side and
+      // then TRUNCATE it to 200 characters before storing that fragment as
+      // storageRef ("base64:" + file.name + ":" + base64.slice(0, 200)) — so
+      // any real file was silently corrupted (undownloadable) while the UI
+      // still said "Document uploaded successfully." FileUpload above does a
+      // real presigned upload to S3 (ds/FileUpload.tsx, the same component
+      // works/execution/photos/new/page.tsx uses) and only sets fileKey once
+      // that upload has actually completed; storageRef is that real S3 key,
+      // not a hand-rolled encoding of the file content.
       const res = await fetch("/api/proxy/v1/procurement/tenders/" + params.id + "/documents", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           docType,
           title: title.trim(),
-          storageRef,
-          mimeType: file.type || undefined,
-          sizeBytes: file.size,
+          storageRef: fileKey,
         }),
       });
       if (!res.ok) {
         const t = await res.text();
-        setUploadMsg(t || "Upload failed");
+        setSaveMsg(t || "Save failed");
         return;
       }
-      setUploadMsg("Document uploaded successfully.");
-      setTitle(""); setFile(null); setDocType("other");
+      setSaveMsg("Document uploaded.");
+      setTitle(""); setFileKey(""); setDocType("other");
+      setFileUploadNonce((n) => n + 1); // remounts FileUpload to clear its own "done" state
       void load();
     } catch (err) {
-      setUploadMsg(err instanceof Error ? err.message : "Upload error");
+      setSaveMsg(err instanceof Error ? err.message : "Upload error");
     } finally {
-      setUploading(false);
+      setSaving(false);
     }
   }
 
@@ -96,11 +135,11 @@ export default function TenderDocumentsPage({ params }: { params: { id: string }
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--ink)", margin: 0 }}>Tender Documents</h1>
           <p style={{ color: "var(--ink2)", fontSize: 12, margin: 0 }}>Tender ID: <span className="mono" style={{ fontSize: 11 }}>{params.id}</span></p>
         </div>
-        <DataSourceBadge source={error ? "error" : "api"} />
+        {error ? <DataSourceBadge source="error" message="Couldn't load documents — showing nothing" /> : null}
       </div>
 
       {/* Upload form */}
-      <form onSubmit={(e) => void handleUpload(e)} className="card pad" style={{ marginBottom: 20 }} noValidate>
+      <form onSubmit={(e) => void handleSave(e)} className="card pad" style={{ marginBottom: 20 }} noValidate>
         <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "var(--ink)" }}>Upload document</h2>
         <div className="fields">
           <div className="field">
@@ -114,21 +153,26 @@ export default function TenderDocumentsPage({ params }: { params: { id: string }
             </select>
           </div>
           <div className="field" style={{ gridColumn: "1 / -1" }}>
-            <label className="label" htmlFor="doc-file">File *</label>
-            <input id="doc-file" type="file" className="inp" style={{ minHeight: 44, paddingTop: 10 }}
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+            <FileUpload
+              key={fileUploadNonce}
+              category="document"
+              label="File *"
+              maxSizeMb={25}
+              onUploaded={(key) => setFileKey(key)}
+            />
           </div>
         </div>
-        {uploadMsg ? <p style={{ marginTop: 8, fontSize: 13, color: uploadMsg.startsWith("Document") ? "var(--good)" : "var(--bad)" }}>{uploadMsg}</p> : null}
+        {saveMsg ? <p role={saveMsg === "Document uploaded." ? "status" : "alert"} style={{ marginTop: 8, fontSize: 13, color: saveMsg === "Document uploaded." ? "var(--good)" : "var(--bad)" }}>{saveMsg}</p> : null}
         <div style={{ marginTop: 16 }}>
-          <button type="submit" className="btn primary" disabled={uploading} style={{ minHeight: 44 }}>
-            {uploading ? "Uploading…" : "Upload"}
+          <button type="submit" className="btn primary" disabled={saving || !fileKey} style={{ minHeight: 44 }}>
+            {saving ? "Saving…" : "Save document"}
           </button>
         </div>
       </form>
 
       {/* Document list */}
       <div className="card">
+        {downloadError ? <p role="alert" style={{ margin: 0, padding: "10px 16px 0", fontSize: 13, color: "var(--bad)" }}>{downloadError}</p> : null}
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
@@ -154,7 +198,15 @@ export default function TenderDocumentsPage({ params }: { params: { id: string }
                   <td>{formatBytes(doc.sizeBytes)}</td>
                   <td style={{ fontSize: 12, color: "var(--ink2)" }}>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("en-IN") : "—"}</td>
                   <td>
-                    <a href={doc.storageRef} target="_blank" rel="noreferrer" className="btn" style={{ fontSize: 12, padding: "2px 10px" }}>Download</a>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(doc.storageRef, doc.id)}
+                      disabled={downloadingId === doc.id}
+                      className="btn"
+                      style={{ fontSize: 12, padding: "2px 10px" }}
+                    >
+                      {downloadingId === doc.id ? "Preparing…" : "Download"}
+                    </button>
                   </td>
                 </tr>
               ))}
