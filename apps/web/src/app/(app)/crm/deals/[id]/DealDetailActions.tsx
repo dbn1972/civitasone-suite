@@ -21,13 +21,22 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
 
   const closed = status === "won" || status === "lost";
 
-  async function markStage(stage: "Won" | "Lost") {
-    const res = await fetch(`/api/proxy/v1/crm/deals/${dealId}/stage`, {
-      method: "PATCH",
+  /**
+   * Close via POST /v1/crm/deals/:id/close (outcome + reason), the same
+   * dedicated close endpoint _components/crm/CloseOpportunityDialog.tsx uses
+   * for the equivalent action on Opportunities — NOT the generic
+   * PATCH .../stage (which requires a version we don't have here and has no
+   * `reason` field in its schema at all, so a reason sent there would be
+   * silently dropped even though the confirm dialog asks for one and claims
+   * it's "recorded in the audit trail").
+   */
+  async function closeDeal(outcome: "won" | "lost", reason?: string) {
+    const res = await fetch(`/api/proxy/v1/crm/deals/${dealId}/close`, {
+      method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ stage }),
+      body: JSON.stringify({ outcome, reason: reason ?? "" }),
     });
-    if (!res.ok) throw new Error((await res.text()) || `Could not mark deal ${stage.toLowerCase()}.`);
+    if (!res.ok) throw new Error((await res.text()) || `Could not mark deal ${outcome}.`);
   }
 
   async function logActivity(e: React.FormEvent) {
@@ -74,7 +83,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
         confirmLabel="Mark Won"
         requireReason
         reasonLabel="Reason / closing note"
-        onConfirm={() => markStage("Won")}
+        onConfirm={(reason) => closeDeal("won", reason)}
         onSuccess={() => {
           setMessage("Deal marked won.");
           router.refresh();
@@ -90,7 +99,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
         confirmLabel="Mark Lost"
         requireReason
         reasonLabel="Reason for loss"
-        onConfirm={() => markStage("Lost")}
+        onConfirm={(reason) => closeDeal("lost", reason)}
         onSuccess={() => {
           setMessage("Deal marked lost.");
           router.refresh();

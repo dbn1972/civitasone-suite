@@ -30,7 +30,7 @@ export function GrievanceActions({ id, status }: { id: string; status: string })
   const disposed = status === "DISPOSED";
 
   async function patch(action: string, payload?: Record<string, unknown>) {
-    const res = await fetch(`/api/v1/crm/grievances/${id}/${action}`, {
+    const res = await fetch(`/api/proxy/v1/crm/grievances/${id}/${action}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
@@ -68,7 +68,8 @@ export function GrievanceActions({ id, status }: { id: string; status: string })
         label="First Appeal"
         confirmTitle="File a first appeal?"
         confirmDescription="Record the citizen reason for appeal. The grievance is escalated to urgent priority."
-        reasonLabel="Reason for appeal (optional)"
+        requireReason
+        reasonLabel="Reason for appeal"
         onConfirm={(reason) => patch("first-appeal", { ...(reason ? { appealReason: reason } : {}) })}
       />
 

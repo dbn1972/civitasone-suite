@@ -8,19 +8,17 @@ import { useToast } from "@/app/_components/ds/Toast";
 type Priority = "Low" | "Medium" | "High" | "Critical";
 
 /**
- * Citizen-facing ticket intake — posts to citizen-service (POST
- * /v1/citizen/tickets), which is what /helpdesk/tickets (the list this form
- * links back to) also reads from. citizen-service's priority enum is
- * lowercase ("low"|"medium"|"high"|"critical"), unlike the Capitalized
- * helpdesk-service enum, so the value is lowercased before sending. Staff
- * ticket intake for the internal ops queue lives at helpdesk/internal/new
- * (NewInternalTicketForm.tsx), which correctly targets helpdesk-service.
+ * Staff-facing ticket intake for the internal ops queue — posts to
+ * helpdesk-service (POST /v1/helpdesk/tickets), gated to
+ * helpdesk_user/helpdesk_admin/super_admin (services/helpdesk-service
+ * tickets/routes.ts HELPDESK_ROLES). Kept deliberately separate from the
+ * citizen-facing NewTicketForm (helpdesk/tickets/new/NewTicketForm.tsx),
+ * which posts to citizen-service instead — the two are different backends
+ * with different role gates and a different priority casing contract
+ * (Capitalized here vs lowercase there). A plain citizen role gets a 403
+ * from this endpoint by design.
  */
-function toApiPriority(p: Priority): string {
-  return p.toLowerCase();
-}
-
-export function NewTicketForm() {
+export function NewInternalTicketForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [subject, setSubject] = useState("");
@@ -47,30 +45,23 @@ export function NewTicketForm() {
     const body: Record<string, string> = {
       subject: subject.trim(),
       description: description.trim(),
-      priority: toApiPriority(priority),
+      priority,
     };
 
     try {
-      const res = await fetch("/api/proxy/v1/citizen/tickets", {
+      const res = await fetch("/api/proxy/v1/helpdesk/tickets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      const text = await res.text();
       if (!res.ok) {
-        const text = await res.text();
-        let human = text || `Request failed (${res.status})`;
-        try {
-          const parsed = JSON.parse(text) as { message?: string };
-          if (parsed.message) human = parsed.message;
-        } catch {
-          /* not JSON — fall back to the raw text above */
-        }
         setStatus("error");
-        setMessage(human);
+        setMessage(text || `Request failed (${res.status})`);
         return;
       }
-      toast.success("Ticket submitted successfully.");
-      router.push("/helpdesk/tickets");
+      toast.success("Ticket created.");
+      router.push("/helpdesk/internal");
       router.refresh();
     } catch (err) {
       setStatus("error");
@@ -166,9 +157,9 @@ export function NewTicketForm() {
           disabled={isSubmitting}
           aria-busy={isSubmitting}
         >
-          {isSubmitting ? "Submitting…" : "Submit ticket"}
+          {isSubmitting ? "Submitting…" : "Create ticket"}
         </button>
-        <Link href="/helpdesk/tickets" className="btn ghost" style={{ minHeight: 44 }}>
+        <Link href="/helpdesk/internal" className="btn ghost" style={{ minHeight: 44 }}>
           Cancel
         </Link>
       </div>

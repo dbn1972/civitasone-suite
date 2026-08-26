@@ -1105,6 +1105,8 @@ export type DealSummary = {
   closeDate?: string;
   probability: number;
   status: "open" | "won" | "lost";
+  /** Optimistic-lock row version (services/crm-service deals.version) — required by PATCH .../stage. */
+  version?: number;
 };
 
 export type ContactDetail = {

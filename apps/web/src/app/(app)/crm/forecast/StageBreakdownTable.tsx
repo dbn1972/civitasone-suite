@@ -63,7 +63,7 @@ export function StageBreakdownTable({ stages }: { stages: RankedForecastStage[] 
       emptyIcon="▽"
       emptyTitle="No forecast yet"
       emptyMessage="A forecast appears once you have active engagements sitting in a pipeline stage with a win probability above zero."
-      emptyAction={<a className="btn primary" href="/crm/engagements/new">+ New Engagement</a>}
+      emptyAction={<a className="btn primary" href="/crm/deals/new">+ New Engagement</a>}
     />
   );
 }

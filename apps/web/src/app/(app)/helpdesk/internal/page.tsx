@@ -18,7 +18,7 @@ export default async function Page() {
         subtitle="Staff operations queue via helpdesk-service."
         back="/helpdesk"
         actions={
-          <Link href="/helpdesk/tickets/new" className="btn primary">+ New Ticket</Link>
+          <Link href="/helpdesk/internal/new" className="btn primary">+ New Ticket</Link>
         }
       />
       {source === "error" && <DataSourceBadge source={source} />}

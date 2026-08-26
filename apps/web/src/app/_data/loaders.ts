@@ -272,7 +272,6 @@ import {
   PODetailSchema,
   CRMDashboardSchema,
   DealSummaryListSchema,
-  DealSummarySchema,
   ContactDetailSchema,
   CRMActivityEntryListSchema,
   TicketDetailListSchema,
@@ -2563,11 +2562,19 @@ export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
 }
 
 export async function getDealById(id: string): Promise<LoaderResult<DealSummary | null>> {
+  // NOTE: deliberately not using DealSummarySchema as a responseSchema gate here —
+  // its stage/status enums are stale relative to the real backend contract (which
+  // returns Capitalized stage values like "Lead"/"Proposal"/"Won"), so every
+  // parse used to fail and this endpoint always reported source:"error" /
+  // Deal Not Found for every real deal. mapDealSummaries already normalizes that
+  // same shape correctly for the deals list — reuse it here for a single row.
   return fetchJson<unknown, DealSummary | null>(`/api/v1/crm/deals/${id}`, null, {
-    revalidateSeconds: 30,
+    revalidateSeconds: 0,
     telemetryKey: "crm.deal.detail",
-    responseSchema: DealSummarySchema,
-    mapResponse: (p) => (isRecord(p) ? (p as DealSummary) : null),
+    mapResponse: (p) => {
+      const mapped = mapDealSummaries(isRecord(p) ? [p] : null);
+      return mapped && mapped[0] ? mapped[0] : null;
+    },
   });
 }
 
