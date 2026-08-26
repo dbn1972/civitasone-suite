@@ -149,8 +149,8 @@ export default async function DisbursementPage() {
         <NachMandateForm />
         <EmptyState
           icon="📋"
-          title="No active mandates"
-          message="Registered NACH mandates will appear here. Use the submit form above to register a new mandate."
+          title="Mandate list not yet available"
+          message="There is no mandate-listing endpoint yet — use the form above to submit a new mandate, or check an existing one by reference."
         />
       </Card>
 
