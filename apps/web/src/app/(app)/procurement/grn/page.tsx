@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementGRNs } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -51,7 +52,7 @@ export default async function GRNPage() {
         actions={
           <>
             <Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />
@@ -65,12 +66,8 @@ export default async function GRNPage() {
 
       <Card title="Goods receipt notes">
         {source === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn’t load GRNs"
-            message="The procurement service didn’t respond. Check your connection and try again."
-            action={<Link href="/procurement/grn" className="btn ghost">Retry</Link>}
-          />
+          // L4 fix: see tenders/page.tsx for the same fix and rationale.
+          <ErrorState error={toHumanError("load", { area: "GRNs" })} backHref="/procurement/grn" />
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📦"

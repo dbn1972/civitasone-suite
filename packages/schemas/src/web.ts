@@ -917,9 +917,27 @@ export const TenderDetailSchema = TenderSummarySchema.extend({
   scope: z.string().optional(),
   eligibilityCriteria: z.string().optional(),
   bids: z.array(z.object({
+    // CRITICAL fix: bidAmount was required (no .optional()), but
+    // procurement-service's queries.ts getTenderDetail deliberately sends
+    // `bidAmount: undefined` for any bid whose financial envelope hasn't been
+    // opened yet ("SEALING GUARD: financial value only surfaced once the
+    // envelope is opened") — the two-envelope sealing property this module
+    // exists to enforce. Because sendValidated() does a strict
+    // TenderDetailSchema.parse(detail) server-side before every response,
+    // GET /v1/procurement/tenders/:id threw a ZodError (-> 400
+    // VALIDATION_FAILED) for ANY tender with at least one bid still sealed —
+    // i.e. essentially every real tender between first-bid-submitted and
+    // financial-open. The tender detail page was unreachable for that entire
+    // window, not as an edge case but as the common case.
+    bidAmount: z.number().optional(),
+    // bidId: needed by the tender lifecycle UI to submit per-bid technical
+    // evaluation results (POST /v1/procurement/tenders/:id/technical-evaluation
+    // takes { results: [{ bidId, qualified, score }] }) — vendorId alone can't
+    // stand in for it (a vendor's identity, not the bid row itself).
+    // Optional so any other consumer relying on the previous shape can't break.
+    bidId: z.string().optional(),
     vendorId: z.string(),
     vendorName: z.string(),
-    bidAmount: z.number(),
     technicalScore: z.number().optional(),
     financialScore: z.number().optional(),
     status: z.string(),

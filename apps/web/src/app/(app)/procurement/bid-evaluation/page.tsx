@@ -15,7 +15,7 @@ export default async function BidEvaluationPage() {
       <PageHeader
         title="Bid Evaluation"
         subtitle="Technical and financial scoring matrix for open tenders."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

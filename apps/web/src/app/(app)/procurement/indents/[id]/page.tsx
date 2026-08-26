@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getProcurementIndentById } from "../../../../_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -33,10 +34,21 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
   const { data: indent, source } = await getProcurementIndentById(params.id);
 
   if (!indent) {
+    // L3 fix: a fetch failure and a genuine bad id were both rendered as
+    // "may have been removed or invalid" (EmptyState), which is a truthfulness
+    // bug — on a real fetch error this tells the officer the wrong thing
+    // (implies the indent is gone/bad, when the server just couldn't be
+    // reached). `source === "error"` is the same signal already used for
+    // DataSourceBadge above; use it here too, and use ErrorState (role="alert",
+    // a working "back" action) instead of EmptyState for the genuine-error case.
     return (
       <>
         <PageHeader title="Indent Detail" back="/procurement/indents" />
-        <EmptyState icon="📋" title="Indent not found" message="This indent may have been removed or the ID is invalid." />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "indent" })} backHref="/procurement/indents" />
+        ) : (
+          <EmptyState icon="📋" title="Indent not found" message="This indent may have been removed or the ID is invalid." />
+        )}
       </>
     );
   }
@@ -59,7 +71,7 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
         actions={
           <>
             <StatusPill status={indent.status} label={STATUS_LABELS[indent.status] ?? indent.status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

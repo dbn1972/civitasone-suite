@@ -5,6 +5,7 @@ import { PageHeader } from "../../_components/ds";
 
 const procurementTiles: NavTile[] = [
 	{ title: "Dashboard", href: "/procurement/dashboard", description: "Snapshot of procurement activity" },
+	{ title: "Annual Plans", href: "/procurement/planning", description: "GFR annual procurement plan aggregation and approval" },
 	{ title: "Purchase Indents", href: "/procurement/indents", description: "Material requisitions from departments" },
 	{ title: "Vendors", href: "/procurement/vendors", description: "Empanelled vendor directory" },
 	{ title: "RFQ", href: "/procurement/rfq", description: "Request for quotation management" },

@@ -1,10 +1,18 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getProcurementPOById } from "../../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
+import Link from "next/link";
 import { DispatchPOActions } from "./DispatchPOActions";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import { RaiseEOfficeNote } from "../../../../_components/RaiseEOfficeNote";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+
+// L1 fix: /procurement/orders/[id]/amend is a real route (backed by
+// POST /v1/procurement/pos/:id/amendments) but had no link from this page —
+// it was only reachable by typing the URL directly. Amendment is only
+// meaningful once a PO is a real order (not still draft) and not final.
+const AMENDABLE_STATUSES = new Set(["approved", "dispatched", "partial_grn"]);
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -40,10 +48,16 @@ export default async function PODetailPage({ params }: { params: { id: string } 
   const { data: po, source } = await getProcurementPOById(params.id);
 
   if (!po) {
+    // L3 fix: see indents/[id]/page.tsx — don't tell the officer a PO is
+    // "removed or invalid" when the real cause was a fetch error.
     return (
       <>
         <PageHeader title="Purchase Order" back="/procurement/orders" />
-        <EmptyState icon="📦" title="Purchase order not found" message="This PO may have been removed or the ID is invalid." />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "purchase order" })} backHref="/procurement/orders" />
+        ) : (
+          <EmptyState icon="📦" title="Purchase order not found" message="This PO may have been removed or the ID is invalid." />
+        )}
       </>
     );
   }
@@ -71,8 +85,11 @@ export default async function PODetailPage({ params }: { params: { id: string } 
               label="Print PO"
             />
             <StatusPill status={po.status} label={STATUS_LABELS[po.status] ?? po.status} />
+            {AMENDABLE_STATUSES.has(po.status) ? (
+              <Link href={`/procurement/orders/${po.id}/amend`} className="btn ghost">Request amendment</Link>
+            ) : null}
             <DispatchPOActions poId={po.id} canDispatch={po.status === "approved"} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

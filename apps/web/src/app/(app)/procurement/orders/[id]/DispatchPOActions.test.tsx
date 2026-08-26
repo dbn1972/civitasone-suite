@@ -44,7 +44,7 @@ describe("DispatchPOActions", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("dispatches the PO on confirm and shows a success message", async () => {
+  it("submits the dispatch request on confirm and shows an honest pending message", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 200 }));
 
     render(<DispatchPOActions poId={PO_ID} canDispatch />);
@@ -53,10 +53,18 @@ describe("DispatchPOActions", () => {
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(screen.getByRole("button", { name: "Dispatch" }));
 
+    // Regression test for an L3 defect: `/dispatch` is a 202-accepted async
+    // command (services/procurement-service/src/modules/po/routes.ts uses
+    // sendAccepted), so a 200/202 response here only means the request was
+    // QUEUED, not that the vendor was actually notified. The old copy
+    // ("PO dispatched to vendor.") asserted a completed fact the server had
+    // not yet confirmed. This must never regress back to that wording.
     await waitFor(() => {
-      expect(screen.getByText("PO dispatched to vendor.")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(/submitted/i);
     });
+    expect(screen.queryByText("PO dispatched to vendor.")).not.toBeInTheDocument();
     expect(dialog).not.toBeInTheDocument();
+    // Still triggers a refresh so the real (server-confirmed) status can land.
     expect(refreshMock).toHaveBeenCalled();
   });
 });

@@ -22,7 +22,7 @@ export default async function EmdBgPage() {
       <PageHeader
         title="EMD & Bank Guarantees"
         subtitle="Earnest money deposits and bank guarantee register for procurement security."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

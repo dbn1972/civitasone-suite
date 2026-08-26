@@ -4947,6 +4947,53 @@ export async function getProcurementAnnualPlans(query?: { department?: string; y
   );
 }
 
+export type AnnualPlanLine = {
+  id: string;
+  itemCode: string;
+  description: string;
+  aggregatedQty: number;
+  uom: string;
+  procurementCategory: string;
+  procurementMethod: string;
+  budgetLine: string | null;
+  estimatedValueMinor: string;
+  timelineQuarter: string | null;
+  packageGroup: string | null;
+  tenderId: string | null;
+};
+
+// L1/L2 fix: GET /v1/procurement/plans/:id has been a real, working backend
+// endpoint (services/procurement-service/src/modules/planning/routes.ts) since
+// this module shipped, but there was no frontend loader — and therefore no
+// /procurement/planning/[id] page — to call it. The plans LIST page has always
+// linked to /procurement/planning/{plan.id}, so every one of those links 404'd.
+export type AnnualPlanDetail = Omit<AnnualPlanSummary, "itemCount"> & {
+  planNo: string;
+  currency: string;
+  notes: string | null;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  lines: AnnualPlanLine[];
+};
+
+export async function getProcurementAnnualPlanById(id: string): Promise<LoaderResult<AnnualPlanDetail | null>> {
+  return fetchJson<unknown, AnnualPlanDetail | null>(
+    "/api/v1/procurement/plans/" + encodeURIComponent(id),
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "procurement.plan.detail",
+      mapResponse: (p) => {
+        const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
+        return isRecord(data) ? (data as unknown as AnnualPlanDetail) : null;
+      },
+    }
+  );
+}
+
 // ---- Procurement: Tender Documents ----------------------------------------
 export type TenderDocumentSummary = {
   id: string;
