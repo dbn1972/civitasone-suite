@@ -65,9 +65,15 @@ export default async function DisciplinaryListPage() {
         <StatCard icon="📋" iconBg="#f5f5f5" label="Active / Open" value={open} />
       </StatGrid>
       <Card title="All Disciplinary Cases">
+        {/* Regression fix: this table had no row-link props at all, so the
+            fully-built disciplinary/[id] detail page (breadcrumbs, case
+            fields, e-Office raise action) was completely unreachable except
+            by hand-typing a case UUID into the URL. */}
         <DataTable<Row>
           columns={columns}
           rows={items}
+          rowLinkKey="id"
+          rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
           filterPlaceholder="Filter by employee, department or charge…"

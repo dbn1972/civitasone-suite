@@ -20,9 +20,9 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <main className="page-main wrap" aria-labelledby="page-heading">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
-          <a href="/hr/vigilance">Disciplinary</a> <span aria-hidden="true">›</span> Not found
+          <a href="/hr/disciplinary">Disciplinary</a> <span aria-hidden="true">›</span> Not found
         </nav>
-        <PageHeader title="Disciplinary Case" back="/hr/vigilance" />
+        <PageHeader title="Disciplinary Case" back="/hr/disciplinary" />
         <EmptyState icon="📁" title="Case not found" message="This disciplinary case may have been removed or the ID is invalid." />
       </main>
     );
@@ -40,14 +40,14 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
-        <a href="/hr/vigilance">Disciplinary</a> <span aria-hidden="true">›</span>{" "}
+        <a href="/hr/disciplinary">Disciplinary</a> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{caseLabel}</span>
       </nav>
 
       <PageHeader
         title={`Disciplinary case ${caseLabel}`}
         subtitle={proceedingType !== "—" ? `${proceedingType} proceeding` : undefined}
-        back="/hr/vigilance"
+        back="/hr/disciplinary"
         actions={<StatusPill status={status} />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
