@@ -1,37 +1,33 @@
 /**
- * blacklist screening — `expiresAt` is never enforced by the actual
- * screening path (domain.ts#isExpired exists but nothing calls it).
+ * blacklist screening — `expiresAt` enforcement (Fix 3).
  *
- * SECURITY/COMPLIANCE AUDIT FINDING (HIGH — indefinite denial past the
- * authorized duration): `isBlacklisted()` (screening-store.ts), which is
- * what visit-request/routes.ts and check-in/routes.ts actually call to
- * decide whether to block someone, is a raw Redis/in-memory SISMEMBER
- * check against a hash set populated once at approval time
- * (blacklist/consumer.ts#blacklistApprove -> addToBlacklistHashSet). It has
- * no notion of time and never consults the entry's `expiresAt` or `status`.
- * `domain.ts#isExpired` is a pure function that is unit-tested in isolation
- * (blacklist-domain-deep.test.ts) but is NEVER called from any production
- * code path — grep confirms no worker/consumer/route reads it. There is
- * also no scheduled sweep job (unlike, e.g., dpdp/purge-worker.ts or
- * visit-request/auto-reject-worker.ts) that removes expired hashes from the
- * screening set or flips the DB row's status from 'active' to 'expired'.
+ * SECURITY/COMPLIANCE AUDIT FINDING, now fixed (was HIGH — indefinite
+ * denial past the authorized duration): `isBlacklisted()`
+ * (screening-store.ts), which is what visit-request/routes.ts and
+ * check-in/routes.ts actually call to decide whether to block someone, used
+ * to be a raw Redis/in-memory SISMEMBER check against a hash set populated
+ * once at approval time (blacklist/consumer.ts#blacklistApprove ->
+ * addToBlacklistHashSet). It had no notion of time and never consulted the
+ * entry's `expiresAt` or `status`. `domain.ts#isExpired` is a pure function
+ * that is unit-tested in isolation (blacklist-domain-deep.test.ts) but,
+ * before this fix, was NEVER called from any production code path.
  *
- * Net effect, reproduced LIVE against the running audit instance: a
- * blacklist entry approved with `expiresAt` set to 2020-01-01 (already six+
- * years expired at approval time) still returns `isBlacklisted() === true`
- * and still 403s a brand-new visit request in 2026. Once approved, a
- * blacklist entry blocks PERMANENTLY regardless of any expiresAt the
- * approving officer set — combined with there being no
- * remove/archive/reject/override route or command anywhere in this module
- * (topics.ts defines only blacklistAdd/blacklistApprove — no
- * blacklistArchive/Remove/Reject), there is no way to lift a block once
- * granted, other than direct DB intervention. For a government citizen-
- * facing system this is a real due-process concern, not just a stale-data
- * nuisance.
+ * The fix (screening-store.ts): the underlying store switched from a plain
+ * Redis Set to a sorted set keyed by expiry (ZADD/ZSCORE/ZREM), with
+ * `addToBlacklistHashSet` now accepting the entry's `expiresAt` (threaded
+ * through from blacklist/consumer.ts#blacklistApprove, which already had
+ * the DB row's `expiresAt` in hand) and `isBlacklisted` treating an expired
+ * member as absent — lazily evicting it, so the set self-heals on read
+ * without a separate sweep worker. This is backward compatible: a member
+ * added with no expiresAt (e.g. every watchlist entry, or a permanent
+ * blacklist entry) keeps blocking forever exactly as before.
  *
- * This test documents the gap at the unit level: it shows the disconnect
- * between `isExpired()` (says "yes, this should no longer apply") and
- * `isBlacklisted()` (says "still blocked") for the exact same entry.
+ * A companion fix (blacklist/routes.ts + consumer.ts) adds
+ * `POST /v1/visitor/blacklist/:id/deactivate` (COMMANDS.blacklistDeactivate)
+ * — before this, there was no route/command anywhere that could lift or
+ * remove a blacklist entry at all (topics.ts only defined
+ * blacklistAdd/blacklistApprove).
+ *
  * Mirrors blacklist-screening-store.test.ts's conventions (in-memory store
  * via setScreeningStoreForTests(null), CACHE_DRIVER=memory per
  * vitest.config.ts).
@@ -50,38 +46,43 @@ beforeEach(() => {
   setScreeningStoreForTests(null);
 });
 
-describe("blacklist expiry is not enforced by the screening path", () => {
+describe("blacklist expiry is enforced by the screening path (Fix 3)", () => {
   it("isExpired() correctly reports an already-past expiresAt as expired", () => {
     const longExpired = new Date("2020-01-01T00:00:00.000Z");
     expect(isExpired(longExpired, new Date("2026-01-01T00:00:00.000Z"))).toBe(true);
   });
 
-  it("BUG: isBlacklisted() still returns true for a hash whose entry's expiresAt has long passed", async () => {
+  it("isBlacklisted() returns false once the entry's expiresAt has passed", async () => {
     const hash = "doc-hash-already-expired";
+    // Long in the past relative to real wall-clock time — isBlacklisted()
+    // compares against Date.now(), not a fixed/injected "now".
     const expiresAt = new Date("2020-01-01T00:00:00.000Z");
-    const now = new Date("2026-01-01T00:00:00.000Z");
 
-    // This is exactly what blacklist/consumer.ts#blacklistApprove does on
-    // approval: add the hash to the screening set. It does this
-    // unconditionally — it does not check isExpired(expiresAt) first, and
-    // nothing removes the hash later when expiresAt passes.
-    expect(isExpired(expiresAt, now)).toBe(true); // the entry itself is expired...
-    await addToBlacklistHashSet(TENANT, hash);
-    expect(await isBlacklisted(TENANT, hash)).toBe(true); // ...but screening ignores that entirely.
+    expect(isExpired(expiresAt, new Date())).toBe(true); // the entry itself is expired...
+    // This is exactly what blacklist/consumer.ts#blacklistApprove now does
+    // on approval: add the hash to the screening set WITH its expiresAt.
+    await addToBlacklistHashSet(TENANT, hash, expiresAt);
+    expect(await isBlacklisted(TENANT, hash)).toBe(false); // ...and screening now honours that.
   });
 
-  it("BUG: no amount of elapsed time removes a hash from the screening set on its own", async () => {
+  it("isBlacklisted() still returns true for an entry whose expiresAt has NOT yet passed", async () => {
+    const hash = "doc-hash-not-yet-expired";
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h from now
+
+    await addToBlacklistHashSet(TENANT, hash, expiresAt);
+    expect(await isBlacklisted(TENANT, hash)).toBe(true);
+  });
+
+  it("an entry with no expiresAt (permanent) never expires — correct behavior, not a bug", async () => {
     const hash = "doc-hash-never-swept";
     await addToBlacklistHashSet(TENANT, hash);
     expect(await isBlacklisted(TENANT, hash)).toBe(true);
 
-    // Simulate "time passing" — there is no sweep/expiry worker to invoke,
-    // which is itself the point: nothing in this module ever calls srem
-    // on the blacklist hash-set keys (unlike, e.g.,
-    // recurring-pass/revocation-store.ts's srem for revoked-pass keys).
-    // The hash remains blocked forever, or until the *next* successful
-    // add/approve for that tenant happens to overwrite unrelated state
-    // (it never does, since Redis Sets only grow via SADD in this module).
+    // A permanent entry (null expiresAt, matching domain.ts#isExpired's own
+    // "null means never expires" convention) has no time bound at all —
+    // this is intentional, not the bug this file used to document. Lifting
+    // a permanent entry now goes through the new blacklistDeactivate
+    // command/route instead (blacklist/commands.ts, blacklist/routes.ts).
     expect(await isBlacklisted(TENANT, hash)).toBe(true);
   });
 });

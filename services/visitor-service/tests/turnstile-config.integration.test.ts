@@ -13,6 +13,13 @@
  *
  * The tailgating decision now reads `getPolicyNumber` on the handler tx
  * (previously a hardcoded literal). Assertions key on the unique passage-event id.
+ *
+ * The seeded device's `gateId` is set to the SAME gate every passage in this
+ * file claims (Fix 5: turnstile-control/consumer.ts's passageRecord handler
+ * now rejects any passage whose claimed gateId doesn't match the publishing
+ * device's registered binding — a device with no gateId at all would fail
+ * that check unconditionally, which would mask this file's actual subject,
+ * the config-driven tailgating tolerance).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -57,7 +64,7 @@ async function seedTenant(tenant: string): Promise<Seed> {
       });
       await tx.insert(devices).values({
         id: s.deviceId, tenantId: tenant, deviceType: "turnstile", name: "Turnstile 1",
-        serialNumber: "SN-" + s.deviceId.slice(0, 8), locationId: s.locationId, authType: "mtls",
+        serialNumber: "SN-" + s.deviceId.slice(0, 8), locationId: s.locationId, gateId: s.gateId, authType: "mtls",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
       await tx.insert(visitRequests).values({
@@ -105,7 +112,13 @@ async function publishPassage(tenant: string, seed: Seed, passageCount: number):
       direction: "out", passageCount, eventTimestamp: new Date().toISOString(), offlineRecorded: false,
     },
   });
-  await new Promise((r) => setTimeout(r, 25));
+  // Fix 5 added one extra sequential DB round trip to every passageRecord
+  // message (the gate-binding lookup, before the main transaction) — under
+  // full-suite load (many tests sharing the same Postgres instance) the
+  // original 25ms margin was occasionally too tight. Widened for headroom,
+  // matching the "give it real headroom" precedent already established in
+  // identity-verify-ownership.integration.test.ts for a real DB round trip.
+  await new Promise((r) => setTimeout(r, 150));
   return passageId;
 }
 

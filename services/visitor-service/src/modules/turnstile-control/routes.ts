@@ -50,10 +50,20 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
   /**
    * POST /v1/visitor/turnstiles/passage — Report a passage event.
    * Route → zod validate → publishPassageRecord → 202.
+   *
+   * Fix 5 (gate binding): deviceAuth binds `deviceContext.gateId` from the
+   * device's own registered gate (device-registry). The event's `gateId` is
+   * client-supplied — a device authenticated for one gate must not be able
+   * to report passage for a different one, so the two are compared before
+   * anything is published.
    */
   app.post("/v1/visitor/turnstiles/passage", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = passageEventBody.parse(req.body);
+
+    if (body.gateId !== deviceCtx.gateId) {
+      throw new HttpError(403, "GATE_BINDING_MISMATCH", "device is not bound to the claimed gate");
+    }
 
     const ctx = {
       tenantId: deviceCtx.tenantId,
@@ -79,10 +89,17 @@ export default async function turnstileControlRoutes(app: FastifyInstance): Prom
   /**
    * POST /v1/visitor/turnstiles/tailgating — Report tailgating detection.
    * Route → zod validate → create security incident → 202.
+   *
+   * Fix 5 (gate binding): same enforcement as the passage handler above —
+   * a device may only report tailgating for the gate it is actually bound to.
    */
   app.post("/v1/visitor/turnstiles/tailgating", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = tailgatingBody.parse(req.body);
+
+    if (body.gateId !== deviceCtx.gateId) {
+      throw new HttpError(403, "GATE_BINDING_MISMATCH", "device is not bound to the claimed gate");
+    }
 
     const ctx = {
       tenantId: deviceCtx.tenantId,

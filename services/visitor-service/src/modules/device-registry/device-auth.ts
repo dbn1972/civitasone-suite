@@ -12,6 +12,7 @@
  * After identity resolution, performs:
  *   - Device status check (reject suspended/deregistered → 403 DEVICE_INACTIVE)
  *   - Token expiration check (tokenExpiresAt < now → 401 DEVICE_CREDENTIAL_REVOKED)
+ *   - Credential rotation grace-period check (Fix 4 — see Step 2.5 below)
  *   - Rate limiting (Redis INCR with 60s TTL window): 60 req/min for
  *     printers/scanners/kiosks, 120 req/min for turnstiles/barriers
  *   - Location mismatch detection (optional spoofing check)
@@ -25,6 +26,7 @@ import type { TLSSocket } from "node:tls";
 import { Redis } from "ioredis";
 import { HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { isInRotationGracePeriod, BEARER_ROTATION_GRACE_MS } from "./domain.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -221,6 +223,13 @@ function extractCertificateFingerprint(req: FastifyRequest): string | null {
 export async function deviceAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   // --- Step 1: Identify the device ---
   let device: DeviceRecord | null = null;
+  // Fix 4: tracks whether the presented Bearer token matched the device's
+  // CURRENT hash or its OLD (rotated-away) hash — repo.ts#getDeviceByTokenHash
+  // matches `device_token_hash OR old_token_hash` unconditionally, with no
+  // indication of which column matched, so this middleware determines it
+  // itself by comparing the presented token's hash against the resolved
+  // record's current `deviceTokenHash`.
+  let matchedOldBearerHash = false;
 
   // Try Bearer token path first
   const token = extractBearerToken(req);
@@ -240,6 +249,8 @@ export async function deviceAuth(req: FastifyRequest, reply: FastifyReply): Prom
     if (!device) {
       throw new HttpError(401, "DEVICE_CREDENTIAL_REVOKED", "invalid or revoked device token");
     }
+
+    matchedOldBearerHash = device.deviceTokenHash !== tokenHash;
   }
 
   // Try mTLS path if no Bearer token found
@@ -261,6 +272,20 @@ export async function deviceAuth(req: FastifyRequest, reply: FastifyReply): Prom
 
   if (device.status !== "active") {
     throw new HttpError(403, "DEVICE_INACTIVE", `device is not active (status: ${device.status})`);
+  }
+
+  // --- Step 2.5: Bearer credential-rotation grace period (Fix 4) ---
+  // domain.ts defines BEARER_ROTATION_GRACE_MS / isInRotationGracePeriod but
+  // nothing previously called them — repo.ts#getDeviceByTokenHash matches
+  // old_token_hash with no time bound, so a rotated-away (e.g. leaked)
+  // Bearer token kept authenticating forever. Once the presented token is
+  // confirmed to be the OLD hash (not the current one), it is only valid
+  // within BEARER_ROTATION_GRACE_MS of tokenRotatedAt.
+  if (matchedOldBearerHash) {
+    const rotatedAt = device.tokenRotatedAt ? new Date(device.tokenRotatedAt) : null;
+    if (!isInRotationGracePeriod(rotatedAt, BEARER_ROTATION_GRACE_MS)) {
+      throw new HttpError(401, "DEVICE_CREDENTIAL_REVOKED", "device token has been rotated and the grace period has expired");
+    }
   }
 
   // --- Step 3: Check token expiration (Bearer path only) ---

@@ -144,6 +144,16 @@ describe("passageRecord", () => {
     offlineRecorded: false,
   };
 
+  // Fix 5: passageRecord now looks up the publishing device's registered
+  // gate binding (a single tx.select().from(devices)... call, matching
+  // this mock's generic fakeTx.select -> passageRows plumbing) and rejects
+  // when it doesn't match the payload's claimed gateId. Every test in this
+  // block exercises a device legitimately bound to GATE_ID, so the select
+  // must return a row carrying that gateId.
+  beforeEach(() => {
+    passageRows = [{ gateId: GATE_ID }];
+  });
+
   it("records a passage and emits passageConfirmed + checkIn command", async () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.passageRecord, passagePayload);
