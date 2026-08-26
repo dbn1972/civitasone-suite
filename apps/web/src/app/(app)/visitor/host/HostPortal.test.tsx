@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const approveVisitRequestMock = vi.fn();
 const rejectVisitRequestMock = vi.fn();
@@ -102,8 +102,39 @@ describe("HostPortal", () => {
     expect(screen.getByText("Priya Singh")).toBeInTheDocument();
   });
 
-  it("renders the empty state when the approval queue API call failed (stale/no data)", () => {
-    render(<HostPortal pending={[]} pendingSource="error" expectedToday={[]} expectedTodaySource="api" />);
-    expect(screen.getByText("Could not load the approval queue")).toBeInTheDocument();
+  describe("error vs. empty states (not conflated via a shared EmptyState)", () => {
+    it("shows a retryable error state (not a plain empty state) when the initial approval-queue load failed", () => {
+      render(<HostPortal pending={[]} pendingSource="error" expectedToday={[]} expectedTodaySource="api" />);
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("Could not load the approval queue.");
+      expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByText("Nothing awaiting approval")).not.toBeInTheDocument();
+    });
+
+    it("recovers the queue when the error state's own retry succeeds", async () => {
+      render(<HostPortal pending={[]} pendingSource="error" expectedToday={[]} expectedTodaySource="api" />);
+      const alert = screen.getByRole("alert");
+
+      fetchVisitRequestsMock.mockResolvedValueOnce([pendingRequest]);
+      fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+      expect(await screen.findByText("Priya Singh")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(fetchVisitRequestsMock).toHaveBeenCalledWith("pending_approval");
+    });
+
+    it("shows the genuine empty state (not an error) when the queue loaded successfully with zero rows", () => {
+      render(<HostPortal pending={[]} pendingSource="api" expectedToday={[]} expectedTodaySource="api" />);
+      expect(screen.getByText("Nothing awaiting approval")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("shows a retryable error state for expected-today when the load failed, distinct from a genuine empty result", () => {
+      render(<HostPortal pending={[]} pendingSource="api" expectedToday={[]} expectedTodaySource="error" />);
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("We couldn't load today's expected visitors.");
+      expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByText("No visitors expected today")).not.toBeInTheDocument();
+    });
   });
 });

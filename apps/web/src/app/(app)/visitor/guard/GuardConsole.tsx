@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
   EmptyState,
+  ErrorState,
+  RefreshErrorState,
   StatCard,
   StatGrid,
   StatusPill,
@@ -249,7 +251,13 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       {/* Expected today */}
       <Card title={`Expected today (${expectedToday.length})`} padding>
         {expectedTodaySource === "error" ? (
-          <EmptyState icon="📅" title="Could not load expected visitors" message="Live data couldn't be reached. Try again shortly." />
+          <RefreshErrorState
+            error={{
+              what: "We couldn't load today's expected visitors.",
+              next: "Check your connection and try again.",
+              actions: ["retry", "help"],
+            }}
+          />
         ) : expectedToday.length === 0 ? (
           <EmptyState icon="📅" title="No approved visitors expected today" message="Approved visit requests scheduled for today will appear here." />
         ) : (
@@ -291,10 +299,15 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       >
         {rosterState === "loading" && <p style={{ fontSize: 13, color: "var(--ink2)" }}>Loading roster…</p>}
         {rosterState === "error" && (
-          <EmptyState
-            icon="🔒"
-            title="Live roster unavailable"
-            message={rosterError ?? "The premises roster endpoint is restricted (emergency IP allowlist). Ask an administrator to authorise this console's network, then refresh."}
+          <ErrorState
+            error={{
+              what: "Live roster unavailable.",
+              next:
+                rosterError ??
+                "The premises roster endpoint is restricted (emergency IP allowlist). Ask an administrator to authorise this console's network, then retry.",
+              actions: ["retry", "help"],
+            }}
+            onRetry={() => void loadRoster()}
           />
         )}
         {rosterState === "ok" && roster.length === 0 && (

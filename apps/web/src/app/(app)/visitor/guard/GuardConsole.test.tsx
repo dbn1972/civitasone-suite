@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const fetchRosterMock = vi.fn();
 const recordCheckInMock = vi.fn();
@@ -117,5 +117,51 @@ describe("GuardConsole", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check out" }));
     await waitFor(() => expect(recordCheckOutMock).toHaveBeenCalledWith("pass-1", ""));
+  });
+
+  describe("error vs. empty states (not conflated via a shared EmptyState)", () => {
+    it("shows a retryable error state for expected-today when the load failed, distinct from a genuine empty result", async () => {
+      render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="error" />);
+      // Let the unrelated mount-time roster fetch settle before asserting, so
+      // its state update isn't left dangling outside act().
+      await waitFor(() => expect(fetchRosterMock).toHaveBeenCalledWith("loc-1"));
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("We couldn't load today's expected visitors.");
+      expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByText("No approved visitors expected today")).not.toBeInTheDocument();
+    });
+
+    it("shows the genuine empty state (no alert) when expected-today loaded successfully with zero rows", async () => {
+      render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+      await waitFor(() => expect(fetchRosterMock).toHaveBeenCalledWith("loc-1"));
+
+      expect(screen.getByText("No approved visitors expected today")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("shows a retryable error state for the live roster on fetch failure, and recovers when retried", async () => {
+      fetchRosterMock.mockRejectedValueOnce(new Error("Roster endpoint forbidden (403)"));
+      render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Live roster unavailable.");
+      expect(alert).toHaveTextContent("Roster endpoint forbidden (403)");
+      expect(screen.queryByText("No one is currently inside")).not.toBeInTheDocument();
+
+      fetchRosterMock.mockResolvedValueOnce([rosterEntry]);
+      fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+      expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(fetchRosterMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows the genuine empty state (not an error) when the roster loads successfully with zero entries", async () => {
+      fetchRosterMock.mockResolvedValue([]);
+      render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+      expect(await screen.findByText("No one is currently inside")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
   });
 });
