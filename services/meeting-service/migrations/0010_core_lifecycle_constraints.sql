@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
--- Migration: 0009_core_lifecycle_constraints.sql
+-- Migration: 0010_core_lifecycle_constraints.sql
 -- Service:   meeting-service (gateway /api/v1/meetings) — DB civitas_meeting
 --
 -- Purpose:
