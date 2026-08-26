@@ -1,7 +1,11 @@
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "./domain.js";
-import { financeBudgets, financeSanctions, financeHeads, financeReappropriations, type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow, type ReappropriationRow, type ReappropriationInsert } from "./schema.js";
+import {
+  financeBudgets, financeSanctions, financeHeads, financeReappropriations, financeDemands, financeSchemes,
+  type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow,
+  type ReappropriationRow, type ReappropriationInsert, type DemandRow, type SchemeRow,
+} from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -112,6 +116,28 @@ export async function listBudgetsByTenant(tenantId: string, limit: number, offse
     .where(eq(financeBudgets.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
+}
+
+export async function listDemandsByTenant(tenantId: string, limit: number, offset = 0): Promise<DemandRow[]> {
+  return scopedRead((tx) => tx.select().from(financeDemands)
+    .where(eq(financeDemands.tenantId, tenantId))
+    .orderBy(desc(financeDemands.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function listSchemesByTenant(tenantId: string, limit: number, offset = 0): Promise<SchemeRow[]> {
+  return scopedRead((tx) => tx.select().from(financeSchemes)
+    .where(eq(financeSchemes.tenantId, tenantId))
+    .orderBy(desc(financeSchemes.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function findSchemeByIdAndTenant(id: string, tenantId: string): Promise<SchemeRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeSchemes)
+    .where(and(eq(financeSchemes.id, id), eq(financeSchemes.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
 }
 
 export async function findHeadById(id: string): Promise<HeadRow | null> {

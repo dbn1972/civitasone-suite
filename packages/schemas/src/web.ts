@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "./common.js";
+import { zMoneyMinorString } from "./money.js";
 
 export const auditRowSchema = z.object({
   actor: z.string(),
@@ -32,6 +33,12 @@ export const slaQueueSchema = z.object({
 });
 
 export const paymentSummarySchema = z.object({
+  // Backend row id (UUID). Optional so partial/legacy payloads still satisfy
+  // the schema; the real query (payments/queries.ts's listPayments) always
+  // sets it. Without this field, .parse() silently stripped `id` off every
+  // response, leaving the frontend's payment-detail link dead even though
+  // PaymentsTable.tsx already reads `p.id` to build it.
+  id: z.string().optional(),
   referenceId: z.string(),
   beneficiary: z.string(),
   amountDisplay: z.string(),
@@ -562,7 +569,10 @@ export const BillSummarySchema = z.object({
   id: z.string(),
   billNo: z.string(),
   vendor: z.string(),
-  amount: z.number(),
+  // Bigint-safe string, not z.number(): payments/queries.ts's listBillSummaries
+  // and getBillDetail return row.netMinor.toString() (paise can exceed 2^53),
+  // so a plain z.number() here made GET /v1/finance/bills 400 on every call.
+  amount: zMoneyMinorString,
   amountDisplay: z.string().optional(),
   submittedDate: z.string(),
   dueDate: z.string().optional(),
@@ -577,7 +587,9 @@ export const BillDetailSchema = BillSummarySchema.extend({
     description: z.string(),
     quantity: z.number(),
     unitPrice: z.number(),
-    amount: z.number(),
+    // Same bigint-safe-string convention as BillSummarySchema.amount above
+    // (money is integer-minor-unit strings throughout this codebase).
+    amount: zMoneyMinorString,
     taxCode: z.string().optional(),
   })).default([]),
   grnRef: z.string().optional(),
@@ -590,11 +602,15 @@ export const AdvanceSummarySchema = z.object({
   advanceNo: z.string(),
   beneficiary: z.string(),
   type: z.enum(["employee", "vendor", "other"]),
-  amount: z.number(),
+  // Bigint-safe strings, not z.number(): payments/queries.ts's listAdvances
+  // returns amount/adjustedAmount/balance via .toString() (H3: paise can
+  // exceed 2^53), which a plain z.number() here would 400 on real data (it
+  // only passed before because the advances table was empty).
+  amount: zMoneyMinorString,
   disbursedDate: z.string(),
   dueDate: z.string().optional(),
-  adjustedAmount: z.number().default(0),
-  balance: z.number(),
+  adjustedAmount: zMoneyMinorString.default(0),
+  balance: zMoneyMinorString,
   status: z.enum(["active", "adjusted", "overdue", "closed"]),
 });
 export const AdvanceSummaryListSchema = z.array(AdvanceSummarySchema);
@@ -2407,6 +2423,15 @@ export const DisciplinaryCaseDetailSchema = z.object({
   version: z.number(),
 });
 
+export const FinanceVendorBillHistoryEntrySchema = z.object({
+  id: z.string(),
+  billNo: z.string(),
+  date: z.string(),
+  amount: z.string(),
+  tds: z.string(),
+  status: z.string(),
+});
+
 export const FinanceVendorDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -2425,6 +2450,11 @@ export const FinanceVendorDetailSchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Vendor<->bills rollup for the [id] page's Total Bills/Total Paid/TDS
+  // Deducted stat cards + Bill History table (masters/routes.ts's
+  // toVendorBillHistory()). Defaults to [] so a POST/PATCH echo (which never
+  // looks bills up) still satisfies this schema.
+  bills: z.array(FinanceVendorBillHistoryEntrySchema).default([]),
 });
 
 export const FinanceVendorSummarySchema = z.object({

@@ -66,7 +66,7 @@ export default async function BillDetailPage({ params }: { params: { id: string 
       {bill.lineItems.length > 0 && (
         <Card title="Line items">
           <BillLineItemsTable
-            rows={bill.lineItems as ({ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string } & Record<string, unknown>)[]}
+            rows={bill.lineItems as ({ description: string; quantity: number; unitPrice: number; amount: string; taxCode?: string } & Record<string, unknown>)[]}
           />
         </Card>
       )}

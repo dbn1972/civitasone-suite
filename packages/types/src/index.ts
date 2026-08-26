@@ -657,7 +657,7 @@ export type BillSummary = {
   id: string;
   billNo: string;
   vendor: string;
-  amount: number;        // minor units (paise)
+  amount: string;        // minor units (paise), bigint-safe decimal string
   amountDisplay?: string; // pre-formatted display string e.g. "₹47,500.00"
   submittedDate: string;
   dueDate?: string;
@@ -667,7 +667,7 @@ export type BillSummary = {
 };
 
 export type BillDetail = BillSummary & {
-  lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string }>;
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: string; taxCode?: string }>;
   grnRef?: string;
   invoiceNo?: string;
   paymentRef?: string;
@@ -678,11 +678,11 @@ export type AdvanceSummary = {
   advanceNo: string;
   beneficiary: string;
   type: "employee" | "vendor" | "other";
-  amount: number;
+  amount: string;
   disbursedDate: string;
   dueDate?: string;
-  adjustedAmount: number;
-  balance: number;
+  adjustedAmount: string;
+  balance: string;
   status: "active" | "adjusted" | "overdue" | "closed";
 };
 
@@ -2518,6 +2518,15 @@ export type DisciplinaryCaseDetail = {
  * 0065_vendor_master.sql). Field names match the route's response mapping exactly — this is a
  * runtime-verified contract, not a prediction.
  */
+export type FinanceVendorBillHistoryEntry = {
+  id: string;
+  billNo: string;
+  date: string;
+  amount: string;
+  tds: string;
+  status: string;
+};
+
 export type FinanceVendorDetail = {
   id: string;
   name: string;
@@ -2536,6 +2545,7 @@ export type FinanceVendorDetail = {
   version: number;
   createdAt: string;
   updatedAt: string;
+  bills?: FinanceVendorBillHistoryEntry[];
 };
 
 /**

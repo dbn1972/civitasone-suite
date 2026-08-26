@@ -144,5 +144,7 @@ export type DepositInsert = typeof financeDeposits.$inferInsert;
 export type DepositEventInsert = typeof financeDepositEvents.$inferInsert;
 export type InstrumentRow    = typeof financeInstruments.$inferSelect;
 export type InstrumentInsert = typeof financeInstruments.$inferInsert;
+export type DebtRow       = typeof financeDebt.$inferSelect;
+export type GuaranteeRow  = typeof financeGuarantees.$inferSelect;
 
 export const schema = { financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees, financeInstruments };
