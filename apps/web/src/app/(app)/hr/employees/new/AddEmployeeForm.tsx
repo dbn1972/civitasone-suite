@@ -228,10 +228,12 @@ export function AddEmployeeForm({ departments, designations, managers }: Props) 
         }}
       >
         <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>
-          Employee created successfully!
+          Employee record submitted!
         </p>
         <p style={{ margin: "8px 0 16px", fontSize: 14 }}>
-          Employee ID: <strong>{success.id}</strong>
+          {/* POST /v1/hrms/employees returns 202 (queued command) -- the
+              record is being created, not already confirmed done. */}
+          Reference ID: <strong>{success.id}</strong>. It will appear in the employee list shortly.
         </p>
         <Link
           href="/hr/employees"
