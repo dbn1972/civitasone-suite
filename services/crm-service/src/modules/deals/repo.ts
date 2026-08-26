@@ -1,5 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { pino } from "pino";
+import { tenantTransaction } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
@@ -313,8 +314,20 @@ export interface GateSnapshot {
   currency: string;
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()`:
+ * `crm.deals` is FORCE ROW LEVEL SECURITY, and `scopedRead` only gets the app.tenant_id
+ * GUC set via AsyncLocalStorage populated by `createTenantTxHook`'s onRequest hook —
+ * which keys off an `x-tenant-id` HEADER, not the JWT `tid` claim `ctx.tenantId` (the
+ * `tenantId` param here) is already derived from. Routes calling this — notably PATCH
+ * /v1/crm/deals/:id/stage's OP-002/OP-003 gate — pass their own verified `ctx.tenantId`
+ * straight through, so the read must not depend on that separate header ever having
+ * arrived; without this, gateSnapshot silently returned null under FORCE RLS whenever it
+ * didn't (e.g. every direct-to-service call, including this file's own vitest coverage),
+ * which skipped the stage gate entirely rather than enforcing or rejecting it.
+ */
 export async function gateSnapshot(id: string, tenantId: string): Promise<GateSnapshot | null> {
-  const rows = await scopedRead((tx) => tx.select({
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({
     id: deals.id,
     pipelineId: deals.pipelineId,
     stageId: deals.stageId,

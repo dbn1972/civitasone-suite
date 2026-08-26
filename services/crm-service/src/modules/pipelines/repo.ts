@@ -1,4 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
+import { tenantTransaction } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { pipelines, type PipelineRow, type PipelineInsert, type PipelineView } from "./schema.js";
 
@@ -104,11 +105,27 @@ export async function softDelete(tx: Writer, id: string, tenantId: string, actor
 }
 
 /**
- * Load a pipeline's stage array for stage-gate enforcement (OP-003). Returns the raw
- * stage list, or null when the pipeline is missing/deleted for this tenant.
+ * Load a pipeline's stage array for stage-gate enforcement (OP-003, OP-002). Returns the
+ * raw stage list, or null when the pipeline is missing/deleted for this tenant.
+ *
+ * Uses `tenantTransaction` (explicit tenantId → `set_config('app.tenant_id', ...)`) rather
+ * than `scopedRead`/bare `db.transaction()`: `crm.pipelines` is FORCE ROW LEVEL SECURITY
+ * (0015), and `scopedRead` only gets the GUC set via AsyncLocalStorage populated by
+ * `createTenantTxHook`'s onRequest hook — which reads the tenantId from an `x-tenant-id`
+ * HEADER, not from the caller-verified JWT `tid` claim `resolveContext`/`ctx.tenantId`
+ * already carry. A request with no such header (every direct-to-service call that isn't
+ * relayed through something adding it — confirmed via `vitest`'s `app.inject`, which
+ * never sets it) leaves that AsyncLocalStorage store empty, so `scopedRead` silently ran
+ * with NO GUC set — under FORCE RLS that filters out every row, including ones the
+ * caller-supplied `tenantId` parameter (used in the WHERE clause below) genuinely owns.
+ * This function already receives `tenantId` explicitly; `tenantTransaction` uses THAT to
+ * set the GUC directly, so the read no longer depends on that separate, narrower
+ * (header-only) mechanism ever having fired. See the PR description for why the
+ * `x-tenant-id`/hook gap itself is being flagged rather than fixed here — it is a
+ * shared `packages/db` concern well beyond this one pipeline-stage lookup.
  */
 export async function stagesOf(id: string, tenantId: string): Promise<PipelineRow["stages"] | null> {
-  const rows = await scopedRead((tx) => tx.select({ stages: pipelines.stages })
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ stages: pipelines.stages })
     .from(pipelines)
     .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
     .limit(1));
