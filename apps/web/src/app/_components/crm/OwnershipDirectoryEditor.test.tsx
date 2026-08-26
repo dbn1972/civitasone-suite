@@ -24,7 +24,7 @@ describe("OwnershipDirectoryEditor (AS-002 admin)", () => {
   it("loads the first tab (queues) and shows the saved-info badge on error", async () => {
     vi.mocked(as.getResources).mockResolvedValue({ data: [], source: "error" });
     render(<OwnershipDirectoryEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(as.getResources).toHaveBeenCalledWith("assignment-queues");
   });
 

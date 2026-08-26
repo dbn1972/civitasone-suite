@@ -25,7 +25,7 @@ describe("AssignmentRulesEditor (AS-001 admin)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [], source: "error" });
     render(<AssignmentRulesEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no assignment rules yet/i)).toBeInTheDocument();
   });
 

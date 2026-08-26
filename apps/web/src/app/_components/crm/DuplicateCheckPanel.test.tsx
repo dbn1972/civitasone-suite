@@ -43,7 +43,7 @@ describe("DuplicateCheckPanel (DQ-001)", () => {
   it("shows a source=error affordance when the check itself failed (finding 5)", () => {
     render(<DuplicateCheckPanel candidates={[]} error />);
     expect(screen.getByText(/duplicate check unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/showing saved information/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 
   it("prefers the checking message over the error affordance while a check is in flight", () => {

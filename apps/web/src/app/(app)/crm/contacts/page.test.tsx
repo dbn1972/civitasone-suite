@@ -20,7 +20,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
     render(await Page({ searchParams: {} }));
     // All four stat values render em dashes, and the saved-info badge appears.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByText(/showing saved information/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 
   it("shows real counts when the load succeeds", async () => {
@@ -34,7 +34,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
     render(await Page({ searchParams: {} }));
     // Total Contacts = 2
     expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("renders DPDP data protection notice", async () => {

@@ -49,7 +49,7 @@ describe("DocumentsPanel (DM-001/002/003)", () => {
   it("shows the saved-info badge on a failed load and no fabricated list", async () => {
     vi.mocked(dm.getDocuments).mockResolvedValue({ data: [], source: "error" });
     render(<DocumentsPanel subjectType="contact" subjectId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/documents unavailable/i)).toBeInTheDocument();
   });
 

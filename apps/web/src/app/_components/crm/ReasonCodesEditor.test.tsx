@@ -19,7 +19,7 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "error" });
     render(<ReasonCodesEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument();
   });
 

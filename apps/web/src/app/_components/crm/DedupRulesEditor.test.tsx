@@ -20,13 +20,13 @@ describe("DedupRulesEditor (DQ-001 admin)", () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api" });
     render(<DedupRulesEditor />);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("shows saved-info badge on a failed load (source===error)", async () => {
     vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [], source: "error" });
     render(<DedupRulesEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no matching rules yet/i)).toBeInTheDocument();
   });
 

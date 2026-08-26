@@ -49,13 +49,13 @@ describe("Accounts list page", () => {
     render(await Page());
     // Linked Contacts = 5+3 = 8, unique among stat values
     expect(screen.getByText("8")).toBeInTheDocument();
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("shows '—' for all stats when load fails (source='error')", async () => {
     mocked.mockResolvedValue({ data: [], source: "error" });
     render(await Page());
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByText(/showing saved information/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 });

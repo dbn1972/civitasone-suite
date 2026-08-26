@@ -40,7 +40,7 @@ describe("PriceBookEditor (QP-002)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [], source: "error" });
     render(<PriceBookEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("creates a new price book", async () => {

@@ -52,13 +52,13 @@ describe("OnboardingList (P1-9)", () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [], source: "api" });
     render(<OnboardingList />);
     await waitFor(() => expect(screen.getByText(/No onboarding cases/i)).toBeInTheDocument());
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("shows the saved-info badge on a load error, not a fake empty list", async () => {
     vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [], source: "error" });
     render(<OnboardingList />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
     expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
     expect(screen.queryByText(/No onboarding cases/i)).not.toBeInTheDocument();
   });
