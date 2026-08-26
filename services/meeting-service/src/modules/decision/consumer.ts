@@ -58,6 +58,8 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { votes } from "../voting/schema.js";
+import { minutes } from "../minutes/schema.js";
+import { isMinutesLocked } from "../minutes/domain.js";
 import { decisions, resolutions } from "./schema.js";
 import {
   computeFinancialYear,
@@ -562,11 +564,28 @@ async function handleDecisionUpdate(msg: CommandEnvelope<DecisionUpdatePayload>)
     if (!(await markProcessed(tx, msg.messageId))) return;
 
     const rows = await tx
-      .select({ id: decisions.id })
+      .select({ id: decisions.id, meetingId: decisions.meetingId })
       .from(decisions)
       .where(and(eq(decisions.id, p.decisionId), eq(decisions.tenantId, msg.tenantId)))
       .limit(1);
-    if (rows.length === 0) return;
+    const existing = rows[0];
+    if (!existing) return;
+
+    // Fix (decision amendable after its minutes are signed): once a meeting's minutes are
+    // approved/signed/circulated, the decisions they recorded must not be silently rewritten —
+    // the legally-binding, hash-anchored minutes and the "live" decision record would otherwise
+    // permanently disagree with nothing surfacing it. Mirrors minutes/consumer.ts's own
+    // `assertMinutesEditable` guard, applied from the decision side since this handler
+    // previously never queried `minutes` at all.
+    const minutesRows = await tx
+      .select({ status: minutes.status })
+      .from(minutes)
+      .where(and(eq(minutes.meetingId, existing.meetingId), eq(minutes.tenantId, msg.tenantId)));
+    if (minutesRows.some((m) => isMinutesLocked(m.status))) {
+      throw new NonRetryableError(
+        `decision ${p.decisionId} cannot be amended: its meeting's minutes are already approved/signed/circulated`,
+      );
+    }
 
     const patch = p.patch;
 

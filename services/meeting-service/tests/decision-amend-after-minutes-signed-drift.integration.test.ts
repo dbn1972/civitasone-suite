@@ -1,35 +1,22 @@
 /**
- * CROSS-MODULE INTEGRATION FINDING (HIGH) — once a meeting's minutes are
- * approved, `minutes/consumer.ts` correctly LOCKS the minutes content itself
- * against further edits (Req 7.5) — but the underlying `decisions` row that the
- * approved minutes recorded can still be silently amended afterward, with no
- * error, no re-opening of the minutes, and no flag anywhere connecting the two.
- * The legally-binding, DSC-hash-anchored minutes and the "live" decision record
- * can permanently disagree, and nothing in the system ever surfaces that.
- *
- * Root cause: `decision/consumer.ts` never imports `minutes/schema.ts` at all
- * (confirmed by grepping every cross-module import in every consumer.ts in this
- * service — decision/consumer.ts imports only `meetings`, `committees`/
- * `committeeMembers`, and `votes`). `handleDecisionUpdate`
- * (decision/consumer.ts:551 onward) applies `patch.text` (and type, authority,
- * effectiveDate, financialImplication, status, …) via a plain `versionedUpdate`
- * keyed only on the decision's own optimistic-lock `version` — there is no
- * query against `minutes`, no check of the parent meeting's status, nothing.
- *
- * Contrast: `minutes/consumer.ts`'s `handleMinutesUpdate` (consumer.ts:472
- * onward) DOES correctly call `assertMinutesEditable(current.status)`
- * (minutes/domain.ts:137-143, `isMinutesLocked` = approved | signed |
- * circulated) and throws `MEETING_INVALID_TRANSITION` (422) rather than let a
- * locked minutes document be edited directly. That protection is real and
- * proven below to work — it just doesn't reach the decisions table the minutes
- * were rendered from.
+ * CROSS-MODULE INTEGRATION FIX (was HIGH) — once a meeting's minutes are
+ * approved, `minutes/consumer.ts` has always correctly LOCKED the minutes
+ * content itself against further edits (Req 7.5). `decision/consumer.ts`'s
+ * `handleDecisionUpdate` now applies the same lock from the decision side:
+ * it looks up the parent meeting's minutes status and rejects the patch via
+ * `isMinutesLocked` (minutes/domain.ts) when minutes are approved/signed/
+ * circulated — mirroring `handleMinutesUpdate`'s own `assertMinutesEditable`
+ * guard. Before this fix, `decision/consumer.ts` never imported
+ * `minutes/schema.ts` at all, so a decision could be silently amended after
+ * the minutes recording it were already signed off, leaving the legally-
+ * binding, hash-anchored minutes permanently disagreeing with the live
+ * decision record.
  *
  * Proven live below: a decision is recorded, and minutes that (per their
  * `content`) already recorded it are approved and locked. Editing the minutes
- * content directly is correctly rejected. Editing the underlying DECISION's
- * text, however, succeeds outright — leaving the approved minutes' `content`
- * and `hash_current` referencing text that, per the live decisions table, is no
- * longer what was decided.
+ * content directly is correctly rejected (unchanged behavior). Editing the
+ * underlying DECISION's text is now ALSO correctly rejected, and the decision
+ * row is confirmed unchanged.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -107,7 +94,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("an approved minutes' content is locked, but the decision it recorded is not", () => {
+describe("an approved minutes' content is locked, and so is the decision it recorded", () => {
   it("sanity: editing the approved minutes' content directly IS correctly rejected", async () => {
     await expect(
       run(msg(COMMANDS.minutesUpdate, { minutesId: MINUTES, version: 1, content: "Tampered content", changeNote: "attempted edit" })),
@@ -118,30 +105,18 @@ describe("an approved minutes' content is locked, but the decision it recorded i
     expect((rows as any[])[0].status).toBe("approved");
   });
 
-  it("BUG: the underlying decision can still be amended after the minutes recording it are approved", async () => {
+  it("FIXED: the underlying decision can no longer be amended once the minutes recording it are approved", async () => {
     const AMENDED_TEXT = "Approve Rs 40 lakh for a full structural overhaul (never actually decided in-meeting)";
-    await run(msg(COMMANDS.decisionUpdate, {
-      decisionId: DECISION, version: 1, patch: { text: AMENDED_TEXT },
-    }));
+    await expect(
+      run(msg(COMMANDS.decisionUpdate, {
+        decisionId: DECISION, version: 1, patch: { text: AMENDED_TEXT },
+      })),
+    ).rejects.toThrow(/minutes are already approved/);
 
+    // The decision row is untouched — no drift between it and the signed-off minutes.
     const rows = await tenantQuery((sql) => sql`select text, version from meeting.decisions where id = ${DECISION}`);
-    expect((rows as any[])[0].text).toBe(AMENDED_TEXT);
-    expect((rows as any[])[0].text).not.toBe(ORIGINAL_TEXT);
-  });
-
-  it("BUG: the approved, hash-anchored minutes now silently disagree with the live decision record", async () => {
-    const rows = await tenantQuery(
-      (sql) => sql`select content, hash_current, status, current_version from meeting.minutes where id = ${MINUTES}`,
-    );
-    const m = (rows as any[])[0];
-    // The signed-off official record still shows the ORIGINAL text and its original hash —
-    // untouched, unre-opened, un-flagged — while meeting.decisions now says something the
-    // committee never actually approved in that form. No mechanism anywhere links the two or
-    // surfaces the divergence.
-    expect(m.content).toBe(ORIGINAL_CONTENT);
-    expect(m.content).toContain("Rs 10 lakh for emergency roof repairs");
-    expect(m.hash_current).toBe(FIXED_HASH);
-    expect(m.status).toBe("approved");
-    expect(m.current_version).toBe(1);
+    expect((rows as any[])[0].text).toBe(ORIGINAL_TEXT);
+    expect((rows as any[])[0].text).not.toBe(AMENDED_TEXT);
+    expect((rows as any[])[0].version).toBe(1);
   });
 });
