@@ -7,7 +7,7 @@ type BillLineItem = {
   description: string;
   quantity: number;
   unitPrice: number;
-  amount: number;
+  amount: string;
   taxCode?: string;
 } & Record<string, unknown>;
 
@@ -32,8 +32,8 @@ export function BillLineItemsTable({ rows }: { rows: BillLineItem[] }) {
           label: "Amount",
           align: "right",
           render: (item) => (
-            <span aria-label={`Amount ${formatMoney(item.amount as number)}`}>
-              {formatMoney(item.amount as number)}
+            <span aria-label={`Amount ${formatMoney(item.amount as string)}`}>
+              {formatMoney(item.amount as string)}
             </span>
           ),
         },

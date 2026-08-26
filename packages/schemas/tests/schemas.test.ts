@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deviceRegisterResponseSchema, paymentSummarySchema, syncPushRequestSchema, TenderDetailSchema } from "../src/index.js";
+import {
+  deviceRegisterResponseSchema, paymentSummarySchema, syncPushRequestSchema, TenderDetailSchema,
+  BillSummarySchema, AdvanceSummarySchema, FinanceVendorDetailSchema,
+} from "../src/index.js";
 
 describe("@civitasone/schemas", () => {
   // Regression test for a CRITICAL cross-service contract bug: bidAmount used
@@ -60,5 +63,85 @@ describe("@civitasone/schemas", () => {
       mutations: [],
     });
     expect(parsed.success).toBe(true);
+  });
+
+  // Regression tests for a CRITICAL bug: payments/queries.ts returns money
+  // fields as bigint-safe decimal STRINGS (H3: paise can exceed 2^53), but
+  // these response schemas typed them as z.number() -- so sendValidated's
+  // own schema.parse() 400'd GET /v1/finance/bills and would have 400'd
+  // GET /v1/finance/advances the moment that table held real data.
+  it("BillSummarySchema accepts the real bigint-safe string amount payments/queries.ts sends", () => {
+    const parsed = BillSummarySchema.safeParse({
+      id: "b-1", billNo: "BILL/2026/001", vendor: "Acme Supplies",
+      amount: "473500000", submittedDate: "2026-08-01", status: "pending", threeWayMatch: "na",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.amount).toBe("473500000");
+  });
+
+  it("AdvanceSummarySchema accepts string amount/adjustedAmount/balance", () => {
+    const parsed = AdvanceSummarySchema.safeParse({
+      id: "a-1", advanceNo: "ADV/2026/001", beneficiary: "Suresh Nair", type: "employee",
+      amount: "10000000", disbursedDate: "2026-08-01", adjustedAmount: "4000000", balance: "6000000",
+      status: "active",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.amount).toBe("10000000");
+      expect(parsed.data.balance).toBe("6000000");
+    }
+  });
+
+  it("AdvanceSummarySchema still defaults adjustedAmount to a stringified 0 when omitted", () => {
+    const parsed = AdvanceSummarySchema.safeParse({
+      id: "a-2", advanceNo: "ADV/2026/002", beneficiary: "Kavita Sharma", type: "employee",
+      amount: "5000000", disbursedDate: "2026-08-01", balance: "5000000", status: "active",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.adjustedAmount).toBe("0");
+  });
+
+  // Regression test for a CRITICAL bug: paymentSummarySchema had no `id`
+  // field, so sendValidated's schema.parse() silently stripped the id the
+  // query returns -- PaymentsTable.tsx's payment-detail link was dead even
+  // though it already reads p.id to build the href.
+  it("paymentSummarySchema preserves id through parse instead of stripping it", () => {
+    const parsed = paymentSummarySchema.safeParse({
+      id: "11111111-2222-4333-8444-555555555555",
+      referenceId: "PAY-001", beneficiary: "Tech Supplies Ltd",
+      amountDisplay: "10,000", status: "Queued",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.id).toBe("11111111-2222-4333-8444-555555555555");
+  });
+
+  it("paymentSummarySchema still accepts a legacy/partial payload with no id", () => {
+    const parsed = paymentSummarySchema.safeParse({
+      referenceId: "PAY-002", beneficiary: "Bharat Construction", amountDisplay: "5,000", status: "Released",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.id).toBeUndefined();
+  });
+
+  // FinanceVendorDetailSchema.bills backs the vendor [id] page's Total
+  // Bills/Total Paid/TDS Deducted rollup, previously permanently empty.
+  it("FinanceVendorDetailSchema defaults bills to [] and accepts a real bill-history entry", () => {
+    const base = {
+      id: "v-1", name: "M/s Test Vendor", category: "supplies", status: "active",
+      pan: "ABCDE1234F", gstin: null, address: "1 Test Road", contactPerson: null,
+      email: null, phone: null, bankName: "Test Bank", ifsc: "TEST0001234",
+      bankAccount: "000111222333", isActive: true, version: 1,
+      createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    const withoutBills = FinanceVendorDetailSchema.safeParse(base);
+    expect(withoutBills.success).toBe(true);
+    if (withoutBills.success) expect(withoutBills.data.bills).toEqual([]);
+
+    const withBills = FinanceVendorDetailSchema.safeParse({
+      ...base,
+      bills: [{ id: "bill-1", billNo: "BILL/001", date: "2026-08-01", amount: "100000", tds: "10000", status: "paid" }],
+    });
+    expect(withBills.success).toBe(true);
+    if (withBills.success) expect(withBills.data.bills).toHaveLength(1);
   });
 });

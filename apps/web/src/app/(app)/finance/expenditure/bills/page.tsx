@@ -11,8 +11,11 @@ export default async function BillsPage() {
 
   const inProcess = bills.filter((b) => b.status === "pending" || b.status === "under_review").length;
   const paid = bills.filter((b) => b.status === "paid").length;
-  const totalAmount = bills.reduce((s, b) => s + b.amount, 0);
-  const paidAmount = bills.filter((b) => b.status === "paid").reduce((s, b) => s + b.amount, 0);
+  // bill.amount is a bigint-safe minor-unit STRING (see packages/types'
+  // BillSummary) -- summing with `+` would string-concatenate instead of
+  // adding, so accumulate in BigInt (formatMoney already accepts bigint).
+  const totalAmount = bills.reduce((s, b) => s + BigInt(b.amount), 0n);
+  const paidAmount = bills.filter((b) => b.status === "paid").reduce((s, b) => s + BigInt(b.amount), 0n);
 
   return (
     <>

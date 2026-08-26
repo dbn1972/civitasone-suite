@@ -10,8 +10,11 @@ export default async function AdvancesPage() {
 
   const openAdvances = advances.filter((a) => a.status === "active").length;
   const overdue = advances.filter((a) => a.status === "overdue").length;
-  const totalBalance = advances.reduce((s, a) => s + a.balance, 0);
-  const settled = advances.filter((a) => a.status === "adjusted").reduce((s, a) => s + a.adjustedAmount, 0);
+  // balance/adjustedAmount are bigint-safe minor-unit STRINGs (see
+  // packages/types' AdvanceSummary) -- summing with `+` would
+  // string-concatenate, so accumulate in BigInt (formatMoney accepts bigint).
+  const totalBalance = advances.reduce((s, a) => s + BigInt(a.balance), 0n);
+  const settled = advances.filter((a) => a.status === "adjusted").reduce((s, a) => s + BigInt(a.adjustedAmount), 0n);
 
   return (
     <>
