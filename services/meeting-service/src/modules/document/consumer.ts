@@ -170,15 +170,24 @@ async function handleDocumentUpload(msg: CommandEnvelope<DocumentUploadPayload>)
     if (!(await markProcessed(tx, msg.messageId))) return;
 
     // Version control (Req 15.4): a replacement carries `previousVersionId`; the new row's
-    // version_num is the predecessor's + 1 (defaults to 1 for a first upload).
+    // version_num is the predecessor's + 1 (defaults to 1 for a first upload). A
+    // previousVersionId that names no real row (deleted / never existed / wrong tenant) is
+    // NOT persisted onto the new row — previous_version_id is now a self-referential FK
+    // (migrations/0009_document_previous_version_fk.sql) and a dangling pointer must never
+    // reach it; version_num likewise falls back to 1, as if this were a first upload
+    // (schema/migration review finding — previously the dangling id was silently kept).
     let versionNum = 1;
+    let resolvedPreviousVersionId: string | null = null;
     if (p.previousVersionId) {
       const prev = await tx
         .select({ versionNum: meetingDocuments.versionNum })
         .from(meetingDocuments)
         .where(and(eq(meetingDocuments.id, p.previousVersionId), eq(meetingDocuments.tenantId, p.tenantId)))
         .limit(1);
-      if (prev[0]) versionNum = prev[0].versionNum + 1;
+      if (prev[0]) {
+        versionNum = prev[0].versionNum + 1;
+        resolvedPreviousVersionId = p.previousVersionId;
+      }
     }
 
     await tx.insert(meetingDocuments).values({
@@ -194,7 +203,7 @@ async function handleDocumentUpload(msg: CommandEnvelope<DocumentUploadPayload>)
       classification,
       documentType: p.documentType ?? null,
       versionNum,
-      previousVersionId: p.previousVersionId ?? null,
+      previousVersionId: resolvedPreviousVersionId,
       retentionYears,
       expiresAt,
       createdBy: msg.actorId,
