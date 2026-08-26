@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }}>
+    <main className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label="Loading…">
       <div className="space-y-2" style={{ marginBottom: 24 }}>
         <div className="h-4 w-40 rounded bg-gray-200" style={{ height: 16, width: 160, borderRadius: 4, background: "#e5e7eb" }} />
         <div className="h-8 w-64 rounded bg-gray-200" style={{ height: 32, width: 256, borderRadius: 4, background: "#e5e7eb" }} />
