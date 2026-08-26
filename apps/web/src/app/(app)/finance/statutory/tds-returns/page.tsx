@@ -12,7 +12,7 @@ export default async function TDSReturnsPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="TDS Returns"
-        subtitle="Quarterly TDS filing and Form 16A issuance."
+        subtitle="Quarterly vendor TDS deduction register, by section and quarter, with CSV export."
         back="/finance"
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />

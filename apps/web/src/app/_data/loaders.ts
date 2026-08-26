@@ -1742,8 +1742,9 @@ export async function getFinanceGLEntries(): Promise<LoaderResult<GLEntrySummary
   });
 }
 
-export async function getFinancialStatements(): Promise<LoaderResult<FinancialStatementSummary[]>> {
-  return fetchJson<unknown, FinancialStatementSummary[]>("/api/v1/finance/statements", [], {
+export async function getFinancialStatements(fy?: string): Promise<LoaderResult<FinancialStatementSummary[]>> {
+  const qs = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+  return fetchJson<unknown, FinancialStatementSummary[]>(`/api/v1/finance/statements${qs}`, [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.statements",
     responseSchema: FinancialStatementSummaryListSchema,

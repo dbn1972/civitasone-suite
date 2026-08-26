@@ -1,76 +1,67 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { getFinanceSchemeById } from "@/app/_data/loaders";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
-export default function SchemeDetailPage({ params }: { params: { id: string } }) {
-  const scheme = {
-    name: "PM Gram Sadak Yojana",
-    sanctioned: "₹2,500 Cr",
-    released: "₹1,800 Cr",
-    spent: "₹1,520 Cr",
-    spentPercent: "84%",
-    status: "active",
-    ministry: "Ministry of Rural Development",
-    startDate: "01-Apr-2024",
-    endDate: "31-Mar-2026",
-  };
+/**
+ * Scheme detail. Previously 100% hardcoded fake data ("PM Gram Sadak Yojana",
+ * fixed milestone/release tables) with `params.id` never read — now wired to
+ * the real GET /v1/finance/schemes/:id loader (same one the scheme-tracking
+ * list already uses for its row links). That backend route does not exist
+ * yet (see FinanceSchemeSummary's "no live GET route" note in
+ * packages/types), so today this honestly falls into the empty state below;
+ * once finance-service ships the route, real data flows through
+ * automatically with no further frontend change. The fabricated milestones
+ * and fund-release tables are dropped rather than kept fake — the real
+ * scheme record carries no such fields today.
+ */
+export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
+  const { data: scheme, source } = await getFinanceSchemeById(params.id);
 
-  type Milestone = { milestone: string; target: string; achieved: string; status: string; [k: string]: unknown };
-  const milestones: Milestone[] = [
-    { milestone: "Phase 1 — DPR Preparation", target: "30-Jun-2024", achieved: "28-Jun-2024", status: "approved" },
-    { milestone: "Phase 2 — Tendering", target: "30-Sep-2024", achieved: "15-Oct-2024", status: "approved" },
-    { milestone: "Phase 3 — Construction Start", target: "01-Nov-2024", achieved: "15-Nov-2024", status: "active" },
-    { milestone: "Phase 4 — Mid-term Review", target: "31-Mar-2025", achieved: "—", status: "pending" },
-    { milestone: "Phase 5 — Completion", target: "31-Mar-2026", achieved: "—", status: "pending" },
-  ];
+  if (!scheme) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Scheme Detail" back="/finance/expenditure/scheme-tracking" />
+        <EmptyState
+          icon="🎯"
+          title="Scheme detail not available"
+          message="This scheme may not exist, or scheme detail lookup isn't available yet. Check Scheme Tracking for the current list."
+        />
+      </main>
+    );
+  }
 
-  type Release = { releaseNo: string; date: string; amount: string; ucStatus: string; [k: string]: unknown };
-  const releases: Release[] = [
-    { releaseNo: "REL/2024/001", date: "15-Apr-2024", amount: "₹600 Cr", ucStatus: "approved" },
-    { releaseNo: "REL/2024/002", date: "01-Jul-2024", amount: "₹500 Cr", ucStatus: "approved" },
-    { releaseNo: "REL/2024/003", date: "01-Oct-2024", amount: "₹400 Cr", ucStatus: "pending" },
-    { releaseNo: "REL/2025/001", date: "05-Jan-2025", amount: "₹300 Cr", ucStatus: "pending" },
-  ];
+  const outlay = Number(scheme.outlayMinor);
+  const utilised = Number(scheme.utilisedMinor);
+  const utilisationPct = outlay > 0 ? Math.round((utilised / outlay) * 100) : 0;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={scheme.name} subtitle={scheme.ministry} back="/finance/expenditure/scheme-tracking" />
+      <PageHeader
+        title={scheme.name}
+        subtitle={scheme.funding ?? scheme.code}
+        back="/finance/expenditure/scheme-tracking"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Sanctioned" value={scheme.sanctioned} />
-        <StatCard icon="📤" iconBg="#e7edfd" label="Released" value={scheme.released} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Spent" value={scheme.spent} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Utilization" value={scheme.spentPercent} />
+        <StatCard icon="₹" iconBg="#ecfdf3" label="Outlay" value={formatMoney(scheme.outlayMinor)} />
+        <StatCard icon="📤" iconBg="#e7edfd" label="Utilised" value={formatMoney(scheme.utilisedMinor)} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Utilisation" value={`${utilisationPct}%`} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={scheme.status} />
       </StatGrid>
 
       <Card title="Scheme Details" padding>
         <div className="fields">
-          <div className="field"><span className="label">Scheme</span><span>{scheme.name}</span></div>
-          <div className="field"><span className="label">Ministry</span><span>{scheme.ministry}</span></div>
-          <div className="field"><span className="label">Duration</span><span>{scheme.startDate} to {scheme.endDate}</span></div>
+          <div className="field"><span className="label">Code</span><span className="mono">{scheme.code}</span></div>
+          <div className="field"><span className="label">Name</span><span>{scheme.name}</span></div>
+          <div className="field"><span className="label">Funding</span><span>{scheme.funding ?? "—"}</span></div>
+          <div className="field"><span className="label">Currency</span><span>{scheme.currency}</span></div>
+          <div className="field"><span className="label">Outlay</span><span>{formatMoney(scheme.outlayMinor)}</span></div>
+          <div className="field"><span className="label">Utilised</span><span>{formatMoney(scheme.utilisedMinor)}</span></div>
+          <div className="field"><span className="label">Created</span><span>{formatIndianDate(scheme.createdAt)}</span></div>
+          <div className="field"><span className="label">Last Updated</span><span>{formatIndianDate(scheme.updatedAt)}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={scheme.status} /></div>
         </div>
-      </Card>
-
-      <Card title="Milestones">
-        <DataTable<Milestone>
-          columns={[
-            { key: "milestone", label: "Milestone" },
-            { key: "target", label: "Target Date" },
-            { key: "achieved", label: "Achieved" },
-            { key: "status", label: "Status", cellType: "status" },
-          ]}
-          rows={milestones}
-        />
-      </Card>
-
-      <Card title="Fund Releases & UC Status">
-        <DataTable<Release>
-          columns={[
-            { key: "releaseNo", label: "Release No" },
-            { key: "date", label: "Date" },
-            { key: "amount", label: "Amount", align: "right" },
-            { key: "ucStatus", label: "UC Status", cellType: "status" },
-          ]}
-          rows={releases}
-        />
       </Card>
     </main>
   );

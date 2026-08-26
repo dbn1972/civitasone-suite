@@ -132,8 +132,9 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
         <>
           Hard-close period <strong>{row.period}</strong>. No further postings will be accepted for this period, and
           this action <strong>cannot be undone</strong> from this screen — reversing it requires a Finance Admin to
-          explicitly reopen the period, which is separately audit-logged. If the period has unposted vouchers the
-          server will reject this request.
+          explicitly reopen the period, which is separately audit-logged. Existing unposted vouchers in this period
+          are <strong>not</strong> automatically rejected by the server — reconcile, post, or cancel them first, or
+          they will be left stranded in this period once it is closed.
         </>
       );
     }

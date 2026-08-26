@@ -44,6 +44,19 @@ export function currentFinancialYear(now: Date = new Date()): string {
   return financialYearOf(now);
 }
 
+/**
+ * Calendar year-month label ("2026-08") for `date`, as observed in
+ * Asia/Kolkata. For filing-period pickers (GST, TDS) that are scoped to a
+ * calendar month rather than a fiscal year — same IST-boundary reasoning as
+ * `financialYearOf` above: a naive `new Date().getMonth()` reads the wrong
+ * month for the first 5.5 hours of each new IST day that falls on a UTC date
+ * boundary.
+ */
+export function currentMonthPeriod(now: Date = new Date()): string {
+  const { year, month } = istYearMonth(now);
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 /** The current Indian FY and the `count - 1` preceding ones, most-recent first. */
 export function recentFinancialYears(count = 5, now: Date = new Date()): string[] {
   const currentStart = Number(currentFinancialYear(now).slice(0, 4));

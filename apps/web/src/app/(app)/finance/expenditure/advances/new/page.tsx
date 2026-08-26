@@ -16,6 +16,21 @@ import { PageHeader } from "../../../../../_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
+/** Mirrors the { message } / { error } envelope parsing in FinanceActions.tsx
+ * and JournalEntryForm.tsx, so a failed submit shows the real backend reason
+ * instead of the raw, unparsed response body. */
+async function parseErrorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  let msg = `Request failed (${res.status}).`;
+  try {
+    const j = JSON.parse(text);
+    msg = j?.message ?? j?.error ?? msg;
+  } catch {
+    if (text) msg = text;
+  }
+  return msg;
+}
+
 export default function NewAdvancePage() {
   const router = useRouter();
   const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", amount: "", dueDate: "" });
@@ -45,7 +60,7 @@ export default function NewAdvancePage() {
           dueDate: form.dueDate || undefined,
         }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+      if (!(res.ok || res.status === 202)) throw new Error(await parseErrorMessage(res));
       setMessage("Advance recorded.");
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/advances"), 700);

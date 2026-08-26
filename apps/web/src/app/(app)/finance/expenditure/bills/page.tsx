@@ -21,7 +21,10 @@ export default async function BillsPage() {
         subtitle="Receive, pre-audit, pass and pay bills against sanctions."
         actions={
           <>
-            <Link href="/finance/config" className="btn ghost">Pre-audit rules</Link>
+            {/* /finance/config sets up FYs/banks, not pre-audit rules — there is no
+                dedicated pre-audit-rules screen yet, so this points to the closest
+                real destination rather than promising content that doesn't exist. */}
+            <Link href="/finance/config" className="btn ghost">Finance Configuration</Link>
             <BillCreateAction />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

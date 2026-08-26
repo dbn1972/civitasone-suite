@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 type FY = { id: string; code: string; label: string; startDate: string; endDate: string; status: string } & Record<string, unknown>;
 type Bank = { id: string; bankName: string; branchName: string | null; accountNo: string; ifsc: string; accountType: string; purpose: string | null; status: string } & Record<string, unknown>;
 
-async function getFYs(): Promise<FY[]> {
-  const r = await fetchJson<unknown, FY[]>("/api/v1/finance/fiscal-years", [], { telemetryKey: "config.fy", mapResponse: (p) => (p as { data: FY[] })?.data ?? null });
-  return r.data;
+async function getFYs(): Promise<LoaderResult<FY[]>> {
+  return fetchJson<unknown, FY[]>("/api/v1/finance/fiscal-years", [], { telemetryKey: "config.fy", mapResponse: (p) => (p as { data: FY[] })?.data ?? null });
 }
-async function getBanks(): Promise<Bank[]> {
-  const r = await fetchJson<unknown, Bank[]>("/api/v1/finance/bank-accounts", [], { telemetryKey: "config.banks", mapResponse: (p) => (p as { data: Bank[] })?.data ?? null });
-  return r.data;
+async function getBanks(): Promise<LoaderResult<Bank[]>> {
+  return fetchJson<unknown, Bank[]>("/api/v1/finance/bank-accounts", [], { telemetryKey: "config.banks", mapResponse: (p) => (p as { data: Bank[] })?.data ?? null });
 }
 
 export default async function FinanceConfigPage() {
-  const [fys, banks] = await Promise.all([getFYs(), getBanks()]);
+  const [{ data: fys, source: fySource }, { data: banks, source: bankSource }] = await Promise.all([getFYs(), getBanks()]);
+  const source = fySource === "error" || bankSource === "error" ? "error" : "api";
   const activeFY = fys.find((f) => f.status === "active");
 
   return (
@@ -26,6 +26,7 @@ export default async function FinanceConfigPage() {
         back="/finance"
         backLabel="Finance"
         help="finance"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <StatGrid>

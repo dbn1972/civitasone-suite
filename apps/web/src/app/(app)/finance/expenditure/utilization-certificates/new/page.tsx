@@ -17,6 +17,21 @@ import { PageHeader } from "../../../../../_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
+/** Mirrors the { message } / { error } envelope parsing in FinanceActions.tsx
+ * and JournalEntryForm.tsx, so a failed submit shows the real backend reason
+ * instead of the raw, unparsed response body. */
+async function parseErrorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  let msg = `Request failed (${res.status}).`;
+  try {
+    const j = JSON.parse(text);
+    msg = j?.message ?? j?.error ?? msg;
+  } catch {
+    if (text) msg = text;
+  }
+  return msg;
+}
+
 export default function NewUCPage() {
   const router = useRouter();
   const [form, setForm] = useState({ ucNo: "", purpose: "", scheme: "", amount: "" });
@@ -39,7 +54,7 @@ export default function NewUCPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ucNo: form.ucNo, purpose: form.purpose, scheme: form.scheme || undefined, amountMinor, currency: "INR" }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+      if (!(res.ok || res.status === 202)) throw new Error(await parseErrorMessage(res));
       setMessage("Utilization certificate submitted.");
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/utilization-certificates"), 700);
