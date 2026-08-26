@@ -8,6 +8,7 @@
  * DDO/PAO code validation, and vendor tax ID format.
  */
 import { describe, it, expect } from "vitest";
+import { assertOpeningBalancesBalanced, DomainError } from "../src/modules/masters/domain.js";
 
 // ─── Fiscal Year Format Validation ───────────────────────────────────────────
 
@@ -49,6 +50,33 @@ describe("opening balance equation: sum(Dr) must equal sum(Cr)", () => {
     const totalDr = entries.reduce((s, e) => s + e.debitMinor, 0n);
     const totalCr = entries.reduce((s, e) => s + e.creditMinor, 0n);
     expect(totalDr).not.toBe(totalCr);
+  });
+
+  // The two tests above check the arithmetic CONCEPT in the abstract but
+  // never call the actual enforcement code -- which is exactly how the real
+  // integrity gap went unnoticed: fy-routes.ts validated each entry
+  // individually but never summed them, and masters/consumer.ts inserted
+  // unconditionally. These tests exercise the real assertOpeningBalancesBalanced
+  // (masters/domain.ts), the function fy-routes.ts and consumer.ts now both
+  // call before accepting/inserting a set.
+  it("assertOpeningBalancesBalanced (the real enforcement fn) accepts a balanced set", () => {
+    expect(() => assertOpeningBalancesBalanced([
+      { debitMinor: 500_000, creditMinor: 0 },
+      { debitMinor: 0, creditMinor: 300_000 },
+      { debitMinor: 0, creditMinor: 200_000 },
+    ])).not.toThrow();
+  });
+
+  it("assertOpeningBalancesBalanced rejects the same unbalanced set with a typed DomainError", () => {
+    expect(() => assertOpeningBalancesBalanced([
+      { debitMinor: 500_000, creditMinor: 0 },
+      { debitMinor: 0, creditMinor: 499_999 },
+    ])).toThrow(DomainError);
+    try {
+      assertOpeningBalancesBalanced([{ debitMinor: 500_000, creditMinor: 0 }, { debitMinor: 0, creditMinor: 499_999 }]);
+    } catch (err) {
+      expect((err as DomainError).code).toBe("OPENING_BALANCE_UNBALANCED");
+    }
   });
 });
 
