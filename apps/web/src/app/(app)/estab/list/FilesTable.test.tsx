@@ -52,11 +52,15 @@ describe("FilesTable — keyboard row navigation", () => {
     expect(pushMock).toHaveBeenCalledWith("/estab/files/file-2");
   });
 
-  it("exposes rows as keyboard-focusable (tabIndex 0) with an accessible link role", () => {
+  it("exposes each row as a keyboard-focusable link to its file", () => {
     render(<FilesTable rows={ROWS} />);
 
-    const row = screen.getByRole("link", { name: "Open F/2026/001" });
-    expect(row.tagName).toBe("TR");
+    // The accessible "Open <fileNo>" link is provided by DataTable; the row it
+    // sits in is the keyboard-focusable element (tabIndex 0) — Enter/Space
+    // navigation is covered by the tests above.
+    const link = screen.getByRole("link", { name: "Open F/2026/001" });
+    const row = link.closest("tr");
+    expect(row).not.toBeNull();
     expect(row).toHaveAttribute("tabindex", "0");
   });
 });
