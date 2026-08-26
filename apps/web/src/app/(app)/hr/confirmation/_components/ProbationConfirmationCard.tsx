@@ -3,10 +3,17 @@
  * ProbationConfirmationCard / ProbationConfirmationList — Sprint 14 / Lifecycle Phase 2
  * Card grid for employees due for confirmation after 2-year probation (CCS Rules).
  * Each card: probation start, due date, manager recommendation badge, Confirm/Extend buttons.
- * Optimistic local UI — no API mutation in Phase 2.
+ *
+ * "Confirm" calls the real PATCH /v1/hrms/employees/:id/confirm. "Extend" has
+ * no backend endpoint at all (checked hrms-service/modules/{employee,lifecycle}
+ * — no probation-extension route exists anywhere), so it stays disabled with
+ * an honest tooltip rather than faking a local state change, which is what
+ * this file used to do for BOTH actions ("Optimistic local UI — no API
+ * mutation" — clicking "Confirm" showed a checkmark and persisted nothing;
+ * a refresh silently reverted it).
  */
 import { useState } from "react";
-import { StatusPill } from "@/app/_components/ds";
+import { StatusPill, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type ConfirmationRow = {
@@ -46,6 +53,22 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   const days = daysDiff(row.dueDate);
   const due  = dueMeta(days);
   const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
+
+  const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
+    onConfirm: async () => {
+      const confirmationDate = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`/api/proxy/v1/hrms/employees/${row.id}/confirm`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmationDate }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Confirmation failed (${res.status})`);
+      }
+    },
+    onSuccess: () => setAction("confirmed"),
+  });
 
   const isActionable =
     action === "default" &&
@@ -149,7 +172,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         {isActionable && (
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={() => setAction("confirmed")}
+              onClick={trigger}
               style={{
                 padding: "6px 16px", borderRadius: 6, border: "none",
                 background: "#16a34a", color: "#fff",
@@ -159,21 +182,43 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
             >
               Confirm
             </button>
-            <button
-              onClick={() => setAction("extended")}
-              style={{
-                padding: "6px 16px", borderRadius: 6,
-                border: "1px solid var(--line, #e2e8f0)",
-                background: "var(--bg2, #f8fafc)",
-                fontSize: "0.8125rem", fontWeight: 500,
-                cursor: "pointer", color: "var(--ink)",
-              }}
-              aria-label={`Extend probation for ${row.employee}`}
+            <span
+              style={{ position: "relative" }}
+              title="Probation extension isn't available in this release yet"
             >
-              Extend
-            </button>
+              <button
+                disabled
+                style={{
+                  padding: "6px 16px", borderRadius: 6,
+                  border: "1px solid var(--line, #e2e8f0)",
+                  background: "var(--bg2, #f8fafc)",
+                  fontSize: "0.8125rem", fontWeight: 500,
+                  cursor: "not-allowed", color: "var(--ink3, #94a3b8)",
+                }}
+                aria-label={`Extend probation for ${row.employee} — not available yet`}
+              >
+                Extend
+              </button>
+            </span>
           </div>
         )}
+
+        <ConfirmDialog
+          open={open}
+          title={`Confirm ${row.employee}'s service?`}
+          description={
+            <>
+              This ends the probation period and marks the employee&apos;s service as confirmed
+              as of today ({formatIndianDate(new Date().toISOString())}), per CCS Conduct Rules.
+              This is a formal service-record action and cannot be undone from here.
+            </>
+          }
+          confirmLabel="Confirm service"
+          busy={busy}
+          errorMessage={error}
+          onConfirm={() => void confirm()}
+          onCancel={cancel}
+        />
       </div>
     </article>
   );
