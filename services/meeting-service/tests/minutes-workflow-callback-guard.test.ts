@@ -25,8 +25,9 @@
  * (`minutes/repo.ts` `classifyIntegrity`) will later read as "tampered" for a record that was
  * never legitimately signable in the first place.
  *
- * `it.fails()` encodes the CORRECT behavior (repo precedent:
- * visitor-service/tests/badge-print-revoked-pass.test.ts) — flip to a plain `it()` once fixed.
+ * FIXED: the approve branch now requires `current.status === "submitted"` (same precondition as
+ * the reject branch) before writing "approved" — a still-draft record is now a silent no-op, so
+ * it never reaches the sign path with a null `hash_current` either.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -124,7 +125,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("[BUG] workflow.task.completed force-approves a DRAFT minutes record with no transition check", () => {
+describe("[FIXED] workflow.task.completed no longer force-approves a DRAFT minutes record", () => {
   it("sanity: the reject branch correctly ignores a draft record (proves the asymmetry is real)", async () => {
     const minutesId = randomUUID();
     await seedDraftMinutes(minutesId);
@@ -135,27 +136,17 @@ describe("[BUG] workflow.task.completed force-approves a DRAFT minutes record wi
     expect(row.status).toBe("draft"); // correctly a no-op — reject DOES check status === 'submitted'
   });
 
-  it.fails("must NOT approve a minutes record that is still 'draft' (never submitted for review)", async () => {
+  it("must NOT approve a minutes record that is still 'draft' (never submitted for review)", async () => {
     const minutesId = randomUUID();
     await seedDraftMinutes(minutesId);
 
     await run(workflowTaskCompleted(minutesId, "approved"));
 
     const row = await readMinutes(minutesId);
-    // Correct behavior: approving a draft that skipped chairperson review should be rejected
-    // (or at minimum a no-op), the same way the reject branch protects 'draft' records.
+    // Correct behavior: approving a draft that skipped chairperson review is a no-op, the same
+    // way the reject branch protects 'draft' records.
     expect(row.status).toBe("draft");
-  });
-
-  it("characterizes today's actual (buggy) behavior: the draft IS force-approved, with no hash anchor", async () => {
-    const minutesId = randomUUID();
-    await seedDraftMinutes(minutesId);
-
-    await run(workflowTaskCompleted(minutesId, "approved"));
-
-    const row = await readMinutes(minutesId);
-    expect(row.status).toBe("approved"); // never submitted, never chairperson-reviewed
-    expect(row.approved_by).toBe(WORKFLOW_ACTOR);
-    expect(row.hash_current).toBeNull(); // applyMinutesOutcome never computes the hash chain
+    expect(row.approved_by).toBeNull();
+    expect(row.hash_current).toBeNull();
   });
 });

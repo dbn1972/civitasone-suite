@@ -35,12 +35,12 @@ const ASSIGNEE = "33333333-0000-4000-8000-0000000000a1";
 const handlers = new Map<string, (msg: CommandEnvelope<any>) => Promise<void>>();
 registerActionItemConsumers((topic, h) => handlers.set(topic, h as any));
 
-function msg<T>(type: string, payload: T, messageId = randomUUID()): CommandEnvelope<T> {
+function msg<T>(type: string, payload: T, messageId = randomUUID(), actorId = ACTOR): CommandEnvelope<T> {
   return {
     messageId,
     type,
     tenantId: TENANT,
-    actorId: ACTOR,
+    actorId,
     correlationId: randomUUID(),
     schemaVersion: "1.0",
     payload,
@@ -183,7 +183,8 @@ describe("action_item full lifecycle: assign → acknowledge → progress → ev
     const id = randomUUID();
     await run(assignMsg(id));
 
-    await run(msg(COMMANDS.actionItemAcknowledge, { actionItemId: id, tenantId: TENANT, version: 1 }));
+    // Self-scope (Req 9.4): acknowledge must be done by the assignee themselves.
+    await run(msg(COMMANDS.actionItemAcknowledge, { actionItemId: id, tenantId: TENANT, version: 1 }, randomUUID(), ASSIGNEE));
 
     const row = await readItem(id);
     expect(row.status).toBe("acknowledged");
@@ -194,9 +195,10 @@ describe("action_item full lifecycle: assign → acknowledge → progress → ev
     const id = randomUUID();
     await run(assignMsg(id));
 
+    // Self-scope (Req 9.x): progress updates must be logged by the assignee themselves.
     await run(msg(COMMANDS.actionItemProgress, {
       actionItemId: id, tenantId: TENANT, updateText: "Draft circular prepared", percentage: 40,
-    }));
+    }, randomUUID(), ASSIGNEE));
 
     expect(await progressCount(id)).toBe(1);
     expect((await readItem(id)).status).toBe("in_progress");
@@ -207,9 +209,10 @@ describe("action_item full lifecycle: assign → acknowledge → progress → ev
     await run(assignMsg(id));
     const notifBefore = await outboxCount("notification.send");
 
+    // Self-scope (Req 9.7): evidence must be submitted by the assignee themselves.
     await run(msg(COMMANDS.actionItemEvidence, {
       actionItemId: id, tenantId: TENANT, evidenceUrl: "https://minio.local/evidence/circular.pdf",
-    }));
+    }, randomUUID(), ASSIGNEE));
 
     const row = await readItem(id);
     expect(row.status).toBe("evidence_submitted");
@@ -222,13 +225,16 @@ describe("action_item full lifecycle: assign → acknowledge → progress → ev
   it("verifies submitted evidence → completed (P22 satisfied)", async () => {
     const id = randomUUID();
     await run(assignMsg(id));
+    // Self-scope: evidence comes from the assignee.
     await run(msg(COMMANDS.actionItemEvidence, {
       actionItemId: id, tenantId: TENANT, evidenceNote: "Circular #123 issued and filed",
-    }));
+    }, randomUUID(), ASSIGNEE));
 
+    // Verifier identity is bound to the authenticated caller (Req 9.7 fix) — verify as SECRETARY,
+    // a genuinely different person from ASSIGNEE, rather than trusting the body's verifierId.
     await run(msg(COMMANDS.actionItemVerify, {
       actionItemId: id, tenantId: TENANT, verifierId: SECRETARY, verified: true,
-    }));
+    }, randomUUID(), SECRETARY));
 
     const row = await readItem(id);
     expect(row.status).toBe("completed");
@@ -254,23 +260,25 @@ describe("action_item full lifecycle: assign → acknowledge → progress → ev
 
 describe("action_item ownership — assignee self-scope (SECURITY GAP)", () => {
   /**
-   * AUDIT FINDING (HIGH): routes.ts's own RBAC doc comment claims: "committee_member — Update own
-   * + act on their own assignment (acknowledge/progress/evidence). The self-scope (assignee ==
-   * actor) is not enforced here at the role gate; the consumer owns the per-row rules." That claim
-   * is false: `handleAcknowledge` / `handleProgress` / `handleEvidence` load the row and mutate it
-   * without ever comparing `msg.actorId` to `row.assigneeId`. Any authenticated `committee_member`
-   * (a coarse, tenant-wide role — not scoped to being THIS item's assignee) can acknowledge, log
-   * progress on, or submit fabricated "evidence" for ANY OTHER member's assigned action item.
-   * `ACTOR` (the command's authenticated sender throughout this file, via `msg()`) is a distinct
-   * identity from `ASSIGNEE` (who every item below is actually assigned to) — every call in this
-   * block acts on ASSIGNEE's item as ACTOR, and none of them are ASSIGNEE.
+   * AUDIT FINDING (HIGH), FIXED: routes.ts's own RBAC doc comment claims: "committee_member —
+   * Update own + act on their own assignment (acknowledge/progress/evidence). The self-scope
+   * (assignee == actor) is not enforced here at the role gate; the consumer owns the per-row
+   * rules." That claim used to be false: `handleAcknowledge` / `handleProgress` / `handleEvidence`
+   * loaded the row and mutated it without ever comparing `msg.actorId` to `row.assigneeId`. Any
+   * authenticated `committee_member` (a coarse, tenant-wide role — not scoped to being THIS item's
+   * assignee) could acknowledge, log progress on, or submit fabricated "evidence" for ANY OTHER
+   * member's assigned action item. `ACTOR` (the command's authenticated sender throughout this
+   * file, via `msg()`) is a distinct identity from `ASSIGNEE` (who every item below is actually
+   * assigned to) — every call in this block acts on ASSIGNEE's item as ACTOR, and none of them
+   * are ASSIGNEE.
    *
-   * `it.fails()` asserts the CORRECT (claimed) behavior — currently failing, because the consumer
-   * silently allows it. Flip each to a plain `it()` once ownership is enforced. The plain
-   * "[BLAST RADIUS]" case documents the real current behavior end-to-end: a non-assignee can walk
-   * a stranger's action item all the way to `completed` without the assignee ever acting.
+   * Fixed in action-item/consumer.ts: `handleAcknowledge` / `handleProgress` / `handleEvidence`
+   * now throw `NonRetryableError` (permanent/DLQ) whenever `msg.actorId !== row.assigneeId` —
+   * the routes.ts comment's claim is now actually true. The former "[BLAST RADIUS]" case (a
+   * non-assignee walking a stranger's item all the way to `completed`) is replaced below by
+   * "[FIXED]", which proves the chain is now cut off at the very first step.
    */
-  it.fails("rejects an acknowledge from someone other than the item's assignee", async () => {
+  it("rejects an acknowledge from someone other than the item's assignee", async () => {
     const id = randomUUID();
     await run(assignMsg(id)); // assigned to ASSIGNEE; the command below runs as ACTOR
     await expect(
@@ -278,7 +286,7 @@ describe("action_item ownership — assignee self-scope (SECURITY GAP)", () => {
     ).rejects.toBeInstanceOf(NonRetryableError);
   });
 
-  it.fails("rejects a progress update from someone other than the item's assignee", async () => {
+  it("rejects a progress update from someone other than the item's assignee", async () => {
     const id = randomUUID();
     await run(assignMsg(id));
     await expect(
@@ -288,7 +296,7 @@ describe("action_item ownership — assignee self-scope (SECURITY GAP)", () => {
     ).rejects.toBeInstanceOf(NonRetryableError);
   });
 
-  it.fails("rejects evidence submitted by someone other than the item's assignee", async () => {
+  it("rejects evidence submitted by someone other than the item's assignee", async () => {
     const id = randomUUID();
     await run(assignMsg(id));
     await expect(
@@ -298,21 +306,18 @@ describe("action_item ownership — assignee self-scope (SECURITY GAP)", () => {
     ).rejects.toBeInstanceOf(NonRetryableError);
   });
 
-  it("[BLAST RADIUS] a non-assignee can single-handedly fabricate evidence and have it verified completed — the real assignee never acts", async () => {
+  it("[FIXED] a non-assignee is blocked at the very first step and never reaches evidence/verify", async () => {
     const id = randomUUID();
-    await run(assignMsg(id)); // assigned to ASSIGNEE, who does nothing below — ACTOR does it all
-    await run(msg(COMMANDS.actionItemAcknowledge, { actionItemId: id, tenantId: TENANT, version: 1 }));
-    await run(msg(COMMANDS.actionItemProgress, {
-      actionItemId: id, tenantId: TENANT, updateText: "done (by ACTOR, not ASSIGNEE)", percentage: 100,
-    }));
-    await run(msg(COMMANDS.actionItemEvidence, {
-      actionItemId: id, tenantId: TENANT, evidenceUrl: "https://minio.local/evidence/forged.pdf",
-    }));
-    // The verifier has no signal that ASSIGNEE — the officer of record — never touched this item.
-    await run(msg(COMMANDS.actionItemVerify, { actionItemId: id, tenantId: TENANT, verifierId: SECRETARY, verified: true }));
+    await run(assignMsg(id)); // assigned to ASSIGNEE; ACTOR (not the assignee) tries to act on it
+    await expect(
+      run(msg(COMMANDS.actionItemAcknowledge, { actionItemId: id, tenantId: TENANT, version: 1 })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+
+    // Blocked before any state changed — the item never left "assigned", so a non-assignee has no
+    // path to fabricate evidence or reach "completed" the way the former bug allowed end-to-end.
     const row = await readItem(id);
-    expect(row.status).toBe("completed");
-    expect(row.evidence_url).toBe("https://minio.local/evidence/forged.pdf");
+    expect(row.status).toBe("assigned");
+    expect(row.evidence_url).toBeNull();
   });
 });
 

@@ -20,19 +20,22 @@
  * out of `draft` (never reaches `in_progress`, `actual_start_at` stays NULL
  * forever) passes this check unconditionally, for ANY deadline.
  *
- * Proven live below: a meeting is created in `draft`, cancelled immediately
- * (legal: `draft -> cancelled` per meeting-core/domain.ts BASE_TRANSITIONS),
- * and never once starts. An action item is then successfully assigned against
- * it — persisted, escalation-scheduled, with a real assignee and deadline — for
- * a meeting that, by the system's own state machine, never happened. A second
- * case shows the same hole for a meeting cancelled AFTER it started and was
- * adjourned (`actual_start_at` is set, so the P19 guard is live and satisfied,
- * but `meeting.status` is just as unchecked).
+ * FIXED: `handleAssign` now checks `meeting.status` against the same
+ * `CONCLUDED_MEETING_STATES` (cancelled/closed/archived) vocabulary
+ * `ensureAtrAgendaItem` already used to skip picking an upcoming meeting,
+ * throwing `NonRetryableError` (permanent/DLQ) before the INSERT when the
+ * parent meeting has concluded. Proven live below: a meeting is created in
+ * `draft`, cancelled immediately (legal: `draft -> cancelled` per
+ * meeting-core/domain.ts BASE_TRANSITIONS), and never once starts — assigning
+ * an action item against it is now rejected, with no row persisted. A second
+ * case shows the same rejection for a meeting cancelled AFTER it started and
+ * was adjourned (`actual_start_at` is set, so the P19 guard was already live
+ * and satisfied there — `meeting.status` is the piece that was unchecked).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerMeetingCoreConsumers } from "../src/modules/meeting-core/consumer.js";
@@ -97,7 +100,7 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("action items can be assigned to meetings that never happened or were called off", () => {
+describe("action items can no longer be assigned to meetings that never happened or were called off", () => {
   it("sanity: the never-started meeting is cancelled straight from draft (legal transition, actual_start_at stays null)", async () => {
     await run(msg(COMMANDS.meetingCancel, { meetingId: MEETING_NEVER_STARTED, version: 1, reason: "Committee dissolved before first sitting" }));
     const rows = await tenantQuery((sql) => sql`select status, actual_start_at from meeting.meetings where id = ${MEETING_NEVER_STARTED}`);
@@ -105,33 +108,36 @@ describe("action items can be assigned to meetings that never happened or were c
     expect((rows as any[])[0].actual_start_at).toBeNull();
   });
 
-  it("BUG: an action item is still successfully assigned against the never-started, cancelled meeting", async () => {
+  it("FIXED: an action item can no longer be assigned against the never-started, cancelled meeting", async () => {
     const deadline = new Date(Date.now() + 3 * 86400000).toISOString();
-    await run(msg(COMMANDS.actionItemAssign, {
-      actionItemId: ACTION_ITEM_1, meetingId: MEETING_NEVER_STARTED, tenantId: TENANT,
-      description: "Follow up on a decision from a meeting that never occurred",
-      assigneeId: ASSIGNEE, deadline, priority: "medium",
-    }));
+    await expect(
+      run(msg(COMMANDS.actionItemAssign, {
+        actionItemId: ACTION_ITEM_1, meetingId: MEETING_NEVER_STARTED, tenantId: TENANT,
+        description: "Follow up on a decision from a meeting that never occurred",
+        assigneeId: ASSIGNEE, deadline, priority: "medium",
+      })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
-    const rows = await tenantQuery((sql) => sql`select status, assignee_id, meeting_id from meeting.action_items where id = ${ACTION_ITEM_1}`);
-    expect((rows as any[])[0]).toBeTruthy();
-    expect((rows as any[])[0].status).toBe("assigned");
-    expect((rows as any[])[0].meeting_id).toBe(MEETING_NEVER_STARTED);
+    // No row was ever persisted for the rejected assignment.
+    const rows = await tenantQuery((sql) => sql`select id from meeting.action_items where id = ${ACTION_ITEM_1}`);
+    expect((rows as any[])[0]).toBeUndefined();
   });
 
-  it("BUG: an action item is also assignable against a meeting cancelled after it started and was adjourned", async () => {
+  it("FIXED: an action item is also rejected against a meeting cancelled after it started and was adjourned", async () => {
     await run(msg(COMMANDS.meetingCancel, { meetingId: MEETING_STARTED_THEN_CANCELLED, version: 1, reason: "Committee dissolved mid-adjournment" }));
     const meetingRows = await tenantQuery((sql) => sql`select status from meeting.meetings where id = ${MEETING_STARTED_THEN_CANCELLED}`);
     expect((meetingRows as any[])[0].status).toBe("cancelled");
 
     const deadline = new Date(Date.now() + 3 * 86400000).toISOString();
-    await run(msg(COMMANDS.actionItemAssign, {
-      actionItemId: ACTION_ITEM_2, meetingId: MEETING_STARTED_THEN_CANCELLED, tenantId: TENANT,
-      description: "Follow up on a decision from a meeting called off after it started",
-      assigneeId: ASSIGNEE, deadline, priority: "high",
-    }));
+    await expect(
+      run(msg(COMMANDS.actionItemAssign, {
+        actionItemId: ACTION_ITEM_2, meetingId: MEETING_STARTED_THEN_CANCELLED, tenantId: TENANT,
+        description: "Follow up on a decision from a meeting called off after it started",
+        assigneeId: ASSIGNEE, deadline, priority: "high",
+      })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
-    const rows = await tenantQuery((sql) => sql`select status from meeting.action_items where id = ${ACTION_ITEM_2}`);
-    expect((rows as any[])[0]?.status).toBe("assigned");
+    const rows = await tenantQuery((sql) => sql`select id from meeting.action_items where id = ${ACTION_ITEM_2}`);
+    expect((rows as any[])[0]).toBeUndefined();
   });
 });
