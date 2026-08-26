@@ -74,18 +74,15 @@ export default async function Form16Page({
           {lookup.state === "not_found" ? (
             <EmptyState
               icon="🧾"
-              title={`No Form-16 run for FY ${fy}`}
+              title={`No Form-16 filing run for FY ${fy}`}
               message="Use the wizard above to start a single-employee or bulk generation job."
             />
           ) : lookup.state === "error" ? (
-            <>
-              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
-              <EmptyState
-                icon="⚠️"
-                title={`Could not load filing run for FY ${fy}`}
-                message="The status check failed. Please reload the page or contact an administrator."
-              />
-            </>
+            <EmptyState
+              icon="⚠️"
+              title={`Could not load the Form-16 filing run for FY ${fy}`}
+              message="The status check failed. Please reload the page or contact an administrator."
+            />
           ) : (
             <>
               <StatGrid>

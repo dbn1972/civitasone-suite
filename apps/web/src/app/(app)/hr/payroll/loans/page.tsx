@@ -64,8 +64,8 @@ export default async function LoansPage({
       <Card title="Recovery Schedule">
         <EmptyState
           icon="📅"
-          title="No repayment schedule yet"
-          message="Repayment installments will appear here once the loan is processed and approved. Each EMI will show the amount, due date, and status."
+          title="Recovery schedule not yet available"
+          message="There is no per-installment repayment schedule endpoint yet. The EMI total above is computed from the loan record; individual due dates are not tracked in this view."
         />
       </Card>
     </main>
