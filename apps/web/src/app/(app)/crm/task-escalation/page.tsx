@@ -2,7 +2,7 @@ import { PageHeader } from "../../../_components/ds";
 import { TaskEscalationEditor } from "../../../_components/crm/TaskEscalationEditor";
 import { OverdueTaskAlerts } from "../../../_components/crm/OverdueTaskAlerts";
 
-/** AC-005 — task-escalation configuration + overdue-task alerts. Role-gated via CRM layout. */
+/** AC-005 — task-escalation configuration + overdue-task alerts. Role-gated via this route's own layout.tsx (admin-only), not just the broad CRM layout. */
 export default function Page() {
   return (
     <>
