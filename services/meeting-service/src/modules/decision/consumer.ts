@@ -58,8 +58,11 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";
 import { votes } from "../voting/schema.js";
+import { attendanceRecords } from "../attendance/schema.js";
 import { minutes } from "../minutes/schema.js";
 import { isMinutesLocked } from "../minutes/domain.js";
+import { countQuorumEligible, requiredQuorumCount, type QuorumRule } from "../committee/domain.js";
+import { isQuorumMetAtVoteTime, assertVotesWithinPresent } from "../voting/domain.js";
 import { decisions, resolutions } from "./schema.js";
 import {
   computeFinancialYear,
@@ -347,6 +350,45 @@ async function countActiveMembers(tx: DrizzleTx, tenantId: string, committeeId: 
       ),
     );
   return rows.length;
+}
+
+/**
+ * Re-derive quorum LIVE at resolution-record time (Gap 2). `meeting.quorumEstablished` is a
+ * ONE-WAY LATCH — attendance/consumer.ts sets it true exactly once and never clears it when members
+ * simply leave (only an explicit adjourn→resume cycle resets it) — so a numbered, "effective"
+ * resolution with an arbitrary invented tally could otherwise still be recorded long after every
+ * real attendee has left. This is the SAME live-attendance quorum recomputation voting/consumer.ts
+ * fix 11 applies at conclude (`computeVoteTimeQuorum`): count quorum-eligible present attendees and
+ * the committee's required quorum through the shared committee-domain helpers, so the
+ * count/percentage/VC-exclusion logic matches quorum establishment exactly. Returns null when the
+ * meeting has no committee (no formal quorum rule to apply — the caller then falls back to the
+ * latched flag, preserving the existing no-committee aggregate-record path).
+ */
+async function computeResolutionTimeQuorum(
+  tx: DrizzleTx,
+  meetingId: string,
+  tenantId: string,
+  committeeId: string | null,
+): Promise<{ membersPresent: number; requiredQuorum: number } | null> {
+  if (!committeeId) return null;
+  const committeeRows = await tx
+    .select({ quorumRule: committees.quorumRule })
+    .from(committees)
+    .where(and(eq(committees.id, committeeId), eq(committees.tenantId, tenantId)))
+    .limit(1);
+  const committee = committeeRows[0];
+  if (!committee) return null;
+  const rule = committee.quorumRule as QuorumRule;
+
+  const activeMembers = await countActiveMembers(tx, tenantId, committeeId);
+  const attendance = await tx
+    .select({ status: attendanceRecords.status, mode: attendanceRecords.mode })
+    .from(attendanceRecords)
+    .where(and(eq(attendanceRecords.meetingId, meetingId), eq(attendanceRecords.tenantId, tenantId)));
+
+  const membersPresent = countQuorumEligible(attendance, rule);
+  const requiredQuorum = requiredQuorumCount(rule, activeMembers);
+  return { membersPresent, requiredQuorum };
 }
 
 // ─── DSC signing of the resolution document (Req 11.5) ──────────────────────────
@@ -686,13 +728,19 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
       throw new NonRetryableError(`meeting ${p.meetingId} not found for resolution ${p.resolutionId}`);
     }
 
-    // Fix (resolution fabrication bypass): a resolution can only ever be recorded once quorum
-    // was genuinely established for the meeting — closes the "no committee, no roster, zero
-    // attendance, fabricate any tally you like" gap this handler used to have no defence
-    // against at all (see tests/resolution-fabrication-bypass.test.ts).
-    if (!meeting.quorumEstablished) {
+    // Fix (resolution fabrication bypass + Gap 2 stale quorum latch): a resolution can only be
+    // recorded while quorum genuinely holds. `meeting.quorumEstablished` is a ONE-WAY LATCH — set
+    // true once and never cleared when members simply leave (attendance/consumer.ts) — so trusting
+    // it alone let an official, numbered, "effective" resolution with an invented tally be recorded
+    // after the room had actually dropped below quorum. Re-derive quorum LIVE from attendance the
+    // SAME way voting's fix 11 does at conclude (computeResolutionTimeQuorum). A no-committee
+    // meeting has no quorum rule to apply, so fall back to the latched flag there — unchanged for
+    // the legitimate no-roster aggregate-record path (tests/resolution-fabrication-bypass.test.ts).
+    const liveQuorum = await computeResolutionTimeQuorum(tx, meeting.id, msg.tenantId, meeting.committeeId);
+    const quorumMet = liveQuorum ? isQuorumMetAtVoteTime(liveQuorum) : meeting.quorumEstablished;
+    if (!quorumMet) {
       throw new NonRetryableError(
-        `resolution ${p.resolutionId} cannot be recorded: quorum was never established for meeting ${p.meetingId}`,
+        `resolution ${p.resolutionId} cannot be recorded: quorum is not currently met for meeting ${p.meetingId}`,
       );
     }
 
@@ -718,6 +766,22 @@ async function handleResolutionRecord(msg: CommandEnvelope<ResolutionRecordPaylo
             { votesFor: 0, votesAgainst: 0, votesAbstain: 0 },
           )
         : { votesFor: p.votesFor, votesAgainst: p.votesAgainst, votesAbstain: p.votesAbstain };
+
+    // Fix (Gap 2 — bound the client tally against the live headcount): on the aggregate fallback
+    // path (no real meeting.votes rows — the show_of_hands/secret_ballot case where the client tally
+    // is trusted verbatim), a claimed tally can never exceed the members actually present. Enforce
+    // the same P15 invariant voting applies at conclude (assertVotesWithinPresent), bounding the
+    // TOTAL claimed positions (for + against + abstain) against the live present-member headcount.
+    // Only when the meeting is committee-backed (liveQuorum non-null yields a real headcount): a
+    // no-committee meeting has no roster to bound against, so that path is left unchanged.
+    if (realVoteRows.length === 0 && liveQuorum) {
+      const claimedTotal = tally.votesFor + tally.votesAgainst + tally.votesAbstain;
+      try {
+        assertVotesWithinPresent(claimedTotal, liveQuorum.membersPresent);
+      } catch (err) {
+        throw new NonRetryableError(err instanceof Error ? err.message : String(err), err);
+      }
+    }
 
     const financialYear = meeting.financialYear ?? computeFinancialYear(meeting.scheduledAt ?? new Date());
     const resolutionNumber = await computeResolutionNumber(tx, {
