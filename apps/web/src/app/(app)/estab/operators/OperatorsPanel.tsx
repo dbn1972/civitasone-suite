@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, StatusPill, ActionButton } from "../../../_components/ds";
+import { DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type Operator = {
   id: string;
@@ -38,19 +39,21 @@ export function OperatorsPanel() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
       if (!res.ok) throw new Error(await res.text());
       const body = (await res.json()) as { data?: Operator[] };
       setOperators(body.data ?? []);
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load operators");
+    } catch {
+      // A failed load must not read as "No operators enrolled yet".
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -172,6 +175,8 @@ export function OperatorsPanel() {
 
       {loading ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+      ) : loadError ? (
+        <div className="card"><div className="pad"><ErrorState error={toHumanError("load", { area: "operator roster" })} onRetry={() => void load()} /></div></div>
       ) : grouped.length === 0 ? (
         <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>No operators enrolled yet. Until you enrol operators, files cannot be marked to anyone.</p></div>
       ) : (
