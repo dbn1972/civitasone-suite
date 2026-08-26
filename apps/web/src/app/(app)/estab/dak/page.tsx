@@ -20,8 +20,6 @@ type InwardRow = {
   sourceSection?: string | null;
 };
 
-const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
-
 export default function DakRegistryPage() {
   const router = useRouter();
   const [rows, setRows] = useState<InwardRow[]>([]);
@@ -63,7 +61,9 @@ export default function DakRegistryPage() {
       const res = await fetch("/api/proxy/v1/estab/inward", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, assignedTo: DEFAULT_OFFICER }),
+        // SECURITY: no officer placeholder — the server assigns the
+        // authenticated actor when assignedTo is omitted.
+        body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error(await res.text());
       setForm({ dakNo: "", fromAddress: "", subject: "" });
@@ -81,9 +81,11 @@ export default function DakRegistryPage() {
       const res = await fetch(`/api/proxy/v1/estab/inward/${inwardId}/open-file`, {
         method: "POST",
         headers: { "content-type": "application/json" },
+        // SECURITY: no officer placeholder — the server defaults currentWith
+        // to the authenticated actor (the file opens on your own desk)
+        // when it's omitted.
         body: JSON.stringify({
           dept: "ADMIN",
-          currentWith: DEFAULT_OFFICER,
           classification: "public",
         }),
       });

@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
-
 const CLASS_MAP: Record<string, string> = {
   unclassified: "public",
   restricted: "confidential",
@@ -35,7 +33,9 @@ export default function NewFilePage() {
         subject,
         dept: department || "ADMIN",
         classification: CLASS_MAP[classification] ?? "public",
-        currentWith: DEFAULT_OFFICER,
+        // SECURITY: no officer placeholder — currentWith is intentionally
+        // omitted so the server defaults it to the authenticated actor
+        // creating this file (never a client-suppliable id).
         initialNote: initialNote || undefined,
         dakNo: dakNo || undefined,
         parentFileId: parentFileId.trim() || undefined,

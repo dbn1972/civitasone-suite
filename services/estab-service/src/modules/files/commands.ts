@@ -16,10 +16,15 @@ export async function createFile(ctx: RequestContext, body: CreateFileBody): Pro
   // CSMOP gapless file number is allocated server-side in the consumer (per
   // section+year). A caller-supplied fileNo is honoured only for legacy mapping.
   const section = body.section ?? body.dept;
+  // SECURITY: a file must always be "with" a real officer (DB NOT NULL). When
+  // the client doesn't explicitly route it elsewhere, default to the actor
+  // creating it — never a caller-suppliable placeholder. This also seeds the
+  // opening noting's officer of record (see fileCreate in consumer.ts).
+  const currentWith = body.currentWith ?? ctx.actorId;
   await queue.publish(COMMANDS.fileCreate, {
     messageId: id, type: COMMANDS.fileCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body, section },
+    payload: { id, tenantId: ctx.tenantId, ...body, section, currentWith },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -29,7 +34,12 @@ export async function addNoting(ctx: RequestContext, fileId: string, body: AddNo
   await queue.publish(COMMANDS.notingAdd, {
     messageId: id, type: COMMANDS.notingAdd,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, fileId, tenantId: ctx.tenantId, ...body },
+    // SECURITY: officerId is the officer-of-record in a hash-chained,
+    // legally-relevant noting trail — it MUST be the authenticated actor,
+    // exactly like signNoting below. `body` is spread first and its
+    // officerId is then unconditionally overridden here; a client-supplied
+    // officerId is never trusted, no matter what the request body claims.
+    payload: { id, fileId, tenantId: ctx.tenantId, ...body, officerId: ctx.actorId },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -69,10 +79,13 @@ export async function openFileFromInward(
   body: OpenFileFromInwardBody,
 ): Promise<Accepted> {
   const id = randomUUID();
+  // SECURITY: same rationale as createFile — default the file's holder to the
+  // opening actor when the client doesn't specify one; never a placeholder.
+  const currentWith = body.currentWith ?? ctx.actorId;
   await queue.publish(COMMANDS.inwardOpenFile, {
     messageId: id, type: COMMANDS.inwardOpenFile,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, inwardId, tenantId: ctx.tenantId, section: body.dept, ...body },
+    payload: { id, inwardId, tenantId: ctx.tenantId, section: body.dept, ...body, currentWith },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

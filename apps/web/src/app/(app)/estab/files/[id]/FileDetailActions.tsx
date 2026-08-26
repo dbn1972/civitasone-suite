@@ -4,8 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 
-const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
-
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
   section_officer: "Section Officer",
@@ -79,9 +77,11 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings`, {
         method: "POST",
         headers: { "content-type": "application/json" },
+        // SECURITY: no officerId — the server derives the noting's officer
+        // of record from the authenticated actor; a client-supplied id would
+        // be ignored (and must never be a placeholder in the first place).
         body: JSON.stringify({
           body: noteBody.trim(),
-          officerId: DEFAULT_OFFICER,
           noteType: "yellow",
           action: "draft",
         }),
@@ -138,7 +138,10 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   // Referring a file changes its custody — gated behind a ConfirmDialog that
   // names the destination officer.
   async function referBackAction() {
-    const target = toOfficer.trim() || DEFAULT_OFFICER;
+    // SECURITY: no placeholder fallback — referring a file must always name a
+    // real destination officer. onReferBackClick() already blocks this action
+    // unless referTargetValid is true, so toOfficer is guaranteed non-empty here.
+    const target = toOfficer.trim();
     setMessage("");
     setError("");
     const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/move`, {
@@ -157,7 +160,10 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
 
   const referConfirm = useConfirmAction({ onConfirm: () => referBackAction() });
 
-  const referTarget = toOfficer.trim() || DEFAULT_OFFICER;
+  // SECURITY: no placeholder fallback here either — an empty toOfficer must
+  // fail validation (below) and block the action, not silently resolve to a
+  // phantom officer that happens to look like a valid UUID.
+  const referTarget = toOfficer.trim();
   const referTargetValid = /^[0-9a-f-]{36}$/i.test(referTarget);
   const referTargetOperator = operators.find((o) => o.employeeId === referTarget);
   const referTargetLabel = referTargetOperator

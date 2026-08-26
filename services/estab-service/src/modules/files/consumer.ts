@@ -85,7 +85,10 @@ export function registerFilesConsumers(rawQueue: Queue): void {
         const noteId = randomUUID();
         await repo.insertNoting(tx, {
           id: noteId, tenantId: p.tenantId, fileId: p.id, seq: 1,
-          officerId: p.currentWith, body: p.initialNote.trim(),
+          // SECURITY: the opening note's officer of record is whoever
+          // actually created the file (msg.actorId), not p.currentWith — the
+          // file may be routed to a different officer than its author.
+          officerId: msg.actorId, body: p.initialNote.trim(),
           action: "initiate", noteType: "yellow", noteStatus: "draft",
           eSigned: false, signedAt: null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -126,7 +129,10 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       const noteBody = p.initialNote?.trim() ?? `DAK ${inward.dakNo} registered and file opened.`;
       await repo.insertNoting(tx, {
         id: randomUUID(), tenantId: p.tenantId, fileId: p.id, seq: 1,
-        officerId: p.currentWith, body: noteBody,
+        // SECURITY: same rationale as fileCreate above — officer of record is
+        // the actor opening the file, not the (possibly different) officer
+        // it's being routed to.
+        officerId: msg.actorId, body: noteBody,
         action: "dak_to_file", noteType: "yellow", noteStatus: "draft",
         eSigned: false, signedAt: null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -161,7 +167,16 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       const seq = (await repo.countNotings(tx, p.fileId)) + 1;
       await repo.insertNoting(tx, {
         id: p.id, tenantId: p.tenantId, fileId: p.fileId, seq,
-        officerId: p.officerId, body: p.body, action: p.action ?? null,
+        // SECURITY (defense-in-depth): addNoting() in commands.ts already
+        // forces payload.officerId to ctx.actorId before this is ever
+        // published, but the officer-of-record in this legally-relevant,
+        // hash-chained noting trail must never depend on that alone — the
+        // consumer independently binds it to msg.actorId (the envelope's
+        // authenticated actor) rather than trusting p.officerId from the
+        // payload. officerName/officerDesignation/officerSection remain
+        // self-descriptive annotations about that same actor (not identity
+        // claims) and are not hash-chained or displayed today.
+        officerId: msg.actorId, body: p.body, action: p.action ?? null,
         noteType: p.noteType ?? "yellow", noteStatus: "draft",
         officerName: p.officerName ?? null,
         officerDesignation: p.officerDesignation ?? null,
