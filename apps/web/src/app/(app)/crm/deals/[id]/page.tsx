@@ -17,7 +17,12 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  const STAGES = ["Lead", "Proposal", "Negotiation", "Won", "Lost"] as const;
+  // Canonical stage vocabulary — matches DealSummary["stage"] (see
+  // apps/web/src/app/_data/apiMappers.ts normalizeDealStage), NOT the
+  // Capitalized "Lead"/"Proposal"/"Won"/"Lost" strings the backend stores;
+  // deal.stage here is already normalized by getDealById before it reaches
+  // this page.
+  const STAGES = ["prospecting", "proposal", "negotiation", "closed_won", "closed_lost"] as const;
   const currentIdx = STAGES.indexOf(deal.stage as typeof STAGES[number]);
 
   return (
