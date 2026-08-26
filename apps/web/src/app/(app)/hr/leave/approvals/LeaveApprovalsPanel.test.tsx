@@ -34,7 +34,7 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
     render(<LeaveApprovalsPanel />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
-    const dialog = await screen.findByRole("alertdialog");
+    await screen.findByRole("alertdialog");
     fireEvent.change(screen.getByLabelText(/reason for rejection/i), { target: { value: "Insufficient staffing on those dates" } });
     fireEvent.click(screen.getByRole("button", { name: "Reject leave" }));
 

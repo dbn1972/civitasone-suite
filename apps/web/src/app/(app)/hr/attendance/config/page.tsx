@@ -7,7 +7,7 @@ import { PageHeader, Card } from "../../../../_components/ds";
 export default function AttendanceConfigPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Attendance Rules" subtitle="Configure how late marks, half-days, overtime, and weekly-offs are computed." back="/hr/attendance" backLabel="Attendance" />
+      <PageHeader title="Attendance Rules" subtitle="How late marks, half-days, overtime, and weekly-offs are computed (read-only reference)." back="/hr/attendance" backLabel="Attendance" />
 
       <div className="grid g-2">
         <Card title="Working Hours" padding>

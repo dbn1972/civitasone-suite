@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+
+type FetchMock = ReturnType<typeof vi.fn> & { lastScreeningBody?: Record<string, unknown>; lastWithdrawBody?: Record<string, unknown> };
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "job-1" }),
@@ -44,12 +46,12 @@ function mockFetchSequence(applications = [APPLIED_APP]) {
     }
     if (url.includes("/screening-decision")) {
       const body = JSON.parse(String(init?.body ?? "{}"));
-      (fn as any).lastScreeningBody = body;
+      (fn as FetchMock).lastScreeningBody = body;
       return { ok: true, status: 200, json: async () => ({}) } as Response;
     }
     if (url.endsWith("/withdraw")) {
       const body = JSON.parse(String(init?.body ?? "{}"));
-      (fn as any).lastWithdrawBody = body;
+      (fn as FetchMock).lastWithdrawBody = body;
       return { ok: true, status: 200, json: async () => ({}) } as Response;
     }
     if (url.endsWith("/stage")) {
@@ -99,10 +101,10 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
     fireEvent.click(await screen.findByRole("button", { name: /reject application/i }));
 
-    await waitFor(() => expect((fetchMock as any).lastScreeningBody).toBeTruthy());
-    const body = (fetchMock as any).lastScreeningBody;
+    await waitFor(() => expect((fetchMock as FetchMock).lastScreeningBody).toBeTruthy());
+    const body = (fetchMock as FetchMock).lastScreeningBody;
     const VALID_REASON_CODES = ["eligibility", "skill", "experience", "qualification", "incomplete_documents", "duplicate", "position_hold", "other"];
-    expect(VALID_REASON_CODES).toContain(body.reasonCode);
+    expect(VALID_REASON_CODES).toContain(body?.reasonCode);
   });
 
   it("withdraw calls the real /withdraw endpoint with a required reason, not the nonexistent /stage endpoint", async () => {
@@ -121,8 +123,8 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     expect(confirmBtn).not.toBeDisabled();
     fireEvent.click(confirmBtn);
 
-    await waitFor(() => expect((fetchMock as any).lastWithdrawBody).toBeTruthy());
-    expect((fetchMock as any).lastWithdrawBody).toEqual({ reason: "Candidate accepted another offer" });
+    await waitFor(() => expect((fetchMock as FetchMock).lastWithdrawBody).toBeTruthy());
+    expect((fetchMock as FetchMock).lastWithdrawBody).toEqual({ reason: "Candidate accepted another offer" });
     // Never call the dead route.
     const calledUrls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calledUrls.some((u: string) => u.endsWith("/stage"))).toBe(false);
