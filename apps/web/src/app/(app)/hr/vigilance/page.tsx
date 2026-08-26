@@ -43,7 +43,12 @@ export default async function VigilancePage() {
     { key: "department", label: "Department" },
     { key: "charges", label: "Charge Summary" },
     { key: "inquiryOfficer", label: "Inquiry Officer" },
-    { key: "nextHearing", label: "Next Hearing" },
+    // Backend aliases inquiry_appointed_date (a one-time event) as
+    // "nextHearing" -- it is not a recurring hearing schedule, so a case
+    // shows the same date forever after its inquiry officer is appointed,
+    // regardless of how many hearings actually happen afterward. Labelled
+    // honestly until the backend tracks real hearing dates.
+    { key: "nextHearing", label: "Inquiry Officer Appointed" },
     { key: "status", label: "Status", cellType: "status" },
   ];
 
