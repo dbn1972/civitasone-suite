@@ -585,7 +585,11 @@ export interface ThemeTokenSummary {
 }
 
 export interface PaymentSummary {
+  /** Backend row id (UUID) — used to open /finance/payments/[id]. Optional so
+   *  partial/legacy payloads still satisfy the type. */
+  id?: string;
   referenceId: string;
+
   beneficiary: string;
   amountDisplay: string;
   status: 'Queued' | 'Released' | 'Pending Approval' | 'Failed';
