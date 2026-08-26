@@ -6,9 +6,17 @@
  * explicit confirmation + a reason (maker-checker). The "checker" role is
  * surfaced in the dialog copy; the action POSTs/PATCHes the real proxied
  * finance-service endpoint and refreshes the route on success.
+ *
+ * These endpoints are CQRS commands that return 202 Accepted — the work is
+ * queued, not finished, when the request resolves. So on success we do NOT
+ * claim "released"/"approved"; we tell the officer the request was SUBMITTED
+ * for processing (an honest 202) via a toast, then refresh so the status
+ * updates when the read model catches up. Without this the dialog just closed
+ * over an unchanged page and the officer could not tell if anything happened
+ * (and might re-submit an irreversible disbursement).
  */
 import { useRouter } from "next/navigation";
-import { ActionButton } from "@/app/_components/ds";
+import { ActionButton, useToast } from "@/app/_components/ds";
 
 async function postJson(url: string, body: unknown): Promise<void> {
   const res = await fetch(url, {
@@ -47,6 +55,7 @@ async function patchJson(url: string, body: unknown): Promise<void> {
 /* ── Payments: PFMS sync + release (treasury) ───────────────────── */
 export function PaymentActions() {
   const router = useRouter();
+  const { toast } = useToast();
   return (
     <>
       <ActionButton
@@ -60,7 +69,7 @@ export function PaymentActions() {
         onConfirm={async (reason) => {
           await postJson("/api/proxy/v1/finance/payments/eft", { action: "pfms-sync", reason });
         }}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => { toast.info("PFMS sync submitted — the register updates as instructions settle."); router.refresh(); }}
       />
       <ActionButton
         label="+ New Payment"
@@ -74,7 +83,7 @@ export function PaymentActions() {
         onConfirm={async (reason) => {
           await postJson("/api/proxy/v1/finance/payments/eft", { action: "release", reason });
         }}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => { toast.info("Payment submitted to the gateway for processing — the status updates once it responds."); router.refresh(); }}
       />
     </>
   );
@@ -83,6 +92,7 @@ export function PaymentActions() {
 /* ── Sanctions: approve (financial sanction authority) ──────────── */
 export function SanctionApproveAction({ id }: { id: string }) {
   const router = useRouter();
+  const { toast } = useToast();
   return (
     <ActionButton
       label="Approve sanction"
@@ -96,7 +106,7 @@ export function SanctionApproveAction({ id }: { id: string }) {
       onConfirm={async (reason) => {
         await patchJson(`/api/proxy/v1/finance/sanctions/${id}/approve`, { reason });
       }}
-      onSuccess={() => router.refresh()}
+      onSuccess={() => { toast.info("Approval submitted — the sanction status updates once processing completes."); router.refresh(); }}
     />
   );
 }
@@ -104,6 +114,7 @@ export function SanctionApproveAction({ id }: { id: string }) {
 /* ── Bills: pass (pre-audit) and pay (treasury) ─────────────────── */
 export function BillPassPayActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
+  const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
   const canPay = s === "passed" || s === "approved";
   return (
@@ -119,7 +130,7 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
         onConfirm={async (reason) => {
           await patchJson(`/api/proxy/v1/finance/bills/${id}/approve`, { decision: "pass", reason });
         }}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => { toast.info("Bill passing submitted for processing."); router.refresh(); }}
       />
       <ActionButton
         label="Release payment"
@@ -134,7 +145,7 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
         onConfirm={async (reason) => {
           await postJson("/api/proxy/v1/finance/payments/eft", { billId: id, action: "release", reason });
         }}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => { toast.info("Payment submitted to the gateway for processing."); router.refresh(); }}
       />
     </>
   );
@@ -144,6 +155,7 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
 /* ── List-level create actions (maker prepares; checker approves later) ── */
 export function SanctionCreateAction() {
   const router = useRouter();
+  const { toast } = useToast();
   return (
     <ActionButton
       label="+ New Sanction"
@@ -156,13 +168,14 @@ export function SanctionCreateAction() {
       onConfirm={async (reason) => {
         await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" });
       }}
-      onSuccess={() => router.refresh()}
+      onSuccess={() => { toast.success("Draft sanction submitted for approval."); router.refresh(); }}
     />
   );
 }
 
 export function BillCreateAction() {
   const router = useRouter();
+  const { toast } = useToast();
   return (
     <ActionButton
       label="+ New Bill"
@@ -175,7 +188,7 @@ export function BillCreateAction() {
       onConfirm={async (reason) => {
         await postJson("/api/proxy/v1/finance/bills", { reason, status: "pending" });
       }}
-      onSuccess={() => router.refresh()}
+      onSuccess={() => { toast.success("Bill submitted for pre-audit."); router.refresh(); }}
     />
   );
 }
