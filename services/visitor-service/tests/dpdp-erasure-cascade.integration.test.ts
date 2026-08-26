@@ -300,3 +300,90 @@ describe("DPDP erasure cascade — one visitor's PII across module boundaries", 
     expect(ocr?.address).toBeNull();
   });
 });
+
+describe("DPDP erasure cascade — ocr_results matched despite doc-number formatting differences", () => {
+  // Regression coverage for a real gap in identityDocHash() (blacklist/
+  // blind-index.ts): docType was normalized (trim + lowercase) before
+  // hashing, but docNumber was hashed VERBATIM. A receptionist's manual
+  // entry at visit-request time and OCR's extraction of the SAME physical
+  // document at scan time commonly differ in spacing/case — those hashed to
+  // DIFFERENT values, so the purge-worker's ocr_results cascade (matched by
+  // identityDocHash, see purge-worker.ts:283-309) silently failed to find
+  // this row during a legally-mandated erasure: no error, no warning,
+  // nothing logged, the PII just silently survived. The suite above reuses
+  // the byte-identical VISITOR_AADHAAR constant on both the visit-request
+  // and ocr_results sides, which is exactly why that gap went completely
+  // unexercised — this block deliberately uses two different formattings of
+  // the SAME document number to prove the cascade still matches now that
+  // identityDocHash() normalizes docNumber too.
+  const VISIT_REQUEST_ID_FMT = randomUUID();
+  const SCAN_SESSION_ID_FMT = randomUUID();
+  const OCR_RESULT_ID_FMT = randomUUID();
+  const VISITOR_NAME_FMT = "AUDIT-CascadeErasure Visitor FormatMismatch";
+
+  // Same physical Aadhaar number, formatted differently at each capture point.
+  const DOC_NUMBER_AS_ENTERED = "1234 5678 9012"; // receptionist manual entry (visit-request)
+  const DOC_NUMBER_AS_SCANNED = "123456789012"; // OCR extraction (document-scan)
+
+  beforeAll(async () => {
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(visitRequests).values({
+          id: VISIT_REQUEST_ID_FMT, tenantId: TENANT, locationId: LOCATION_ID,
+          hostEmployeeId: ACTOR, status: "approved",
+          visitorName: VISITOR_NAME_FMT, visitorPhone: "+919900099002",
+          identityDocType: "aadhaar", identityDocRef: DOC_NUMBER_AS_ENTERED,
+          erasureRequestedAt: new Date(Date.now() - 80 * HOURS),
+          createdBy: ACTOR, updatedBy: ACTOR,
+        });
+        await tx.insert(scanSessions).values({
+          id: SCAN_SESSION_ID_FMT, tenantId: TENANT, deviceId: SCANNER_DEVICE_ID, status: "completed",
+        });
+        await tx.insert(ocrResults).values({
+          id: OCR_RESULT_ID_FMT, tenantId: TENANT, scanSessionId: SCAN_SESSION_ID_FMT,
+          fullName: VISITOR_NAME_FMT, dateOfBirth: "1990-01-01",
+          idDocumentNumber: DOC_NUMBER_AS_SCANNED, idDocumentType: "aadhaar",
+          address: "AUDIT test address, format mismatch", verificationStatus: "verified",
+        });
+      }),
+    );
+
+    // A second, real purge cycle. The outer suite's VISIT_REQUEST_ID was
+    // already purged above (visitorName = PURGED_SENTINEL), so the
+    // scanner's `visitorName != PURGED_SENTINEL` eligibility filter
+    // excludes it here — only this block's new row is eligible.
+    await processPurgeCycle(db, scannerDb, {
+      retentionPeriodMs: 365 * DAYS,
+      erasureSlaMs: 72 * HOURS,
+      batchSize: 500,
+    });
+  });
+
+  afterAll(async () => {
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.delete(ocrResults).where(eq(ocrResults.id, OCR_RESULT_ID_FMT));
+        await tx.delete(scanSessions).where(eq(scanSessions.id, SCAN_SESSION_ID_FMT));
+        await tx.delete(visitRequests).where(eq(visitRequests.id, VISIT_REQUEST_ID_FMT));
+      }),
+    );
+  });
+
+  it("purges the visit_requests row as usual (sanity)", async () => {
+    const [vr] = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(visitRequests).where(eq(visitRequests.id, VISIT_REQUEST_ID_FMT))),
+    );
+    expect(vr?.visitorName).toBe(PURGED_SENTINEL);
+    expect(vr?.identityDocRef).toBeNull();
+  });
+
+  it("[FIXED] nulls the ocr_results row even though the visit-request doc number and the OCR-extracted doc number are formatted differently", async () => {
+    const [ocr] = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(ocrResults).where(eq(ocrResults.id, OCR_RESULT_ID_FMT))),
+    );
+    expect(ocr?.idDocumentNumber).toBeNull();
+    expect(ocr?.fullName).not.toBe(VISITOR_NAME_FMT);
+    expect(ocr?.dateOfBirth).toBeNull();
+    expect(ocr?.address).toBeNull();
+  });
+});

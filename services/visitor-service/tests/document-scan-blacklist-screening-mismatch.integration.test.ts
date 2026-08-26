@@ -59,16 +59,19 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { Redis } from "ioredis";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { createQueue, type MemoryQueue } from "@civitasone/queue";
+import { NOTIFICATION_SEND } from "@civitasone/events";
 import { db, scopedRead } from "../src/shared/db.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { devices } from "../src/modules/device-registry/schema.js";
 import { locations } from "../src/modules/location/schema.js";
 import { scanSessions, ocrResults } from "../src/modules/document-scan/schema.js";
+import { securityIncidents } from "../src/modules/identity/schema.js";
 import { addToBlacklistHashSet, isBlacklisted } from "../src/modules/blacklist/screening-store.js";
 import { identityDocHash, blindIndex } from "../src/modules/blacklist/blind-index.js";
-import { COMMANDS } from "../src/topics.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
 
 // Override the suite-wide memory default for this file only — see file
 // docstring. Both `getRedis()` (document-scan/consumer.ts) and
@@ -225,5 +228,72 @@ describe("document-scan EVENTS.scanBlacklistMatch — zero subscribers anywhere 
     // void. (No route reads ocr_results.blacklistMatch either — it is
     // stored and never consulted anywhere, including at check-in.)
     expect(found).toBe(true);
+  });
+
+  it("[FIXED] publishing EVENTS.scanBlacklistMatch through the real subscriber creates a security_incidents row and a security-control-room alert", async () => {
+    // The test above only proves SOME file contains a `.subscribe(` call
+    // referencing EVENTS.scanBlacklistMatch as a source string — it never
+    // actually publishes the event or checks what happens. This test drives
+    // the real subscriber (check-in/consumer.ts, registered on a real
+    // createQueue() instance — not `new MemoryQueue()` directly — so
+    // `.subscribe` gets the production `withTenantConsumer` decoration the
+    // consumer's own db.transaction() calls need to satisfy RLS, exactly as
+    // check-in-watchlist-raw-hash-mismatch.integration.test.ts does) end to
+    // end against the live Postgres DB, and asserts on the two real,
+    // durable side effects the file header + check-in/consumer.ts's own
+    // module doc promise: a `security_incidents` row (incidentType
+    // "blacklist_match") and a NOTIFICATION_SEND alert to
+    // security_control_room.
+    const { registerCheckInConsumers } = await import("../src/modules/check-in/consumer.js");
+
+    const queue = createQueue() as MemoryQueue;
+    registerCheckInConsumers(queue);
+
+    const sessionId = randomUUID();
+    const ocrResultId = randomUUID();
+    const corr = `corr-scan-blacklist-match-${randomUUID()}`;
+
+    await queue.publish(EVENTS.scanBlacklistMatch, {
+      type: EVENTS.scanBlacklistMatch,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: corr,
+      schemaVersion: "1.0",
+      payload: { sessionId, ocrResultId, deviceId: DEVICE_ID, idDocumentType: DOC_TYPE },
+    });
+    await queue.drain();
+
+    const incidents = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(securityIncidents).where(
+        and(eq(securityIncidents.tenantId, TENANT), eq(securityIncidents.locationId, LOCATION)),
+      )),
+    );
+    const incident = incidents.find((i) => i.incidentType === "blacklist_match");
+    // CORRECT behavior: a scan-time blacklist match becomes a real,
+    // queryable security incident — not an event enqueued into the void.
+    expect(incident).toBeDefined();
+    expect(incident?.severity).toBe("critical");
+    expect(incident?.description).toContain(sessionId);
+
+    const outboxRows = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(outboxMessages).where(
+        and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.correlationId, corr)),
+      )),
+    );
+    const alert = outboxRows.find((r) => {
+      const payload = r.payload as { eventType?: string };
+      return r.topic === NOTIFICATION_SEND && payload.eventType === EVENTS.scanBlacklistMatch;
+    });
+    // CORRECT behavior: security control room is actually alerted.
+    expect(alert).toBeDefined();
+
+    // This test's own cleanup — the shared file-level afterAll only knows
+    // about the ocr_results/scan_sessions fixture from the describe block
+    // above, not the security_incidents row this test creates.
+    if (incident) {
+      await runWithTenant(TENANT, () =>
+        db.transaction((tx) => tx.delete(securityIncidents).where(eq(securityIncidents.id, incident.id))),
+      );
+    }
   });
 });
