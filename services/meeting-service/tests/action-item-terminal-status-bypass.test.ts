@@ -27,8 +27,13 @@
  * This mirrors the exact bug class flagged in the visitor-service audit ("a revoked pass still
  * checks in at the gate") — a settled/terminal status that a later handler forgets to check.
  *
- * `it.fails()` encodes the CORRECT behavior (repo precedent:
- * visitor-service/tests/badge-print-revoked-pass.test.ts) — flip to a plain `it()` once fixed.
+ * FIXED in action-item/consumer.ts: `handleEvidence` and `handleVerify` now guard on
+ * `isSettledStatus(row.status)` (silent idempotent no-op) before writing, and `handleVerify`
+ * additionally rejects self-verification (`msg.actorId === row.assigneeId`, also a silent no-op)
+ * and binds the persisted `verified_by` to `msg.actorId` rather than the client-supplied
+ * `verifierId`. The `it.fails()` cases below are flipped to plain `it()`; the three
+ * "characterizes today's actual (buggy) behavior" companions (which asserted the OLD, now-wrong
+ * outcomes) are removed rather than left to fail.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -139,31 +144,20 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("[BUG] evidence.submit has no terminal-status guard", () => {
-  it.fails("must not accept new evidence on an already-COMPLETED action item", async () => {
+describe("[FIXED] evidence.submit has a terminal-status guard", () => {
+  it("must not accept new evidence on an already-COMPLETED action item", async () => {
     const id = randomUUID();
     await seedCompletedItem(id);
 
     await run(msg(COMMANDS.actionItemEvidence, { actionItemId: id, tenantId: TENANT, evidenceNote: "resubmitted after completion" }));
 
     const row = await readItem(id);
-    expect(row.status).toBe("completed"); // fails today — it flips back to evidence_submitted
-  });
-
-  it("characterizes today's actual (buggy) behavior: a completed item is silently un-completed", async () => {
-    const id = randomUUID();
-    await seedCompletedItem(id);
-
-    await run(msg(COMMANDS.actionItemEvidence, { actionItemId: id, tenantId: TENANT, evidenceNote: "resubmitted after completion" }));
-
-    const row = await readItem(id);
-    expect(row.status).toBe("evidence_submitted");
-    expect(row.completed_at).not.toBeNull(); // stale completed_at now coexists with a "reopened" status
+    expect(row.status).toBe("completed"); // unchanged — the terminal-status guard silently no-ops
   });
 });
 
-describe("[BUG] verify has no terminal-status guard — re-verification overwrites the original audit trail", () => {
-  it.fails("must not re-verify an already-COMPLETED item and overwrite its original verifier", async () => {
+describe("[FIXED] verify has a terminal-status guard — re-verification no longer overwrites the audit trail", () => {
+  it("must not re-verify an already-COMPLETED item and overwrite its original verifier", async () => {
     const id = randomUUID();
     await seedCompletedItem(id, REAL_SECRETARY);
 
@@ -172,24 +166,12 @@ describe("[BUG] verify has no terminal-status guard — re-verification overwrit
     );
 
     const row = await readItem(id);
-    // Correct behavior: verifying an already-settled item should be rejected, preserving the
-    // ORIGINAL verifier's record rather than letting anyone silently overwrite it.
+    // The terminal-status guard silently no-ops, preserving the ORIGINAL verifier's record
+    // rather than letting anyone overwrite it.
     expect(row.verified_by).toBe(REAL_SECRETARY);
   });
 
-  it("characterizes today's actual (buggy) behavior: the original verifier is silently overwritten", async () => {
-    const id = randomUUID();
-    await seedCompletedItem(id, REAL_SECRETARY);
-
-    await run(
-      msg(COMMANDS.actionItemVerify, { actionItemId: id, tenantId: TENANT, verifierId: ASSIGNEE, verified: true }),
-    );
-
-    const row = await readItem(id);
-    expect(row.verified_by).toBe(ASSIGNEE); // REAL_SECRETARY's original sign-off is gone
-  });
-
-  it.fails("must not reopen a WITHDRAWN (cancelled) item back to in_progress", async () => {
+  it("must not reopen a WITHDRAWN (cancelled) item back to in_progress", async () => {
     const id = randomUUID();
     await seedWithdrawnItem(id);
 
@@ -202,15 +184,15 @@ describe("[BUG] verify has no terminal-status guard — re-verification overwrit
   });
 });
 
-describe("[BUG] verifierId is client-supplied with no self-verification / identity check", () => {
-  it.fails("the assignee must not be able to verify their own submitted evidence as themselves", async () => {
+describe("[FIXED] verifierId is bound to the authenticated caller, with a self-verification guard", () => {
+  it("the assignee must not be able to verify their own submitted evidence as themselves", async () => {
     const id = randomUUID();
     await seedEvidenceSubmittedItem(id);
 
-    // The assignee both submits AND "verifies" their own work — msg.actorId is ASSIGNEE, and
-    // they name themselves as verifierId too. Nothing in handleVerify compares verifierId to
-    // assigneeId, or to msg.actorId, or requires the caller to actually be the meeting's
-    // secretary/chairperson.
+    // The assignee both submits AND attempts to "verify" their own work — msg.actorId is
+    // ASSIGNEE, and they name themselves as verifierId too. handleVerify now rejects this: the
+    // self-verification guard (msg.actorId === row.assigneeId) fires as a silent no-op, and even
+    // if it hadn't, verified_by is bound to msg.actorId (never the client-supplied verifierId).
     await run(
       msg(
         COMMANDS.actionItemVerify,
@@ -221,19 +203,7 @@ describe("[BUG] verifierId is client-supplied with no self-verification / identi
 
     const row = await readItem(id);
     expect(row.verified_by).not.toBe(row.assignee_id);
-  });
-
-  it("characterizes today's actual (buggy) behavior: self-verification is accepted and recorded as legitimate", async () => {
-    const id = randomUUID();
-    await seedEvidenceSubmittedItem(id);
-
-    await run(
-      msg(COMMANDS.actionItemVerify, { actionItemId: id, tenantId: TENANT, verifierId: ASSIGNEE, verified: true }, ASSIGNEE),
-    );
-
-    const row = await readItem(id);
-    expect(row.status).toBe("completed");
-    expect(row.verified_by).toBe(ASSIGNEE);
-    expect(row.verified_by).toBe(row.assignee_id); // the same person assigned, did, and signed off the work
+    // No-op: verification never happened, so the item is still awaiting a genuine verifier.
+    expect(row.status).toBe("evidence_submitted");
   });
 });

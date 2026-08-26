@@ -20,10 +20,10 @@
  * is referenced anywhere in this suite before this file (`tests/worker-wiring.test.ts`, a pure
  * topic-registration check) — `applyMinutesOutcome` had zero behavioral coverage.
  *
- * `it.fails()` asserts the CORRECT behavior (a non-submitted minutes record must not be
- * approvable this way); it currently fails because the real behavior is silent acceptance. Flip
- * to a plain `it()` once the handler requires `current.status === "submitted"` (or reuses
- * `assertMinutesTransition`) before approving.
+ * FIXED: `applyMinutesOutcome`'s approve branch now requires `current.status === "submitted"`
+ * (mirroring the reject branch's own precondition two lines below it) before writing
+ * `status: "approved"` — any other status, including "draft", is now a silent no-op, exactly
+ * like the reject branch already was.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -108,7 +108,7 @@ afterAll(async () => {
 });
 
 describe("workflow.task.completed -> minutes outcome — approval bypasses the submitted gate (SECURITY GAP)", () => {
-  it.fails("rejects (or ignores) an 'approve' outcome for a minutes record that was never submitted", async () => {
+  it("rejects (or ignores) an 'approve' outcome for a minutes record that was never submitted", async () => {
     const minutesId = await seedMinutes("draft");
     await run(
       msg(CONSUMED_EVENTS.workflowTaskCompleted, {
@@ -125,7 +125,7 @@ describe("workflow.task.completed -> minutes outcome — approval bypasses the s
     expect(row?.status).not.toBe("approved");
   });
 
-  it("[BLAST RADIUS] a draft minutes record — never submitted — is pushed straight to approved, with approvedBy set to the workflow actor", async () => {
+  it("[FIXED] a draft minutes record — never submitted — stays draft, untouched by the callback", async () => {
     const minutesId = await seedMinutes("draft");
     await run(
       msg(CONSUMED_EVENTS.workflowTaskCompleted, {
@@ -139,10 +139,10 @@ describe("workflow.task.completed -> minutes outcome — approval bypasses the s
     );
     const row = await readMinutes(minutesId);
     // The secretary never called minutes.submit; no chairperson ever reviewed this content.
-    // Yet the official record now reads "approved", attributed to WORKFLOW_ACTOR.
-    expect(row?.status).toBe("approved");
-    expect(row?.approved_by).toBe(WORKFLOW_ACTOR);
-    expect(row?.approved_at).not.toBeNull();
+    // The callback now silently no-ops instead of force-approving it.
+    expect(row?.status).toBe("draft");
+    expect(row?.approved_by).toBeNull();
+    expect(row?.approved_at).toBeNull();
   });
 
   it("control: a genuinely submitted minutes record approves cleanly (the mechanism is correct for its intended input)", async () => {

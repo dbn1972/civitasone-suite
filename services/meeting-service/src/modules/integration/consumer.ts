@@ -250,8 +250,14 @@ async function applyMinutesOutcome(
     meetingId = current.meetingId;
 
     if (decision === "approve") {
-      // Already finalized (approved/signed/circulated) — idempotent no-op.
-      if (["approved", "signed", "circulated"].includes(current.status)) return;
+      // Mirror the reject branch's precondition below: only a minutes record that has actually
+      // been submitted for chairperson review may be approved through this cross-service
+      // callback. The previous check here only excluded already-finalized statuses
+      // (approved/signed/circulated) — an idempotency guard, not a transition guard — which let
+      // a still-"draft" (never submitted, never chairperson-reviewed) record be force-approved by
+      // a bare workflow.task.completed event. Any other non-submitted status is now also a
+      // silent no-op, exactly like the reject branch two lines below.
+      if (current.status !== "submitted") return;
       await versionedUpdate(tx, minutes, {
         id: minutesId,
         tenantId: msg.tenantId,

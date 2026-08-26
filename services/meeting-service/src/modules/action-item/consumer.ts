@@ -55,6 +55,7 @@ import {
   assertEscalationMonotonic,
   assertDeadlineAfterMeetingStart,
   assertEvidenceBeforeVerification,
+  isSettledStatus,
 } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -296,6 +297,17 @@ async function handleAssign(msg: CommandEnvelope<AssignPayload>): Promise<void> 
     if (!meeting) {
       throw new NonRetryableError(`meeting ${p.meetingId} not found for action item ${p.actionItemId}`);
     }
+    // A concluded meeting (cancelled/closed/archived — the same vocabulary ensureAtrAgendaItem
+    // already uses to skip picking one) must not accept new action-item assignments. Unguarded,
+    // this let a meeting cancelled straight from "draft" (actual_start_at stays null forever, so
+    // the temporal P19 guard below is vacuously true for ANY deadline) — or cancelled after
+    // adjournment — still accept work against a meeting that, by the state machine, never
+    // happened or is over.
+    if ((CONCLUDED_MEETING_STATES as readonly string[]).includes(meeting.status)) {
+      throw new NonRetryableError(
+        `meeting ${p.meetingId} has concluded (status="${meeting.status}"); cannot assign new action items`,
+      );
+    }
     // P19 (Req 9.1): the deadline must fall after the meeting start.
     try {
       assertDeadlineAfterMeetingStart(deadline, meeting.actualStartAt);
@@ -401,6 +413,11 @@ async function handleAcknowledge(msg: CommandEnvelope<AcknowledgePayload>): Prom
 
     const row = await loadActionItem(tx, p.actionItemId, msg.tenantId);
     if (!row) throw new NonRetryableError(`action item ${p.actionItemId} not found`);
+    // Self-scope (Req 9.4): only the item's assignee may acknowledge their own assignment (the
+    // routes.ts RBAC comment documents this as a consumer-owned rule — this is that rule).
+    if (msg.actorId !== row.assigneeId) {
+      throw new NonRetryableError(`actor ${msg.actorId} is not the assignee of action item ${p.actionItemId}`);
+    }
 
     const set: Record<string, unknown> = {
       acknowledgedAt: new Date(),
@@ -436,6 +453,10 @@ async function handleProgress(msg: CommandEnvelope<ProgressPayload>): Promise<vo
 
     const row = await loadActionItem(tx, p.actionItemId, msg.tenantId);
     if (!row) throw new NonRetryableError(`action item ${p.actionItemId} not found`);
+    // Self-scope (Req 9.x): only the item's assignee may log progress on their own assignment.
+    if (msg.actorId !== row.assigneeId) {
+      throw new NonRetryableError(`actor ${msg.actorId} is not the assignee of action item ${p.actionItemId}`);
+    }
 
     await tx.insert(actionProgress).values({
       tenantId: msg.tenantId,
@@ -476,6 +497,15 @@ async function handleEvidence(msg: CommandEnvelope<EvidencePayload>): Promise<vo
 
     const row = await loadActionItem(tx, p.actionItemId, msg.tenantId);
     if (!row) throw new NonRetryableError(`action item ${p.actionItemId} not found`);
+    // Terminal-status guard (Req 9.7): a settled item (completed/verified/withdrawn) must not
+    // accept new evidence — unguarded, this silently un-completed a finished item while leaving
+    // its stale completedAt/verifiedBy in place. Idempotent no-op for a redelivered/late message
+    // that no longer applies, same house style as minutes/consumer.ts's applyMinutesOutcome.
+    if (isSettledStatus(row.status)) return;
+    // Self-scope (Req 9.7): only the item's assignee may submit evidence for their own assignment.
+    if (msg.actorId !== row.assigneeId) {
+      throw new NonRetryableError(`actor ${msg.actorId} is not the assignee of action item ${p.actionItemId}`);
+    }
 
     await versionedUpdate(tx, actionItems, {
       id: p.actionItemId,
@@ -532,8 +562,20 @@ async function handleVerify(msg: CommandEnvelope<VerifyPayload>): Promise<void> 
 
     const row = await loadActionItem(tx, p.actionItemId, msg.tenantId);
     if (!row) throw new NonRetryableError(`action item ${p.actionItemId} not found`);
+    // Terminal-status guard (Req 9.7): a settled item must not be re-verified — that would
+    // silently overwrite the ORIGINAL verifier's audit trail — nor reopened (reject branch) once
+    // withdrawn. Idempotent no-op, same house style as the guards above.
+    if (isSettledStatus(row.status)) return;
 
     if (p.verified) {
+      // Self-verification guard (Req 9.7): the verifier must be a different person from the
+      // assignee — an assignee signing off on their own work defeats the entire point of an
+      // independent verification step. Bound to `msg.actorId` (the authenticated caller the
+      // command envelope carries, set from `ctx.actorId` at the HTTP boundary) rather than the
+      // client-supplied `verifierId` body field, which had no relationship check at all and let a
+      // caller simply NAME an arbitrary verifier (e.g. the real secretary's id) while acting as
+      // anyone. Silent no-op — mirrors the terminal-status guard above rather than throwing.
+      if (msg.actorId === row.assigneeId) return;
       // P22 (Req 9.7): cannot verify without completion evidence.
       try {
         assertEvidenceBeforeVerification({ evidenceUrl: row.evidenceUrl, evidenceNote: row.evidenceNote });
@@ -546,7 +588,7 @@ async function handleVerify(msg: CommandEnvelope<VerifyPayload>): Promise<void> 
         tenantId: msg.tenantId,
         expectedVersion: row.version,
         set: {
-          verifiedBy: p.verifierId,
+          verifiedBy: msg.actorId,
           verifiedAt: completedAt,
           status: "completed",
           completedAt,
@@ -563,7 +605,7 @@ async function handleVerify(msg: CommandEnvelope<VerifyPayload>): Promise<void> 
         correlationId: msg.correlationId,
         payload: { actionItemId: p.actionItemId, meetingId: row.meetingId, completedAt: completedAt.toISOString() },
       });
-      await audit(tx, msg, "verify", p.actionItemId, { verified: "true", verifierId: p.verifierId });
+      await audit(tx, msg, "verify", p.actionItemId, { verified: "true", verifierId: msg.actorId });
     } else {
       // Rejected: return to the assignee for rework; evidence is retained for reference.
       await versionedUpdate(tx, actionItems, {
@@ -578,7 +620,7 @@ async function handleVerify(msg: CommandEnvelope<VerifyPayload>): Promise<void> 
         actionItemId: p.actionItemId,
         meetingId: row.meetingId,
       });
-      await audit(tx, msg, "verify", p.actionItemId, { verified: "false", verifierId: p.verifierId });
+      await audit(tx, msg, "verify", p.actionItemId, { verified: "false", verifierId: msg.actorId });
     }
   });
 

@@ -33,6 +33,11 @@
  *
  * Severity: MEDIUM-HIGH (governance-integrity impact; trust-boundary-gated reachability).
  * Live-proven against the real Postgres DB.
+ *
+ * FIXED: `applyMinutesOutcome`'s approve branch (integration/consumer.ts) now requires
+ * `current.status === "submitted"` before writing "approved" — the asymmetry with the reject
+ * branch is gone, and P37's human-approval invariant is no longer reachable-around through this
+ * cross-service path.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -128,14 +133,14 @@ afterAll(async () => {
   await sqlClient.end();
 });
 
-describe("BUG: workflow.task.completed(outcome=approve) approves minutes still in draft (never submitted)", () => {
+describe("FIXED: workflow.task.completed(outcome=approve) no longer approves minutes still in draft", () => {
   it("sanity: the AI-drafted minutes really is draft/ai_generated, never submitted", async () => {
     const row = await readMinutes(DRAFT_AI_MINUTES);
     expect(row.status).toBe("draft");
     expect(row.ai_generated).toBe(true);
   });
 
-  it("a workflow-service 'approve' completion event flips an UNSUBMITTED, AI-generated draft straight to approved", async () => {
+  it("a workflow-service 'approve' completion event no longer flips an UNSUBMITTED, AI-generated draft to approved", async () => {
     await run(
       msg({
         taskId: randomUUID(),
@@ -149,14 +154,14 @@ describe("BUG: workflow.task.completed(outcome=approve) approves minutes still i
     );
 
     const row = await readMinutes(DRAFT_AI_MINUTES);
-    // This is the bug: an AI-generated draft that no human ever submitted for review is now
-    // "approved" — the official, authoritative record — via a path P37's own guards
-    // (ai-assist/domain.ts assertAiMinutesNeverAutoApproved) never cover, because they only
-    // constrain ai-assist's own consumer, not this cross-service callback handler.
-    expect(row.status).toBe("approved");
+    // An AI-generated draft that no human ever submitted for review must NOT reach "approved"
+    // through this cross-service callback — P37 (ai-assist/domain.ts
+    // assertAiMinutesNeverAutoApproved) constrains ai-assist's own consumer; this handler's own
+    // submitted-status guard now closes the separate path around it.
+    expect(row.status).toBe("draft");
     expect(row.ai_generated).toBe(true);
-    expect(row.approved_by).toBe(WORKFLOW_ACTOR);
-    expect(await outboxHas(EVENTS.minutesApproved, DRAFT_AI_MINUTES)).toBe(true);
+    expect(row.approved_by).toBeNull();
+    expect(await outboxHas(EVENTS.minutesApproved, DRAFT_AI_MINUTES)).toBe(false);
   });
 
   it("control group: a PROPERLY submitted minutes is also approved correctly by the same handler (the mechanism itself works — only the missing submitted-gate on approve is the bug)", async () => {
