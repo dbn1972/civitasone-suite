@@ -21,7 +21,10 @@ export default async function ApplyLeavePage() {
         department: myProfile.department ?? "",
         status: myProfile.status ?? "active",
       }];
-      resolvedSource = mySource;
+      // Only adopt the fallback's source if the primary call didn't itself fail —
+      // a real fetch failure on the admin list must still show the error badge,
+      // even though the self-service fallback happened to succeed.
+      resolvedSource = source === "error" ? "error" : mySource;
     }
   }
 
