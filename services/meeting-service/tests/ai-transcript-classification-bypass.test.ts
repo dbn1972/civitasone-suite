@@ -25,11 +25,17 @@
  * attached document, since it is the raw proceedings) is exposed to any tenant user holding a
  * broad meeting-read role, regardless of clearance.
  *
- * Static file:line citations:
+ * Static file:line citations (as originally reported):
  *   - src/modules/ai-assist/routes.ts:80-88   GET /ai/transcript — requireRole(READ_ROLES) only
  *   - src/modules/ai-assist/repo.ts:59-105    getTranscript — no classification predicate/filter
  *   - src/modules/document/routes.ts:96-102   loadReadableDocument — canAccessClassification gate
  *   - src/modules/document/validators.ts:147-156 maxClearanceRank / canAccessClassification
+ *
+ * FIXED: ai-assist/repo.ts `getTranscript` now selects `classification`, and
+ * ai-assist/routes.ts GET /ai/transcript applies `canAccessClassification(ctx.roles,
+ * transcript.classification)` — reused directly from document/validators.ts — collapsing an
+ * unauthorized read to the identical `MEETING_UNAUTHORIZED_ACCESS` 404 document/routes.ts
+ * already used. The two "BUG" cases below are now flipped to assert the fixed (404) behavior.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -135,19 +141,16 @@ describe("classification bypass: GET /ai/transcript vs GET /documents/:documentI
     expect(res.json().code).toBe("MEETING_UNAUTHORIZED_ACCESS");
   });
 
-  it("BUG: ai-assist serves the SAME top_secret transcript row 200 to the SAME unauthorized observer", async () => {
+  it("FIXED: ai-assist now 404s the SAME unauthorized observer on the top_secret transcript row (classification gate applied)", async () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/meetings/${MEETING}/ai/transcript`,
       headers: auth(["observer"]),
     });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    // Metadata (existence, hash, filename) is leaked at minimum; the body too when storage is
-    // reachable. Either way this is exactly the outcome Req 19.7 says must never happen for an
-    // uncleared reader of a top_secret artifact.
-    expect(data.documentId).toBe(TOP_SECRET_TRANSCRIPT);
-    expect(data.hash).toBe("b".repeat(64));
+    // Matches the document module's control-group behaviour exactly (Req 19.7): existence is
+    // never leaked to an uncleared reader — no metadata, no hash, no filename in the response.
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("MEETING_UNAUTHORIZED_ACCESS");
   });
 
   it("document module correctly 404s a committee_member (confidential-tier, rank 2) on the secret transcript row", async () => {
@@ -159,7 +162,7 @@ describe("classification bypass: GET /ai/transcript vs GET /documents/:documentI
     expect(res.statusCode).toBe(404);
   });
 
-  it("BUG: ai-assist serves the SAME secret transcript row 200 to the SAME committee_member — exceeds their clearance ceiling", async () => {
+  it("FIXED: ai-assist now 404s the SAME committee_member on the secret transcript row — exceeds their clearance ceiling", async () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/meetings/${MEETING}/ai/transcript`,
@@ -167,10 +170,10 @@ describe("classification bypass: GET /ai/transcript vs GET /documents/:documentI
     });
     // /ai/transcript always resolves the meeting's MOST RECENT transcript document — the fixture
     // inserts top_secret then secret, so the secret one is latest; either way a committee_member
-    // (max clearance: confidential) is never entitled to read a secret-or-above transcript.
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect([TOP_SECRET_TRANSCRIPT, SECRET_TRANSCRIPT]).toContain(data.documentId);
+    // (max clearance: confidential) is never entitled to read a secret-or-above transcript, so
+    // this now 404s exactly like the document-module control group.
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("MEETING_UNAUTHORIZED_ACCESS");
   });
 
   it("cleared roles (committee_secretary) still see the transcript via the proper document route — the classification model itself is sound, only the ai-assist path skips it", async () => {

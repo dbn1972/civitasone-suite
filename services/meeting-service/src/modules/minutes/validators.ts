@@ -45,13 +45,21 @@ export const minutesSubmitSchema = z.object({
 export type MinutesSubmitInput = z.infer<typeof minutesSubmitSchema>;
 
 /**
- * Approve the minutes (Req 7.5). Optimistic-locked on `version`; `approverId` is normally the
- * authenticated chairperson (resolved from context) but may be supplied explicitly. Optional
- * approval comments are retained for the audit trail.
+ * Approve the minutes (Req 7.5). Optimistic-locked on `version`. `approverId` is ALWAYS the
+ * authenticated caller — commands.ts `minutesApprove` resolves it as `body.approverId ??
+ * ctx.actorId`, so this field is accepted for wire/type compatibility but its value is ALWAYS
+ * discarded (never trusted from the client): a client-supplied `approverId` previously let any
+ * caller with approve rights record an arbitrary user as the approver (identity spoofing —
+ * audit finding). There is no elevated "approve on behalf of" role/flow in this codebase today
+ * to preserve, so the safer fix is to make the field fully non-authoritative rather than add an
+ * unrequested cross-check; if "approve on behalf of" becomes a real requirement, resolve it in
+ * commands.ts against `ctx.actorId` + the committee's actual chairperson, not a bare client
+ * value. Optional approval comments are retained for the audit trail.
  */
 export const minutesApproveSchema = z.object({
   version,
-  approverId: uuid.optional(),
+  /** Accepted but always discarded — see the schema doc comment above. Never trust this. */
+  approverId: uuid.optional().transform(() => undefined),
   comments: z.string().trim().max(4_000).optional(),
 });
 export type MinutesApproveInput = z.infer<typeof minutesApproveSchema>;
@@ -67,13 +75,16 @@ export const minutesRejectSchema = z.object({
 export type MinutesRejectInput = z.infer<typeof minutesRejectSchema>;
 
 /**
- * Apply the chairperson's DSC to the approved minutes (Req 8.1). Optimistic-locked on `version`;
- * `signerId` is normally the authenticated signer (resolved from context) but may be supplied
- * explicitly. Signing does not mutate content — it seals the hash chain and DSC block.
+ * Apply the chairperson's DSC to the approved minutes (Req 8.1). Optimistic-locked on
+ * `version`. `signerId` is ALWAYS the authenticated caller — commands.ts `minutesSign`
+ * resolves it as `body.signerId ?? ctx.actorId` — for the same identity-spoofing reason as
+ * `approverId` above: the field is accepted but its value is always discarded, never trusted
+ * from the client. Signing does not mutate content — it seals the hash chain and DSC block.
  */
 export const minutesSignSchema = z.object({
   version,
-  signerId: uuid.optional(),
+  /** Accepted but always discarded — see the schema doc comment above. Never trust this. */
+  signerId: uuid.optional().transform(() => undefined),
 });
 export type MinutesSignInput = z.infer<typeof minutesSignSchema>;
 

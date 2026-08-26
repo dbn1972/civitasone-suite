@@ -159,12 +159,49 @@ describe("POST /v1/meetings/:meetingId/decisions", () => {
     expect(typeof json.data.id).toBe("string");
   });
 
-  it("202 accepts a decision with bigint-paise financial implication as a string", async () => {
+  it("202 accepts a large-but-within-bound bigint-paise financial implication as a string", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING_ID}/decisions`,
       headers: auth(["committee_secretary"]),
+      // ₹1,00,000 crore in paise — one order of magnitude below the platform ceiling
+      // (decision/validators.ts MAX_FINANCIAL_IMPLICATION_MINOR), still exercises bigint-paise
+      // string handling well beyond a value you'd type as a JS number by hand.
+      payload: { text: "Sanction expenditure", type: "financial", financialImplication: "100000000000000" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("400 rejects a financial implication above the platform's sane ceiling (schema/migration review finding — this field was previously unbounded and accepted any magnitude)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_ID}/decisions`,
+      headers: auth(["committee_secretary"]),
+      // ~₹90 trillion in paise (also > Number.MAX_SAFE_INTEGER) — absurd for a single meeting
+      // decision (bigger than a meaningful fraction of India's entire annual Union Budget) and
+      // now correctly rejected instead of silently accepted.
       payload: { text: "Sanction expenditure", type: "financial", financialImplication: "9007199254740993" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("400 rejects a currency code that is not on the platform's supported ISO-4217 list", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_ID}/decisions`,
+      headers: auth(["committee_secretary"]),
+      // "ZZZ" is 3 uppercase letters (passed the old regex) but not a real/supported ISO-4217 code.
+      payload: { text: "Sanction expenditure", type: "financial", financialImplication: "500000", currency: "ZZZ" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("202 still accepts the platform's default currency (INR)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_ID}/decisions`,
+      headers: auth(["committee_secretary"]),
+      payload: { text: "Sanction expenditure", type: "financial", financialImplication: "500000", currency: "INR" },
     });
     expect(res.statusCode).toBe(202);
   });

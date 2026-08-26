@@ -23,6 +23,13 @@
  * classification filter in getDocuments/getVersionHistory are unaffected). Live-proven: the DB
  * itself accepts the dangling reference at the schema level, and the real consumer accepts it
  * end-to-end at the application level.
+ *
+ * FIXED: migrations/0009_document_previous_version_fk.sql adds a self-referential FK
+ * (`previous_version_id REFERENCES meeting.meeting_documents(id) ON DELETE SET NULL`), matching
+ * `meeting_id`/`agenda_item_id` on the same table. document/consumer.ts `handleDocumentUpload`
+ * now only persists `previousVersionId` when its own predecessor lookup actually resolves —
+ * an unresolvable id is nulled out rather than kept dangling. Both cases below are flipped to
+ * assert the fixed (rejecting / self-healing) behavior.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -86,9 +93,10 @@ afterAll(async () => {
 });
 
 describe("schema gap: meeting_documents.previous_version_id has no FK constraint", () => {
-  it("the database itself accepts a previous_version_id that names no real row (a raw INSERT, bypassing all app-layer logic, succeeds)", async () => {
-    await expect(
-      runWithTenant(TENANT, () =>
+  it("the database now REJECTS a previous_version_id that names no real row (a raw INSERT, bypassing all app-layer logic, fails)", async () => {
+    let caught: unknown;
+    try {
+      await runWithTenant(TENANT, () =>
         sqlClient.begin(async (sql) => {
           await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
           return sql`
@@ -99,11 +107,17 @@ describe("schema gap: meeting_documents.previous_version_id has no FK constraint
                     ${"meeting/" + TENANT + "/documents/" + RAW_INSERT_DOC}, ${"e".repeat(64)},
                     ${NONEXISTENT_PREV_ID}, ${ACTOR}, ${ACTOR})`;
         }),
-      ),
-    ).resolves.toBeDefined(); // no foreign_key_violation — contrast with meeting_id, which IS FK'd
+      );
+    } catch (err) {
+      caught = err;
+    }
+    // 23503 = foreign_key_violation (Postgres SQLSTATE) — previous_version_id now matches
+    // meeting_id's behavior on the SAME table, closing the contrast this test used to document.
+    expect(caught).toBeDefined();
+    expect((caught as { code?: string } | undefined)?.code).toBe("23503");
   });
 
-  it("the real document.upload consumer also accepts a previousVersionId that names no real row — silently resets versionNum to 1 while still persisting the dangling reference", async () => {
+  it("the real document.upload consumer now self-heals a previousVersionId that names no real row — resets versionNum to 1 AND discards the dangling reference", async () => {
     const pdfBytes = Buffer.from("%PDF-1.4 dangling-version-test", "utf8");
     objects.set(`meeting/${TENANT}/documents/${CONSUMER_DOC}`, pdfBytes);
 
@@ -128,6 +142,6 @@ describe("schema gap: meeting_documents.previous_version_id has no FK constraint
       }),
     );
     expect(rows[0].version_num).toBe(1); // predecessor lookup missed -> falls back to "first version"
-    expect(rows[0].previous_version_id).toBe(NONEXISTENT_PREV_ID); // yet the dangling pointer is kept
+    expect(rows[0].previous_version_id).toBeNull(); // the dangling pointer is now discarded, not kept
   });
 });

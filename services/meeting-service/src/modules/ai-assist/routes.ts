@@ -40,6 +40,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { createAIAdapter, AIUnavailableError, type AgendaSuggestion } from "./adapter.js";
 import { classifyMatch } from "./domain.js";
+import { canAccessClassification } from "../document/validators.js";
 
 // ─── RBAC (mirrors the minutes module role sets) ─────────────────────────────
 const READ_ROLES = [
@@ -76,14 +77,22 @@ export async function aiAssistRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: accepted });
   });
 
-  // ── Get the stored transcript (Req 17.x) ─────────────────────────────────
+  // ── Get the stored transcript (Req 17.x, 19.3, 19.7) ─────────────────────
+  // Classification-based access control mirrors document/routes.ts `loadReadableDocument`
+  // EXACTLY (Req 19.3, 19.7): the transcript lives in the SAME meeting_documents table and
+  // must be gated by the SAME canAccessClassification check, reused directly from the document
+  // module rather than reimplemented here (audit finding: this route used to only check broad
+  // role membership, skipping classification entirely). A missing transcript and one the caller
+  // is not cleared for collapse to the SAME generic 404 so classified existence is never leaked.
   app.get("/v1/meetings/:meetingId/ai/transcript", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     await loadMeetingOr404(ctx.tenantId, meetingId);
     const transcript = await repo.getTranscript(ctx.tenantId, meetingId);
-    if (!transcript) throw new HttpError(404, "MEETING_NOT_FOUND", "no transcript for this meeting");
+    if (!transcript || !canAccessClassification(ctx.roles, transcript.classification)) {
+      throw new HttpError(404, "MEETING_UNAUTHORIZED_ACCESS", "no transcript for this meeting");
+    }
     return reply.send({ data: transcript });
   });
 
