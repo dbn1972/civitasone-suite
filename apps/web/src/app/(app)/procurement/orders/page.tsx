@@ -20,7 +20,7 @@ export default async function OrdersPage() {
         actions={
           <>
             <Link href="/procurement/orders/new" className="btn primary">+ New PO</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

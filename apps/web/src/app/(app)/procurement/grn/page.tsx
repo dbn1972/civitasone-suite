@@ -51,7 +51,7 @@ export default async function GRNPage() {
         actions={
           <>
             <Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

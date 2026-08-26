@@ -65,7 +65,7 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
             <label className="label" htmlFor="amendmentType">Amendment type *</label>
             <select id="amendmentType" className="inp" value={amendmentType} onChange={(e) => setAmendmentType(e.target.value)} style={{ minHeight: 44 }}>
               {AMENDMENT_TYPES.map((t) => (
-                <option key={t} value={t}>{t.replace(/_/g, " ").replace(/\w/g, (c) => c.toUpperCase())}</option>
+                <option key={t} value={t}>{t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>
               ))}
             </select>
           </div>

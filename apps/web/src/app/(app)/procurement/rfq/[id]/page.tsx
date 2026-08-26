@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getRFQById } from "../../../../_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type LineItemRow = Record<string, unknown> & {
   itemName: string;
@@ -33,10 +34,16 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
   const { data: rfq, source } = await getRFQById(params.id);
 
   if (!rfq) {
+    // L3 fix: see indents/[id]/page.tsx — don't tell the officer an RFQ is
+    // "removed or invalid" when the real cause was a fetch error.
     return (
       <>
         <PageHeader title="RFQ Detail" back="/procurement/rfq" />
-        <EmptyState icon="📝" title="RFQ not found" message="This RFQ may have been removed or the ID is invalid." />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "RFQ" })} backHref="/procurement/rfq" />
+        ) : (
+          <EmptyState icon="📝" title="RFQ not found" message="This RFQ may have been removed or the ID is invalid." />
+        )}
       </>
     );
   }
@@ -63,7 +70,7 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
         actions={
           <>
             <StatusPill status={rfq.status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

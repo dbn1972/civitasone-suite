@@ -35,7 +35,7 @@ export default async function ProcurementContractsPage() {
           <>
             <Link href="/procurement/contracts/new?template=1" className="btn ghost">Templates</Link>
             <Link href="/procurement/contracts/new" className="btn primary">+ New Contract</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

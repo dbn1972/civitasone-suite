@@ -42,7 +42,7 @@ export default async function RFQPage() {
           <>
             <Link href="/procurement/rfq/new?template=1" className="btn ghost">Templates</Link>
             <Link href="/procurement/rfq/new" className="btn primary">+ New RFQ</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />
