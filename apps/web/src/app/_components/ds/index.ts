@@ -17,6 +17,7 @@ export { ErrorState } from "./ErrorState";
 export { RefreshErrorState } from "./RefreshErrorState";
 export type { RefreshErrorStateProps } from "./RefreshErrorState";
 export { FileUpload } from "./FileUpload";
+export type { UploadedFileMeta } from "./FileUpload";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
 export { ConfirmDialog } from "./ConfirmDialog";

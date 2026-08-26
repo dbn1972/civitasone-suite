@@ -62,7 +62,14 @@ describe("ds/FileUpload", () => {
     fireEvent.change(input);
 
     await waitFor(() => {
-      expect(onUploaded).toHaveBeenCalledWith("uploads/test.pdf");
+      // Second argument carries the real file metadata (fileName/size/mimeType
+      // from the browser File object) so callers whose backend record needs
+      // them (e.g. an attachment row) don't have to re-derive it elsewhere.
+      expect(onUploaded).toHaveBeenCalledWith("uploads/test.pdf", {
+        fileName: "test.pdf",
+        size: 7,
+        mimeType: "application/pdf",
+      });
     });
   });
 
