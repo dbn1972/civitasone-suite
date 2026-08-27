@@ -101,7 +101,7 @@ for (const svc of SERVICES) {
     const sql = readFileSync(filePath);
     try {
       execSync(
-        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db}`,
+        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db} -v ON_ERROR_STOP=1`,
         { input: sql, stdio: ["pipe", "pipe", "pipe"] }
       );
       console.log(`[ok]   ${svc.name}/${file} → ${svc.db}`);
