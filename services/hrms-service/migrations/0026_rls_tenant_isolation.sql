@@ -12,13 +12,27 @@
 --   • Added RLS for training schema (hrms_trainings, hrms_nominations).
 --   • Added RLS for lifecycle schema (hrms_transfers, hrms_promotions,
 --     hrms_separations).
+--   • FIXED 2026-08-27: current_tenant_id() used current_setting('app.tenant_id',
+--     false), which RAISES when the GUC is unset — same failure mode as the
+--     bare one-arg form, just spelled differently. Any later migration that
+--     validates a FK against a table this function's policy governs (e.g.
+--     0028_fk_constraints.sql's ADD CONSTRAINT ... FOREIGN KEY on
+--     attendance.hrms_attendance, which is FORCE ROW LEVEL SECURITY'd above)
+--     scans the table as hrms_svc, which is not exempt from a FORCE'd
+--     policy, hits this function, and the migration aborts with
+--     "unrecognized configuration parameter app.tenant_id" even though no
+--     row exists yet. Every other USING clause in this service (37+ call
+--     sites) already uses the non-erroring current_setting('app.tenant_id',
+--     true); 0034_rls_full_tenant_isolation.sql later CREATE OR REPLACEs
+--     this same function with that safe form anyway. Adopting that fix here
+--     too, at its source, so nothing between 0026 and 0034 breaks on it.
 
 CREATE OR REPLACE FUNCTION employee.current_tenant_id()
 RETURNS uuid
 LANGUAGE sql
 STABLE SECURITY DEFINER
 AS $$
-  SELECT current_setting('app.tenant_id', false)::uuid
+  SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid
 $$;
 
 -- ── employee schema ───────────────────────────────────────────────
