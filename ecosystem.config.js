@@ -382,7 +382,10 @@ module.exports = {
     worker("helpdesk",     "helpdesk_svc",     "civitas_helpdesk"),
     worker("audit",        "audit_svc",        "civitas_audit"),
     worker("legal",        "legal_svc",        "civitas_legal"),
-    worker("crm",          "crm_svc",          "civitas_crm", { CRM_PII_KEY }),
+    worker("crm",          "crm_svc",          "civitas_crm", {
+      CRM_PII_KEY,
+      CRM_SCANNER_DATABASE_URL: scannerDbUrl("crm_scanner", "civitas_crm", "CRM_SCANNER_DATABASE_URL"),
+    }),
     worker("admin",        "admin_svc",        "civitas_admin"),
     worker("billing",      "billing_svc",      "civitas_billing"),
     worker("contract",     "contract_svc",     "civitas_contract", {

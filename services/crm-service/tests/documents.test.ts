@@ -16,12 +16,14 @@ import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
 import { runTenantDocumentAlerts, runDocumentAlertCycle } from "../src/modules/documents/alert-scheduler.js";
+import { scannerSqlClient } from "../src/shared/scanner-db.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const INTERNAL_SECRET = "dm_test_internal_secret";
 const TENANT = "aaaaaaaa-1111-4000-8000-00000000d001";
 const OTHER = "aaaaaaaa-1111-4000-8000-00000000d009";
 const ALERT_TENANT = "aaaaaaaa-1111-4000-8000-00000000d0a1";
+const ALERT_TENANT_2 = "aaaaaaaa-1111-4000-8000-00000000d0a2";
 const ACTOR = "cccccccc-3333-4000-8000-00000000d001";
 const SUBJECT = "22222222-bbbb-4000-8000-00000000d001";
 
@@ -40,7 +42,7 @@ function internalHeaders(tenant = TENANT) {
 }
 
 async function cleanup() {
-  for (const t of [TENANT, OTHER, ALERT_TENANT]) {
+  for (const t of [TENANT, OTHER, ALERT_TENANT, ALERT_TENANT_2]) {
     await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${t}, true)`;
       await tx`DELETE FROM crm.documents WHERE tenant_id = ${t}`.catch(() => {});
@@ -382,5 +384,32 @@ describe("DM-002 alert scheduler round-trip", () => {
 
     const emitted = await runTenantDocumentAlerts(ALERT_TENANT, new Date("2026-08-05T00:00:00Z"));
     expect(emitted).toBeGreaterThanOrEqual(1); // SUBJECT is missing a "universal_id" doc
+  });
+
+  it("list_document_alert_tenants() discovers tenants across the WHOLE table, not just one (BYPASSRLS scanner)", async () => {
+    // A second, independent tenant with its own expired trade_licence — proves
+    // the cross-tenant discovery step (crm_scanner, BYPASSRLS; see
+    // 0089_crm_scanner_role.sql) really scans across tenants, rather than only
+    // ever surfacing whichever single tenant an earlier test happened to seed.
+    await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(ALERT_TENANT_2),
+      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: ["contact"], mandatory: true, expiryRequired: true },
+    });
+    const pre2 = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "lic2.pdf", mimeType: "application/pdf" }, ALERT_TENANT_2);
+    const c2 = await confirm({
+      subjectType: "contact", subjectId: SUBJECT, title: "Licence", filename: "lic2.pdf",
+      storageKey: pre2.json().data.storageKey, mimeType: "application/pdf", sizeBytes: 10,
+      docType: "trade_licence", expiryDate: "2020-01-01",
+    }, ALERT_TENANT_2);
+    expect(c2.statusCode).toBe(202);
+
+    // The raw discovery function itself must name BOTH tenants.
+    const discovered = (await scannerSqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
+    const discoveredIds = discovered.map((r) => r.tenant_id);
+    expect(discoveredIds).toEqual(expect.arrayContaining([ALERT_TENANT, ALERT_TENANT_2]));
+
+    // And the full cycle actually processes both, not just the first one found.
+    const total = await runDocumentAlertCycle(new Date("2026-08-05T00:00:00Z"));
+    expect(total).toBeGreaterThanOrEqual(2); // at least one expired-doc alert per tenant
   });
 });

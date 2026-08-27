@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../../shared/db.js";
+import { scannerSqlClient } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import {
@@ -174,7 +175,10 @@ export async function runTenantDocumentAlerts(tenantId: string, now: Date = new 
 
 /** One full cycle across every tenant with enabled types or dated documents. */
 export async function runDocumentAlertCycle(now: Date = new Date()): Promise<number> {
-  const rows = (await sqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
+  // Tenant discovery MUST run on the BYPASSRLS crm_scanner connection: crm_svc
+  // (correctly NOBYPASSRLS) cannot see rows across tenants through FORCE RLS,
+  // even via this SECURITY DEFINER function — see 0089_crm_scanner_role.sql.
+  const rows = (await scannerSqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
   let total = 0;
   for (const r of rows) {
     try {
