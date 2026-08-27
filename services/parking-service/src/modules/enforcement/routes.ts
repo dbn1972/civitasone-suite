@@ -3,6 +3,19 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { canTransition } from "./domain.js";
+
+// NOTE (scoped out, not fixed here): GET /violations, GET /violations/:id,
+// pay, and contest are tenant-scoped only — there is no ownership check the
+// way bookings/passes now have. Unlike those, this table has no field that
+// identifies the offender/vehicle-owner at all: issuedBy/createdBy identify
+// the ISSUING OFFICER, not the citizen who owes the fine. Retrofitting an
+// actorId-based ownership check here would be actively wrong — it would
+// scope violations to whichever officer happened to issue them, not to the
+// citizen who needs to see/pay/contest their own fine. A correct fix needs a
+// real citizen/vehicle-owner reference (e.g. a vehicle registry lookup),
+// which doesn't exist anywhere in this service — flagged in the PR
+// description as a schema/data-model gap, not silently fixed or ignored.
 
 const USER_ROLES = ["parking_user", "parking_admin", "super_admin"];
 const ADMIN_ROLES = ["parking_admin", "super_admin"];
@@ -71,7 +84,7 @@ export async function enforcementRoutes(app: FastifyInstance): Promise<void> {
     const body = payBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "VIOLATION_NOT_FOUND", "Violation not found");
-    if (existing.status !== "issued") {
+    if (!canTransition(existing.status, "paid")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot pay violation in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.payViolation(ctx, id, body.paymentRef));
@@ -84,7 +97,7 @@ export async function enforcementRoutes(app: FastifyInstance): Promise<void> {
     const body = contestBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "VIOLATION_NOT_FOUND", "Violation not found");
-    if (existing.status !== "issued") {
+    if (!canTransition(existing.status, "contested")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot contest violation in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.contestViolation(ctx, id, body.reason));

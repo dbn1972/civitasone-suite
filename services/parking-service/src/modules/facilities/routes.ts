@@ -62,13 +62,17 @@ export async function facilityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
-    return reply.code(202).send(await commands.createFacility(ctx, {
-      ...body,
-      tariffPerHourMinor: body.tariffPerHourMinor !== undefined ? BigInt(body.tariffPerHourMinor) : undefined,
-      tariffPerDayMinor: body.tariffPerDayMinor !== undefined ? BigInt(body.tariffPerDayMinor) : undefined,
-      monthlyPassMinor: body.monthlyPassMinor !== undefined ? BigInt(body.monthlyPassMinor) : undefined,
-      annualPassMinor: body.annualPassMinor !== undefined ? BigInt(body.annualPassMinor) : undefined,
-    }));
+    // Was: BigInt(...) here, then publishCommand -> queue.publish() ->
+    // JSON.stringify(msg) on the real SQS/RabbitMQ drivers (MemoryQueue, used in
+    // tests, never serializes, which is why this went unnoticed). Native BigInt
+    // throws "Do not know how to serialize a BigInt" — every create/update with
+    // any tariff field set would fail on a real deployment, meaning there was no
+    // way via this API to ever populate the tariff fields the booking/pass fee
+    // fix now depends on. facilities/consumer.ts already expects these as
+    // strings (see its payload type) — routes.ts was the one side of the pipe
+    // not following that contract. Pass the Zod-validated numbers straight
+    // through; the consumer converts to BigInt right before the Drizzle insert.
+    return reply.code(202).send(await commands.createFacility(ctx, body));
   });
 
   app.get("/v1/parking/facilities", async (req, reply) => {
@@ -99,12 +103,7 @@ export async function facilityRoutes(app: FastifyInstance): Promise<void> {
     const body = updateBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "FACILITY_NOT_FOUND", "Facility not found");
-    return reply.code(202).send(await commands.updateFacility(ctx, id, {
-      ...body,
-      tariffPerHourMinor: body.tariffPerHourMinor !== undefined ? BigInt(body.tariffPerHourMinor) : undefined,
-      tariffPerDayMinor: body.tariffPerDayMinor !== undefined ? BigInt(body.tariffPerDayMinor) : undefined,
-      monthlyPassMinor: body.monthlyPassMinor !== undefined ? BigInt(body.monthlyPassMinor) : undefined,
-      annualPassMinor: body.annualPassMinor !== undefined ? BigInt(body.annualPassMinor) : undefined,
-    }));
+    // See the note in POST above — same BigInt/JSON.stringify crash fix.
+    return reply.code(202).send(await commands.updateFacility(ctx, id, body));
   });
 }
