@@ -47,7 +47,7 @@ export async function updateProperty(
   tx: ScopedTx,
   id: string,
   tenantId: string,
-  data: Partial<Pick<PropertyInsert, "marketName" | "monthlyRentMinor" | "status" | "area" | "areaUnit">>,
+  data: Partial<Pick<PropertyInsert, "marketName" | "monthlyRentMinor" | "securityDepositMinor" | "status" | "area" | "areaUnit">>,
   updatedBy: string,
 ): Promise<boolean> {
   const result = await tx.update(marketProperties)

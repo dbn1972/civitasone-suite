@@ -13,6 +13,12 @@ export const marketProperties = marketSchema.table("market_properties", {
   areaUnit: varchar("area_unit", { length: 16 }).notNull().default("sqft"),
   floorNumber: integer("floor_number"),
   monthlyRentMinor: bigint("monthly_rent_minor", { mode: "bigint" }),
+  // Added in the re-review pass: this is now the sole authoritative source for
+  // an allotment's deposit (see allotments/routes.ts) — previously there was no
+  // property-level deposit at all, so a citizen's self-declared
+  // securityDepositMinor on POST /allotments went straight to the DB unchecked.
+  // Safe to add now: market-service's first migration has not shipped yet.
+  securityDepositMinor: bigint("security_deposit_minor", { mode: "bigint" }),
   currency: varchar("currency", { length: 3 }).notNull().default("INR"),
   status: varchar("status", { length: 32 }).notNull().default("available"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

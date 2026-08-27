@@ -4,9 +4,11 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { randomInt } from "node:crypto";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateAllotmentNumber } from "./domain.js";
+import { cache } from "../../shared/infra.js";
+import { generateAllotmentNumber, fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "market.allotments.consumer" });
 
@@ -29,7 +31,12 @@ export function registerAllotmentConsumers(rawQueue: Queue): void {
       monthlyRentMinor?: string;
       securityDepositMinor?: string;
     };
-    const allotmentNumber = generateAllotmentNumber("ULB", Date.now() % 999999);
+    // Mitigation, not a full fix — Date.now() % 999999 repeats every ~16.7min
+    // against a table-wide (non-tenant-scoped) .unique() column; crypto.randomInt
+    // reduces collision probability without a schema change. Real fix (a
+    // per-tenant DB sequence) is a follow-up — this exact pattern recurs
+    // fleet-wide across every service audited in this pass.
+    const allotmentNumber = generateAllotmentNumber("ULB", randomInt(1, 999999));
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -71,13 +78,14 @@ export function registerAllotmentConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.selectAllottee, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const today = new Date().toISOString().slice(0, 10);
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "selected", msg.actorId, {
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "selected", fromStatusesFor("selected"), msg.actorId, {
         allotmentDate: today,
       });
-      if (!ok) return;
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.allotteeSelected,
         eventType: EVENTS.allotteeSelected,
@@ -92,17 +100,19 @@ export function registerAllotmentConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`market:${msg.tenantId}:allotment:${p.id}`, updated);
   });
 
   queue.subscribe(COMMANDS.signAgreement, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; agreementStartDate: string; agreementEndDate: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "agreement_signed", msg.actorId, {
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "agreement_signed", fromStatusesFor("agreement_signed"), msg.actorId, {
         agreementStartDate: p.agreementStartDate,
         agreementEndDate: p.agreementEndDate,
       });
-      if (!ok) return;
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.agreementSigned,
         eventType: EVENTS.agreementSigned,
@@ -117,5 +127,6 @@ export function registerAllotmentConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`market:${msg.tenantId}:allotment:${p.id}`, updated);
   });
 }

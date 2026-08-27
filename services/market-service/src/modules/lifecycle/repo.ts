@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { marketLifecycleRequests, type LifecycleRequestRow, type LifecycleRequestInsert } from "./schema.js";
 
@@ -50,9 +50,10 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
   extra?: { approvedBy?: string; completedAt?: Date },
-): Promise<boolean> {
+): Promise<LifecycleRequestRow | null> {
   const result = await tx.update(marketLifecycleRequests)
     .set({
       status,
@@ -62,7 +63,11 @@ export async function updateStatus(
       ...(extra?.completedAt ? { completedAt: extra.completedAt } : {}),
       version: sql`${marketLifecycleRequests.version} + 1`,
     })
-    .where(and(eq(marketLifecycleRequests.id, id), eq(marketLifecycleRequests.tenantId, tenantId)))
-    .returning({ id: marketLifecycleRequests.id });
-  return result.length > 0;
+    .where(and(
+      eq(marketLifecycleRequests.id, id),
+      eq(marketLifecycleRequests.tenantId, tenantId),
+      inArray(marketLifecycleRequests.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }
