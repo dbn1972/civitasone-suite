@@ -483,7 +483,7 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - name: Run procurement module E2E
-        run: pnpm --filter @civitasone/web exec playwright test e2e/procurement.spec.ts
+        run: pnpm --filter @civitasone/web exec playwright test e2e/procurement.spec.ts --project=chromium
         env:
           CI: true
       - name: Upload Playwright report on failure
@@ -518,7 +518,7 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - name: Run Playwright E2E suite
-        run: pnpm --filter @civitasone/web run e2e
+        run: pnpm --filter @civitasone/web run e2e -- --project=chromium
         env:
           CI: true
       - name: Upload Playwright report on failure
