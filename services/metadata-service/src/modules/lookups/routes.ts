@@ -46,6 +46,12 @@ export async function lookupsRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/metadata/kv", async (req, reply) => {
     const ctx  = resolveContext(req);
+    // Deep-verify audit: every other write in this file (lookups, lookup
+    // values, enums) requires ADMIN; this one and the generic entity-metadata
+    // POST below did not, letting any authenticated tenant member of any role
+    // write/overwrite arbitrary namespaced key-value data. Matching this
+    // file's own convention rather than leaving writes open by omission.
+    requireRole(ctx, ADMIN);
     const body = safeParse(kvWriteBody, req.body);
     const id   = randomUUID();
     await runWithTenant(ctx.tenantId, () =>
@@ -172,6 +178,11 @@ export async function lookupsRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/metadata/:entityType/:entityId", async (req, reply) => {
     const ctx  = resolveContext(req);
+    // Deep-verify audit: same gap as POST /v1/metadata/kv above — see that
+    // comment. This route is the more serious of the two, since it lets a
+    // caller attach/overwrite metadata against ANY entityType/entityId, not
+    // just their own namespace.
+    requireRole(ctx, ADMIN);
     const { entityType, entityId } = safeParse(entityTypeP, req.params);
     const body = safeParse(z.object({ k: z.string().min(1), v: z.unknown() }), req.body);
     const id   = randomUUID();
