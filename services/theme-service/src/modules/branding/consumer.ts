@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import type { TenantBrandingView } from "./schema.js";
+import type { UpsertBrandingPayload } from "./commands.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "branding";
@@ -14,26 +14,19 @@ function keyFor(tenantId: string, id: string) {
 }
 
 export function registerBrandingConsumers(queue: Queue): void {
-  queue.subscribe<TenantBrandingView>(COMMANDS.upsertBranding, async (msg) => {
+  queue.subscribe<UpsertBrandingPayload>(COMMANDS.upsertBranding, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const p = msg.payload;
-      await repo.upsert(tx, {
-        id: p.id,
-        tenantId: p.tenantId,
-        logoS3Key: p.logoS3Key,
-        faviconS3Key: p.faviconS3Key,
-        appName: p.appName,
-        primaryColor: p.primaryColor,
-        accentColor: p.accentColor,
-        footerText: p.footerText,
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-        version: 1,
-      });
-      await emit(tx, msg, EVENTS.brandingUpserted, { brandingId: p.id, tenantId: p.tenantId }, "upsert", p.id);
+      const { projected, isCreate } = msg.payload;
+      if (isCreate) {
+        await repo.insert(tx, projected);
+      } else {
+        const { tenantId, ...patch } = projected;
+        await repo.update(tx, tenantId, patch);
+      }
+      await emit(tx, msg, EVENTS.brandingUpserted, { brandingId: projected.id, tenantId: projected.tenantId }, "upsert", projected.id);
     });
-    await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
+    await cache.put(keyFor(msg.tenantId, msg.payload.projected.id), msg.payload.projected);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 }
