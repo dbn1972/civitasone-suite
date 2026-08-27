@@ -54,6 +54,35 @@ describe("plugin sandbox isolation (SEC-P0-03)", () => {
     expect(r.error).toMatch(/Code generation from strings|Cannot read propert|not defined/);
   });
 
+  it("blocks the constructor realm-escape via a host callback (ctx.log)", async () => {
+    // ctx.log/ctx.emit are real host-realm functions handed into the sandbox.
+    // Before sealHostFunction()/the null-prototype ctx wrapper, `ctx.log
+    // .constructor` resolved to the HOST `Function` constructor (a realm with
+    // no codeGeneration restriction at all — that policy only binds the vm
+    // context's OWN Function/eval), so this string compiled and ran as host
+    // code and returned the real host `process`. It must now be denied.
+    const r = await runInSandbox(
+      'return ctx.log.constructor.constructor("return typeof process")();',
+      api(),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("blocks the constructor realm-escape via the ctx object itself", async () => {
+    // Same reach-back, one hop shorter: `ctx` is an ordinary object, so
+    // `ctx.constructor` (Object.prototype's, inherited) also chains to the
+    // host `Function` constructor — independent of ctx.log/ctx.emit.
+    const r = await runInSandbox(
+      'return ctx.constructor.constructor("return typeof process")();',
+      api(),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
   it("blocks eval / Function code generation", async () => {
     const r = await runInSandbox('return eval("1+1");', api(), 2000);
     expect(r.error).toBeTruthy();
