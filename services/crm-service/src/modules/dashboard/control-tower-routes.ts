@@ -90,7 +90,10 @@ export async function controlTowerRoutes(app: FastifyInstance): Promise<void> {
         kind: "overdue_follow_up",
         label: "Overdue follow-ups",
         severity: overdue > 0 ? "high" : "medium",
-        href: "/crm/dashboard",
+        // /crm/activities has a real Overdue segment (and its own Overdue stat
+        // card) that shows exactly these records; /crm/dashboard has no
+        // overdue-specific content at all, so it was a drill-down to nothing.
+        href: "/crm/activities?segment=Overdue",
         count: overdue,
       },
       {

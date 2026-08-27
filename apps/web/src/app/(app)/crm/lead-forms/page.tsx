@@ -12,6 +12,10 @@ export default async function LeadFormsPage() {
   const live = forms.filter((f) => formHealth(f) === "live").length;
   const unlawful = forms.filter((f) => formHealth(f) === "unlawful").length;
 
+  // Never fabricate a 0 count when the list load failed — show "—" instead
+  // (matches the pattern already used on dashboard/accounts/contacts).
+  const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
+
   return (
     <>
       <PageHeader
@@ -22,9 +26,9 @@ export default async function LeadFormsPage() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🌐" iconBg="#e0f2fe" label="Forms" value={forms.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Live" value={live.toLocaleString("en-IN")} />
-        <StatCard icon="⛔" iconBg="#fee2e2" label="Consent gaps" value={unlawful.toLocaleString("en-IN")} />
+        <StatCard icon="🌐" iconBg="#e0f2fe" label="Forms" value={stat(forms.length)} />
+        <StatCard icon="✅" iconBg="#dcfce7" label="Live" value={stat(live)} />
+        <StatCard icon="⛔" iconBg="#fee2e2" label="Consent gaps" value={stat(unlawful)} />
       </StatGrid>
       <Card title="Registered forms">
         <LeadFormsTable rows={ranked} />

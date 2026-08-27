@@ -4,7 +4,7 @@ import { getCRMActivities } from "../../../_data/loaders";
 import { ActivitiesTable } from "./ActivitiesTable";
 import { LogActivityButton } from "./LogActivityButton";
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams?: { segment?: string } }) {
   const { data: activities, source } = await getCRMActivities();
 
   // Never fabricate a 0 count when the list load failed — show "—" instead
@@ -30,7 +30,10 @@ export default async function Page() {
         <StatCard icon="◈" iconBg="#fef2f2" label="Overdue" value={stat(overdue)} />
         <StatCard icon="○" iconBg="#ecfdf5" label="Completed" value={stat(completed)} />
       </StatGrid>
-      <ActivitiesTable activities={activities} />
+      {/* ?segment= lets a caller (e.g. the Control Tower's "Overdue follow-ups"
+          exception drill-down) land straight on the matching toggle instead of
+          the generic "All" view. */}
+      <ActivitiesTable activities={activities} initialSegment={searchParams?.segment} />
     </>
   );
 }
