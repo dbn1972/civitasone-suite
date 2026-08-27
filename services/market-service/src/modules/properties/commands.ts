@@ -13,7 +13,12 @@ export interface CreatePropertyInput {
   area?: string | undefined;
   areaUnit?: string | undefined;
   floorNumber?: number | undefined;
-  monthlyRentMinor?: bigint | undefined;
+  // number, not bigint: goes straight into a queue.publish() payload that gets
+  // JSON.stringify'd on the real SQS/RabbitMQ drivers — a native bigint throws
+  // there ("Do not know how to serialize a BigInt"), silently only "working" in
+  // tests (MemoryQueue never serializes). The consumer converts to BigInt
+  // itself right before the Drizzle insert/update.
+  monthlyRentMinor?: number | undefined;
 }
 
 export async function createProperty(ctx: RequestContext, body: CreatePropertyInput): Promise<Accepted> {
@@ -23,7 +28,12 @@ export async function createProperty(ctx: RequestContext, body: CreatePropertyIn
 
 export interface UpdatePropertyInput {
   marketName?: string | undefined;
-  monthlyRentMinor?: bigint | undefined;
+  // number, not bigint: goes straight into a queue.publish() payload that gets
+  // JSON.stringify'd on the real SQS/RabbitMQ drivers — a native bigint throws
+  // there ("Do not know how to serialize a BigInt"), silently only "working" in
+  // tests (MemoryQueue never serializes). The consumer converts to BigInt
+  // itself right before the Drizzle insert/update.
+  monthlyRentMinor?: number | undefined;
   status?: string | undefined;
   area?: string | undefined;
   areaUnit?: string | undefined;

@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { marketDemands, type DemandRow, type DemandInsert } from "./schema.js";
 
@@ -46,14 +46,29 @@ export async function insertDemand(tx: ScopedTx, row: DemandInsert): Promise<voi
   await tx.insert(marketDemands).values(row);
 }
 
+/** Used by routes.ts to reject a duplicate demand for the same allotment+month before publishing. */
+export async function findByAllotmentAndMonth(allotmentId: string, tenantId: string, demandMonth: string): Promise<DemandRow | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(marketDemands)
+      .where(and(
+        eq(marketDemands.tenantId, tenantId),
+        eq(marketDemands.allotmentId, allotmentId),
+        eq(marketDemands.demandMonth, demandMonth),
+      ))
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 export async function updateStatus(
   tx: ScopedTx,
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
   extra?: { paidAt?: Date; paymentRef?: string },
-): Promise<boolean> {
+): Promise<DemandRow | null> {
   const result = await tx.update(marketDemands)
     .set({
       status,
@@ -63,7 +78,11 @@ export async function updateStatus(
       ...(extra?.paymentRef ? { paymentRef: extra.paymentRef } : {}),
       version: sql`${marketDemands.version} + 1`,
     })
-    .where(and(eq(marketDemands.id, id), eq(marketDemands.tenantId, tenantId)))
-    .returning({ id: marketDemands.id });
-  return result.length > 0;
+    .where(and(
+      eq(marketDemands.id, id),
+      eq(marketDemands.tenantId, tenantId),
+      inArray(marketDemands.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

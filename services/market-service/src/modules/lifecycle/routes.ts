@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as allotmentsRepo from "../allotments/repo.js";
 import * as commands from "./commands.js";
+import { canTransition } from "./domain.js";
 
 const USER_ROLES = ["market_user", "market_admin", "super_admin"];
 const ADMIN_ROLES = ["market_admin", "super_admin"];
@@ -41,6 +43,8 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
     const body = transferBody.parse(req.body);
+    const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
+    if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
     return reply.code(202).send(await commands.requestTransfer(ctx, body));
   });
 
@@ -48,6 +52,8 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
     const body = cancellationBody.parse(req.body);
+    const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
+    if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
     return reply.code(202).send(await commands.requestCancellation(ctx, body.allotmentId, body.reason));
   });
 
@@ -55,6 +61,8 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = evictionBody.parse(req.body);
+    const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
+    if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
     return reply.code(202).send(await commands.initiateEviction(ctx, body.allotmentId, body.reason));
   });
 

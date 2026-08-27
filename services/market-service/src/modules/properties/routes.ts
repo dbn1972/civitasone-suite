@@ -47,10 +47,11 @@ export async function propertyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
-    return reply.code(202).send(await commands.createProperty(ctx, {
-      ...body,
-      monthlyRentMinor: body.monthlyRentMinor !== undefined ? BigInt(body.monthlyRentMinor) : undefined,
-    }));
+    // Was converting to BigInt here before publishing — crashes the async
+    // consumer's JSON.stringify on any real queue driver (SQS/RabbitMQ). See
+    // commands.ts for the full explanation; the consumer converts to BigInt
+    // itself right before the Drizzle write.
+    return reply.code(202).send(await commands.createProperty(ctx, body));
   });
 
   app.get("/v1/market/properties", async (req, reply) => {
@@ -81,9 +82,7 @@ export async function propertyRoutes(app: FastifyInstance): Promise<void> {
     const body = updateBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "PROPERTY_NOT_FOUND", "Property not found");
-    return reply.code(202).send(await commands.updateProperty(ctx, id, {
-      ...body,
-      monthlyRentMinor: body.monthlyRentMinor !== undefined ? BigInt(body.monthlyRentMinor) : undefined,
-    }));
+    // See the note in POST above — same BigInt/JSON.stringify crash fix.
+    return reply.code(202).send(await commands.updateProperty(ctx, id, body));
   });
 }

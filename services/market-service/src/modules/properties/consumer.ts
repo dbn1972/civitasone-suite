@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
@@ -27,7 +28,7 @@ export function registerPropertyConsumers(rawQueue: Queue): void {
       area?: string;
       areaUnit?: string;
       floorNumber?: number;
-      monthlyRentMinor?: string;
+      monthlyRentMinor?: number;
     };
 
     await db.transaction(async (tx) => {
@@ -73,9 +74,16 @@ export function registerPropertyConsumers(rawQueue: Queue): void {
       for (const key of ["marketName", "status", "area", "areaUnit"]) {
         if (p[key] !== undefined) data[key] = p[key];
       }
-      if (p.monthlyRentMinor !== undefined) data.monthlyRentMinor = BigInt(p.monthlyRentMinor as string);
+      if (p.monthlyRentMinor !== undefined) data.monthlyRentMinor = BigInt(p.monthlyRentMinor as number);
       const ok = await repo.updateProperty(tx, p.id, msg.tenantId, data as never, msg.actorId);
       if (!ok) return;
+      // Was: no cache invalidation of any kind after a property update — GET
+      // .../properties/:id could keep serving the pre-update row for up to the
+      // cache's TTL. cache.invalidate() (a real, existing method on
+      // @civitasone/cache — packages/cache/src/index.ts) is the convention
+      // used elsewhere in this monorepo (e.g. admin-service); the next GET
+      // simply re-fetches from the DB via the existing getOrLoad fallback.
+      await cache.invalidate(`market:${msg.tenantId}:property:${p.id}`);
       await enqueue(tx, {
         topic: EVENTS.propertyUpdated,
         eventType: EVENTS.propertyUpdated,

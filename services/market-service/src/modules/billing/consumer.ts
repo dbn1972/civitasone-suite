@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "market.billing.consumer" });
 
@@ -65,7 +66,7 @@ export function registerBillingConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; paymentRef: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", msg.actorId, {
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", fromStatusesFor("paid"), msg.actorId, {
         paidAt: new Date(),
         paymentRef: p.paymentRef,
       });
@@ -90,7 +91,7 @@ export function registerBillingConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "waived", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "waived", fromStatusesFor("waived"), msg.actorId);
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.demandWaived,

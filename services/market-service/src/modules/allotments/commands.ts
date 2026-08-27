@@ -11,8 +11,10 @@ export interface ApplyAllotmentInput {
   allotteePhone?: string | undefined;
   allotteeAadhaar?: string | undefined;
   allotmentType: string;
-  monthlyRentMinor?: bigint | undefined;
-  securityDepositMinor?: bigint | undefined;
+  // number, not bigint — see properties/commands.ts for the full explanation
+  // (native bigint crashes JSON.stringify in queue.publish() on real drivers).
+  monthlyRentMinor?: number | undefined;
+  securityDepositMinor?: number | undefined;
 }
 
 export async function applyAllotment(ctx: RequestContext, body: ApplyAllotmentInput): Promise<Accepted> {
