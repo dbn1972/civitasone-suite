@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -71,6 +72,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.assignComplaint, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; assignedTo: string; assignedTeam: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "assigned", msg.actorId, {
@@ -78,6 +80,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         assignedTeam: p.assignedTeam,
       });
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.complaintAssigned,
         eventType: EVENTS.complaintAssigned,
@@ -92,14 +95,19 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // GET /v1/animal/complaints/:id (complaints/routes.ts) serves through a
+    // read-through cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "complaint", p.id));
   });
 
   queue.subscribe(COMMANDS.dispatchTeam, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "dispatched", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.teamDispatched,
         eventType: EVENTS.teamDispatched,
@@ -114,10 +122,12 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "complaint", p.id));
   });
 
   queue.subscribe(COMMANDS.closeComplaint, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; resolution: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "closed", msg.actorId, {
@@ -125,6 +135,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         resolution: p.resolution,
       });
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.complaintClosed,
         eventType: EVENTS.complaintClosed,
@@ -139,5 +150,6 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "complaint", p.id));
   });
 }

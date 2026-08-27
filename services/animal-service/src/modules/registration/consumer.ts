@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -83,10 +84,12 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.renewRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "active", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationRenewed,
         eventType: EVENTS.registrationRenewed,
@@ -101,14 +104,19 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // GET /v1/animal/registrations/:id (registration/routes.ts) serves through
+    // a read-through cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.id));
   });
 
   queue.subscribe(COMMANDS.transferRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; newOwnerName: string; newOwnerPhone: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "transferred", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationTransferred,
         eventType: EVENTS.registrationTransferred,
@@ -123,5 +131,6 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.id));
   });
 }
