@@ -718,7 +718,7 @@ describe("PATCH /v1/field/routes/:id/reorder", () => {
 // ── SYNC ROUTES ───────────────────────────────────────────────────────────────
 
 describe("POST /v1/field/sync/push", () => {
-  it("202 — processes batch", async () => {
+  it("202 — accepts batch onto the queue (not yet applied -- see sync/routes.ts note)", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/field/sync/push",
@@ -737,7 +737,8 @@ describe("POST /v1/field/sync/push", () => {
       },
     });
     expect(r.statusCode).toBe(202);
-    expect(r.json().data.processed).toBe(1);
+    expect(r.json().status).toBe("accepted");
+    expect(r.json().data.accepted).toBe(1);
     expect(H.publishMock).toHaveBeenCalledOnce();
     const [topic] = H.publishMock.mock.calls[0]!;
     expect(topic).toBe("field.sync.push");

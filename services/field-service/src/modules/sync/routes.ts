@@ -49,9 +49,22 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
 
     const accepted = await commands.pushSync(ctx, operations);
 
+    // Honest async-state note: this only confirms the batch was ACCEPTED onto the
+    // queue (status: "accepted" above, from publishCommand) -- it does not mean the
+    // operations were applied to their target task/visit/route records.
+    // registerSyncConsumers currently inserts each op as a syncQueue row with
+    // status "pending" and nothing ever transitions it to "processed" (no
+    // consumer/cron anywhere calls repo.markProcessed/markFailed), so this
+    // response must not claim "processed" or give a completion timestamp -- a
+    // field worker's offline app could reasonably treat that as confirmation and
+    // discard its local retry queue for data that was never actually applied.
+    // Flagged separately: the server-side replay step (apply a pending operation's
+    // payload to its real entity) was never implemented, and GET
+    // /v1/field/sync/pull only ever returns status="processed" rows, so pushed
+    // operations currently never surface anywhere once accepted.
     return reply.code(202).send({
       ...accepted,
-      data: { processed: operations.length, syncedAt: new Date().toISOString() },
+      data: { accepted: operations.length, acceptedAt: new Date().toISOString() },
     });
   });
 
