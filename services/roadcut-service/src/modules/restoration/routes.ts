@@ -98,9 +98,14 @@ export async function restorationRoutes(app: FastifyInstance): Promise<void> {
         "Restoration quality has not been assessed yet; complete the restoration inspection before deciding a refund",
       );
     }
-    // A full refund only makes sense when the restoration was actually
-    // verified as satisfactory — otherwise the decision and the assessed
-    // quality contradict each other.
+    // Quality must agree with the decision at BOTH ends: a full refund only
+    // makes sense for verified-satisfactory work, and forfeiting the deposit
+    // only makes sense for verified-unsatisfactory work. Previously only the
+    // full_refund half of this was checked — "forfeited" on a "satisfactory"
+    // restoration fell into the same branch as full_refund below and got
+    // calculateRefundMinor(deposit, quality), which paid out the FULL
+    // deposit for a decision that means the opposite (live-confirmed by an
+    // independent review before this fix).
     if (body.decision === "full_refund" && existing.quality !== "satisfactory") {
       throw new HttpError(
         422,
@@ -108,13 +113,18 @@ export async function restorationRoutes(app: FastifyInstance): Promise<void> {
         `Cannot grant a full refund; restoration quality was assessed as '${existing.quality}'`,
       );
     }
+    if (body.decision === "forfeited" && existing.quality !== "unsatisfactory") {
+      throw new HttpError(
+        422,
+        "QUALITY_MISMATCH",
+        `Cannot forfeit the deposit; restoration quality was assessed as '${existing.quality}'`,
+      );
+    }
 
     // Resolve the actual deposit collected (restoration -> permit ->
     // application) so the refund amount is bounded by, or derived from, real
     // money on record rather than trusting an arbitrary client-supplied
-    // figure. Previously refundMinor was accepted as free-form client input
-    // with no relationship to the deposit at all, and silently defaulted to
-    // 0 whenever the caller omitted it — including for "full_refund".
+    // figure.
     const permit = await permitsRepo.findById(existing.permitId, ctx.tenantId);
     if (!permit) {
       throw new HttpError(409, "PERMIT_NOT_FOUND", "Restoration references a permit that no longer exists");
@@ -125,19 +135,37 @@ export async function restorationRoutes(app: FastifyInstance): Promise<void> {
     }
     const depositMinor = application.depositMinor;
 
+    // The amount is DERIVED from `decision`, never taken from the client,
+    // except for partial_refund where an explicit admin-supplied figure is
+    // the only way to express "some amount, not all or nothing". Previously
+    // a client-supplied refundMinor was honoured for ANY decision as long as
+    // it merely didn't exceed the deposit — so {decision:"full_refund",
+    // refundMinor:"0"} or {decision:"forfeited", refundMinor:"<full
+    // deposit>"} both passed that check while inverting the decision's real
+    // meaning (independent review finding, confirmed deterministic — no
+    // race required).
     let refundMinor: bigint;
-    if (body.refundMinor != null) {
-      refundMinor = BigInt(body.refundMinor);
-      if (refundMinor > depositMinor) {
-        throw new HttpError(422, "REFUND_EXCEEDS_DEPOSIT", "refundMinor cannot exceed the original deposit");
+    if (body.decision === "partial_refund") {
+      if (body.refundMinor == null) {
+        throw new HttpError(422, "REFUND_AMOUNT_REQUIRED", "refundMinor is required for a partial_refund decision");
       }
-    } else if (body.decision === "partial_refund") {
-      throw new HttpError(422, "REFUND_AMOUNT_REQUIRED", "refundMinor is required for a partial_refund decision");
+      refundMinor = BigInt(body.refundMinor);
+      if (refundMinor <= 0n || refundMinor >= depositMinor) {
+        throw new HttpError(
+          422,
+          "INVALID_PARTIAL_REFUND_AMOUNT",
+          "A partial refund must be strictly between 0 and the full deposit — use 'forfeited' or 'full_refund' for those boundary cases",
+        );
+      }
     } else {
-      // full_refund (quality already confirmed satisfactory above) or
-      // forfeited: derive the correct amount from the assessed quality
-      // instead of leaving it unset.
-      refundMinor = calculateRefundMinor(depositMinor, existing.quality);
+      if (body.refundMinor != null) {
+        throw new HttpError(
+          422,
+          "REFUND_AMOUNT_NOT_APPLICABLE",
+          `refundMinor is only accepted for partial_refund; the amount for '${body.decision}' is computed automatically`,
+        );
+      }
+      refundMinor = calculateRefundMinor(depositMinor, body.decision);
     }
 
     return reply.code(202).send(

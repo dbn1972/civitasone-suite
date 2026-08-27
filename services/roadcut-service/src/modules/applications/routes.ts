@@ -18,10 +18,21 @@ const ADMIN_ROLES = ["roadcut_admin", "super_admin"];
 // that then fails permanently in the async consumer (poison-pill message,
 // confirmed live: applications with cuttingLength:"abc" are accepted but
 // never created).
+//
+// The regex + `parseFloat > 0` refine alone still let a ~300-digit numeral
+// through: it matches \d+(\.\d+)? and parseFloat resolves it to `Infinity`
+// (IEEE 754 double overflow), which is > 0, so the refine passed — and
+// `BigInt(Math.ceil(Infinity))` throws exactly the same RangeError this
+// fix exists to prevent, just via magnitude overflow instead of NaN
+// (independent review finding). `.max(12)` bounds the string to well under
+// any realistic cutting dimension in metres (up to ~10^9), and
+// `Number.isFinite` is a second, cheap backstop against any value that
+// still resolves to a non-finite number.
 const positiveDecimalString = z
   .string()
+  .max(12, "must be at most 12 characters")
   .regex(/^\d+(\.\d+)?$/, "must be a positive decimal number")
-  .refine((v) => parseFloat(v) > 0, "must be greater than 0");
+  .refine((v) => Number.isFinite(parseFloat(v)) && parseFloat(v) > 0, "must be a finite number greater than 0");
 
 const createBody = z.object({
   applicantName: z.string().min(1).max(256),

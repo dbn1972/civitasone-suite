@@ -57,7 +57,17 @@ export async function updateStatus(
   tenantId: string,
   status: string,
   updatedBy: string,
+  fromStatus: string,
 ): Promise<boolean> {
+  // The route's canTransition() pre-check and this write happen in two
+  // separate steps (route -> queue -> consumer) with nothing holding the row
+  // in between — two concurrent transitions off the same starting status
+  // (e.g. one admin approving while another rejects the same under_review
+  // application) can each independently pass the route's check. Re-asserting
+  // the expected prior status in the WHERE clause (not just id+tenantId)
+  // makes the second of two racing commands a genuine no-op instead of
+  // silently overwriting the first decision — the same pattern used for
+  // restoration's completeRestoration/updateDepositRefund.
   const result = await tx.update(roadcutApplications)
     .set({
       status,
@@ -66,7 +76,11 @@ export async function updateStatus(
       ...(status === "submitted" ? { submittedAt: new Date() } : {}),
       version: sql`${roadcutApplications.version} + 1`,
     })
-    .where(and(eq(roadcutApplications.id, id), eq(roadcutApplications.tenantId, tenantId)))
+    .where(and(
+      eq(roadcutApplications.id, id),
+      eq(roadcutApplications.tenantId, tenantId),
+      eq(roadcutApplications.status, fromStatus),
+    ))
     .returning({ id: roadcutApplications.id });
   return result.length > 0;
 }

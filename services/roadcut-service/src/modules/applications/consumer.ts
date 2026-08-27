@@ -86,7 +86,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId, "draft");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationSubmitted,
@@ -108,7 +108,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId, "draft");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationWithdrawn,
@@ -130,7 +130,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId, "submitted");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationUnderReview,
@@ -152,7 +152,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "approved", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "approved", msg.actorId, "under_review");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationApproved,
@@ -174,7 +174,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "rejected", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "rejected", msg.actorId, "under_review");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationRejected,
