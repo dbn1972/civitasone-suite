@@ -36,7 +36,9 @@ function extractRows(payload: unknown): unknown[] {
   return [payload];
 }
 
-function mapRows(payload: unknown): ModuleRowSummary[] {
+/** Exported for unit tests (see _data.test.ts) — the label/meta fallback ladder
+ * is exactly the kind of per-backend-shape logic that regresses silently. */
+export function mapRows(payload: unknown): ModuleRowSummary[] {
   const mapped: ModuleRowSummary[] = [];
   for (const [index, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
@@ -52,12 +54,17 @@ function mapRows(payload: unknown): ModuleRowSummary[] {
       `row-${index + 1}`;
     const label =
       toText(row.name) ??
+      // events/taxonomy rows carry the event name as `eventName`, not `name`.
+      toText(row.eventName) ??
       toText(row.title) ??
       toText(row.label) ??
       toText(row.code) ??
       toText(row.type) ??
       toText(row.entityType) ??
       toText(row.direction) ??
+      // anonymous-visitor rows have no name at all; `visitorRef` is the
+      // service's own short, presentable stand-in for the internal id.
+      toText(row.visitorRef) ??
       id;
     const sublabel =
       toText(row.description) ??
@@ -74,6 +81,8 @@ function mapRows(payload: unknown): ModuleRowSummary[] {
       toText(row.currency) ??
       toText(row.updatedAt) ??
       toText(row.createdAt) ??
+      // anonymous-visitor rows use lastSeenAt/firstSeenAt instead.
+      toText(row.lastSeenAt) ??
       (typeof row.points === "number" ? `${row.points} pts` : undefined) ??
       (typeof row.balance === "number" ? `bal ${row.balance}` : undefined);
     mapped.push({
@@ -97,7 +106,13 @@ function moduleLoader(path: string, key: string) {
 }
 
 export const getCdpProfiles = moduleLoader("/api/v1/cdp/profiles", "cdp.profiles");
-export const getCdpIdentity = moduleLoader("/api/v1/cdp/identity/anonymous-visitors", "cdp.identity");
+/**
+ * Unlike every other list route this loader hits, cdp-service makes `limit`
+ * on GET .../anonymous-visitors mandatory rather than defaulting it (see
+ * services/cdp-service/tests/cdp-visitor-stitch.test.ts, "limit is
+ * mandatory") — a request with no query string 400s. Send it explicitly.
+ */
+export const getCdpIdentity = moduleLoader("/api/v1/cdp/identity/anonymous-visitors?limit=50", "cdp.identity");
 export const getCdpSegments = moduleLoader("/api/v1/cdp/segments", "cdp.segments");
 export const getCdpEvents = moduleLoader("/api/v1/cdp/events/taxonomy", "cdp.events");
 
