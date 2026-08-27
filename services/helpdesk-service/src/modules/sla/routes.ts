@@ -52,6 +52,14 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/helpdesk/csat", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC-REVIEW (fresh-services sweep): this handler had no requireRole call
+    // at all, unlike every other mutating action in this file (SLA policy
+    // upsert, ticket escalate) -- despite CSAT being an authenticated,
+    // tenant-scoped write. Any authenticated principal of any role (or none)
+    // could submit a satisfaction rating for an arbitrary ticket in the
+    // tenant, corrupting CSAT stats and pre-empting the ALREADY_SUBMITTED
+    // guard to lock out the legitimate rater. Gate it like every sibling here.
+    requireRole(ctx, HELPDESK_ROLES);
     const body = csatBody.parse(req.body);
     if (!isValidCsatRating(body.rating)) {
       throw new HttpError(400, "INVALID_RATING", "rating must be an integer between 1 and 5");
