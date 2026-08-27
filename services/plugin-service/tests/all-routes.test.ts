@@ -82,10 +82,15 @@ vi.mock("../src/modules/registry/repo.js", () => ({
     if (id === FAKE_ID && tenantId === TENANT) return fakePlugin;
     return null;
   }),
-  listByTenant: vi.fn(async () => ({
-    data: [fakePlugin],
-    pagination: { hasMore: false, pageSize: 50 },
-  })),
+  // The real registry/repo.ts::listByTenant returns a bare array (there is no
+  // separate queries.js wrapping layer for this module, unlike items/ above) —
+  // registry/routes.ts itself wraps it into {data, pagination} before handing
+  // it to sendValidated. This mock previously returned the already-wrapped
+  // shape, which masked a real bug: routes.ts used to pass the bare array
+  // straight through, so every real (unmocked) call 400'd with "Expected
+  // object, received array". Matching the repo's actual return shape here
+  // means this test now exercises the same wrapping routes.ts really does.
+  listByTenant: vi.fn(async () => [fakePlugin]),
 }));
 
 vi.mock("../src/modules/registry/commands.js", () => ({
@@ -112,10 +117,12 @@ vi.mock("../src/modules/hooks/repo.js", () => ({
     if (id === FAKE_ID && tenantId === TENANT) return fakeHook;
     return null;
   }),
-  listByTenant: vi.fn(async () => ({
-    data: [fakeHook],
-    pagination: { hasMore: false, pageSize: 50 },
-  })),
+  // See the identical note on registry/repo.js's mock above: hooks/repo.ts's
+  // real listByTenant returns a bare array, and hooks/routes.ts wraps it into
+  // {data, pagination} itself. This mock previously pre-wrapped the value,
+  // which hid the real routes.ts bug (bare array passed straight through,
+  // 400'ing every real request) behind a mock that didn't match reality.
+  listByTenant: vi.fn(async () => [fakeHook]),
 }));
 
 vi.mock("../src/modules/hooks/commands.js", () => ({
