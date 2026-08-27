@@ -55,4 +55,31 @@ describe("estab/meetings/page.tsx (fix 3 + fix 8-style error/empty split)", () =
     const scheduleBtn = screen.getByRole("button", { name: /Schedule/ });
     expect(scheduleBtn).toBeDisabled();
   });
+
+  it("shows the corrected stat cards: real agenda-item total (not meeting count), an honest upcoming-meetings label, and no fabricated compliance trend", async () => {
+    getMeetingsMock.mockResolvedValue({
+      data: [
+        { ...MEETING, id: "m1", agendaItemsCount: 2, attendeesCount: 5, status: "scheduled" },
+        { ...MEETING, id: "m2", agendaItemsCount: 5, attendeesCount: 3, status: "completed" },
+      ],
+      source: "api",
+    });
+    render(await MeetingsPage({}));
+
+    // Was `meetings.length` (2) mislabeled "Action Items"; now the real sum
+    // of each meeting's own agendaItemsCount (2 + 5 = 7), honestly relabeled.
+    expect(screen.getByText("Agenda Items")).toBeInTheDocument();
+    expect(screen.queryByText("Action Items")).not.toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+
+    // "Meetings (wk)" implied a 7-day window; the underlying count is an
+    // unbounded upcoming-scheduled count, so the label is fixed to match it
+    // instead of arbitrarily truncating the data to fit a fake window.
+    expect(screen.getByText("Upcoming Meetings")).toBeInTheDocument();
+    expect(screen.queryByText("Meetings (wk)")).not.toBeInTheDocument();
+
+    // Compliance's "+3%" delta was a hardcoded literal with no real trend
+    // data behind it -- dropped rather than replaced with another fake number.
+    expect(screen.queryByText("+3%")).not.toBeInTheDocument();
+  });
 });

@@ -17,7 +17,7 @@ export default async function MeetingsPage({
   const upcoming = meetings.filter((m) => m.status === "scheduled" && m.scheduledDate >= today).length;
   const completed = meetings.filter((m) => m.status === "completed").length;
   const momPending = meetings.filter((m) => m.status === "in_progress").length;
-  const totalActions = meetings.length;
+  const totalAgendaItems = meetings.reduce((sum, m) => sum + m.agendaItemsCount, 0);
 
   const rows: MeetingRow[] = meetings.map((m) => ({
     id: m.id,
@@ -64,10 +64,10 @@ export default async function MeetingsPage({
         }
       />
       <StatGrid>
-        <StatCard icon="📅" iconBg="#e6f7f5" label="Meetings (wk)" value={upcoming.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#e6f7f5" label="Upcoming Meetings" value={upcoming.toLocaleString("en-IN")} />
         <StatCard icon="📝" iconBg="#fffaeb" label="MOM Pending" value={momPending.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#eff6ff" label="Action Items" value={totalActions.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Compliance" value={completed > 0 ? `${Math.round((completed / meetings.length) * 100)}%` : "—"} delta="+3%" up />
+        <StatCard icon="✅" iconBg="#eff6ff" label="Agenda Items" value={totalAgendaItems.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#ecfdf3" label="Compliance" value={completed > 0 ? `${Math.round((completed / meetings.length) * 100)}%` : "—"} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {source === "error" ? (

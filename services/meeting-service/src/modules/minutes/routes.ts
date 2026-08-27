@@ -32,8 +32,15 @@
  * _Requirements: 7.1, 7.3, 7.5, 7.8, 8.1, 8.4_
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import {
+  isDirectMeetingOwner,
+  CHAIR_STANDING_ROLES,
+  SECRETARIAL_STANDING_ROLES,
+} from "../meeting-core/domain.js";
 import {
   minutesCreateSchema,
   minutesUpdateSchema,
@@ -63,6 +70,8 @@ const READ_ROLES = [
 const SECRETARY_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin", "admin"];
 /** Approval authority: approve / reject / sign are chairperson (+ platform admin) only (Req 7.5, 8.1). */
 const CHAIR_ROLES = ["meeting_admin", "committee_chairperson", "tenant_admin", "super_admin", "admin"];
+/** Platform-admin bypass, matching meeting-core's documented "Full CRUD" access matrix. */
+const ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
 
 // ─── Path-param schemas (validated at the boundary) ──────────────────────────
 const meetingParam = z.object({ meetingId: z.string().uuid() });
@@ -90,6 +99,43 @@ async function loadMinutesOr404(tenantId: string, meetingId: string, minutesId: 
   const row = await repo.getMinutes(tenantId, minutesId);
   if (!row || row.meetingId !== meetingId) throw new HttpError(404, "MINUTES_NOT_FOUND", "minutes not found");
   return row;
+}
+
+/**
+ * Ownership/standing check (IDOR fix, Req 7.5, 7.6, 8.1, 8.3): `requireRole` alone only proved
+ * the caller holds a CHAIR_ROLES/SECRETARY_ROLES claim somewhere in the tenant -- it never
+ * compared them to THIS meeting's own `chairpersonId`/`secretaryId`, so any
+ * `committee_chairperson`/`committee_secretary` could approve/reject/sign/submit/circulate the
+ * minutes of a meeting they have no staffing relationship to. Byte-for-byte the same shape as
+ * meeting-core/routes.ts's own `assertMeetingOwnership` (admin bypass retained per the
+ * documented "Full CRUD" access matrix; everyone else must actually BE this meeting's
+ * chairperson/secretary, or hold matching standing on its committee roster).
+ */
+async function assertMeetingOwnership(
+  ctx: RequestContext,
+  meeting: { committeeId: string | null; chairpersonId: string | null; secretaryId: string | null },
+  standingRoles: readonly string[],
+): Promise<void> {
+  if (hasAnyRole(ctx, ADMIN_ROLES)) return;
+  if (isDirectMeetingOwner(ctx.actorId, meeting)) return;
+  if (
+    meeting.committeeId &&
+    (await repo.hasCommitteeStanding(ctx.tenantId, meeting.committeeId, ctx.actorId, standingRoles))
+  ) {
+    return;
+  }
+  throw new HttpError(
+    403,
+    "FORBIDDEN",
+    "you must be this meeting's own chairperson/secretary (or hold matching committee standing) to perform this action",
+  );
+}
+
+/** 404 unless the parent meeting exists in the caller's tenant; returns its ownership fields. */
+async function loadMeetingRefOr404(tenantId: string, meetingId: string) {
+  const meeting = await repo.getMeetingRef(tenantId, meetingId);
+  if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+  return meeting;
 }
 
 export async function minutesRoutes(app: FastifyInstance): Promise<void> {
@@ -132,6 +178,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesSubmitSchema.parse(req.body);
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, SECRETARIAL_STANDING_ROLES);
     const accepted = await commands.minutesSubmit(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -143,6 +191,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesApproveSchema.parse(req.body);
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const accepted = await commands.minutesApprove(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -154,6 +204,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesRejectSchema.parse(req.body);
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const accepted = await commands.minutesReject(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -165,6 +217,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesSignSchema.parse(req.body);
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const accepted = await commands.minutesSign(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -176,6 +230,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesCirculateSchema.parse(req.body ?? {});
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, SECRETARIAL_STANDING_ROLES);
     const accepted = await commands.minutesCirculate(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });

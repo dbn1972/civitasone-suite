@@ -19,6 +19,12 @@
  *      POST /v1/meetings/:meetingId/resolutions/:resolutionId/sign for a Committee B resolution.
  *   3. A genuine Committee B secretary / chairperson (an ACTIVE officer row on B) still succeeds
  *      (202) on both — proving the gate blocks only the IDOR, not legitimate committee officers.
+ *
+ * Also covers a second, closely-related gap found in the same file: `dissent` (15 lines below
+ * `sign`) never got the SAME `requireCommitteeStanding` treatment `sign` did, so a flat
+ * `committee_member`/`committee_secretary`/`committee_chairperson` anywhere in the tenant could
+ * record a dissent — and, via `handleDissentRecord`, silently overwrite another member's
+ * existing vote `reason` — against a resolution of a committee they never served.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -160,6 +166,39 @@ describe("[FIXED, Gap 1] resolution.sign now requires committee standing", () =>
         "x-idempotency-key": randomUUID(),
       },
       payload: { signerId: CHAIR_OF_B },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+});
+
+
+describe("[FIXED] resolution.dissent now requires committee standing", () => {
+  it("rejects a flat committee_member with ZERO committee_members rows on the target committee", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_B}/resolutions/${RES_B}/dissent`,
+      headers: {
+        authorization: `Bearer ${token(["committee_member"], SEC_OF_A)}`,
+        "x-idempotency-key": randomUUID(),
+      },
+      payload: { memberId: CHAIR_OF_B, note: "Forged dissent from an outsider to Committee B" },
+    });
+    // SEC_OF_A holds a DISSENT_ROLES-eligible flat role but no roster row on COMMITTEE_B —
+    // requireCommitteeStanding rejects with 403 before dissentRecord is ever published, so
+    // CHAIR_OF_B's real vote reason (seeded below) is never at risk of being overwritten.
+    expect(res.statusCode).not.toBe(202);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("confirms the fix: a GENUINE Committee B secretary (active roster row on B) can still record a dissent (202)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_B}/resolutions/${RES_B}/dissent`,
+      headers: {
+        authorization: `Bearer ${token(["committee_secretary"], SEC_OF_B)}`,
+        "x-idempotency-key": randomUUID(),
+      },
+      payload: { memberId: CHAIR_OF_B, note: "Transcribed on the floor by the Committee B secretary" },
     });
     expect(res.statusCode).toBe(202);
   });

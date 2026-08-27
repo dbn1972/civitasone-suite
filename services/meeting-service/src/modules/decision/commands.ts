@@ -152,7 +152,7 @@ export async function resolutionSign(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: SCHEMA_VERSION,
-    payload: { resolutionId, meetingId, tenantId: ctx.tenantId, signerId: body.signerId },
+    payload: { resolutionId, meetingId, tenantId: ctx.tenantId, signerId: body.signerId ?? ctx.actorId },
   });
   await invalidateResolutions(ctx.tenantId, meetingId);
   return { id: resolutionId, status: "accepted", correlationId: ctx.correlationId };

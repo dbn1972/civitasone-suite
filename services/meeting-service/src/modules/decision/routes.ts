@@ -50,6 +50,7 @@ import {
   resolutionCirculationInitSchema,
   circulationVoteSchema,
 } from "./validators.js";
+import { MEMBER_ROLES } from "../committee/domain.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 
@@ -274,6 +275,16 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     const resolution = await repo.getResolution(ctx.tenantId, resolutionId);
     if (!resolution || resolution.meetingId !== meetingId) {
       throw new HttpError(404, "NOT_FOUND", "resolution not found");
+    }
+    // Standing check (same shape as `sign`'s Gap 1 fix, immediately above, but scoped to ANY
+    // active membership -- not just officer roles -- since recording one's OWN dissent is a
+    // self-service action open to every committee member, not just its secretary/chair).
+    // Without this, ANY caller holding a DISSENT_ROLES role anywhere in the tenant -- not just
+    // a member of THIS resolution's own committee -- could record a dissent and (via
+    // handleDissentRecord) silently overwrite another member's existing vote reason.
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (meetingRef?.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, MEMBER_ROLES);
     }
     const accepted = await commands.dissentRecord(ctx, meetingId, resolutionId, body);
     return reply.code(202).send({ data: accepted });
