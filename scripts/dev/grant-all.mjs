@@ -59,6 +59,19 @@ const DB_USERS = {
   civitas_roadcut: "roadcut_svc",
   civitas_shop: "shop_svc",
   civitas_trade: "trade_svc",
+  // Municipal Sec5 batch 3 (deep-verification pass, 2026-08-27): migrate-all.mjs's
+  // SERVICES list now provisions civitas_crematorium/drainage/event/fire/market/
+  // parking (see the matching comment there), but grant-all.mjs never learned
+  // about this batch either -- same "tables exist, *_svc role has no grants on
+  // them" gap the async-infra and Sec5-batch-2 blocks above this one already
+  // fixed for their own services. Caught reviewing PR #830 (drainage-service);
+  // fixed for the whole batch at once rather than leaving the other 5 broken.
+  civitas_crematorium: "crematorium_svc",
+  civitas_drainage: "drainage_svc",
+  civitas_event: "event_svc",
+  civitas_fire: "fire_svc",
+  civitas_market: "market_svc",
+  civitas_parking: "parking_svc",
 };
 
 const GRANT_SQL = (role) => `
