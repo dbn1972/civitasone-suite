@@ -132,18 +132,29 @@ export async function cannedResponsesRoutes(app: FastifyInstance): Promise<void>
     `);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "canned response not found");
 
-    const sets: string[] = [];
-    if (body.title !== undefined) sets.push(`title = '${body.title.replace(/'/g, "''")}'`);
-    if (body.content !== undefined) sets.push(`content = '${body.content.replace(/'/g, "''")}'`);
-    if (body.category !== undefined) sets.push(`category = ${body.category === null ? "NULL" : `'${body.category}'`}`);
-    if (body.shortCode !== undefined) sets.push(`short_code = ${body.shortCode === null ? "NULL" : `'${body.shortCode}'`}`);
-    if (body.tags !== undefined) sets.push(`tags = '${JSON.stringify(body.tags)}'::jsonb`);
-    if (body.enabled !== undefined) sets.push(`enabled = ${body.enabled}`);
-    sets.push("updated_at = now()");
-
-    await withTenantGuc(ctx.tenantId, (tx) => tx.unsafe(
-      `UPDATE helpdesk.canned_responses SET ${sets.join(", ")} WHERE id = '${id}' AND tenant_id = '${ctx.tenantId}'`
-    ));
+    // SEC-REVIEW (fresh-services sweep): this built the UPDATE by
+    // string-concatenating request-body values (only `title`/`content` were
+    // even quote-escaped; `category`/`shortCode` were not escaped at all)
+    // into a query string run via `tx.unsafe()`. Any ADMIN_ROLES caller could
+    // break out of the string via a single quote in `category`/`shortCode`
+    // and inject arbitrary SQL into this UPDATE (e.g. reassign `tenant_id`
+    // to move the row to another tenant, or run stacked statements — postgres
+    // 'simple query' mode used by `.unsafe()` permits both). Rebuilt using
+    // the same parameterized conditional-fragment style this file's own GET
+    // handler already uses (`category ? tx\`AND category = ${category}\` : tx\`\``),
+    // so every value is bound, never spliced into SQL text.
+    await withTenantGuc(ctx.tenantId, (tx) => tx`
+      UPDATE helpdesk.canned_responses
+      SET
+        updated_at = now()
+        ${body.title !== undefined ? tx`, title = ${body.title}` : tx``}
+        ${body.content !== undefined ? tx`, content = ${body.content}` : tx``}
+        ${body.category !== undefined ? tx`, category = ${body.category}` : tx``}
+        ${body.shortCode !== undefined ? tx`, short_code = ${body.shortCode}` : tx``}
+        ${body.tags !== undefined ? tx`, tags = ${JSON.stringify(body.tags)}::jsonb` : tx``}
+        ${body.enabled !== undefined ? tx`, enabled = ${body.enabled}` : tx``}
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+    `);
 
     return reply.send({ data: { id, status: "updated" } });
   });
