@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { tenantTransaction } from "@civitasone/db";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { pipelines, type PipelineRow, type PipelineInsert, type PipelineView } from "./schema.js";
 
 export function toView(r: PipelineRow): PipelineView {
@@ -19,8 +19,18 @@ export function toView(r: PipelineRow): PipelineView {
   };
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()` —
+ * same FORCE ROW LEVEL SECURITY / AsyncLocalStorage gap `stagesOf` below documents in full:
+ * `scopedRead` only gets `app.tenant_id` set via AsyncLocalStorage populated by
+ * `createTenantTxHook`'s onRequest hook, which reads an `x-tenant-id` HEADER, never the
+ * caller-verified `tenantId` (already `ctx.tenantId`) this function receives directly.
+ * Without this, a request that omits that header — every direct-to-service call,
+ * including this file's own vitest coverage via `app.inject` — silently returned null
+ * under FORCE RLS for a pipeline the caller's own tenant genuinely owns.
+ */
 export async function findById(id: string, tenantId: string): Promise<PipelineView | null> {
-  const rows = await scopedRead((tx) => tx.select()
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select()
     .from(pipelines)
     .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
     .limit(1));
@@ -35,6 +45,7 @@ export interface PipelineScopeFilter {
   businessUnit?: string;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above. */
 export async function listByTenant(
   tenantId: string,
   limit: number,
@@ -47,7 +58,7 @@ export async function listByTenant(
   if (scope.product !== undefined) conds.push(sql`(${pipelines.product} = ${scope.product} OR ${pipelines.product} IS NULL)`);
   if (scope.region !== undefined) conds.push(sql`(${pipelines.region} = ${scope.region} OR ${pipelines.region} IS NULL)`);
   if (scope.businessUnit !== undefined) conds.push(sql`(${pipelines.businessUnit} = ${scope.businessUnit} OR ${pipelines.businessUnit} IS NULL)`);
-  const rows = await scopedRead((tx) => tx.select()
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select()
     .from(pipelines)
     .where(and(...conds))
     .orderBy(pipelines.name)
