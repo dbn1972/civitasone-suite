@@ -674,6 +674,7 @@ export const HRDashboardSchema = z.object({
   onLeave: z.number().default(0),
   payrollDue: z.number().default(0),
   departmentBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
+  employeeTypeBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
 });
 
 export const AttendanceSummaryItemSchema = z.object({

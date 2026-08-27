@@ -5,7 +5,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
@@ -19,8 +19,8 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employees", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset));
+    const q = employeeListQuery.parse(req.query);
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {

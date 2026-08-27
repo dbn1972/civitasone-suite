@@ -83,16 +83,27 @@ function buildPayload(data: WizardData): Record<string, unknown> {
     "mobile", "email",
     "employeeNo", "departmentId", "designationId", "grade",
     "dateOfJoining", "employeeType",
-    "managerId", "workLocation", "shift", "costCenter",
+    "managerId", "shift", "costCenter",
     "pan", "aadhaarRef", "bankAccountNo", "bankIfsc",
   ];
   for (const k of stringKeys) {
     const v = data[k];
     if (typeof v === "string" && v.trim() !== "") body[k] = v.trim();
   }
+  // workLocation maps to the backend's `station` column/field (see
+  // createEmployeeBody) -- sent under its real key so it actually persists,
+  // instead of the "workLocation" key the API silently discards (HR-A finding).
+  if (data.workLocation.trim() !== "") body.station = data.workLocation.trim();
   body.pfEnrolled = data.pfEnrolled;
   body.esiEnrolled = data.esiEnrolled;
   body.ptApplicable = data.ptApplicable;
+  // NOTE: grade / shift / costCenter / maritalStatus / bloodGroup / pfEnrolled /
+  // esiEnrolled / ptApplicable are collected above but have no corresponding field
+  // in createEmployeeBody today, so the API silently strips them (unknown Zod
+  // keys) -- same "collected but not persisted" defect class as workLocation was,
+  // but each needs a real product/schema decision (new columns, or a different
+  // module e.g. shift assignment) rather than a one-line key rename. Flagged as a
+  // follow-up, out of scope for this fix.
   return body;
 }
 

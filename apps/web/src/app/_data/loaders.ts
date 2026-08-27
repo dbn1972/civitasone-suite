@@ -1100,8 +1100,9 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(limit = 50, offset = 0): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}`, [] as EmployeeSummary[], {
+export async function getEmployees(limit = 50, offset = 0, employeeType?: string): Promise<LoaderResult<EmployeeSummary[]>> {
+  const typeQs = employeeType ? `&employeeType=${encodeURIComponent(employeeType)}` : "";
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -2022,6 +2023,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   onLeave: 0,
   payrollDue: 0,
   departmentBreakdown: [],
+  employeeTypeBreakdown: [],
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
@@ -2036,6 +2038,9 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
     payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
     departmentBreakdown: Array.isArray(raw.departmentBreakdown)
       ? (raw.departmentBreakdown as { name: string; count: number }[])
+      : [],
+    employeeTypeBreakdown: Array.isArray(raw.employeeTypeBreakdown)
+      ? (raw.employeeTypeBreakdown as { name: string; count: number }[])
       : [],
   };
 }

@@ -5,15 +5,6 @@ import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
 
-const TYPE_LABELS: Record<string, string> = {
-  permanent: "Permanent",
-  probation: "On Probation",
-  contractual: "Contractual",
-  deputation: "Deputation",
-  consultant: "Consultant",
-  intern: "Intern / Trainee",
-};
-
 const PAGE_SIZE = 50;
 
 function empPageHref(type: string, p: number): string {
@@ -25,8 +16,9 @@ function empPageHref(type: string, p: number): string {
 
 export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
+  const typeFilter = searchParams?.type ?? "all";
   const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
-    getEmployees(PAGE_SIZE, page * PAGE_SIZE),
+    getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter),
     getHRDashboard(),
   ]);
   const t = await getTranslations();
@@ -34,25 +26,19 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
 
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
   const total = hrDashboard.headcount || employees.length;
+  // NOTE: `active`/`others` below still derive from the current page only (same
+  // page-scoped-math class as the type-tabs bug this fix targets), because there is
+  // no existing tenant-wide "serving" aggregate to source them from without adding a
+  // new backend query -- flagged as a follow-up, out of scope for this fix. `onLeave`
+  // is fixed here since the dashboard already returns it tenant-wide.
   const active = employees.filter((e) => SERVING.has(e.status)).length;
-  const onLeave = employees.filter((e) => e.status === "on_leave").length;
+  const onLeave = hrDashboard.onLeave;
   const others = total - active - onLeave;
 
-  const typeFilter = searchParams?.type ?? "all";
-  const filtered = typeFilter === "all"
-    ? employees
-    : employees.filter((e) => {
-        const raw = e as Record<string, unknown>;
-        return (raw.employeeTypeCode ?? raw.status ?? "") === typeFilter;
-      });
-
-  // Count employees per type for filter tab badges
-  const countByType = employees.reduce<Record<string, number>>((acc, e) => {
-    const raw = e as Record<string, unknown>;
-    const key = String(raw.employeeTypeCode ?? raw.status ?? "other");
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
+  // Tenant-wide, independent of pagination -- see dashboard/queries.ts employeeTypeBreakdown.
+  const countByType: Record<string, number> = Object.fromEntries(
+    hrDashboard.employeeTypeBreakdown.map((b) => [b.name, b.count]),
+  );
 
   const TYPE_TABS = [
     { key: "all", label: `All (${total})` },
@@ -61,6 +47,13 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
     { key: "deputation", label: countByType.deputation ? `Deputation (${countByType.deputation})` : "Deputation" },
     { key: "consultant", label: countByType.consultant ? `Consultant (${countByType.consultant})` : "Consultant" },
   ];
+
+  // The backend now applies the type filter itself (see getEmployees' employeeType
+  // param / GET /v1/hrms/employees?employeeType=), so `employees` already reflects
+  // `typeFilter` -- no client-side re-filtering needed (previously this incorrectly
+  // re-filtered only the current 50-row page, using a field the API never returned).
+  const filtered = employees;
+  const filteredTotal = typeFilter === "all" ? total : (countByType[typeFilter] ?? 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -100,7 +93,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         <EmployeesTable employees={filtered} source={source} />
       </Card>
 
-      {total > PAGE_SIZE && (
+      {filteredTotal > PAGE_SIZE && (
         <nav aria-label="Employee list pagination" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
           {page > 0 && (
             <Link
@@ -111,9 +104,9 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
             </Link>
           )}
           <span style={{ color: "var(--ink2)" }}>
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total} employees
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredTotal)} of {filteredTotal} employees
           </span>
-          {(page + 1) * PAGE_SIZE < total && (
+          {(page + 1) * PAGE_SIZE < filteredTotal && (
             <Link
               href={empPageHref(typeFilter, page + 1)}
               className="btn"

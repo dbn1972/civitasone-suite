@@ -47,6 +47,24 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
       legalEntityId:  body.legalEntityId ?? null,
       costCenterId:   body.costCenterId ?? null,
       locationId:     body.locationId ?? null,
+      // Previously validated by createEmployeeBody + present as real columns on
+      // hrmsEmployees, but never mapped into this insert -- silently discarded on
+      // every create (HR-A deep-verify finding). See employee/schema.ts for columns.
+      pan:            body.pan ?? null,
+      aadhaarRef:     body.aadhaarRef ?? null,
+      bankAccountNo:  body.bankAccountNo ?? null,
+      bankIfsc:       body.bankIfsc ?? null,
+      esicIpNumber:   body.esicIpNumber ?? null,
+      uanNumber:      body.uanNumber ?? null,
+      pran:           body.pran ?? null,
+      gstin:          body.gstin ?? null,
+      sacCode:        body.sacCode ?? null,
+      agencyRef:      body.agencyRef ?? null,
+      napsId:         body.napsId ?? null,
+      managerId:      body.managerId ?? null,
+      station:        body.station ?? null,
+      category:       body.category ?? null,
+      disability:     body.disability ?? false,
       createdBy:      ctx.actorId,
       updatedBy:      ctx.actorId,
     }).returning({ id: hrmsEmployees.id })
