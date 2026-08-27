@@ -41,19 +41,23 @@ export default defineConfig({
     // 400_000ms timeout (2026-08-27): it still never came up, so this is a
     // genuine hang, not merely a slow cold compile that a bigger number would
     // fix. `next start` against a build made moments earlier has none of this
-    // (Ready in ~490ms, verified separately in the Accessibility job's own
-    // build+start step), so CI builds once and serves the production output
-    // instead of asking `next dev` to compile on the fly. Local runs keep
-    // `next dev` for hot reload; global-setup.ts has no NODE_ENV/dev-login
-    // dependency, so switching modes only in CI is safe.
+    // (Ready in ~490ms). The build itself is done as its own CI step (see
+    // ci.yml's "Build web" step in the e2e / procurement-e2e jobs) rather than
+    // chained into this command: chaining `build && start` put the ~3.5min
+    // build time inside webServer's own timeout budget and blew through 360s
+    // (2026-08-27 run) -- keeping the slow part in an ordinary CI step, with
+    // its own clearly-visible duration, and leaving webServer only the fast
+    // `next start` is both easier to reason about and matches the pattern the
+    // Accessibility job already uses successfully. Local runs keep `next dev`
+    // for hot reload; global-setup.ts has no NODE_ENV/dev-login dependency, so
+    // switching modes only in CI is safe.
     command: process.env.CI
-      ? `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} NEXT_PUBLIC_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web run build && CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web run start --port ${E2E_PORT}`
+      ? `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web run start --port ${E2E_PORT}`
       : `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web dev --port ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
     reuseExistingServer: !process.env.CI,
-    // CI's command above includes a full production build (~3.5min observed
-    // in the Accessibility job) before the server can start; local `next dev`
-    // only needs to bind the port.
-    timeout: process.env.CI ? 360_000 : 120_000,
+    // `next start` against an already-built .next/ is fast (~490ms observed);
+    // 120s leaves ample margin either way without hiding a real regression.
+    timeout: 120_000,
   },
 });

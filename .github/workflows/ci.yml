@@ -465,6 +465,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build packages for web dev server
         run: pnpm turbo build --filter='./packages/*'
+      # `next dev` never reaches "Ready" in this CI environment -- it logs a
+      # couple of webpack PackFileCacheStrategy warnings about next-intl's
+      # dynamic import(t) and then hangs indefinitely (confirmed: raising
+      # config.webServer.timeout as high as 400s made no difference, so it is
+      # a genuine hang, not a slow cold compile). `next start` against a build
+      # made moments earlier has none of this problem (Ready in ~490ms, same
+      # as the Accessibility job's own build+start below). Building here, as
+      # its own step, keeps that multi-minute cost out of webServer's budget --
+      # playwright.config.ts only asks webServer to run the fast `next start`.
+      - name: Build web (production build — next dev hangs in this CI env, see above)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          CIVITASONE_API_BASE_URL: http://127.0.0.1:4001
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4001
       - name: Install Playwright browsers
         run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - name: Run procurement module E2E
@@ -491,6 +506,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build packages for web dev server
         run: pnpm turbo build --filter='./packages/*'
+      # See the matching step/comment in the procurement-e2e job above: next dev
+      # hangs indefinitely in this CI environment, so CI builds once and runs
+      # the fast `next start` from playwright.config.ts instead.
+      - name: Build web (production build — next dev hangs in this CI env, see above)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          CIVITASONE_API_BASE_URL: http://127.0.0.1:4001
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4001
       - name: Install Playwright browsers
         run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
       - name: Run Playwright E2E suite
