@@ -29,16 +29,25 @@
 --
 -- Idempotent: plain `ADD CONSTRAINT` has no `IF NOT EXISTS` form in Postgres
 -- (unlike CREATE TABLE/INDEX/SCHEMA elsewhere in this codebase's migrations),
--- and re-running it would raise `ERROR: constraint ... already exists` —
--- which scripts/dev/migrate-all.mjs's idempotency check does NOT treat as
--- safe-to-skip (it only skips "already exists" messages that do NOT also
--- contain the literal string "ERROR", and Postgres's real message contains
--- both). Wrapping in a DO block that catches duplicate_object makes this
--- migration safe to apply more than once, consistent with every other
--- migration in this service.
+-- and re-running it would raise an error — which scripts/dev/migrate-all.mjs's
+-- idempotency check does NOT treat as safe-to-skip (it only skips "already
+-- exists" messages that do NOT also contain the literal string "ERROR", and
+-- Postgres's real message contains both). Wrapping in a DO block catches
+-- that and makes this migration safe to apply more than once, consistent
+-- with every other migration in this service.
+--
+-- Verified empirically against Postgres 16 (this cluster) which class the
+-- re-application error actually raises: adding a UNIQUE constraint also
+-- creates a supporting unique index of the same name, and re-adding it
+-- collides on THAT index — SQLSTATE 42P07 (duplicate_table, Postgres's
+-- class for "a relation by this name already exists", covering indexes as
+-- well as tables), not 42710 (duplicate_object, the class an initial guess
+-- reasonably lands on for "a constraint already exists" but which does NOT
+-- fire here). Catching both keeps this migration correct regardless of
+-- which the constraint machinery raises.
 DO $$ BEGIN
   ALTER TABLE branding.tenant_branding
     ADD CONSTRAINT uq_tenant_branding_tenant UNIQUE (tenant_id);
 EXCEPTION
-  WHEN duplicate_object THEN NULL;
+  WHEN duplicate_object OR duplicate_table THEN NULL;
 END $$;
