@@ -52,7 +52,7 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADV_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `adv:${ctx.tenantId}:permit:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "permit", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "PERMIT_NOT_FOUND", "Permit not found");
     return reply.send({ data: row });

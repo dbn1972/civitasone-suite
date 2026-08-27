@@ -72,3 +72,17 @@ export async function updateStatus(
 export async function insertRenewal(tx: ScopedTx, row: AdvRenewalInsert): Promise<void> {
   await tx.insert(advRenewals).values(row);
 }
+
+export async function updateValidUntil(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  validUntil: string,
+  updatedBy: string,
+): Promise<boolean> {
+  const result = await tx.update(advPermits)
+    .set({ validUntil, updatedBy, updatedAt: new Date(), version: sql`${advPermits.version} + 1` })
+    .where(and(eq(advPermits.id, id), eq(advPermits.tenantId, tenantId)))
+    .returning({ id: advPermits.id });
+  return result.length > 0;
+}

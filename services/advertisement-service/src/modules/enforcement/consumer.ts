@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -57,6 +58,7 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.issueNotice, async (msg) => {
     const p = msg.payload as { violationId: string; noticeDetails: Record<string, unknown> };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateViolation(tx, p.violationId, msg.tenantId, {
@@ -65,16 +67,20 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         noticeDetails: p.noticeDetails as never,
       }, msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.noticeIssued, eventType: EVENTS.noticeIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId } });
       await writeAudit(tx, ctxOf(msg), { action: "violation.issue_notice", resourceType: "adv_violation", resourceId: p.violationId });
     });
+    // GET /v1/advertisement/violations/:id reads through a cache that only
+    // this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "violation", p.violationId));
   });
 
   queue.subscribe(COMMANDS.imposePenalty, async (msg) => {
     const p = msg.payload as { violationId: string; penaltyMinor?: string };
     const violation = await repo.findById(p.violationId, msg.tenantId);
     const penaltyMinor = p.penaltyMinor ? BigInt(p.penaltyMinor) : calculatePenaltyMinor(violation?.violationType ?? "unauthorized_hoarding");
-
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateViolation(tx, p.violationId, msg.tenantId, {
@@ -84,13 +90,16 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         penaltyImposedAt: new Date(),
       }, msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.penaltyImposed, eventType: EVENTS.penaltyImposed, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId, penaltyMinor: String(penaltyMinor) } });
       await writeAudit(tx, ctxOf(msg), { action: "violation.impose_penalty", resourceType: "adv_violation", resourceId: p.violationId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "violation", p.violationId));
   });
 
   queue.subscribe(COMMANDS.orderRemoval, async (msg) => {
     const p = msg.payload as { violationId: string; removalDeadline: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateViolation(tx, p.violationId, msg.tenantId, {
@@ -99,13 +108,16 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         removalDeadline: p.removalDeadline,
       }, msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.removalOrdered, eventType: EVENTS.removalOrdered, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId, removalDeadline: p.removalDeadline } });
       await writeAudit(tx, ctxOf(msg), { action: "violation.order_removal", resourceType: "adv_violation", resourceId: p.violationId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "violation", p.violationId));
   });
 
   queue.subscribe(COMMANDS.recordRemoval, async (msg) => {
     const p = msg.payload as { violationId: string; removalNotes: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateViolation(tx, p.violationId, msg.tenantId, {
@@ -114,8 +126,10 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         removalNotes: p.removalNotes,
       }, msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.removalRecorded, eventType: EVENTS.removalRecorded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId } });
       await writeAudit(tx, ctxOf(msg), { action: "violation.record_removal", resourceType: "adv_violation", resourceId: p.violationId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "violation", p.violationId));
   });
 }

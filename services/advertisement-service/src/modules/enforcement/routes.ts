@@ -54,7 +54,7 @@ export async function enforcementRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `adv:${ctx.tenantId}:violation:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "violation", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "VIOLATION_NOT_FOUND", "Violation not found");
     return reply.send({ data: row });
