@@ -1,12 +1,15 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateBookingNumber } from "./domain.js";
+import * as facilitiesRepo from "../facilities/repo.js";
+import { generateBookingNumber, calculateParkingFee, fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "parking.bookings.consumer" });
 
@@ -26,7 +29,13 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       vehicleType: string;
       spaceNumber?: string;
     };
-    const bookingNumber = generateBookingNumber("ULB", Date.now() % 999999);
+    // Mitigation: was `Date.now() % 999999` — a deterministic sequence repeating
+    // every ~16.7 minutes, checked against a globally (not per-tenant) .unique()
+    // column, colliding across ALL tenants and throwing inside this transaction
+    // after the caller already got 202. crypto.randomInt makes collisions far
+    // less likely without a schema change; a real fix needs a per-tenant DB
+    // sequence (follow-up, not done here — same pattern recurs fleet-wide).
+    const bookingNumber = generateBookingNumber("ULB", randomInt(1, 999999));
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -67,13 +76,16 @@ export function registerBookingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.recordEntry, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; spaceNumber?: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "active", msg.actorId, {
+      // fromStatusesFor("active") = ["booked"] — previously this had no status
+      // guard at all and could re-activate an already-completed/cancelled booking.
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "active", fromStatusesFor("active"), msg.actorId, {
         entryTime: new Date(),
         ...(p.spaceNumber !== undefined ? { spaceNumber: p.spaceNumber } : {}),
       });
-      if (!ok) return;
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.entryRecorded,
         eventType: EVENTS.entryRecorded,
@@ -88,32 +100,54 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`parking:${msg.tenantId}:booking:${p.id}`, updated);
   });
 
   queue.subscribe(COMMANDS.recordExit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; paymentRef?: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const booking = await repo.findById(p.id, msg.tenantId);
+      // Was: `if (!booking?.entryTime) return;` only — catches "never entered"
+      // but NOT "already exited": entryTime stays set after a first exit, so a
+      // second recordExit on an already-completed booking would recompute
+      // duration/amount from the same stale entryTime to *now* and re-bill,
+      // re-emitting exitRecorded with a larger amount (a double-billing/replay
+      // path independent of the tariff fix below). fromStatusesFor("completed")
+      // = ["active"] in the atomic UPDATE guard below now closes that: a second
+      // recordExit finds status is no longer "active" and updateStatus no-ops.
       if (!booking?.entryTime) return;
+      const facility = await facilitiesRepo.findById(booking.facilityId, msg.tenantId);
       const exitTime = new Date();
       const durationMinutes = Math.round((exitTime.getTime() - booking.entryTime.getTime()) / 60000);
-      // Placeholder: Rs 20/hr
-      const amountMinor = BigInt(Math.ceil(durationMinutes / 60)) * 2000n;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId, {
+      // Was: hardcoded "Placeholder: Rs 20/hr" flat rate, ignoring the facility's
+      // actual tariffPerHourMinor (already stored on parking_facilities and
+      // already exposed by facilitiesRepo.findById) and the calculateParkingFee()
+      // domain function that existed specifically for this purpose but was never
+      // called. If the facility hasn't configured an hourly tariff, amountMinor
+      // stays null (a real, nullable state — "not chargeable" — rather than
+      // inventing a new fallback magic number) and this is logged for follow-up.
+      let amountMinor: bigint | null = null;
+      if (facility?.tariffPerHourMinor != null) {
+        amountMinor = calculateParkingFee(durationMinutes, facility.tariffPerHourMinor);
+      } else {
+        log.warn({ bookingId: p.id, facilityId: booking.facilityId }, "no tariffPerHourMinor configured for facility; exiting without a fee");
+      }
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", fromStatusesFor("completed"), msg.actorId, {
         exitTime,
         durationMinutes,
-        amountMinor,
+        ...(amountMinor !== null ? { amountMinor } : {}),
         ...(p.paymentRef !== undefined ? { paymentRef: p.paymentRef } : {}),
       });
-      if (!ok) return;
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.exitRecorded,
         eventType: EVENTS.exitRecorded,
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { bookingId: p.id, durationMinutes, amountMinor: String(amountMinor) },
+        payload: { bookingId: p.id, durationMinutes, amountMinor: amountMinor !== null ? String(amountMinor) : null },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.exit",
@@ -121,14 +155,16 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`parking:${msg.tenantId}:booking:${p.id}`, updated);
   });
 
   queue.subscribe(COMMANDS.cancelBooking, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
-      if (!ok) return;
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", fromStatusesFor("cancelled"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.bookingCancelled,
         eventType: EVENTS.bookingCancelled,
@@ -143,5 +179,6 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`parking:${msg.tenantId}:booking:${p.id}`, updated);
   });
 }

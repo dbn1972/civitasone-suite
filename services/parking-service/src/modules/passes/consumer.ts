@@ -1,12 +1,15 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generatePassNumber } from "./domain.js";
+import * as facilitiesRepo from "../facilities/repo.js";
+import { generatePassNumber, fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "parking.passes.consumer" });
 
@@ -29,7 +32,8 @@ export function registerPassConsumers(rawQueue: Queue): void {
       validFrom: string;
       paymentRef?: string;
     };
-    const passNumber = generatePassNumber("ULB", Date.now() % 999999);
+    // Mitigation, not a full fix — see bookings/consumer.ts for the same pattern.
+    const passNumber = generatePassNumber("ULB", randomInt(1, 999999));
     const validFrom = new Date(p.validFrom);
     const validUntil = new Date(validFrom);
     if (p.passType === "annual") {
@@ -37,8 +41,23 @@ export function registerPassConsumers(rawQueue: Queue): void {
     } else {
       validUntil.setMonth(validUntil.getMonth() + 1);
     }
-    // Placeholder fee; real implementation reads from facility tariff
-    const amountMinor = p.passType === "annual" ? 600000n : 60000n;
+    // Was: hardcoded flat fee ("Placeholder fee; real implementation reads from
+    // facility tariff" — the previous author's own comment). The facility's real
+    // monthlyPassMinor/annualPassMinor are already stored and already exposed by
+    // facilitiesRepo.findById; routes.ts now rejects the request with 422 before
+    // publishing if the facility hasn't configured the relevant tariff, so by the
+    // time this consumer runs it should always be present — but this is a
+    // separate async execution context, so re-fetch and re-check rather than
+    // trust the route's earlier read. amountMinor is NOT NULL on this table
+    // (unlike bookings' nullable amountMinor), so if the tariff has since been
+    // removed we fail closed and do not create a pass with a fabricated amount.
+    const facility = await facilitiesRepo.findById(p.facilityId, msg.tenantId);
+    const tariff = p.passType === "annual" ? facility?.annualPassMinor : facility?.monthlyPassMinor;
+    if (tariff == null) {
+      log.error({ id: p.id, facilityId: p.facilityId, passType: p.passType }, "facility has no tariff configured for this pass type; refusing to create pass with a fabricated amount");
+      return;
+    }
+    const amountMinor = tariff;
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -79,10 +98,11 @@ export function registerPassConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.cancelPass, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
-      if (!ok) return;
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", fromStatusesFor("cancelled"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.passCancelled,
         eventType: EVENTS.passCancelled,
@@ -97,5 +117,6 @@ export function registerPassConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`parking:${msg.tenantId}:pass:${p.id}`, updated);
   });
 }
