@@ -1,6 +1,7 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatRupees } from "@/lib/formatters";
 
 export type RevisedEstimateRow = {
   id: string;
@@ -27,9 +28,14 @@ export function RevisedEstimatesTable({ estimates, source = "api" }: { estimates
         columns={[
           { key: "headCode", label: "Head" },
           { key: "description", label: "Description" },
-          { key: "budgetEstimate", label: "BE", align: "right" },
-          { key: "revisedEstimate", label: "RE", align: "right" },
-          { key: "variancePct", label: "Variance %", align: "right" },
+          // budgetEstimate/revisedEstimate are already rupees (page.tsx computes
+          // them via Number(beMinor)/100), not minor units — formatRupees(), not
+          // formatMoney(), which would treat them as paise and show 100x too
+          // small. Previously rendered as bare unformatted numbers (no ₹, no
+          // Indian digit grouping, no fixed 2dp).
+          { key: "budgetEstimate", label: "BE", align: "right", render: (r) => formatRupees(r.budgetEstimate as number) },
+          { key: "revisedEstimate", label: "RE", align: "right", render: (r) => formatRupees(r.revisedEstimate as number) },
+          { key: "variancePct", label: "Variance %", align: "right", render: (r) => `${(r.variancePct as number).toFixed(1)}%` },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

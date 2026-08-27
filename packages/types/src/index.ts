@@ -624,10 +624,13 @@ export type BudgetSummary = {
   id: string;
   majorHead: string;
   subHead?: string;
-  sanctionedAmount: number;
-  releasedAmount: number;
-  expenditure: number;
-  balance: number;
+  /** Minor units (paise) as a bigint-safe decimal string — budget/queries.ts
+   *  sends these via .toString() (H3: avoid 2^53 precision loss); pass to
+   *  formatMoney(), sum as BigInt, never as a plain number. */
+  sanctionedAmount: string;
+  releasedAmount: string;
+  expenditure: string;
+  balance: string;
   /** Raw Budget Estimate, paise as string — distinct from releasedAmount, which is BE-capped. */
   beMinor: string;
   /** Raw Revised Estimate, paise as string — can legitimately exceed beMinor pre-reconciliation. */
@@ -640,7 +643,10 @@ export type SanctionSummary = {
   id: string;
   sanctionNo: string;
   subject: string;
-  amount: number;
+  /** Minor units (paise) as a bigint-safe decimal string (budget/queries.ts's
+   *  row.amountMinor.toString(), H3: avoid 2^53 precision loss on large
+   *  government sanction amounts) — pass to formatMoney(), never Number(). */
+  amount: string;
   sanctionedBy: string;
   date: string;
   status: "approved" | "pending" | "rejected";
@@ -648,7 +654,7 @@ export type SanctionSummary = {
 };
 
 export type SanctionDetail = SanctionSummary & {
-  lineItems: Array<{ description: string; amount: number; head: string }>;
+  lineItems: Array<{ description: string; amount: string; head: string }>;
   remarks?: string;
   approvalTrail: Array<{ actor: string; action: string; timestamp: string }>;
 };
@@ -704,8 +710,10 @@ export type GLEntrySummary = {
   date: string;
   accountCode: string;
   accountName: string;
-  debit: number;
-  credit: number;
+  /** Minor units (paise) as a bigint-safe decimal string — pass to formatMoney(), never divide. */
+  debit: string;
+  /** Minor units (paise) as a bigint-safe decimal string — pass to formatMoney(), never divide. */
+  credit: string;
   narration?: string;
   referenceNo?: string;
   type?: "payment" | "receipt" | "journal" | "budget";
@@ -2275,7 +2283,6 @@ export type FinanceBudgetAllocationSummary = {
   committedMinor: string;
   actualMinor: string;
   availableMinor: string;
-  enforce: boolean;
 };
 
 export type BudgetMonitoringTotals = {

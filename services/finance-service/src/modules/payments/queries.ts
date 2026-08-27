@@ -10,8 +10,23 @@ const VENDOR_NAMES: Record<string, string> = {
 };
 
 
+// Bigint-safe end to end (no Number() conversion) — ports the same
+// rupee/paise-split + Indian lakh/crore grouping algorithm the frontend's
+// formatMoney() (apps/web/src/lib/formatters.ts) already uses, so this
+// display string matches it exactly instead of drifting via float division.
+// The rest of this file guards the identical risk with explicit .toString()
+// (see the "H3" comments below) — this was the one call site still doing
+// Number(minor) / 100.
 function formatMinor(minor: bigint): string {
-  return `₹${(Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const rupees = abs / 100n;
+  const paise = abs % 100n;
+  const rupeesStr = rupees.toString();
+  const grouped = rupeesStr.length <= 3
+    ? rupeesStr
+    : rupeesStr.slice(0, rupeesStr.length - 3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + rupeesStr.slice(-3);
+  return `${negative ? "-" : ""}₹${grouped}.${paise.toString().padStart(2, "0")}`;
 }
 
 function mapPaymentStatus(status: string): PaymentSummary["status"] {

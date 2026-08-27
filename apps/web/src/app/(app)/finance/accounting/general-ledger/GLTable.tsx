@@ -52,8 +52,11 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
     }) as GLRow[];
   }, [rows, activeTab, query]);
 
-  const totalDebit = filtered.reduce((s, e) => s + (e.debit as number), 0);
-  const totalCredit = filtered.reduce((s, e) => s + (e.credit as number), 0);
+  // debit/credit are minor-unit (paise) decimal strings — sum as BigInt so
+  // formatMoney() (which expects minor units) renders the right scale and
+  // large ledgers don't drift under float addition.
+  const totalDebit = filtered.reduce((s, e) => s + BigInt((e.debit as string) || "0"), 0n);
+  const totalCredit = filtered.reduce((s, e) => s + BigInt((e.credit as string) || "0"), 0n);
 
   const cacheNote =
     offline || fromCache
@@ -103,10 +106,10 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
               label: "Debit",
               align: "right",
               render: (e) => {
-                const val = e.debit as number;
+                const val = BigInt((e.debit as string) || "0");
                 return (
-                  <span aria-label={val > 0 ? `Debit ${formatMoney(val)}` : "No debit"}>
-                    {val > 0 ? formatMoney(val) : "—"}
+                  <span aria-label={val > 0n ? `Debit ${formatMoney(val)}` : "No debit"}>
+                    {val > 0n ? formatMoney(val) : "—"}
                   </span>
                 );
               },
@@ -116,10 +119,10 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
               label: "Credit",
               align: "right",
               render: (e) => {
-                const val = e.credit as number;
+                const val = BigInt((e.credit as string) || "0");
                 return (
-                  <span aria-label={val > 0 ? `Credit ${formatMoney(val)}` : "No credit"}>
-                    {val > 0 ? formatMoney(val) : "—"}
+                  <span aria-label={val > 0n ? `Credit ${formatMoney(val)}` : "No credit"}>
+                    {val > 0n ? formatMoney(val) : "—"}
                   </span>
                 );
               },

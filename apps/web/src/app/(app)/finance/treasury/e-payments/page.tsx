@@ -6,7 +6,10 @@ import { EPaymentsTable } from "./EPaymentsTable";
 export default async function EPaymentsPage() {
   const { data: orders, source } = await getFinanceEPayments();
   const released = orders.filter((o) => String(o.status).toLowerCase() === "released").length;
-  const pending = orders.filter((o) => String(o.status).toLowerCase() === "pending").length;
+  // PaymentSummary.status is the closed union Queued|Released|"Pending Approval"|Failed
+  // (payments/queries.ts's mapPaymentStatus is exhaustive) — "Pending" alone
+  // never occurs, so this was permanently 0.
+  const pending = orders.filter((o) => String(o.status).toLowerCase() === "pending approval").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
