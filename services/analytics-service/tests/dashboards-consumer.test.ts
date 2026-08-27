@@ -27,7 +27,11 @@ const mockTx = {
       }),
     }),
   }),
-  delete: vi.fn(),
+  delete: vi.fn().mockReturnValue({
+    where: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "mock" }]),
+    }),
+  }),
 };
 
 const markProcessedMock = vi.fn().mockResolvedValue(true);
@@ -71,6 +75,13 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   markProcessedMock.mockResolvedValue(true);
+  // restore the default chainable delete() stub — some tests override its
+  // resolved value to simulate "already gone".
+  mockTx.delete.mockReturnValue({
+    where: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "mock" }]),
+    }),
+  });
 });
 
 describe("DashboardsConsumer — createDashboard", () => {
@@ -164,5 +175,64 @@ describe("DashboardsConsumer — shareDashboard", () => {
     });
     await new Promise((r) => setTimeout(r, 50));
     expect(markProcessedMock).toHaveBeenCalled();
+  });
+});
+
+describe("DashboardsConsumer — deleteDashboard", () => {
+  it("was previously unhandled: COMMANDS.deleteDashboard now has a registered consumer that actually deletes the row", async () => {
+    const dashboardId = randomUUID();
+    await queue.publish(COMMANDS.deleteDashboard, {
+      messageId: randomUUID(),
+      type: COMMANDS.deleteDashboard,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: { dashboardId },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(markProcessedMock).toHaveBeenCalled();
+    expect(mockTx.delete).toHaveBeenCalled();
+    // Emits dashboardDeleted domain event + audit event (2 enqueue calls) —
+    // mirrors createDashboard's assertion above.
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("records a failure audit (not a thrown error) when the dashboard no longer exists", async () => {
+    mockTx.delete.mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]), // nothing matched id+tenant
+      }),
+    });
+    const dashboardId = randomUUID();
+    await queue.publish(COMMANDS.deleteDashboard, {
+      messageId: randomUUID(),
+      type: COMMANDS.deleteDashboard,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: { dashboardId },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(markProcessedMock).toHaveBeenCalled();
+    // Only the failure-audit enqueue — no dashboardDeleted domain event.
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips processing when markProcessed returns false (duplicate delivery)", async () => {
+    markProcessedMock.mockResolvedValue(false);
+    await queue.publish(COMMANDS.deleteDashboard, {
+      messageId: randomUUID(),
+      type: COMMANDS.deleteDashboard,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: { dashboardId: randomUUID() },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockTx.delete).not.toHaveBeenCalled();
+    expect(enqueueMock).not.toHaveBeenCalled();
   });
 });

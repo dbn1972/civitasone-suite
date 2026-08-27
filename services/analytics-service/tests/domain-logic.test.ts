@@ -57,6 +57,18 @@ describe("validateExpression", () => {
     expect(() => validateExpression(expr)).toThrow(CalcFieldError);
   });
 
+  // Regression: see the "__proto__" note on validateJoinCondition above —
+  // the same class of bug existed here via `key in METRICS || key in
+  // DIMENSIONS || key in FILTERS`. isWhitelistedIdentifier() fixes it.
+  it("throws CalcFieldError for '__proto__' as a calculated-field column key", () => {
+    const expr: CalcExpression = {
+      op: "add",
+      left: { type: "column", key: "__proto__" },
+      right: { type: "literal", value: 1 },
+    };
+    expect(() => validateExpression(expr)).toThrow(CalcFieldError);
+  });
+
   it("throws CalcFieldError for invalid operator", () => {
     const expr = {
       op: "evil_op" as any,
@@ -184,6 +196,22 @@ describe("validateJoinCondition", () => {
 
   it("throws JoinError for unregistered right key", () => {
     expect(() => validateJoinCondition({ leftKey: "source", rightKey: "unknown", type: "inner" })).toThrow(JoinError);
+  });
+
+  // Regression: validateJoinCondition used to check `key in { ...DIMENSIONS,
+  // ...FILTERS }`, and `in` walks the prototype chain — so "__proto__" /
+  // "constructor" (own properties of nothing here, but found via inheritance
+  // from Object.prototype) incorrectly passed as "whitelisted". Confirmed
+  // live: this let an authenticated analytics_user crash POST
+  // /v1/analytics/query with a Postgres "syntax error at or near '='" by
+  // passing one of these as a join leftKey/rightKey. hasKeyIn() (an
+  // Object.prototype.hasOwnProperty-based check) closes it.
+  it("throws JoinError for '__proto__' as a join key (prototype-chain lookup bypass)", () => {
+    expect(() => validateJoinCondition({ leftKey: "__proto__", rightKey: "source", type: "inner" })).toThrow(JoinError);
+  });
+
+  it("throws JoinError for 'constructor' as a join key (prototype-chain lookup bypass)", () => {
+    expect(() => validateJoinCondition({ leftKey: "source", rightKey: "constructor", type: "inner" })).toThrow(JoinError);
   });
 
   it("throws JoinError for invalid join type", () => {

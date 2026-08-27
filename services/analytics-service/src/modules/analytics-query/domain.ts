@@ -9,7 +9,7 @@
  * Security: No eval(). No arbitrary code. Only whitelisted column keys and
  * arithmetic operators are allowed in expressions. All queries are tenant-scoped.
  */
-import { METRICS, DIMENSIONS, FILTERS, type MetricDef, type DimensionDef } from "../registry/registry.js";
+import { isWhitelistedIdentifier, DIMENSIONS, FILTERS, hasKeyIn } from "../registry/registry.js";
 
 // ─── Calculated Fields ───────────────────────────────────────────────────────
 
@@ -62,10 +62,11 @@ export function validateExpression(expr: CalcExpression, depth = 0): void {
 function validateOperand(operand: CalcExpressionOperand, depth: number): void {
   switch (operand.type) {
     case "column": {
-      // Must be a whitelisted column key (from METRICS, DIMENSIONS, or FILTERS)
-      const isWhitelisted =
-        operand.key in METRICS || operand.key in DIMENSIONS || operand.key in FILTERS;
-      if (!isWhitelisted) {
+      // Must be a whitelisted column key (from METRICS, DIMENSIONS, or FILTERS).
+      // isWhitelistedIdentifier uses hasOwnProperty, not `in` or a bare index —
+      // so "__proto__" / "constructor" / "toString" etc. are correctly rejected
+      // instead of resolving to Object.prototype.
+      if (!isWhitelistedIdentifier(operand.key)) {
         throw new CalcFieldError(
           "UNREGISTERED_IDENTIFIER",
           `column key '${operand.key}' is not whitelisted`,
@@ -152,13 +153,16 @@ export interface JoinCondition {
 
 /**
  * Validate that join conditions reference only whitelisted columns.
+ * Uses hasKeyIn (hasOwnProperty-based), not `key in allKeys` — the `in`
+ * operator walks the prototype chain, so "__proto__" / "constructor" /
+ * "toString" etc. are own properties of nothing here but ARE found on
+ * Object.prototype, which `in` would incorrectly treat as "whitelisted".
  */
 export function validateJoinCondition(condition: JoinCondition): void {
-  const allKeys = { ...DIMENSIONS, ...FILTERS };
-  if (!(condition.leftKey in allKeys)) {
+  if (!hasKeyIn([DIMENSIONS, FILTERS], condition.leftKey)) {
     throw new JoinError("UNREGISTERED_LEFT_KEY", `left join key '${condition.leftKey}' is not whitelisted`);
   }
-  if (!(condition.rightKey in allKeys)) {
+  if (!hasKeyIn([DIMENSIONS, FILTERS], condition.rightKey)) {
     throw new JoinError("UNREGISTERED_RIGHT_KEY", `right join key '${condition.rightKey}' is not whitelisted`);
   }
   if (!JOIN_TYPES.includes(condition.type)) {

@@ -205,6 +205,52 @@ describe("POST /v1/analytics/query", () => {
     expect(body.code).toBe("UNREGISTERED_LEFT_KEY");
   });
 
+  // Regression, confirmed live against the running shared instance before this
+  // fix: validateJoinCondition()'s `leftKey in { ...DIMENSIONS, ...FILTERS }`
+  // check used `in`, which walks the JS prototype chain, so "__proto__" and
+  // "constructor" resolved to Object.prototype's own (truthy) values instead
+  // of being rejected. The join-building loop in executor.ts then resolved a
+  // real column for source/rightKey but `undefined` for the "__proto__"/
+  // "constructor" side, and interpolated it into a Drizzle sql`` template —
+  // producing malformed SQL text. Actual observed failure on the live
+  // instance: HTTP 500, upstream Postgres error "syntax error at or near
+  // '='" (code 42P10... surfaced as a plain syntax error once undefined hit
+  // the query text). Any authenticated analytics_user could trigger this on
+  // demand. Must now return a clean 400, exactly like any other unknown key.
+  it("returns 400 (not 500) for '__proto__' as a join key", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/query",
+      headers: { authorization: `Bearer ${makeToken(["analytics_user"])}` },
+      payload: {
+        metrics: ["event_count"],
+        joins: [{ leftKey: "__proto__", rightKey: "source", type: "inner" }],
+        limit: 100,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.code).toBe("UNREGISTERED_LEFT_KEY");
+  });
+
+  it("returns 400 (not 500) for 'constructor' as a join key", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/query",
+      headers: { authorization: `Bearer ${makeToken(["analytics_user"])}` },
+      payload: {
+        metrics: ["event_count"],
+        joins: [{ leftKey: "source", rightKey: "constructor", type: "inner" }],
+        limit: 100,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.code).toBe("UNREGISTERED_RIGHT_KEY");
+  });
+
   it("returns 400 for invalid operator in expression", async () => {
     const res = await app.inject({
       method: "POST",

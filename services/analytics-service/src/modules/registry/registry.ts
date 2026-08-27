@@ -16,6 +16,17 @@
  *
  * Combined with the always-on tenant predicate in the builder, this makes SQL
  * injection and cross-tenant reads structurally impossible, not merely unlikely.
+ *
+ * Lookups below use Object.prototype.hasOwnProperty (never `key in obj` and
+ * never a bare `obj[key]` truthiness check): plain-object property lookups
+ * fall through to Object.prototype for names like "__proto__", "constructor"
+ * or "toString", and both `in` and a direct index both resolve those to a
+ * real (truthy) value instead of failing the whitelist. Confirmed live: a
+ * join key of "__proto__" or "constructor" reached resolveDimension()/
+ * resolveFilterField() as if valid, produced a column of `undefined`, and
+ * crashed the query with a Postgres "syntax error at or near '='" — an
+ * authenticated-user-triggerable 500 on POST /v1/analytics/query. Hardening
+ * the lookup here closes it at the root for every caller.
  */
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { factEvents } from "../facts/schema.js";
@@ -79,6 +90,18 @@ export const METRIC_KEYS = Object.keys(METRICS) as [string, ...string[]];
 export const DIMENSION_KEYS = Object.keys(DIMENSIONS) as [string, ...string[]];
 export const FILTER_KEYS = Object.keys(FILTERS) as [string, ...string[]];
 
+/** True only for an OWN enumerable key — safe against "__proto__" etc. */
+function hasKey(obj: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+/** True iff `key` is an own key of ANY of the given objects. Exported for
+ * callers (e.g. join-condition validation) that whitelist across more than
+ * one registry map without wanting to re-implement the hasOwnProperty check. */
+export function hasKeyIn(objs: object[], key: string): boolean {
+  return objs.some((obj) => hasKey(obj, key));
+}
+
 /** Thrown when user input references a non-whitelisted identifier. */
 export class RegistryError extends Error {
   constructor(public code: string, message: string) {
@@ -88,21 +111,38 @@ export class RegistryError extends Error {
 }
 
 export function resolveMetric(key: string): MetricDef {
-  const def = METRICS[key];
-  if (!def) throw new RegistryError("UNKNOWN_METRIC", `unknown metric: ${key}`);
-  return def;
+  if (!hasKey(METRICS, key)) throw new RegistryError("UNKNOWN_METRIC", `unknown metric: ${key}`);
+  // Non-null: hasKey() just confirmed `key` is an own property of METRICS.
+  // TS's indexed-access type on Record<string, T> can't narrow through an
+  // arbitrary function call, so it still sees `T | undefined` here.
+  return METRICS[key]!;
 }
 
 export function resolveDimension(key: string): DimensionDef {
-  const def = DIMENSIONS[key];
-  if (!def) throw new RegistryError("UNKNOWN_DIMENSION", `unknown dimension: ${key}`);
-  return def;
+  if (!hasKey(DIMENSIONS, key)) throw new RegistryError("UNKNOWN_DIMENSION", `unknown dimension: ${key}`);
+  return DIMENSIONS[key]!;
 }
 
 export function resolveFilterField(key: string): FilterFieldDef {
-  const def = FILTERS[key];
-  if (!def) throw new RegistryError("UNKNOWN_FILTER", `unknown filter field: ${key}`);
-  return def;
+  if (!hasKey(FILTERS, key)) throw new RegistryError("UNKNOWN_FILTER", `unknown filter field: ${key}`);
+  return FILTERS[key]!;
+}
+
+/**
+ * Resolve a key that may be either a group-by dimension or a filterable field
+ * (used by join conditions, which may correlate on either kind of column).
+ * Never returns undefined — always resolves to a real whitelisted column or
+ * throws, so callers can't accidentally build SQL around a missing column.
+ */
+export function resolveDimensionOrFilter(key: string): { key: string; column: PgColumn } {
+  if (hasKey(DIMENSIONS, key)) return DIMENSIONS[key]!;
+  if (hasKey(FILTERS, key)) return FILTERS[key]!;
+  throw new RegistryError("UNREGISTERED_IDENTIFIER", `'${key}' is not a whitelisted dimension or filter field`);
+}
+
+/** True iff `key` is an own key of METRICS, DIMENSIONS or FILTERS. */
+export function isWhitelistedIdentifier(key: string): boolean {
+  return hasKey(METRICS, key) || hasKey(DIMENSIONS, key) || hasKey(FILTERS, key);
 }
 
 /** Machine-readable catalog for the UI / API discovery endpoint. */
