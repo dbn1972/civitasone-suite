@@ -7,6 +7,10 @@ import { LogActivityButton } from "./LogActivityButton";
 export default async function Page() {
   const { data: activities, source } = await getCRMActivities();
 
+  // Never fabricate a 0 count when the list load failed — show "—" instead
+  // (matches the pattern already used on dashboard/accounts/contacts).
+  const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
+
   const dueToday = activities.filter((a) => a.dueDate === new Date().toISOString().slice(0, 10)).length;
   const overdue = activities.filter((a) => a.status === "overdue").length;
   const completed = activities.filter((a) => a.status === "completed").length;
@@ -21,10 +25,10 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="▣" iconBg="#f0f9ff" label="Total Interactions" value={activities.length.toLocaleString("en-IN")} />
-        <StatCard icon="△" iconBg="#fffaeb" label="Due Today" value={dueToday.toLocaleString("en-IN")} />
-        <StatCard icon="◈" iconBg="#fef2f2" label="Overdue" value={overdue.toLocaleString("en-IN")} />
-        <StatCard icon="○" iconBg="#ecfdf5" label="Completed" value={completed.toLocaleString("en-IN")} />
+        <StatCard icon="▣" iconBg="#f0f9ff" label="Total Interactions" value={stat(activities.length)} />
+        <StatCard icon="△" iconBg="#fffaeb" label="Due Today" value={stat(dueToday)} />
+        <StatCard icon="◈" iconBg="#fef2f2" label="Overdue" value={stat(overdue)} />
+        <StatCard icon="○" iconBg="#ecfdf5" label="Completed" value={stat(completed)} />
       </StatGrid>
       <ActivitiesTable activities={activities} />
     </>
