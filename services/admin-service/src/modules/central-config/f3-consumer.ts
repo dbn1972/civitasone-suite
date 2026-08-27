@@ -15,9 +15,25 @@ export function registerF3_central_config_Consumers(queue: Queue): void {
     if (!ops.has(op)) return;
     const ctx = { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
     try {
-      let ok = false;
-      await db.transaction(async (tx) => { ok = await markProcessed(tx, msg.messageId); });
-      if (!ok) return;
+      // SOD-FIX: claim idempotency AFTER the business transaction succeeds, not
+      // before. apply_central_config_N() is atomic — it wraps its own
+      // db.transaction() internally and either fully commits or fully throws
+      // (e.g. MAKER_CHECKER_VIOLATION when an approver tries to self-approve,
+      // NOT_PENDING, or a transient DB error). Claiming "processed" up front (the
+      // previous behaviour) meant any such throw was marked processed before the
+      // work ran: SQS redelivers on the throw, the redelivery finds the message
+      // already claimed and returns cleanly with no exception, and SQS deletes it
+      // as an ordinary success. The action then silently never happens, is never
+      // retried, never reaches the queue's native RedrivePolicy dead-letter queue,
+      // and leaves no trace beyond one log line from the first attempt — including
+      // for a self-approval attempt, which is exactly the case we most want a
+      // durable trail for. Claiming only after success keeps a genuinely poison
+      // message retryable and lets it reach the DLQ as designed instead of
+      // vanishing. (Residual: a concurrent redelivery landing mid-flight, before
+      // the claim commits, could re-run an apply_* — the per-op status/version
+      // guards make this a harmless no-op for approve/reject/schedule/etc., and
+      // only a narrow risk for the create/propose ops; full exactly-once would
+      // need apply_* to accept a shared tx, a larger refactor left for follow-up.)
       switch (op) {
       case 'central_config_op_0': {
         await apply_central_config_0(ctx, { body: p.body, params: p.params, query: p.query });
@@ -32,6 +48,7 @@ export function registerF3_central_config_Consumers(queue: Queue): void {
         break;
       }
       }
+      await db.transaction(async (tx) => { await markProcessed(tx, msg.messageId); });
     } catch (err) {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;

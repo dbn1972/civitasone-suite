@@ -15,9 +15,15 @@ export function registerF3_config_Consumers(queue: Queue): void {
     if (!ops.has(op)) return;
     const ctx = { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
     try {
-      let ok = false;
-      await db.transaction(async (tx) => { ok = await markProcessed(tx, msg.messageId); });
-      if (!ok) return;
+      // SOD-FIX (see central-config/f3-consumer.ts for the full rationale):
+      // claim idempotency AFTER apply_config_N() succeeds, not before. apply_*
+      // is atomic (own internal db.transaction), so claiming up front meant a
+      // thrown business error — e.g. MAKER_CHECKER_VIOLATION when a promotion's
+      // approver/rejecter is the same actor as the requester — got marked
+      // "processed" before the work ran, so SQS's redelivery silently no-op'd
+      // and the message never reached the dead-letter queue. Claiming only on
+      // success restores real retry + DLQ visibility for a genuinely poisoned
+      // message instead of it vanishing after one log line.
       switch (op) {
       case 'config_op_0': {
         await apply_config_0(ctx, { body: p.body, params: p.params, query: p.query });
@@ -40,6 +46,7 @@ export function registerF3_config_Consumers(queue: Queue): void {
         break;
       }
       }
+      await db.transaction(async (tx) => { await markProcessed(tx, msg.messageId); });
     } catch (err) {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;
