@@ -350,6 +350,7 @@ import {
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "./apiClient";
+import { formatMoney } from "@/lib/formatters";
 import {
   mapAdminUserSummaries,
   mapAssetSummaries,
@@ -1219,7 +1220,8 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
     const segment = toText(row.segment) ?? undefined;
     const product = toText(row.product) ?? undefined;
     const region = toText(row.region) ?? undefined;
-    const expectedValueDisplay = toText(row.expectedValueDisplay) ?? undefined;
+    const expectedValueMinorRaw = toText(row.expectedValueMinor);
+    const expectedValueDisplay = expectedValueMinorRaw ? formatMoney(expectedValueMinorRaw) : undefined;
     mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity, temperature, priority, segment, product, region, expectedValueDisplay });
   }
   return mapped.length > 0 ? mapped : null;
@@ -2944,7 +2946,16 @@ export async function getContactById(id: string): Promise<LoaderResult<ContactDe
     revalidateSeconds: 60,
     telemetryKey: "crm.contact.detail",
     responseSchema: ContactDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as ContactDetail) : null),
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const detail = p as ContactDetail;
+      // The backend sends the raw expectedValueMinor but never a precomputed
+      // display string; derive it the same way the contacts list does.
+      if (!detail.expectedValueDisplay && detail.expectedValueMinor) {
+        return { ...detail, expectedValueDisplay: formatMoney(detail.expectedValueMinor) };
+      }
+      return detail;
+    },
   });
 }
 

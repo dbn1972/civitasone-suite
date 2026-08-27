@@ -5,8 +5,20 @@
  *
  * Citizen feedback form — GIGW 3.0 Part B operational requirement.
  * Collects a 1-5 star service rating, free-text comment, contact type,
- * and a mandatory DPDP Act 2023 consent checkbox before posting to
- * /api/citizen/feedback.
+ * and a mandatory DPDP Act 2023 consent checkbox.
+ *
+ * Submission is intentionally NOT wired up: there is no `/api/citizen/feedback`
+ * route anywhere (no Next.js handler, no rewrite, no backend service — checked
+ * citizen-service, crm-service, recommendation-service) and this was never a
+ * documented stub, so a real citizen was previously hitting a raw, unparseable
+ * "HTTP 404". A real backend here is a separate, larger feature (DPDP-compliant
+ * citizen feedback ingestion + storage + moderation) — CRM's own VoC sentiment
+ * pipeline (crm-service sentiment module) deliberately has no write route; it is
+ * populated only by scoring logged CRM interactions, not citizen self-report.
+ * Until that backend exists, the form stays visible as a preview of the intended
+ * UX (matching the house EmptyState convention used by the sibling, honest
+ * /citizen/feedback stub) but submission is disabled with a plain-language notice
+ * instead of silently failing.
  */
 import { useState } from "react";
 import { PageHeader } from "../../../../_components/ds";
@@ -73,77 +85,15 @@ const RATING_LABELS = ["Poor", "Fair", "Good", "Very Good", "Excellent"];
 
 export default function CitizenFeedbackPage() {
   const [rating, setRating] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  /**
+   * Nothing to submit to yet (see file header). This guards only against the
+   * implicit form submission a browser can still trigger from an Enter
+   * keypress even with the submit button disabled — it must never attempt the
+   * dead endpoint.
+   */
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (rating === 0) {
-      setError("Please select a star rating before submitting.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-
-    const fd = new FormData(e.currentTarget);
-    const body = {
-      rating,
-      comment: (fd.get("comment") as string)?.trim() || undefined,
-      contactType: fd.get("contactType"),
-      dpdpConsent: fd.get("dpdpConsent") === "on",
-    };
-
-    try {
-      const res = await fetch("/api/citizen/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(
-          (json as { message?: string }).message ?? `HTTP ${res.status}`
-        );
-      }
-      setSubmitted(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
-      setSaving(false);
-    }
-  }
-
-  if (submitted) {
-    return (
-      <>
-        <PageHeader
-          title="Feedback Submitted"
-          back="/crm/voice-of-customer"
-          backLabel="Voice of Citizen"
-        />
-        <div
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r)",
-            padding: "32px 28px",
-            maxWidth: 560,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🙏</div>
-          <h2 style={{ margin: "0 0 8px", color: "var(--ink)", fontSize: 20 }}>
-            Thank you for your feedback
-          </h2>
-          <p style={{ color: "var(--ink-dim)", fontSize: 14, margin: "0 0 20px" }}>
-            Your response has been recorded. It helps us improve public services.
-          </p>
-          <a href="/crm/voice-of-customer" className="btn primary">
-            Back to Voice of Citizen
-          </a>
-        </div>
-      </>
-    );
   }
 
   return (
@@ -163,22 +113,29 @@ export default function CitizenFeedbackPage() {
           maxWidth: 560,
         }}
       >
-        {error && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: 16,
-              padding: "10px 14px",
-              background: "color-mix(in srgb, var(--bad) 10%, transparent)",
-              border: "1px solid var(--bad)",
-              borderRadius: "var(--r)",
-              color: "var(--bad)",
-              fontSize: 14,
-            }}
-          >
-            {error}
-          </div>
-        )}
+        <div
+          role="note"
+          aria-label="Feedback submission status"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            marginBottom: 16,
+            padding: "10px 14px",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "var(--r)",
+            color: "#92400e",
+            fontSize: 13,
+          }}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>
+            This form previews the intended citizen feedback experience. Submission is not
+            connected to a backend yet, so nothing entered below is saved — please do not use
+            it to report a real issue.
+          </span>
+        </div>
 
         <form
           onSubmit={handleSubmit}
@@ -296,9 +253,10 @@ export default function CitizenFeedbackPage() {
             <button
               type="submit"
               className="btn primary"
-              disabled={saving}
+              disabled
+              title="Submission is not yet available — backend wiring is pending."
             >
-              {saving ? "Submitting..." : "Submit Feedback"}
+              Submission unavailable
             </button>
           </div>
         </form>

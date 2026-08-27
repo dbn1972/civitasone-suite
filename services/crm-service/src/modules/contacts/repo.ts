@@ -64,6 +64,15 @@ export async function findDetail(id: string, tenantId: string): Promise<ContactD
     ...(contact.phone ? { phone: contact.phone } : {}),
     ...(contact.designation ? { designation: contact.designation } : {}),
     ...(contact.city ? { city: contact.city } : {}),
+    // LQ-003 classification/segmentation — must round-trip here or the edit form
+    // (which prefills from this endpoint) reloads blank values and then
+    // unconditionally PATCHes them back as null, silently wiping real data on save.
+    ...(contact.temperature ? { temperature: contact.temperature } : {}),
+    ...(contact.priority ? { priority: contact.priority } : {}),
+    ...(contact.segment ? { segment: contact.segment } : {}),
+    ...(contact.product ? { product: contact.product } : {}),
+    ...(contact.region ? { region: contact.region } : {}),
+    ...(contact.expectedValueMinor ? { expectedValueMinor: contact.expectedValueMinor } : {}),
     leadStatus: contact.leadStatus,
     marketingConsent: contact.marketingConsent,
     ...(contact.lastActivityAt ? { lastActivityDate: contact.lastActivityAt.slice(0, 10) } : {}),
