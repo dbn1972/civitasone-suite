@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { fireRenewalsTable } from "./schema.js";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import type { FireRenewalInsert } from "./schema.js";
@@ -52,6 +52,7 @@ export async function updateDecision(
   decision: string,
   status: string,
   newValidUntil: string | null,
+  fromStatuses: readonly string[],
   actorId: string,
 ) {
   const rows = await tx
@@ -66,7 +67,11 @@ export async function updateDecision(
       updatedAt: new Date(),
       updatedBy: actorId,
     })
-    .where(and(eq(fireRenewalsTable.tenantId, tenantId), eq(fireRenewalsTable.id, id)))
+    .where(and(
+      eq(fireRenewalsTable.tenantId, tenantId),
+      eq(fireRenewalsTable.id, id),
+      inArray(fireRenewalsTable.status, fromStatuses as string[]),
+    ))
     .returning();
   return rows[0] ?? null;
 }

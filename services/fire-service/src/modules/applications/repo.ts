@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { fireApplicationsTable } from "./schema.js";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import type { FireApplicationInsert } from "./schema.js";
@@ -50,6 +50,7 @@ export async function updateStatus(
   tenantId: string,
   id: string,
   status: string,
+  fromStatuses: readonly string[],
   actorId: string,
 ) {
   const now = new Date();
@@ -59,7 +60,11 @@ export async function updateStatus(
   const rows = await tx
     .update(fireApplicationsTable)
     .set({ status, version: sql`${fireApplicationsTable.version} + 1`, ...extra })
-    .where(and(eq(fireApplicationsTable.tenantId, tenantId), eq(fireApplicationsTable.id, id)))
+    .where(and(
+      eq(fireApplicationsTable.tenantId, tenantId),
+      eq(fireApplicationsTable.id, id),
+      inArray(fireApplicationsTable.status, fromStatuses as string[]),
+    ))
     .returning();
   return rows[0] ?? null;
 }
