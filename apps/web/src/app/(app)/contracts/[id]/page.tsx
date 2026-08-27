@@ -41,14 +41,23 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   const title = field(contract, "title", "name", "contractNo");
   const contractNo = field(contract, "contractNo", "contract_no", "number");
-  const parties = field(contract, "party", "partyName", "parties", "vendor");
+  // contract-service returns the vendor as a raw `vendorId` (uuid) with no
+  // joined display name today (no vendor-name enrichment exists in the
+  // backend) -- falls back to the id itself rather than a permanent "--",
+  // which previously made this field look empty even when the data exists.
+  const parties = field(contract, "party", "partyName", "parties", "vendor", "vendorId");
   const contractType = field(contract, "type", "contractType", "contract_type");
   const startDate = field(contract, "startDate", "start_date", "validFrom");
-  const endDate = field(contract, "endDate", "end_date", "validTo", "expiryDate");
+  // contract-service's column is `expiry`, not endDate/validTo/expiryDate.
+  const endDate = field(contract, "endDate", "end_date", "validTo", "expiryDate", "expiry");
   const status = field(contract, "status");
   const description = field(contract, "description", "remarks", "notes");
 
-  const rawValue = contract.value ?? contract.amount ?? contract.contractValue;
+  // contract-service's column is `valueMinor` (already in minor units/paise --
+  // formatMoney expects exactly that, no conversion needed). The previous
+  // value/amount/contractValue aliases never matched the real API response,
+  // so the contract's own monetary value never rendered on its detail page.
+  const rawValue = contract.value ?? contract.amount ?? contract.contractValue ?? contract.valueMinor;
   const valueDisplay =
     rawValue != null && rawValue !== "" && rawValue !== "—"
       ? formatMoney(rawValue as number | string | bigint)

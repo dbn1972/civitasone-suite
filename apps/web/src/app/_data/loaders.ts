@@ -1588,7 +1588,50 @@ export async function getBillingPlanById(id: string): Promise<LoaderResult<Recor
   });
 }
 
-export const getContracts = moduleLoader("/api/v1/contract/contracts", "contract.list");
+// Bespoke mapper (not the generic moduleLoader): contract-service's row shape
+// has neither a "vendor"/"party" display name (only a raw vendorId uuid, with
+// no joined vendor-name enrichment in the backend today) nor any "type"/
+// "category"/"code" field the generic mapModuleRows() fallback chains expect.
+// Using moduleLoader() here left "Party / Info" permanently blank AND made
+// the "Type" column silently display contractNo (mapModuleRows' `meta`
+// fallback chain matches contractNo before running out of options) --
+// mislabeling a reference number as a contract "type". This mapper is
+// explicit about what's actually available: title as the label, the raw
+// vendorId as sublabel (until/unless the backend adds a resolved vendor
+// name), and contractNo as meta (surfaced under a "Contract No." column
+// header in ContractsTable, not "Type").
+export async function getContracts(): Promise<LoaderResult<ModuleRowSummary[]>> {
+  return fetchJson<unknown, ModuleRowSummary[]>("/api/v1/contract/contracts", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "contract.list",
+    mapResponse: (payload) => {
+      const rows = Array.isArray(payload)
+        ? payload
+        : isRecord(payload) && Array.isArray(payload.data)
+          ? payload.data
+          : null;
+      if (!rows) return null;
+      const mapped: ModuleRowSummary[] = [];
+      for (const row of rows) {
+        if (!isRecord(row)) continue;
+        const id = toText(row.id);
+        const label = toText(row.title) ?? toText(row.contractNo);
+        if (!id || !label) continue;
+        const sublabel = toText(row.vendorId);
+        const status = toText(row.status);
+        const meta = toText(row.contractNo);
+        mapped.push({
+          id,
+          label,
+          ...(sublabel ? { sublabel } : {}),
+          ...(status ? { status } : {}),
+          ...(meta ? { meta } : {}),
+        });
+      }
+      return mapped.length > 0 ? mapped : null;
+    },
+  });
+}
 export const getRateContracts = moduleLoader("/api/v1/contract/rate-contracts", "contract.rate");
 
 export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
