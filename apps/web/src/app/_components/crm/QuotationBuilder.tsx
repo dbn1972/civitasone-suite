@@ -551,6 +551,9 @@ export function QuotationBuilder() {
         open={rejecting}
         danger
         requireReason
+        // Backend REJECT_REASON_MIN_LENGTH (quotation-domain.ts) is 10 -- without
+        // this the dialog would accept a 1-2 char reason that then 400s.
+        minReasonLength={10}
         reasonLabel="Reason for rejection"
         title="Reject this quotation?"
         description="The customer's quotation will be marked rejected."
