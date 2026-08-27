@@ -90,16 +90,15 @@ const SERVICES = [
   { name: "roadcut-service", db: "civitas_roadcut" },
   { name: "shop-service",    db: "civitas_shop" },
   { name: "trade-service",   db: "civitas_trade" },
-  // Municipal Sec5 batch 3 (deep-verification pass, 2026-08-27): the 5
-  // municipal services in this batch (crematorium, event, fire, market,
-  // parking) had no migrations/0001_initial.sql either, until this same pass
-  // wrote them — CI's migrate-all-inventory test caught this directly
-  // (parking-service PR #799: "expected ['parking-service'] to deeply equal
-  // []"). fire-service (#825) already merged to main without this entry, so
-  // this also backfills that gap. drainage-service (6th of this batch) is
-  // deliberately not listed yet — its migration hasn't been written/merged;
-  // it'll be added alongside that PR the same way the other 5 were.
+  // Municipal Sec5 batch 3 (deep-verification pass, 2026-08-27): all 6
+  // municipal services in this batch (crematorium, drainage, event, fire,
+  // market, parking) had no migrations/0001_initial.sql either, until this
+  // same pass wrote them — CI's migrate-all-inventory test caught this
+  // directly (parking-service PR #799: "expected ['parking-service'] to
+  // deeply equal []"). fire-service (#825) already merged to main without
+  // this entry, so this also backfills that gap.
   { name: "crematorium-service", db: "civitas_crematorium" },
+  { name: "drainage-service",    db: "civitas_drainage" },
   { name: "event-service",       db: "civitas_event" },
   { name: "fire-service",        db: "civitas_fire" },
   { name: "market-service",      db: "civitas_market" },
