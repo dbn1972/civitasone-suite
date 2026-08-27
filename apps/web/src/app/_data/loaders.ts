@@ -274,7 +274,6 @@ import {
   DealSummaryListSchema,
   ContactDetailSchema,
   CRMActivityEntryListSchema,
-  TicketDetailListSchema,
   TicketDetailSchema,
   TicketAnalyticsSchema,
   CitizenRequestSummaryListSchema,
@@ -483,7 +482,10 @@ function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
     if (status !== "Open" && status !== "In Progress" && status !== "Resolved" && status !== "Closed") continue;
     mapped.push({ id, subject, priority, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  // A tenant with zero matching tickets is a legitimate empty state, not a
+  // mapping failure — returning null here made fetchJson report source:"error"
+  // (and show the "data source" warning badge) for an ordinary empty queue.
+  return mapped;
 }
 
 function mapPayments(payload: unknown): PaymentSummary[] | null {
@@ -3027,7 +3029,11 @@ function mapTicketDetails(payload: unknown): TicketDetail[] | null {
       comments: [],
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // Same reasoning as mapTickets() above: an empty (but valid) result set is
+  // not a mapping failure. getBreachedSLATickets() below relies on this for
+  // each of its three per-status fetches — a tenant with e.g. zero due_soon
+  // tickets is common and must not flip the whole SLA Queue page to source:"error".
+  return mapped;
 }
 
 export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail[]>> {
@@ -3046,13 +3052,45 @@ export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<Ti
   });
 }
 
+/**
+ * Powers /helpdesk/slas (SLA Queue). That page computes its own
+ * Breached/Due Soon/Within SLA/Total stat cards by filtering the returned
+ * list client-side, then separately re-filters+sorts to "breached" for the
+ * table — i.e. it expects the FULL cross-status population, not a
+ * pre-filtered slice. citizen-service's list endpoint only returns the rich
+ * per-ticket shape (requesterName, createdAt, etc. — via listTicketDetails)
+ * when a slaStatus filter is supplied; the unfiltered call returns a much
+ * narrower summary instead (see getHelpdeskTicketList's toSummary()
+ * counterpart). So fetch all three valid slaStatus buckets and merge, rather
+ * than a single filtered or unfiltered call, to get both the rich shape and
+ * the full population.
+ *
+ * NOTE: no `responseSchema` here — citizen-service wraps this branch's
+ * response as `{ data, pagination }`, not a bare array (TicketDetailListSchema
+ * is `z.array(...)` and would fail to parse the envelope, forcing
+ * source:"error" on every call) — mapTicketDetails already unwraps the
+ * envelope itself via getArrayPayload().
+ */
 export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail[]>> {
-  return fetchJson<unknown, TicketDetail[]>("/api/v1/citizen/tickets?slaStatus=breached", [], {
-    revalidateSeconds: 30,
-    telemetryKey: "helpdesk.sla.breached",
-    responseSchema: TicketDetailListSchema,
-    mapResponse: mapTicketDetails,
-  });
+  const fetchBucket = (slaStatus: "breached" | "due_soon" | "within_sla") =>
+    fetchJson<unknown, TicketDetail[]>(`/api/v1/citizen/tickets?slaStatus=${slaStatus}`, [], {
+      revalidateSeconds: 30,
+      telemetryKey: `helpdesk.sla.${slaStatus}`,
+      mapResponse: mapTicketDetails,
+    });
+
+  const [breached, dueSoon, withinSla] = await Promise.all([
+    fetchBucket("breached"),
+    fetchBucket("due_soon"),
+    fetchBucket("within_sla"),
+  ]);
+
+  return {
+    data: [...breached.data, ...dueSoon.data, ...withinSla.data],
+    source: breached.source === "error" || dueSoon.source === "error" || withinSla.source === "error"
+      ? "error"
+      : "api",
+  };
 }
 
 const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
