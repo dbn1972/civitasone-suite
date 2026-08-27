@@ -59,3 +59,48 @@ export function generatePeriods(startDate: string, endDate: string): string[] {
   return periods;
 }
 
+export interface AssetHeadlineFigures {
+  acquisitionCostMinor: bigint;
+  salvageValueMinor:    bigint;
+  accumulatedDepMinor:  bigint;
+}
+
+export interface BookValuePosting {
+  bookValueMinor:       bigint;
+  accumulatedDepMinor:  bigint;
+}
+
+/**
+ * Compute an asset's new headline `bookValue`/`accumulatedDep` after posting
+ * one depreciation-schedule entry, deriving bookValue directly from the
+ * updated accumulatedDep so the two figures can never disagree.
+ *
+ * Bug this replaces (found live in a deep-verify pass, 2026-08-27): the
+ * depreciation-run consumer used to copy the schedule entry's own
+ * `bookValueAfterMinor` — a value baked in at schedule-GENERATION time that
+ * assumes every prior period in the schedule was already posted in
+ * chronological order — straight onto the asset row's `bookValue`, while
+ * separately computing `accumulatedDep` as a running sum of only the
+ * entries ACTUALLY posted so far. The two update paths agree only when
+ * periods post in perfect, gap-free order. The instant a period is posted
+ * late, out of order, or a period is skipped (a scheduler outage, a manual
+ * catch-up run, a period run twice for different books), `bookValue` and
+ * `accumulatedDep` silently disagree on the same row — reproduced live:
+ * asset bc24a403-3961-449e-ad1f-e889e575e9f3 (acquisitionCost 8500000,
+ * SLM, 60 monthly entries of 133333) had only its Apr+May "company"-book
+ * entries posted (accumulatedDep correctly = 266666) while bookValue was
+ * 7833335 — the value from a schedule entry computed as if Jan/Feb/Mar had
+ * ALSO already been posted (5 periods x 133333 = 666665 implied), i.e.
+ * `acquisitionCost - accumulatedDep` (8233334) no longer equalled
+ * `bookValue` (7833335) on the same row, a real ledger-integrity bug on a
+ * headline financial figure.
+ */
+export function applyDepreciationPosting(
+  asset: AssetHeadlineFigures,
+  entryAmountMinor: bigint,
+): BookValuePosting {
+  const accumulatedDepMinor = asset.accumulatedDepMinor + entryAmountMinor;
+  let bookValueMinor = asset.acquisitionCostMinor - accumulatedDepMinor;
+  if (bookValueMinor < asset.salvageValueMinor) bookValueMinor = asset.salvageValueMinor;
+  return { bookValueMinor, accumulatedDepMinor };
+}
