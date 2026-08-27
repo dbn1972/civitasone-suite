@@ -77,7 +77,10 @@ export function CloseOpportunityDialog({
       setError(
         competitorRequired && competitor.trim().length === 0
           ? "A competitor is required when an opportunity is marked lost."
-          : reasonLen < reasonMin
+          : // Only the more specific message when something was typed but it's
+            // too short — a completely empty reason keeps the original, plainer
+            // wording (also what CloseOpportunityDialog.test.tsx expects).
+            reasonTooShort
             ? `A reason of at least ${reasonMin} characters is required to close an opportunity as ${CLOSE_OUTCOME_LABELS[outcome].toLowerCase()}.`
             : "A reason is required to close an opportunity.",
       );

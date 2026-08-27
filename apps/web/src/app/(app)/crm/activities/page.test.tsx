@@ -52,4 +52,20 @@ describe("Stakeholder Interactions page (GoI redesign)", () => {
     render(await Page());
     expect(screen.getByTestId("act-table")).toBeInTheDocument();
   });
+
+  it("shows em dashes, not fabricated zeros, for every stat when the load fails", async () => {
+    // Regression test: the loader falls back to data: [] on a failed fetch, so
+    // every count (total/due-today/overdue/completed) used to render a
+    // confident "0" instead of signalling the load actually failed.
+    mocked.mockResolvedValue({ data: [], source: "error" });
+    render(await Page());
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("still renders with no arguments (Next.js may omit searchParams)", async () => {
+    mocked.mockResolvedValue({ data: mockActivities, source: "api" });
+    render(await Page());
+    expect(screen.getByText("Stakeholder Interactions")).toBeInTheDocument();
+  });
 });
