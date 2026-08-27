@@ -3,4 +3,5 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-08-08  Count: 34 (14 scanner/role migrations removed 2026-08-08 — now run as superuser; notification/0024 syntax bug fixed)
+# Generated: 2026-08-27  Count: 0 (all previously-tracked failures fixed — see
+# PRs #765-#770 for the individual root-cause fixes, grouped by service)
