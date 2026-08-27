@@ -120,4 +120,27 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     });
     log.info({ id: p.id, decision: p.decision }, "renewal decided");
   });
+
+  queue.subscribe(COMMANDS.recordRenewalFeePayment, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; transactionId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
+      if (!ok) return;
+      await enqueue(tx, {
+        topic: EVENTS.renewalFeePaymentRecorded,
+        eventType: EVENTS.renewalFeePaymentRecorded,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { renewalId: p.id, transactionId: p.transactionId },
+      });
+      await writeAudit(tx, ctxOf(msg), {
+        action: "renewal.fee_payment",
+        resourceType: "shop_renewal",
+        resourceId: p.id,
+      });
+    });
+    log.info({ id: p.id }, "renewal fee payment recorded");
+  });
 }

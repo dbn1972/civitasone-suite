@@ -28,3 +28,11 @@ export async function decideRenewal(
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.decideRenewal, id, { id, decision, reason });
 }
+
+export async function recordRenewalFeePayment(
+  ctx: RequestContext,
+  id: string,
+  transactionId: string,
+): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.recordRenewalFeePayment, id, { id, transactionId });
+}

@@ -20,6 +20,10 @@ const decideBody = z.object({
   reason: z.string().optional(),
 });
 
+const feePaymentBody = z.object({
+  transactionId: z.string().min(1).max(128),
+});
+
 const idParam = z.object({ id: z.string().uuid() });
 const permitIdQuery = z.object({ permitId: z.string().uuid() });
 const listQuery = z.object({
@@ -86,6 +90,22 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     if (existing.status !== "submitted" && existing.status !== "under_review") {
       throw new HttpError(422, "ALREADY_DECIDED", `Renewal already in status '${existing.status}'`);
     }
+    const feeOwed = existing.feeAmountMinor ?? 0n;
+    if (body.decision === "approved" && feeOwed > 0n && !existing.feePaid) {
+      throw new HttpError(422, "FEE_NOT_PAID",
+        "Cannot approve a renewal until its fee has been paid");
+    }
     return reply.code(202).send(await commands.decideRenewal(ctx, id, body.decision, body.reason));
+  });
+
+  app.post("/v1/shop/renewals/:id/fee-payment", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SHOP_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = feePaymentBody.parse(req.body);
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "RENEWAL_NOT_FOUND", "Renewal request not found");
+    if (existing.feePaid) throw new HttpError(409, "FEE_ALREADY_PAID", "Fee has already been paid");
+    return reply.code(202).send(await commands.recordRenewalFeePayment(ctx, id, body.transactionId));
   });
 }
