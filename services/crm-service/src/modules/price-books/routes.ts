@@ -16,6 +16,22 @@ const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const minor = z.string().regex(/^\d{1,25}$/, "must be a non-negative integer string of minor units");
 
+const itemBody = z.object({
+  productId: z.string().uuid(),
+  priceMinor: minor,
+});
+// Book-level create/update used to have no way to carry per-product prices at all: the
+// frontend (PriceBookEditor.tsx) always sends the full current `entries` array on save,
+// Zod silently stripped it (unknown key), and the consumer never touched
+// crm.price_book_items — the only endpoint that persisted a price was the one-item-at-a-
+// time PUT /:id/items below. `entries`, when present, is the book's COMPLETE desired set
+// of prices (matching how the editor builds it — every remaining row after the user's
+// edits, not a delta), applied transactionally with the book itself in the consumer.
+// Omitting it entirely (e.g. a caller that only wants to patch `priority`) leaves
+// existing entries untouched — same "undefined = don't touch" convention as every other
+// optional field on updateBody.
+const entriesField = z.array(itemBody).max(1000).optional();
+
 const createBody = z.object({
   name: z.string().min(1).max(200),
   segment: z.string().min(1).max(120).nullable().optional(),
@@ -24,6 +40,7 @@ const createBody = z.object({
   channel: z.string().min(1).max(120).nullable().optional(),
   priority: z.number().int().min(0).max(100000).default(0),
   enabled: z.boolean().default(true),
+  entries: entriesField,
 });
 const updateBody = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -33,12 +50,8 @@ const updateBody = z.object({
   channel: z.string().min(1).max(120).nullable().optional(),
   priority: z.number().int().min(0).max(100000).optional(),
   enabled: z.boolean().optional(),
+  entries: entriesField,
 }).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
-
-const itemBody = z.object({
-  productId: z.string().uuid(),
-  priceMinor: minor,
-});
 
 const resolveQuery = z.object({
   segment: z.string().min(1).max(120).optional(),
@@ -82,7 +95,14 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const q = listQuery.parse(req.query ?? {});
     const { rows, total } = await repo.list(ctx.tenantId, q.limit, q.offset);
-    return reply.send({ data: rows, meta: { limit: q.limit, offset: q.offset, total } });
+    // repo.list's own SELECT never carried items (list pages are meant to stay light),
+    // but the editor's list view shows an "N prices" count per row and its Edit action
+    // reuses this same row as its draft — without items attached here, every book looked
+    // like it had zero saved prices until you separately GET'd it by id, which nothing in
+    // the UI actually does. Same attach-items-per-book the single GET /:id already does
+    // below; at admin-configured price-book cardinalities this stays cheap.
+    const data = await Promise.all(rows.map(async (book) => ({ ...book, items: await repo.listItems(ctx.tenantId, book.id) })));
+    return reply.send({ data, meta: { limit: q.limit, offset: q.offset, total } });
   });
 
   app.get("/v1/crm/price-books/:id", async (req, reply) => {

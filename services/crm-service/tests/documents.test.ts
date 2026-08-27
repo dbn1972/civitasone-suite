@@ -263,13 +263,13 @@ describe("DM-002 document types + verify", () => {
   it("CRUD on document types", async () => {
     const create = await inject("POST", "/v1/crm/document-types", {
       headers: adminHeaders(),
-      payload: { code: "pan_card", name: "PAN Card", appliesTo: "contact", mandatory: true, verificationRequired: true },
+      payload: { code: "pan_card", name: "PAN Card", appliesTo: ["contact"], mandatory: true, verificationRequired: true },
     });
     expect(create.statusCode).toBe(201);
     const typeId = create.json().data.id as string;
 
     const dup = await inject("POST", "/v1/crm/document-types", {
-      headers: adminHeaders(), payload: { code: "pan_card", name: "dup", appliesTo: "contact" },
+      headers: adminHeaders(), payload: { code: "pan_card", name: "dup", appliesTo: ["contact"] },
     });
     expect(dup.statusCode).toBe(409);
 
@@ -284,9 +284,50 @@ describe("DM-002 document types + verify", () => {
     expect(del.statusCode).toBe(204);
   });
 
+  // Regression coverage: applies_to used to be a scalar column + z.enum() validator, so
+  // ANY array the frontend's checkbox UI sent (even a single checked box) failed
+  // validation unconditionally. Now a real array, allowing >1 subject type per document
+  // type and an empty array as "applies to every subject type" (DocumentTypesEditor.tsx
+  // / documents.ts's computeAlerts convention).
+  it("persists appliesTo as a real multi-value array, and an update replaces it", async () => {
+    const create = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(),
+      payload: { code: "id_proof", name: "ID Proof", appliesTo: ["contact", "account", "lead"] },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json().data.appliesTo).toEqual(["contact", "account", "lead"]);
+    const typeId = create.json().data.id as string;
+
+    const list = await inject("GET", "/v1/crm/document-types", { headers: headers() });
+    const listed = (list.json().data as Array<{ code: string; appliesTo: string[] }>).find((t) => t.code === "id_proof");
+    expect(listed?.appliesTo).toEqual(["contact", "account", "lead"]);
+
+    // Narrow it down to one subject type on update — a full replace, not a merge.
+    const upd = await inject("PUT", `/v1/crm/document-types/${typeId}`, {
+      headers: adminHeaders(), payload: { appliesTo: ["account"] },
+    });
+    expect(upd.statusCode).toBe(200);
+    expect(upd.json().data.appliesTo).toEqual(["account"]);
+
+    // The empty array is a deliberate, distinct value ("applies to everything"), not an
+    // error — must round-trip too, not get coerced to something else.
+    const wild = await inject("PUT", `/v1/crm/document-types/${typeId}`, {
+      headers: adminHeaders(), payload: { appliesTo: [] },
+    });
+    expect(wild.statusCode).toBe(200);
+    expect(wild.json().data.appliesTo).toEqual([]);
+  });
+
+  it("rejects a subject type outside the known six inside the appliesTo array (400)", async () => {
+    const res = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(), payload: { code: "bad_type", name: "Bad", appliesTo: ["contact", "not_a_real_subject"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("forbids a non-admin from creating a document type (403)", async () => {
     const res = await inject("POST", "/v1/crm/document-types", {
-      headers: headers(), payload: { code: "gst", name: "GST", appliesTo: "account" },
+      headers: headers(), payload: { code: "gst", name: "GST", appliesTo: ["account"] },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -307,7 +348,7 @@ describe("DM-002 alert scheduler round-trip", () => {
     // A mandatory type (exercises the missing-mandatory scan) + one already-expired doc.
     await inject("POST", "/v1/crm/document-types", {
       headers: adminHeaders(ALERT_TENANT),
-      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: "contact", mandatory: true, expiryRequired: true },
+      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: ["contact"], mandatory: true, expiryRequired: true },
     });
     const pre = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "lic.pdf", mimeType: "application/pdf" }, ALERT_TENANT);
     const { storageKey } = pre.json().data;
@@ -323,5 +364,23 @@ describe("DM-002 alert scheduler round-trip", () => {
     // The cross-tenant cycle discovers ALERT_TENANT via list_document_alert_tenants().
     const total = await runDocumentAlertCycle(new Date("2026-08-05T00:00:00Z"));
     expect(total).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a mandatory type with appliesTo=[] (wildcard) is scanned as applying to every enumerable subject type", async () => {
+    // Previously impossible to even express: the old scalar applies_to column required
+    // exactly one of the six names, with no "applies to everything" value. Confirms
+    // alert-scheduler.ts's expansion of an empty appliesTo actually reaches "contact"
+    // (SUBJECT has no "universal_id" document on file) instead of silently matching
+    // nothing (which is what treating appliesTo as an opaque, never-equal Map key would
+    // have done for an array/empty value).
+    const create = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(ALERT_TENANT),
+      payload: { code: "universal_id", name: "Universal ID", appliesTo: [], mandatory: true },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json().data.appliesTo).toEqual([]);
+
+    const emitted = await runTenantDocumentAlerts(ALERT_TENANT, new Date("2026-08-05T00:00:00Z"));
+    expect(emitted).toBeGreaterThanOrEqual(1); // SUBJECT is missing a "universal_id" doc
   });
 });

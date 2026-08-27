@@ -1,7 +1,19 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
 
-const dealStage = z.enum(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
+// OP-002: pipelines (pipelines/validators.ts's pipelineStageSchema) let admins define
+// 3-10 arbitrary, per-pipeline stage names (each up to 100 chars) — "Lead"/"Proposal"/
+// "Negotiation"/"Won"/"Lost" is only the default/legacy vocabulary, not an exhaustive
+// list. This used to be a fixed z.enum() of those five names, which made it impossible
+// to ever create or move a deal into a custom pipeline's own stages: the enum rejected
+// the request before the per-pipeline gate logic in deals/routes.ts (findStage,
+// missingMandatoryFields, skippedGateStage) ever ran. A stage name's actual validity is
+// dynamic — it depends on which pipeline (if any) the deal belongs to — so it cannot be
+// expressed as a static zod enum; deals/routes.ts now looks up the deal's real pipeline
+// and validates the name against ITS configured stages (422 INVALID_STAGE otherwise).
+// This just keeps the field a required, sanely-bounded string (matching pipelines'
+// own per-stage name length cap) so "no value" / absurdly long values still 400.
+const dealStage = z.string().min(1).max(100);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const competitors = z.array(z.string().min(1).max(160)).max(50);
 
@@ -18,7 +30,11 @@ export const createDealBody = z.object({
   name: z.string().min(1).max(200),
   pipelineId: z.string().uuid().optional(),
   stageId: z.string().uuid().optional(),
-  stage: dealStage.default("Lead"),
+  // No default here: "Lead" is only a sane fallback when there is NO pipeline (see
+  // routes.ts), and a custom pipeline is not guaranteed to have a stage by that name.
+  // routes.ts resolves the effective stage (pipeline's own entry stage, or "Lead" when
+  // pipeline-less) before this reaches commands.createDeal.
+  stage: dealStage.optional(),
   valueMinor: z.number().int().nonnegative().default(0),
   currency: z.string().length(3).default("INR"),
   contactId: z.string().uuid().optional(),

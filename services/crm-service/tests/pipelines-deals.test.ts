@@ -316,14 +316,30 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
     expect(res.json().status).toBe("accepted");
   });
 
-  it("PATCH /v1/crm/deals/:id/stage — rejects invalid stage (400)", async () => {
+  it("PATCH /v1/crm/deals/:id/stage — rejects empty stage (400) — still a required, real value", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/crm/deals/${randomUUID()}/stage`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { stage: "", version: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // OP-002: `stage` is no longer a fixed 5-value enum (validators.ts's old
+  // z.enum(["Lead","Proposal","Negotiation","Won","Lost"])) — a non-legacy name is only
+  // rejected when it doesn't match the deal's OWN pipeline's configured stages. This deal
+  // has no pipelineId (random, non-existent id — gateSnapshot finds nothing), so there is
+  // no pipeline to validate the name against and the request is accepted, same as the
+  // adjacent "Proposal" case below.
+  it("PATCH /v1/crm/deals/:id/stage — accepts a non-legacy stage name when no pipeline is scoped (202)", async () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/crm/deals/${randomUUID()}/stage`,
       headers: { authorization: `Bearer ${token()}` },
       payload: { stage: "InvalidStage", version: 1 },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(202);
   });
 
   it("PATCH /v1/crm/deals/:id/stage — accepts valid stage with stageId → 202", async () => {
@@ -355,6 +371,146 @@ describe("Deal Stage Transition with Optimistic Locking", () => {
       payload: { stage: "Proposal", version: 1 },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe("OP-002: dynamic per-pipeline stage validation (deals no longer bound to a fixed 5-value enum)", () => {
+  async function createCustomPipeline() {
+    const intakeId = randomUUID();
+    const siteVisitId = randomUUID();
+    const wonId = randomUUID();
+    const lostId = randomUUID();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/pipelines",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: {
+        name: "Field Services Pipeline",
+        stages: [
+          { id: intakeId, name: "Intake", probability: 10, ordinal: 0 },
+          { id: siteVisitId, name: "Site Visit Scheduled", probability: 40, ordinal: 1 },
+          { id: wonId, name: "Won", probability: 100, ordinal: 2 },
+          { id: lostId, name: "Lost", probability: 0, ordinal: 3 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    return { pipelineId: res.json().id as string, intakeId, siteVisitId, wonId, lostId };
+  }
+
+  it("POST /v1/crm/deals — creates a deal directly into a custom (non-legacy) pipeline stage (202), persists stage + real stageId", async () => {
+    const { pipelineId, siteVisitId } = await createCustomPipeline();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/deals",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "Custom-stage deal", pipelineId, stage: "Site Visit Scheduled", valueMinor: 10000 },
+    });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ stage: string; stageId: string | null }>>`
+        SELECT stage, stage_id AS "stageId" FROM crm.deals WHERE id = ${res.json().id} AND tenant_id = ${TENANT}
+      `;
+    });
+    expect(rows[0]?.stage).toBe("Site Visit Scheduled");
+    expect(rows[0]?.stageId).toBe(siteVisitId);
+  });
+
+  it('POST /v1/crm/deals — omitting stage on a pipeline-scoped deal lands on THAT pipeline\'s own entry stage, not the literal "Lead" (202)', async () => {
+    const { pipelineId, intakeId } = await createCustomPipeline();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/deals",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "No stage specified", pipelineId, valueMinor: 5000 },
+    });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ stage: string; stageId: string | null }>>`
+        SELECT stage, stage_id AS "stageId" FROM crm.deals WHERE id = ${res.json().id} AND tenant_id = ${TENANT}
+      `;
+    });
+    expect(rows[0]?.stage).toBe("Intake");
+    expect(rows[0]?.stageId).toBe(intakeId);
+  });
+
+  it("PATCH /v1/crm/deals/:id/stage — moves a deal into a custom pipeline's own stage (202), persists the resolved stage + stageId", async () => {
+    const { pipelineId, siteVisitId } = await createCustomPipeline();
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/crm/deals",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "Move me", pipelineId, stage: "Intake", valueMinor: 20000 },
+    });
+    expect(createRes.statusCode).toBe(202);
+    await drainQueue();
+    const dealId = createRes.json().id as string;
+
+    const moveRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/crm/deals/${dealId}/stage`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { stage: "Site Visit Scheduled", version: 1 },
+    });
+    expect(moveRes.statusCode).toBe(202);
+    await drainQueue();
+
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ stage: string; stageId: string | null; status: string }>>`
+        SELECT stage, stage_id AS "stageId", status FROM crm.deals WHERE id = ${dealId} AND tenant_id = ${TENANT}
+      `;
+    });
+    expect(rows[0]?.stage).toBe("Site Visit Scheduled");
+    expect(rows[0]?.stageId).toBe(siteVisitId);
+    expect(rows[0]?.status).toBe("active");
+  });
+
+  it("PATCH /v1/crm/deals/:id/stage — rejects a stage name that isn't one of THIS deal's pipeline stages (422 INVALID_STAGE), leaves the row untouched", async () => {
+    const { pipelineId } = await createCustomPipeline();
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/crm/deals",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "Should not move", pipelineId, stage: "Intake", valueMinor: 20000 },
+    });
+    expect(createRes.statusCode).toBe(202);
+    await drainQueue();
+    const dealId = createRes.json().id as string;
+
+    const moveRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/crm/deals/${dealId}/stage`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { stage: "Not A Real Stage", version: 1 },
+    });
+    expect(moveRes.statusCode).toBe(422);
+    expect(moveRes.json().code).toBe("INVALID_STAGE");
+
+    // The write must never have reached the consumer — confirm the row is untouched.
+    await drainQueue();
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ stage: string }>>`SELECT stage FROM crm.deals WHERE id = ${dealId} AND tenant_id = ${TENANT}`;
+    });
+    expect(rows[0]?.stage).toBe("Intake");
+  });
+
+  it("POST /v1/crm/deals — rejects a stage name that isn't one of the given pipeline's stages (422 INVALID_STAGE)", async () => {
+    const { pipelineId } = await createCustomPipeline();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/deals",
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "Bad stage on create", pipelineId, stage: "Not A Real Stage", valueMinor: 1000 },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INVALID_STAGE");
   });
 });
 
