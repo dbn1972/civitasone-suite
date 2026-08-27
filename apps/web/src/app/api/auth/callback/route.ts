@@ -39,6 +39,9 @@ export async function GET(req: Request) {
     jar.delete(COOKIE.OAUTH_STATE);
     return NextResponse.redirect(new URL("/dashboard", APP_URL));
   } catch (err) {
+    // Server-side only (Route Handler); apps/web has no shared logger package,
+    // and an auth failure here must stay observable in server logs.
+    // eslint-disable-next-line no-console -- auth failure diagnostics, same rationale as RouteError.tsx
     console.error("[auth/callback] token exchange failed", err);
     clearAuthCookies(jar);
     return NextResponse.redirect(new URL("/auth/login?error=token_exchange_failed", APP_URL));

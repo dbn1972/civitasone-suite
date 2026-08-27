@@ -99,7 +99,11 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
   const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   function toggleSelect(id: string) {
-    setSelected((s) => { const c = new Set(s); c.has(id) ? c.delete(id) : c.add(id); return c; });
+    setSelected((s) => {
+      const c = new Set(s);
+      if (c.has(id)) c.delete(id); else c.add(id);
+      return c;
+    });
   }
   function toggleAll() {
     const pageIds = pageRows.map((u) => u.id);
