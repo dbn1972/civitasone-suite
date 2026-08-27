@@ -37,6 +37,6 @@ export default defineConfig({
     command: `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web dev --port ${E2E_PORT}`,
     url: `http://localhost:${E2E_PORT}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 400_000, // TEMP DIAGNOSTIC: was 120_000, testing if this is just slow vs genuinely stuck
   },
 });

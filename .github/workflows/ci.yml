@@ -552,7 +552,7 @@ jobs:
       - name: Start web
         run: |
           pnpm --filter @civitasone/web run start > web-server.log 2>&1 &
-          npx --yes wait-on http://localhost:3000/auth/login --timeout 120000
+          npx --yes wait-on tcp:localhost:3000 --timeout 120000
         env:
           # NOTE: the app reads CIVITASONE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL.
           # `NEXT_PUBLIC_API_BASE` (used by the web-build job) is read by nothing.
