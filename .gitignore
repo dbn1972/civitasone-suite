@@ -9,6 +9,7 @@ coverage/
 .env*.local
 infra/.env
 .DS_Store
+._*
 *.tsbuildinfo
 apps/web/test-results/
 apps/web/e2e-report/
