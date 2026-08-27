@@ -156,6 +156,56 @@ describe("POST /audit/exports", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// POST /v1/audit/exports
+// ───────────────────────────────────────────────────────────────────────────
+// G-FIX-4 regression guard: this route previously existed ONLY under the
+// legacy /audit prefix — every other export endpoint (status/download/verify,
+// below) is v1-only, so a client treating /v1/audit/exports as a complete,
+// self-sufficient namespace for this resource got a 404 trying to create one.
+// Confirmed live before this fix: POST /api/v1/audit/exports 404'd through
+// the gateway while POST /api/audit/exports reached this same handler.
+describe("POST /v1/audit/exports", () => {
+  it("401 without a bearer token (same guard as the legacy path)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/exports",
+      payload: { from: "2026-01-01T00:00:00.000Z", to: "2026-01-02T00:00:00.000Z", format: "json" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("202 accepted for audit_officer with a valid body (route now exists under v1)", async () => {
+    const jwt = token(["audit_officer"], TENANT, randomUUID());
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: { from: "2026-01-01T00:00:00.000Z", to: "2026-01-02T00:00:00.000Z", format: "json" },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data ?? res.json()).toBeDefined();
+  });
+
+  it("400 for an invalid body (missing from/to) (same guard as the legacy path)", async () => {
+    const jwt = token(["audit_officer"], TENANT, randomUUID());
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: { format: "json" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("403 for a role outside EXPORT_ROLES (same guard as the legacy path)", async () => {
+    const jwt = token(["employee"], TENANT, randomUUID());
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/exports",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: { from: "2026-01-01T00:00:00.000Z", to: "2026-01-02T00:00:00.000Z", format: "json" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // GET /v1/audit/exports/:id
 // ───────────────────────────────────────────────────────────────────────────
 describe("GET /v1/audit/exports/:id", () => {
