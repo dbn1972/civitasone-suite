@@ -730,4 +730,69 @@ describe("E-sign consumer — CQRS wiring (integration)", () => {
 
     await rawQueue.stop();
   });
+
+  it("consumer independently rejects a sign command whose userId is not the current signatory", async () => {
+    // The route layer can never construct this payload today (the signer is
+    // always ctx.actorId — see routes.ts/commands.ts), but the consumer must
+    // not blindly trust the queue payload either. This proves its own
+    // canSign() re-check is real defense-in-depth, not dead code: a
+    // hypothetical second producer, or a future refactor that swaps which
+    // field feeds userId, would still be caught here even if the route-level
+    // guard were ever weakened.
+    const { MemoryQueue } = await import("@civitasone/queue");
+    const { withTenantConsumer } = await import("@civitasone/db");
+    const { registerEsignConsumers } = await import("../src/modules/esign/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const rawQueue = new MemoryQueue();
+    const rawSubscribe = rawQueue.subscribe.bind(rawQueue);
+    rawQueue.subscribe = ((topic: string, handler: any) =>
+      rawSubscribe(topic, withTenantConsumer(handler) as any)) as typeof rawQueue.subscribe;
+    registerEsignConsumers(rawQueue);
+    await rawQueue.start();
+
+    const routeId = randomUUID();
+    function pub(type: string, payload: Record<string, unknown>) {
+      return rawQueue.publish(type, {
+        messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR,
+        correlationId: "corr-" + randomUUID().slice(0, 8), schemaVersion: "1.0", payload,
+      });
+    }
+
+    async function waitForRoute(want: { status?: string; currentOrdinal?: number }) {
+      for (let i = 0; i < 40; i++) {
+        const row = await withTenantScope(db, TENANT, (tx) =>
+          tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
+        if (row && (want.status === undefined || row.status === want.status)
+          && (want.currentOrdinal === undefined || row.currentOrdinal === want.currentOrdinal)) {
+          return row;
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error(`e-sign route ${routeId} did not reach expected state ${JSON.stringify(want)}`);
+    }
+
+    await pub(COMMANDS.esignCreate, {
+      id: routeId, tenantId: TENANT, contractId: CONTRACT_ID, ownerId: OWNER,
+      signatories: [
+        { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+        { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+      ],
+    });
+    await waitForRoute({ status: "in_progress", currentOrdinal: 1 });
+
+    // Forged/mismatched payload: userId is SIGNER_2, but ordinal 1 (SIGNER_1) is current.
+    await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_2 });
+
+    // Give the (no-op) handler a moment to run, then assert nothing changed.
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await withTenantScope(db, TENANT, (tx) =>
+      tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
+    expect(row?.status).toBe("in_progress");
+    expect(row?.currentOrdinal).toBe(1);
+    expect((row?.signatories as SignatoryEntry[]).find((s) => s.userId === SIGNER_1)?.status).toBe("pending");
+    expect((row?.signatories as SignatoryEntry[]).find((s) => s.userId === SIGNER_2)?.status).toBe("pending");
+
+    await rawQueue.stop();
+  });
 });
