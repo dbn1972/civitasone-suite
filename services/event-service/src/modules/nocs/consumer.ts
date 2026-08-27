@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { RESPONDABLE_FROM_STATUSES } from "./domain.js";
 
 const log = pino({ name: "event.nocs.consumer" });
 
@@ -64,7 +65,11 @@ export function registerNocConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.respondNoc(tx, p.id, msg.tenantId, p.status, p.conditions ?? null, msg.actorId);
+      // Was: return value entirely discarded, so a stale/duplicate response
+      // command unconditionally published "responded" + wrote an audit row even
+      // when it matched zero rows (wrong id/tenant, or already responded).
+      const updated = await repo.respondNoc(tx, p.id, msg.tenantId, p.status, p.conditions ?? null, RESPONDABLE_FROM_STATUSES, msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.nocResponded,
         eventType: EVENTS.nocResponded,
