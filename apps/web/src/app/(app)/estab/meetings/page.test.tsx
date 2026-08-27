@@ -66,10 +66,12 @@ describe("estab/meetings/page.tsx (fix 3 + fix 8-style error/empty split)", () =
     });
     render(await MeetingsPage({}));
 
-    // Was `meetings.length` (2) mislabeled "Action Items"; now the real sum
-    // of each meeting's own agendaItemsCount (2 + 5 = 7), honestly relabeled.
-    expect(screen.getByText("Agenda Items")).toBeInTheDocument();
-    expect(screen.queryByText("Action Items")).not.toBeInTheDocument();
+    // Was `meetings.length` (2), mislabeled -- but summing agendaItemsCount would have been
+    // an equally hollow fix while the backend never populated it, so the label stays "Action
+    // Items" (matching what estab-service now actually computes it from: real resolutions,
+    // this feature's action-point equivalent -- see estab-service's queries.ts) and the value
+    // is the real sum (2 + 5 = 7), not the meeting count.
+    expect(screen.getByText("Action Items")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
 
     // "Meetings (wk)" implied a 7-day window; the underlying count is an

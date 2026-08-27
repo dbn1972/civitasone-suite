@@ -84,12 +84,6 @@ const versionParam = z.object({
 /** Optional tenant scope for the public verification endpoint (QR-encoded). */
 const verifyQuery = z.object({ tenantId: z.string().uuid().optional() });
 
-/** 404 unless the parent meeting exists in the caller's tenant. */
-async function assertMeetingExists(tenantId: string, meetingId: string): Promise<void> {
-  const meeting = await repo.getMeetingStatus(tenantId, meetingId);
-  if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
-}
-
 /**
  * 404 unless the minutes exists in the caller's tenant AND belongs to `meetingId`. Returns the
  * row so callers can avoid a second read. NOT_FOUND (not FORBIDDEN) on a cross-meeting id so we
@@ -145,7 +139,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SECRETARY_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const body = minutesCreateSchema.parse(req.body ?? {});
-    await assertMeetingExists(ctx.tenantId, meetingId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, SECRETARIAL_STANDING_ROLES);
     const accepted = await commands.minutesCreate(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
   });
@@ -167,6 +162,8 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesUpdateSchema.parse(req.body);
     await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
+    await assertMeetingOwnership(ctx, meeting, SECRETARIAL_STANDING_ROLES);
     const accepted = await commands.minutesUpdate(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });

@@ -493,7 +493,7 @@ describe("POST /v1/meetings/:meetingId/resolutions/:resolutionId/sign", () => {
 describe("POST /v1/meetings/:meetingId/resolutions/:resolutionId/dissent", () => {
   const body = { memberId: MEMBER_B, note: "I dissent on procedural grounds" };
 
-  it("202 accepts a dissent note from a member", async () => {
+  it("202 accepts a dissent note a member records for THEMSELVES", async () => {
     // Dissent now requires standing as an active member of the resolution's OWN committee
     // (IDOR fix, tests/decision-membership-idor.test.ts) -- ACTOR itself deliberately has no
     // committee_members row (it's reused tenant-wide across this file's other, count-sensitive
@@ -504,9 +504,25 @@ describe("POST /v1/meetings/:meetingId/resolutions/:resolutionId/dissent", () =>
       method: "POST",
       url: `/v1/meetings/${MEETING_ID}/resolutions/${RESOLUTION_ID}/dissent`,
       headers: { authorization: `Bearer ${memberAToken}` },
-      payload: body,
+      payload: { memberId: MEMBER_A, note: body.note },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  it("403 when a plain member tries to record a dissent for a DIFFERENT member (self-binding fix)", async () => {
+    // A plain (non-officer) committee_member may only record their OWN dissent -- naming a
+    // different member is still real audit-trail spoofing between peers (handleDissentRecord
+    // would overwrite THAT member's vote reason), even when both genuinely serve the same
+    // committee. Only an officer (chairperson/secretary) may record on someone else's behalf
+    // (see tests/decision-membership-idor.test.ts's SEC_OF_B → CHAIR_OF_B case for that path).
+    const memberAToken = signToken({ sub: MEMBER_A, tid: TENANT, roles: ["committee_member"], sid: "sess-member-a" }, SECRET);
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING_ID}/resolutions/${RESOLUTION_ID}/dissent`,
+      headers: { authorization: `Bearer ${memberAToken}` },
+      payload: { memberId: MEMBER_B, note: body.note },
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it("400 on a missing note", async () => {

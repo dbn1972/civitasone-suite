@@ -284,7 +284,28 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     // handleDissentRecord) silently overwrite another member's existing vote reason.
     const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
     if (meetingRef?.committeeId) {
-      await requireCommitteeStanding(ctx, meetingRef.committeeId, MEMBER_ROLES);
+      if (ctx.roles.some((r) => COMMITTEE_SCOPE_BYPASS_ROLES.includes(r))) {
+        // admin bypass -- may name anyone, same as an officer below.
+      } else {
+        const membership = await repo.getActiveMembership(ctx.tenantId, meetingRef.committeeId, ctx.actorId);
+        if (!membership || !MEMBER_ROLES.includes(membership.role as (typeof MEMBER_ROLES)[number])) {
+          throw new HttpError(403, "FORBIDDEN", "caller does not have standing on this committee");
+        }
+        // A plain member may only record their OWN dissent -- naming someone else is still
+        // real audit-trail spoofing even from a genuine committee peer (handleDissentRecord
+        // will overwrite THAT member's vote reason). Officers may record on behalf of a
+        // member who raised it on the floor but didn't type it in themselves (mirrors the
+        // "chair/secretary may record a recusal for another member" convention documented on
+        // voting/validators.ts's recuse field).
+        const isOfficer = (DECISION_OFFICER_ROLES as readonly string[]).includes(membership.role);
+        if (!isOfficer && body.memberId !== ctx.actorId) {
+          throw new HttpError(
+            403,
+            "FORBIDDEN",
+            "only a committee officer (chairperson/secretary) may record a dissent on behalf of another member",
+          );
+        }
+      }
     }
     const accepted = await commands.dissentRecord(ctx, meetingId, resolutionId, body);
     return reply.code(202).send({ data: accepted });
