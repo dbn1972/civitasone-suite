@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -49,15 +50,33 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     const renewal = await repo.findRenewalById(p.id, msg.tenantId);
     if (!renewal) return;
     const newValidUntil = p.decision === "approved" ? calculateNewValidUntil(renewal.previousValidUntil) : null;
+    let applied = false;
+    let permitExtended = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateRenewalDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil);
+      // updateRenewalDecision's boolean return (row actually matched) was
+      // previously discarded — same fake-success pattern already fixed
+      // elsewhere in this service. Gate everything else on it.
+      const ok = await repo.updateRenewalDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil);
+      if (!ok) return;
+      applied = true;
       if (p.decision === "approved" && newValidUntil) {
-        await permitRepo.updateValidUntil(tx, renewal.permitId, msg.tenantId, newValidUntil, msg.actorId);
+        permitExtended = await permitRepo.updateValidUntil(tx, renewal.permitId, msg.tenantId, newValidUntil, msg.actorId);
+        if (!permitExtended) {
+          // The renewal record itself was genuinely decided (true above), so
+          // we still report that truthfully — but a matched renewal whose
+          // permit didn't update is a real data inconsistency (permit
+          // deleted/wrong tenant under an id we just read moments ago), not
+          // a routine no-op, so it must not vanish silently.
+          log.error({ renewalId: p.id, permitId: renewal.permitId }, "renewal approved but permit validUntil update matched no row — data inconsistency");
+        }
       }
       await enqueue(tx, { topic: EVENTS.renewalDecided, eventType: EVENTS.renewalDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { renewalId: p.id, permitId: renewal.permitId, renewalType: renewal.renewalType, decision: p.decision, reason: p.reason, newValidUntil: newValidUntil?.toISOString() } });
       await writeAudit(tx, ctxOf(msg), { action: `renewal.${p.decision}`, resourceType: "building_renewal", resourceId: p.id });
     });
-    log.info({ id: p.id, decision: p.decision }, "building renewal decided");
+    // GET /v1/building/permits/:id (permits/routes.ts) reads through a cache
+    // that only this consumer's write path can invalidate (CLAUDE.md §6).
+    if (permitExtended) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", renewal.permitId));
+    if (applied) log.info({ id: p.id, decision: p.decision }, "building renewal decided");
   });
 }
