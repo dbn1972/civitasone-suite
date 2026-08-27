@@ -52,7 +52,10 @@ export async function assetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuery.parse(req.query);
-    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, { status: q.status, assetType: q.assetType });
+    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, {
+      ...(q.status !== undefined ? { status: q.status } : {}),
+      ...(q.assetType !== undefined ? { assetType: q.assetType } : {}),
+    });
     return reply.send({ data: rows.map(repo.toView), meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total } });
   });
 
