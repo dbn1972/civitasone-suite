@@ -4,7 +4,14 @@ export type TreeRequestType = "pruning" | "removal" | "new_planting" | "transpla
 const TRANSITIONS: Record<TreeRequestStatus, TreeRequestStatus[]> = {
   submitted: ["inspected", "rejected"],
   inspected: ["approved", "rejected"],
-  approved: ["work_ordered"],
+  // "work_ordered" has no implementing command/route anywhere in this module
+  // (no work-order endpoint exists), so it was never reachable and every
+  // /complete call on an approved request failed with TRANSITION_INVALID —
+  // the entire completion workflow was dead on arrival. "completed" added as
+  // a direct edge to match what's actually implemented: approve -> complete,
+  // no separate work-order step. "work_ordered" kept in the status/type union
+  // for forward compatibility if that step is added later.
+  approved: ["work_ordered", "completed"],
   rejected: [],
   work_ordered: ["completed"],
   completed: [],
