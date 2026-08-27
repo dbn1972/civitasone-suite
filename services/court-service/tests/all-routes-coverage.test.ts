@@ -486,6 +486,48 @@ describe("Case Registry Routes", () => {
       expect(getCasePartiesByCaseId).toHaveBeenCalledWith(TENANT_ID, CASE_ID);
     });
 
+    it("masks party PII for a registrar but reveals it for super_admin (DPDP regression guard)", async () => {
+      // This is the exact bug PR #794 fixed: GET /cases/:id used to embed
+      // parties straight from the DB row with NO role-based masking at all,
+      // while the dedicated GET /cases/:id/parties endpoint (party module,
+      // see below) already masked correctly. Both must now agree.
+      const { getCasePartiesByCaseId } = await import("../src/modules/case-registry/repo.js");
+      const partyRow = {
+        id: "party-1",
+        caseId: CASE_ID,
+        partyRole: "petitioner",
+        nameEnc: "Ramesh Kumar Sharma",
+        addressEnc: "12 MG Road, Lucknow",
+        phoneEnc: "9876543210",
+        emailEnc: "ramesh@example.com",
+        advocateName: "Adv. Priya Singh",
+        advocateBarId: "UP/1234/2010",
+        version: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      };
+      (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockResolvedValueOnce([partyRow]);
+
+      const registrarRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${REGISTRAR_TOKEN()}` } });
+      expect(registrarRes.statusCode).toBe(200);
+      const registrarBody = registrarRes.json();
+      expect(registrarBody.piiRevealed).toBe(false);
+      expect(registrarBody.parties[0].name).toBeNull();
+      expect(registrarBody.parties[0].address).toBeNull();
+      expect(registrarBody.parties[0].phone).not.toBe("9876543210");
+      expect(registrarBody.parties[0].email).not.toBe("ramesh@example.com");
+      // Raw encrypted-column field names must never reach the wire.
+      expect(registrarBody.parties[0].nameEnc).toBeUndefined();
+
+      (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockResolvedValueOnce([partyRow]);
+      const adminRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(adminRes.statusCode).toBe(200);
+      const adminBody = adminRes.json();
+      expect(adminBody.piiRevealed).toBe(true);
+      expect(adminBody.parties[0].name).toBe("Ramesh Kumar Sharma");
+      expect(adminBody.parties[0].phone).toBe("9876543210");
+    });
+
     it("returns 404 when not found", async () => {
       mockState.queryResult = [];
       const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });

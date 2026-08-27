@@ -118,6 +118,11 @@ export async function getCaseById(tenantId: string, id: string): Promise<CaseRow
  * bypassed on this read path.
  */
 export async function getCasePartiesByCaseId(tenantId: string, caseId: string): Promise<CasePartyRow[]> {
+  // Ordered oldest-first, matching party/repo.ts's listPartiesByCase — the two
+  // near-duplicate queries (both against court.case_parties) must agree on row
+  // order, or GET /cases/:id and GET /cases/:id/parties would list the SAME
+  // case's parties in a different sequence.
   return scopedRead((tx) => tx.select().from(caseParties)
-    .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId))));
+    .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId)))
+    .orderBy(asc(caseParties.createdAt)));
 }
