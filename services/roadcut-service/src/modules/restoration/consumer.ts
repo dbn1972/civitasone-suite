@@ -50,9 +50,16 @@ export function registerRestorationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.completeRestoration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; quality: string; endDate: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.completeRestoration(tx, p.id, msg.tenantId, p.quality, p.endDate, msg.actorId);
+      // repo.completeRestoration now only applies while quality is still
+      // "pending" (see repo.ts) — a losing racer against a concurrent
+      // /complete call returns false here and must not publish a completed
+      // event or audit entry for a write that didn't happen.
+      const ok = await repo.completeRestoration(tx, p.id, msg.tenantId, p.quality, p.endDate, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.restorationCompleted,
         eventType: EVENTS.restorationCompleted,
@@ -67,14 +74,22 @@ export function registerRestorationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) log.info({ id: p.id, quality: p.quality }, "restoration completed");
   });
 
   queue.subscribe(COMMANDS.decideDepositRefund, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; decision: string; refundMinor?: string };
     const refundAmount = p.refundMinor ? BigInt(p.refundMinor) : 0n;
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateDepositRefund(tx, p.id, msg.tenantId, p.decision, refundAmount, msg.actorId);
+      // repo.updateDepositRefund now only applies while depositRefundStatus is
+      // still "held" (see repo.ts) — a losing racer against a concurrent
+      // /refund call returns false here and must not publish a decided event
+      // or audit entry for a write that didn't happen.
+      const ok = await repo.updateDepositRefund(tx, p.id, msg.tenantId, p.decision, refundAmount, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.depositRefundDecided,
         eventType: EVENTS.depositRefundDecided,
@@ -89,6 +104,6 @@ export function registerRestorationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, decision: p.decision }, "deposit refund decided");
+    if (applied) log.info({ id: p.id, decision: p.decision }, "deposit refund decided");
   });
 }

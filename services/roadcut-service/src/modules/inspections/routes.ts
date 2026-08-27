@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { canComplete } from "./domain.js";
+import * as permitsRepo from "../permits/repo.js";
 
 const ADMIN_ROLES = ["roadcut_admin", "super_admin"];
 
@@ -11,7 +12,7 @@ const scheduleBody = z.object({
   permitId: z.string().uuid(),
   inspectionType: z.enum(["pre_work", "during_work", "post_restoration"]),
   inspectorId: z.string().uuid(),
-  scheduledDate: z.string(),
+  scheduledDate: z.string().date(),
 });
 
 const completeBody = z.object({
@@ -32,6 +33,13 @@ export async function inspectionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = scheduleBody.parse(req.body);
+
+    // No FK exists on roadcut_inspections.permit_id — confirm the permit is
+    // real before scheduling an inspection against it (mirrors the same
+    // unchecked-reference gap found and fixed for permit issuance).
+    const permit = await permitsRepo.findById(body.permitId, ctx.tenantId);
+    if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "Referenced permit not found");
+
     return reply.code(202).send(
       await commands.scheduleInspection(ctx, body.permitId, body.inspectionType, body.inspectorId, body.scheduledDate),
     );

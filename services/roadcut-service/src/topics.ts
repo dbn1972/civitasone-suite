@@ -3,6 +3,9 @@ export const COMMANDS = {
   createApplication: "roadcut.application.create",
   submitApplication: "roadcut.application.submit",
   withdrawApplication: "roadcut.application.withdraw",
+  startReview: "roadcut.application.start_review",
+  approveApplication: "roadcut.application.approve",
+  rejectApplication: "roadcut.application.reject",
 
   // permits
   issuePermit: "roadcut.permit.issue",
@@ -25,6 +28,9 @@ export const EVENTS = {
   applicationCreated: "roadcut.application.created",
   applicationSubmitted: "roadcut.application.submitted",
   applicationWithdrawn: "roadcut.application.withdrawn",
+  applicationUnderReview: "roadcut.application.under_review",
+  applicationApproved: "roadcut.application.approved",
+  applicationRejected: "roadcut.application.rejected",
 
   // permits
   permitIssued: "roadcut.permit.issued",

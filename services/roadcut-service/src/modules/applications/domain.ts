@@ -4,20 +4,29 @@ export const APPLICATION_STATUSES = [
   "under_review",
   "approved",
   "rejected",
+  "withdrawn",
 ] as const;
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
-  draft: ["submitted"],
+  draft: ["submitted", "withdrawn"],
   submitted: ["under_review"],
   under_review: ["approved", "rejected"],
   approved: [],
   rejected: [],
+  withdrawn: [],
 };
 
 export function canTransition(from: string, to: ApplicationStatus): boolean {
   return (VALID_TRANSITIONS[from] ?? []).includes(to);
+}
+
+// An application can only be approved once fee/deposit have actually been
+// calculated — both columns are nullable at the schema level, and approval
+// is the gate before a permit (which relies on these figures) can be issued.
+export function canApprove(status: string, feeMinor: bigint | null, depositMinor: bigint | null): boolean {
+  return status === "under_review" && feeMinor != null && depositMinor != null;
 }
 
 export const PURPOSES = [

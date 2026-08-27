@@ -29,3 +29,15 @@ export async function submitApplication(ctx: RequestContext, id: string): Promis
 export async function withdrawApplication(ctx: RequestContext, id: string): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.withdrawApplication, id, { id });
 }
+
+export async function startReview(ctx: RequestContext, id: string): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.startReview, id, { id });
+}
+
+export async function approveApplication(ctx: RequestContext, id: string): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.approveApplication, id, { id });
+}
+
+export async function rejectApplication(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.rejectApplication, id, { id, reason });
+}
