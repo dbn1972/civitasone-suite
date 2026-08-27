@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -6,6 +7,8 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as journeyRepo from "../journeys/repo.js";
+import { resolveStep } from "../journeys/domain.js";
 import { computeNextStatus, validateExecutionTransition, type ExecutionStatus } from "./domain.js";
 
 const log = pino({ name: "journey.executions.consumer" });
@@ -136,6 +139,53 @@ export function registerExecutionConsumers(rawQueue: Queue): void {
           journeyId: p.journeyId,
           profileId: p.profileId,
           totalSteps: p.totalSteps,
+        });
+      } else {
+        // P1-8 follow-up: bumping currentStepIndex is bookkeeping, not progress —
+        // the run only actually moves if the new current step gets dispatched.
+        // Before this, nothing anywhere ever published journey.step.execute for
+        // any index past the one a caller (or the wait sweeper) explicitly
+        // triggered, so every run silently froze "in_progress" forever after its
+        // first non-terminal step.
+        //
+        // The journey lookup runs inside this same transaction: journeys are
+        // only ever soft-deleted (status becomes 'archived', the row and its
+        // steps stay readable), so findById returning null or the target index
+        // resolving to nothing means genuine data corruption, not a normal
+        // archive/delete. Throwing rolls back the currentStepIndex bump together
+        // with the inbox claim, so the queue retries and this eventually DLQs —
+        // visibly — instead of silently committing a run that says "in_progress
+        // at step N" while nothing will ever dispatch step N.
+        //
+        // Known limitation: journey_executions has no persisted context column,
+        // so an auto-chained step dispatches with an empty context, unlike the
+        // first step (whose context a caller supplies explicitly on the manual
+        // execute-step call). A condition_check step beyond position 0 cannot
+        // see enrollment-time attributes yet — tracked separately, not fixed here.
+        const journey = await journeyRepo.findById(p.journeyId, msg.tenantId);
+        const next = journey ? resolveStep(journey.steps, nextIndex) : null;
+        if (!next) {
+          throw new Error(
+            `cannot dispatch step ${nextIndex} of journey ${p.journeyId} for execution ${run.id}: ` +
+              (journey ? "step definition missing or malformed" : "journey not found"),
+          );
+        }
+        await enqueue(tx, {
+          topic: COMMANDS.stepExecute,
+          eventType: COMMANDS.stepExecute,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            id: randomUUID(),
+            tenantId: msg.tenantId,
+            journeyId: p.journeyId,
+            profileId: p.profileId,
+            stepIndex: nextIndex,
+            stepType: next.stepType,
+            stepConfig: next.stepConfig,
+            totalSteps: p.totalSteps,
+          },
         });
       }
 
