@@ -37,6 +37,17 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authPlugin);
 
+  // Must run before any route-module `app.register(...)` calls below: Fastify's
+  // setErrorHandler only applies to plugins/routes registered AFTER it in the
+  // same encapsulation context (root-level state is captured per-child at the
+  // child's own registration time, not re-read later). Registering it after
+  // ~20 awaited route modules meant every one of those routes silently kept
+  // Fastify's default handler, so a bare ZodError from route-level validation
+  // leaked as a raw 500 instead of this envelope's structured 400 -- confirmed
+  // for POST perquisite-components/challans, and verified to generalize to every
+  // other unprotected route module in this file (see PR description for detail).
+  registerSchemaErrorHandler(app, HttpError);
+
   // M2: per-user rate limiting -- 300 req/min keyed by actorId, ops paths excluded.
   await registerRateLimit(app, {
     max: 300,
@@ -86,8 +97,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { gapRoutes } = await import("./modules/payroll/gap-routes.js");
   await app.register(gapRoutes);
   await app.register((await import("./modules/form16-pdf/routes.js")).form16PdfRoutes);
-
-  registerSchemaErrorHandler(app, HttpError);
 
   return app;
 }
