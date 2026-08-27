@@ -4,12 +4,22 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getProposals } from "../_data/loaders";
 import { ProposalsTable } from "./ProposalsTable";
 
+// Bug fix (works-deep-verify, MEDIUM/L3): this list used to include
+// "Submitted" and "TS Eligible" filter tabs. work_proposals.status is only
+// ever set to "draft" (on create) or "dao_finalized" (on DAO finalize) —
+// see services/works-service/src/modules/proposal/consumer.ts, the only
+// writer of this column. "submitted" is proposals/[id]'s local pre-finalize
+// UI toast wording, never persisted; "ts_eligible" is referenced only in
+// proposal/schema.ts's column comment and approval/domain.ts's gate check,
+// with no code path that ever sets it. Both tabs were therefore permanently
+// dead: reachable, but guaranteed-empty regardless of real data — a clerk
+// clicking either would see "no proposals" and reasonably read that as a
+// system problem. Removed rather than guessing at unimplemented lifecycle
+// business logic (see PR description).
 const STATUS_TABS = [
   { key: "all",           label: "All" },
   { key: "draft",         label: "Draft" },
-  { key: "submitted",     label: "Submitted" },
   { key: "dao_finalized", label: "DAO Finalized" },
-  { key: "ts_eligible",  label: "TS Eligible" },
 ];
 
 function tabHref(key: string) {
@@ -27,7 +37,6 @@ export default async function ProposalsPage({
   const total        = proposals.length;
   const draftCount   = proposals.filter((p) => p.status === "draft").length;
   const daoFinalized = proposals.filter((p) => p.status === "dao_finalized").length;
-  const tsEligible   = proposals.filter((p) => p.status === "ts_eligible").length;
 
   const countByStatus = proposals.reduce<Record<string, number>>((acc, p) => {
     const s = String(p.status);
@@ -67,7 +76,6 @@ export default async function ProposalsPage({
         <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)"  label="Total Works"   value={total} />
         <StatCard icon="📝" iconBg="var(--warnbg, #fef3c7)"  label="Draft"         value={draftCount} />
         <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)"  label="DAO Finalized" value={daoFinalized} />
-        <StatCard icon="📑" iconBg="#f0fdf4"                 label="TS Eligible"   value={tsEligible} />
       </StatGrid>
 
       {/* Status filter tabs */}
