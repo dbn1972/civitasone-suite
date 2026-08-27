@@ -15,6 +15,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// ForceFileButton (rendered by the reconciliation-blocked branch below) calls
+// useToast(), which throws without a ToastProvider ancestor — stub it the
+// same way NewTicketForm.test.tsx etc. do, since this file never asserts on
+// toast content.
+vi.mock("@/app/_components/ds/Toast", () => ({
+  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }),
+}));
+
 import ReturnsPage from "./page";
 
 const populated26Q = {
