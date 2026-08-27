@@ -168,4 +168,38 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
     });
     expect(getAfterUnpublish.json().status).toBe("draft");
   });
+
+  // Failure-path counterpart: publishing a nonexistent (or foreign-tenant)
+  // id must not silently "succeed" the same way the original GUC bug did --
+  // it should 404, not 200. Also exercises Tenant B genuinely being denied,
+  // not just an empty list happening to contain no leaked rows.
+  it("Publishing a nonexistent article id returns 404, not a fake 200", async () => {
+    const fakeId = "00000000-0000-4000-8000-000000000000";
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${fakeId}/publish`,
+      headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+      payload: { published: true },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("Tenant B cannot publish Tenant A's article", async () => {
+    expect(createdDocumentId).toBeDefined();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: { authorization: `Bearer ${tokenB}`, "content-type": "application/json" },
+      payload: { published: true },
+    });
+    expect(res.statusCode).toBe(404);
+
+    // And Tenant A's copy must be unaffected by Tenant B's attempt.
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+    expect(getRes.json().status).toBe("draft");
+  });
 });
