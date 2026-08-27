@@ -1,6 +1,13 @@
--- 0020_deputation_ltc_cea.sql
+-- 0033b_deputation_ltc_cea.sql
 -- Deputation lifecycle + LTC and CEA claim modules.
 -- Additive + idempotent only. Money in paise (bigint).
+--
+-- Renumbered 2026-08-27: this file's own header already called itself
+-- "0020_..." (its intended slot), but it was checked in as 0120 — 100 past
+-- where it was meant to sort — while 0034/0035/0038 reference the tables
+-- created here (lifecycle.hrms_deputations, claims.hrms_ltc_claims,
+-- claims.hrms_cea_claims) starting at file 0034. Moved to the smallest slot
+-- that sorts before that earliest consumer. Content otherwise unchanged.
 
 -- ============================================================
 -- 1. Deputation lifecycle (lives in the lifecycle schema)

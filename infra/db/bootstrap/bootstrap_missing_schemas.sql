@@ -28,6 +28,7 @@
 \connect civitas_tenant
 CREATE SCHEMA IF NOT EXISTS plans         AUTHORIZATION tenant_svc;
 CREATE SCHEMA IF NOT EXISTS subscriptions AUTHORIZATION tenant_svc;
+CREATE SCHEMA IF NOT EXISTS quotas        AUTHORIZATION tenant_svc;
 
 \connect civitas_policy
 CREATE SCHEMA IF NOT EXISTS role_features AUTHORIZATION policy_svc;
@@ -81,6 +82,7 @@ CREATE SCHEMA IF NOT EXISTS payroll AUTHORIZATION hrms_svc;
 \connect civitas_theme
 CREATE SCHEMA IF NOT EXISTS theme    AUTHORIZATION theme_svc;
 CREATE SCHEMA IF NOT EXISTS branding AUTHORIZATION theme_svc;
+CREATE SCHEMA IF NOT EXISTS templates AUTHORIZATION theme_svc;
 
 \connect civitas_plugin
 CREATE SCHEMA IF NOT EXISTS plugin AUTHORIZATION plugin_svc;

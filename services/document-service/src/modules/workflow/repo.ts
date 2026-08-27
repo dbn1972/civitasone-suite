@@ -50,14 +50,12 @@ export async function insertDak(tx: Writer, row: DakInsert): Promise<void> {
 export async function forwardDak(tx: Writer, tenantId: string, id: string, assignedTo: string, forwardedBy: string): Promise<void> {
   await tx.update(daks)
     .set({ assignedTo, forwardedBy, forwardedAt: new Date(), status: "forwarded", updatedBy: forwardedBy, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(daks.tenantId, tenantId), eq(daks.id, id)));
 }
 
 export async function acknowledgeDak(tx: Writer, tenantId: string, id: string, actorId: string): Promise<void> {
   await tx.update(daks)
     .set({ acknowledgedAt: new Date(), status: "acknowledged", updatedBy: actorId, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(daks.tenantId, tenantId), eq(daks.id, id)));
 }
 
@@ -72,6 +70,5 @@ export async function insertApproval(tx: Writer, row: typeof approvals.$inferIns
 export async function decideApproval(tx: Writer, tenantId: string, id: string, decision: string, remarks: string | null, decidedBy: string): Promise<void> {
   await tx.update(approvals)
     .set({ decision, remarks, decidedBy, decidedAt: new Date(), status: decision })
-    // @ts-ignore drizzle where overload
     .where(and(eq(approvals.tenantId, tenantId), eq(approvals.id, id)));
 }

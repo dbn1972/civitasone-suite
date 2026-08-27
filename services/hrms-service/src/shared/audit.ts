@@ -2,7 +2,10 @@
  * Audit log writer for HRMS mutating actions.
  * Fire-and-forget: never throws, never delays a response.
  */
+import { pino } from "pino";
 import { sqlClient } from "./db.js";
+
+const log = pino({ name: "hrms.audit" });
 
 interface AuditEntry {
   tenantId: string;
@@ -71,6 +74,6 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
       ],
     );
   } catch (err) {
-    console.error("[audit] write failed", err);
+    log.error({ err }, "[audit] write failed");
   }
 }

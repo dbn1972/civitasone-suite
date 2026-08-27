@@ -16,7 +16,7 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerInspectionConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe(COMMANDS.inspectionCreate, async (msg) => {
+  queue.subscribe(COMMANDS.SCHEDULE_INSPECTION, async (msg) => {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -27,7 +27,7 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
-        topic: EVENTS.inspectionCreated, eventType: EVENTS.inspectionCreated,
+        topic: EVENTS.INSPECTION_SCHEDULED, eventType: EVENTS.INSPECTION_SCHEDULED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { inspectionId: p.id, complaintId: p.complaintId, treeRequestId: p.treeRequestId },
       });
@@ -36,7 +36,7 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "inspection created");
   });
 
-  queue.subscribe(COMMANDS.inspectionComplete, async (msg) => {
+  queue.subscribe(COMMANDS.COMPLETE_INSPECTION, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -49,7 +49,7 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.inspectionCompleted, eventType: EVENTS.inspectionCompleted,
+        topic: EVENTS.INSPECTION_COMPLETED, eventType: EVENTS.INSPECTION_COMPLETED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { inspectionId: p.id, workOrderRequired: p.workOrderRequired },
       });

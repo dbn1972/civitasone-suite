@@ -13,7 +13,7 @@ export interface CreateInspectionInput {
 
 export async function createInspection(ctx: RequestContext, body: CreateInspectionInput): Promise<Accepted> {
   const id = randomUUID();
-  return publishCommand(ctx, COMMANDS.inspectionCreate, id, { id, inspectorId: ctx.actorId, ...body });
+  return publishCommand(ctx, COMMANDS.SCHEDULE_INSPECTION, id, { id, inspectorId: ctx.actorId, ...body });
 }
 
 export async function completeInspection(
@@ -24,5 +24,5 @@ export async function completeInspection(
   workOrderRequired: boolean,
   version: number,
 ): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.inspectionComplete, id, { id, findings, photos, workOrderRequired, version });
+  return publishCommand(ctx, COMMANDS.COMPLETE_INSPECTION, id, { id, findings, photos, workOrderRequired, version });
 }

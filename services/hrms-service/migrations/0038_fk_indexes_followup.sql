@@ -4,6 +4,9 @@
 -- Affected services: hrms-service only.
 -- Safety: IF NOT EXISTS ensures idempotency. CONCURRENTLY avoids table locks.
 -- Note: CREATE INDEX CONCURRENTLY cannot run inside a transaction block.
+-- FIXED 2026-08-27: the hrms_apar_scores / hrms_apar_stage_history indexes
+-- below were wrongly schema-qualified as "public." — both tables are created
+-- by 0017_apar_workflow.sql under the appraisal schema. Corrected.
 
 SET lock_timeout = '5s';
 
@@ -19,17 +22,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_employee_risk_scores_employee_i
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_recommendations_employee_id
   ON employee.hrms_recommendations (employee_id);
 
--- public.hrms_apar_scores.appraisal_id (FK-style lookup column, no covering index found)
+-- appraisal.hrms_apar_scores.appraisal_id (FK-style lookup column, no covering index found)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_apar_scores_appraisal_id
-  ON public.hrms_apar_scores (appraisal_id);
+  ON appraisal.hrms_apar_scores (appraisal_id);
 
--- public.hrms_apar_stage_history.appraisal_id (FK-style lookup column, no covering index found)
+-- appraisal.hrms_apar_stage_history.appraisal_id (FK-style lookup column, no covering index found)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_apar_stage_history_appraisal_id
-  ON public.hrms_apar_stage_history (appraisal_id);
+  ON appraisal.hrms_apar_stage_history (appraisal_id);
 
--- public.hrms_apar_stage_history.actor_id (FK-style lookup column, no covering index found)
+-- appraisal.hrms_apar_stage_history.actor_id (FK-style lookup column, no covering index found)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_apar_stage_history_actor_id
-  ON public.hrms_apar_stage_history (actor_id);
+  ON appraisal.hrms_apar_stage_history (actor_id);
 
 -- appraisal.hrms_appraisals.employee_id (FK-style lookup column, no covering index found)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_hrms_appraisals_employee_id
