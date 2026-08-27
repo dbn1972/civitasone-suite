@@ -34,7 +34,3 @@ tenant-service/0013_fk_indexes.sql                         # relation "subscript
 theme-service/0005_rls_full_tenant_isolation.sql           # relation "branding.tenant_branding" does not exist
 theme-service/0007_check_constraints_status_columns.sql    # schema "templates" does not exist
 theme-service/0009_fk_indexes.sql                          # relation "branding.tenant_branding" does not exist
-workflow-service/0013_rls_tenant_isolation.sql             # column "tenant_id" does not exist
-workflow-service/0020_rls_completeness.sql                 # column "tenant_id" does not exist
-citizen-service/0020_designer_phase0.sql                   # fails on fresh CI cluster; tracked until designer phase0 migration is repaired
-revenue-service/0004_outbox_inbox_durable.sql              # fails on fresh CI cluster after admin-owned migration path was restored

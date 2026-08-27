@@ -33,22 +33,25 @@ CREATE POLICY tenant_isolation_policy ON workflow.dead_letters
   WITH CHECK (tenant_id = workflow.current_tenant_id());
 
 -- workflow.definition_edges
+-- definition_edges has no tenant_id column of its own (child of
+-- workflow.definitions via definition_id; see workflow.definition_tenant(),
+-- defined in 0013_rls_tenant_isolation.sql) — scope through the parent.
 ALTER TABLE workflow.definition_edges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow.definition_edges FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON workflow.definition_edges;
 DROP POLICY IF EXISTS tenant_isolation ON workflow.definition_edges;
 CREATE POLICY tenant_isolation_policy ON workflow.definition_edges
-  USING (tenant_id = workflow.current_tenant_id())
-  WITH CHECK (tenant_id = workflow.current_tenant_id());
+  USING (workflow.definition_tenant(definition_id) = workflow.current_tenant_id())
+  WITH CHECK (workflow.definition_tenant(definition_id) = workflow.current_tenant_id());
 
--- workflow.definition_nodes
+-- workflow.definition_nodes (same reasoning as definition_edges above)
 ALTER TABLE workflow.definition_nodes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow.definition_nodes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON workflow.definition_nodes;
 DROP POLICY IF EXISTS tenant_isolation ON workflow.definition_nodes;
 CREATE POLICY tenant_isolation_policy ON workflow.definition_nodes
-  USING (tenant_id = workflow.current_tenant_id())
-  WITH CHECK (tenant_id = workflow.current_tenant_id());
+  USING (workflow.definition_tenant(definition_id) = workflow.current_tenant_id())
+  WITH CHECK (workflow.definition_tenant(definition_id) = workflow.current_tenant_id());
 
 -- workflow.role_members
 ALTER TABLE workflow.role_members ENABLE ROW LEVEL SECURITY;

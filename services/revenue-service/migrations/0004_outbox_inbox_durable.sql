@@ -65,6 +65,32 @@
 
 SET lock_timeout = '5s';
 
+-- ── Part B: NULL-safe tenant helper + drop RLS on the relay table only ───────
+-- Moved AHEAD of Part A (was originally last in this file): Part A's backfill
+-- UPDATE below touches _outbox.messages, which until this point in the
+-- migration sequence still carries the FORCE RLS policy from
+-- 0002_rls_tenant_isolation.sql (`tenant_id = rates.current_tenant_id()`) using
+-- the OLD strict-mode current_tenant_id() (current_setting('app.tenant_id',
+-- false), which raises instead of returning NULL). With Part B still running
+-- after Part A, evaluating that pre-existing policy for the UPDATE's row scan
+-- invoked the not-yet-replaced strict function and raised "unrecognized
+-- configuration parameter app.tenant_id" (42704) — this migration's own fix
+-- existed but took effect one statement too late. Running Part B first means
+-- RLS is already disabled on _outbox.messages (and the helper already
+-- NULL-safe, as defense in depth) before anything in Part A touches the table.
+
+CREATE OR REPLACE FUNCTION rates.current_tenant_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE SECURITY DEFINER
+AS $$
+  SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid
+$$;
+
+DROP POLICY IF EXISTS tenant_isolation ON _outbox.messages;
+ALTER TABLE _outbox.messages NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE _outbox.messages DISABLE ROW LEVEL SECURITY;
+
 -- ── Part A: durable _inbox.processed + _outbox.messages.published_at ─────────
 
 CREATE SCHEMA IF NOT EXISTS _inbox;
@@ -90,17 +116,3 @@ CREATE INDEX IF NOT EXISTS idx_outbox_unpublished_at
 GRANT USAGE ON SCHEMA _inbox TO revenue_svc;
 GRANT SELECT, INSERT, DELETE ON _inbox.processed TO revenue_svc;
 GRANT SELECT, INSERT, UPDATE, DELETE ON _outbox.messages TO revenue_svc;
-
--- ── Part B: NULL-safe tenant helper + drop RLS on the relay table only ───────
-
-CREATE OR REPLACE FUNCTION rates.current_tenant_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE SECURITY DEFINER
-AS $$
-  SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid
-$$;
-
-DROP POLICY IF EXISTS tenant_isolation ON _outbox.messages;
-ALTER TABLE _outbox.messages NO FORCE ROW LEVEL SECURITY;
-ALTER TABLE _outbox.messages DISABLE ROW LEVEL SECURITY;

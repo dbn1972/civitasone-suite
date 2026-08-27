@@ -1,8 +1,22 @@
--- 0014: Seed the missing definition_edges for the demo-tenant standard
--- definitions. Migration 0003 inserted nodes but NO edges, so the chains
--- (file_noting SO→US→DS, etc.) could not advance — completing the start task
--- found zero outgoing edges and terminated immediately. This adds the linear
--- approve-advances edges. New tenants get these via the provisioning consumer.
+-- Originally 0014: Seed the missing definition_edges for the demo-tenant
+-- standard definitions. Migration 0003 inserted nodes but NO edges, so the
+-- chains (file_noting SO→US→DS, etc.) could not advance — completing the
+-- start task found zero outgoing edges and terminated immediately. This adds
+-- the linear approve-advances edges. New tenants get these via the
+-- provisioning consumer.
+--
+-- Renumbered from 0014_seed_definition_edges.sql to sort here, BEFORE
+-- 0013_rls_tenant_isolation.sql. definition_edges has no tenant_id column of
+-- its own (see workflow.definition_tenant() in 0013) and this file's INSERT
+-- supplies no session tenant context, so once 0013 enables this table's FORCE
+-- RLS policy (`workflow.definition_tenant(definition_id) =
+-- workflow.current_tenant_id()`), current_tenant_id() correctly resolves to
+-- NULL (fail-closed) and WITH CHECK rejects every row here with "new row
+-- violates row-level security policy". Running before 0013 (table still
+-- unrestricted — RLS has no effect until ENABLE ROW LEVEL SECURITY runs)
+-- avoids that. All rows referenced (workflow.definitions from 0003, the
+-- workflow.definition_edges table itself from 0005) already exist by this
+-- point, so moving earlier needs no other change.
 
 -- file_noting: draft → section_review → us_approve → ds_approve (terminal)
 INSERT INTO workflow.definition_edges (id, definition_id, from_node, to_node, sort_order)

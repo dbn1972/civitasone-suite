@@ -81,22 +81,21 @@ CREATE TABLE IF NOT EXISTS packs.service_packs (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_service_pack_key_version
   ON packs.service_packs (tenant_id, pack_key, version);
 
--- ── RLS (tenant isolation) ─────────────────────────────────────────────────
-ALTER TABLE packs.domain_packs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE packs.domain_packs FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON packs.domain_packs;
-CREATE POLICY tenant_isolation ON packs.domain_packs
-  USING (tenant_id = portal.current_tenant_id())
-  WITH CHECK (tenant_id = portal.current_tenant_id());
-
-ALTER TABLE packs.service_packs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE packs.service_packs FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON packs.service_packs;
-CREATE POLICY tenant_isolation ON packs.service_packs
-  USING (tenant_id = portal.current_tenant_id())
-  WITH CHECK (tenant_id = portal.current_tenant_id());
-
 -- ── municipal-in-v1 seed (Phase 0 reference Domain Pack) ───────────────────
+-- Seeded here, BEFORE RLS is enabled below (moved ahead of the "RLS (tenant
+-- isolation)" block, which originally preceded this section). packs.tenant_id
+-- is a genuine NOT NULL column (matches the Drizzle model in
+-- services/citizen-service/src/modules/packs/schema.ts — this is not
+-- platform-global reference data like tenant-service's nullable code_lists),
+-- and this migration's own session never sets the app.tenant_id GUC, so once
+-- FORCE ROW LEVEL SECURITY + the tenant_isolation policy are active below,
+-- portal.current_tenant_id() resolves to NULL and WITH CHECK rejects the
+-- literal-tenant seed row with "new row violates row-level security policy".
+-- Inserting first, while the table is still an ordinary unrestricted table
+-- (RLS has no effect until ENABLE ROW LEVEL SECURITY runs), mirrors how every
+-- other seed-then-RLS sequence in this codebase avoids the same trap (e.g.
+-- workflow-service seeds workflow.definitions in 0003, RLS is only added in
+-- 0013 — a later file, not a bypass).
 INSERT INTO packs.domain_packs (
   id, tenant_id, domain_pack_key, sector, jurisdiction, version, name, description,
   manifest, pack_keys, status, created_by, updated_by
@@ -127,6 +126,21 @@ INSERT INTO packs.service_packs (
   ('bbbbbbbb-0005-4000-8000-000000000005', '00000000-0000-0000-0000-000000000001', 'pack:property-tax', 'municipal-in-v1', 'Property Tax Self-Assessment', 'collection', 'engine', '4205', '{"businessService":"PT","engineKey":"revenue.assessment","pilot":true}'::jsonb, 'published', 1, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
   ('bbbbbbbb-0006-4000-8000-000000000006', '00000000-0000-0000-0000-000000000001', 'pack:birth-death', 'municipal-in-v1', 'Birth & Death Registration', 'certificate', 'flat', '4206', '{"businessService":"BD","statutory":true,"pilot":true}'::jsonb, 'published', 1, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT (id) DO NOTHING;
+
+-- ── RLS (tenant isolation) ─────────────────────────────────────────────────
+ALTER TABLE packs.domain_packs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE packs.domain_packs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON packs.domain_packs;
+CREATE POLICY tenant_isolation ON packs.domain_packs
+  USING (tenant_id = portal.current_tenant_id())
+  WITH CHECK (tenant_id = portal.current_tenant_id());
+
+ALTER TABLE packs.service_packs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE packs.service_packs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON packs.service_packs;
+CREATE POLICY tenant_isolation ON packs.service_packs
+  USING (tenant_id = portal.current_tenant_id())
+  WITH CHECK (tenant_id = portal.current_tenant_id());
 
 -- Reassign ownership to citizen_svc (mirrors 0015/0016)
 ALTER SCHEMA packs OWNER TO citizen_svc;
