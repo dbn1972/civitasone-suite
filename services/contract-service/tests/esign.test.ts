@@ -46,8 +46,8 @@ const SIGNER_2 = "22222222-2222-4000-8000-000000000002";
 const SIGNER_3 = "33333333-3333-4000-8000-000000000003";
 const OWNER = "eeeeeeee-5555-4000-8000-000000000030";
 
-function makeToken(roles: string[] = ["super_admin"], tenantId = TENANT) {
-  return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-esign-001" }, SECRET);
+function makeToken(roles: string[] = ["super_admin"], tenantId = TENANT, sub = ACTOR) {
+  return signToken({ sub, tid: tenantId, roles, sid: "sess-esign-001" }, SECRET);
 }
 
 let app: FastifyInstance;
@@ -441,6 +441,11 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     return route.id;
   }
 
+  // SEC: the signer identity is bound to the AUTHENTICATED caller (the
+  // token's `sub`), never to a request-body field (see validators.ts /
+  // commands.ts). So "sign as SIGNER_1" below means calling with a token
+  // whose sub is SIGNER_1 — not passing { userId: SIGNER_1 } in the body.
+
   it("returns 202 accepted when correct signatory signs (queue-first)", async () => {
     const routeId = await seedRoute([
       { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
@@ -449,8 +454,8 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(202);
     const body = res.json();
@@ -466,19 +471,47 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_2 }, // Not ordinal 1
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_2)}` }, // Not ordinal 1
+      payload: {},
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("CANNOT_SIGN");
+  });
+
+  it("SEC regression: a userId in the request body cannot forge another signatory's signature", async () => {
+    // Before the fix, POSTing { userId: SIGNER_1 } while authenticated as a
+    // totally different, non-signatory actor would sign on SIGNER_1's behalf.
+    // The body field must now be inert: only the caller's own authenticated
+    // identity (ACTOR, who is not a signatory on this route) is checked.
+    const routeId = await seedRoute([
+      { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+      { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/contract/esign/${routeId}/sign`,
+      headers: { authorization: `Bearer ${makeToken()}` }, // sub: ACTOR — not a signatory
+      payload: { userId: SIGNER_1 }, // attempted spoof — must be ignored
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("CANNOT_SIGN");
+
+    // The route must be untouched: SIGNER_1 still shows pending, not signed.
+    const status = await app.inject({
+      method: "GET",
+      url: `/v1/contract/esign/${routeId}`,
+      headers: { authorization: `Bearer ${makeToken()}` },
+    });
+    const signatories = status.json().data.signatories as SignatoryEntry[];
+    expect(signatories.find((s) => s.userId === SIGNER_1)?.status).toBe("pending");
   });
 
   it("returns 404 for non-existent route", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign/00000000-0000-4000-8000-000000000099/sign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(404);
   });
@@ -491,8 +524,8 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("ROUTE_NOT_ACTIVE");
@@ -502,7 +535,7 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign/some-id/sign",
-      payload: { userId: SIGNER_1 },
+      payload: {},
     });
     expect(res.statusCode).toBe(401);
   });

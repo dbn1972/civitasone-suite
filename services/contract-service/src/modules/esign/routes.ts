@@ -42,9 +42,18 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
   // ── Sign current signatory — queue-first CQRS write ───────────────────
   app.post("/v1/contract/esign/:id/sign", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...WRITE_ROLES, ...READ_ROLES]);
+    // [...WRITE_ROLES, ...READ_ROLES] was a no-op union (READ_ROLES already
+    // contains every WRITE_ROLES entry) — collapsed to READ_ROLES for clarity.
+    // Note: this is deliberately a coarse "may this actor touch e-sign at all"
+    // gate, not the real authorization check. The real check is `canSign`
+    // below, which is now bound to the AUTHENTICATED caller (ctx.actorId).
+    requireRole(ctx, READ_ROLES);
     const { id } = esignRouteIdParam.parse(req.params);
-    const body = signBody.parse(req.body);
+    // SEC: signBody intentionally carries no fields. The signer is always
+    // ctx.actorId — see the note on signBody in validators.ts. This parse
+    // call is kept only as defensive validation that the body (if any) is a
+    // JSON object; its result is not used.
+    signBody.parse(req.body ?? {});
 
     const route = await repo.getEsignRouteById(id, ctx.tenantId);
     if (!route) {
@@ -57,11 +66,11 @@ export async function esignRoutes(app: FastifyInstance): Promise<void> {
 
     const signatories = route.signatories as SignatoryEntry[];
 
-    if (!canSign(signatories, route.currentOrdinal, body.userId)) {
+    if (!canSign(signatories, route.currentOrdinal, ctx.actorId)) {
       throw new HttpError(422, "CANNOT_SIGN", "user is not the current signatory or has already signed");
     }
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.signEsignRoute(ctx, id, body.userId));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.signEsignRoute(ctx, id));
   });
 
   // ── Get e-sign route status ───────────────────────────────────────────
