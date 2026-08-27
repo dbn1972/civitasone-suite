@@ -92,6 +92,13 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },
+  // Municipal Sec5 services — only 3 of 17 scaffolds pass typecheck/build as of
+  // 2026-08-27 (see ecosystem.config.js for the full list + Architecture Guard
+  // PR notes). The other 14 are deliberately NOT routed here; a route to a
+  // service that fails to build would not make it reachable, just wrong.
+  { name: "sewerage",     prefix: "/api/v1/sewerage",  upstream: upstream("sewerage", 3078) },
+  { name: "swm",          prefix: "/api/v1/swm",       upstream: upstream("swm", 3079) },
+  { name: "vendor",       prefix: "/api/v1/vendor",    upstream: upstream("vendor", 3074) },
 ];
 
 export function resolveRoute(pathname: string): { route: ServiceRoute; remainder: string } | null {

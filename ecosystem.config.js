@@ -447,6 +447,13 @@ module.exports = {
     // metadata-worker was never declared here, so CQRS writes black-holed.
     worker("metadata",     "metadata_svc",     "civitas_metadata"),
 
+    // Municipal Sec5 — see svc() block above for context. Only these 3 of 17
+    // pass typecheck/build as of 2026-08-27; the other 14 have no worker()
+    // entry either, for the same reason.
+    worker("sewerage",     "sewerage_svc",     "civitas_sewerage"),
+    worker("swm",          "swm_svc",          "civitas_swm"),
+    worker("vendor",       "vendor_svc",       "civitas_vendor"),
+
     // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
     worker("gateway",      "gateway_svc",      "civitas_gateway"),
 
@@ -498,6 +505,26 @@ module.exports = {
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
     }),
     svc("location",     4012, "location_svc",     "civitas_location"),
+
+    // ── Municipal Sec5 services (BRD Section 5) ─────────────────────────────────
+    // 17 municipal licence/permit services landed on `services/*` via an
+    // unrelated commit (8d542ee0) and were never wired into this file — exactly
+    // the defect the Architecture Guard (deployment-declaration-guard.mjs)
+    // exists to catch. Investigated 2026-08-27: of the 17, only these 3
+    // typecheck clean, build clean, and have real (non-stub) route + repo
+    // implementations. The other 14 — advertisement, animal, building,
+    // crematorium, drainage, event, fire, market, parking, parks, refund,
+    // roadcut, shop, trade — currently fail `tsc` (see PR description for the
+    // full breakdown) and are deliberately left unwired: adding a svc() entry
+    // for a service that doesn't build would make it "startable" in name only.
+    // NOTE: none of the 17 has a DB migration yet (no civitas_sewerage /
+    // civitas_swm / civitas_vendor schema exists), so even these 3 will fail
+    // real requests until migrations are authored — that's runtime readiness
+    // (a different lane per this guard's own docstring), not a reason to
+    // withhold the static declaration these 3 have earned.
+    svc("sewerage",     3078, "sewerage_svc",     "civitas_sewerage"),
+    svc("swm",          3079, "swm_svc",          "civitas_swm"),
+    svc("vendor",       3074, "vendor_svc",       "civitas_vendor"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)

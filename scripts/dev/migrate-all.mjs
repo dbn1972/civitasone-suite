@@ -72,6 +72,17 @@ const SERVICES = [
   // Gateway owns civitas_gateway (api catalogue). Was the only service with a
   // migrations/ dir missing from this list.
   { name: "gateway-service",    db: "civitas_gateway" },
+  // Municipal Sec5 — vendor-service is the one of the 17 BRD Sec5 scaffolds
+  // (see ecosystem.config.js) that both passes typecheck/build AND already
+  // ships migrations/0001_initial.sql. Without this entry migrate-all never
+  // provisions civitas_vendor even after the service is wired into
+  // ecosystem.config.js / gateway registry.ts. advertisement-service and
+  // animal-service also ship a migrations/0001_initial.sql but currently fail
+  // typecheck (not wired into deployment config in this change) — deliberately
+  // left unregistered here too; add them once they build, or document them in
+  // tests/ops/migrate-all-inventory.test.ts MIGRATE_ALL_EXCEPTIONS if the
+  // product decision is to shelve them instead.
+  { name: "vendor-service",     db: "civitas_vendor" },
 ];
 
 let applied = 0;
