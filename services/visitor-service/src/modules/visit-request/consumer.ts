@@ -39,7 +39,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import type { RequestContext } from "@civitasone/types";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
@@ -65,7 +65,9 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 // its own definition) — it mints a real UUID messageId and the correct
 // payload shape from a single source of truth. See triggerPassGenerate()
 // below.
-import { passGenerate as publishPassGenerateCommand } from "../digital-pass/commands.js";
+import { passGenerate as publishPassGenerateCommand, passRevoke } from "../digital-pass/commands.js";
+import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
+import { listRevocablePassIdsByVisitRequest } from "../digital-pass/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -690,8 +692,8 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
   queue.subscribe<VisitRequestCancelPayload>(COMMANDS.visitRequestCancel, async (msg) => {
     const p = msg.payload;
 
-    await db.transaction(async (tx): Promise<void> => {
-      if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+    const committed = await db.transaction(async (tx): Promise<boolean> => {
+      if (!(await markProcessed(tx, msg.messageId))) return false; // idempotent replay
 
       const rows = await tx
         .select()
@@ -734,7 +736,55 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
+      return true;
     });
+
+    if (!committed) return; // idempotent replay
+
+    // Fix (2026-08-27 deep-verify): cancelling a visit request never revoked
+    // its digital pass or released any parking slot it had allocated — the
+    // visitRequestCancelled event above had zero subscribers anywhere in the
+    // service (confirmed by grep across the entire src tree). Best-effort
+    // post-commit cascade: the cancellation itself already durably committed
+    // above and is never retried for this reason alone (each try/catch
+    // below only catches a synchronous publish()-time failure -- the actual
+    // revoke/release run asynchronously in their own consumers with their
+    // own independent retry/DLQ, same as every other command publish in
+    // this service, e.g. triggerPassGenerate above). Per-pass try/catch (not
+    // one shared block) so a group visit with multiple passes under one
+    // visitRequestId isn't left with later passes un-revoked just because an
+    // earlier one failed -- matches group-visit/consumer.ts's own bulk
+    // check-in handler, which isolates per-member for the identical reason.
+    // Goes through digital-pass/repo.ts (not a direct schema import) per
+    // this service's module-isolation convention.
+    // Includes "checked_out": check-in/domain.ts#checkIn() allows
+    // checked_out -> checked_in re-entry, so a pass that already completed
+    // one visit and is sitting checked_out is just as re-usable as an
+    // active/checked_in one and must be revoked too.
+    const passIds = await listRevocablePassIdsByVisitRequest(msg.tenantId, p.id);
+    for (const passId of passIds) {
+      try {
+        await passRevoke(
+          {
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            actorType: "service_account",
+            roles: [],
+          },
+          { passId, reason: "visit request cancelled" },
+        );
+        await releaseParkingIfAllocated(
+          { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+          passId,
+        );
+      } catch (err) {
+        log.warn(
+          { err, tenantId: msg.tenantId, visitRequestId: p.id, passId, event: "cancel_pass_revoke_failed" },
+          "post-cancellation pass revoke/parking release failed for this pass; cancellation already committed, other passes on this visit are unaffected",
+        );
+      }
+    }
   });
 
   // ─── visitRequestAutoReject ──────────────────────────────────────────

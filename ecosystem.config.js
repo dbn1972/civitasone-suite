@@ -71,6 +71,50 @@ const DEVICE_TRUST_SECRET = IS_PROD
 // Only honoured outside production (tests/dev). Empty in prod.
 const JWT_SECRET = IS_PROD ? undefined : (process.env.JWT_SECRET ?? "civitasone-dev-secret");
 
+// visit-request approval (the system-originated pass-generate cascade in
+// modules/visit-request/consumer.ts#tenantSigningKeyPem, NOT the
+// caller-supplied digital-pass/routes.ts call sites) signs the pass QR
+// with this service-level RSA key. It was never wired into this file at
+// all, for either svc("visitor") or worker("visitor") — confirmed live
+// 2026-08-27: approving a visit request queued cleanly (202) but the
+// worker's post-commit pass-generate step threw
+// "VISITOR_TENANT_SIGNING_KEY_PEM is not configured" on every attempt, so
+// no deployment started from this file could ever complete that cascade.
+// Only the worker process calls tenantSigningKeyPem() — wired into
+// worker("visitor") below, not svc("visitor"). Fail-closed in prod (no
+// insecure default); dev/test gets a stable generated-for-this-repo
+// RSA-2048 key (not used anywhere else, safe to keep in source).
+const VISITOR_TENANT_SIGNING_KEY_PEM = IS_PROD
+  ? requireSecret("VISITOR_TENANT_SIGNING_KEY_PEM")
+  : (process.env.VISITOR_TENANT_SIGNING_KEY_PEM ?? `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQChgFyoBZkpVFCv
+T9CNY0O6C3SbSofZGu4acnGo6WyRRJfUHokWS2vgnQBeXv1bHeUU0zFVRD/VOsnX
+z00zhKoPKkLBzY/dEedIvLFT0Ho5hpCUtYeTI2DQtRcU+JBIgGjj3dsogQU180Dr
+SD/VMp5Cr+5G4qj5I7o0Mpd1GIko0lJ4CDAihzfZqOODudTwKaxlC8gBBwU6gl/e
+N0LNovbcy6dOq6WSx3Fr4gXFfEAD9ZntLhvEzoSWRwZ6q7rXhfcmHMO7N4Yv/UUG
+8cTF4fAgEjTrW7SNUfJN+CVl1CL1VrDBOZpbG6iZdUWpmMYYxkXgcfTNXdYaG8NU
++CkN43W1AgMBAAECggEARNKGqbN5CXu8xnikzxu2CNpI3sRsD8DCJtMOTITslxs7
++FDq6m1Jk3ZUaeLg5Ktgq/cz1ro22Y8r5KOaqpGmRsAjoqMO4451mTGP/7+f1lPZ
+2QViuPkikM4a//zMv5i5GiG4+xHAPrVivOEVEq13c8O1Ls/4YfMvrn7AvE2wZYxN
+0s5vxsmXXE9xcuKpfmD3ZEHJAsAZsNPNqjQ3xWijB7fhPskJCTt4MmbX97xSAvUw
+AmR2D0wtAKHkvz/pWz7bMgvXRcdb2bBbrP5HhKHh8jxoH4z2SY/s4ZQdhJ3CsQCy
+ycnX2HwRKuLKdMKtrrlYnfaEDuuzP/v+KxOG8SQgIQKBgQDUQz1VjEBZbUH6QcaN
+gk4Sa7c1/v2l8r2UNAGm+0DqX30RKJaRi57RyVw83mZn3g2cB/k7jKr3dYWYFTUP
+dPWggunHBr5L+AdxJWTbwLwWL3qGVbIGATOZcfOTmNB+nvmz5ol7Nl4WaPNLa3Be
+oIwZ886Zaxknz09RqHqBNTSMrwKBgQDCx31RoR4KS3y2DQppXz4IXPoaur+PYJPl
+tz7ByuZC5eybXhYuCjKCnXi1xrT1Ht+tme1yaF7WRMV9DVmNJL5U3oh6vzFGPD+M
+xhtHTDFzYn3GPAFVK3vuqWj38d6wcsjlldxTVYsamHSVDK91UQD6puhqqQkK4EFH
+Jmzq5uGk2wKBgQDReIW3vc/nMJZSxMSP887eCOTl6X0hXnrOHcCfrAY1BQTkgPyO
+J44VE7Tt8MB4sj8WAxxnMvupd5XeLteNKGwZ+feAzNvRFrUpaLCu2PYEotg0Z69m
+k5r7S+QHfWAMBREBA3obWNzjGrE2dZGQILoCBoOVDYbmrYRmXnB+wCXaywKBgFp7
+KS/+VGIb5vb639dLMxnXdydrkQkdqBaSJUkI5CY3gM47yrngas5aMHTgtbcYfHe8
+hZ0b9tI6aDNLPEpgwznRljzPDCjAXBUdAhcAwggDvMGVpljWNmALuoNTjEsTR1e/
+YfYkStYz9BQ5LFinJHlLh7PkihrPSgOvSfFlB3T5AoGAJrbcXAEkZ2Doihd5feBo
+suVkXESdRMKJuD0fGy1TMnrkGvZ2/bEfS1S+EBVg3BbiBZmSgL81HeyGdGExbMG3
+lAUCZOnu8SGRABd8kJsEDWy6DcHWTqAuTSDflJdKm+gCqt8O2YiPZowOyPRxCMW2
+pthCQsCWknmFVyjDWGco5Yw=
+-----END PRIVATE KEY-----`);
+
 const AUTH_ENV = {
   JWT_ALGORITHM,
   KEYCLOAK_URL,
@@ -432,7 +476,7 @@ module.exports = {
     // it forever (restarts climbing, status "waiting restart"). Point pm2 at
     // the same compiled entrypoint the "pnpm worker" script uses.
     worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
-    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
+    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_TENANT_SIGNING_KEY_PEM, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
     worker("works",        "works_svc",        "civitas_works", { WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {

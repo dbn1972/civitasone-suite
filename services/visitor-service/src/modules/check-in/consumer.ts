@@ -30,6 +30,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyVipArrival } from "../vip/routes.js";
+import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
 import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
@@ -609,6 +610,23 @@ export function registerCheckInConsumers(queue: Queue): void {
       log.warn(
         { err, tenantId: msg.tenantId, passId: p.passId, event: "evacuation_roster_remove_failed" },
         "evacuation roster remove failed; check-out already committed, roster will self-heal on next check-in/out",
+      );
+    }
+
+    // Fix (2026-08-27 deep-verify): release any parking slot this pass had
+    // allocated — `parkingSlotRelease` already existed (command + consumer +
+    // DB update, Requirement 14.5) but was never actually called on
+    // checkout despite its own doc comment claiming it was. Best-effort,
+    // same rationale as the roster removal above.
+    try {
+      await releaseParkingIfAllocated(
+        { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        p.passId,
+      );
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, passId: p.passId, event: "checkout_parking_release_failed" },
+        "parking slot release failed; check-out already committed",
       );
     }
   });
