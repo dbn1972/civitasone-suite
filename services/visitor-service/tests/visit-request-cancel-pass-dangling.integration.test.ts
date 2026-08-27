@@ -145,6 +145,44 @@ afterAll(async () => {
   );
 });
 
+const CHECKED_OUT_VISIT_REQUEST_ID = randomUUID();
+const CHECKED_OUT_PASS_ID = randomUUID();
+
+beforeAll(async () => {
+  // Second fixture, in "checked_out" status -- the review-flagged gap:
+  // check-in/domain.ts#checkIn() allows checked_out -> checked_in
+  // re-entry, so a pass that already completed one visit and is sitting
+  // checked_out is exactly as re-usable as an active/checked_in one and
+  // must be revoked on cancellation too. The main fixture above never
+  // exercises this status.
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.insert(visitRequests).values({
+        id: CHECKED_OUT_VISIT_REQUEST_ID, tenantId: TENANT, locationId: LOCATION,
+        hostEmployeeId: HOST, status: "approved",
+        visitorName: "AUDIT Checked-Out-Then-Cancel Visitor", visitorPhone: "+919900044477",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(digitalPasses).values({
+        id: CHECKED_OUT_PASS_ID, tenantId: TENANT, visitRequestId: CHECKED_OUT_VISIT_REQUEST_ID,
+        locationId: LOCATION, passNumber: "CXO" + Math.floor(Math.random() * 1e6),
+        passType: "single", status: "checked_out", qrJwt: "audit.fixture.jwt",
+        validFrom: new Date(), validUntil: new Date(Date.now() + 86_400_000),
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }),
+  );
+});
+
+afterAll(async () => {
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(digitalPasses).where(eq(digitalPasses.id, CHECKED_OUT_PASS_ID));
+      await tx.delete(visitRequests).where(eq(visitRequests.id, CHECKED_OUT_VISIT_REQUEST_ID));
+    }),
+  );
+});
+
 describe("visit-request cancel -> dangling digital pass / vehicle pass", () => {
   it("sanity: cancelling the visit request does correctly update its own status", async () => {
     const queue = sharedQueue;
@@ -222,5 +260,28 @@ describe("visit-request cancel -> dangling digital pass / vehicle pass", () => {
     // ever inserted and the pass's status is left untouched at "revoked".
     expect(pass?.status).toBe("revoked");
     expect(checkInRow).toBeUndefined();
+  });
+
+  it("FIXED: a pass already checked_out (re-enterable, per check-in/domain.ts) is still revoked on cancellation", async () => {
+    const queue = sharedQueue;
+    registerVisitRequestConsumers(queue);
+    registerDigitalPassConsumers(queue);
+    registerVehiclePassConsumers(queue);
+
+    await queue.publish(COMMANDS.visitRequestCancel, {
+      type: COMMANDS.visitRequestCancel,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: `corr-cancel-checked-out-${randomUUID()}`,
+      schemaVersion: "1.0",
+      payload: { id: CHECKED_OUT_VISIT_REQUEST_ID },
+    });
+    await queue.drain();
+
+    const [pass] = await runWithTenant(TENANT, () =>
+      scopedRead((tx) => tx.select().from(digitalPasses).where(eq(digitalPasses.id, CHECKED_OUT_PASS_ID))),
+    );
+    expect(pass?.status).toBe("revoked");
+    expect(pass?.revoked).toBe(true);
   });
 });
