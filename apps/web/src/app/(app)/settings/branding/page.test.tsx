@@ -76,6 +76,24 @@ describe("BrandingPage", () => {
     expect(calledUrls.some((u) => u.startsWith("/api/v1/"))).toBe(false);
   });
 
+  it("still shows the loaded brand config even if the (non-essential) presets request fails", async () => {
+    // The two GET requests are handled independently: a flaky presets
+    // endpoint shouldn't discard an already-successful brand config
+    // response just because they were both in flight together.
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/themes/brand/presets")) {
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ...FULL_BRAND_CONFIG, appName: "Loaded Anyway" }), { status: 200 }));
+    });
+
+    render(<BrandingPage />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Loaded Anyway")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/presets/i);
+  });
+
   it("shows a load error instead of silently sitting on defaults with no indication", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
 

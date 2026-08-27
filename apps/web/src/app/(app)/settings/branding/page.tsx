@@ -298,23 +298,32 @@ export default function BrandingPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(null);
-    Promise.all([
-      fetch("/api/proxy/v1/themes/brand", { signal: controller.signal }).then((r) => {
+    // Independent requests, independent failure handling: presets are a
+    // secondary, non-essential convenience (quick-pick color themes), so a
+    // presets-endpoint hiccup shouldn't block the editor from showing the
+    // tenant's actual, successfully-loaded brand config — only surface an
+    // error banner and degrade gracefully (empty preset list) for whichever
+    // one actually failed, rather than discarding a perfectly good response
+    // just because the other request in the pair had a problem.
+    fetch("/api/proxy/v1/themes/brand", { signal: controller.signal })
+      .then((r) => {
         if (!r.ok) throw new Error(`brand config: HTTP ${r.status}`);
         return r.json();
-      }),
-      fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal }).then((r) => {
-        if (!r.ok) throw new Error(`presets: HTTP ${r.status}`);
-        return r.json();
-      }),
-    ])
-      .then(([brandData, presetsData]) => {
-        setConfig(brandData);
-        setPresets(presetsData);
       })
+      .then(setConfig)
       .catch((e) => {
         if (e.name === "AbortError") return;
         setLoadError("Couldn't load your current branding. Showing defaults — saving will still work.");
+      });
+    fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`presets: HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(setPresets)
+      .catch((e) => {
+        if (e.name === "AbortError") return;
+        setLoadError((prev) => prev ?? "Couldn't load color presets. You can still set colors manually.");
       });
     return () => controller.abort();
   }, []);
