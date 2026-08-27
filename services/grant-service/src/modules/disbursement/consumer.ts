@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -160,18 +161,22 @@ export function registerDisbursementConsumers(queue: Queue): void {
           // or misrouted real disbursement to a citizen is worse than a loud failure
           // here, and this message will retry/DLQ instead of silently corrupting a
           // government payment request.
+          // NonRetryableError: this is a permanent configuration/architecture gap,
+          // not a transient failure — retrying with backoff would just fail the
+          // same way every time and delay landing in the DLQ where a human can act
+          // on it. See packages/queue-service (bus.ts) for the retry-bypass contract.
           if (!p.beneficiaryBankRef) {
-            throw new Error(
+            throw new NonRetryableError(
               "PFMS_BANK_REF_MISSING: real PFMS disbursement requires beneficiaryBankRef",
             );
           }
           const beneficiary = await repo.findBeneficiaryByRef(tx, p.beneficiaryBankRef, p.tenantId);
           if (!beneficiary) {
-            throw new Error(
+            throw new NonRetryableError(
               `PFMS_BENEFICIARY_UNRESOLVED: no bank account found for ref ${p.beneficiaryBankRef}`,
             );
           }
-          throw new Error(
+          throw new NonRetryableError(
             "PFMS_FULL_ACCOUNT_UNAVAILABLE: grant-service only holds a masked account " +
             "number (account_no_masked); live PFMS submission needs the full account " +
             "number from a dedicated bank-details vault, which is not wired up yet. " +
