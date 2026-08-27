@@ -46,7 +46,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "create", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── approve: draft → approved (checker, SoD) ─────────────────────────────
@@ -68,7 +68,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "approve", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── activate: approved → active ──────────────────────────────────────────
@@ -89,7 +89,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "activate", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── close: active → closed ───────────────────────────────────────────────
@@ -110,7 +110,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "close", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── terminate: draft|approved|active → terminated (checker, SoD) ─────────
@@ -132,7 +132,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "terminate", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── amend: value/expiry variation (only when active) ─────────────────────
@@ -163,7 +163,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "amend", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── submit for eOffice award approval: draft → pending_approval ──────────
@@ -180,7 +180,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "submit_for_eoffice_approval", "contract", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.id));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── milestone complete (on-time) ─────────────────────────────────────────
@@ -211,7 +211,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "milestone_complete", "milestone", p.milestoneId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── milestone mark late (SLA penalty, bigint paise) ──────────────────────
@@ -258,7 +258,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "milestone_mark_late", "milestone", p.milestoneId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── performance bond register ────────────────────────────────────────────
@@ -284,7 +284,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "bond_register", "performance_bond", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 
   // ── performance bond transition ──────────────────────────────────────────
@@ -310,7 +310,7 @@ export function registerContractConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "bond_transition", "performance_bond", p.bondId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", p.contractId));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 }
 

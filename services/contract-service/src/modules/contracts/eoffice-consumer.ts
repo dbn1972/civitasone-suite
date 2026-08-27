@@ -59,7 +59,7 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
         await audit(tx, msg, "eoffice_returned", cb.refId, { fileNo: cb.fileNo });
       }
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "contract", cb.refId));
+    await cache.invalidateResource(msg.tenantId, "contract");
   });
 }
 

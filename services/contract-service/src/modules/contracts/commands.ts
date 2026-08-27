@@ -13,8 +13,13 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-function inval(ctx: RequestContext, id: string): Promise<void> {
-  return cache.invalidate(cache.makeKey(ctx.tenantId, "contract", id));
+// Invalidate the whole "contract" resource prefix, not just this one id, so
+// the cached list (contract:<tenant>:contract:list:<limit>) is busted too.
+// A single-key invalidate here left GET /contracts stale for up to the cache
+// TTL after every mutation (create/approve/activate/close/terminate/amend/...)
+// even though the row itself had already changed underneath.
+function inval(ctx: RequestContext, _id: string): Promise<void> {
+  return cache.invalidateResource(ctx.tenantId, "contract");
 }
 
 /** Load + tenant-scope a contract or 404. */
