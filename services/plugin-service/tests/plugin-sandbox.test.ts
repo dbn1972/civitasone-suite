@@ -54,6 +54,107 @@ describe("plugin sandbox isolation (SEC-P0-03)", () => {
     expect(r.error).toMatch(/Code generation from strings|Cannot read propert|not defined/);
   });
 
+  it("blocks the constructor realm-escape via a host callback (ctx.log)", async () => {
+    // ctx.log/ctx.emit are real host-realm functions handed into the sandbox.
+    // Before sealHostFunction()/the null-prototype ctx wrapper, `ctx.log
+    // .constructor` resolved to the HOST `Function` constructor (a realm with
+    // no codeGeneration restriction at all — that policy only binds the vm
+    // context's OWN Function/eval), so this string compiled and ran as host
+    // code and returned the real host `process`. It must now be denied.
+    const r = await runInSandbox(
+      'return ctx.log.constructor.constructor("return typeof process")();',
+      api(),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("blocks the constructor realm-escape via the ctx object itself", async () => {
+    // Same reach-back, one hop shorter: `ctx` is an ordinary object, so
+    // `ctx.constructor` (Object.prototype's, inherited) also chains to the
+    // host `Function` constructor — independent of ctx.log/ctx.emit.
+    const r = await runInSandbox(
+      'return ctx.constructor.constructor("return typeof process")();',
+      api(),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("blocks the constructor realm-escape via ctx.payload (an object VALUE, not ctx itself)", async () => {
+    // Independent of both escapes above: sealing `ctx` and its FUNCTION
+    // properties does nothing for an object VALUE nested inside `ctx` (e.g.
+    // ctx.payload) — that object is still an ordinary object created in the
+    // host realm, so its inherited `.constructor` reaches the same host
+    // Function constructor the same way. Found in independent review before
+    // this test existed: this line returned the real host `process.version`
+    // (e.g. "v22.23.2") prior to the payload-rehydration fix.
+    const r = await runInSandbox(
+      'return ctx.payload.constructor.constructor("return typeof process")();',
+      api({ payload: { a: 1 } }),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("still delivers a working, deeply-equal payload after rehydration", async () => {
+    // The fix for the escape above reconstructs ctx.payload via JSON
+    // round-tripping INSIDE the vm context rather than passing the live
+    // object through — confirm that doesn't silently corrupt or drop data
+    // for a realistic nested payload.
+    const payload = { billId: "bill-123", amount: 50000, tags: ["urgent", "reviewed"], meta: { ok: true } };
+    const r = await runInSandbox(
+      "return JSON.stringify(ctx.payload);",
+      api({ payload }),
+      2000,
+    );
+    expect(r.error).toBeUndefined();
+    expect(JSON.parse(r.output as string)).toEqual(payload);
+  });
+
+  it("does not crash on a payload that cannot be JSON-serialized (fails closed to null)", async () => {
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    const r = await runInSandbox("return ctx.payload;", api({ payload: circular }), 2000);
+    expect(r.error).toBeUndefined();
+    expect(r.output).toBeNull();
+  });
+
+  it("blocks the constructor realm-escape via a primitive ctx property too", async () => {
+    // Primitives (tenantId, eventType, correlationId) are passed through
+    // unsealed — safe only because autoboxing a primitive always uses the
+    // CURRENTLY EXECUTING realm, never the primitive's realm of origin.
+    // Confirm that claim empirically rather than by inspection alone.
+    const r = await runInSandbox(
+      'return ctx.tenantId.constructor.constructor("return typeof process")();',
+      api({ tenantId: "t1" }),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("does not let a payload with literal __proto__/constructor keys pollute anything", async () => {
+    // A payload built via JSON.parse (the real wire path — not an object
+    // literal, which special-cases __proto__ differently) can legitimately
+    // contain a plain data property literally named "__proto__" or
+    // "constructor". Confirm rehydration inside the context doesn't turn
+    // either into a live prototype/constructor reference reachable by the
+    // handler, and doesn't leak into the host's Object.prototype.
+    const payload = JSON.parse('{"__proto__":{"polluted":true},"constructor":{"nested":"x"},"normal":1}');
+    const r = await runInSandbox(
+      "return { protoOwn: Object.prototype.hasOwnProperty.call(ctx.payload, '__proto__'), pollutedGlobally: ({}).polluted, ctorIsData: typeof ctx.payload.constructor, normal: ctx.payload.normal };",
+      api({ payload }),
+      2000,
+    );
+    expect(r.error).toBeUndefined();
+    expect(r.output).toEqual({ protoOwn: true, pollutedGlobally: undefined, ctorIsData: "object", normal: 1 });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   it("blocks eval / Function code generation", async () => {
     const r = await runInSandbox('return eval("1+1");', api(), 2000);
     expect(r.error).toBeTruthy();
