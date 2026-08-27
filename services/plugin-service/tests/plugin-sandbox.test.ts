@@ -83,6 +83,46 @@ describe("plugin sandbox isolation (SEC-P0-03)", () => {
     expect(r.error).toBeTruthy();
   });
 
+  it("blocks the constructor realm-escape via ctx.payload (an object VALUE, not ctx itself)", async () => {
+    // Independent of both escapes above: sealing `ctx` and its FUNCTION
+    // properties does nothing for an object VALUE nested inside `ctx` (e.g.
+    // ctx.payload) — that object is still an ordinary object created in the
+    // host realm, so its inherited `.constructor` reaches the same host
+    // Function constructor the same way. Found in independent review before
+    // this test existed: this line returned the real host `process.version`
+    // (e.g. "v22.23.2") prior to the payload-rehydration fix.
+    const r = await runInSandbox(
+      'return ctx.payload.constructor.constructor("return typeof process")();',
+      api({ payload: { a: 1 } }),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("still delivers a working, deeply-equal payload after rehydration", async () => {
+    // The fix for the escape above reconstructs ctx.payload via JSON
+    // round-tripping INSIDE the vm context rather than passing the live
+    // object through — confirm that doesn't silently corrupt or drop data
+    // for a realistic nested payload.
+    const payload = { billId: "bill-123", amount: 50000, tags: ["urgent", "reviewed"], meta: { ok: true } };
+    const r = await runInSandbox(
+      "return JSON.stringify(ctx.payload);",
+      api({ payload }),
+      2000,
+    );
+    expect(r.error).toBeUndefined();
+    expect(JSON.parse(r.output as string)).toEqual(payload);
+  });
+
+  it("does not crash on a payload that cannot be JSON-serialized (fails closed to null)", async () => {
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    const r = await runInSandbox("return ctx.payload;", api({ payload: circular }), 2000);
+    expect(r.error).toBeUndefined();
+    expect(r.output).toBeNull();
+  });
+
   it("blocks eval / Function code generation", async () => {
     const r = await runInSandbox('return eval("1+1");', api(), 2000);
     expect(r.error).toBeTruthy();

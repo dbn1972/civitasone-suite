@@ -32,11 +32,27 @@
  *     below. Both are needed: a null-prototype object has no inherited
  *     `.constructor` of its own (closes `ctx.constructor.constructor(...)`),
  *     and a null-prototype wrapper function likewise has no `.constructor`
- *     (closes `ctx.log.constructor.constructor(...)`). Without this, any
- *     object or function value passed into the context — regardless of
- *     codeGeneration settings, which only govern the context's OWN realm —
- *     still carries a live reference to the HOST realm's `Function`/`Object`
- *     constructors via the normal prototype chain.
+ *     (closes `ctx.log.constructor.constructor(...)`).
+ *   - every OBJECT-valued property on `ctx` (payload, and any future
+ *     object/array addition) is JSON-serialized on the host side and
+ *     reconstructed INSIDE the vm context via that context's OWN JSON.parse
+ *     — see the rehydrate step in runInSandbox(). A null prototype only
+ *     protects the object it's applied to; a plain object VALUE nested
+ *     inside `ctx` (e.g. `ctx.payload`) is unaffected by sealing `ctx`
+ *     itself, and still carries the host's `Object.prototype` — so
+ *     `ctx.payload.constructor.constructor("...")()` reached the real host
+ *     Function constructor exactly like the two escapes above, independent
+ *     of them and not closed by sealing functions alone. `vm.createContext`
+ *     supplies each context its OWN full set of built-ins (JSON, Object,
+ *     Array, ...) regardless of the sandbox object's prototype, so
+ *     JSON.parse run BY THE CONTEXT produces objects rooted in that
+ *     context's own Object/Array.prototype, whose `.constructor` chain IS
+ *     bound by this context's codeGeneration policy — closing the same
+ *     reach-back for object values the way sealHostFunction() closes it for
+ *     functions. Primitive properties (tenantId, eventType, correlationId)
+ *     need none of this: autoboxing a primitive always uses the CURRENTLY
+ *     EXECUTING realm, never the primitive's realm of origin, so e.g.
+ *     `ctx.tenantId.constructor` already resolves in-context.
  *   - wall-clock + vm timeout bound runaway handlers.
  *
  * Residual limitation (defense-in-depth, not a hard multi-tenant boundary):
@@ -99,6 +115,28 @@ function sealHostFunction<T extends (...args: never[]) => unknown>(fn: T): T {
 }
 
 /**
+ * Serialize a host-realm object/array value so it can be reconstructed
+ * INSIDE the vm context (see the rehydrate step in runInSandbox()) instead
+ * of crossing the boundary as a live reference to a host-realm object.
+ *
+ * A value that can't be represented as JSON (e.g. contains a function,
+ * BigInt, or a circular reference — none of which JSON.stringify supports,
+ * unlike structuredClone) is replaced with `null` rather than thrown: failing
+ * closed (the handler sees nothing for that field) is the safe choice here,
+ * not surfacing the host's structured data by falling back to a live
+ * reference, and not aborting the whole hook execution over one
+ * unrepresentable field.
+ */
+function toRehydratableJson(value: unknown): string {
+  try {
+    const json = JSON.stringify(value);
+    return json === undefined ? "null" : json; // JSON.stringify(undefined) returns undefined, not a string
+  } catch {
+    return "null";
+  }
+}
+
+/**
  * Execute an untrusted handler body in an isolated vm context.
  * @param handler   plugin-supplied JS (the async function body)
  * @param api       the ONLY capabilities exposed to the handler (as `ctx`)
@@ -109,33 +147,36 @@ export async function runInSandbox(
   api: SandboxApi,
   timeoutMs: number,
 ): Promise<SandboxResult> {
-  // Build a null-prototype copy of `api` (the object the handler sees as
-  // `ctx`), sealing every function-valued property along the way.
-  //
-  // Two DISTINCT escapes both reach-back to the host Function realm via a
-  // plain `.constructor` lookup, and both are closed by the same technique:
-  //   - `ctx.constructor.constructor("...")()` — `ctx` itself, being an
-  //     ordinary object created in the host realm, inherits `.constructor`
-  //     from `Object.prototype` → host `Object` → `.constructor` again →
-  //     host `Function`. This works even if `ctx` held no functions at all.
-  //   - `ctx.log.constructor.constructor("...")()` — same reach-back, one
-  //     hop further, via any individual callback (sealHostFunction() covers
-  //     this one; see its own comment).
-  // `codeGeneration: { strings: false }` on the vm context (below) does NOT
-  // help here: it only restricts the context's OWN eval/Function, and every
-  // object/function reached this way belongs to a DIFFERENT (host) realm
-  // with no such restriction. Setting each object's prototype to `null`
-  // removes `Function`/`Object`.prototype — and therefore `.constructor` —
-  // from its lookup chain entirely, so both reach-backs resolve to
-  // `undefined` instead of the host constructor.
+  // Partition api's own properties by kind — each kind needs a DIFFERENT
+  // treatment to keep the host's Function/Object constructors unreachable
+  // from inside the sandbox:
+  //   - functions (ctx.log, ctx.emit, ...)  -> sealHostFunction() (null
+  //     prototype; see that function's comment)
+  //   - objects/arrays (ctx.payload, ...)   -> serialize now, reconstructed
+  //     INSIDE the context below (see rehydrateSource; see
+  //     toRehydratableJson()'s comment)
+  //   - primitives (tenantId, eventType...) -> pass through unchanged;
+  //     autoboxing always uses the CURRENTLY EXECUTING realm, not the
+  //     primitive's realm of origin, so these carry no escape risk.
+  const primitiveEntries: [string, unknown][] = [];
+  const functionEntries: [string, (...args: never[]) => unknown][] = [];
+  const objectEntries: [string, unknown][] = [];
+  for (const [key, value] of Object.entries(api)) {
+    if (typeof value === "function") functionEntries.push([key, value as (...args: never[]) => unknown]);
+    else if (value !== null && typeof value === "object") objectEntries.push([key, value]);
+    else primitiveEntries.push([key, value]);
+  }
+
+  // `ctx` itself is rebuilt with a null prototype so `ctx.constructor` is
+  // undefined too — closing the same reach-back one level up (`ctx` is an
+  // ordinary object created in the host realm, so without this it inherits
+  // `.constructor` from `Object.prototype` -> host `Object` -> `.constructor`
+  // again -> host `Function`, independent of whether `ctx` holds any
+  // functions at all).
   const sealedApi = Object.assign(
     Object.create(null),
-    Object.fromEntries(
-      Object.entries(api).map(([key, value]) => [
-        key,
-        typeof value === "function" ? sealHostFunction(value as (...args: never[]) => unknown) : value,
-      ]),
-    ),
+    Object.fromEntries(primitiveEntries),
+    Object.fromEntries(functionEntries.map(([key, fn]) => [key, sealHostFunction(fn)])),
   ) as SandboxApi;
 
   // The context's global object holds ONLY `ctx`. No require/process/module/fs,
@@ -148,9 +189,26 @@ export async function runInSandbox(
     codeGeneration: { strings: false, wasm: false },
   });
 
+  // Reconstruct each object-valued ctx property BY CALLING THIS CONTEXT'S
+  // OWN JSON.parse (a contextified global vm.createContext supplies
+  // regardless of the sandbox object's prototype) before the untrusted
+  // handler body runs. The resulting objects are rooted in THIS context's
+  // Object/Array.prototype, not the host's — `codeGeneration: {strings:
+  // false}` binds their `.constructor` chain the same way it already binds
+  // `ctx`/`ctx.log`'s. This is JSON.parse, not eval/Function, so it is not
+  // itself subject to the codeGeneration restriction. The JSON text is
+  // embedded directly as a string LITERAL (via the outer JSON.stringify) so
+  // no auxiliary object needs to sit on the sandbox global at all — anything
+  // placed there would need this same null-prototype treatment, since the
+  // untrusted handler shares that same global scope and could reference it
+  // directly, same as `ctx`.
+  const rehydrateSource = objectEntries
+    .map(([key, value]) => `ctx[${JSON.stringify(key)}] = JSON.parse(${JSON.stringify(toRehydratableJson(value))});`)
+    .join(" ");
+
   // Wrap the handler body in an async IIFE. `eval`/`new Function` inside the
   // handler are blocked by codeGeneration.strings:false above.
-  const source = `"use strict"; (async () => { ${handler} })();`;
+  const source = `"use strict"; (async () => { ${rehydrateSource} ${handler} })();`;
 
   let script: vm.Script;
   try {
