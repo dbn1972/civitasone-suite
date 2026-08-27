@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * Signs a draft Store Receipt Note. Signing is the GFR Rule 149 gate — once
@@ -17,7 +18,10 @@ export function SignSrnAction({ srnId }: { srnId: string }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ remarks: reason || undefined }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not sign the SRN.");
+    if (!res.ok) {
+      const human = toHumanError("save", { area: "Store Receipt Note" });
+      throw new Error(`${human.what} ${human.next}`);
+    }
   }
 
   return (

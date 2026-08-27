@@ -1045,9 +1045,20 @@ export type TenderDetail = TenderSummary & {
   scope?: string;
   eligibilityCriteria?: string;
   bids: Array<{
+    // bidId: needed by the tender lifecycle UI to submit per-bid technical
+    // evaluation results (POST /v1/procurement/tenders/:id/technical-evaluation
+    // takes { results: [{ bidId, qualified, score }] }) — vendorId alone can't
+    // stand in for it (a vendor's identity, not the bid row itself). Optional
+    // so any other consumer relying on the previous shape can't break.
+    bidId?: string;
     vendorId: string;
     vendorName: string;
-    bidAmount: number;
+    // Optional: procurement-service's getTenderDetail deliberately omits this
+    // for any bid whose financial envelope hasn't been opened yet — the
+    // two-envelope bid-sealing property (GFR two-bid system). Keep this in
+    // sync with TenderDetailSchema in packages/schemas/src/web.ts, which is
+    // the corrected, authoritative shape enforced server-side.
+    bidAmount?: number;
     technicalScore?: number;
     financialScore?: number;
     status: string;
