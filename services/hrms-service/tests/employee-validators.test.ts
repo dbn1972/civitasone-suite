@@ -157,6 +157,25 @@ describe("updateEmployeeBody — EM-11: sensitive field validation", () => {
   it("accepts empty object (all optional)", () => {
     expect(updateEmployeeBody.safeParse({}).success).toBe(true);
   });
+
+  // HR-A deep-verify finding: basicMinor was declared `z.bigint()`, which can
+  // never successfully parse a real HTTP JSON request body -- JSON has no
+  // bigint literal, so `JSON.parse` always produces a plain `number` here,
+  // and zod's bigint schema rejects that with "Expected bigint, received
+  // number". Every PATCH that included basicMinor 400'd unconditionally.
+  it("accepts a plain JSON number for basicMinor (regression: was z.bigint(), which JSON can never satisfy)", () => {
+    const result = updateEmployeeBody.safeParse({ basicMinor: 5000000 });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.basicMinor).toBe(5000000);
+  });
+
+  it("rejects a negative basicMinor", () => {
+    expect(updateEmployeeBody.safeParse({ basicMinor: -1 }).success).toBe(false);
+  });
+
+  it("rejects a non-integer basicMinor", () => {
+    expect(updateEmployeeBody.safeParse({ basicMinor: 1.5 }).success).toBe(false);
+  });
 });
 
 describe("EMPLOYEE_STATUSES — status contract", () => {

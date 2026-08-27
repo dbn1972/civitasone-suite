@@ -65,7 +65,12 @@ export const updateEmployeeBody = z.object({
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().optional(),
   bankIfsc:       z.string().max(16).optional(),
-  basicMinor:     z.bigint().optional(),
+  // HR-A deep-verify finding: this was `z.bigint()`, which can never parse a
+  // real HTTP JSON body (JSON has no bigint literal) -- every PATCH that
+  // included basicMinor would 400 with "Expected bigint, received number".
+  // Match createEmployeeBody's basicMinor type; commands.ts already does
+  // `.toString()` on this value, which works the same on a plain number.
+  basicMinor:     z.number().int().nonnegative().optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
   uanNumber:      z.string().max(12).optional(),
