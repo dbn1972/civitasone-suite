@@ -1,12 +1,4 @@
 import { z } from "zod";
-import { listQuerySchema } from "@civitasone/schemas/common";
-
-// GET /v1/hrms/employees query params: standard pagination plus an optional
-// tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
-export const employeeListQuery = listQuerySchema.extend({
-  employeeType: z.string().min(1).max(32).optional(),
-});
-export type EmployeeListQuery = z.infer<typeof employeeListQuery>;
 
 export const createEmployeeBody = z.object({
   employeeNo:    z.string().min(1).max(32),
