@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eventPermits, type EventPermitRow, type EventPermitInsert } from "./schema.js";
 
@@ -56,8 +56,9 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
-): Promise<boolean> {
+): Promise<EventPermitRow | null> {
   const result = await tx.update(eventPermits)
     .set({
       status,
@@ -65,7 +66,11 @@ export async function updateStatus(
       updatedAt: new Date(),
       version: sql`${eventPermits.version} + 1`,
     })
-    .where(and(eq(eventPermits.id, id), eq(eventPermits.tenantId, tenantId)))
-    .returning({ id: eventPermits.id });
-  return result.length > 0;
+    .where(and(
+      eq(eventPermits.id, id),
+      eq(eventPermits.tenantId, tenantId),
+      inArray(eventPermits.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

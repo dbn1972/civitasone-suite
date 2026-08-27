@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as applicationsRepo from "../applications/repo.js";
 import * as commands from "./commands.js";
 import { canRespond } from "./domain.js";
 
@@ -25,6 +26,11 @@ export async function nocRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = requestBody.parse(req.body);
+    // applicationId previously had no existence/tenant-match check anywhere —
+    // a NOC request could be created against a nonexistent or cross-tenant
+    // application (no FK exists at the schema level either).
+    const application = await applicationsRepo.findById(body.applicationId, ctx.tenantId);
+    if (!application) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
     return reply.code(202).send(await commands.requestNoc(ctx, body.applicationId, body.department));
   });
 

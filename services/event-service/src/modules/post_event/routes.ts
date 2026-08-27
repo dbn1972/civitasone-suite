@@ -2,8 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as permitsRepo from "../permits/repo.js";
+import * as applicationsRepo from "../applications/repo.js";
 import * as commands from "./commands.js";
-import { canDecideDeposit } from "./domain.js";
+import { canDecideDeposit, checkInspectionEligibility, computeRefundMinor } from "./domain.js";
 
 const ADMIN_ROLES = ["event_admin", "super_admin"];
 
@@ -15,7 +17,12 @@ const inspectionBody = z.object({
 
 const depositBody = z.object({
   decision: z.enum(["full_refund", "partial_refund", "forfeited"]),
-  refundMinor: z.string().optional(),
+  // Was a bare optional string: a non-numeric value reached BigInt() inside the
+  // async consumer and threw there, AFTER the HTTP caller already got 202 —
+  // the caller believed the decision succeeded when nothing was ever written.
+  // Validating the shape synchronously here closes that; the actual bounds
+  // check against the real deposit happens below via computeRefundMinor.
+  refundMinor: z.string().regex(/^\d+$/).optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -25,6 +32,14 @@ export async function postEventRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = inspectionBody.parse(req.body);
+    // CRITICAL fix: previously conducted unconditionally — no check that the
+    // permit exists, hasn't been revoked, or that the event has actually
+    // concluded (validUntil in the past).
+    const permit = await permitsRepo.findById(body.permitId, ctx.tenantId);
+    const eligibility = checkInspectionEligibility(permit);
+    if (!eligibility.eligible) {
+      throw new HttpError(422, "NOT_ELIGIBLE_FOR_INSPECTION", eligibility.reason);
+    }
     return reply.code(202).send(
       await commands.conductInspection(ctx, body.permitId, body.findings, body.damageAssessment),
     );
@@ -49,6 +64,26 @@ export async function postEventRoutes(app: FastifyInstance): Promise<void> {
     if (!canDecideDeposit(existing)) {
       throw new HttpError(422, "ALREADY_DECIDED", "Deposit already decided");
     }
-    return reply.code(202).send(await commands.decideDeposit(ctx, id, body.decision, body.refundMinor));
+    // CRITICAL fix, the money bug: derive the actual, bounded refund amount
+    // server-side from the deposit really collected (permit -> application,
+    // a two-hop lookup that previously didn't exist anywhere in this module),
+    // rather than trusting the client's refundMinor verbatim. See
+    // domain.ts's computeRefundMinor for the exact rules per decision.
+    const permit = await permitsRepo.findById(existing.permitId, ctx.tenantId);
+    if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "Permit not found for this inspection");
+    const application = await applicationsRepo.findById(permit.applicationId, ctx.tenantId);
+    if (!application) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found for this permit");
+    const depositMinor = application.depositMinor ?? 0n;
+    let refundMinor: bigint;
+    try {
+      refundMinor = computeRefundMinor(
+        body.decision,
+        depositMinor,
+        body.refundMinor !== undefined ? BigInt(body.refundMinor) : undefined,
+      );
+    } catch (err) {
+      throw new HttpError(422, "INVALID_REFUND_AMOUNT", err instanceof Error ? err.message : "Invalid refund amount");
+    }
+    return reply.code(202).send(await commands.decideDeposit(ctx, id, body.decision, refundMinor.toString()));
   });
 }

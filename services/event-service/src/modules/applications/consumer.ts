@@ -1,12 +1,14 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { calculateFeeMinor, calculateDepositMinor, generateApplicationNumber } from "./domain.js";
+import { calculateFeeMinor, calculateDepositMinor, generateApplicationNumber, fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "event.applications.consumer" });
 
@@ -44,7 +46,10 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       expectedAttendance: p.expectedAttendance,
       soundPermission: p.soundPermission ?? false,
     });
-    const applicationNumber = generateApplicationNumber("ULB", Date.now() % 999999);
+    // Mitigation, not a full fix — see the PR description for the collision
+    // mechanism (Date.now() % 999999 vs. a globally-unique column); this pattern
+    // recurs across every module audited in this pass.
+    const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -96,10 +101,11 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
-      if (!ok) return;
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", fromStatusesFor("submitted"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.applicationSubmitted,
         eventType: EVENTS.applicationSubmitted,
@@ -114,14 +120,16 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`event:${msg.tenantId}:application:${p.id}`, updated);
   });
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
-      if (!ok) return;
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", fromStatusesFor("withdrawn"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.applicationWithdrawn,
         eventType: EVENTS.applicationWithdrawn,
@@ -136,5 +144,6 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (updated) await cache.put(`event:${msg.tenantId}:application:${p.id}`, updated);
   });
 }
