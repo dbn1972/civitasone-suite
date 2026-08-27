@@ -4,27 +4,23 @@ import { db } from "../../shared/db.js";
 import { notifications, type NotificationInsert, type NotificationRow } from "./schema.js";
 
 /**
- * Set the app.tenant_id GUC for RLS in the current session.
- * Required because RLS policies check current_setting('app.tenant_id', true).
- *
- * SEC: previously built via sql.raw() + raw string interpolation (no
- * parameterization) — an outlier compared to every other service in the
- * fleet, which all set this same GUC via the parameterized set_config()
- * function form (e.g. admin-service/config/repo.ts, contract-service,
- * gateway-service/shared/scope.ts, metadata-service/shared/scope.ts).
- * set_config('app.tenant_id', value, true) is the function-call equivalent
- * of `SET LOCAL app.tenant_id = value` (Postgres docs), so this is a
- * behavior-preserving swap to the tagged-template form, which drizzle-orm's
- * sql`` binds as a real query parameter instead of splicing it into the
- * statement text.
- */
-async function setTenantGuc(tenantId: string): Promise<void> {
-  await db.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
-}
-
-/**
  * Persist a notification for offline recipients or history.
  * Uses a transaction to set tenant GUC for RLS.
+ *
+ * SEC: the `set_config('app.tenant_id', ..., true)` call below was previously
+ * built via sql.raw() + raw string interpolation (no parameterization) — an
+ * outlier compared to every other service in the fleet, which all set this
+ * same GUC via the parameterized set_config() function form (e.g.
+ * admin-service/config/repo.ts, contract-service, gateway-service/shared/
+ * scope.ts, metadata-service/shared/scope.ts). set_config(...) is the
+ * function-call equivalent of `SET LOCAL app.tenant_id = value` (Postgres
+ * docs), so this is a behavior-preserving swap to the tagged-template form,
+ * which drizzle-orm's sql`` binds as a real query parameter instead of
+ * splicing it into the statement text. It is set inside the same
+ * db.transaction() as the query it protects (`true` = SET LOCAL semantics)
+ * because pgbouncer runs this DB in `transaction` pool_mode — a session-scoped
+ * set_config would not reliably survive to the paired query on a pooled
+ * connection.
  */
 export async function persistNotification(data: NotificationInsert): Promise<NotificationRow> {
   const result = await db.transaction(async (tx) => {
