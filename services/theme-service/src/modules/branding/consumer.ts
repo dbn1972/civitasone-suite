@@ -18,6 +18,28 @@ export function registerBrandingConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { projected, isCreate } = msg.payload;
+      // Known residual race, accepted as a large improvement over the prior
+      // behavior rather than fixed here: isCreate is decided once in
+      // commands.ts (findRowByTenant(), read before this message was even
+      // published) and baked into the queued payload. Two concurrent
+      // FIRST-EVER saves for the same tenant can both read "no existing row"
+      // and both arrive here with isCreate:true. The first insert succeeds;
+      // the second violates the UNIQUE(tenant_id) constraint added in
+      // 0004c_tenant_branding_unique_tenant.sql, throws, and rolls back this
+      // whole transaction (including markProcessed() above) — Postgres has
+      // no partial-transaction recovery without an explicit SAVEPOINT, which
+      // this handler doesn't take. Depending on the queue driver's redelivery
+      // behavior, the second request's save can end up dropped rather than
+      // applied, with no error surfaced to that caller (their HTTP PUT
+      // already returned 202 before this consumer ever ran).
+      // This is still strictly better than before this PR: the old
+      // insert-only code had NO constraint at all, so this exact race
+      // deterministically produced a stray row on every second save, not
+      // just under a narrow timing window. Closing this fully would mean
+      // either a SAVEPOINT-based retry here or moving to a single atomic
+      // `INSERT ... ON CONFLICT (tenant_id) DO UPDATE` — tracked as a
+      // follow-up, not done here to avoid rushing a transaction-recovery
+      // change into this already-large fix.
       if (isCreate) {
         await repo.insert(tx, projected);
       } else {
