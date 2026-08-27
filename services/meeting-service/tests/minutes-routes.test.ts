@@ -62,8 +62,8 @@ beforeAll(async () => {
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`
-    INSERT INTO meeting.meetings (id, tenant_id, type, title, status, duration_minutes, created_by, updated_by)
-    VALUES (${MEETING}, ${TENANT}, 'committee', 'Board Meeting', 'minutes_pending', 60, ${ACTOR}, ${ACTOR})
+    INSERT INTO meeting.meetings (id, tenant_id, type, title, status, duration_minutes, chairperson_id, secretary_id, created_by, updated_by)
+    VALUES (${MEETING}, ${TENANT}, 'committee', 'Board Meeting', 'minutes_pending', 60, ${ACTOR}, ${ACTOR}, ${ACTOR}, ${ACTOR})
   `;
   });
   await sqlClient.begin(async (sql) => {
