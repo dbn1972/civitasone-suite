@@ -1,13 +1,16 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
-import { generatePermitNumber, generateVerificationCode } from "./domain.js";
+import * as nocRepo from "../nocs/repo.js";
+import { generatePermitNumber, generateVerificationCode, checkPermitEligibility, fromStatusesFor, PERMIT_ELIGIBLE_APPLICATION_STATUSES } from "./domain.js";
 
 const log = pino({ name: "event.permits.consumer" });
 
@@ -27,8 +30,23 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       validUntil: string;
       conditions?: Record<string, unknown>;
     };
-    const permitNumber = generatePermitNumber("ULB", Date.now() % 999999);
+    const permitNumber = generatePermitNumber("ULB", randomInt(1, 999999));
     const verificationCode = generateVerificationCode();
+
+    // CRITICAL fix: previously this handler never consulted the application or
+    // its NOC records at all — a permit (with a real permit number and
+    // verification code) could be issued for any applicationId, including one
+    // still `draft`, `rejected`, or with zero or explicitly-rejected NOCs.
+    // routes.ts now runs this same check synchronously for fast 422 feedback;
+    // re-checking here too because this consumer is a separate async execution
+    // context and is the place the actual insert happens.
+    const application = await appRepo.findById(p.applicationId, msg.tenantId);
+    const nocs = await nocRepo.listByApplication(p.applicationId, msg.tenantId);
+    const eligibility = checkPermitEligibility(application, nocs);
+    if (!eligibility.eligible) {
+      log.error({ id: p.id, applicationId: p.applicationId, reason: eligibility.reason }, "refusing to issue permit: application not eligible");
+      return;
+    }
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -46,7 +64,15 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "permitted", msg.actorId);
+      // Was: return value discarded. Now atomic with the eligibility check
+      // above: if the application's status changed out from under us between
+      // that check and this write (e.g. rejected by another officer in the
+      // interim — a narrow but real race), abort the WHOLE transaction rather
+      // than issue a permit whose backing application no longer supports it.
+      const appUpdated = await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "permitted", PERMIT_ELIGIBLE_APPLICATION_STATUSES, msg.actorId);
+      if (!appUpdated) {
+        throw new Error(`application ${p.applicationId} status changed since eligibility check; aborting permit issuance for ${p.id}`);
+      }
       await enqueue(tx, {
         topic: EVENTS.permitIssued,
         eventType: EVENTS.permitIssued,
@@ -70,9 +96,11 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.revokePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "revoked", msg.actorId);
+      updated = await repo.updateStatus(tx, p.id, msg.tenantId, "revoked", fromStatusesFor("revoked"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.permitRevoked,
         eventType: EVENTS.permitRevoked,
@@ -85,7 +113,12 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         action: "permit.revoke",
         resourceType: "event_permit",
         resourceId: p.id,
+        // reason wasn't persisted anywhere but the outbox event before this —
+        // eventPermits has no column for it (a bigger schema change, not done
+        // in this pass), but at least it now survives in the audit log too.
+        details: { reason: p.reason },
       });
     });
+    if (updated) await cache.put(`event:${msg.tenantId}:permit:${p.id}`, updated);
   });
 }

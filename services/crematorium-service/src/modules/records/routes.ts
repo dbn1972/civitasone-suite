@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as bookingsRepo from "../bookings/repo.js";
+import * as facilitiesRepo from "../facilities/repo.js";
 import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["crematorium_admin", "super_admin"];
@@ -28,6 +30,15 @@ export async function recordRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = recordBody.parse(req.body);
+    // bookingId/facilityId previously flowed straight into the service register with
+    // no existence or tenant-match check anywhere (no DB-level FK either) — an admin
+    // could record a completed service against a fabricated or cross-tenant
+    // bookingId/facilityId, corrupting what is effectively this service's
+    // legal register of completed cremations/burials.
+    const booking = await bookingsRepo.findById(body.bookingId, ctx.tenantId);
+    if (!booking) throw new HttpError(404, "BOOKING_NOT_FOUND", "Booking not found");
+    const facility = await facilitiesRepo.findById(body.facilityId, ctx.tenantId);
+    if (!facility) throw new HttpError(404, "FACILITY_NOT_FOUND", "Facility not found");
     return reply.code(202).send(await commands.recordService(ctx, body));
   });
 

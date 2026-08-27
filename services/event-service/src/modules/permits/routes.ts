@@ -3,8 +3,10 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as applicationsRepo from "../applications/repo.js";
+import * as nocRepo from "../nocs/repo.js";
 import * as commands from "./commands.js";
-import { canRevoke } from "./domain.js";
+import { canRevoke, checkPermitEligibility } from "./domain.js";
 
 const EVENT_ROLES = ["event_user", "event_admin", "super_admin"];
 const ADMIN_ROLES = ["event_admin", "super_admin"];
@@ -31,6 +33,17 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = issueBody.parse(req.body);
+    // CRITICAL fix: previously issued unconditionally — no check that the
+    // application exists, is in an approved-enough status, or has any
+    // (let alone approved) NOCs at all. See domain.ts's checkPermitEligibility
+    // for the full reasoning; the consumer re-checks this atomically with the
+    // actual write, this is just for fast, synchronous 422 feedback.
+    const application = await applicationsRepo.findById(body.applicationId, ctx.tenantId);
+    const nocs = application ? await nocRepo.listByApplication(body.applicationId, ctx.tenantId) : [];
+    const eligibility = checkPermitEligibility(application, nocs);
+    if (!eligibility.eligible) {
+      throw new HttpError(422, "NOT_ELIGIBLE_FOR_PERMIT", eligibility.reason);
+    }
     return reply.code(202).send(
       await commands.issuePermit(ctx, body.applicationId, body.validFrom, body.validUntil, body.conditions),
     );

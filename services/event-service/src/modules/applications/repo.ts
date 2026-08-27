@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eventApplications, type EventApplicationRow, type EventApplicationInsert } from "./schema.js";
 
@@ -56,8 +56,9 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
-): Promise<boolean> {
+): Promise<EventApplicationRow | null> {
   const result = await tx.update(eventApplications)
     .set({
       status,
@@ -66,7 +67,11 @@ export async function updateStatus(
       ...(status === "submitted" ? { submittedAt: new Date() } : {}),
       version: sql`${eventApplications.version} + 1`,
     })
-    .where(and(eq(eventApplications.id, id), eq(eventApplications.tenantId, tenantId)))
-    .returning({ id: eventApplications.id });
-  return result.length > 0;
+    .where(and(
+      eq(eventApplications.id, id),
+      eq(eventApplications.tenantId, tenantId),
+      inArray(eventApplications.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

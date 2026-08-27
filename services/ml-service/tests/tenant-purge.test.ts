@@ -44,6 +44,13 @@ const deleteReturningMock = vi.fn().mockResolvedValue([]);
 const deleteWhereMock = vi.fn().mockReturnValue({ returning: deleteReturningMock });
 const mockDbDelete = vi.fn().mockReturnValue({ where: deleteWhereMock });
 const mockMarkProcessed = vi.fn().mockResolvedValue(true);
+// Wrapped in vi.fn() (rather than a plain arrow function) so tests can assert
+// HOW MANY transactions a run used — the atomicity regression test below
+// relies on this to prove markProcessed + the row deletes + the audit enqueue
+// all happen inside a single db.transaction() call, not three separate ones.
+const mockDbTransaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+  fn({ delete: (...args: unknown[]) => mockDbDelete(...args) }),
+);
 
 // Mock shared/db — the real module connects to PostgreSQL
 // wrapWithTenantGuc injects app.tenant_id inside db.transaction() — the mock
@@ -52,8 +59,7 @@ const mockMarkProcessed = vi.fn().mockResolvedValue(true);
 vi.mock("../src/shared/db.js", () => ({
   db: {
     delete: (...args: unknown[]) => mockDbDelete(...args),
-    transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ delete: (...args: unknown[]) => mockDbDelete(...args) }),
+    transaction: (...args: [(tx: unknown) => Promise<unknown>]) => mockDbTransaction(...args),
   },
 }));
 
@@ -371,6 +377,65 @@ describe("tenant purge handler", () => {
       });
 
       await expect(handler(msg)).rejects.toThrow("Database connection lost");
+    });
+
+    it("performs the idempotency check, row deletes, and audit enqueue inside a SINGLE transaction (atomicity regression)", async () => {
+      // Regression test for a bug where markProcessed() committed in its own
+      // transaction BEFORE purgeTenantData() ran in a separate one. If the
+      // purge then failed, the message was already durably marked processed,
+      // so every retry silently no-op'd forever — permanently dropping a
+      // DPDP Act-mandated tenant data purge with no further error ever logged.
+      // Asserting exactly one db.transaction() call for the whole sequence is
+      // what actually distinguishes the fixed implementation from the bug:
+      // with the bug this was 3 separate transaction() calls (markProcessed,
+      // purgeTenantData's internal one, and the audit enqueue).
+      const mockSubscribe = vi.fn();
+      const mockQueue = { subscribe: mockSubscribe } as unknown as Queue;
+      registerPurgeConsumer(mockQueue);
+
+      const handler = mockSubscribe.mock.calls[0]![1] as (msg: unknown) => Promise<void>;
+      deleteReturningMock.mockResolvedValue([]);
+      mockDbTransaction.mockClear();
+
+      await handler({
+        messageId: "msg-atomic",
+        type: "tenant.deleted",
+        tenantId: TENANT_ID,
+        payload: { tenantId: TENANT_ID },
+      });
+
+      expect(mockDbTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it("a purge failure does not persist markProcessed — a retry with the same messageId re-attempts the purge", async () => {
+      const mockSubscribe = vi.fn();
+      const mockQueue = { subscribe: mockSubscribe } as unknown as Queue;
+      registerPurgeConsumer(mockQueue);
+
+      const handler = mockSubscribe.mock.calls[0]![1] as (msg: unknown) => Promise<void>;
+      const msg = {
+        messageId: "msg-retry",
+        type: "tenant.deleted",
+        tenantId: TENANT_ID,
+        payload: { tenantId: TENANT_ID },
+      };
+
+      // First attempt: the purge itself fails partway through the transaction.
+      // Because markProcessed() is now inside that SAME transaction, a real
+      // Postgres would roll its insert back too — modeled here by having
+      // markProcessed still report "not yet processed" on the next call.
+      mockDbDelete.mockImplementationOnce(() => {
+        throw new Error("transient failure");
+      });
+      await expect(handler(msg)).rejects.toThrow("transient failure");
+
+      // Retry with the identical messageId: since the earlier attempt never
+      // committed, the purge must actually run again — not be silently
+      // skipped as "already processed".
+      mockDbDelete.mockClear();
+      await handler(msg);
+
+      expect(mockDbDelete).toHaveBeenCalled();
     });
   });
 });

@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
@@ -75,6 +76,7 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
       contactPhone?: string;
       status?: string;
     };
+    let updated: Awaited<ReturnType<typeof repo.updateFacility>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const data: Record<string, unknown> = {};
@@ -84,8 +86,8 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
       if (p.contactPerson !== undefined) data.contactPerson = p.contactPerson;
       if (p.contactPhone !== undefined) data.contactPhone = p.contactPhone;
       if (p.status !== undefined) data.status = p.status;
-      const ok = await repo.updateFacility(tx, p.id, msg.tenantId, data as never, msg.actorId);
-      if (!ok) return;
+      updated = await repo.updateFacility(tx, p.id, msg.tenantId, data as never, msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.facilityUpdated,
         eventType: EVENTS.facilityUpdated,
@@ -100,5 +102,9 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // Prime the read cache with the fresh row so GET .../facilities/:id doesn't keep
+    // serving the pre-update row for up to the cache's TTL (60s default) — there was
+    // previously no invalidation/refresh of any kind after a facility update.
+    if (updated) await cache.put(`crematorium:${msg.tenantId}:facility:${p.id}`, updated);
   });
 }

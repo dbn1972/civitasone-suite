@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eventNocRequests, type NocRequestRow, type NocRequestInsert } from "./schema.js";
 
@@ -32,8 +32,9 @@ export async function respondNoc(
   tenantId: string,
   status: string,
   conditions: Record<string, unknown> | null,
+  fromStatuses: readonly string[],
   officerId: string,
-): Promise<boolean> {
+): Promise<NocRequestRow | null> {
   const result = await tx.update(eventNocRequests)
     .set({
       status,
@@ -42,8 +43,19 @@ export async function respondNoc(
       respondedAt: new Date(),
       updatedBy: officerId,
       updatedAt: new Date(),
+      // A double-submit or two officers racing to respond both used to pass the
+      // route-level pre-check (both read status="requested" before either write
+      // landed) and both would then succeed here, the second silently
+      // overwriting the first's decision (approved -> rejected with neither
+      // caller told). version wasn't read/incremented anywhere either, so there
+      // was no optimistic-concurrency backstop.
+      version: sql`${eventNocRequests.version} + 1`,
     })
-    .where(and(eq(eventNocRequests.id, id), eq(eventNocRequests.tenantId, tenantId)))
-    .returning({ id: eventNocRequests.id });
-  return result.length > 0;
+    .where(and(
+      eq(eventNocRequests.id, id),
+      eq(eventNocRequests.tenantId, tenantId),
+      inArray(eventNocRequests.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }
