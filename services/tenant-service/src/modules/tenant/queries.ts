@@ -16,7 +16,7 @@ export async function getTenant(id: string): Promise<TenantView | null> {
 export async function getTenantByDomain(tenantId: string, domain: string): Promise<TenantView | null> {
   return cache.getOrLoad<TenantView>(
     cache.makeKey(tenantId, `${RESOURCE}_by_domain`, domain),
-    () => repo.findByDomain(domain)
+    () => repo.findByDomain(tenantId, domain)
   );
 }
 

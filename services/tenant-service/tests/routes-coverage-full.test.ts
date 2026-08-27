@@ -165,6 +165,57 @@ describe("GET /v1/tenants/:tenantId", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  // Regression test for a real bug found in deep-verification (2026-08-27):
+  // every test in this describe block only ever asserted the not-found path
+  // (comments here used to read "won't exist" / "if it existed") -- none
+  // inserted a real row and fetched it back, so a bug where the lookup could
+  // NEVER find ANY tenant (tenant.tenants has FORCE RLS with no escape hatch;
+  // repo.findById queried via a bare db.select(), which never sets the
+  // app.tenant_id GUC) went completely undetected. Live-confirmed 404 for a
+  // tenant verified to exist via a direct superuser query, before the fix in
+  // src/modules/tenant/repo.ts. This test creates a real row and proves the
+  // lookup actually finds it.
+  it("→ 200 with a real, existing tenant (regression: RLS previously hid every row)", async () => {
+    const { runWithTenant } = await import("@civitasone/db");
+    const { db } = await import("../src/shared/db.js");
+    const repo = await import("../src/modules/tenant/repo.js");
+    const realId = "9f5b1a10-0000-4000-8000-00000000f00d";
+    await runWithTenant(realId, () =>
+      db.transaction((tx) =>
+        repo.insert(tx as unknown as repo.Writer, {
+          id: realId,
+          tenantId: realId,
+          name: "Regression Test Tenant",
+          domain: `regression-${realId}.example.gov`,
+          edition: "govt",
+          region: "IN-DL",
+          residency: "IN",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        }),
+      ),
+    );
+    try {
+      const res = await app.inject({
+        method: "GET", url: `/v1/tenants/${realId}`,
+        headers: authHeader(["tenant_admin"], realId),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.id).toBe(realId);
+      expect(body.name).toBe("Regression Test Tenant");
+    } finally {
+      // Clean up so this doesn't linger in the shared dev database. Raw SQL
+      // (rather than importing the schema/eq helper here) keeps this test
+      // self-contained; RLS still applies, so this must run inside the same
+      // tenant-scoped transaction the insert used.
+      const { sql } = await import("drizzle-orm");
+      await runWithTenant(realId, () =>
+        db.transaction((tx) => (tx as unknown as typeof db).execute(sql`DELETE FROM tenant.tenants WHERE id = ${realId}`)),
+      ).catch(() => undefined);
+    }
+  });
+
   it("→ 400 invalid uuid param", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/tenants/not-a-uuid",
