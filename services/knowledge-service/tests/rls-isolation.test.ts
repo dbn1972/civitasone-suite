@@ -122,4 +122,50 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  // Regression test for a fake-success bug found during deep-verification:
+  // PATCH /publish called repo.updateStatusDirect(), which used a bare
+  // db.update() outside any db.transaction(). Since wrapWithTenantGuc only
+  // injects app.tenant_id for .transaction() calls, and `documents` carries
+  // FORCE ROW LEVEL SECURITY, the UPDATE's own tenant_isolation_policy WITH
+  // CHECK silently matched zero rows on every call -- the route still
+  // returned HTTP 200 with the requested status, but nothing was ever
+  // persisted. This test asserts the status change is actually durable, not
+  // just that the endpoint responds 200.
+  it("Publishing an article actually persists the status change", async () => {
+    expect(createdDocumentId).toBeDefined();
+
+    const publishRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+      payload: { published: true },
+    });
+    expect(publishRes.statusCode).toBe(200);
+    expect(publishRes.json().status).toBe("approved");
+
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.json().status).toBe("approved");
+
+    // Unpublish too, to confirm the fix works both directions.
+    const unpublishRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
+      payload: { published: false },
+    });
+    expect(unpublishRes.statusCode).toBe(200);
+
+    const getAfterUnpublish = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+    expect(getAfterUnpublish.json().status).toBe("draft");
+  });
 });

@@ -85,7 +85,18 @@ export async function updateStatus(tx: Writer, tenantId: string, id: string, sta
 }
 
 export async function updateStatusDirect(tenantId: string, id: string, status: string): Promise<void> {
-  await db.update(documents)
-    .set({ status, updatedAt: new Date() })
-    .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)));
+  // Bug fix (deep-verify sweep): this used to call bare db.update(...) directly,
+  // which bypasses wrapWithTenantGuc (only db.transaction() sets app.tenant_id).
+  // documents carries FORCE ROW LEVEL SECURITY with tenant_isolation_policy
+  // USING/WITH CHECK (tenant_id = current_tenant_id()) -- with no GUC set,
+  // current_tenant_id() is NULL and the policy silently matches zero rows.
+  // Confirmed live against the dev DB: the bare UPDATE reported "UPDATE 0"
+  // and left the row unchanged, while the identical UPDATE with
+  // app.tenant_id set correctly reported "UPDATE 1". PATCH
+  // /v1/knowledge/articles/:id/publish (the only caller, via
+  // setDocumentStatus) was returning HTTP 200 with the requested status on
+  // every call while never actually persisting it. Route through the
+  // existing tx-based updateStatus() inside a real transaction so the GUC
+  // gets set, exactly like every other write path in this service.
+  await db.transaction((tx) => updateStatus(tx, tenantId, id, status));
 }
