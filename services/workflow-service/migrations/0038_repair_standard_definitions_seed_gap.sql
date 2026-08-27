@@ -118,7 +118,7 @@
 -- migration also inserts.
 
 BEGIN;
-SET lock_timeout = '5s';
+SET LOCAL lock_timeout = '5s';
 SET LOCAL app.tenant_id = '00000000-0000-0000-0000-000000000001';
 
 INSERT INTO workflow.definition_nodes (definition_id, node_key, name, role_ref, sort_order)
@@ -181,5 +181,33 @@ WHERE NOT EXISTS (
     AND e2.from_node = v.from_node
     AND e2.to_node = v.to_node
 );
+
+-- Post-condition (closes a 5th independent-review finding: the d.status =
+-- 'active' join filter above is a silent no-op for any code whose only row
+-- is currently 'draft' -- both INSERTs would match zero rows for it and this
+-- migration would still COMMIT successfully, reporting repaired when it
+-- repaired nothing). Fail loudly instead: verify all 4 target codes now
+-- resolve to an active definition with at least one node and one edge, or
+-- roll back the whole migration so the gap can't silently persist unnoticed.
+DO $$
+DECLARE
+  v_missing text;
+BEGIN
+  SELECT string_agg(want.code, ', ' ORDER BY want.code) INTO v_missing
+  FROM (VALUES ('finance_approval'), ('procurement_approval'), ('file_noting'), ('grant_disbursement')) AS want(code)
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM workflow.definitions d
+    WHERE d.code = want.code
+      AND d.tenant_id = '00000000-0000-0000-0000-000000000001'
+      AND d.status = 'active'
+      AND EXISTS (SELECT 1 FROM workflow.definition_nodes n WHERE n.definition_id = d.id)
+      AND EXISTS (SELECT 1 FROM workflow.definition_edges e WHERE e.definition_id = d.id)
+  );
+
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION 'Seed-gap repair incomplete for standard definition code(s): %. No active workflow.definitions row with both nodes and edges was found -- most likely that code is not currently status=''active'' on this database, so the JOIN above matched zero rows for it. Investigate before re-running.', v_missing;
+  END IF;
+END $$;
 
 COMMIT;
