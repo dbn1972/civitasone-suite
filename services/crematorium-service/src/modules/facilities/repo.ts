@@ -48,7 +48,7 @@ export async function updateFacility(
   tenantId: string,
   data: Partial<Pick<FacilityInsert, "facilityName" | "operatingHours" | "contactPerson" | "contactPhone" | "status" | "totalSlots">>,
   updatedBy: string,
-): Promise<boolean> {
+): Promise<FacilityRow | null> {
   const result = await tx.update(crematoriumFacilities)
     .set({
       ...data,
@@ -57,6 +57,8 @@ export async function updateFacility(
       version: sql`${crematoriumFacilities.version} + 1`,
     })
     .where(and(eq(crematoriumFacilities.id, id), eq(crematoriumFacilities.tenantId, tenantId)))
-    .returning({ id: crematoriumFacilities.id });
-  return result.length > 0;
+    .returning();
+  // Full row (not just {id}) so the caller can prime the read cache with fresh data
+  // instead of leaving a stale pre-update row cached for up to the cache's TTL.
+  return result[0] ?? null;
 }
