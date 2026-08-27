@@ -51,6 +51,31 @@ export async function insertRenewal(tx: ScopedTx, row: RenewalInsert): Promise<v
   await tx.insert(renewals).values(row);
 }
 
+export async function updateFeePayment(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  transactionId: string,
+  updatedBy: string,
+): Promise<boolean> {
+  // renewals has no dedicated fee_transaction_id column (unlike
+  // applications.feeTransactionId) — merge it into the existing `details`
+  // jsonb blob rather than adding a column, since authoring a new migration
+  // here would collide with the separate DB-provisioning PR (#777) that owns
+  // shop-service's schema. It's also recorded on the outbox/audit event.
+  const result = await tx.update(renewals)
+    .set({
+      feePaid: true,
+      details: sql`coalesce(${renewals.details}, '{}'::jsonb) || jsonb_build_object('feeTransactionId', ${transactionId}::text)`,
+      updatedBy,
+      updatedAt: new Date(),
+      version: sql`${renewals.version} + 1`,
+    })
+    .where(and(eq(renewals.id, id), eq(renewals.tenantId, tenantId)))
+    .returning({ id: renewals.id });
+  return result.length > 0;
+}
+
 export async function updateDecision(
   tx: ScopedTx,
   id: string,
