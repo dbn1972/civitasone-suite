@@ -80,6 +80,16 @@ export function registerApplicationConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
+      // P0-4 SoD (defence in depth): never record a score when scorer == submitter.
+      if (app.submittedBy && app.submittedBy === msg.actorId) {
+        await enqueue(tx, {
+          topic: EVENTS.applicationRejected, eventType: "grant.application.score_sod_violation",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { applicationId: p.id, reason: "SOD_VIOLATION: scorer must differ from submitter" },
+        });
+        await audit(tx, msg, "score", "grant_application", p.id, "failure");
+        return;
+      }
       assertTransition(app.status, "under_review");
       await repo.updateApplication(tx, p.id, { status: "under_review", updatedBy: msg.actorId });
       const totalScore = (p.technicalScore + p.financialScore) / 2;
@@ -198,6 +208,16 @@ export function registerApplicationConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const app = await repo.findApplicationByIdTx(tx, p.id, p.tenantId);
       if (!app) return;
+      // P0-4 SoD (defence in depth): the assigner must not be the applicant.
+      if (app.submittedBy && app.submittedBy === p.assignedBy) {
+        await enqueue(tx, {
+          topic: EVENTS.applicationRejected, eventType: "grant.application.assign_reviewer_sod_violation",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { applicationId: p.id, reason: "SOD_VIOLATION: reviewer assignment must differ from submitter" },
+        });
+        await audit(tx, msg, "assign_reviewer", "grant_application", p.id, "failure");
+        return;
+      }
       await repo.updateApplication(tx, p.id, {
         reviewerRef: p.reviewerRef,
         assignedAt: new Date(),

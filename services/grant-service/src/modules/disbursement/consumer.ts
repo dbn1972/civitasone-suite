@@ -149,25 +149,34 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // calls the real PFMS e-Kuber API. Fail-closed when unconfigured.
       let pfmsTxnId: string;
       if (p.mode === "PFMS") {
-        const { initiateDisbursement, isConfigured } = await import("@civitasone/gov-adapters/pfms");
+        // `initiateDisbursement` is intentionally not called below anymore — see
+        // the fail-closed comment in the isConfigured() branch.
+        const { isConfigured } = await import("@civitasone/gov-adapters/pfms");
         if (isConfigured()) {
-          // Resolve beneficiary details for PFMS submission
-          const beneficiary = p.beneficiaryBankRef
-            ? await repo.findBeneficiaryByRef(tx, p.beneficiaryBankRef, p.tenantId)
-            : null;
-          const pfmsResult = await initiateDisbursement({
-            txnRef: p.id,
-            schemeCode: process.env.PFMS_SCHEME_CODE ?? "DEFAULT",
-            amountMinor: installment.amountMinor,
-            currency: "INR",
-            beneficiary: {
-              name: beneficiary?.name ?? "BENEFICIARY",
-              bankAccount: beneficiary?.accountNo ?? "",
-              ifsc: beneficiary?.ifsc ?? "",
-            },
-            narration: `Grant disbursement ${p.installmentId}`,
-          });
-          pfmsTxnId = pfmsResult.pfmsTxnId;
+          // Resolve beneficiary details for PFMS submission. grant-service never
+          // stores a full account number (DPDP masking — see beneficiary/schema.ts),
+          // so a real (non-mock) PFMS call cannot be completed from local data alone.
+          // Fail closed rather than send PFMS a blank/masked bank account: a rejected
+          // or misrouted real disbursement to a citizen is worse than a loud failure
+          // here, and this message will retry/DLQ instead of silently corrupting a
+          // government payment request.
+          if (!p.beneficiaryBankRef) {
+            throw new Error(
+              "PFMS_BANK_REF_MISSING: real PFMS disbursement requires beneficiaryBankRef",
+            );
+          }
+          const beneficiary = await repo.findBeneficiaryByRef(tx, p.beneficiaryBankRef, p.tenantId);
+          if (!beneficiary) {
+            throw new Error(
+              `PFMS_BENEFICIARY_UNRESOLVED: no bank account found for ref ${p.beneficiaryBankRef}`,
+            );
+          }
+          throw new Error(
+            "PFMS_FULL_ACCOUNT_UNAVAILABLE: grant-service only holds a masked account " +
+            "number (account_no_masked); live PFMS submission needs the full account " +
+            "number from a dedicated bank-details vault, which is not wired up yet. " +
+            "Resolve via the vault integration before enabling PFMS_MODE=sandbox|production.",
+          );
         } else {
           // Mock mode — generate a synthetic reference
           pfmsTxnId = `PFMS-MOCK-${p.id}`;

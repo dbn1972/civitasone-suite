@@ -46,6 +46,7 @@ export const EVENTS = {
   schemeBudgetExceeded:       "grant.scheme.budget_exceeded",
   ucValidated:                "grant.uc.validated",
   ucRejected:                 "grant.uc.rejected",
+  ucSodViolation:             "grant.uc.sod_violation",
 } as const;
 
 /** Topics consumed from other services */

@@ -35,6 +35,7 @@ import { maskAadhaar } from "../src/modules/beneficiary/domain.js";
 import { registerApplicationConsumers } from "../src/modules/application/consumer.js";
 import { registerDisbursementConsumers } from "../src/modules/disbursement/consumer.js";
 import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
+import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
 import { randomUUID } from "node:crypto";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../src/topics.js";
 
@@ -178,6 +179,139 @@ describe("SoD — separation of duties on approval", () => {
     expect(rows[0]!.status).toBe("approved");
     expect(rows[0]!.amountApprovedMinor).toBe(100n);
     await q.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("SoD — separation of duties on UC validation (P0-4)", () => {
+  const UC = "5f000000-eeee-4000-8000-000000000001";
+
+  async function seedSubmittedUc(id: string, submitter: string) {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantApplications).values({
+        id: APP, tenantId: TENANT, grantNo: `G-UC-${++seq}`, schemeId: SCHEME, beneficiaryId: BEN,
+        purpose: "x", amountRequestedMinor: 100n, amountApprovedMinor: 100n, currency: "INR",
+        status: "approved", approvedAt: new Date(), submittedBy: ACTOR, approvedBy: ACTOR2,
+        createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(grantUcStatements).values({
+        id, tenantId: TENANT, applicationId: APP, period: "2025-26", installmentNo: 1,
+        releasedMinor: 100n, utilisedMinor: 90n, varianceMinor: 10n, currency: "INR",
+        status: "submitted", isImmutable: true, validationStatus: "pending",
+        createdBy: submitter, updatedBy: submitter,
+      });
+    }));
+  }
+
+  it("submitter==validator -> 403 SOD_VIOLATION at the route boundary", async () => {
+    await seedScheme(1_000_000n);
+    await seedSubmittedUc(UC, ACTOR);
+    const app = await buildApp();
+    const token = signToken({ sub: ACTOR, tid: TENANT, roles: ["grant_officer"], sid: "s" }, JWT_SECRET);
+    const res = await app.inject({
+      method: "POST", url: `/v1/grants/utilization-certs/${UC}/validate`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { status: "validated" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SOD_VIOLATION");
+  });
+
+  it("consumer re-asserts SoD: self-validate emits sod_violation, no validation row written", async () => {
+    await seedScheme(1_000_000n);
+    await seedSubmittedUc(UC, ACTOR);
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerUtilisationConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.ucValidate, wrap(COMMANDS.ucValidate, {
+      id: randomUUID(), tenantId: TENANT, ucId: UC, status: "validated", remarks: null,
+      validatedAt: new Date().toISOString(), applicationId: APP, installmentNo: 1,
+    }, TENANT));
+    await settle();
+    const rows = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantUcStatements).where(eq(grantUcStatements.id, UC)));
+    expect(rows[0]!.validationStatus).toBe("pending"); // unchanged
+    const validations = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantUcValidations).where(eq(grantUcValidations.ucId, UC)));
+    expect(validations.length).toBe(0); // no validation decision persisted
+    const outbox = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)));
+    expect(outbox.some((o) => o.eventType === "grant.uc.sod_violation")).toBe(true);
+    await q.stop();
+  });
+
+  it("distinct validator -> validated", async () => {
+    // Mirrors "distinct approver -> approved" above: the route only publishes
+    // the command (tested for the 403 case above, which never reaches the
+    // queue); the actual write happens in the worker-side consumer, wired here
+    // directly against a local queue rather than through the HTTP app.
+    await seedScheme(1_000_000n);
+    await seedSubmittedUc(UC, ACTOR);
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerUtilisationConsumers(q);
+    await q.start();
+    await q.publish(COMMANDS.ucValidate, {
+      messageId: msgId(), type: COMMANDS.ucValidate, tenantId: TENANT, actorId: ACTOR2,
+      correlationId: `corr-${seq}`, schemaVersion: "1.0",
+      payload: {
+        id: randomUUID(), tenantId: TENANT, ucId: UC, status: "validated", remarks: null,
+        validatedAt: new Date().toISOString(), applicationId: APP, installmentNo: 1,
+      },
+    });
+    await settle();
+    const rows = await scopedQuery(TENANT, (tx) =>
+      tx.select().from(grantUcStatements).where(eq(grantUcStatements.id, UC)));
+    expect(rows[0]!.validationStatus).toBe("validated");
+    await q.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("SoD — separation of duties on reviewer assignment (P0-4)", () => {
+  it("submitter==assigner -> 403 SOD_VIOLATION at the route boundary", async () => {
+    await seedScheme(1_000_000n);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantApplications).values({
+        id: APP, tenantId: TENANT, grantNo: "G-AR", schemeId: SCHEME, beneficiaryId: BEN,
+        purpose: "x", amountRequestedMinor: 100n, amountApprovedMinor: 0n, currency: "INR",
+        status: "submitted", submittedBy: ACTOR, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
+    const app = await buildApp();
+    const token = signToken({ sub: ACTOR, tid: TENANT, roles: ["grant_admin"], sid: "s" }, JWT_SECRET);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/grants/applications/${APP}/assign-reviewer`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { reviewerRef: "reviewer-42" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SOD_VIOLATION");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("SoD — separation of duties on scoring (P0-4)", () => {
+  it("submitter==scorer -> 403 SOD_VIOLATION at the route boundary", async () => {
+    await seedScheme(1_000_000n);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantApplications).values({
+        id: APP, tenantId: TENANT, grantNo: "G-SC", schemeId: SCHEME, beneficiaryId: BEN,
+        purpose: "x", amountRequestedMinor: 100n, amountApprovedMinor: 0n, currency: "INR",
+        status: "submitted", submittedBy: ACTOR, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
+    const app = await buildApp();
+    const token = signToken({ sub: ACTOR, tid: TENANT, roles: ["grant_officer"], sid: "s" }, JWT_SECRET);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/grants/applications/${APP}/score`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { reviewerRef: "reviewer-77", technicalScore: 90, financialScore: 80 },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SOD_VIOLATION");
   });
 });
 
