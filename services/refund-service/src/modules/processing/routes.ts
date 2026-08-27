@@ -26,6 +26,27 @@ const returnBody = z.object({
 
 const requestIdQuery = z.object({ requestId: z.string().uuid() });
 
+/**
+ * FIN-2 / maker-checker: approve/reject/return must happen in strict level
+ * order (level 1 "checker" before level 2 "authorizer"). `repo.getMaxApprovalLevel`
+ * already existed to support this but was never called anywhere — nothing
+ * stopped a caller from submitting a level-2 decision directly, which
+ * `isFullyApproved()` in processing/consumer.ts would then treat as a
+ * complete approval, fully approving a refund with zero level-1 review.
+ * This enforces that an action at level N is only valid once level N-1 has
+ * an approved decision on record (level 1 requires no predecessor).
+ */
+async function assertNextApprovalLevel(requestId: string, tenantId: string, level: number): Promise<void> {
+  const maxApprovedLevel = await repo.getMaxApprovalLevel(requestId, tenantId);
+  if (level !== maxApprovedLevel + 1) {
+    throw new HttpError(
+      422,
+      "APPROVAL_SEQUENCE_INVALID",
+      `Expected an approval action at level ${maxApprovedLevel + 1}, got level ${level}`,
+    );
+  }
+}
+
 export async function processingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/refund/processing/review", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -48,6 +69,7 @@ export async function processingRoutes(app: FastifyInstance): Promise<void> {
     if (request.status !== "under_review") {
       throw new HttpError(422, "INVALID_STATUS", `Cannot approve request in status '${request.status}'`);
     }
+    await assertNextApprovalLevel(body.requestId, ctx.tenantId, body.level);
     return reply.code(202).send(
       await commands.approveRequest(ctx, body.requestId, body.level, body.remarks),
     );
@@ -62,6 +84,7 @@ export async function processingRoutes(app: FastifyInstance): Promise<void> {
     if (request.status !== "under_review") {
       throw new HttpError(422, "INVALID_STATUS", `Cannot reject request in status '${request.status}'`);
     }
+    await assertNextApprovalLevel(body.requestId, ctx.tenantId, body.level);
     return reply.code(202).send(
       await commands.rejectRequest(ctx, body.requestId, body.level, body.remarks),
     );
@@ -76,6 +99,7 @@ export async function processingRoutes(app: FastifyInstance): Promise<void> {
     if (request.status !== "under_review") {
       throw new HttpError(422, "INVALID_STATUS", `Cannot return request in status '${request.status}'`);
     }
+    await assertNextApprovalLevel(body.requestId, ctx.tenantId, body.level);
     return reply.code(202).send(
       await commands.returnRequest(ctx, body.requestId, body.level, body.remarks),
     );

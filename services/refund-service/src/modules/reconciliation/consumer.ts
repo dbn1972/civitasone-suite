@@ -25,8 +25,34 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       bankAccountDetails: { accountNumber: string; ifscCode: string; accountHolderName: string; bankName?: string };
       disbursedAmountMinor: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // NOTE: `inserted` tracks whether this invocation actually created the
+    // disbursement row, so the success log below (only useful when something
+    // really happened) doesn't fire on the already-processed or duplicate
+    // early-return paths — the pre-existing pattern in this file logged
+    // "disbursement initiated" unconditionally after the transaction even
+    // when markProcessed() short-circuited it, which the new duplicate-skip
+    // path below would otherwise have made actively misleading.
+    const inserted = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+
+      // FIN-3 / double-disbursement guard, defense in depth: routes.ts already
+      // refuses a second active disbursement, but this re-checks inside the
+      // same transaction immediately before inserting so this consumer never
+      // creates a duplicate even if two initiate commands were both accepted
+      // (e.g. two nearly-simultaneous HTTP requests racing the route-level
+      // check before either command was consumed). Message processing for a
+      // single topic is strictly sequential in this service (one worker
+      // instance, one poll loop per topic), so this check-then-insert inside
+      // one transaction is race-free for the current deployment topology.
+      const existingActive = await repo.findActiveByRequestTx(tx, p.requestId, msg.tenantId);
+      if (existingActive) {
+        log.warn(
+          { requestId: p.requestId, attemptedDisbursementId: p.id, existingDisbursementId: existingActive.id },
+          "duplicate disbursement initiation ignored: an active disbursement already exists for this request",
+        );
+        return false;
+      }
+
       await repo.insertDisbursement(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -57,8 +83,11 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceType: "refund_disbursement",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id, requestId: p.requestId }, "disbursement initiated");
+    if (inserted) {
+      log.info({ id: p.id, requestId: p.requestId }, "disbursement initiated");
+    }
   });
 
   queue.subscribe(COMMANDS.completeDisbursement, async (msg) => {

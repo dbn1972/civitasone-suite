@@ -8,6 +8,11 @@ import { canComplete, canFail, canReconcile } from "./domain.js";
 
 const ADMIN_ROLES = ["refund_admin", "refund_approver", "super_admin"];
 
+// See requests/routes.ts MINOR_AMOUNT: same shape, same reasoning (Zod-layer
+// numeric validation so a malformed value 400s at the route instead of
+// throwing inside BigInt() deep inside the async consumer transaction).
+const MINOR_AMOUNT = z.string().regex(/^[1-9]\d{0,17}$/, "must be a positive integer string (minor units)");
+
 const initiateBody = z.object({
   requestId: z.string().uuid(),
   bankAccountDetails: z.object({
@@ -16,7 +21,7 @@ const initiateBody = z.object({
     accountHolderName: z.string().min(1),
     bankName: z.string().optional(),
   }),
-  disbursedAmountMinor: z.string().min(1),
+  disbursedAmountMinor: MINOR_AMOUNT,
 });
 
 const completeBody = z.object({ disbursementRef: z.string().min(1) });
@@ -31,9 +36,46 @@ export async function reconciliationRoutes(app: FastifyInstance): Promise<void> 
     const body = initiateBody.parse(req.body);
     const request = await reqRepo.findById(body.requestId, ctx.tenantId);
     if (!request) throw new HttpError(404, "REQUEST_NOT_FOUND", "Refund request not found");
-    if (request.status !== "approved") {
+
+    // FIN-4: a disbursement can also be (re-)initiated from a request that's
+    // "failed" — see requests/domain.ts VALID_TRANSITIONS (failed -> processing)
+    // — so a bad IFSC code / bounced transfer isn't a permanent dead end.
+    if (request.status !== "approved" && request.status !== "failed") {
       throw new HttpError(422, "INVALID_STATUS", `Cannot disburse for request in status '${request.status}'`);
     }
+
+    // FIN-3 / double-disbursement guard: refuse a second disbursement while
+    // one is already active (initiated/processing/completed) for this
+    // request. `repo.findActiveByRequest` existed in spirit (as the old,
+    // never-called `findByRequest`) but nothing ever checked it — a request
+    // could previously accumulate more than one disbursement, including two
+    // that both ran to completion/failure independently and left the parent
+    // request's status flip-flopping between "refunded" and "failed"
+    // depending on which one's terminal event was processed last.
+    const existingActive = await repo.findActiveByRequest(body.requestId, ctx.tenantId);
+    if (existingActive) {
+      throw new HttpError(
+        409,
+        "DISBURSEMENT_ALREADY_ACTIVE",
+        `An active disbursement already exists for this request (id=${existingActive.id}, status=${existingActive.status})`,
+      );
+    }
+
+    // FIN-1 (disbursement side): the disbursed amount must never exceed the
+    // approved refund amount on the request. Previously `disbursedAmountMinor`
+    // was a fully caller-supplied figure with no bound anywhere in the route,
+    // command, or consumer — a disbursement could be initiated for any
+    // amount regardless of what was actually approved.
+    const disbursedAmountMinor = BigInt(body.disbursedAmountMinor);
+    const approvedCeiling = BigInt(request.refundAmountMinor);
+    if (disbursedAmountMinor <= 0n || disbursedAmountMinor > approvedCeiling) {
+      throw new HttpError(
+        422,
+        "DISBURSEMENT_AMOUNT_INVALID",
+        `disbursedAmountMinor must be greater than 0 and cannot exceed the approved refund amount (${approvedCeiling})`,
+      );
+    }
+
     return reply.code(202).send(
       await commands.initiateDisbursement(ctx, body.requestId, body.bankAccountDetails, body.disbursedAmountMinor),
     );
@@ -82,6 +124,17 @@ export async function reconciliationRoutes(app: FastifyInstance): Promise<void> 
     if (!existing) throw new HttpError(404, "DISBURSEMENT_NOT_FOUND", "Disbursement not found");
     if (!canReconcile(existing.status)) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot reconcile disbursement in status '${existing.status}'`);
+    }
+    // FIN-5: canReconcile() only looks at `status`, which reconcile() itself
+    // never changes — so nothing previously stopped /reconcile from being
+    // called any number of times on the same disbursement, each call
+    // silently overwriting reconciled_at/reconciled_by.
+    if (existing.reconciledAt) {
+      throw new HttpError(
+        409,
+        "ALREADY_RECONCILED",
+        `Disbursement was already reconciled at ${existing.reconciledAt.toISOString()}`,
+      );
     }
     return reply.code(202).send(await commands.reconcile(ctx, id));
   });
