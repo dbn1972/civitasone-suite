@@ -16,6 +16,10 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerNoticeConsumers } from "../src/modules/notices/consumer.js";
 import { registerSettlementConsumers } from "../src/modules/settlements/consumer.js";
 import { registerReminderConsumers } from "../src/modules/reminders/consumer.js";
+import { registerCounselBriefConsumers } from "../src/modules/counsel/consumer.js";
+import * as counselQueries from "../src/modules/counsel/queries.js";
+import { legalCounselBriefs } from "../src/modules/counsel/schema.js";
+import { cache } from "../src/shared/infra.js";
 import { assertCanRespond, DomainError } from "../src/modules/notices/domain.js";
 import { DomainError as SettlementDomainError } from "../src/modules/settlements/domain.js";
 import { COMMANDS } from "../src/topics.js";
@@ -44,11 +48,17 @@ async function wipe(): Promise<void> {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(legalNoticeResponses).where(eq(legalNoticeResponses.tenantId, TENANT));
     await tx.delete(legalNotices).where(eq(legalNotices.tenantId, TENANT));
+    await tx.delete(legalCounselBriefs).where(eq(legalCounselBriefs.tenantId, TENANT));
     await tx.delete(legalCases).where(eq(legalCases.tenantId, TENANT));
     for (let i = 1; i <= 20; i++) {
       await tx.delete(processed).where(eq(processed.messageId, MSG(i)));
     }
   }));
+  // Cache entries live outside the DB transaction above, so a leftover
+  // (possibly stale) key from a previous run could make the invalidation
+  // assertions below pass or fail for the wrong reason.
+  await cache.invalidateResource(TENANT, "counsel_brief");
+  await cache.invalidateResource(TENANT, "counsel_briefs");
 }
 
 beforeAll(async () => {
@@ -219,6 +229,81 @@ describe("Reminder consumer — create (integration)", () => {
   });
 });
 
+
+// ── Counsel-brief consumer (integration) ────────────────────────────────────────
+// Covers the fix in fix/legal-wire-real-counsel-brief-endpoint: the consumer
+// used to invalidate only the single-item "counsel_brief" cache key, never
+// the separate "counsel_briefs" (plural) list-cache key that
+// counselQueries.listBriefs() reads through — so a list read that raced
+// ahead of (or ran before) this consumer would cache a stale/incomplete
+// result and keep serving it for up to the cache TTL even after the insert
+// commits.
+describe("Counsel-brief consumer — assign + list-cache invalidation (integration)", () => {
+  const BRIEF_1 = "44444444-aaaa-4000-8000-000000000c01";
+  const BRIEF_2 = "44444444-aaaa-4000-8000-000000000c02";
+
+  it("counselBriefAssign: inserts brief with status 'assigned' and emits audit", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCounselBriefConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.counselBriefAssign, {
+      messageId: MSG(15), type: COMMANDS.counselBriefAssign,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-cb-1", schemaVersion: "1.0",
+      payload: {
+        id: BRIEF_1, tenantId: TENANT, caseId: CASE_ID,
+        counselName: "Adv. Coverage Test", counselType: "advocate",
+        briefSummary: "Appear at the next hearing.",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    const [brief] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.id, BRIEF_1))));
+    expect(brief?.status).toBe("assigned");
+    expect(brief?.counselName).toBe("Adv. Coverage Test");
+    expect(brief?.caseId).toBe(CASE_ID);
+
+    const events = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
+    expect(events.map((e) => e.eventType)).toContain("audit.event.record");
+  });
+
+  it("regression: a list read cached before a brief exists is not left stale after the consumer commits", async () => {
+    // Reproduces the exact race proven live against the running dev service
+    // (see PR description): a caller lists briefs for this case before the
+    // consumer has processed the assign command, caching an (incomplete)
+    // result — here that BRIEF_1 (inserted by the previous test) is the only
+    // one present yet, BRIEF_2 is not.
+    const preRaceList = await runWithTenant(TENANT, () => counselQueries.listBriefs(TENANT, CASE_ID));
+    expect(preRaceList.map((b) => b.id)).toContain(BRIEF_1);
+    expect(preRaceList.map((b) => b.id)).not.toContain(BRIEF_2);
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCounselBriefConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.counselBriefAssign, {
+      messageId: MSG(16), type: COMMANDS.counselBriefAssign,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-cb-2", schemaVersion: "1.0",
+      payload: {
+        id: BRIEF_2, tenantId: TENANT, caseId: CASE_ID,
+        counselName: "Adv. Race Test", counselType: "senior_advocate",
+        briefSummary: "Race-condition regression check.",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    // Without the fix, this reads the pre-race cached list straight back
+    // (missing BRIEF_2) and fails — the row exists in Postgres (it would be
+    // found by a fresh, uncached query) but the stale list-cache entry hides
+    // it until the TTL expires.
+    const postRaceList = await runWithTenant(TENANT, () => counselQueries.listBriefs(TENANT, CASE_ID));
+    expect(postRaceList.map((b) => b.id)).toContain(BRIEF_2);
+  });
+});
 
 // ── eCourts sync-consumer pure functions ───────────────────────────────────────
 // NOTE: The sync-consumer exports pure functions (resolveInterval, withRetry) that

@@ -118,7 +118,12 @@ export function CaseActions({ caseId }: { caseId: string }) {
     const briefSummary = (briefDate ? `Brief by ${briefDate}. ` : "") + briefMessage.trim();
     void post(`/api/proxy/v1/legal/counsel-briefs`, {
       caseId,
-      counselName: counselName.trim(),
+      // Defensive caps matching the backend's zod bounds (validators.ts:
+      // counselName max 256, briefSummary max 8000) — the HTML maxLength on
+      // the input covers normal typing, but paste/IME/programmatic input can
+      // bypass it, and an oversized value should be trimmed client-side
+      // rather than round-tripped to a 400 that drops the whole submission.
+      counselName: counselName.trim().slice(0, 256),
       counselType,
       briefSummary: briefSummary.slice(0, 8000),
     });
