@@ -10,14 +10,20 @@ type Panel = "brief" | "affidavit" | null;
 /**
  * Case-detail header actions.
  *
- * legal-service has no dedicated "brief counsel" or affidavit-upload endpoints,
- * so per the closest-existing-command rule:
- *  - "Brief counsel"   → POST /api/v1/legal/cases/:id/reminder  (task/reminder to brief counsel)
- *  - "Upload Affidavit"→ POST /api/v1/legal/cases/:id/orders     (records the affidavit as a case filing)
+ *  - "Brief counsel"   → POST /api/v1/legal/counsel-briefs (services/legal-service/src/modules/counsel)
+ *    This is a real, fully-built endpoint (routes + commands + queue consumer + repo) that this
+ *    button previously did not call: it silently recorded a generic case reminder instead ("Brief
+ *    counsel: <note>"), which never created a counsel_brief record, so nothing about who was
+ *    briefed, their fee, or brief status (assigned/accepted/completed/withdrawn) was ever tracked.
+ *    Fixed to call the real endpoint. The endpoint has no due-date field, so an optional "brief by"
+ *    date is folded into the summary text rather than silently dropped.
+ *  - "Upload Affidavit"→ POST /api/v1/legal/cases/:id/orders (records the affidavit as a case filing)
+ *    legal-service does have a real document-management module (modules/documents), but it is keyed
+ *    by matterId, a concept the cases module has no relationship to (cases carry no matterId
+ *    anywhere in the schema) — wiring this to real document storage is a data-model change, not a
+ *    UI fix, so this workaround stays as-is. Recording an affidavit is an irreversible case filing,
+ *    so it is gated behind an accessible ConfirmDialog (maker-checker).
  * "Legal opinion →" remains a plain navigation link.
- *
- * Recording an affidavit is an irreversible case filing, so it is gated behind
- * an accessible ConfirmDialog (maker-checker).
  */
 export function CaseActions({ caseId }: { caseId: string }) {
   const router = useRouter();
@@ -28,6 +34,8 @@ export function CaseActions({ caseId }: { caseId: string }) {
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
   // brief counsel fields
+  const [counselName, setCounselName] = useState("");
+  const [counselType, setCounselType] = useState("advocate");
   const [briefDate, setBriefDate] = useState("");
   const [briefMessage, setBriefMessage] = useState("");
   // affidavit fields
@@ -99,14 +107,20 @@ export function CaseActions({ caseId }: { caseId: string }) {
 
   function submitBrief(e: React.FormEvent) {
     e.preventDefault();
+    if (counselName.trim().length < 1) {
+      setMessage("Counsel name is required.");
+      return;
+    }
     if (briefMessage.trim().length < 1) {
       setMessage("Briefing note is required.");
       return;
     }
-    const remindAt = (briefDate ? new Date(briefDate) : new Date()).toISOString();
-    void post(`/api/proxy/v1/legal/cases/${encodeURIComponent(caseId)}/reminder`, {
-      remindAt,
-      message: `Brief counsel: ${briefMessage.trim()}`.slice(0, 500),
+    const briefSummary = (briefDate ? `Brief by ${briefDate}. ` : "") + briefMessage.trim();
+    void post(`/api/proxy/v1/legal/counsel-briefs`, {
+      caseId,
+      counselName: counselName.trim(),
+      counselType,
+      briefSummary: briefSummary.slice(0, 8000),
     });
   }
 
@@ -147,13 +161,34 @@ export function CaseActions({ caseId }: { caseId: string }) {
 
             {panel === "brief" ? (
               <form className="pad" onSubmit={submitBrief} noValidate>
-                <p style={{ fontSize: 12, color: "#92400e", margin: "0 0 12px" }}>
-                  Recorded as a case reminder (no dedicated counsel-briefing endpoint).
-                </p>
+                <label className="label" htmlFor="counselName">Counsel name *</label>
+                <input
+                  id="counselName"
+                  ref={firstFieldRef as React.RefObject<HTMLInputElement>}
+                  type="text"
+                  className="inp"
+                  value={counselName}
+                  onChange={(e) => setCounselName(e.target.value)}
+                  required
+                  maxLength={256}
+                  style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
+                />
+                <label className="label" htmlFor="counselType">Counsel type</label>
+                <select
+                  id="counselType"
+                  className="inp"
+                  value={counselType}
+                  onChange={(e) => setCounselType(e.target.value)}
+                  style={{ width: "100%", minHeight: 44, marginBottom: 10 }}
+                >
+                  <option value="advocate">Advocate</option>
+                  <option value="senior_advocate">Senior advocate</option>
+                  <option value="counsel">Counsel</option>
+                  <option value="law_officer">Law officer</option>
+                </select>
                 <label className="label" htmlFor="briefMessage">Briefing note *</label>
                 <textarea
                   id="briefMessage"
-                  ref={firstFieldRef as React.RefObject<HTMLTextAreaElement>}
                   className="inp"
                   rows={3}
                   value={briefMessage}
