@@ -36,12 +36,10 @@ export async function insert(tx: Writer, row: FolderInsert): Promise<void> {
 
 export async function rename(tx: Writer, tenantId: string, id: string, name: string, actorId: string): Promise<void> {
   await tx.update(folders).set({ name, updatedBy: actorId, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(folders.tenantId, tenantId), eq(folders.id, id)));
 }
 
 export async function move(tx: Writer, tenantId: string, id: string, parentId: string | null, actorId: string): Promise<void> {
   await tx.update(folders).set({ parentId, updatedBy: actorId, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(folders.tenantId, tenantId), eq(folders.id, id)));
 }

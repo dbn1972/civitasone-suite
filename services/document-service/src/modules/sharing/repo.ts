@@ -22,6 +22,5 @@ export async function insert(tx: Writer, row: ShareInsert): Promise<void> {
 
 export async function revoke(tx: Writer, tenantId: string, id: string, actorId: string): Promise<void> {
   await tx.update(fileShares).set({ revokedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(fileShares.tenantId, tenantId), eq(fileShares.id, id)));
 }

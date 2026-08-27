@@ -46,7 +46,7 @@ export async function updateStatus(
   tx: ScopedTx, id: string, tenantId: string, status: string, updatedBy: string,
 ): Promise<boolean> {
   const result = await tx.update(buildingApplications)
-    .set({ status, updatedBy, updatedAt: new Date(), submittedAt: status === "submitted" ? new Date() : undefined, version: sql`${buildingApplications.version} + 1` })
+    .set({ status, updatedBy, updatedAt: new Date(), ...(status === "submitted" ? { submittedAt: new Date() } : {}), version: sql`${buildingApplications.version} + 1` })
     .where(and(eq(buildingApplications.id, id), eq(buildingApplications.tenantId, tenantId)))
     .returning({ id: buildingApplications.id });
   return result.length > 0;
