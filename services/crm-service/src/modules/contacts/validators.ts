@@ -118,6 +118,16 @@ const createAccountObject = z.object({
 export const createAccountBody = createAccountObject.superRefine(formatRefiner(ACCOUNT_FORMAT_SPECS));
 export type CreateAccountBody = z.infer<typeof createAccountBody>;
 
+// DELETE /v1/crm/contacts/:id body. Optional (and defaults applied against `{}`
+// at the route) so existing callers that send no body keep working. When the
+// UI's maker-checker confirm dialog collects a deletion reason, this is what
+// carries it to commands.deleteContact -> the contactDeleted audit-trail record
+// (see consumer.ts emit()) instead of the reason being silently dropped.
+export const deleteContactBody = z.object({
+  reason: z.string().trim().max(1000).optional(),
+});
+export type DeleteContactBody = z.infer<typeof deleteContactBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const accountViewSchema = z.object({

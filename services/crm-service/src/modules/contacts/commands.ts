@@ -66,12 +66,20 @@ export async function updateContact(ctx: RequestContext, id: string, body: Updat
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function deleteContact(ctx: RequestContext, id: string): Promise<Accepted> {
+/**
+ * `reason` is the maker-checker deletion note collected by the UI's confirm
+ * dialog (ContactDetailActions.tsx). It is optional here purely for backward
+ * compatibility with any caller that sends none; forwarded through to the
+ * contactDeleted audit-trail record in consumer.ts so "recorded in the audit
+ * trail" (the dialog's own copy) is actually true instead of the reason being
+ * collected from the user and then discarded.
+ */
+export async function deleteContact(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   const msgId = commandId(ctx, `${COMMANDS.deleteContact}:${id}`);
   await queue.publish(COMMANDS.deleteContact, {
     messageId: msgId, type: COMMANDS.deleteContact,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId },
+    payload: { id, tenantId: ctx.tenantId, reason: reason ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, RESOURCE, id));
   await cache.invalidateResource(ctx.tenantId, RESOURCE);
