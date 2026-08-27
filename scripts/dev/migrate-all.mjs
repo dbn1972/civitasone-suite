@@ -81,6 +81,15 @@ const SERVICES = [
   { name: "advertisement-service", db: "civitas_advertisement" },
   { name: "animal-service",        db: "civitas_animal" },
   { name: "vendor-service",        db: "civitas_vendor" },
+  // Municipal Sec5 batch 2 (deep-verification pass, 2026-08-27): these 5 had
+  // no migrations/0001_initial.sql either — same gap as the 11 other Sec5
+  // scaffolds still missing one. Written to match each service's
+  // src/modules/*/schema.ts exactly (see PR adding these 5 migration files).
+  { name: "parks-service",   db: "civitas_parks" },
+  { name: "refund-service",  db: "civitas_refund" },
+  { name: "roadcut-service", db: "civitas_roadcut" },
+  { name: "shop-service",    db: "civitas_shop" },
+  { name: "trade-service",   db: "civitas_trade" },
 ];
 
 let applied = 0;

@@ -46,6 +46,19 @@ const DB_USERS = {
   civitas_meeting: "meeting_svc",
   civitas_ml: "ml_svc",
   civitas_inspection: "inspection_svc",
+  // Municipal Sec5 batch 2 (deep-verification pass, 2026-08-27): roles/DBs
+  // provisioned and migrations authored for these 5 in the same change. Scoped
+  // deliberately to just these 5 — civitas_advertisement/animal/vendor above
+  // this block have the identical missing-grant defect (their *_svc roles hold
+  // only the CONNECT/CREATE bits `\l` shows at the database level, not the
+  // schema/table grants this script applies) but that gap predates this batch
+  // and is tracked separately; left untouched here to avoid colliding with
+  // whoever picks that up.
+  civitas_parks: "parks_svc",
+  civitas_refund: "refund_svc",
+  civitas_roadcut: "roadcut_svc",
+  civitas_shop: "shop_svc",
+  civitas_trade: "trade_svc",
 };
 
 const GRANT_SQL = (role) => `
