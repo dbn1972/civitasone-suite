@@ -17,15 +17,6 @@ CREATE POLICY tenant_isolation_policy ON plans.plans
   USING (tenant_id = tenant.current_tenant_id())
   WITH CHECK (tenant_id = tenant.current_tenant_id());
 
--- quotas.quotas
-ALTER TABLE quotas.quotas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quotas.quotas FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON quotas.quotas;
-DROP POLICY IF EXISTS tenant_isolation ON quotas.quotas;
-CREATE POLICY tenant_isolation_policy ON quotas.quotas
-  USING (tenant_id = tenant.current_tenant_id())
-  WITH CHECK (tenant_id = tenant.current_tenant_id());
-
 -- settings.tenant_settings
 ALTER TABLE settings.tenant_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings.tenant_settings FORCE ROW LEVEL SECURITY;

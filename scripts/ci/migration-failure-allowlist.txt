@@ -26,14 +26,6 @@ location-service/0009_fk_indexes.sql                       # relation "hierarchy
 location-service/0010_additional_status_type_constraints.sql # relation "jurisdiction.jurisdictions" does not exist
 plugin-service/0004_rls_full_tenant_isolation.sql          # relation "hooks.plugin_hooks" does not exist
 plugin-service/0008_fk_indexes.sql                         # relation "hooks.plugin_hooks" does not exist
-policy-service/0003_rls_full_tenant_isolation.sql          # relation "role_features.role_feature_grants" does not exist
-procurement-service/0002_perf_indexes.sql                  # relation "vendor.vendors" does not exist
-tenant-service/0009_plans_bigint_price.sql                 # relation "plans.plans" does not exist
-tenant-service/0010_rls_full_tenant_isolation.sql          # relation "plans.plans" does not exist
-tenant-service/0013_fk_indexes.sql                         # relation "subscriptions.subscriptions" does not exist
-theme-service/0005_rls_full_tenant_isolation.sql           # relation "branding.tenant_branding" does not exist
-theme-service/0007_check_constraints_status_columns.sql    # schema "templates" does not exist
-theme-service/0009_fk_indexes.sql                          # relation "branding.tenant_branding" does not exist
 workflow-service/0013_rls_tenant_isolation.sql             # column "tenant_id" does not exist
 workflow-service/0020_rls_completeness.sql                 # column "tenant_id" does not exist
 citizen-service/0020_designer_phase0.sql                   # fails on fresh CI cluster; tracked until designer phase0 migration is repaired
