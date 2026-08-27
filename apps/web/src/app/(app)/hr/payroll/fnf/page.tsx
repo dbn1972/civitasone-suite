@@ -58,7 +58,7 @@ export default async function FnfPage() {
         subtitle="Compute and track F&F separation settlements — last salary, gratuity, leave encashment, arrears."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load F&F settlements — showing nothing" />
 
       <StatGrid>
         <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={settlements.length} />
