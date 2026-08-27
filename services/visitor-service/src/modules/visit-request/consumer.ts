@@ -39,7 +39,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import type { RequestContext } from "@civitasone/types";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
@@ -65,7 +65,9 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 // its own definition) — it mints a real UUID messageId and the correct
 // payload shape from a single source of truth. See triggerPassGenerate()
 // below.
-import { passGenerate as publishPassGenerateCommand } from "../digital-pass/commands.js";
+import { passGenerate as publishPassGenerateCommand, passRevoke } from "../digital-pass/commands.js";
+import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
+import { digitalPasses } from "../digital-pass/schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -690,8 +692,8 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
   queue.subscribe<VisitRequestCancelPayload>(COMMANDS.visitRequestCancel, async (msg) => {
     const p = msg.payload;
 
-    await db.transaction(async (tx): Promise<void> => {
-      if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+    const committed = await db.transaction(async (tx): Promise<boolean> => {
+      if (!(await markProcessed(tx, msg.messageId))) return false; // idempotent replay
 
       const rows = await tx
         .select()
@@ -734,7 +736,54 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
         },
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "visit_request", resourceId: p.id, outcome: "success" } });
+      return true;
     });
+
+    if (!committed) return; // idempotent replay
+
+    // Fix (2026-08-27 deep-verify): cancelling a visit request never revoked
+    // its digital pass or released any parking slot it had allocated — the
+    // visitRequestCancelled event above had zero subscribers anywhere in the
+    // service (confirmed by grep across the entire src tree). Best-effort
+    // post-commit cascade: the cancellation itself already durably committed
+    // above, so a failure here is logged, not retried — same rationale as
+    // the roster-removal / parking-release pattern in check-in/consumer.ts.
+    try {
+      // scopedRead, not a bare db.select() -- see shared/db.ts's doc
+      // comment on why RLS reads need the tenant GUC set via a
+      // transaction wrapper.
+      const passRows = await scopedRead((tx) => tx
+        .select({ id: digitalPasses.id })
+        .from(digitalPasses)
+        .where(
+          and(
+            eq(digitalPasses.visitRequestId, p.id),
+            eq(digitalPasses.tenantId, msg.tenantId),
+            inArray(digitalPasses.status, ["active", "checked_in"]),
+          ),
+        ));
+      for (const pass of passRows) {
+        await passRevoke(
+          {
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            actorType: "service_account",
+            roles: [],
+          },
+          { passId: pass.id, reason: "visit request cancelled" },
+        );
+        await releaseParkingIfAllocated(
+          { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+          pass.id,
+        );
+      }
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, visitRequestId: p.id, event: "cancel_pass_revoke_failed" },
+        "post-cancellation pass revoke/parking release failed; cancellation already committed",
+      );
+    }
   });
 
   // ─── visitRequestAutoReject ──────────────────────────────────────────
