@@ -524,14 +524,20 @@ export const FinanceDashboardSchema = z.object({
   totalExpenditure: z.number().default(0),
 });
 
+// Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
+// returns sanctionedAmount/releasedAmount/expenditure/balance via .toString()
+// (H3: paise can exceed 2^53) — a plain z.number() here means sendValidated()
+// throws a ZodError (-> 400 VALIDATION_FAILED) the instant a tenant has one
+// real non-zero budget row. Same fix already applied to BillSummarySchema
+// above; this mirrors it for Budget/Sanctions, which had been missed.
 export const BudgetSummarySchema = z.object({
   id: z.string(),
   majorHead: z.string(),
   subHead: z.string().optional(),
-  sanctionedAmount: z.number(),
-  releasedAmount: z.number(),
-  expenditure: z.number(),
-  balance: z.number(),
+  sanctionedAmount: zMoneyMinorString,
+  releasedAmount: zMoneyMinorString,
+  expenditure: zMoneyMinorString,
+  balance: zMoneyMinorString,
   beMinor: z.string(),
   reMinor: z.string(),
   status: z.string(),
@@ -543,7 +549,9 @@ export const SanctionSummarySchema = z.object({
   id: z.string(),
   sanctionNo: z.string(),
   subject: z.string(),
-  amount: z.number(),
+  // Bigint-safe string: budget/queries.ts sends row.amountMinor.toString()
+  // (H3: avoid 2^53 precision loss on large government sanction amounts).
+  amount: zMoneyMinorString,
   sanctionedBy: z.string(),
   date: z.string(),
   status: z.enum(["approved", "pending", "rejected"]),
@@ -554,7 +562,7 @@ export const SanctionSummaryListSchema = z.array(SanctionSummarySchema);
 export const SanctionDetailSchema = SanctionSummarySchema.extend({
   lineItems: z.array(z.object({
     description: z.string(),
-    amount: z.number(),
+    amount: zMoneyMinorString,
     head: z.string(),
   })).default([]),
   remarks: z.string().optional(),
@@ -634,8 +642,12 @@ export const GLEntrySummarySchema = z.object({
   date: z.string(),
   accountCode: z.string(),
   accountName: z.string(),
-  debit: z.number().default(0),
-  credit: z.number().default(0),
+  // Minor units (paise) as a bigint-safe decimal string, e.g. "500000" for
+  // ₹5,000.00 — NOT rupees, NOT a float. Consumers pass this straight to
+  // formatMoney(); do not divide by 100 or coerce with Number() anywhere in
+  // this pipeline (see gl/queries.ts listJournalEntries for why that broke).
+  debit: z.string().default("0"),
+  credit: z.string().default("0"),
   narration: z.string().optional(),
   referenceNo: z.string().optional(),
   type: z.enum(["payment", "receipt", "journal", "budget"]).optional(),
@@ -2187,6 +2199,14 @@ export const AllocationDistributionSummarySchema = z.object({
 });
 export const AllocationDistributionSummaryListSchema = z.array(AllocationDistributionSummarySchema);
 
+// `enforce` was deliberately removed on the backend (DB column dropped in
+// migrations/0067_drop_allocation_enforce.sql; allocation-routes.ts's own
+// comment calls it a "misleading dead flag" that never worked as advertised)
+// but this schema still required it — since GET /v1/finance/budget-allocations
+// sends a plain 200 (no server-side sendValidated), the mismatch wasn't a
+// 400: the frontend's own responseSchema.safeParse silently rejected every
+// real row instead, collapsing the Allocation list to {data: [], source:
+// "error"} the instant a tenant has real data.
 export const FinanceBudgetAllocationSummarySchema = z.object({
   id: z.string(),
   headId: z.string(),
@@ -2195,7 +2215,6 @@ export const FinanceBudgetAllocationSummarySchema = z.object({
   committedMinor: z.string(),
   actualMinor: z.string(),
   availableMinor: z.string(),
-  enforce: z.boolean(),
 });
 export const FinanceBudgetAllocationSummaryListSchema = z.array(FinanceBudgetAllocationSummarySchema);
 

@@ -31,7 +31,11 @@ export async function getDashboard(tenantId: string) {
           budgetUtilisationPct,
           pendingSanctions: pendingRow?.count ?? 0,
           paymentsThisMonth: payRow?.count ?? 0,
-          totalExpenditure: Number(expRow?.total ?? 0) / 100,
+          // Minor units (paise) — formatMoney() on the frontend expects this
+          // scale directly. Dividing by 100 here previously sent rupees,
+          // which formatMoney() then re-divided again, rendering every
+          // amount 100x too small (the same bug fixed in gl/queries.ts).
+          totalExpenditure: Number(expRow?.total ?? 0),
         };
       });
     },

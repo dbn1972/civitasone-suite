@@ -23,7 +23,10 @@ export default async function CashBankPage() {
         <StatCard icon="📖" iconBg="#e7edfd" label="Total Entries" value={entries.length} />
         <StatCard icon="📥" iconBg="#ecfdf3" label="Receipts" value={receipts} />
         <StatCard icon="📤" iconBg="#fce7ee" label="Payments" value={payments} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={entries.filter((e) => String(e.entry_date) === new Date().toISOString().slice(0, 10)).length} />
+        {/* IST, not UTC: an entry genuinely dated "today" in India would be
+            excluded from 00:00-05:30 IST every day if compared against
+            new Date().toISOString(), which is always UTC. */}
+        <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={entries.filter((e) => String(e.entry_date) === new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })).length} />
       </StatGrid>
       <Card title="Cash & Bank Entries">
         <CashBankTable entries={entries} source={source === "error" ? "error" : "api"} />

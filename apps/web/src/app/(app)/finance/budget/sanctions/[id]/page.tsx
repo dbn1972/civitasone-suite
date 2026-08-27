@@ -81,7 +81,7 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
       {sanction.lineItems.length > 0 && (
         <Card title="Line items">
           <SanctionLineItemsTable
-            rows={sanction.lineItems as ({ description: string; amount: number; head: string } & Record<string, unknown>)[]}
+            rows={sanction.lineItems as ({ description: string; amount: string; head: string } & Record<string, unknown>)[]}
           />
         </Card>
       )}

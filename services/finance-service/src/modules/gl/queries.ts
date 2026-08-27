@@ -66,8 +66,15 @@ export async function listJournalEntries(tenantId: string, limit: number, offset
         date: journal.postingDate,
         accountCode: line.accountCode,
         accountName: line.accountCode,
-        debit: Number(line.debitMinor) / 100,
-        credit: Number(line.creditMinor) / 100,
+        // Minor units (paise) as a bigint-safe decimal string — the frontend
+        // passes these straight to formatMoney(), which expects minor units.
+        // This previously did Number(line.debitMinor) / 100, i.e. converted
+        // to rupees as a float; formatMoney() then re-interpreted that rupee
+        // value as minor units, so every amount rendered 100x too small
+        // (₹5,000.00 posted showed as ₹50.00) and large aggregates risked
+        // float-precision loss on top of that.
+        debit: line.debitMinor,
+        credit: line.creditMinor,
         referenceNo: journal.voucherNo,
         type: journal.type as "payment" | "receipt" | "journal" | "budget",
       });
