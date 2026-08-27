@@ -45,20 +45,42 @@ const ACTOR = randomUUID();
 
 let app: FastifyInstance;
 let seededEventId: string;
+let seededOtherTenantEventId: string;
 
 beforeAll(async () => {
   app = await buildApp();
 
-  // Seed one real audit event row for TENANT via the real consumer path.
+  // Seed one real audit event row for TENANT, and a SEPARATE one for
+  // OTHER_TENANT, both via the real consumer path (see module doc comment —
+  // events.events is append-only, no direct test insert).
+  //
+  // OTHER_TENANT needs its own real row, not just its own id: the
+  // cross-tenant admin tests below assert on the RESPONSE BODY containing
+  // this specific event, not just a 200 status. G-FIX-3 was an RLS-GUC
+  // mismatch that made a cross-tenant read silently return [] instead of
+  // erroring — a status-only assertion against an unseeded OTHER_TENANT
+  // cannot tell "correctly empty" from "silently broken" apart, since both
+  // look like 200 + []. Asserting the seeded row is actually present is
+  // what would have caught that regression.
   const q = wireTenantAwareQueue(new MemoryQueue());
   registerAuditConsumers(q);
   await q.start();
+
   const messageId = randomUUID();
   await q.publish("audit.event.record", {
     messageId, type: "audit.event.record", tenantId: TENANT, actorId: ACTOR,
     correlationId: randomUUID(), schemaVersion: "1.0",
     payload: { service: "policy", action: "create", resourceType: "role", resourceId: "r1", outcome: "success" },
   });
+
+  const otherMessageId = randomUUID();
+  const otherActor = randomUUID();
+  await q.publish("audit.event.record", {
+    messageId: otherMessageId, type: "audit.event.record", tenantId: OTHER_TENANT, actorId: otherActor,
+    correlationId: randomUUID(), schemaVersion: "1.0",
+    payload: { service: "policy", action: "create", resourceType: "role", resourceId: "r2", outcome: "success" },
+  });
+
   await new Promise((r) => setTimeout(r, 400));
   await q.stop();
 
@@ -66,6 +88,11 @@ beforeAll(async () => {
     tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT))));
   expect(rows.length).toBeGreaterThanOrEqual(1);
   seededEventId = rows[0]!.id;
+
+  const otherRows = await runWithTenant(OTHER_TENANT, () => db.transaction((tx) =>
+    tx.select().from(auditEvents).where(eq(auditEvents.tenantId, OTHER_TENANT))));
+  expect(otherRows.length).toBeGreaterThanOrEqual(1);
+  seededOtherTenantEventId = otherRows[0]!.id;
 });
 
 afterAll(async () => {
@@ -109,13 +136,22 @@ describe("GET /audit/events", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("200 for an admin role (audit_admin) passing tenantId= a different tenant", async () => {
+  it("200 for an admin role (audit_admin) passing tenantId= a different tenant, and actually returns that tenant's data", async () => {
     const jwt = token(["audit_admin"], TENANT, ACTOR);
     const res = await app.inject({
-      method: "GET", url: `/audit/events?tenantId=${OTHER_TENANT}`,
+      method: "GET", url: `/audit/events?tenantId=${OTHER_TENANT}&from=2020-01-01T00:00:00.000Z`,
       headers: { authorization: `Bearer ${jwt}` },
     });
     expect(res.statusCode).toBe(200);
+    // G-FIX-3 regression guard: before the fix this endpoint returned 200
+    // with [] for ANY cross-tenant request, regardless of whether the target
+    // tenant actually had data — status-only assertions cannot tell that
+    // apart from a genuinely empty tenant. OTHER_TENANT has a real seeded
+    // row (see beforeAll); asserting it comes back is what actually proves
+    // the read reached the right tenant's data.
+    const body = res.json();
+    const data = Array.isArray(body) ? body : body.data ?? [];
+    expect(data.some((e: { id?: string }) => e.id === seededOtherTenantEventId)).toBe(true);
   });
 });
 
@@ -155,13 +191,19 @@ describe("GET /v1/audit/events", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("200 for super_admin with tenantScoped=false and a cross-tenant tenantId", async () => {
+  it("200 for super_admin with tenantScoped=false and a cross-tenant tenantId, and actually returns that tenant's data", async () => {
     const jwt = token(["super_admin"], TENANT, ACTOR);
     const res = await app.inject({
-      method: "GET", url: `/v1/audit/events?tenantScoped=false&tenantId=${OTHER_TENANT}`,
+      method: "GET",
+      url: `/v1/audit/events?tenantScoped=false&tenantId=${OTHER_TENANT}&from=2020-01-01T00:00:00.000Z`,
       headers: { authorization: `Bearer ${jwt}` },
     });
     expect(res.statusCode).toBe(200);
+    // G-FIX-3 regression guard — see the identical note on the /audit/events
+    // version of this test above.
+    const body = res.json();
+    const data = Array.isArray(body) ? body : body.data ?? [];
+    expect(data.some((e: { id?: string }) => e.id === seededOtherTenantEventId)).toBe(true);
   });
 });
 
