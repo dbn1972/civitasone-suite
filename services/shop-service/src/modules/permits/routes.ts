@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { canPerformAction } from "./domain.js";
+import * as appRepo from "../registrations/repo.js";
 
 const SHOP_ROLES = ["shop_user", "shop_admin", "super_admin"];
 const OFFICER_ROLES = ["shop_admin", "shop_officer", "super_admin"];
@@ -87,6 +88,17 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = issueBody.parse(req.body);
+    const application = await appRepo.findById(body.applicationId, ctx.tenantId);
+    if (!application) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
+    if (application.status !== "approved") {
+      throw new HttpError(422, "INVALID_STATUS",
+        `Cannot issue a permit for application in status '${application.status}'`);
+    }
+    const existingPermit = await repo.findByApplicationId(body.applicationId, ctx.tenantId);
+    if (existingPermit) {
+      throw new HttpError(409, "PERMIT_ALREADY_ISSUED",
+        `A permit already exists for this application (${existingPermit.permitNumber})`);
+    }
     return reply.code(202).send(
       await commands.issuePermit(ctx, body.applicationId, body.establishmentName, body.validityMonths),
     );

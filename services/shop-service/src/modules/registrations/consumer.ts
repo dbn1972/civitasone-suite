@@ -6,7 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
+import { calculateFeeMinor, generateApplicationNumber, canTransition } from "./domain.js";
 
 const log = pino({ name: "shop.registrations.consumer" });
 
@@ -91,6 +91,16 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Re-validate against the CURRENT persisted status — the route only checked a
+    // snapshot at request time, and async delivery is not guaranteed ordered.
+    const current = await repo.findById(p.id, msg.tenantId);
+    if (!current || !canTransition(current.status, "submitted")) {
+      log.warn(
+        { applicationId: p.id, currentStatus: current?.status },
+        "submitApplication: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
@@ -113,6 +123,14 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    const current = await repo.findById(p.id, msg.tenantId);
+    if (!current || !canTransition(current.status, "withdrawn")) {
+      log.warn(
+        { applicationId: p.id, currentStatus: current?.status },
+        "withdrawApplication: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);

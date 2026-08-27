@@ -31,3 +31,7 @@ export function canRequestRenewal(permitStatus: string, renewalType: string): bo
   if (renewalType === "surrender") return permitStatus === "active";
   return permitStatus === "active" || permitStatus === "expired";
 }
+
+export function canDecideRenewal(status: string): boolean {
+  return status === "submitted" || status === "under_review";
+}

@@ -7,7 +7,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../registrations/repo.js";
-import { validateScrutinyComplete, type ScrutinyFinding } from "./domain.js";
+import { validateScrutinyComplete, canDecide, type ScrutinyFinding } from "./domain.js";
 
 const log = pino({ name: "shop.approvals.consumer" });
 
@@ -99,9 +99,21 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
       decision: string;
       reason?: string;
     };
+    // Re-validate against the CURRENT persisted status. The route only checked a
+    // snapshot at request time; async delivery is not guaranteed ordered, so two
+    // racing decisions (or a decide racing a withdraw) must not both silently land.
+    const current = await appRepo.findById(p.applicationId, msg.tenantId);
+    if (!current || !canDecide(current.status)) {
+      log.warn(
+        { applicationId: p.applicationId, currentStatus: current?.status },
+        "decideApplication: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, p.decision, msg.actorId);
+      const ok = await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, p.decision, msg.actorId);
+      if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationDecided,
         eventType: EVENTS.applicationDecided,

@@ -7,7 +7,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generatePermitNumber, generateVerificationCode, calculateValidUntil } from "./domain.js";
+import { generatePermitNumber, generateVerificationCode, calculateValidUntil, canPerformAction } from "./domain.js";
 
 const log = pino({ name: "shop.permits.consumer" });
 
@@ -74,12 +74,25 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.suspendPermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    // Re-validate against the CURRENT persisted status — the route only checked a
+    // snapshot at request time, and async command delivery is not guaranteed to be
+    // ordered, so a racing/stale command must not be allowed to force an illegal
+    // transition (e.g. resurrecting an already-cancelled permit).
+    const current = await repo.findById(p.permitId, msg.tenantId);
+    if (!current || !canPerformAction(current.permitStatus, "suspended")) {
+      log.warn(
+        { permitId: p.permitId, currentStatus: current?.permitStatus },
+        "suspendPermit: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "suspended", {
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "suspended", {
         suspendedAt: new Date(),
         suspensionReason: p.reason,
       }, msg.actorId);
+      if (!ok) return;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,
@@ -107,12 +120,21 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.cancelPermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    const current = await repo.findById(p.permitId, msg.tenantId);
+    if (!current || !canPerformAction(current.permitStatus, "cancelled")) {
+      log.warn(
+        { permitId: p.permitId, currentStatus: current?.permitStatus },
+        "cancelPermit: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "cancelled", {
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "cancelled", {
         cancelledAt: new Date(),
         cancellationReason: p.reason,
       }, msg.actorId);
+      if (!ok) return;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,
@@ -140,12 +162,21 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.restorePermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    const current = await repo.findById(p.permitId, msg.tenantId);
+    if (!current || !canPerformAction(current.permitStatus, "active")) {
+      log.warn(
+        { permitId: p.permitId, currentStatus: current?.permitStatus },
+        "restorePermit: stale or invalid transition, skipping",
+      );
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "active", {
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "active", {
         suspendedAt: null,
         suspensionReason: null,
       }, msg.actorId);
+      if (!ok) return;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,

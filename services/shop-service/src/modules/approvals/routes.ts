@@ -14,8 +14,24 @@ const initiateBody = z.object({
   officerId: z.string().uuid(),
 });
 
+// Must mirror ScrutinyFinding in ./domain.js. The consumer reads
+// findings.items to decide pass/fail (see validateScrutinyComplete); a schema
+// this loose (z.record(z.unknown())) let ANY object through, including one
+// with no "items" array at all — which silently defaulted to zero findings
+// and marked the scrutiny "completed" with no deficiencies, no matter what
+// the caller actually reported (live-confirmed: a payload describing a
+// failed fire-safety check, shaped without "items", was recorded as a clean
+// pass). Validating the real shape here closes that gap at the boundary.
+const scrutinyFindingBody = z.object({
+  checkItem: z.string().min(1),
+  result: z.enum(["pass", "fail", "na"]),
+  remarks: z.string().optional(),
+});
+
 const completeBody = z.object({
-  findings: z.record(z.unknown()),
+  findings: z.object({
+    items: z.array(scrutinyFindingBody).min(1),
+  }).passthrough(),
   deficiencyDetails: z.string().optional(),
 });
 

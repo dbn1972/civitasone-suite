@@ -7,7 +7,8 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as permitRepo from "../permits/repo.js";
-import { calculateRenewalFeeMinor, calculateNewValidUntil } from "./domain.js";
+import { canPerformAction } from "../permits/domain.js";
+import { calculateRenewalFeeMinor, calculateNewValidUntil, canDecideRenewal } from "./domain.js";
 
 const log = pino({ name: "shop.lifecycle.consumer" });
 
@@ -75,26 +76,56 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     };
     const renewal = await repo.findById(p.id, msg.tenantId);
     if (!renewal) return;
+    // Re-validate against the CURRENT persisted status — the route only checked a
+    // snapshot at request time, and async delivery is not guaranteed ordered, so
+    // two racing decisions on the same renewal must not both silently land.
+    if (!canDecideRenewal(renewal.status)) {
+      log.warn(
+        { id: p.id, currentStatus: renewal.status },
+        "decideRenewal: stale or already-decided renewal, skipping",
+      );
+      return;
+    }
 
     const newValidUntil = p.decision === "approved" && renewal.renewalType === "renewal"
       ? calculateNewValidUntil(renewal.previousValidUntil)
       : null;
 
+    // The permit itself may have moved (e.g. suspended/cancelled by an officer)
+    // since this renewal was requested — re-check its current state before an
+    // approval mutates it, for the same reason as above.
+    const permit = p.decision === "approved" ? await permitRepo.findById(renewal.permitId, msg.tenantId) : null;
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateDecision(
+      const ok = await repo.updateDecision(
         tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil,
       );
+      if (!ok) return;
 
       if (p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil) {
-        await permitRepo.updateValidUntil(tx, renewal.permitId, msg.tenantId, newValidUntil, msg.actorId);
+        if (permit && (permit.permitStatus === "active" || permit.permitStatus === "expired")) {
+          await permitRepo.updateValidUntil(tx, renewal.permitId, msg.tenantId, newValidUntil, msg.actorId);
+        } else {
+          log.warn(
+            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
+            "decideRenewal: permit no longer active/expired, skipping validUntil extension",
+          );
+        }
       }
       if (p.decision === "approved" && renewal.renewalType === "surrender") {
-        await permitRepo.updatePermitStatus(
-          tx, renewal.permitId, msg.tenantId, "cancelled",
-          { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" },
-          msg.actorId,
-        );
+        if (permit && canPerformAction(permit.permitStatus, "cancelled")) {
+          await permitRepo.updatePermitStatus(
+            tx, renewal.permitId, msg.tenantId, "cancelled",
+            { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" },
+            msg.actorId,
+          );
+        } else {
+          log.warn(
+            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
+            "decideRenewal: permit can no longer be cancelled via surrender, skipping",
+          );
+        }
       }
 
       await enqueue(tx, {
