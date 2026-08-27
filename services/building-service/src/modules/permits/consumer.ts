@@ -1,9 +1,9 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -35,31 +35,50 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.suspendPermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "suspended", { suspendedAt: new Date(), suspensionReason: p.reason }, msg.actorId);
+      // updatePermitStatus reports whether a row actually matched (right
+      // tenant + existing id) via its boolean return — this was previously
+      // discarded, so a stale/mismatched command would still emit
+      // permitSuspended and write an audit record for a change that never
+      // happened. Guard on it like the sibling applications module does.
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "suspended", { suspendedAt: new Date(), suspensionReason: p.reason }, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.permitSuspended, eventType: EVENTS.permitSuspended, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.permitId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "permit.suspend", resourceType: "building_permit", resourceId: p.permitId });
     });
+    // Read-through GET-by-id cache must not keep serving pre-suspension state
+    // (CLAUDE.md §6: "the consumer invalidates here").
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
   queue.subscribe(COMMANDS.cancelPermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: p.reason }, msg.actorId);
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: p.reason }, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.permitCancelled, eventType: EVENTS.permitCancelled, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.permitId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "permit.cancel", resourceType: "building_permit", resourceId: p.permitId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
   queue.subscribe(COMMANDS.restorePermit, async (msg) => {
     const p = msg.payload as { permitId: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "active", { suspendedAt: null, suspensionReason: null }, msg.actorId);
+      const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "active", { suspendedAt: null, suspensionReason: null }, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.permitRestored, eventType: EVENTS.permitRestored, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.permitId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "permit.restore", resourceType: "building_permit", resourceId: p.permitId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 }
