@@ -40,3 +40,24 @@ CREATE TABLE IF NOT EXISTS templates.templates (
   version     integer NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_templates_tenant ON templates.templates(tenant_id);
+
+-- Grants: migrations run as civitas_admin (see scripts/dev/migrate-all.mjs),
+-- so these tables are owned by civitas_admin, not theme_svc — the role
+-- theme-service actually connects as. Sibling migration 0004_brand_config.sql
+-- grants theme_svc explicitly for exactly this reason; this file omitted that
+-- step, which — combined with bootstrap_missing_schemas.sql's `branding`/
+-- `templates` schemas never having been applied to this codebase's dev
+-- cluster — left theme_svc unable to read or write either table at all.
+-- Granting explicitly here (matching 0004_brand_config.sql's own pattern)
+-- makes this migration self-sufficient rather than depending on
+-- scripts/dev/grant-all.mjs, which only runs after every service in the
+-- fleet migrates cleanly. USAGE is included even though the schemas above
+-- are created AUTHORIZATION theme_svc, because that clause is a no-op on any
+-- environment where the schema already exists under a different owner (the
+-- IF NOT EXISTS guard short-circuits before AUTHORIZATION is evaluated) — the
+-- exact trap that left the sibling `registry` schema civitas_admin-owned
+-- despite 0003b's identical AUTHORIZATION plugin_svc clause.
+GRANT USAGE ON SCHEMA branding TO theme_svc;
+GRANT USAGE ON SCHEMA templates TO theme_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON branding.tenant_branding TO theme_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON templates.templates TO theme_svc;
