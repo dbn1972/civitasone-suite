@@ -4,6 +4,15 @@
  * CERT-In / DPDP requirement: the audit trail must be tamper-evident.
  * Verifies that UPDATE and DELETE on audit_events are rejected at the DB level
  * (not just application level), and that TRUNCATE is blocked.
+ *
+ * Extended 2026-08-27/28 after a deep-verification pass found that the
+ * TRUNCATE guard covered `events.events` (the partitioned parent) but not
+ * its actual partitions — where 100% of rows physically live — and that
+ * nine case-of-record tables (observations, paras, plans, risks, vigilance
+ * cases/actions/evidence) had no DB-level DELETE/TRUNCATE protection at all.
+ * Migration 0027_immutability_guard_gaps.sql fixed both; the blocks below
+ * guard against either regressing silently the way the original partition
+ * gap did (0014 shipped for months before this pass caught it).
  */
 import { describe, it, expect } from "vitest";
 import { execSync } from "child_process";
@@ -59,6 +68,32 @@ function psqlScopedMutation(statement: string): { ok: boolean; output: string } 
     statement,
     "ROLLBACK",
   ]
+    .map((s) => `-c "${s.replace(/\s+/g, " ").trim().replace(/"/g, '\\"')}"`)
+    .join(" ");
+  try {
+    const out = execSync(
+      `PGPASSWORD='${PW}' psql -h ${PGHOST} -p ${PGPORT} -U ${ROLE} -d ${DB} -t -A -v ON_ERROR_STOP=1 ${sql}`,
+      { encoding: "utf-8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] },
+    );
+    return { ok: true, output: out.trim() };
+  } catch (err: unknown) {
+    const e = err as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
+    const stderr = e.stderr ? String(e.stderr) : "";
+    const stdout = e.stdout ? String(e.stdout) : "";
+    return { ok: false, output: stderr || stdout || e.message || "unknown error" };
+  }
+}
+
+/**
+ * Run a statement-level-trigger probe inside a rolled-back transaction, with
+ * no row seeding. Only valid for statements guarded by a FOR EACH STATEMENT
+ * trigger (DELETE/TRUNCATE on the tables in this file all are) — those fire
+ * regardless of whether any row matches, so unlike psqlScopedMutation above,
+ * there is nothing to seed. Always rolled back — nothing can persist even if
+ * the guard under test has regressed and the statement "succeeds".
+ */
+function psqlScopedStatement(statement: string): { ok: boolean; output: string } {
+  const sql = ["BEGIN", `SET LOCAL app.tenant_id = '${TENANT}'`, statement, "ROLLBACK"]
     .map((s) => `-c "${s.replace(/\s+/g, " ").trim().replace(/"/g, '\\"')}"`)
     .join(" ");
   try {
@@ -145,5 +180,80 @@ describe("L6 — Audit ledger: TRUNCATE is rejected", () => {
     // must always fail.
     expect(ok).toBe(false);
     expect(output.toLowerCase()).toMatch(/immutab|truncate|not allowed|cannot|denied|permission/);
+  });
+
+  /**
+   * G-FIX-1 regression guard: 0014_partition_audit_events.sql converted
+   * events.events into a partitioned table without re-creating this guard on
+   * any partition — TRUNCATE events.events (the parent, tested above) stayed
+   * blocked, but `TRUNCATE events.events_y2026m08` (an actual partition,
+   * where the rows live) silently succeeded for months. Picks whatever
+   * partition currently exists via pg_inherits rather than a hardcoded name,
+   * so this does not go stale next month.
+   */
+  it("TRUNCATE on an individual partition is blocked (not just the parent)", () => {
+    const { ok: foundOk, output: partName } = psqlResult(`
+      SELECT c.relname FROM pg_inherits i
+      JOIN pg_class c ON c.oid = i.inhrelid
+      JOIN pg_class p ON p.oid = i.inhparent
+      JOIN pg_namespace n ON n.oid = p.relnamespace
+      WHERE n.nspname = 'events' AND p.relname = 'events'
+      ORDER BY c.relname LIMIT 1
+    `);
+    if (!foundOk || partName.length === 0) {
+      // No partitions found (e.g. events.events not partitioned in this
+      // environment) — nothing to check, skip rather than false-fail.
+      return;
+    }
+    const { ok, output } = psqlResult(`TRUNCATE events.${partName}`);
+    expect(ok, `TRUNCATE events.${partName} succeeded — a partition is NOT append-only`).toBe(false);
+    expect(output.toLowerCase()).toMatch(/immutab|truncate|not allowed|cannot|denied|permission/);
+  });
+});
+
+/**
+ * G-FIX-2 regression guard: observation/para/plan/risk/vigilance case-of-record
+ * tables had UPDATE, DELETE and TRUNCATE all granted to audit_svc with no
+ * trigger backstop before 0027_immutability_guard_gaps.sql. UPDATE is
+ * legitimate (status-transition workflows) and must keep working; DELETE and
+ * TRUNCATE must not. All rejections here rely on a FOR EACH STATEMENT
+ * trigger, so no row needs to exist for the guard to fire — psqlScopedStatement
+ * runs everything inside BEGIN/ROLLBACK regardless, so a regression here
+ * cannot destroy real data as a side effect of running this test.
+ */
+describe("L6 — Case-of-record tables: DELETE/TRUNCATE rejected, UPDATE unaffected", () => {
+  const CASE_TABLES = [
+    "observation.audit_observations",
+    "para.audit_paras",
+    "para.audit_para_status_history",
+    "plan.audit_plans",
+    "risk.audit_risks",
+    "risk.risk_acceptances",
+    "vigilance.vigilance_cases",
+    "vigilance.vigilance_actions",
+    "vigilance.vigilance_evidence",
+  ];
+
+  it.each(CASE_TABLES)("DELETE FROM %s is rejected", (table) => {
+    const { ok, output } = psqlScopedStatement(`DELETE FROM ${table} WHERE true`);
+    expect(ok, `DELETE FROM ${table} succeeded — this case-of-record table is hard-deletable`).toBe(false);
+    expect(output.toLowerCase()).toMatch(/immutab|not permitted|denied|cannot/);
+  });
+
+  it.each(CASE_TABLES)("TRUNCATE %s is rejected", (table) => {
+    const { ok, output } = psqlScopedStatement(`TRUNCATE ${table}`);
+    expect(ok, `TRUNCATE ${table} succeeded — this case-of-record table is truncatable`).toBe(false);
+    expect(output.toLowerCase()).toMatch(/immutab|not permitted|denied|cannot/);
+  });
+
+  it("UPDATE on a case-of-record table still succeeds (no over-broad lockdown)", () => {
+    // Targets a real seeded row (plan.audit_plans, DEV DEMO tenant) so a
+    // false pass from "0 rows matched" is not possible — this must be a
+    // genuine, committed-then-rolled-back UPDATE.
+    const { ok, output } = psqlScopedStatement(`
+      UPDATE plan.audit_plans SET updated_at = now()
+      WHERE id = '99999999-0001-0000-0000-000000000003'
+    `);
+    expect(ok, `UPDATE on plan.audit_plans failed — the DELETE/TRUNCATE guard is over-broad: ${output}`).toBe(true);
   });
 });
