@@ -84,6 +84,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql"
 # against a throwaway container: `schema "X" does not exist` was the largest single
 # cause of migration failure (30 of 97). Must run before the migration loop.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
+# Municipal Sec5 batch 3 (crematorium/drainage/event/fire/market/parking) had
+# roles/dbs wired into scripts/dev/migrate-all.mjs + grant-all.mjs for local dev
+# (PR #830) but no bootstrap file here at all -- the same "role/database never
+# created in CI" gap the blocks above this one already fixed for their own
+# batches. Without this, all 6 services' migrations fail in CI with
+# "database does not exist" before the migration loop ever reaches them.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
