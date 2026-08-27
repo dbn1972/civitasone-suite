@@ -8,6 +8,7 @@ import {
   validateActivation,
   validateEditable,
   validateCreate,
+  resolveStep,
 } from "../src/modules/journeys/domain.js";
 import {
   validateStepType,
@@ -116,6 +117,33 @@ describe("journeys/domain — validateCreate", () => {
 
   it("rejects name over 200 chars", () => {
     expect(validateCreate("x".repeat(201))).not.toBeNull();
+  });
+});
+
+describe("journeys/domain — resolveStep", () => {
+  it("returns the type + config of a well-formed step", () => {
+    const steps = [{ type: "send_notification", config: { templateId: "t-1" } }];
+    expect(resolveStep(steps, 0)).toEqual({ stepType: "send_notification", stepConfig: { templateId: "t-1" } });
+  });
+
+  it("defaults config to {} when missing", () => {
+    const steps = [{ type: "wait" }];
+    expect(resolveStep(steps, 0)).toEqual({ stepType: "wait", stepConfig: {} });
+  });
+
+  it("defaults config to {} when it is not a plain object (e.g. an array)", () => {
+    const steps = [{ type: "wait", config: ["not", "an", "object"] }];
+    expect(resolveStep(steps, 0)).toEqual({ stepType: "wait", stepConfig: {} });
+  });
+
+  it("returns null for an out-of-bounds index", () => {
+    expect(resolveStep([{ type: "wait" }], 5)).toBeNull();
+    expect(resolveStep([], 0)).toBeNull();
+  });
+
+  it("returns null when the step has no string type, rather than assuming one", () => {
+    expect(resolveStep([{ config: {} }], 0)).toBeNull();
+    expect(resolveStep([{ type: 123 }], 0)).toBeNull();
   });
 });
 
