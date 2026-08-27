@@ -1,4 +1,8 @@
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+  type FastifyReply,
+} from "fastify";
 import { Readable } from "node:stream";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
 import cors from "@fastify/cors";
@@ -11,14 +15,22 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { resolveRoute, SERVICE_ROUTES } from "./registry.js";
 import { checkModuleEnabled } from "./module-guard.js";
 import { checkPolicy } from "./policy-check.js";
-import { createRedisQuotaStore, createInMemoryQuotaStore } from "./quota-store.js";
+import {
+  createRedisQuotaStore,
+  createInMemoryQuotaStore,
+} from "./quota-store.js";
 import { registerResponseMetrics } from "./response-metrics.js";
 import { registerScreenManifestRoute } from "./screen-manifest.js";
 import { registerSearchRoute } from "./search-route.js";
 import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { getConfig, applyConfig, ConfigError, type GatewayRuntimeConfig } from "./runtime-config.js";
+import {
+  getConfig,
+  applyConfig,
+  ConfigError,
+  type GatewayRuntimeConfig,
+} from "./runtime-config.js";
 
 // x-internal is intentionally absent: external clients must never inject it.
 // The gateway sets it itself only when it originates an internal service call.
@@ -35,7 +47,13 @@ const FORWARD_HEADERS = [
 ] as const;
 
 // Actively strip these from every inbound request before forwarding, regardless of FORWARD_HEADERS.
-const STRIP_HEADERS = ["x-internal", "x-internal-secret", "x-internal-caller", "x-service-secret", "x-gateway-request"] as const;
+const STRIP_HEADERS = [
+  "x-internal",
+  "x-internal-secret",
+  "x-internal-caller",
+  "x-service-secret",
+  "x-gateway-request",
+] as const;
 
 /**
  * Routes that do NOT require a bearer token at the gateway.
@@ -55,6 +73,15 @@ const PUBLIC_PREFIXES = [
   "/api/v1/install",
   "/api/v1/careers",
   "/api/v1/crm/public",
+  // MSME self-signup (deep-verification, 2026-08-27): tenant-service's own
+  // route is marked config:{public:true} and does not read req.ctx, but the
+  // gateway's own bearer-token pre-check (below) runs BEFORE any request is
+  // proxied downstream, so a real anonymous caller was still 401'd here even
+  // after the tenant-service-side fix. An exact path, not the whole
+  // /api/v1/tenant prefix, to avoid exposing any other tenant-service route
+  // (create/suspend/etc, all of which still require a real role) to
+  // unauthenticated traffic at the gateway.
+  "/api/v1/tenant/msme-onboard",
 ];
 
 /** Verify the internal service-to-service secret (timing-safe). */
@@ -63,10 +90,16 @@ function verifyInternalSecret(req: FastifyRequest): boolean {
   const expected = process.env.INTERNAL_SERVICE_SECRET;
   if (!expected || expected.length === 0) return false;
   if (!secret || secret.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
+  return timingSafeEqual(
+    Buffer.from(secret, "utf8"),
+    Buffer.from(expected, "utf8"),
+  );
 }
 
-async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+async function proxyHandler(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
   /**
    * Canonicalise BEFORE any decision, and use the single result for BOTH the public-prefix
    * check and the upstream lookup. Deriving the path twice, or deciding on the raw string
@@ -76,22 +109,36 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
    */
   const canonical = canonicalisePath(req.url);
   if (!canonical.ok) {
-    req.log.warn({ correlationId: req.id, reason: canonical.reason }, "rejected malformed request path");
-    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+    req.log.warn(
+      { correlationId: req.id, reason: canonical.reason },
+      "rejected malformed request path",
+    );
+    return reply
+      .code(400)
+      .send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
   }
   const pathname = canonical.pathname;
 
   const resolved = resolveRoute(pathname);
   if (!resolved) {
-    return reply.code(404).send({ code: "NOT_FOUND", message: "no upstream for path" });
+    return reply
+      .code(404)
+      .send({ code: "NOT_FOUND", message: "no upstream for path" });
   }
 
   // Enforce authentication for all non-public routes
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isPublic = PUBLIC_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
   if (!isPublic) {
     const auth = req.headers["authorization"];
     if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
-      return reply.code(401).send({ code: "UNAUTHENTICATED", message: "missing or invalid authorization header" });
+      return reply
+        .code(401)
+        .send({
+          code: "UNAUTHENTICATED",
+          message: "missing or invalid authorization header",
+        });
     }
   }
 
@@ -107,7 +154,9 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   const policyAllowed = await checkPolicy(req, reply, route.name);
   if (!policyAllowed) return; // reply already sent with 403
 
-  const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  const query = req.url.includes("?")
+    ? req.url.slice(req.url.indexOf("?"))
+    : "";
 
   /**
    * Forward the RAW path bytes, not the decoded ones. The guard has already established
@@ -123,8 +172,13 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
    */
   const rawPathname = req.url.split("?")[0] ?? "/";
   if (!rawPathname.startsWith(route.prefix)) {
-    req.log.warn({ correlationId: req.id, reason: "encoded_prefix" }, "rejected malformed request path");
-    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+    req.log.warn(
+      { correlationId: req.id, reason: "encoded_prefix" },
+      "rejected malformed request path",
+    );
+    return reply
+      .code(400)
+      .send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
   }
   const rawRemainder = rawPathname.slice(route.prefix.length) || "/";
   const remainder = rawRemainder === "/" ? "" : rawRemainder;
@@ -232,14 +286,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     // SEC REM-10: hard cap on inbound body size. Prevents memory-exhaustion attacks
     // via large-body requests at 1000 TPS. Default 1MB; tune via GATEWAY_BODY_LIMIT env.
     bodyLimit: Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576), // 1 MB
-    genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+    genReqId: (req) =>
+      (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 
   // SEC: CORS must fail closed in production. If CORS_ORIGIN is unset in prod we
   // refuse to start rather than silently trusting localhost. Outside prod we keep
   // the localhost dev default so local development is unaffected.
   const corsOriginEnv = process.env.CORS_ORIGIN;
-  if (process.env.NODE_ENV === "production" && (!corsOriginEnv || corsOriginEnv.trim() === "")) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!corsOriginEnv || corsOriginEnv.trim() === "")
+  ) {
     throw new Error(
       "CORS_ORIGIN must be set in production; refusing to start with an insecure default.",
     );
@@ -247,7 +305,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: (corsOriginEnv ?? "http://localhost:3000").split(","),
     credentials: true,
-    allowedHeaders: ["content-type", "authorization", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token"],
+    allowedHeaders: [
+      "content-type",
+      "authorization",
+      "x-correlation-id",
+      "x-device-id",
+      "x-device-trust-token",
+      "x-step-up-token",
+    ],
   });
 
   // SEC: real CSP instead of disabling it. default-src 'self'; no unsafe-eval.
@@ -273,14 +338,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   // @fastify/rate-limit v9 RedisStore calls redis.defineCommand() on the value
   // passed as { redis: ... }. A plain { url } object has no such method and
   // crashes. We must pass a real ioredis client instance.
-  const rateLimitRedisUrl = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
+  const rateLimitRedisUrl =
+    process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rateLimitClient: any = undefined;
   if (rateLimitRedisUrl) {
     try {
-      rateLimitClient = new Redis(rateLimitRedisUrl, { maxRetriesPerRequest: 2, lazyConnect: true });
+      rateLimitClient = new Redis(rateLimitRedisUrl, {
+        maxRetriesPerRequest: 2,
+        lazyConnect: true,
+      });
       await rateLimitClient.connect();
-      app.log.info({ redisUrl: rateLimitRedisUrl }, "rate-limit: Redis store connected");
+      app.log.info(
+        { redisUrl: rateLimitRedisUrl },
+        "rate-limit: Redis store connected",
+      );
     } catch (err) {
       app.log.warn(
         { err, redisUrl: rateLimitRedisUrl },
@@ -303,14 +375,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   // 1 000 req/min limit rather than getting an extra 200/min allowance.
   await app.register(rateLimit, {
     global: false,
-    keyGenerator: (req) => (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
+    keyGenerator: (req) =>
+      (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
     ...(rateLimitClient ? { redis: rateLimitClient } : {}),
   });
   // Phase 1 hyperscale: per-tenant configurable quota enforcement.
   // Uses Redis for distributed counters (survives restart, fleet-wide enforcement).
-  const REDIS_URL = process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
+  const REDIS_URL =
+    process.env.REDIS_URL ?? process.env.GATEWAY_REDIS_URL ?? "";
   const quotaStore = REDIS_URL
     ? await createRedisQuotaStore(REDIS_URL)
     : createInMemoryQuotaStore();
@@ -343,14 +417,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Called by admin-service to push config changes. Authenticated via x-internal-secret.
   app.get("/internal/config", async (req, reply) => {
     if (!verifyInternalSecret(req)) {
-      return reply.code(403).send({ code: "FORBIDDEN", message: "invalid internal secret" });
+      return reply
+        .code(403)
+        .send({ code: "FORBIDDEN", message: "invalid internal secret" });
     }
     return reply.send({ data: getConfig() });
   });
 
   app.patch("/internal/config", async (req, reply) => {
     if (!verifyInternalSecret(req)) {
-      return reply.code(403).send({ code: "FORBIDDEN", message: "invalid internal secret" });
+      return reply
+        .code(403)
+        .send({ code: "FORBIDDEN", message: "invalid internal secret" });
     }
     try {
       const patch = req.body as Partial<GatewayRuntimeConfig>;
@@ -358,7 +436,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.send({ status: "updated", data: updated });
     } catch (err) {
       if (err instanceof ConfigError) {
-        return reply.code(400).send({ code: "VALIDATION_FAILED", message: err.message });
+        return reply
+          .code(400)
+          .send({ code: "VALIDATION_FAILED", message: err.message });
       }
       throw err;
     }
@@ -391,7 +471,7 @@ export async function buildApp(): Promise<FastifyInstance> {
             fetch(`${u}/health`, { signal: AbortSignal.timeout(2000) })
               .then((r) => r.ok)
               .catch(() => false),
-          ])
+          ]),
         );
         void Promise.allSettled([..._batchProbes.values()]).then(() => {
           _batchProbes = null;
@@ -419,16 +499,20 @@ export async function buildApp(): Promise<FastifyInstance> {
   // internal-IP), so the gateway no longer needs its own duplicate onRequest
   // guard. Behavior is identical — same METRICS_TOKEN / internal-IP rule.
 
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
-    try {
-      done(null, body ? JSON.parse(body as string) : {});
-    } catch (err) {
-      // Return 400 for malformed JSON — never 500.
-      const syntaxErr = err as Error & { statusCode?: number };
-      syntaxErr.statusCode = 400;
-      done(syntaxErr, undefined);
-    }
-  });
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      try {
+        done(null, body ? JSON.parse(body as string) : {});
+      } catch (err) {
+        // Return 400 for malformed JSON — never 500.
+        const syntaxErr = err as Error & { statusCode?: number };
+        syntaxErr.statusCode = 400;
+        done(syntaxErr, undefined);
+      }
+    },
+  );
 
   // SEC REM-08: Per-IP auth rate limit (10 req/min). Primary brute-force defense is
   // Keycloak's built-in bruteForceProtected=true (failureFactor:5, lockout after 5
@@ -450,7 +534,10 @@ export async function buildApp(): Promise<FastifyInstance> {
         // prevents distributed attacks where the same username is tried from many IPs.
         keyGenerator: (req) => {
           const body = req.body as Record<string, unknown> | undefined;
-          const username = typeof body?.username === "string" ? body.username.toLowerCase().trim() : null;
+          const username =
+            typeof body?.username === "string"
+              ? body.username.toLowerCase().trim()
+              : null;
           return username ? `auth:${username}` : (req.ip ?? "unknown");
         },
       },
@@ -458,7 +545,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     handler: proxyHandler,
   });
 
-  app.route({ method: ["GET", "POST", "PUT", "PATCH", "DELETE"], url: "/api/*", handler: proxyHandler });
+  app.route({
+    method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    url: "/api/*",
+    handler: proxyHandler,
+  });
 
   // CAP-052: API catalogue is the one persistent store the gateway owns
   // (DB civitas_gateway). Mounted only when DATABASE_URL is configured so the

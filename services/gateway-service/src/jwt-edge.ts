@@ -35,6 +35,9 @@ const PUBLIC_PREFIXES = [
   "/api/v1/install",
   "/api/v1/careers",
   "/api/v1/crm/public",
+  // Must stay in sync with PUBLIC_PREFIXES in app.ts — see the comment there
+  // for why (MSME self-signup, deep-verification, 2026-08-27).
+  "/api/v1/tenant/msme-onboard",
 ];
 
 /**
@@ -61,8 +64,13 @@ export async function jwtEdgeVerify(
    */
   const canonical = canonicalisePath(req.url);
   if (!canonical.ok) {
-    log.warn({ correlationId: req.id, reason: canonical.reason }, "rejected malformed request path");
-    return reply.code(400).send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
+    log.warn(
+      { correlationId: req.id, reason: canonical.reason },
+      "rejected malformed request path",
+    );
+    return reply
+      .code(400)
+      .send({ ...BAD_PATH_RESPONSE, correlationId: req.id });
   }
   const pathname = canonical.pathname;
 
@@ -87,7 +95,8 @@ export async function jwtEdgeVerify(
     const payload = await verifyJwt(token);
     // Attach the verified tenant/actor to the request for downstream guards
     // (module-guard, policy-check) that need tenant context without re-verifying.
-    (req as FastifyRequest & { jwtPayload?: CivitasJwtPayload }).jwtPayload = payload;
+    (req as FastifyRequest & { jwtPayload?: CivitasJwtPayload }).jwtPayload =
+      payload;
     // SEC-P0: the verified token's tid claim is AUTHORITATIVE. Always overwrite any
     // client-supplied x-tenant-id so a logged-in user cannot forge a victim tenant id
     // in the header (downstream services source the RLS GUC from x-tenant-id).
@@ -110,7 +119,8 @@ export async function jwtEdgeVerify(
       delete headers["x-tenant-id"];
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "token verification failed";
+    const message =
+      err instanceof Error ? err.message : "token verification failed";
 
     if (mode === "audit") {
       // Shadow mode: log but allow through (useful during rollout to detect breakage).
@@ -122,7 +132,10 @@ export async function jwtEdgeVerify(
     }
 
     // Enforce mode: reject with 401.
-    log.info({ correlationId: req.id, err: message, url: pathname }, "JWT edge reject");
+    log.info(
+      { correlationId: req.id, err: message, url: pathname },
+      "JWT edge reject",
+    );
     return reply.code(401).send({
       code: "TOKEN_INVALID",
       message: "Token verification failed at gateway edge",
