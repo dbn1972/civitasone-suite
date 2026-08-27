@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ContactOption = { id: string; name: string };
 
@@ -22,7 +23,7 @@ export function LogActivityButton() {
     let active = true;
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/crm/contacts");
+        const res = await browserFetch("v1/crm/contacts");
         if (!res.ok) return;
         const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
         if (!active) return;
@@ -46,9 +47,8 @@ export function LogActivityButton() {
     setMessage("");
     setError("");
     try {
-      const res = await fetch("/api/proxy/v1/crm/activities", {
+      const res = await browserFetch("v1/crm/activities", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(form.contactId ? { contactId: form.contactId } : {}),
           type: form.type,
@@ -58,7 +58,7 @@ export function LogActivityButton() {
           ...(form.dueDate ? { dueDate: form.dueDate } : {}),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not log the interaction.");
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setMessage("Interaction logged.");
       setForm({ contactId: "", type: "call", subject: "", text: "", dueDate: "" });
       setOpen(false);
