@@ -1,4 +1,16 @@
 import { z } from "zod";
+import { listQuerySchema } from "@civitasone/schemas/common";
+
+// GET /v1/hrms/employees query params: standard pagination plus an optional
+// tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
+// NOTE: also declared verbatim on the employee-detail/id-cards/disciplinary
+// cluster branch (PR #753), which touched this file for an unrelated fix
+// (basicMinor bigint->number) but happened to carry this hunk along; the two
+// insertions are identical so whichever PR merges second should merge cleanly.
+export const employeeListQuery = listQuerySchema.extend({
+  employeeType: z.string().min(1).max(32).optional(),
+});
+export type EmployeeListQuery = z.infer<typeof employeeListQuery>;
 
 export const createEmployeeBody = z.object({
   employeeNo:    z.string().min(1).max(32),

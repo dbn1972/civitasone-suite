@@ -8,6 +8,7 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import ShiftRequestsPage from "./page";
 
+// Matches the real GET /v1/hrms/shift-requests shape (employeeName, no department).
 const MOCK_REQUESTS = [
   { id: "r1", employeeId: "e1", employeeName: "Priya Nair", currentShift: "General Duty", requestedShift: "Morning Shift", effectiveDate: "2026-09-01", reason: "Family care", status: "pending" },
   { id: "r2", employeeId: "e2", employeeName: "Arvind Kumar", currentShift: "Morning Shift", requestedShift: "Evening Shift", effectiveDate: "2026-09-01", reason: "Health", status: "approved" },
@@ -23,6 +24,15 @@ describe("ShiftRequestsPage", () => {
     expect(screen.getByText("Arvind Kumar")).toBeInTheDocument();
   });
 
+  // NOTE: a fallback-mapping test (employeeName missing -> falls back to
+  // employeeId) was attempted here but dropped: fetchJson is mocked at the
+  // module boundary in this test file, so getData()'s mapResponse callback
+  // (where the fallback lives) never actually runs against mocked data --
+  // the mock's raw payload is returned as-is. The fallback logic itself
+  // (`employeeName ?? employeeId`) is simple enough to trust via code
+  // review; it cannot be meaningfully unit-tested at this boundary without
+  // restructuring how fetchJson is mocked across this codebase's page tests.
+
   it("shows stat cards for pending and approved counts", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_REQUESTS, source: "api" });
     render(await ShiftRequestsPage());
@@ -33,7 +43,9 @@ describe("ShiftRequestsPage", () => {
   it("renders page title", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await ShiftRequestsPage());
-    expect(screen.getByRole("heading", { name: /shift change requests/i })).toBeInTheDocument();
+    // level: 1 disambiguates the PageHeader's <h1> from the Card's <h3>
+    // title, which is also literally "Shift Change Requests".
+    expect(screen.getByRole("heading", { level: 1, name: /shift change requests/i })).toBeInTheDocument();
   });
 
   it("renders empty state when no requests", async () => {

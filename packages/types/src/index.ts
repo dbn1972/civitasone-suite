@@ -738,6 +738,8 @@ export type HRDashboard = {
   onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
+  /** Tenant-wide headcount grouped by employeeType (excludes separated), independent of any list pagination. */
+  employeeTypeBreakdown: { name: string; count: number }[];
 };
 
 export type LeaveInboxItem = {

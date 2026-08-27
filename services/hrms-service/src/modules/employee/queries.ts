@@ -65,9 +65,9 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
   };
 }
 
-export async function listEmployees(tenantId: string, limit: number, offset: number): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     return {

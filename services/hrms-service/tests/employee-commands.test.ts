@@ -5,15 +5,35 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 
-const { publishMock, putMock, invalidateMock } = vi.hoisted(() => ({
+const { publishMock, putMock, invalidateMock, insertValuesMock } = vi.hoisted(() => ({
   publishMock: vi.fn(async () => randomUUID()),
   putMock: vi.fn(async () => undefined),
   invalidateMock: vi.fn(async () => undefined),
+  insertValuesMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: (...a: any[]) => publishMock(...a) },
   cache: { put: (...a: any[]) => putMock(...a), invalidate: (...a: any[]) => invalidateMock(...a), makeKey: (...parts: string[]) => parts.join(":") },
+}));
+
+// createEmployee does a direct Drizzle insert (no queue/cache) -- capture the
+// exact .values() object so we can assert every validated field actually
+// reaches the insert (HR-A deep-verify: several fields -- category, station,
+// managerId, pran, pan, aadhaarRef, bankAccountNo, bankIfsc, esicIpNumber,
+// uanNumber, gstin, sacCode, agencyRef, napsId, disability -- passed
+// createEmployeeBody validation but were silently dropped before this insert).
+vi.mock("../src/shared/db.js", () => ({
+  db: {},
+  scopedRead: async (fn: any) =>
+    fn({
+      insert: (_table: unknown) => ({
+        values: (v: unknown) => {
+          insertValuesMock(v);
+          return { returning: async (_sel: unknown) => [{ id: "11111111-1111-1111-1111-111111111111" }] };
+        },
+      }),
+    }),
 }));
 
 import {
@@ -33,7 +53,7 @@ function ctx(): RequestContext {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe("createEmployee", () => {
-  it("publishes command and returns accepted", async () => {
+  it("inserts a row and returns accepted", async () => {
     const r = await createEmployee(ctx(), {
       employeeNo: "EMP001", fullName: "Test", departmentId: randomUUID(),
       designationId: randomUUID(), dateOfJoining: "2026-01-01",
@@ -41,8 +61,54 @@ describe("createEmployee", () => {
     } as any);
     expect(r.status).toBe("accepted");
     expect(r.id).toBeDefined();
-    expect(publishMock).toHaveBeenCalledOnce();
-    expect(putMock).toHaveBeenCalledOnce();
+    expect(insertValuesMock).toHaveBeenCalledOnce();
+  });
+
+  it("persists category, station, managerId, pran and other statutory/type-specific fields (HR-A finding: previously silently dropped)", async () => {
+    const mgr = randomUUID();
+    await createEmployee(ctx(), {
+      employeeNo: "EMP002", fullName: "Test Two", departmentId: randomUUID(),
+      designationId: randomUUID(), dateOfJoining: "2026-01-01",
+      employeeType: "permanent", basicMinor: 5000000n, currency: "INR",
+      category: "OBC", station: "CGO Complex, New Delhi", managerId: mgr,
+      pran: "110012345678", pan: "ABCDE1234F", aadhaarRef: "masked-ref-1",
+      bankAccountNo: "00011122233", bankIfsc: "SBIN0001234",
+      esicIpNumber: "3100000000", uanNumber: "100200300400",
+      gstin: "29ABCDE1234F1Z5", sacCode: "998311",
+      agencyRef: "AG/DEP/2025/017", napsId: "NAPS-2025-0001",
+      disability: true,
+    } as any);
+    expect(insertValuesMock).toHaveBeenCalledOnce();
+    const inserted = insertValuesMock.mock.calls[0][0];
+    expect(inserted.category).toBe("OBC");
+    expect(inserted.station).toBe("CGO Complex, New Delhi");
+    expect(inserted.managerId).toBe(mgr);
+    expect(inserted.pran).toBe("110012345678");
+    expect(inserted.pan).toBe("ABCDE1234F");
+    expect(inserted.aadhaarRef).toBe("masked-ref-1");
+    expect(inserted.bankAccountNo).toBe("00011122233");
+    expect(inserted.bankIfsc).toBe("SBIN0001234");
+    expect(inserted.esicIpNumber).toBe("3100000000");
+    expect(inserted.uanNumber).toBe("100200300400");
+    expect(inserted.gstin).toBe("29ABCDE1234F1Z5");
+    expect(inserted.sacCode).toBe("998311");
+    expect(inserted.agencyRef).toBe("AG/DEP/2025/017");
+    expect(inserted.napsId).toBe("NAPS-2025-0001");
+    expect(inserted.disability).toBe(true);
+  });
+
+  it("defaults the new optional fields to null/false when omitted (no regression for minimal payloads)", async () => {
+    await createEmployee(ctx(), {
+      employeeNo: "EMP003", fullName: "Test Three", departmentId: randomUUID(),
+      designationId: randomUUID(), dateOfJoining: "2026-01-01",
+      employeeType: "permanent", basicMinor: 0n, currency: "INR",
+    } as any);
+    const inserted = insertValuesMock.mock.calls[0][0];
+    expect(inserted.category).toBeNull();
+    expect(inserted.station).toBeNull();
+    expect(inserted.managerId).toBeNull();
+    expect(inserted.pran).toBeNull();
+    expect(inserted.disability).toBe(false);
   });
 });
 
