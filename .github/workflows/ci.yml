@@ -561,6 +561,9 @@ jobs:
           # Gates the /auth/dev route. Read by apps/web/src/lib/auth/env.ts.
           ENABLE_DEV_LOGIN: 'true'
           JWT_SECRET: civitasone-dev-secret
+      - name: TEMP DIAGNOSTIC — network probe (remove before merge)
+        if: always()
+        run: node scripts/ci/_tmp_network_probe.mjs
       - name: Run axe-core WCAG 2.2 AA gate
         run: pnpm --filter @civitasone/web run test:a11y
         env:
