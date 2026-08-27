@@ -99,6 +99,19 @@ BEGIN
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'analytics' AND table_name = 'fact_events_legacy'
   ) THEN
+    -- The pre-partitioning table predates the version/created_by/updated_by
+    -- audit columns (added to analytics.fact_events by Step 2 above to match
+    -- facts/schema.ts). Backfill them on the legacy table so the INSERT ...
+    -- SELECT below can carry every row over. version defaults to 1 like the
+    -- target column; created_by/updated_by use this codebase's nil-UUID
+    -- sentinel for backfilled audit columns with no historical actor (see
+    -- e.g. finance-service/0043_schema_drift_fixups.sql,
+    -- citizen-service/0014_sla_rules_missing_columns.sql).
+    ALTER TABLE analytics.fact_events_legacy
+      ADD COLUMN IF NOT EXISTS version    integer NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS created_by uuid    NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+      ADD COLUMN IF NOT EXISTS updated_by uuid    NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+
     INSERT INTO analytics.fact_events (
       id, tenant_id, source, event_type, category, status,
       amount, occurred_at, dedupe_key, version, created_by, updated_by, ingested_at

@@ -86,7 +86,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "confirmed", msg.actorId, {
         slotNumber: p.slotNumber,
-        paymentRef: p.paymentRef,
+        ...(p.paymentRef !== undefined ? { paymentRef: p.paymentRef } : {}),
         feePaid: !!p.paymentRef,
       });
       if (!ok) return;

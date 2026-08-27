@@ -124,10 +124,24 @@ INSERT INTO employee.hrms_letter_templates (tenant_id, letter_type, name, templa
 ON CONFLICT DO NOTHING;
 
 -- ═══ Seed default shifts ═══
-INSERT INTO attendance.hrms_shifts (tenant_id, name, code, start_time, end_time, grace_minutes, overtime_threshold_minutes, created_by) VALUES
-('00000000-0000-0000-0000-000000000001', 'General Shift', 'GEN', '09:00', '17:30', 15, 30, '00000000-0000-0000-0000-000000000099'),
-('00000000-0000-0000-0000-000000000001', 'Morning Shift', 'MORN', '06:00', '14:00', 10, 30, '00000000-0000-0000-0000-000000000099'),
-('00000000-0000-0000-0000-000000000001', 'Evening Shift', 'EVE', '14:00', '22:00', 10, 30, '00000000-0000-0000-0000-000000000099'),
-('00000000-0000-0000-0000-000000000001', 'Night Shift', 'NIGHT', '22:00', '06:00', 10, 30, '00000000-0000-0000-0000-000000000099')
+-- FIXED 2026-08-27: this INSERT targeted columns (code, overtime_threshold_
+-- minutes, grace_minutes) that don't exist on the real attendance.hrms_shifts
+-- table. That table was already created by 0001_init.sql with a plainer
+-- shape (grace_mins, no code/half_day_minutes/overtime_threshold_minutes/
+-- is_night_shift/is_active) before this file's own CREATE TABLE IF NOT
+-- EXISTS above ever runs, so this file's richer redefinition is a silent
+-- no-op — confirmed against src/modules/attendance/schema.ts, which the app
+-- actually queries and which matches the 0001 shape exactly. Trimmed the
+-- INSERT to the columns that are really there and fixed grace_minutes ->
+-- grace_mins; the per-shift codes (GEN/MORN/EVE/NIGHT) have nowhere to be
+-- stored under the real schema, so they're dropped rather than invented.
+-- updated_by is also required: it's NOT NULL with no default on the real
+-- table, so it must be listed explicitly (mirrors created_by, as elsewhere
+-- in this file's own letter-template audit columns).
+INSERT INTO attendance.hrms_shifts (tenant_id, name, start_time, end_time, grace_mins, created_by, updated_by) VALUES
+('00000000-0000-0000-0000-000000000001', 'General Shift', '09:00', '17:30', 15, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
+('00000000-0000-0000-0000-000000000001', 'Morning Shift', '06:00', '14:00', 10, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
+('00000000-0000-0000-0000-000000000001', 'Evening Shift', '14:00', '22:00', 10, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
+('00000000-0000-0000-0000-000000000001', 'Night Shift', '22:00', '06:00', 10, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
 

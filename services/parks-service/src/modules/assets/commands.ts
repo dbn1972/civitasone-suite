@@ -16,13 +16,13 @@ export interface CreateAssetInput {
 export async function createAsset(ctx: RequestContext, body: CreateAssetInput): Promise<Accepted> {
   const id = randomUUID();
   const assetCode = `PRKA-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.assetCreate, id, { id, assetCode, ...body });
+  return publishCommand(ctx, COMMANDS.CREATE_ASSET, id, { id, assetCode, ...body });
 }
 
 export async function updateAsset(ctx: RequestContext, id: string, patch: Record<string, unknown>, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.assetUpdate, id, { id, patch, version });
+  return publishCommand(ctx, COMMANDS.UPDATE_ASSET, id, { id, patch, version });
 }
 
 export async function recordMaintenance(ctx: RequestContext, id: string, maintenanceEntry: Record<string, unknown>, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.assetMaintenance, id, { id, maintenanceEntry, version });
+  return publishCommand(ctx, COMMANDS.RECORD_MAINTENANCE, id, { id, maintenanceEntry, version });
 }

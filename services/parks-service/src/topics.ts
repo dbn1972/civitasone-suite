@@ -5,6 +5,7 @@ export const COMMANDS = {
   ACKNOWLEDGE_COMPLAINT:  "parks.complaint.acknowledge",
   ASSIGN_COMPLAINT:       "parks.complaint.assign",
   RESOLVE_COMPLAINT:      "parks.complaint.resolve",
+  CLOSE_COMPLAINT:        "parks.complaint.close",
 
   CREATE_TREE_REQUEST:    "parks.tree_request.create",
   INSPECT_TREE_REQUEST:   "parks.tree_request.inspect",
@@ -25,6 +26,7 @@ export const EVENTS = {
   COMPLAINT_ACKNOWLEDGED: "parks.complaint.acknowledged",
   COMPLAINT_ASSIGNED:     "parks.complaint.assigned",
   COMPLAINT_RESOLVED:     "parks.complaint.resolved",
+  COMPLAINT_CLOSED:       "parks.complaint.closed",
 
   TREE_REQUEST_CREATED:   "parks.tree_request.created",
   TREE_REQUEST_INSPECTED: "parks.tree_request.inspected",
