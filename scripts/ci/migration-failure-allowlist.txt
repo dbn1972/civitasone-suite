@@ -4,7 +4,3 @@
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
 # Generated: 2026-08-08  Count: 34 (14 scanner/role migrations removed 2026-08-08 — now run as superuser; notification/0024 syntax bug fixed)
-workflow-service/0013_rls_tenant_isolation.sql             # column "tenant_id" does not exist
-workflow-service/0020_rls_completeness.sql                 # column "tenant_id" does not exist
-citizen-service/0020_designer_phase0.sql                   # fails on fresh CI cluster; tracked until designer phase0 migration is repaired
-revenue-service/0004_outbox_inbox_durable.sql              # fails on fresh CI cluster after admin-owned migration path was restored
