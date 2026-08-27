@@ -123,6 +123,38 @@ describe("plugin sandbox isolation (SEC-P0-03)", () => {
     expect(r.output).toBeNull();
   });
 
+  it("blocks the constructor realm-escape via a primitive ctx property too", async () => {
+    // Primitives (tenantId, eventType, correlationId) are passed through
+    // unsealed — safe only because autoboxing a primitive always uses the
+    // CURRENTLY EXECUTING realm, never the primitive's realm of origin.
+    // Confirm that claim empirically rather than by inspection alone.
+    const r = await runInSandbox(
+      'return ctx.tenantId.constructor.constructor("return typeof process")();',
+      api({ tenantId: "t1" }),
+      2000,
+    );
+    expect(r.output).toBeUndefined();
+    expect(r.error).toBeTruthy();
+  });
+
+  it("does not let a payload with literal __proto__/constructor keys pollute anything", async () => {
+    // A payload built via JSON.parse (the real wire path — not an object
+    // literal, which special-cases __proto__ differently) can legitimately
+    // contain a plain data property literally named "__proto__" or
+    // "constructor". Confirm rehydration inside the context doesn't turn
+    // either into a live prototype/constructor reference reachable by the
+    // handler, and doesn't leak into the host's Object.prototype.
+    const payload = JSON.parse('{"__proto__":{"polluted":true},"constructor":{"nested":"x"},"normal":1}');
+    const r = await runInSandbox(
+      "return { protoOwn: Object.prototype.hasOwnProperty.call(ctx.payload, '__proto__'), pollutedGlobally: ({}).polluted, ctorIsData: typeof ctx.payload.constructor, normal: ctx.payload.normal };",
+      api({ payload }),
+      2000,
+    );
+    expect(r.error).toBeUndefined();
+    expect(r.output).toEqual({ protoOwn: true, pollutedGlobally: undefined, ctorIsData: "object", normal: 1 });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   it("blocks eval / Function code generation", async () => {
     const r = await runInSandbox('return eval("1+1");', api(), 2000);
     expect(r.error).toBeTruthy();
