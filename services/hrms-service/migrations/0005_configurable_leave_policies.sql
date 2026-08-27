@@ -54,8 +54,23 @@ BEGIN
   SELECT id INTO el_id FROM leave.hrms_leave_types WHERE tenant_id = t_id AND code = 'EL' LIMIT 1;
   SELECT id INTO hpl_id FROM leave.hrms_leave_types WHERE tenant_id = t_id AND code = 'HPL' LIMIT 1;
 
-  IF cl_id IS NULL THEN cl_id := 'eeeeeeee-0001-0000-0000-000000000007'; END IF;
-  IF el_id IS NULL THEN el_id := 'eeeeeeee-0001-0000-0000-000000000008'; END IF;
+  -- FIXED: on a fresh cluster no migration ever seeds the base CL/EL leave
+  -- types (only a long-lived, hand-patched dev DB had them already), so
+  -- cl_id/el_id fell back to hardcoded UUIDs that named no actual row and
+  -- the policy-rule INSERTs below violated their leave_type_id FK. HPL
+  -- already used an insert-if-missing pattern; CL/EL now follow it too,
+  -- using the same day counts/flags this file already assumes for them at
+  -- the 'permanent' policy rows, matching src/modules/leave/rules-engine.ts.
+  IF cl_id IS NULL THEN
+    INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, is_encashable, carry_forward, created_by, updated_by)
+    VALUES ('eeeeeeee-0001-0000-0000-000000000007', t_id, 'CL', 'Casual Leave', 8, false, false, actor, actor) ON CONFLICT DO NOTHING;
+    cl_id := 'eeeeeeee-0001-0000-0000-000000000007';
+  END IF;
+  IF el_id IS NULL THEN
+    INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, is_encashable, carry_forward, created_by, updated_by)
+    VALUES ('eeeeeeee-0001-0000-0000-000000000008', t_id, 'EL', 'Earned Leave', 30, true, true, actor, actor) ON CONFLICT DO NOTHING;
+    el_id := 'eeeeeeee-0001-0000-0000-000000000008';
+  END IF;
   IF hpl_id IS NULL THEN
     INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, is_encashable, carry_forward, created_by, updated_by)
     VALUES ('eeeeeeee-0001-0000-0000-000000000052', t_id, 'HPL', 'Half Pay Leave', 20, false, true, actor, actor) ON CONFLICT DO NOTHING;

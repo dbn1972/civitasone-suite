@@ -27,11 +27,14 @@ ALTER TABLE employee.hrms_fnf_settlements FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_fnf_settlements;
 CREATE POLICY tenant_isolation ON employee.hrms_fnf_settlements USING (tenant_id = employee.current_tenant_id());
 
--- employee.hrms_employee_letters (from 0009 — documents)
-ALTER TABLE employee.hrms_employee_letters ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee.hrms_employee_letters FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_employee_letters;
-CREATE POLICY tenant_isolation ON employee.hrms_employee_letters USING (tenant_id = employee.current_tenant_id());
+-- employee.hrms_generated_letters (FIXED 2026-08-27: this file called it
+-- "hrms_employee_letters", a table that has never existed anywhere in this
+-- service; 0009_letters_shifts_fnf.sql's actual "documents" table from that
+-- same section is employee.hrms_generated_letters — corrected to match.)
+ALTER TABLE employee.hrms_generated_letters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_generated_letters FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_generated_letters;
+CREATE POLICY tenant_isolation ON employee.hrms_generated_letters USING (tenant_id = employee.current_tenant_id());
 
 -- ============================================================
 -- Schema: hrms
@@ -43,23 +46,23 @@ ALTER TABLE hrms.face_embeddings FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON hrms.face_embeddings;
 CREATE POLICY tenant_isolation ON hrms.face_embeddings USING (tenant_id = employee.current_tenant_id());
 
--- hrms.travel_requests (from 0015_social_feed.sql)
-ALTER TABLE hrms.travel_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.travel_requests FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.travel_requests;
-CREATE POLICY tenant_isolation ON hrms.travel_requests USING (tenant_id = employee.current_tenant_id());
+-- claims.hrms_travel_requests (FIXED 2026-08-27: was wrongly under schema "hrms."; from 0115_social_feed.sql)
+ALTER TABLE claims.hrms_travel_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims.hrms_travel_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON claims.hrms_travel_requests;
+CREATE POLICY tenant_isolation ON claims.hrms_travel_requests USING (tenant_id = employee.current_tenant_id());
 
--- hrms.expense_claims (from 0015_social_feed.sql)
-ALTER TABLE hrms.expense_claims ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.expense_claims FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.expense_claims;
-CREATE POLICY tenant_isolation ON hrms.expense_claims USING (tenant_id = employee.current_tenant_id());
+-- claims.hrms_expense_claims (FIXED 2026-08-27: was wrongly under schema "hrms."; from 0115_social_feed.sql)
+ALTER TABLE claims.hrms_expense_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims.hrms_expense_claims FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON claims.hrms_expense_claims;
+CREATE POLICY tenant_isolation ON claims.hrms_expense_claims USING (tenant_id = employee.current_tenant_id());
 
--- hrms.push_devices (from 0015_social_feed.sql)
-ALTER TABLE hrms.push_devices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.push_devices FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.push_devices;
-CREATE POLICY tenant_isolation ON hrms.push_devices USING (tenant_id = employee.current_tenant_id());
+-- employee.hrms_push_devices (FIXED 2026-08-27: was wrongly under schema "hrms."; from 0115_social_feed.sql)
+ALTER TABLE employee.hrms_push_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_push_devices FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_push_devices;
+CREATE POLICY tenant_isolation ON employee.hrms_push_devices USING (tenant_id = employee.current_tenant_id());
 
 -- ============================================================
 -- Schema: disciplinary
