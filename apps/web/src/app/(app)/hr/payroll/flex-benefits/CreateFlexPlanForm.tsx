@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
 type PlanComponent = { name: string; maxAmount: string; taxExempt: boolean };
 type PlanResponse = { data: { id: string; name: string; fy: string; totalBudgetMinor: number; status: string } };
@@ -14,7 +15,9 @@ const emptyComponent = (): PlanComponent => ({ name: "", maxAmount: "", taxExemp
 export function CreateFlexPlanForm() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [fy, setFy] = useState("");
+  // Default to the current FY so the common case needs no typing — the field
+  // stays editable for anyone planning next year's plan ahead of time.
+  const [fy, setFy] = useState(currentFinancialYear);
   const [totalBudget, setTotalBudget] = useState("");
   const [components, setComponents] = useState<PlanComponent[]>([emptyComponent()]);
   const [busy, setBusy] = useState(false);

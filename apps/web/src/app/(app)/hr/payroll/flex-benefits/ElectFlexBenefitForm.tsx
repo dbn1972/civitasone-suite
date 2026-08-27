@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
 type ElectionLine = { component: string; amount: string };
 type ElectionResponse = { data: { id: string; planId: string; fy: string; totalElectedMinor: number } };
@@ -14,7 +15,9 @@ const emptyLine = (): ElectionLine => ({ component: "", amount: "" });
 export function ElectFlexBenefitForm() {
   const router = useRouter();
   const [planId, setPlanId] = useState("");
-  const [fy, setFy] = useState("");
+  // Default to the current FY — matches CreateFlexPlanForm and avoids
+  // requiring the employee to type an exact "YYYY-YY" string by hand.
+  const [fy, setFy] = useState(currentFinancialYear);
   const [lines, setLines] = useState<ElectionLine[]>([emptyLine()]);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);

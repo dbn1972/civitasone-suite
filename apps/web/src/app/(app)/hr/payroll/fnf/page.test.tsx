@@ -46,6 +46,6 @@ describe("FnfPage", () => {
     const ui = await FnfPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load F&F settlements — showing nothing")).toBeInTheDocument();
   });
 });
