@@ -68,11 +68,17 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   const deptVal = field(contract, "department", "dept");
   const dept = deptVal !== "—" ? deptVal : "Procurement";
-  const amountMinor =
+  // RaiseEOfficeNote's amountMinor prop accepts number | string specifically
+  // so callers never have to round-trip a paise value through a JS double --
+  // it's forwarded as-is and never used in arithmetic. valueMinor now really
+  // is populated (a numeric string, per the live API response), so keep it as
+  // a string rather than coercing through Number(), which would silently
+  // round any value above Number.MAX_SAFE_INTEGER paise.
+  const amountMinor: number | string | undefined =
     typeof rawValue === "number"
       ? rawValue
-      : typeof rawValue === "string" && rawValue.trim() !== "" && Number.isFinite(Number(rawValue))
-        ? Number(rawValue)
+      : typeof rawValue === "string" && /^-?\d+$/.test(rawValue.trim())
+        ? rawValue.trim()
         : undefined;
 
   return (
