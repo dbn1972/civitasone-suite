@@ -152,7 +152,7 @@ jobs:
       - name: Start web
         run: |
           pnpm --filter @civitasone/web run start > web-server.log 2>&1 &
-          npx --yes wait-on http://localhost:3000/auth/login --timeout 120000
+          npx --yes wait-on tcp:localhost:3000 --timeout 120000
         env:
           CIVITASONE_API_BASE_URL: http://localhost:8080
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
