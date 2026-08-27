@@ -396,13 +396,26 @@ describe("POST /policy/breakglass", () => {
     expect(res.statusCode).toBeLessThan(600);
   });
 
-  it("any authenticated user can request breakglass", async () => {
+  // SEC regression: this route had no requireRole call at all (unlike both
+  // sibling routes above, POST/DELETE /policy/bindings, which gate on ADMIN).
+  // This test used to assert that as intended ("any authenticated user can
+  // request breakglass"); it now asserts the corrected, sibling-consistent
+  // behavior instead.
+  it("returns 403 for non-admin", async () => {
     const res = await app.inject({
       method: "POST", url: "/policy/breakglass",
       headers: staffH(),
       payload: { scope: "finance.*", reason: "Emergency access required for incident" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 401 without token", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/policy/breakglass",
+      payload: { scope: "finance.*", reason: "Emergency access required for incident" },
+    });
+    expect(res.statusCode).toBe(401);
   });
 });
 

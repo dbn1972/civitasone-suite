@@ -6,9 +6,20 @@ import { notifications, type NotificationInsert, type NotificationRow } from "./
 /**
  * Set the app.tenant_id GUC for RLS in the current session.
  * Required because RLS policies check current_setting('app.tenant_id', true).
+ *
+ * SEC: previously built via sql.raw() + raw string interpolation (no
+ * parameterization) — an outlier compared to every other service in the
+ * fleet, which all set this same GUC via the parameterized set_config()
+ * function form (e.g. admin-service/config/repo.ts, contract-service,
+ * gateway-service/shared/scope.ts, metadata-service/shared/scope.ts).
+ * set_config('app.tenant_id', value, true) is the function-call equivalent
+ * of `SET LOCAL app.tenant_id = value` (Postgres docs), so this is a
+ * behavior-preserving swap to the tagged-template form, which drizzle-orm's
+ * sql`` binds as a real query parameter instead of splicing it into the
+ * statement text.
  */
 async function setTenantGuc(tenantId: string): Promise<void> {
-  await db.execute(sql.raw(`SET LOCAL app.tenant_id = '${tenantId}'`));
+  await db.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
 }
 
 /**
@@ -17,7 +28,7 @@ async function setTenantGuc(tenantId: string): Promise<void> {
  */
 export async function persistNotification(data: NotificationInsert): Promise<NotificationRow> {
   const result = await db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${data.tenantId}'`));
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${data.tenantId}, true)`);
     const rows = await tx.insert(notifications).values(data).returning();
     const row = rows[0];
     if (!row) throw new Error("Failed to insert notification");
@@ -32,7 +43,7 @@ export async function persistNotification(data: NotificationInsert): Promise<Not
  */
 export async function listUnread(tenantId: string, userId: string, limit = 50): Promise<NotificationRow[]> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${tenantId}'`));
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     return tx
       .select()
       .from(notifications)
@@ -53,7 +64,7 @@ export async function listUnread(tenantId: string, userId: string, limit = 50): 
  */
 export async function markRead(tenantId: string, userId: string, notificationId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${tenantId}'`));
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     const result = await tx
       .update(notifications)
       .set({ readAt: new Date() })
@@ -75,7 +86,7 @@ export async function markRead(tenantId: string, userId: string, notificationId:
  */
 export async function markAllRead(tenantId: string, userId: string): Promise<number> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL app.tenant_id = '${tenantId}'`));
+    await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     const result = await tx
       .update(notifications)
       .set({ readAt: new Date() })
