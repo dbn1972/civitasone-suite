@@ -43,7 +43,12 @@ export default async function TalentPoolPage({
 
   const rows = candidates.map((c) => ({
     ...c,
-    skillsDisplay: c.skills?.join(", ") ?? "—",
+    // Real data has both shapes for "no skills": a SQL NULL (skills == null)
+    // and an empty array (skills == []). c.skills?.join(", ") only caught the
+    // first -- an empty array produced "".join() === "" (a blank cell that
+    // reads as a rendering glitch), not the placeholder every other empty
+    // field in this table uses. Both shapes now render the same placeholder.
+    skillsDisplay: c.skills && c.skills.length > 0 ? c.skills.join(", ") : "—",
     expDisplay: c.experienceYears != null ? `${c.experienceYears} yr` : "—",
     appliedDate: new Date(c.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
   }));

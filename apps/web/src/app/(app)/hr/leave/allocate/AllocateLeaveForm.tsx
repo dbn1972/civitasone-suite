@@ -125,7 +125,7 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("employee") ? `${empId}-err` : undefined}
         >
           {employees.length === 0
-            ? <option value="">Loading…</option>
+            ? <option value="">{status === "error" ? "Unable to load employees" : "Loading…"}</option>
             : employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
               ))}
@@ -148,7 +148,7 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
         >
           {leaveTypes.length === 0
-            ? <option value="">Loading…</option>
+            ? <option value="">{status === "error" ? "Unable to load leave types" : "Loading…"}</option>
             : leaveTypes.map((lt) => (
                 <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
               ))}

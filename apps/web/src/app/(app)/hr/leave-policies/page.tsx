@@ -28,7 +28,15 @@ type Policy = {
 
 type PolicyRow = Policy & Record<string, unknown>;
 
-const EMPLOYEE_TYPES = ["permanent", "contractual", "vendor_deputed", "deputation", "consultant"];
+// Kept in sync with employeeTypeEnum in policy-admin-routes.ts and
+// CreateLeavePolicyForm's own EMPLOYEE_TYPES — previously only 5 of the 9
+// backend-supported types were listed here, so a policy created for e.g.
+// "temporary" or "intern" (allowed by the create form and the backend
+// validator) had no dedicated filter button, only "All Types".
+const EMPLOYEE_TYPES = [
+  "permanent", "contractual", "vendor_deputed", "deputation", "consultant",
+  "temporary", "intern", "apprentice", "volunteer",
+];
 
 const TYPE_VARIANT: Record<string, string> = {
   permanent: "info",
@@ -123,6 +131,12 @@ export default function LeavePoliciesPage() {
     }
   }
 
+  async function handlePolicyCreated() {
+    setToast({ tone: "good", text: "Policy created successfully." });
+    await fetchPolicies();
+    setTimeout(() => setToast(null), 4000);
+  }
+
   const editingPolicy = policies.find((p) => p.id === editId) ?? null;
   const rows: PolicyRow[] = policies as PolicyRow[];
 
@@ -162,6 +176,8 @@ export default function LeavePoliciesPage() {
           {toast.text}
         </p>
       )}
+
+      <CreateLeavePolicyForm onCreated={() => void handlePolicyCreated()} />
 
       <Card title="Leave Policies">
         {state === "loading" ? (

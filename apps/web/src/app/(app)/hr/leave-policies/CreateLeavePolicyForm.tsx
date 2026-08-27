@@ -23,7 +23,7 @@ const COUNT_METHODS = [
   { value: "working_days", label: "Working days only" },
 ];
 
-export function CreateLeavePolicyForm() {
+export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -125,6 +125,12 @@ export function CreateLeavePolicyForm() {
       }
       setConfirmOpen(false);
       setOpen(false);
+      // POST /v1/hrms/admin/leave-policies is a fire-and-forget queued write
+      // (see policy-admin-routes.ts) — router.refresh() alone would not
+      // re-run this page's client-side fetchPolicies() effect, since the page
+      // is a "use client" component with its own useEffect-driven fetch, not
+      // a server component. Let the parent re-fetch its list explicitly.
+      onCreated?.();
       router.refresh();
     } catch {
       setError("Network error. Please try again.");

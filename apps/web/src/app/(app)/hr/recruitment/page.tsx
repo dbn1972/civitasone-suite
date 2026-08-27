@@ -23,12 +23,12 @@ type Opening = {
   applicationDeadline?: string;
 } & Record<string, unknown>;
 
-async function getDashboard(): Promise<DashboardStats> {
+async function getDashboard(): Promise<LoaderResult<DashboardStats>> {
   const res = await fetchJson<unknown, DashboardStats>("/api/v1/hrms/recruitment/dashboard", {
     totalOpenings: 0, openVacancies: 0, publishedVacancies: 0,
     internshipsApprenticeships: 0, applicationsInternal: 0, applicationsPublic: 0,
   }, { telemetryKey: "recruitment.dashboard", mapResponse: (p) => p as DashboardStats });
-  return res.data;
+  return res;
 }
 
 async function getOpenings(): Promise<LoaderResult<Opening[]>> {
@@ -43,8 +43,13 @@ async function getOpenings(): Promise<LoaderResult<Opening[]>> {
 }
 
 export default async function RecruitmentPage() {
-  const [stats, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
+  const [{ data: stats, source: statsSource }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
+  // Either fetch failing is worth telling the clerk about -- the stat cards
+  // below would otherwise show a silent, indistinguishable-from-real all-zero
+  // dashboard when only /recruitment/dashboard fails (openings table has its
+  // own badge, but stats previously had none at all).
+  const pageSource = statsSource === "error" || openingSource === "error" ? "error" : "api";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -60,7 +65,7 @@ export default async function RecruitmentPage() {
         }
       />
 
-      <DataSourceBadge source={openingSource} />
+      <DataSourceBadge source={pageSource} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total Vacancies" value={stats.totalOpenings} />
         <StatCard icon="🟢" iconBg="var(--goodbg)" label="Open Now" value={stats.openVacancies} />
