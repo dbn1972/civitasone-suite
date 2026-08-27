@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { renewals, type RenewalRow, type RenewalInsert } from "./schema.js";
 
@@ -71,15 +71,27 @@ export async function updateFeePayment(
       updatedAt: new Date(),
       version: sql`${renewals.version} + 1`,
     })
-    .where(and(eq(renewals.id, id), eq(renewals.tenantId, tenantId)))
+    // feePaid = false makes this an atomic compare-and-swap: two racing
+    // fee-payment commands for the same renewal can no longer both apply.
+    .where(and(
+      eq(renewals.id, id),
+      eq(renewals.tenantId, tenantId),
+      eq(renewals.feePaid, false),
+    ))
     .returning({ id: renewals.id });
   return result.length > 0;
 }
 
+/**
+ * fromStatuses: the set of renewal statuses this write is valid from (same
+ * set canDecideRenewal already validated). Atomic-CAS reasoning as in
+ * permits/repo.ts's updatePermitStatus.
+ */
 export async function updateDecision(
   tx: ScopedTx,
   id: string,
   tenantId: string,
+  fromStatuses: string[],
   status: string,
   decidedBy: string,
   reason: string | null,
@@ -96,7 +108,11 @@ export async function updateDecision(
       updatedAt: new Date(),
       version: sql`${renewals.version} + 1`,
     })
-    .where(and(eq(renewals.id, id), eq(renewals.tenantId, tenantId)))
+    .where(and(
+      eq(renewals.id, id),
+      eq(renewals.tenantId, tenantId),
+      inArray(renewals.status, fromStatuses),
+    ))
     .returning({ id: renewals.id });
   return result.length > 0;
 }

@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { applications, type ApplicationRow, type ApplicationInsert } from "./schema.js";
 
@@ -51,10 +51,18 @@ export async function insertApplication(tx: ScopedTx, row: ApplicationInsert): P
   await tx.insert(applications).values(row);
 }
 
+/**
+ * fromStatuses: the set of application statuses this write is valid from
+ * (the same set the caller's canTransition/canDecide check already
+ * validated against). Folding it into the WHERE clause makes the write an
+ * atomic compare-and-swap, closing the residual race between the caller's
+ * pre-fetch and this UPDATE.
+ */
 export async function updateStatus(
   tx: ScopedTx,
   id: string,
   tenantId: string,
+  fromStatuses: string[],
   status: string,
   updatedBy: string,
 ): Promise<boolean> {
@@ -66,7 +74,11 @@ export async function updateStatus(
       submittedAt: status === "submitted" ? new Date() : null,
       version: sql`${applications.version} + 1`,
     })
-    .where(and(eq(applications.id, id), eq(applications.tenantId, tenantId)))
+    .where(and(
+      eq(applications.id, id),
+      eq(applications.tenantId, tenantId),
+      inArray(applications.status, fromStatuses),
+    ))
     .returning({ id: applications.id });
   return result.length > 0;
 }
@@ -86,7 +98,15 @@ export async function updateFeePayment(
       updatedAt: new Date(),
       version: sql`${applications.version} + 1`,
     })
-    .where(and(eq(applications.id, id), eq(applications.tenantId, tenantId)))
+    // feePaid = false in the WHERE clause makes this an atomic compare-and-swap:
+    // two racing fee-payment commands for the same application can no longer
+    // both apply — the second sees 0 affected rows instead of silently
+    // overwriting the first payment's transaction id.
+    .where(and(
+      eq(applications.id, id),
+      eq(applications.tenantId, tenantId),
+      eq(applications.feePaid, false),
+    ))
     .returning({ id: applications.id });
   return result.length > 0;
 }

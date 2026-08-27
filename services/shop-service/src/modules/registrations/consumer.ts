@@ -103,7 +103,7 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, ["draft"], "submitted", msg.actorId);
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationSubmitted,
@@ -133,7 +133,7 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
     }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, ["draft", "submitted"], "withdrawn", msg.actorId);
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationWithdrawn,

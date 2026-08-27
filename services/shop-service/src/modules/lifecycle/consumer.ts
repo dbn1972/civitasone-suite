@@ -16,6 +16,8 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
 }
 
+const PERMIT_ACTIVE_OR_EXPIRED = ["active", "expired"];
+
 export function registerLifecycleConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
@@ -92,38 +94,68 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       : null;
 
     // The permit itself may have moved (e.g. suspended/cancelled by an officer)
-    // since this renewal was requested — re-check its current state before an
-    // approval mutates it, for the same reason as above.
-    const permit = p.decision === "approved" ? await permitRepo.findById(renewal.permitId, msg.tenantId) : null;
+    // since this renewal was requested. Determine UP FRONT, before persisting
+    // anything, whether an approval can actually be fully honored against the
+    // permit's CURRENT state. If it can't, treat the whole decision as stale and
+    // skip it entirely (leaving the renewal re-decidable) — do NOT commit the
+    // renewal as "approved" (with a newValidUntil / decided outcome) while the
+    // corresponding permit-side effect silently fails to apply underneath it.
+    // That half-applied state is exactly the kind of fake-success this whole
+    // pass has been hunting: the renewal row and its emitted event would both
+    // claim an extension/surrender that never actually happened to the permit.
+    let permit: Awaited<ReturnType<typeof permitRepo.findById>> = null;
+    if (p.decision === "approved") {
+      permit = await permitRepo.findById(renewal.permitId, msg.tenantId);
+      if (renewal.renewalType === "renewal" && newValidUntil) {
+        if (!permit || !PERMIT_ACTIVE_OR_EXPIRED.includes(permit.permitStatus)) {
+          log.warn(
+            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
+            "decideRenewal: permit no longer active/expired, deferring decision (not applying)",
+          );
+          return;
+        }
+      }
+      if (renewal.renewalType === "surrender") {
+        if (!permit || !canPerformAction(permit.permitStatus, "cancelled")) {
+          log.warn(
+            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
+            "decideRenewal: permit can no longer be cancelled via surrender, deferring decision (not applying)",
+          );
+          return;
+        }
+      }
+    }
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateDecision(
-        tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil,
+        tx, p.id, msg.tenantId, ["submitted", "under_review"], p.decision, msg.actorId, p.reason ?? null, newValidUntil,
       );
       if (!ok) return;
 
       if (p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil) {
-        if (permit && (permit.permitStatus === "active" || permit.permitStatus === "expired")) {
-          await permitRepo.updateValidUntil(tx, renewal.permitId, msg.tenantId, newValidUntil, msg.actorId);
-        } else {
-          log.warn(
-            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
-            "decideRenewal: permit no longer active/expired, skipping validUntil extension",
+        const permitOk = await permitRepo.updateValidUntil(
+          tx, renewal.permitId, msg.tenantId, PERMIT_ACTIVE_OR_EXPIRED, newValidUntil, msg.actorId,
+        );
+        if (!permitOk) {
+          // Lost a race in the tiny window between the pre-check above and this
+          // transaction (the permit moved again). Abort the whole decision by
+          // throwing — the transaction rolls back the updateDecision too, so we
+          // never persist an "approved" renewal whose extension didn't land.
+          throw new Error(
+            `decideRenewal: permit ${renewal.permitId} state changed again before commit; aborting`,
           );
         }
       }
       if (p.decision === "approved" && renewal.renewalType === "surrender") {
-        if (permit && canPerformAction(permit.permitStatus, "cancelled")) {
-          await permitRepo.updatePermitStatus(
-            tx, renewal.permitId, msg.tenantId, "cancelled",
-            { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" },
-            msg.actorId,
-          );
-        } else {
-          log.warn(
-            { renewalId: p.id, permitId: renewal.permitId, permitStatus: permit?.permitStatus },
-            "decideRenewal: permit can no longer be cancelled via surrender, skipping",
+        const permitOk = await permitRepo.updatePermitStatus(
+          tx, renewal.permitId, msg.tenantId, ["active", "suspended"], "cancelled",
+          { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" },
+          msg.actorId,
+        );
+        if (!permitOk) {
+          throw new Error(
+            `decideRenewal: permit ${renewal.permitId} state changed again before commit; aborting`,
           );
         }
       }
@@ -154,10 +186,14 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.recordRenewalFeePayment, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; transactionId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // Same "don't log success on a no-op" fix as the other handlers in this
+    // file: gate the trailing log on whether the write actually applied
+    // (relevant now that updateFeePayment has its own feePaid=false CAS guard,
+    // so a racing duplicate payment command correctly no-ops here).
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.renewalFeePaymentRecorded,
         eventType: EVENTS.renewalFeePaymentRecorded,
@@ -171,7 +207,8 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         resourceType: "shop_renewal",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id }, "renewal fee payment recorded");
+    if (applied) log.info({ id: p.id }, "renewal fee payment recorded");
   });
 }
