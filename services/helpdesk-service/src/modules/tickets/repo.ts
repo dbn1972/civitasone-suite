@@ -139,8 +139,17 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
   const rows = await db.transaction((tx) =>
     tx.select().from(tickets)
       .where(eq(tickets.tenantId, tenantId))
-      /* C-05: Sort by SLA urgency — soonest dueDate first so most-at-risk tickets surface at top */
-      .orderBy(asc(tickets.createdAt))
+      // C-05: the in-memory SLA-priority sort below (breached → at_risk →
+      // within_sla) can only prioritise rows that make it into THIS page.
+      // The frontend (helpdesk/internal) never sends ?limit/?offset, so with
+      // the default limit=50 an ascending-by-createdAt order pinned the
+      // window to the 50 OLDEST tickets ever created for the tenant, forever
+      // — any ticket past position 50 (including a brand-new critical one)
+      // was silently invisible to both this list and the SLA re-sort.
+      // Descending surfaces current activity so newly-created/at-risk
+      // tickets are always in the window the SLA sort operates over. This is
+      // still a stopgap, not true SLA-aware pagination (see PR description).
+      .orderBy(desc(tickets.createdAt))
       .limit(limit)
       .offset(offset),
   );

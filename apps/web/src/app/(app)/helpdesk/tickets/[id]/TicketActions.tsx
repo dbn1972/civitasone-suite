@@ -52,7 +52,21 @@ export function TicketActions({ ticketId }: Props) {
         headers: body ? { "content-type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
+      if (!res.ok) {
+        // The API's error body is JSON (e.g. {"code":"VALIDATION_FAILED",
+        // "message":"invalid request",...}) — surface the human message
+        // instead of dumping the raw JSON into the confirm dialog / result
+        // banner. Mirrors NewTicketForm.tsx's error handling.
+        const text = await res.text();
+        let human = text || `Request failed (${res.status})`;
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          if (parsed.message) human = parsed.message;
+        } catch {
+          /* not JSON — fall back to the raw text above */
+        }
+        throw new Error(human);
+      }
     } finally {
       setBusy(false);
     }

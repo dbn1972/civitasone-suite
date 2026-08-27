@@ -180,7 +180,13 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const atRisk = views.filter((v) => v.slaStatus === "at_risk");
     const escalated = rows.filter((r) => r.breachEscalatedAt !== null).length;
     return reply.send({
-      data: breached,
+      // Both buckets are already fetched (listBreachedRequests queries
+      // slaStatus IN ("breached","at_risk")) and both are counted in
+      // `summary` below — the frontend breach-report table (and its own
+      // subtitle: "breached or are at risk") expects to list both, not just
+      // the fully-breached rows. Breached-first preserves the urgency
+      // ordering already implied by resolutionDeadline ASC in the query.
+      data: [...breached, ...atRisk],
       summary: { breached: breached.length, atRisk: atRisk.length, escalated, total: rows.length },
     });
   });
