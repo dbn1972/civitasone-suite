@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { validateAssetStatusTransition, type AssetStatus } from "./domain.js";
 
 const ROLES = ["parks_user", "parks_admin", "super_admin"];
 const ADMIN_ROLES = ["parks_admin", "super_admin"];
@@ -75,6 +76,16 @@ export async function assetRoutes(app: FastifyInstance): Promise<void> {
     const body = updateBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "asset not found");
+    // validateAssetStatusTransition existed in domain.ts but was never
+    // imported/called here — any status value in the enum could be PATCHed
+    // in regardless of the transition graph (e.g. closed -> under_maintenance
+    // directly, when domain rules say closed can only reopen to active).
+    // Live-confirmed: a closed asset accepted a PATCH straight to
+    // under_maintenance with no error before this fix.
+    if (body.status !== undefined) {
+      const err = validateAssetStatusTransition(existing.status as AssetStatus, body.status as AssetStatus);
+      if (err) throw new HttpError(422, "TRANSITION_INVALID", err);
+    }
     if (body.version !== existing.version) throw new HttpError(409, "VERSION_CONFLICT", "retry with current version");
     const patch: Record<string, unknown> = {};
     if (body.name !== undefined) patch.name = body.name;
