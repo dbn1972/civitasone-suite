@@ -118,7 +118,17 @@ export async function shareDashboard(
 }
 
 export async function deleteDashboard(ctx: RequestContext, dashboardId: string): Promise<Accepted> {
-  await loadOr404(ctx, dashboardId);
+  const current = await loadOr404(ctx, dashboardId);
+  const shares = await repo.listShares(dashboardId, ctx.tenantId);
+  // Was missing entirely: every other mutating command here (update, addWidget,
+  // share) gates on the owner/admin/edit-share model in access.ts before
+  // publishing; delete published unconditionally to anyone holding a coarse
+  // WRITE_ROLES role, letting any analytics_user in the tenant delete another
+  // user's private dashboard. Deletion is at least as sensitive as edit, so it
+  // is gated the same way.
+  if (!canEdit(ctx, current, shares)) {
+    throw new HttpError(403, "FORBIDDEN", "you do not have edit access to this dashboard");
+  }
   await publish(ctx, COMMANDS.deleteDashboard, randomUUID(), { dashboardId });
   return { id: dashboardId, status: "accepted", correlationId: ctx.correlationId };
 }

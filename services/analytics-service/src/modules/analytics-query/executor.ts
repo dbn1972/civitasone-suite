@@ -19,6 +19,7 @@ import {
   resolveMetric,
   resolveDimension,
   resolveFilterField,
+  resolveDimensionOrFilter,
   type FilterFieldDef,
 } from "../registry/registry.js";
 import type { AnalyticsQueryBody, DrillThroughParams } from "./validators.js";
@@ -143,14 +144,16 @@ export async function executeAnalyticsQuery(
     // This translates to additional WHERE conditions correlating dimensions
     for (const join of body.joins) {
       // The join means: leftKey column values must match rightKey column values
-      // Since both reference the same table, this is a self-correlation filter
-      const leftDef = resolveDimension(join.leftKey) ?? resolveFilterField(join.leftKey);
-      const rightDef = resolveDimension(join.rightKey) ?? resolveFilterField(join.rightKey);
-      // For self-join correlation: left column = right column
-      // This constrains the result to rows where both dimension values are equal
-      if (leftDef && rightDef) {
-        conds.push(sql`${leftDef.column} = ${rightDef.column}`);
-      }
+      // Since both reference the same table, this is a self-correlation filter.
+      // resolveDimensionOrFilter() always returns a real whitelisted column or
+      // throws — it never yields `undefined` (validateJoinCondition() above
+      // already confirmed both keys are whitelisted, so this cannot throw here,
+      // but we don't rely on that: unlike the old
+      // `resolveDimension(x) ?? resolveFilterField(x)` pattern, there is no
+      // path left that can push an undefined "column" into the SQL below).
+      const leftDef = resolveDimensionOrFilter(join.leftKey);
+      const rightDef = resolveDimensionOrFilter(join.rightKey);
+      conds.push(sql`${leftDef.column} = ${rightDef.column}`);
     }
   }
 
