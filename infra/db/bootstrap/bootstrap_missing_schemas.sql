@@ -28,6 +28,7 @@
 \connect civitas_tenant
 CREATE SCHEMA IF NOT EXISTS plans         AUTHORIZATION tenant_svc;
 CREATE SCHEMA IF NOT EXISTS subscriptions AUTHORIZATION tenant_svc;
+CREATE SCHEMA IF NOT EXISTS quotas        AUTHORIZATION tenant_svc;
 
 \connect civitas_policy
 CREATE SCHEMA IF NOT EXISTS role_features AUTHORIZATION policy_svc;
