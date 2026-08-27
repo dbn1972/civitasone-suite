@@ -98,7 +98,14 @@ describe("Theme — Cross-Tenant RLS Isolation", () => {
     }
   });
 
-  it("Tenant B branding list shows zero Tenant A branding configs", async () => {
+  it("Tenant B GET branding never returns Tenant A's branding config", async () => {
+    // GET /v1/themes/branding is a singular per-tenant resource (repo.findByTenant),
+    // not a list — there is no GET /v1/themes/branding list/index endpoint
+    // (brandingListSchema is declared in validators.ts but no route uses it).
+    // Tenant B has no branding row of its own in this test, so the correct,
+    // safe response is 404 NOT_FOUND — not the leaked Tenant A row. 200 (with
+    // Tenant B's own config) and 500 (GUC rejection, see file header) are also
+    // safe outcomes; only a 200 carrying TENANT_A's id would be a real leak.
     const res = await app.inject({
       method: "GET",
       url: "/v1/themes/branding",
@@ -106,11 +113,9 @@ describe("Theme — Cross-Tenant RLS Isolation", () => {
     });
     if (res.statusCode === 200) {
       const body = res.json();
-      const data = Array.isArray(body) ? body : body.data ?? [];
-      const leakedTenants = data.filter((b: { tenantId?: string }) => b.tenantId === TENANT_A);
-      expect(leakedTenants).toHaveLength(0);
+      expect(body.tenantId).not.toBe(TENANT_A);
     } else {
-      expect([200, 500]).toContain(res.statusCode);
+      expect([404, 500]).toContain(res.statusCode);
     }
   });
 
