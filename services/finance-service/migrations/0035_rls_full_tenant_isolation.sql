@@ -44,14 +44,11 @@ CREATE POLICY tenant_isolation_policy ON budget.finance_heads
   USING (tenant_id = budget.current_tenant_id())
   WITH CHECK (tenant_id = budget.current_tenant_id());
 
--- budget.finance_major_heads
-ALTER TABLE budget.finance_major_heads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE budget.finance_major_heads FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON budget.finance_major_heads;
-DROP POLICY IF EXISTS tenant_isolation ON budget.finance_major_heads;
-CREATE POLICY tenant_isolation_policy ON budget.finance_major_heads
-  USING (tenant_id = budget.current_tenant_id())
-  WITH CHECK (tenant_id = budget.current_tenant_id());
+-- budget.finance_major_heads is deliberately skipped: it is a GLOBAL CGA
+-- reference master with no tenant_id column (see 0043_schema_drift_fixups.sql
+-- item (f), which had to walk back an earlier version of this exact block
+-- force-enabling RLS here — that made every read default-deny since no
+-- tenant_id-based policy can apply).
 
 -- budget.finance_reappropriations
 ALTER TABLE budget.finance_reappropriations ENABLE ROW LEVEL SECURITY;
