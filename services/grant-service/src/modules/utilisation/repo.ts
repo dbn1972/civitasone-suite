@@ -65,6 +65,16 @@ export async function findUcById(ucId: string, tenantId: string): Promise<UcRow 
   }));
 }
 
+/** Same as {@link findUcById} but reuses an existing transaction handle
+ *  (for consumer defence-in-depth checks that must see the SoD guard inside
+ *  the same transaction that performs the write). */
+export async function findUcByIdTx(tx: Writer, ucId: string, tenantId: string): Promise<UcRow | null> {
+  const rows = await (tx as typeof db).select().from(grantUcStatements)
+    .where(and(eq(grantUcStatements.id, ucId), eq(grantUcStatements.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** Persist a UC validation decision row (utilisation.grant_uc_validations). */
 export async function insertUcValidation(tx: Writer, row: UcValidationInsert): Promise<void> {
   await tx.insert(grantUcValidations).values(row);

@@ -3,6 +3,8 @@ import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
 import type { CreateInstallmentsBody, DisburseBody, PfmsReconcileBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -51,6 +53,15 @@ export async function reconcilePfms(ctx: RequestContext, body: PfmsReconcileBody
  * while the file is under approval.
  */
 export async function submitDisbursementForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
+  // Defence in depth: the actor routing this disbursement into the eOffice
+  // approval chain should not be the same actor who initiated it. The final
+  // financial decision is made externally by eOffice (decidedBy), so this is
+  // a lighter maker/checker guard than P0-4, not a substitute for it.
+  const disbursement = await repo.findDisbursementById(id, ctx.tenantId);
+  if (!disbursement) throw new HttpError(404, "NOT_FOUND", "disbursement not found");
+  if (disbursement.createdBy && disbursement.createdBy === ctx.actorId) {
+    throw new HttpError(403, "SOD_VIOLATION", "submission for approval must be made by someone other than who initiated the disbursement (separation of duties)");
+  }
   await queue.publish(COMMANDS.disbursementSubmitApproval, {
     type: COMMANDS.disbursementSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

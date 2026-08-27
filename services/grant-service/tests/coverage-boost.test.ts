@@ -22,6 +22,10 @@ import type { FastifyInstance } from "fastify";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "eeeeeeee-0000-4000-8000-000000000099";
 const ACTOR  = "eeeeeeee-aaaa-4000-8000-000000000001";
+// Distinct from ACTOR: used wherever the endpoint under test now correctly
+// enforces separation of duties (P0-4) against the ACTOR who submitted/created
+// the underlying record — see application/commands.ts and disbursement/commands.ts.
+const ACTOR2 = "eeeeeeee-aaaa-4000-8000-000000000002";
 const SCHEME = "eeeeeeee-bbbb-4000-8000-000000000001";
 const APP    = "eeeeeeee-cccc-4000-8000-000000000001";
 const BEN    = "eeeeeeee-dddd-4000-8000-000000000001";
@@ -290,9 +294,10 @@ describe("PATCH /v1/grants/applications/:id/reject", () => {
 
 describe("PATCH /v1/grants/applications/:id/score", () => {
   it("202 — scores an application", async () => {
+    // P0-4 SoD: scorer must differ from the application's submitter (ACTOR).
     const res = await app.inject({
       method: "PATCH", url: `/v1/grants/applications/${APP}/score`,
-      headers: { authorization: `Bearer ${makeToken()}` },
+      headers: { authorization: `Bearer ${makeToken(["grant_admin", "super_admin"], ACTOR2)}` },
       payload: { reviewerRef: "reviewer-001", technicalScore: 85, financialScore: 70, recommendation: "well documented" },
     });
     expect(res.statusCode).toBe(202);
@@ -347,9 +352,11 @@ describe("POST /v1/grants/pfms/reconcile", () => {
 
 describe("POST /v1/grants/disbursements/:id/submit-approval", () => {
   it("202 — submits disbursement for approval", async () => {
+    // Defence-in-depth SoD: submitter-for-approval must differ from the
+    // disbursement's createdBy (ACTOR) — see disbursement/commands.ts.
     const res = await app.inject({
       method: "POST", url: `/v1/grants/disbursements/eeeeeeee-ffff-4000-8000-000000000001/submit-approval`,
-      headers: { authorization: `Bearer ${makeToken()}` },
+      headers: { authorization: `Bearer ${makeToken(["grant_admin", "super_admin"], ACTOR2)}` },
     });
     expect(res.statusCode).toBe(202);
   });

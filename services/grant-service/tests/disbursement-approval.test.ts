@@ -204,3 +204,28 @@ describe("R14 — approval-gated disbursement (approval before payment)", () => 
     expect(await eftCount()).toBe(0);                 // no NEW payout — guarded by eft_emitted
   });
 });
+
+describe("SoD — separation of duties on disbursement submit-approval (defence in depth)", () => {
+  it("creator==submitter-for-approval -> 403 SOD_VIOLATION", async () => {
+    const INST = randomUUID(); const DISB = randomUUID();
+    await seed(10_000n, 10_000n, 3_000n, INST);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(grantDisbursements).values({
+        id: DISB, tenantId: TENANT, installmentId: INST, amountMinor: 3_000n, currency: "INR",
+        mode: "PFMS", pfmsTxnId: `PFMS-${DISB}`, status: "initiated", eftEmitted: false,
+        retryCount: 0, createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
+    const { buildApp } = await import("../src/app.js");
+    const { signToken } = await import("@civitasone/auth");
+    const app = await buildApp();
+    const token = signToken({ sub: ACTOR, tid: TENANT, roles: ["grant_officer"], sid: "s" }, process.env.JWT_SECRET as string);
+    const res = await app.inject({
+      method: "POST", url: `/v1/grants/disbursements/${DISB}/submit-approval`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SOD_VIOLATION");
+  });
+});
