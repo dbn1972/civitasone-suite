@@ -54,7 +54,7 @@ export async function licenceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VENDOR_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `vendor:${ctx.tenantId}:licence:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "licence", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "LICENCE_NOT_FOUND", "Licence not found");
     return reply.send({ data: row });

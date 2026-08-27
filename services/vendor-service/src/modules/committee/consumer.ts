@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -24,8 +25,18 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
       registrationId: string;
       committeeType: string;
     };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // regRepo.updateStatus's boolean return (registration actually matched
+      // tenant+id) was previously discarded, so a committee-review record
+      // could get inserted, and a committeeReviewAssigned event + audit
+      // record published, for a registration that was never actually moved
+      // to "under_review". Check it FIRST so a failed precondition creates
+      // no orphaned review record at all.
+      const ok = await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "under_review", msg.actorId);
+      if (!ok) return;
+      applied = true;
       await repo.insertReview(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -35,7 +46,6 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "under_review", msg.actorId);
       await enqueue(tx, {
         topic: EVENTS.committeeReviewAssigned,
         eventType: EVENTS.committeeReviewAssigned,
@@ -54,7 +64,10 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, registrationId: p.registrationId }, "committee review assigned");
+    // GET /v1/vendor/registrations/:id (registrations/routes.ts) reads
+    // through a cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.registrationId));
+    if (applied) log.info({ id: p.id, registrationId: p.registrationId }, "committee review assigned");
   });
 
   queue.subscribe(COMMANDS.completeCommitteeReview, async (msg) => {
@@ -66,7 +79,8 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.completeReview(tx, p.id, msg.tenantId, "reviewed", p.findings, p.recommendation, msg.actorId);
+      const ok = await repo.completeReview(tx, p.id, msg.tenantId, "reviewed", p.findings, p.recommendation, msg.actorId);
+      if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.committeeReviewCompleted,
         eventType: EVENTS.committeeReviewCompleted,
@@ -90,9 +104,12 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
       zone: string;
       spot: string;
     };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await regRepo.allocateZone(tx, p.registrationId, msg.tenantId, p.zone, p.spot, msg.actorId);
+      const ok = await regRepo.allocateZone(tx, p.registrationId, msg.tenantId, p.zone, p.spot, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.zoneAllocated,
         eventType: EVENTS.zoneAllocated,
@@ -107,14 +124,18 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         resourceId: p.registrationId,
       });
     });
-    log.info({ registrationId: p.registrationId, zone: p.zone }, "zone allocated");
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.registrationId));
+    if (applied) log.info({ registrationId: p.registrationId, zone: p.zone }, "zone allocated");
   });
 
   queue.subscribe(COMMANDS.approveRegistration, async (msg) => {
     const p = msg.payload as { registrationId: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "approved", msg.actorId);
+      const ok = await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "approved", msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationApproved,
         eventType: EVENTS.registrationApproved,
@@ -129,14 +150,18 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         resourceId: p.registrationId,
       });
     });
-    log.info({ registrationId: p.registrationId }, "registration approved");
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.registrationId));
+    if (applied) log.info({ registrationId: p.registrationId }, "registration approved");
   });
 
   queue.subscribe(COMMANDS.rejectRegistration, async (msg) => {
     const p = msg.payload as { registrationId: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "rejected", msg.actorId);
+      const ok = await regRepo.updateStatus(tx, p.registrationId, msg.tenantId, "rejected", msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationRejected,
         eventType: EVENTS.registrationRejected,
@@ -151,6 +176,7 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         resourceId: p.registrationId,
       });
     });
-    log.info({ registrationId: p.registrationId }, "registration rejected");
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.registrationId));
+    if (applied) log.info({ registrationId: p.registrationId }, "registration rejected");
   });
 }

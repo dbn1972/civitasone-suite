@@ -163,10 +163,27 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       reason?: string;
       newValidUntil?: string;
     };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const newValid = p.newValidUntil ? new Date(p.newValidUntil) : null;
-      await repo.updateDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValid);
+      // updateDecision's boolean return (renewal request actually matched
+      // tenant+id) was previously discarded, so a stale/mismatched decide
+      // command still published lifecycleRequestDecided and wrote an audit
+      // record for a decision that was never actually recorded.
+      //
+      // NOTE (flagged, not fixed here — see PR description): even when this
+      // succeeds, nothing anywhere in vendor-service consumes
+      // EVENTS.lifecycleRequestDecided, so approving a renewal/zone-transfer
+      // /cancellation/surrender request updates ONLY this vendor_renewals
+      // row — it never touches the actual vendor_licences record (no
+      // validUntil extension, no zone/spotNumber change, no cancelled/
+      // surrendered status). That is a real, separate functional gap
+      // spanning all 4 renewal types, not a one-line fix like the
+      // discarded-boolean pattern fixed elsewhere in this PR.
+      const ok = await repo.updateDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValid);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.lifecycleRequestDecided,
         eventType: EVENTS.lifecycleRequestDecided,
@@ -181,6 +198,6 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, decision: p.decision }, "lifecycle request decided");
+    if (applied) log.info({ id: p.id, decision: p.decision }, "lifecycle request decided");
   });
 }
