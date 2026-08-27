@@ -303,6 +303,55 @@ describe("Counsel-brief consumer — assign + list-cache invalidation (integrati
     const postRaceList = await runWithTenant(TENANT, () => counselQueries.listBriefs(TENANT, CASE_ID));
     expect(postRaceList.map((b) => b.id)).toContain(BRIEF_2);
   });
+
+  it("idempotency: redelivered counselBriefAssign is a no-op", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCounselBriefConsumers(q);
+    await q.start();
+
+    // Re-publish with the same messageId as the first test (MSG(15)), but a
+    // different payload id — markProcessed() must dedup on messageId and
+    // return before insertBrief runs, so this new id must never appear.
+    await q.publish(COMMANDS.counselBriefAssign, {
+      messageId: MSG(15), type: COMMANDS.counselBriefAssign,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-cb-dup", schemaVersion: "1.0",
+      payload: {
+        id: "99999999-aaaa-4000-8000-000000000c02", tenantId: TENANT, caseId: CASE_ID,
+        counselName: "Adv. Duplicate", counselType: "advocate",
+        briefSummary: "Should never be inserted.",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCounselBriefs).where(eq(legalCounselBriefs.tenantId, TENANT))));
+    const byId = rows.filter((r) => r.id === BRIEF_1);
+    expect(byId).toHaveLength(1);
+    expect(rows.some((r) => r.id === "99999999-aaaa-4000-8000-000000000c02")).toBe(false);
+  });
+
+  it("regression: getBrief's tenant-match guard requires tenantId on the primed cache value", async () => {
+    // commands.ts's assignBrief() primes this exact key/shape for
+    // read-your-writes. queries.ts's getBrief() rejects a cache hit whose
+    // row.tenantId doesn't match the caller — a correct defense against a
+    // cross-tenant cache-key collision — but that guard also fires against
+    // undefined, so the primed value MUST carry tenantId or getBrief() nulls
+    // out the very entry it just wrote. Confirmed live before this fix: POST
+    // /v1/legal/counsel-briefs then an immediate GET
+    // /v1/legal/counsel-briefs/:id returned 404 for a brief that had just
+    // been created.
+    const brokenKey = cache.makeKey(TENANT, "counsel_brief", "no-tenant-field-case");
+    await cache.put(brokenKey, { id: "no-tenant-field-case", caseId: CASE_ID, counselName: "X", status: "assigned" });
+    const brokenRead = await counselQueries.getBrief("no-tenant-field-case", TENANT);
+    expect(brokenRead).toBeNull(); // documents the failure mode this fix closes
+
+    const fixedKey = cache.makeKey(TENANT, "counsel_brief", "has-tenant-field-case");
+    await cache.put(fixedKey, { id: "has-tenant-field-case", tenantId: TENANT, caseId: CASE_ID, counselName: "X", status: "assigned" });
+    const fixedRead = await counselQueries.getBrief("has-tenant-field-case", TENANT);
+    expect(fixedRead).not.toBeNull();
+    expect(fixedRead?.id).toBe("has-tenant-field-case");
+  });
 });
 
 // ── eCourts sync-consumer pure functions ───────────────────────────────────────

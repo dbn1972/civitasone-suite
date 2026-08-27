@@ -45,6 +45,15 @@ export function CaseActions({ caseId }: { caseId: string }) {
   const close = useCallback(() => {
     setPanel(null);
     setMessage("");
+    // Reset every panel's fields so a later open starts blank rather than
+    // carrying over the previous submission's values (pre-existing gap for
+    // the affidavit fields; fixed here for both panels together).
+    setCounselName("");
+    setCounselType("advocate");
+    setBriefDate("");
+    setBriefMessage("");
+    setAffidavitDate("");
+    setAffidavitSummary("");
   }, []);
 
   useEffect(() => {
@@ -199,6 +208,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
                   value={briefMessage}
                   onChange={(e) => setBriefMessage(e.target.value)}
                   required
+                  maxLength={7900}
                   style={{ width: "100%", marginBottom: 10 }}
                 />
                 <label className="label" htmlFor="briefDate">Brief by date</label>
