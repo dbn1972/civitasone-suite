@@ -21,7 +21,14 @@ export async function listJobOpenings(tenantId: string, limit: number) {
       department: deptMap.get(r.departmentId) ?? r.departmentId.slice(0, 8),
       vacancies: r.vacancies,
       applicationDeadline: r.closesAt ?? undefined,
-      status: (r.status === "closed" ? "closed" : r.status === "on_hold" ? "on_hold" : "open") as "open" | "closed" | "on_hold",
+      // R-cancel / eOffice approve-reject / pending-approval statuses (see
+      // publication-repo.ts updateVacancy + eoffice-consumer.ts updateJobOpening)
+      // must never read as "open" here. Only "open" and "on_hold" pass through
+      // as-is; every other real status (cancelled, rejected, approved,
+      // pending_approval, and anything future) safely collapses to "closed" --
+      // the previous default branch collapsed them all to "open", which would
+      // have shown a cancelled/rejected/not-yet-approved vacancy as actively hiring.
+      status: (r.status === "open" ? "open" : r.status === "on_hold" ? "on_hold" : "closed") as "open" | "closed" | "on_hold",
       applicationsReceived: appCounts.get(r.id) ?? 0,
       postedDate: r.postedAt ?? new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
     }));
