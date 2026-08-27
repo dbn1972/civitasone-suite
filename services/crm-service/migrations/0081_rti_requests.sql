@@ -18,7 +18,17 @@ CREATE TABLE IF NOT EXISTS crm.rti_requests (
   fee_amount          numeric(10,2),
   received_at         timestamptz  NOT NULL DEFAULT now(),
   due_at              timestamptz  NOT NULL
-                      GENERATED ALWAYS AS (received_at + interval '30 days') STORED,
+                      -- Plain `timestamptz + interval '30 days'` is rejected here:
+                      -- adding a days-component interval to a timestamptz depends on
+                      -- the session's TimeZone GUC (DST/calendar conversion), so
+                      -- Postgres classifies the operator STABLE, not IMMUTABLE, and
+                      -- generated-column expressions require IMMUTABLE. Round-tripping
+                      -- through a fixed literal zone ('UTC', which has no DST) pins the
+                      -- calculation to a constant, making it immutable while computing
+                      -- the identical instant (received_at + exactly 30*24h).
+                      GENERATED ALWAYS AS (
+                        ((received_at AT TIME ZONE 'UTC') + interval '30 days') AT TIME ZONE 'UTC'
+                      ) STORED,
   first_appeal_due_at timestamptz,
   status              text         NOT NULL DEFAULT 'RECEIVED'
                       CHECK (status IN (
