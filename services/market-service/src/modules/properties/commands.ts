@@ -19,6 +19,7 @@ export interface CreatePropertyInput {
   // tests (MemoryQueue never serializes). The consumer converts to BigInt
   // itself right before the Drizzle insert/update.
   monthlyRentMinor?: number | undefined;
+  securityDepositMinor?: number | undefined;
 }
 
 export async function createProperty(ctx: RequestContext, body: CreatePropertyInput): Promise<Accepted> {
@@ -34,6 +35,7 @@ export interface UpdatePropertyInput {
   // tests (MemoryQueue never serializes). The consumer converts to BigInt
   // itself right before the Drizzle insert/update.
   monthlyRentMinor?: number | undefined;
+  securityDepositMinor?: number | undefined;
   status?: string | undefined;
   area?: string | undefined;
   areaUnit?: string | undefined;

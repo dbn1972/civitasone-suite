@@ -100,7 +100,13 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "DEMAND_NOT_FOUND", "Demand not found");
-    if (!canTransition(existing.status, "paid")) {
+    // Re-review fix: this checked canTransition(status, "paid") — the WRONG
+    // target status for a waive action (copy-paste from the /pay handler
+    // above). Masked today only because "paid" and "waived" happen to share
+    // the exact same valid-from set in every current entry of VALID_TRANSITIONS
+    // (domain.ts) — this would silently diverge the moment that table stops
+    // being symmetric between the two target statuses.
+    if (!canTransition(existing.status, "waived")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot waive demand in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.waiveDemand(ctx, id));

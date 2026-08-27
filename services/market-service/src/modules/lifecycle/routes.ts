@@ -3,8 +3,31 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as allotmentsRepo from "../allotments/repo.js";
+import { LIFECYCLE_ACTIONABLE_STATUSES } from "../allotments/domain.js";
 import * as commands from "./commands.js";
-import { canTransition } from "./domain.js";
+
+// Pre-existing drive-by cleanup: `canTransition` was imported but never
+// actually called anywhere in this file — the approve/reject/complete
+// handlers below use plain array-literal status checks instead (unrelated to
+// this PR's fixes, just removing the dead import while already deep in this
+// file for the actionability-guard fix below).
+
+// Re-review fix: request-creation and approval previously only checked that
+// the allotment EXISTED, never that it was in a status transfer/cancellation/
+// eviction actually applies to. completeRequest's atomic guard (consumer.ts,
+// unchanged by this fix) already refuses at completion time — but by then the
+// request has already been submitted and approved, the original HTTP caller
+// long since got their 202, and the failure (a thrown error inside an async
+// consumer) has no client-visible surface at all. Checking here instead gives
+// an immediate, synchronous 422 at the two earliest points a caller could
+// still act on it; the completion-time guard stays as the race-proof backstop
+// for an allotment that changes status in the interim between approval and
+// completion.
+function assertAllotmentActionable(allotment: { status: string }): void {
+  if (!LIFECYCLE_ACTIONABLE_STATUSES.includes(allotment.status)) {
+    throw new HttpError(422, "ALLOTMENT_NOT_ACTIONABLE", `Allotment is in status '${allotment.status}', not eligible for a lifecycle action`);
+  }
+}
 
 const USER_ROLES = ["market_user", "market_admin", "super_admin"];
 const ADMIN_ROLES = ["market_admin", "super_admin"];
@@ -45,6 +68,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = transferBody.parse(req.body);
     const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
     if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
+    assertAllotmentActionable(allotment);
     return reply.code(202).send(await commands.requestTransfer(ctx, body));
   });
 
@@ -54,6 +78,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = cancellationBody.parse(req.body);
     const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
     if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
+    assertAllotmentActionable(allotment);
     return reply.code(202).send(await commands.requestCancellation(ctx, body.allotmentId, body.reason));
   });
 
@@ -63,6 +88,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = evictionBody.parse(req.body);
     const allotment = await allotmentsRepo.findById(body.allotmentId, ctx.tenantId);
     if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
+    assertAllotmentActionable(allotment);
     return reply.code(202).send(await commands.initiateEviction(ctx, body.allotmentId, body.reason));
   });
 
@@ -87,6 +113,13 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     if (!["submitted", "under_review"].includes(existing.status)) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot approve request in status '${existing.status}'`);
     }
+    // Re-review fix: the allotment's status can have changed since this
+    // request was submitted (e.g. a different request against the same
+    // allotment completed first) — re-check here rather than only finding out
+    // at async completion time with no client-visible error.
+    const allotment = await allotmentsRepo.findById(existing.allotmentId, ctx.tenantId);
+    if (!allotment) throw new HttpError(404, "ALLOTMENT_NOT_FOUND", "Allotment not found");
+    assertAllotmentActionable(allotment);
     return reply.code(202).send(await commands.approveRequest(ctx, id));
   });
 

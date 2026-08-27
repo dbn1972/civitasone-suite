@@ -28,9 +28,10 @@ export function registerBillingConsumers(rawQueue: Queue): void {
       lateFeeMinor?: string;
     };
 
+    let inserted: Awaited<ReturnType<typeof repo.insertDemand>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertDemand(tx, {
+      inserted = await repo.insertDemand(tx, {
         id: p.id,
         tenantId: msg.tenantId,
         allotmentId: p.allotmentId,
@@ -45,6 +46,11 @@ export function registerBillingConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      // Re-review fix: a concurrent request already won the race for this
+      // exact allotment+month (onConflictDoNothing hit the unique index) —
+      // skip the event/audit rather than reporting a demand that was never
+      // actually (re-)created.
+      if (!inserted) return;
       await enqueue(tx, {
         topic: EVENTS.demandGenerated,
         eventType: EVENTS.demandGenerated,
@@ -59,7 +65,8 @@ export function registerBillingConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, demandMonth: p.demandMonth }, "market demand generated");
+    if (inserted) log.info({ id: p.id, demandMonth: p.demandMonth }, "market demand generated");
+    else log.warn({ allotmentId: p.allotmentId, demandMonth: p.demandMonth }, "duplicate demand generation skipped (already exists for this allotment+month)");
   });
 
   queue.subscribe(COMMANDS.recordPayment, async (msg) => {

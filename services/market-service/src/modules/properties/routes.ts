@@ -23,11 +23,17 @@ const createBody = z.object({
   areaUnit: z.string().default("sqft").optional(),
   floorNumber: z.number().int().optional(),
   monthlyRentMinor: z.number().int().nonnegative().optional(),
+  // Re-review fix (allotments/routes.ts is the paired half of this): this is
+  // now the ONLY place a deposit amount can be set — ADMIN_ROLES-gated, same
+  // as monthlyRentMinor. POST /allotments no longer accepts a client-supplied
+  // securityDepositMinor at all; it derives it from here server-side.
+  securityDepositMinor: z.number().int().nonnegative().optional(),
 });
 
 const updateBody = z.object({
   marketName: z.string().min(1).max(256).optional(),
   monthlyRentMinor: z.number().int().nonnegative().optional(),
+  securityDepositMinor: z.number().int().nonnegative().optional(),
   status: z.enum(["available", "allotted", "reserved", "under_maintenance"]).optional(),
   area: z.string().optional(),
   areaUnit: z.string().optional(),

@@ -42,8 +42,20 @@ export async function listByAllotment(
   return { rows, total: countResult[0]?.count ?? 0 };
 }
 
-export async function insertDemand(tx: ScopedTx, row: DemandInsert): Promise<void> {
-  await tx.insert(marketDemands).values(row);
+/**
+ * Returns the inserted row, or null if a concurrent request already generated
+ * a demand for the same tenant+allotment+month (onConflictDoNothing against
+ * market_demands_allotment_month_uidx — see schema.ts). This is the atomic
+ * guard; routes.ts's findByAllotmentAndMonth pre-check is only the fast path
+ * for the common (non-racing) case and cannot be relied on alone.
+ */
+export async function insertDemand(tx: ScopedTx, row: DemandInsert): Promise<DemandRow | null> {
+  const result = await tx
+    .insert(marketDemands)
+    .values(row)
+    .onConflictDoNothing({ target: [marketDemands.tenantId, marketDemands.allotmentId, marketDemands.demandMonth] })
+    .returning();
+  return result[0] ?? null;
 }
 
 /** Used by routes.ts to reject a duplicate demand for the same allotment+month before publishing. */

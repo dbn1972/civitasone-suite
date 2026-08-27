@@ -16,8 +16,16 @@ const applyBody = z.object({
   allotteePhone: z.string().max(20).optional(),
   allotteeAadhaar: z.string().length(12).optional(),
   allotmentType: z.enum(["draw", "auction", "committee", "direct"]),
-  monthlyRentMinor: z.number().int().nonnegative().optional(),
-  securityDepositMinor: z.number().int().nonnegative().optional(),
+  // monthlyRentMinor/securityDepositMinor deliberately NOT accepted here
+  // anymore — re-review fix, the exact CRITICAL money bug this PR's billing
+  // fix closed one hop downstream was still reachable here: this endpoint is
+  // USER_ROLES (a plain market_user, not admin), and although `property` was
+  // already being fetched below for its status check, nothing cross-checked
+  // or overrode a client-supplied rent/deposit against it — a citizen could
+  // set their own allotment's rent to 1, and billing/routes.ts would then
+  // faithfully derive the demand amount from that self-set value. Both are
+  // now always derived from the property's own admin-set fields instead (see
+  // properties/routes.ts, ADMIN_ROLES-gated).
 });
 
 const signBody = z.object({
@@ -49,7 +57,13 @@ export async function allotmentRoutes(app: FastifyInstance): Promise<void> {
     }
     // BigInt conversion removed here too — see properties/routes.ts for why
     // (crashes the async consumer's JSON.stringify on a real queue driver).
-    return reply.code(202).send(await commands.applyAllotment(ctx, body));
+    // Re-review fix: rent/deposit now always come from the property, never
+    // from the request body (see the applyBody comment above).
+    return reply.code(202).send(await commands.applyAllotment(ctx, {
+      ...body,
+      monthlyRentMinor: property.monthlyRentMinor?.toString(),
+      securityDepositMinor: property.securityDepositMinor?.toString(),
+    }));
   });
 
   app.get("/v1/market/allotments", async (req, reply) => {

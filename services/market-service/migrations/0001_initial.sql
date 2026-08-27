@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS market.market_properties (
   area_unit           varchar(16) NOT NULL DEFAULT 'sqft',
   floor_number        integer,
   monthly_rent_minor  bigint,
+  -- Added in the re-review pass (see properties/schema.ts): authoritative
+  -- deposit source for allotments/routes.ts, closing the gap where a citizen's
+  -- self-declared securityDepositMinor on POST /allotments went straight to
+  -- the DB with no server-side source to check it against.
+  security_deposit_minor bigint,
   currency            varchar(3) NOT NULL DEFAULT 'INR',
   status              varchar(32) NOT NULL DEFAULT 'available',
   created_at          timestamptz NOT NULL DEFAULT now(),
@@ -131,6 +136,15 @@ CREATE TABLE IF NOT EXISTS market.market_demands (
 
 CREATE INDEX IF NOT EXISTS market_demands_tenant_idx    ON market.market_demands (tenant_id);
 CREATE INDEX IF NOT EXISTS market_demands_allotment_idx ON market.market_demands (allotment_id);
+
+-- Added in the re-review pass: closes a check-then-publish race where two
+-- concurrent POST /v1/market/demands requests for the same allotment+month
+-- could both pass the route-level findByAllotmentAndMonth pre-check and both
+-- insert. This is the true atomic guard; billing/repo.ts's insertDemand now
+-- targets it via onConflictDoNothing so the second writer gets a no-op
+-- instead of a duplicate row or an unhandled constraint-violation exception.
+CREATE UNIQUE INDEX IF NOT EXISTS market_demands_allotment_month_uidx
+  ON market.market_demands (tenant_id, allotment_id, demand_month);
 
 ALTER TABLE market.market_demands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE market.market_demands FORCE ROW LEVEL SECURITY;
