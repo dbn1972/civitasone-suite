@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
+import { runWithTenant } from "@civitasone/db";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { auditEventsListSchema, TenantAuditEventListSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
@@ -22,7 +23,17 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to   = q.to   ? new Date(q.to)   : new Date();
-    sendValidated(reply, auditEventsListSchema, await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
+    // G-FIX-3: the RLS tenant GUC is set once per request from the caller's
+    // OWN JWT tenant (app.ts's onRequest hook, via AsyncLocalStorage) and is
+    // never re-derived from a route's resolved target tenantId. Without this
+    // explicit override, an admin's cross-tenant request silently queries
+    // events.events with app.tenant_id still pinned to their own tenant, so
+    // RLS filters out every row of the OTHER tenant's data before it reaches
+    // this handler — a bare success with an always-empty list, not an error.
+    // Confirmed live before this fix: a super_admin querying a tenant with
+    // 1,690 real events (00000000-0000-0000-0000-000000000001) got back [].
+    const events = await runWithTenant(tenantId, () => queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
+    sendValidated(reply, auditEventsListSchema, events);
   });
 
   app.get("/v1/audit/events", async (req, reply) => {
@@ -47,7 +58,12 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     }
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to = q.to ? new Date(q.to) : new Date();
-    sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset)).map((event) => ({
+    // G-FIX-3: see the identical note on GET /audit/events above — this
+    // handler has the same tenantScoped=false cross-tenant admin path and
+    // needs the same explicit GUC override, or it silently returns an empty
+    // list for any tenant other than the caller's own.
+    const events = await runWithTenant(tenantId, () => queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
+    sendValidated(reply, TenantAuditEventListSchema, events.map((event) => ({
       id: event.id,
       actor: typeof event.actor === "object" && event.actor !== null && "email" in event.actor
         ? String(event.actor.email)
