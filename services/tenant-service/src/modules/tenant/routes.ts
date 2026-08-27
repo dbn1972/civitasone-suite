@@ -265,6 +265,28 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
         retryable: false,
       });
     }
+    // FIX (independent review, PR #780): this handler previously only
+    // recognized ZodError/HttpError and demoted anything else -- including a
+    // real, correctly-triggered 429 from @fastify/rate-limit (registered
+    // service-wide in app.ts) -- to a generic 500. The limiter itself works
+    // (verified: the 301st request in a 1-minute window is genuinely
+    // rejected), but callers got an opaque 500 instead of a proper 429 with
+    // Retry-After, which breaks well-behaved retry logic and misreports a
+    // client-rate-limit condition as a server fault. @fastify/rate-limit
+    // (and Fastify's own built-in errors) set a numeric `statusCode` on the
+    // thrown error; pass those through as-is instead of falling through to
+    // the generic branch below.
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      const body = (err as { code?: string; error?: string; message?: string; retryAfter?: number });
+      return reply.code(statusCode).send({
+        code: body.code ?? body.error ?? "CLIENT_ERROR",
+        message: body.message ?? err.message ?? "request rejected",
+        correlationId,
+        retryable: statusCode === 429,
+        ...(typeof body.retryAfter === "number" ? { retryAfter: body.retryAfter } : {}),
+      });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({
       code: "INTERNAL",
