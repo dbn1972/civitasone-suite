@@ -91,8 +91,23 @@ export async function jwtEdgeVerify(
     // SEC-P0: the verified token's tid claim is AUTHORITATIVE. Always overwrite any
     // client-supplied x-tenant-id so a logged-in user cannot forge a victim tenant id
     // in the header (downstream services source the RLS GUC from x-tenant-id).
+    //
+    // This MUST run unconditionally, including when tid is absent. A token can verify
+    // (valid signature/issuer) yet still carry no tid claim — a real, previously-seen
+    // condition on this platform (a Keycloak account missing the tenant-mapper
+    // attribute). The old `if (payload.tid)` guard skipped the overwrite in exactly
+    // that case, leaving any client-supplied x-tenant-id header completely untouched.
+    // createTenantTxHook (used by 64 of the platform's services, including every
+    // CEP-cluster service) sources the RLS GUC straight from that header, so an
+    // authenticated user with such a token could set x-tenant-id to an arbitrary
+    // victim tenant and have it trusted downstream — a cross-tenant RLS bypass.
+    // Deleting the header when tid is missing makes downstream services see no
+    // tenant at all instead, which FORCE RLS denies by default (fail closed).
+    const headers = req.headers as Record<string, string | undefined>;
     if (payload.tid) {
-      (req.headers as Record<string, string>)["x-tenant-id"] = payload.tid;
+      headers["x-tenant-id"] = payload.tid;
+    } else {
+      delete headers["x-tenant-id"];
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "token verification failed";
