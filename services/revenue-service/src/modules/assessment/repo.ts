@@ -3,6 +3,7 @@
  *
  * _Requirements: SVC-131, Requirement 6_
  */
+import { tenantTransaction } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { assessments, demands, dcbEntries } from "./schema.js";
@@ -10,16 +11,22 @@ import { eq, and } from "drizzle-orm";
 import { SERVICE } from "../../topics.js";
 
 export async function findAssessment(tenantId: string, id: string) {
-  const rows = await db
-    .select()
-    .from(assessments)
-    .where(and(eq(assessments.tenantId, tenantId), eq(assessments.id, id)));
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(assessments)
+      .where(and(eq(assessments.tenantId, tenantId), eq(assessments.id, id)));
+  });
   return rows[0] ?? null;
 }
 
 export async function listAssessments(tenantId: string, pagination: { limit: number; offset: number }) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:assessments`, async () => {
-    return db.select().from(assessments).where(eq(assessments.tenantId, tenantId));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t.select().from(assessments).where(eq(assessments.tenantId, tenantId));
+    });
   });
   const items = rows ?? [];
   const total = items.length;
@@ -29,17 +36,23 @@ export async function listAssessments(tenantId: string, pagination: { limit: num
 
 export async function listDemands(tenantId: string, assesseeId: string) {
   return cache.getOrLoad(`${SERVICE}:${tenantId}:demands:${assesseeId}`, async () => {
-    return db
-      .select()
-      .from(demands)
-      .where(and(eq(demands.tenantId, tenantId), eq(demands.assesseeId, assesseeId)));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t
+        .select()
+        .from(demands)
+        .where(and(eq(demands.tenantId, tenantId), eq(demands.assesseeId, assesseeId)));
+    });
   });
 }
 
 
 export async function listAllDemands(tenantId: string, pagination: { limit: number; offset: number }) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:demands:all`, async () => {
-    return db.select().from(demands).where(eq(demands.tenantId, tenantId));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t.select().from(demands).where(eq(demands.tenantId, tenantId));
+    });
   });
   const all = rows ?? [];
   return {
@@ -49,10 +62,13 @@ export async function listAllDemands(tenantId: string, pagination: { limit: numb
 }
 export async function getDcbSummary(tenantId: string, assesseeId: string) {
   return cache.getOrLoad(`${SERVICE}:${tenantId}:dcb:${assesseeId}`, async () => {
-    const entries = await db
-      .select()
-      .from(dcbEntries)
-      .where(and(eq(dcbEntries.tenantId, tenantId), eq(dcbEntries.assesseeId, assesseeId)));
+    const entries = await tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t
+        .select()
+        .from(dcbEntries)
+        .where(and(eq(dcbEntries.tenantId, tenantId), eq(dcbEntries.assesseeId, assesseeId)));
+    });
 
     let totalDemand = 0n;
     let totalCollected = 0n;
@@ -74,10 +90,13 @@ export async function getDcbSummary(tenantId: string, assesseeId: string) {
 }
 
 export async function getDemandBalance(tenantId: string, demandId: string) {
-  const entries = await db
-    .select()
-    .from(dcbEntries)
-    .where(and(eq(dcbEntries.tenantId, tenantId), eq(dcbEntries.demandId, demandId)));
+  const entries = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(dcbEntries)
+      .where(and(eq(dcbEntries.tenantId, tenantId), eq(dcbEntries.demandId, demandId)));
+  });
 
   let balance = 0n;
   for (const entry of entries) {

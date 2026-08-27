@@ -33,6 +33,13 @@ vi.mock("../src/shared/db.js", () => ({
       insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: "x" }]) }) }),
       select: (...a: any[]) => mockDbSelect(...a),
       update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: "x" }]) }) }) }),
+      // Revenue deep-verify pass: repo
+      // functions now route reads through the real tenantTransaction() from
+      // @civitasone/db, which calls setTenantGuc(runner, tenantId) — that
+      // needs a runner.execute() method on the mocked tx, or it throws
+      // "runner.execute is not a function" before ever reaching the mocked
+      // select/insert/update chains above.
+      execute: vi.fn().mockResolvedValue(undefined),
     })),
   },
   sqlClient: { end: vi.fn() },
@@ -85,9 +92,9 @@ describe("Rate Engine Repo", () => {
 
   it("listRateHeads calls cache.getOrLoad and returns DB results", async () => {
     const { listRateHeads } = await import("../src/modules/rate-engine/repo.js");
-    const result = await listRateHeads("tenant-1");
+    const result = await listRateHeads("11111111-1111-4111-8111-111111111111");
     expect(mockGetOrLoad).toHaveBeenCalledWith(
-      "revenue:tenant-1:rate_heads",
+      "revenue:11111111-1111-4111-8111-111111111111:rate_heads",
       expect.any(Function),
     );
     expect(result).toEqual([{ id: "rh-1", code: "PT" }]);
@@ -95,9 +102,9 @@ describe("Rate Engine Repo", () => {
 
   it("listRateSlabs calls cache.getOrLoad with rateHeadId in key", async () => {
     const { listRateSlabs } = await import("../src/modules/rate-engine/repo.js");
-    const result = await listRateSlabs("tenant-1", "rh-1");
+    const result = await listRateSlabs("11111111-1111-4111-8111-111111111111", "rh-1");
     expect(mockGetOrLoad).toHaveBeenCalledWith(
-      "revenue:tenant-1:rate_slabs:rh-1",
+      "revenue:11111111-1111-4111-8111-111111111111:rate_slabs:rh-1",
       expect.any(Function),
     );
     expect(result).toEqual([{ id: "rh-1", code: "PT" }]);
@@ -105,9 +112,9 @@ describe("Rate Engine Repo", () => {
 
   it("listPenaltyRules calls cache.getOrLoad with correct key", async () => {
     const { listPenaltyRules } = await import("../src/modules/rate-engine/repo.js");
-    const result = await listPenaltyRules("tenant-1", "rh-1");
+    const result = await listPenaltyRules("11111111-1111-4111-8111-111111111111", "rh-1");
     expect(mockGetOrLoad).toHaveBeenCalledWith(
-      "revenue:tenant-1:penalty_rules:rh-1",
+      "revenue:11111111-1111-4111-8111-111111111111:penalty_rules:rh-1",
       expect.any(Function),
     );
     expect(result).toEqual([{ id: "rh-1", code: "PT" }]);
@@ -115,9 +122,9 @@ describe("Rate Engine Repo", () => {
 
   it("listRebateRules calls cache.getOrLoad with correct key", async () => {
     const { listRebateRules } = await import("../src/modules/rate-engine/repo.js");
-    const result = await listRebateRules("tenant-1", "rh-1");
+    const result = await listRebateRules("11111111-1111-4111-8111-111111111111", "rh-1");
     expect(mockGetOrLoad).toHaveBeenCalledWith(
-      "revenue:tenant-1:rebate_rules:rh-1",
+      "revenue:11111111-1111-4111-8111-111111111111:rebate_rules:rh-1",
       expect.any(Function),
     );
     expect(result).toEqual([{ id: "rh-1", code: "PT" }]);
@@ -138,8 +145,8 @@ describe("Assessee Repo", () => {
 
   it("findAssessee executes DB query via cache loader", async () => {
     const { findAssessee } = await import("../src/modules/assessee/repo.js");
-    const result = await findAssessee("tenant-1", "a-1");
-    expect(mockGetOrLoad).toHaveBeenCalledWith("revenue:tenant-1:assessee:a-1", expect.any(Function));
+    const result = await findAssessee("11111111-1111-4111-8111-111111111111", "a-1");
+    expect(mockGetOrLoad).toHaveBeenCalledWith("revenue:11111111-1111-4111-8111-111111111111:assessee:a-1", expect.any(Function));
     expect(mockDbSelect).toHaveBeenCalled();
     expect(result).toEqual({ id: "a-1", ownerName: "Test" });
   });
@@ -147,14 +154,14 @@ describe("Assessee Repo", () => {
   it("findAssessee returns null when DB returns empty", async () => {
     mockDbWhere.mockResolvedValue([]);
     const { findAssessee } = await import("../src/modules/assessee/repo.js");
-    const result = await findAssessee("tenant-1", "nonexistent");
+    const result = await findAssessee("11111111-1111-4111-8111-111111111111", "nonexistent");
     expect(result).toBeNull();
   });
 
   it("listAssessees executes DB query via cache loader and paginates", async () => {
     mockDbWhere.mockResolvedValue([{ id: "a-1" }, { id: "a-2" }, { id: "a-3" }]);
     const { listAssessees } = await import("../src/modules/assessee/repo.js");
-    const result = await listAssessees("tenant-1", { limit: 2, offset: 0 });
+    const result = await listAssessees("11111111-1111-4111-8111-111111111111", { limit: 2, offset: 0 });
     expect(result.data).toHaveLength(2);
     expect(result.meta.total).toBe(3);
   });
@@ -162,7 +169,7 @@ describe("Assessee Repo", () => {
   it("listAssessees handles null from cache.getOrLoad", async () => {
     mockGetOrLoad.mockResolvedValue(null);
     const { listAssessees } = await import("../src/modules/assessee/repo.js");
-    const result = await listAssessees("tenant-1", { limit: 10, offset: 0 });
+    const result = await listAssessees("11111111-1111-4111-8111-111111111111", { limit: 10, offset: 0 });
     expect(result.data).toHaveLength(0);
     expect(result.meta.total).toBe(0);
   });
@@ -183,21 +190,21 @@ describe("Assessment Repo", () => {
   it("findAssessment returns first row or null", async () => {
     mockDbWhere.mockResolvedValue([{ id: "as-1", status: "active" }]);
     const { findAssessment } = await import("../src/modules/assessment/repo.js");
-    const result = await findAssessment("tenant-1", "as-1");
+    const result = await findAssessment("11111111-1111-4111-8111-111111111111", "as-1");
     expect(result).toEqual({ id: "as-1", status: "active" });
   });
 
   it("findAssessment returns null when empty", async () => {
     mockDbWhere.mockResolvedValue([]);
     const { findAssessment } = await import("../src/modules/assessment/repo.js");
-    const result = await findAssessment("tenant-1", "xxx");
+    const result = await findAssessment("11111111-1111-4111-8111-111111111111", "xxx");
     expect(result).toBeNull();
   });
 
   it("listAssessments executes DB query via loader and paginates", async () => {
     mockDbWhere.mockResolvedValue([{ id: "a1" }, { id: "a2" }, { id: "a3" }]);
     const { listAssessments } = await import("../src/modules/assessment/repo.js");
-    const result = await listAssessments("tenant-1", { limit: 2, offset: 0 });
+    const result = await listAssessments("11111111-1111-4111-8111-111111111111", { limit: 2, offset: 0 });
     expect(result.data).toHaveLength(2);
     expect(result.total).toBe(3);
   });
@@ -205,7 +212,7 @@ describe("Assessment Repo", () => {
   it("listAssessments handles null from getOrLoad", async () => {
     mockGetOrLoad.mockResolvedValue(null);
     const { listAssessments } = await import("../src/modules/assessment/repo.js");
-    const result = await listAssessments("tenant-1", { limit: 10, offset: 0 });
+    const result = await listAssessments("11111111-1111-4111-8111-111111111111", { limit: 10, offset: 0 });
     expect(result.data).toHaveLength(0);
     expect(result.total).toBe(0);
   });
@@ -213,9 +220,9 @@ describe("Assessment Repo", () => {
   it("listDemands executes DB query via cache loader", async () => {
     mockDbWhere.mockResolvedValue([{ id: "d-1" }, { id: "d-2" }]);
     const { listDemands } = await import("../src/modules/assessment/repo.js");
-    const result = await listDemands("tenant-1", "assessee-1");
+    const result = await listDemands("11111111-1111-4111-8111-111111111111", "assessee-1");
     expect(mockGetOrLoad).toHaveBeenCalledWith(
-      "revenue:tenant-1:demands:assessee-1",
+      "revenue:11111111-1111-4111-8111-111111111111:demands:assessee-1",
       expect.any(Function),
     );
     expect(result).toEqual([{ id: "d-1" }, { id: "d-2" }]);
@@ -229,7 +236,7 @@ describe("Assessment Repo", () => {
       { entryType: "demand", amountMinor: 50000n },
     ]);
     const { getDcbSummary } = await import("../src/modules/assessment/repo.js");
-    const result = await getDcbSummary("tenant-1", "assessee-1");
+    const result = await getDcbSummary("11111111-1111-4111-8111-111111111111", "assessee-1");
     expect(result).toEqual({
       totalDemand: "150000",
       totalCollected: "30000",
@@ -243,14 +250,14 @@ describe("Assessment Repo", () => {
       { entryType: "collection", amountMinor: 25000n },
     ]);
     const { getDemandBalance } = await import("../src/modules/assessment/repo.js");
-    const result = await getDemandBalance("tenant-1", "demand-1");
+    const result = await getDemandBalance("11111111-1111-4111-8111-111111111111", "demand-1");
     expect(result).toBe(75000n);
   });
 
   it("getDemandBalance returns 0n when no entries", async () => {
     mockDbWhere.mockResolvedValue([]);
     const { getDemandBalance } = await import("../src/modules/assessment/repo.js");
-    const result = await getDemandBalance("tenant-1", "demand-1");
+    const result = await getDemandBalance("11111111-1111-4111-8111-111111111111", "demand-1");
     expect(result).toBe(0n);
   });
 });
@@ -270,7 +277,7 @@ describe("Billing Repo", () => {
   it("listBills executes DB query via cache loader and paginates", async () => {
     mockDbWhere.mockResolvedValue([{ id: "b-1" }, { id: "b-2" }, { id: "b-3" }]);
     const { listBills } = await import("../src/modules/billing/repo.js");
-    const result = await listBills("tenant-1", "assessee-1", { limit: 2, offset: 0 });
+    const result = await listBills("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 2, offset: 0 });
     expect(result.data).toHaveLength(2);
     expect(result.total).toBe(3);
   });
@@ -278,7 +285,7 @@ describe("Billing Repo", () => {
   it("listBills handles null from cache.getOrLoad", async () => {
     mockGetOrLoad.mockResolvedValue(null);
     const { listBills } = await import("../src/modules/billing/repo.js");
-    const result = await listBills("tenant-1", "assessee-1", { limit: 10, offset: 0 });
+    const result = await listBills("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
     expect(result.data).toHaveLength(0);
     expect(result.total).toBe(0);
   });
@@ -302,42 +309,42 @@ describe("Collection Repo", () => {
     mockDbOrderBy.mockResolvedValue([{ id: "r-1" }, { id: "r-2" }]);
     mockDbWhere.mockReturnValue({ orderBy: mockDbOrderBy, limit: mockDbLimit });
     const { listReceipts } = await import("../src/modules/collection/repo.js");
-    const result = await listReceipts("tenant-1", "assessee-1", { limit: 10, offset: 0 });
+    const result = await listReceipts("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
     expect(result).toHaveLength(2);
   });
 
   it("listReceipts handles null from cache.getOrLoad", async () => {
     mockGetOrLoad.mockResolvedValue(null);
     const { listReceipts } = await import("../src/modules/collection/repo.js");
-    const result = await listReceipts("tenant-1", "assessee-1", { limit: 10, offset: 0 });
+    const result = await listReceipts("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
     expect(result).toEqual([]);
   });
 
   it("findReceipt returns first matching row", async () => {
     mockDbLimit.mockResolvedValue([{ id: "r-1", amountMinor: 50000n }]);
     const { findReceipt } = await import("../src/modules/collection/repo.js");
-    const result = await findReceipt("tenant-1", "r-1");
+    const result = await findReceipt("11111111-1111-4111-8111-111111111111", "r-1");
     expect(result).toEqual({ id: "r-1", amountMinor: 50000n });
   });
 
   it("findReceipt returns null when not found", async () => {
     mockDbLimit.mockResolvedValue([]);
     const { findReceipt } = await import("../src/modules/collection/repo.js");
-    const result = await findReceipt("tenant-1", "nonexistent");
+    const result = await findReceipt("11111111-1111-4111-8111-111111111111", "nonexistent");
     expect(result).toBeNull();
   });
 
   it("getDemandBalance returns latest balance or 0n", async () => {
     mockDbLimit.mockResolvedValue([{ balanceMinor: 75000n }]);
     const { getDemandBalance } = await import("../src/modules/collection/repo.js");
-    const result = await getDemandBalance("tenant-1", "demand-1");
+    const result = await getDemandBalance("11111111-1111-4111-8111-111111111111", "demand-1");
     expect(result).toBe(75000n);
   });
 
   it("getDemandBalance returns 0n when no entries", async () => {
     mockDbLimit.mockResolvedValue([]);
     const { getDemandBalance } = await import("../src/modules/collection/repo.js");
-    const result = await getDemandBalance("tenant-1", "demand-1");
+    const result = await getDemandBalance("11111111-1111-4111-8111-111111111111", "demand-1");
     expect(result).toBe(0n);
   });
 });
@@ -357,15 +364,15 @@ describe("Arrears Repo", () => {
 
   it("listInstalmentPlans executes DB query via cache loader", async () => {
     const { listInstalmentPlans } = await import("../src/modules/arrears/repo.js");
-    const result = await listInstalmentPlans("tenant-1", "assessee-1", { limit: 10, offset: 0 });
+    const result = await listInstalmentPlans("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
     expect(result).toHaveLength(1);
-    expect(mockGetOrLoad).toHaveBeenCalledWith("revenue:tenant-1:instalments:assessee-1", expect.any(Function));
+    expect(mockGetOrLoad).toHaveBeenCalledWith("revenue:11111111-1111-4111-8111-111111111111:instalments:assessee-1", expect.any(Function));
   });
 
   it("listInstalmentPlans handles null from cache.getOrLoad", async () => {
     mockGetOrLoad.mockResolvedValue(null);
     const { listInstalmentPlans } = await import("../src/modules/arrears/repo.js");
-    const result = await listInstalmentPlans("tenant-1", "assessee-1", { limit: 10, offset: 0 });
+    const result = await listInstalmentPlans("11111111-1111-4111-8111-111111111111", "assessee-1", { limit: 10, offset: 0 });
     expect(result).toEqual([]);
   });
 });
@@ -385,7 +392,7 @@ describe("BBPS Repo", () => {
   it("getDcbOutstanding returns null when assessee not found", async () => {
     mockDbLimit.mockResolvedValue([]);
     const { getDcbOutstanding } = await import("../src/modules/bbps/repo.js");
-    const result = await getDcbOutstanding("tenant-1", "UNKNOWN-ID");
+    const result = await getDcbOutstanding("11111111-1111-4111-8111-111111111111", "UNKNOWN-ID");
     expect(result).toBeNull();
   });
 
@@ -398,7 +405,7 @@ describe("BBPS Repo", () => {
       .mockResolvedValueOnce([{ totalOutstanding: 150000n, demandCount: 2, oldestDueDate: "2024-01-01" }]); // second call for DCB
 
     const { getDcbOutstanding } = await import("../src/modules/bbps/repo.js");
-    const result = await getDcbOutstanding("tenant-1", "PROP-123");
+    const result = await getDcbOutstanding("11111111-1111-4111-8111-111111111111", "PROP-123");
     expect(result).not.toBeNull();
     expect(result!.assesseeId).toBe("assessee-1");
     expect(result!.ownerName).toBe("John Doe");
