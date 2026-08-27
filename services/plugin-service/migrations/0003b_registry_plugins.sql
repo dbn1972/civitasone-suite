@@ -48,3 +48,21 @@ CREATE POLICY tenant_isolation_policy ON registry.plugins
 
 -- Standard indexes.
 CREATE INDEX IF NOT EXISTS idx_plugins_tenant ON registry.plugins (tenant_id);
+
+-- Grants: migrations run as civitas_admin (see scripts/dev/migrate-all.mjs),
+-- so — despite the AUTHORIZATION clause above — a fresh cluster where
+-- `registry` didn't already exist under a different owner is the only case
+-- that clause actually takes effect; on this codebase's dev/CI cluster the
+-- schema already existed (civitas_admin-owned) by the time this migration
+-- ran, so AUTHORIZATION was a no-op and plugin_svc was left with zero
+-- privileges here ("permission denied for schema registry" on every
+-- request), identical to the sibling hooks.plugin_hooks gap in 0003a. This
+-- service's tables otherwise rely on scripts/dev/grant-all.mjs running after
+-- ALL services' migrations succeed fleet-wide to pick this up — a step that
+-- is silently skipped in full if even one unrelated service's migration
+-- fails. Granting explicitly here — matching the established pattern in
+-- theme-service/migrations/0004_brand_config.sql — makes this migration
+-- self-sufficient regardless of whether AUTHORIZATION took effect or whether
+-- the fleet-wide grant step ran.
+GRANT USAGE ON SCHEMA registry TO plugin_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON registry.plugins TO plugin_svc;

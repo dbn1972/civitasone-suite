@@ -50,3 +50,19 @@ CREATE POLICY tenant_isolation_policy ON hooks.plugin_hooks
 -- Standard tenant index (plugin_id lookup index is added separately by
 -- 0008_fk_indexes.sql via CREATE INDEX CONCURRENTLY).
 CREATE INDEX IF NOT EXISTS idx_plugin_hooks_tenant ON hooks.plugin_hooks (tenant_id);
+
+-- Grants: migrations run as civitas_admin (see scripts/dev/migrate-all.mjs),
+-- so this schema/table are owned by civitas_admin, not plugin_svc — the role
+-- plugin-service actually connects as. Every other module in this service
+-- (and this table's own sibling migrations 0010/0011) relies on
+-- scripts/dev/grant-all.mjs running after ALL services' migrations succeed to
+-- pick this up. That step is skipped fleet-wide if even one unrelated
+-- service's migration fails, which is exactly what left plugin_svc with zero
+-- privileges on this schema in practice ("permission denied for schema
+-- hooks" on every request) despite the table existing. Granting explicitly
+-- here — matching the established pattern in
+-- theme-service/migrations/0004_brand_config.sql — makes this migration
+-- self-sufficient instead of depending on a separate, easy-to-skip fleet-wide
+-- step.
+GRANT USAGE ON SCHEMA hooks TO plugin_svc;
+GRANT SELECT, INSERT, UPDATE, DELETE ON hooks.plugin_hooks TO plugin_svc;
