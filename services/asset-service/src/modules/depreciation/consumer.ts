@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
-import { computeMonthlyDep, generatePeriods } from "./domain.js";
+import { computeMonthlyDep, generatePeriods, applyDepreciationPosting } from "./domain.js";
 import { uuidV5 } from "../../shared/ids.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -55,6 +55,12 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
       // schedule reconciles exactly: sum(amountMinor) === cost - salvage, and the
       // last bookValueAfterMinor === salvage. Per-period amounts are clamped so we
       // never depreciate below salvage before the end.
+      //
+      // NOTE: this per-entry `bookValueAfterMinor` is a SCHEDULE PROJECTION only
+      // (what book value would be if every period posts in order, with no gaps).
+      // It must never be copied onto the asset's own headline `bookValue` — see
+      // applyDepreciationPosting() in domain.ts for why, and the depRun handler
+      // below for the fix.
       const periods = generatePeriods(startDate, endDate);
       const salvage = asset.salvageValue;
       let bookValue = asset.acquisitionCost;
@@ -103,12 +109,29 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
         const glRef = `dep:${entry.depBook}:${entry.assetId}:${entry.period}`;
         await repo.markEntryPosted(tx, entry.id, p.tenantId, glRef, msg.actorId);
         if (entry.depBook === "company") {
-          await registerRepo.updateAssetBookValue(
-            tx, entry.assetId, p.tenantId,
-            entry.bookValueAfterMinor,
-            ((await registerRepo.findAssetById(entry.assetId, p.tenantId))?.accumulatedDep ?? 0n) + entry.amountMinor,
-            msg.actorId
-          );
+          const asset = await registerRepo.findAssetById(entry.assetId, p.tenantId);
+          if (asset) {
+            // Derive both figures from the asset's OWN current accumulatedDep,
+            // never from the schedule entry's pre-baked `bookValueAfterMinor`
+            // projection (see the long comment on applyDepreciationPosting in
+            // domain.ts) — this keeps bookValue and accumulatedDep mutually
+            // consistent (bookValue === acquisitionCost - accumulatedDep,
+            // clamped to salvage) no matter what order periods actually post in.
+            const { bookValueMinor, accumulatedDepMinor } = applyDepreciationPosting(
+              {
+                acquisitionCostMinor: asset.acquisitionCost,
+                salvageValueMinor: asset.salvageValue,
+                accumulatedDepMinor: asset.accumulatedDep ?? 0n,
+              },
+              entry.amountMinor,
+            );
+            await registerRepo.updateAssetBookValue(
+              tx, entry.assetId, p.tenantId,
+              bookValueMinor,
+              accumulatedDepMinor,
+              msg.actorId
+            );
+          }
         }
         await enqueue(tx, {
           topic: GL_TOPIC, eventType: GL_TOPIC,
