@@ -2,21 +2,18 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { maskEmail, maskPhone } from "../../shared/pii-crypto.js";
 import { caseIdParam, partyIdParam, addPartyBody, updateAdvocateBody } from "./validators.js";
+import { presentParty, PII_PRIVILEGED_ROLES } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const PARTY_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
 const PARTY_READ_ROLES  = ["registrar", "court_admin", "super_admin", "court_clerk", "judge"];
 
-/**
- * Roles allowed to see FULL cleartext party PII (name/address/phone/email). All
- * other read roles receive masked phone/email and REDACTED name/address (null).
- * PII is decrypted only server-side and masked per role — DPDP Act 2023 data
- * minimization (Req 15.3): expose the least PII the caller's role needs.
- */
-const PII_PRIVILEGED_ROLES = ["judge", "court_admin", "super_admin"];
+// PII_PRIVILEGED_ROLES now lives in ./domain.js — case-registry/routes.ts (which
+// embeds a case's parties in GET /cases/:id) shares the SAME constant and the
+// SAME presentParty() masking so the two endpoints can never disagree on what
+// PII a role may see.
 
 export async function partyRoutes(app: FastifyInstance): Promise<void> {
   // Add a party / advocate to a case (§14/§15).
@@ -37,36 +34,7 @@ export async function partyRoutes(app: FastifyInstance): Promise<void> {
     const rows = await repo.listPartiesByCase(ctx.tenantId, id);
 
     const privileged = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
-    const items = rows.map((r) => {
-      const base = {
-        id:            r.id,
-        caseId:        r.caseId,
-        partyRole:     r.partyRole,
-        advocateName:  r.advocateName,
-        advocateBarId: r.advocateBarId,
-        version:       r.version,
-        createdAt:     r.createdAt,
-        updatedAt:     r.updatedAt,
-      };
-      if (privileged) {
-        // Full cleartext (decrypted server-side by the encryptedText columns).
-        return {
-          ...base,
-          name:    r.nameEnc,
-          address: r.addressEnc,
-          phone:   r.phoneEnc,
-          email:   r.emailEnc,
-        };
-      }
-      // Ordinary read roles: name/address REDACTED, phone/email MASKED.
-      return {
-        ...base,
-        name:    null,
-        address: null,
-        phone:   maskPhone(r.phoneEnc),
-        email:   maskEmail(r.emailEnc),
-      };
-    });
+    const items = rows.map((r) => presentParty(r, privileged));
 
     return reply.send({ items, count: items.length, source: "db", piiRevealed: privileged });
   });

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { idParam, registerCaseBody, listCasesQuery } from "./validators.js";
+import { presentParty, PII_PRIVILEGED_ROLES } from "../party/domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -84,8 +86,18 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     if (!found || found.tenantId !== ctx.tenantId) {
       throw new HttpError(404, "CASE_NOT_FOUND", "case not found");
     }
-    const parties = await repo.getCasePartiesByCaseId(ctx.tenantId, id);
-    return reply.send({ ...found, parties });
+    const rows = await repo.getCasePartiesByCaseId(ctx.tenantId, id);
+    // PII masked per role (DPDP Act 2023 minimization) — SAME presentParty()
+    // helper and SAME privileged-role list as party/routes.ts's dedicated
+    // GET .../parties, so this embed can never again drift out of sync with
+    // it (see party/domain.ts PII_PRIVILEGED_ROLES doc comment for the bug
+    // history: this embed used to skip masking entirely and leak full
+    // cleartext party PII — name/address/phone/email — to every
+    // COURT_READ_ROLES caller, including registrar/court_clerk who are NOT
+    // privileged to see it).
+    const privileged = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
+    const parties = rows.map((r) => presentParty(r, privileged));
+    return reply.send({ ...found, parties, piiRevealed: privileged });
   });
 
   app.setErrorHandler((err, req, reply) => {
