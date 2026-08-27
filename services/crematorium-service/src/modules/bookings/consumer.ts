@@ -116,8 +116,13 @@ export function registerBookingConsumers(rawQueue: Queue): void {
     });
     // Prime the read cache with the fresh row (outside the tx, read-your-writes) so
     // GET .../bookings/:id doesn't keep serving the pre-confirm row for up to the
-    // cache's TTL. No cache.del()/invalidate exists on @civitasone/cache by design —
-    // put() is the supported way to refresh an entry after a write.
+    // cache's TTL. Correction: @civitasone/cache also exposes invalidate() /
+    // invalidateAfterCommit() (packages/cache/src/index.ts), the more common
+    // convention elsewhere in this monorepo (e.g. admin-service) — an earlier
+    // version of this comment incorrectly claimed no such method exists.
+    // put() is used deliberately here instead, since the fresh row is already
+    // in hand from .returning(), sparing the next GET a DB round-trip that a
+    // plain invalidate() would otherwise force.
     if (updated) await cache.put(`crematorium:${msg.tenantId}:booking:${p.id}`, updated);
   });
 
