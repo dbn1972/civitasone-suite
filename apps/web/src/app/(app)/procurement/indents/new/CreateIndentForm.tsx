@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
+import { toHumanError } from "@/lib/messages";
 
 type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
 
@@ -16,7 +17,7 @@ export function CreateIndentForm() {
   const [indentDate, setIndentDate] = useState(new Date().toISOString().slice(0, 10));
   const [requiredBy, setRequiredBy] = useState("");
   const [estimatedValue, setEstimatedValue] = useState("");
-  const [remarks, setRemarks] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [items, setItems] = useState<LineItem[]>([emptyLineItem()]);
   const [modeBand, setModeBand] = useState<GfrBand | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
@@ -43,19 +44,19 @@ export function CreateIndentForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.itemCode.trim() && it.description.trim());
-    if (!department.trim() || validItems.length === 0) {
+    if (!department.trim() || purpose.trim().length < 3 || validItems.length === 0) {
       setStatus("error");
-      setMessage("Department and at least one complete line item are required.");
+      setMessage("Department, a purpose of at least 3 characters, and at least one complete line item are required.");
       return;
     }
     setStatus("submitting"); setMessage("");
     const body = {
       indentNo,
       department: department.trim(),
+      purpose: purpose.trim(),
       indentDate: indentDate || new Date().toISOString().slice(0, 10),
       requiredBy: requiredBy || undefined,
       estimatedValueMinor: estimatedValue ? Math.round(parseFloat(estimatedValue) * 100) : undefined,
-      remarks: remarks.trim() || undefined,
       items: validItems.map((it) => ({
         itemCode: it.itemCode.trim(),
         description: it.description.trim(),
@@ -70,8 +71,12 @@ export function CreateIndentForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
-      if (!res.ok) { setStatus("error"); setMessage(text || "Request failed"); return; }
+      if (!res.ok) {
+        const human = toHumanError("save", { area: "indent" });
+        setStatus("error");
+        setMessage(`${human.what} ${human.next}`);
+        return;
+      }
       setStatus("accepted");
       trackActivation("first_transaction");
       setMessage("Indent submitted for approval via workflow.");
@@ -125,8 +130,8 @@ export function CreateIndentForm() {
         </div>
 
         <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="remarks">Remarks</label>
-          <textarea id="remarks" className="inp" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional remarks or justification" />
+          <label className="label" htmlFor="purpose">Purpose / justification *</label>
+          <textarea id="purpose" className="inp" rows={2} value={purpose} onChange={(e) => setPurpose(e.target.value)} required minLength={3} maxLength={500} placeholder="Why this purchase is needed (minimum 3 characters)" />
         </div>
       </div>
 

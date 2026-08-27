@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 export function CreateSrnForm({ grnId, storeOfficerId }: { grnId: string; storeOfficerId: string }) {
   const router = useRouter();
@@ -24,11 +25,13 @@ export function CreateSrnForm({ grnId, storeOfficerId }: { grnId: string; storeO
       });
       const createText = await createRes.text();
       if (!createRes.ok) {
+        const human = toHumanError("save", { area: "Store Receipt Note" });
         setStatus("error");
-        setMessage(createText || `Create failed (${createRes.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
-      const created = JSON.parse(createText) as { id?: string };
+      let created: { id?: string } = {};
+      try { created = JSON.parse(createText) as { id?: string }; } catch { /* ignore */ }
 
       if (signNow && created.id) {
         const signRes = await fetch(`/api/proxy/v1/inventory/srn/${created.id}/sign`, {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toHumanError } from "@/lib/messages";
 
 const AMENDMENT_TYPES = ["quantity", "price", "schedule", "scope", "change_order"] as const;
 
@@ -34,10 +35,10 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
           effectiveDate: effectiveDate || undefined,
         }),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "PO amendment" });
         setStatus("error");
-        setMessage(text || "Request failed");
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
       setStatus("accepted");
