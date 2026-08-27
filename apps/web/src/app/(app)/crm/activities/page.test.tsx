@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("../../../_data/loaders", () => ({ getCRMActivities: vi.fn() }));
-vi.mock("./ActivitiesTable", () => ({ ActivitiesTable: () => <div data-testid="act-table" /> }));
+vi.mock("./ActivitiesTable", () => ({
+  ActivitiesTable: ({ initialSegment }: { initialSegment?: string }) => (
+    <div data-testid="act-table" data-initial-segment={initialSegment ?? ""} />
+  ),
+}));
 vi.mock("./LogActivityButton", () => ({ LogActivityButton: () => <button>Log Interaction</button> }));
 vi.mock("../../../_components/DataSourceBadge", () => ({ DataSourceBadge: () => null }));
 
@@ -28,13 +32,13 @@ beforeEach(() => mocked.mockReset());
 describe("Stakeholder Interactions page (GoI redesign)", () => {
   it("renders heading Stakeholder Interactions", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page());
+    render(await Page({ searchParams: {} }));
     expect(screen.getByText("Stakeholder Interactions")).toBeInTheDocument();
   });
 
   it("shows overdue count (3) when activities have status overdue", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page());
+    render(await Page({ searchParams: {} }));
     expect(screen.getByText("Overdue")).toBeInTheDocument();
     // 3 activities are overdue — the value "3" must appear in the stat grid
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -42,14 +46,14 @@ describe("Stakeholder Interactions page (GoI redesign)", () => {
 
   it("shows completed count (2) correctly", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page());
+    render(await Page({ searchParams: {} }));
     expect(screen.getByText("Completed")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
   });
 
   it("renders ActivitiesTable component", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page());
+    render(await Page({ searchParams: {} }));
     expect(screen.getByTestId("act-table")).toBeInTheDocument();
   });
 
@@ -58,14 +62,22 @@ describe("Stakeholder Interactions page (GoI redesign)", () => {
     // every count (total/due-today/overdue/completed) used to render a
     // confident "0" instead of signalling the load actually failed.
     mocked.mockResolvedValue({ data: [], source: "error" });
-    render(await Page());
+    render(await Page({ searchParams: {} }));
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 
-  it("still renders with no arguments (Next.js may omit searchParams)", async () => {
+  it("forwards ?segment= to ActivitiesTable so a drill-down link lands on the right toggle", async () => {
+    // e.g. the Control Tower's "Overdue follow-ups" exception links to
+    // /crm/activities?segment=Overdue.
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page());
-    expect(screen.getByText("Stakeholder Interactions")).toBeInTheDocument();
+    render(await Page({ searchParams: { segment: "Overdue" } }));
+    expect(screen.getByTestId("act-table").dataset.initialSegment).toBe("Overdue");
+  });
+
+  it("omits initialSegment when no ?segment= is present", async () => {
+    mocked.mockResolvedValue({ data: mockActivities, source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.getByTestId("act-table").dataset.initialSegment).toBe("");
   });
 });

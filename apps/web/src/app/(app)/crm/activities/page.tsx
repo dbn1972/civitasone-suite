@@ -4,7 +4,7 @@ import { getCRMActivities } from "../../../_data/loaders";
 import { ActivitiesTable } from "./ActivitiesTable";
 import { LogActivityButton } from "./LogActivityButton";
 
-export default async function Page({ searchParams }: { searchParams?: { segment?: string } } = {}) {
+export default async function Page({ searchParams }: { searchParams?: { segment?: string } }) {
   const { data: activities, source } = await getCRMActivities();
 
   // Never fabricate a 0 count when the list load failed — show "—" instead
