@@ -16,7 +16,7 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerTreeRequestConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe(COMMANDS.treeRequestSubmit, async (msg) => {
+  queue.subscribe(COMMANDS.CREATE_TREE_REQUEST, async (msg) => {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -28,7 +28,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
-        topic: EVENTS.treeRequestSubmitted, eventType: EVENTS.treeRequestSubmitted,
+        topic: EVENTS.TREE_REQUEST_CREATED, eventType: EVENTS.TREE_REQUEST_CREATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { requestId: p.id, requestNumber: p.requestNumber, requestType: p.requestType },
       });
@@ -37,7 +37,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "tree request submitted");
   });
 
-  queue.subscribe(COMMANDS.treeRequestInspect, async (msg) => {
+  queue.subscribe(COMMANDS.INSPECT_TREE_REQUEST, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -49,7 +49,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.treeRequestInspected, eventType: EVENTS.treeRequestInspected,
+        topic: EVENTS.TREE_REQUEST_INSPECTED, eventType: EVENTS.TREE_REQUEST_INSPECTED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { requestId: p.id, inspectorId: p.inspectorId },
       });
@@ -58,7 +58,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "tree request inspected");
   });
 
-  queue.subscribe(COMMANDS.treeRequestApprove, async (msg) => {
+  queue.subscribe(COMMANDS.APPROVE_TREE_REQUEST, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -67,7 +67,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.treeRequestApproved, eventType: EVENTS.treeRequestApproved,
+        topic: EVENTS.TREE_REQUEST_APPROVED, eventType: EVENTS.TREE_REQUEST_APPROVED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { requestId: p.id, approvedBy: p.approvedBy },
       });
@@ -76,7 +76,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "tree request approved");
   });
 
-  queue.subscribe(COMMANDS.treeRequestReject, async (msg) => {
+  queue.subscribe(COMMANDS.REJECT_TREE_REQUEST, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -85,7 +85,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.treeRequestRejected, eventType: EVENTS.treeRequestRejected,
+        topic: EVENTS.TREE_REQUEST_REJECTED, eventType: EVENTS.TREE_REQUEST_REJECTED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { requestId: p.id },
       });
@@ -94,7 +94,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "tree request rejected");
   });
 
-  queue.subscribe(COMMANDS.treeRequestComplete, async (msg) => {
+  queue.subscribe(COMMANDS.COMPLETE_TREE_REQUEST, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -103,7 +103,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.treeRequestCompleted, eventType: EVENTS.treeRequestCompleted,
+        topic: EVENTS.TREE_REQUEST_COMPLETED, eventType: EVENTS.TREE_REQUEST_COMPLETED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { requestId: p.id },
       });

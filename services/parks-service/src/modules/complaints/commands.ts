@@ -17,17 +17,17 @@ export interface CreateComplaintInput {
 export async function createComplaint(ctx: RequestContext, body: CreateComplaintInput): Promise<Accepted> {
   const id = randomUUID();
   const complaintNumber = `PRK-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.complaintCreate, id, { id, complaintNumber, reportedBy: ctx.actorId, ...body });
+  return publishCommand(ctx, COMMANDS.CREATE_COMPLAINT, id, { id, complaintNumber, reportedBy: ctx.actorId, ...body });
 }
 
 export async function assignComplaint(ctx: RequestContext, id: string, assignedTo: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.complaintAssign, id, { id, assignedTo, version });
+  return publishCommand(ctx, COMMANDS.ASSIGN_COMPLAINT, id, { id, assignedTo, version });
 }
 
 export async function resolveComplaint(ctx: RequestContext, id: string, resolution: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.complaintResolve, id, { id, resolution, version });
+  return publishCommand(ctx, COMMANDS.RESOLVE_COMPLAINT, id, { id, resolution, version });
 }
 
 export async function closeComplaint(ctx: RequestContext, id: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.complaintClose, id, { id, version });
+  return publishCommand(ctx, COMMANDS.CLOSE_COMPLAINT, id, { id, version });
 }
