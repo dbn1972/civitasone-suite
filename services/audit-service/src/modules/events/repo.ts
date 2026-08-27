@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { auditEvents, type AuditEventRow, type AuditEventInsert } from "./schema.js";
 import type { AuditEventView } from "./domain.js";
@@ -22,20 +23,36 @@ function toView(r: AuditEventRow): AuditEventView {
   };
 }
 
+/**
+ * G-FIX-3: every function below takes `tenantId` as an explicit parameter but
+ * previously ran its query inside a bare `db.transaction()`, which sets the
+ * RLS `app.tenant_id` GUC from the AMBIENT AsyncLocalStorage context (see
+ * @civitasone/db's wrapWithTenantGuc) — populated once per request from the
+ * CALLER's own JWT tenant, not from whatever `tenantId` a caller passes in
+ * here. For every normal (same-tenant) call the two happen to match, so this
+ * was invisible. For the one caller that legitimately passes a DIFFERENT
+ * tenantId — events/routes.ts's admin cross-tenant audit-trail read — RLS
+ * silently filtered out every row of the target tenant's data, because the
+ * GUC stayed pinned to the admin's own tenant regardless of what this
+ * function's WHERE clause asked for. Confirmed live: an admin querying a
+ * tenant with 1,690 real rows got back [].
+ *
+ * Wrapping each query in runWithTenant(tenantId, ...) makes the GUC always
+ * match the tenantId this function was actually asked to read, regardless of
+ * the ambient per-request context — correct for the common case (where they
+ * already matched) and now also correct for a legitimate cross-tenant
+ * caller, with no per-call-site opt-in required.
+ */
 export async function findById(id: string, tenantId: string): Promise<AuditEventView | null> {
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this read — a bare db.select() runs with no RLS GUC set.
-  const rows = await db.transaction((tx) => tx.select().from(auditEvents).where(and(eq(auditEvents.id, id), eq(auditEvents.tenantId, tenantId))).limit(1));
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents).where(and(eq(auditEvents.id, id), eq(auditEvents.tenantId, tenantId))).limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findLatestForTenant(tenantId: string): Promise<AuditEventView | null> {
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this read — a bare db.select() runs with no RLS GUC set.
-  const rows = await db.transaction((tx) => tx.select().from(auditEvents)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents)
     .where(eq(auditEvents.tenantId, tenantId))
     .orderBy(desc(auditEvents.occurredAt))
-    .limit(1));
+    .limit(1)));
   return rows[0] ? toView(rows[0]) : null;
 }
 
@@ -46,12 +63,10 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
     lte(auditEvents.occurredAt, to),
   ];
   if (type) conditions.push(eq(auditEvents.type, type));
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this read — a bare db.select() runs with no RLS GUC set.
-  const rows = await db.transaction((tx) => tx.select().from(auditEvents)
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents)
     .where(and(...conditions))
     .orderBy(desc(auditEvents.occurredAt))
-    .limit(limit).offset(offset));
+    .limit(limit).offset(offset)));
   return rows.map(toView);
 }
 
@@ -63,7 +78,7 @@ export async function listEventsByEntity(
   limit = 50,
   offset = 0,
 ): Promise<AuditEventView[]> {
-  const rows = await db.transaction((tx) =>
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) =>
     tx.select().from(auditEvents)
       .where(and(
         eq(auditEvents.tenantId, tenantId),
@@ -73,7 +88,7 @@ export async function listEventsByEntity(
       .orderBy(desc(auditEvents.occurredAt))
       .limit(limit)
       .offset(offset),
-  );
+  ));
   return rows.map(toView);
 }
 
