@@ -277,13 +277,46 @@ export default function BrandingPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load current brand + presets on mount
+  // Load current brand + presets on mount.
+  //
+  // These are client-component fetches, so — unlike the server-loader pages
+  // under (app)/themes/* — they can't call the gateway's /api/v1/... path
+  // directly (there is no Next.js route at that path; apps/web/src/app/api
+  // has no v1/ subtree, and next.config.mjs declares no rewrite for it, so
+  // that request 404's against the Next server itself and never reaches
+  // theme-service). Client-side calls in this codebase go through the
+  // authenticated proxy instead — see PluginActions.tsx / ThemeActions.tsx
+  // for the same /api/proxy/v1/... pattern used for mutations.
+  //
+  // Previously this fetch failed silently (only AbortError was handled) and
+  // the editor just sat on its hardcoded default BrandConfig with no
+  // indication anything was wrong, which reads as "your portal has no brand
+  // config yet" rather than "this couldn't load".
   useEffect(() => {
-    const controller = new AbortController()
-    fetch("/api/v1/themes/brand", { signal: controller.signal }).then((r) => r.json()).then(setConfig).catch((e) => { if (e.name === 'AbortError') return; });
-    fetch("/api/v1/themes/brand/presets", { signal: controller.signal }).then((r) => r.json()).then(setPresets).catch((e) => { if (e.name === 'AbortError') return; });
-    return () => controller.abort()
+    const controller = new AbortController();
+    setLoadError(null);
+    Promise.all([
+      fetch("/api/proxy/v1/themes/brand", { signal: controller.signal }).then((r) => {
+        if (!r.ok) throw new Error(`brand config: HTTP ${r.status}`);
+        return r.json();
+      }),
+      fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal }).then((r) => {
+        if (!r.ok) throw new Error(`presets: HTTP ${r.status}`);
+        return r.json();
+      }),
+    ])
+      .then(([brandData, presetsData]) => {
+        setConfig(brandData);
+        setPresets(presetsData);
+      })
+      .catch((e) => {
+        if (e.name === "AbortError") return;
+        setLoadError("Couldn't load your current branding. Showing defaults — saving will still work.");
+      });
+    return () => controller.abort();
   }, []);
 
   const updateColor = useCallback((key: keyof BrandConfig, value: string) => {
@@ -306,14 +339,25 @@ export default function BrandingPage() {
 
   const handleSave = useCallback(async () => {
     setSaving(true);
+    setSaveError(null);
     try {
-      await fetch("/api/v1/themes/brand", {
+      const res = await fetch("/api/proxy/v1/themes/brand", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
+      // Previously unchecked: this always showed "✓ Saved!" regardless of the
+      // actual response, including on the 404 the un-proxied path always
+      // produced — i.e. it claimed success on every save while persisting
+      // nothing. A tenant admin had no way to know their branding never
+      // stuck.
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       setSaved(true);
       setDirty(false);
+    } catch {
+      setSaveError("Couldn't save your changes. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -327,6 +371,12 @@ export default function BrandingPage() {
           <h1 className="text-2xl font-bold text-gray-900">Brand & Theme</h1>
           <p className="text-sm text-gray-500 mt-1">Customize how your portal looks. Changes preview instantly on the right.</p>
         </div>
+
+        {loadError && (
+          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {loadError}
+          </div>
+        )}
 
         {/* App Name */}
         <div>
@@ -420,7 +470,12 @@ export default function BrandingPage() {
         </div>
 
         {/* Save Button */}
-        <div className="sticky bottom-0 bg-white pt-4 border-t">
+        <div className="sticky bottom-0 bg-white pt-4 border-t space-y-2">
+          {saveError && (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {saveError}
+            </div>
+          )}
           <button
             onClick={handleSave}
             disabled={!dirty || saving}
