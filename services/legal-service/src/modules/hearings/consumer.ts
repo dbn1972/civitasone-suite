@@ -28,7 +28,16 @@ export function registerHearingConsumers(queue: Queue): void {
       }
       await audit(tx, msg, "create", "hearing", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId));
+    // queries.ts's listHearingSummaries() reads through a "hearings" list
+    // key (per tenant+limit) that this consumer never invalidated — the
+    // same stale-list-cache bug found and fixed for counsel-briefs
+    // (fix/legal-wire-real-counsel-brief-endpoint). It's keyed only by
+    // limit, not status/filters, so a single invalidateResource covers
+    // every cached limit variant for this tenant.
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
+      cache.invalidateResource(msg.tenantId, "hearings"),
+    ]);
   });
 
   queue.subscribe(COMMANDS.hearingAdjourn, async (msg) => {
@@ -60,7 +69,12 @@ export function registerHearingConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "adjourn", "hearing", p.hearingId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId));
+    // Adjournment changes the hearing's status/date shown in
+    // listHearingSummaries() — same list-cache gap as hearingCreate above.
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
+      cache.invalidateResource(msg.tenantId, "hearings"),
+    ]);
   });
 
   queue.subscribe(COMMANDS.orderRecord, async (msg) => {
@@ -78,7 +92,14 @@ export function registerHearingConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "record", "order", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId));
+    // queries.ts's listCourtOrderSummaries() reads through a separate
+    // "court_orders" list key (per tenant+limit), which this consumer never
+    // invalidated — same stale-list-cache bug found and fixed for
+    // counsel-briefs (fix/legal-wire-real-counsel-brief-endpoint).
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
+      cache.invalidateResource(msg.tenantId, "court_orders"),
+    ]);
   });
 }
 

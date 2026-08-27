@@ -19,6 +19,8 @@ import { registerReminderConsumers } from "../src/modules/reminders/consumer.js"
 import { registerCounselBriefConsumers } from "../src/modules/counsel/consumer.js";
 import * as counselQueries from "../src/modules/counsel/queries.js";
 import { legalCounselBriefs } from "../src/modules/counsel/schema.js";
+import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
+import * as caseQueries from "../src/modules/cases/queries.js";
 import { cache } from "../src/shared/infra.js";
 import { assertCanRespond, DomainError } from "../src/modules/notices/domain.js";
 import { DomainError as SettlementDomainError } from "../src/modules/settlements/domain.js";
@@ -351,6 +353,47 @@ describe("Counsel-brief consumer — assign + list-cache invalidation (integrati
     const fixedRead = await counselQueries.getBrief("has-tenant-field-case", TENANT);
     expect(fixedRead).not.toBeNull();
     expect(fixedRead?.id).toBe("has-tenant-field-case");
+  });
+});
+
+// ── Case consumer — list-cache invalidation (integration) ──────────────────────
+// Same bug class as the counsel-brief regression above, found by inspection
+// once that one was diagnosed: cases/consumer.ts invalidated only the
+// singular "case" cache key, never the plural "cases" list-cache key that
+// queries.ts's listCases() reads through. Fixed alongside opinions, hearings
+// (hearings + court_orders list keys), filings, and documents in the same
+// PR — this test covers cases specifically as the representative case; the
+// others share the identical shape and were verified by typecheck + the
+// full existing legal-domain/legal test suites passing unchanged, plus a
+// live end-to-end check (see PR description).
+describe("Case consumer — list-cache invalidation (integration)", () => {
+  const CASE_2 = "22222222-bbbb-4000-8000-000000000c02";
+
+  it("regression: a list read cached before a second case exists is not left stale after the consumer commits", async () => {
+    const preRaceList = await runWithTenant(TENANT, () => caseQueries.listCases(TENANT));
+    expect(preRaceList.map((c) => c.id)).toContain(CASE_ID); // seeded in beforeAll
+    expect(preRaceList.map((c) => c.id)).not.toContain(CASE_2);
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(17), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-race", schemaVersion: "1.0",
+      payload: {
+        id: CASE_2, tenantId: TENANT, caseNo: "WP-2026-RACE",
+        title: "Race-condition regression check", court: "HC Delhi",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    // Without the fix, this reads the pre-race cached list straight back
+    // (missing CASE_2) — the row exists in Postgres but the stale
+    // list-cache entry hides it until the TTL expires.
+    const postRaceList = await runWithTenant(TENANT, () => caseQueries.listCases(TENANT));
+    expect(postRaceList.map((c) => c.id)).toContain(CASE_2);
   });
 });
 

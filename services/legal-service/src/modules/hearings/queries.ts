@@ -32,24 +32,6 @@ export async function listHearingSummaries(tenantId: string, limit: number) {
   return summaries;
 }
 
-export async function listOpinionSummaries(tenantId: string, limit: number) {
-  const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "legal_opinions", `list:${limit}`),
-    () => repo.listOpinionsByTenant(tenantId, limit),
-  );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    opinionNo: row.opinionNo,
-    subject: row.subject,
-    requestedBy: row.requestedBy,
-    requestDate: row.requestDate.toString(),
-    dueDate: row.dueDate?.toString(),
-    advisorName: row.advisorName ?? undefined,
-    status: (["pending", "draft", "issued", "revised"].includes(row.status) ? row.status : "pending") as "pending" | "draft" | "issued" | "revised",
-    issuedDate: row.issuedDate?.toString(),
-  }));
-}
-
 export async function listCourtOrderSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "court_orders", `list:${limit}`),

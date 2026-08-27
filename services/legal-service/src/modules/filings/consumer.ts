@@ -29,7 +29,14 @@ export function registerFilingConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "record", "legal_filing", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "filing", p.id));
+    // queries.ts's listFilings() reads through a separate plural "filings"
+    // list-cache key per caseId/filingType/status filter combo, which this
+    // consumer never invalidated — same stale-list-cache bug found and
+    // fixed for counsel-briefs (fix/legal-wire-real-counsel-brief-endpoint).
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "filing", p.id)),
+      cache.invalidateResource(msg.tenantId, "filings"),
+    ]);
   });
 }
 

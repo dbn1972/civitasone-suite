@@ -37,7 +37,17 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       }
       await audit(tx, msg, "create", "case", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "case", p.id));
+    // queries.ts's listCases() reads through a separate plural "cases"
+    // list-cache key per status/caseTypeId filter combo, which this consumer
+    // never invalidated — the same stale-list-cache bug found and fixed for
+    // counsel-briefs (fix/legal-wire-real-counsel-brief-endpoint), confirmed
+    // live there via POST-then-immediate-GET. No case-scoped invalidation
+    // primitive exists for this key shape, so this busts every cached list
+    // in the tenant rather than leaving any of them wrong.
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "case", p.id)),
+      cache.invalidateResource(msg.tenantId, "cases"),
+    ]);
   });
 
   queue.subscribe(COMMANDS.caseDispose, async (msg) => {
@@ -52,7 +62,12 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "dispose", "case", p.caseId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId));
+    // Disposing a case changes its status, which is a listCases() filter —
+    // same list-cache gap as caseCreate above.
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
+      cache.invalidateResource(msg.tenantId, "cases"),
+    ]);
   });
 }
 
