@@ -231,6 +231,21 @@ export function registerVehiclePassConsumers(queue: Queue): void {
         return;
       }
 
+      // Idempotent no-op, not a thrown error, when the slot is already free.
+      // releaseParkingSlot() below throws DomainError("SLOT_NOT_OCCUPIED") in
+      // this case, which -- uncaught here -- would dead-letter on a
+      // perfectly benign duplicate delivery (e.g. a retried checkOutRecord,
+      // or this same vehicle pass's slot already released by an earlier
+      // no-show/checkout/cancellation trigger). The end state (slot free) is
+      // already correct, so there is nothing to do.
+      if (!slotRow.occupied) {
+        log.info(
+          { tenantId: msg.tenantId, parkingSlotId: p.parkingSlotId, vehiclePassId: p.vehiclePassId },
+          "parking slot already released; skipping (idempotent)",
+        );
+        return;
+      }
+
       // Project to domain shape and validate release.
       const slotCandidate: ParkingSlotCandidate = {
         id: slotRow.id,
