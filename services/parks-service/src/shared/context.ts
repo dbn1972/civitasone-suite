@@ -27,7 +27,7 @@ export function requireRole(
   ctx: ReturnType<typeof resolveContext>,
   roles: readonly string[],
 ): void {
-  if (!hasAnyRole(ctx, roles)) {
+  if (!hasAnyRole(ctx, [...roles])) {
     throw new HttpError(403, "FORBIDDEN", "Insufficient role");
   }
 }

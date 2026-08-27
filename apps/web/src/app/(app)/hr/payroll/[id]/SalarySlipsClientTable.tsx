@@ -33,7 +33,7 @@ function estimateComponents(gross: number) {
   return { basic, da, hra, ta, special, pf, esi, pt, tds, totalDed };
 }
 
-function SlipRow({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+function SlipLine({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
     <tr>
       <td
@@ -178,20 +178,20 @@ function SalarySlipModal({
         {/* Slip body */}
         <div style={{ padding: "14px 20px" }}>
           <SlipSection title="Earnings">
-            <SlipRow label="Basic Pay"                    value={c.basic}   />
-            <SlipRow label="Dearness Allowance (DA) @46%" value={c.da}      />
-            <SlipRow label="House Rent Allowance (HRA)"   value={c.hra}     />
-            <SlipRow label="Transport Allowance"          value={c.ta}      />
-            <SlipRow label="Special Allowance"            value={c.special} />
-            <SlipRow label="Gross Earnings"               value={slip.gross} bold />
+            <SlipLine label="Basic Pay"                    value={c.basic}   />
+            <SlipLine label="Dearness Allowance (DA) @46%" value={c.da}      />
+            <SlipLine label="House Rent Allowance (HRA)"   value={c.hra}     />
+            <SlipLine label="Transport Allowance"          value={c.ta}      />
+            <SlipLine label="Special Allowance"            value={c.special} />
+            <SlipLine label="Gross Earnings"               value={slip.gross} bold />
           </SlipSection>
 
           <SlipSection title="Deductions">
-            <SlipRow label="Provident Fund (EPF) — 12%"  value={c.pf}      />
-            <SlipRow label="ESI (Employee) — 0.75%"      value={c.esi}     />
-            <SlipRow label="Professional Tax (PT)"       value={c.pt}      />
-            <SlipRow label="Income Tax (TDS)"            value={c.tds}     />
-            <SlipRow label="Total Deductions"            value={c.totalDed} bold />
+            <SlipLine label="Provident Fund (EPF) — 12%"  value={c.pf}      />
+            <SlipLine label="ESI (Employee) — 0.75%"      value={c.esi}     />
+            <SlipLine label="Professional Tax (PT)"       value={c.pt}      />
+            <SlipLine label="Income Tax (TDS)"            value={c.tds}     />
+            <SlipLine label="Total Deductions"            value={c.totalDed} bold />
           </SlipSection>
 
           {/* Net Pay */}

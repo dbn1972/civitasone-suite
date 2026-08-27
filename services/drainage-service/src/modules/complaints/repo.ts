@@ -20,7 +20,7 @@ export async function findById(id: string, tenantId: string): Promise<ComplaintR
   return rows[0] ?? null;
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number, filters: { status?: string; severity?: string } = {}) {
+export async function listByTenant(tenantId: string, limit: number, offset: number, filters: { status?: string | undefined; severity?: string | undefined } = {}) {
   const conditions = [eq(drainageComplaints.tenantId, tenantId)];
   if (filters.status) conditions.push(eq(drainageComplaints.status, filters.status));
   if (filters.severity) conditions.push(eq(drainageComplaints.severity, filters.severity));

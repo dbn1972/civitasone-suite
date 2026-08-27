@@ -44,12 +44,14 @@ CREATE POLICY tenant_isolation_policy ON attendance.hrms_geo_attendance
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- attendance.hrms_office_locations
-ALTER TABLE attendance.hrms_office_locations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance.hrms_office_locations FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON attendance.hrms_office_locations;
-DROP POLICY IF EXISTS tenant_isolation ON attendance.hrms_office_locations;
-CREATE POLICY tenant_isolation_policy ON attendance.hrms_office_locations
+-- employee.hrms_office_locations (FIXED 2026-08-27: was wrongly schema-
+-- qualified as attendance.hrms_office_locations; the table was created by
+-- 0007_geo_attendance_ro.sql under the employee schema)
+ALTER TABLE employee.hrms_office_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_office_locations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_office_locations;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_office_locations;
+CREATE POLICY tenant_isolation_policy ON employee.hrms_office_locations
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
@@ -161,21 +163,22 @@ CREATE POLICY tenant_isolation_policy ON employee.hrms_employees
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- employee.hrms_face_config
-ALTER TABLE employee.hrms_face_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee.hrms_face_config FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_face_config;
-DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_face_config;
-CREATE POLICY tenant_isolation_policy ON employee.hrms_face_config
+-- attendance.hrms_face_config (FIXED 2026-08-27: was "employee.", the table
+-- is created by 0010_face_verification.sql under attendance)
+ALTER TABLE attendance.hrms_face_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance.hrms_face_config FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON attendance.hrms_face_config;
+DROP POLICY IF EXISTS tenant_isolation ON attendance.hrms_face_config;
+CREATE POLICY tenant_isolation_policy ON attendance.hrms_face_config
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- employee.hrms_face_verification_log
-ALTER TABLE employee.hrms_face_verification_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee.hrms_face_verification_log FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_face_verification_log;
-DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_face_verification_log;
-CREATE POLICY tenant_isolation_policy ON employee.hrms_face_verification_log
+-- attendance.hrms_face_verification_log
+ALTER TABLE attendance.hrms_face_verification_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance.hrms_face_verification_log FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON attendance.hrms_face_verification_log;
+DROP POLICY IF EXISTS tenant_isolation ON attendance.hrms_face_verification_log;
+CREATE POLICY tenant_isolation_policy ON attendance.hrms_face_verification_log
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
@@ -323,21 +326,23 @@ CREATE POLICY tenant_isolation_policy ON pension.hrms_pension_records
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- public.hrms_apar_scores
-ALTER TABLE public.hrms_apar_scores ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hrms_apar_scores FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON public.hrms_apar_scores;
-DROP POLICY IF EXISTS tenant_isolation ON public.hrms_apar_scores;
-CREATE POLICY tenant_isolation_policy ON public.hrms_apar_scores
+-- appraisal.hrms_apar_scores (FIXED 2026-08-27: was "public.", the table is
+-- created by 0017_apar_workflow.sql under the appraisal schema)
+ALTER TABLE appraisal.hrms_apar_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appraisal.hrms_apar_scores FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON appraisal.hrms_apar_scores;
+DROP POLICY IF EXISTS tenant_isolation ON appraisal.hrms_apar_scores;
+CREATE POLICY tenant_isolation_policy ON appraisal.hrms_apar_scores
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- public.hrms_apar_stage_history
-ALTER TABLE public.hrms_apar_stage_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hrms_apar_stage_history FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON public.hrms_apar_stage_history;
-DROP POLICY IF EXISTS tenant_isolation ON public.hrms_apar_stage_history;
-CREATE POLICY tenant_isolation_policy ON public.hrms_apar_stage_history
+-- appraisal.hrms_apar_stage_history (FIXED 2026-08-27: same "public." mistake;
+-- also created by 0017_apar_workflow.sql under appraisal)
+ALTER TABLE appraisal.hrms_apar_stage_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appraisal.hrms_apar_stage_history FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON appraisal.hrms_apar_stage_history;
+DROP POLICY IF EXISTS tenant_isolation ON appraisal.hrms_apar_stage_history;
+CREATE POLICY tenant_isolation_policy ON appraisal.hrms_apar_stage_history
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 

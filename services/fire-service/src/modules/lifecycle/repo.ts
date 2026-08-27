@@ -16,7 +16,7 @@ export async function findById(tenantId: string, id: string) {
 
 export async function list(
   tenantId: string,
-  opts: { status?: string; limit?: number; offset?: number } = {},
+  opts: { status?: string | undefined; limit?: number | undefined; offset?: number | undefined } = {},
 ) {
   return scopedRead(async (tx) => {
     const conditions = [eq(fireRenewalsTable.tenantId, tenantId)];

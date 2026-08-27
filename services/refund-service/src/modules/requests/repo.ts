@@ -63,7 +63,7 @@ export async function updateStatus(
       status,
       updatedBy,
       updatedAt: new Date(),
-      submittedAt: status === "under_review" ? new Date() : undefined,
+      ...(status === "under_review" ? { submittedAt: new Date() } : {}),
       version: sql`${refundRequests.version} + 1`,
     })
     .where(and(eq(refundRequests.id, id), eq(refundRequests.tenantId, tenantId)))

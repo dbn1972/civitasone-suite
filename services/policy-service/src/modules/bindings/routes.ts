@@ -25,6 +25,16 @@ export async function bindingRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/policy/breakglass", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC: this handler had no requireRole call at all, unlike both sibling
+    // mutating routes in this file (createBinding/revokeBinding, which gate on
+    // the same ADMIN roles below). requestBreakglass() currently only inserts
+    // a 'pending' row (nothing consumes/approves it yet — see commands.ts /
+    // consumer.ts), so this was not exploitable for actual privilege
+    // escalation today, but any authenticated user of any role, in any
+    // tenant, could otherwise spam breakglass requests for an arbitrary
+    // `scope` string. Gate it the same as its siblings for consistency and
+    // defense-in-depth ahead of the approval flow being built out.
+    requireRole(ctx, ADMIN);
     const body = breakglassBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.requestBreakglass(ctx, body));
   });

@@ -65,20 +65,17 @@ export async function insert(tx: Writer, row: FileInsert): Promise<void> {
 export async function softDelete(tx: Writer, tenantId: string, id: string, actorId: string): Promise<void> {
   await tx.update(files)
     .set({ deletedAt: new Date(), updatedBy: actorId, status: "deleted" })
-    // @ts-ignore drizzle where overload
     .where(and(eq(files.tenantId, tenantId), eq(files.id, id)));
 }
 
 export async function updateTags(tx: Writer, tenantId: string, id: string, tags: string[], actorId: string): Promise<void> {
   await tx.update(files)
     .set({ tags, updatedBy: actorId, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(files.tenantId, tenantId), eq(files.id, id)));
 }
 
 export async function updateFolder(tx: Writer, tenantId: string, id: string, folderId: string | null, actorId: string): Promise<void> {
   await tx.update(files)
     .set({ folderId, updatedBy: actorId, updatedAt: new Date() })
-    // @ts-ignore drizzle where overload
     .where(and(eq(files.tenantId, tenantId), eq(files.id, id)));
 }
