@@ -164,7 +164,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
           // NonRetryableError: this is a permanent configuration/architecture gap,
           // not a transient failure — retrying with backoff would just fail the
           // same way every time and delay landing in the DLQ where a human can act
-          // on it. See packages/queue-service (bus.ts) for the retry-bypass contract.
+          // on it. See services/queue-service (bus.ts) for the retry-bypass contract.
           if (!p.beneficiaryBankRef) {
             throw new NonRetryableError(
               "PFMS_BANK_REF_MISSING: real PFMS disbursement requires beneficiaryBankRef",

@@ -35,7 +35,6 @@ import { maskAadhaar } from "../src/modules/beneficiary/domain.js";
 import { registerApplicationConsumers } from "../src/modules/application/consumer.js";
 import { registerDisbursementConsumers } from "../src/modules/disbursement/consumer.js";
 import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
-import { registerUtilisationConsumers } from "../src/modules/utilisation/consumer.js";
 import { randomUUID } from "node:crypto";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../src/topics.js";
 
