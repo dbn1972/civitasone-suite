@@ -1,6 +1,7 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -38,8 +39,11 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // The transaction reports back whether it actually applied the transition,
+    // so the trailing log can't claim success on a lost race (see
+    // permits/consumer.ts's issuePermit for the same reasoning).
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       // Apply the application-status transition FIRST as an atomic
       // compare-and-swap; only insert the scrutiny record once it succeeds, so a
       // lost race never leaves an orphaned "pending" scrutiny hanging off an
@@ -47,7 +51,7 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
       const ok = await appRepo.updateStatus(
         tx, p.applicationId, msg.tenantId, ["submitted", "under_scrutiny"], "under_scrutiny", msg.actorId,
       );
-      if (!ok) return;
+      if (!ok) return false;
       await repo.insertScrutiny(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -76,8 +80,15 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
         resourceType: "shop_scrutiny_record",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id, applicationId: p.applicationId }, "scrutiny initiated");
+    if (applied) {
+      // GET /v1/shop/applications/:id (registrations/routes.ts) reads through a
+      // cache that only application-mutating write paths can invalidate
+      // (CLAUDE.md §6) — this handler is one of them.
+      await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
+      log.info({ id: p.id, applicationId: p.applicationId }, "scrutiny initiated");
+    }
   });
 
   queue.subscribe(COMMANDS.completeScrutiny, async (msg) => {
@@ -143,12 +154,12 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await appRepo.updateStatus(
         tx, p.applicationId, msg.tenantId, ["under_scrutiny", "inspecting"], p.decision, msg.actorId,
       );
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.applicationDecided,
         eventType: EVENTS.applicationDecided,
@@ -167,7 +178,11 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
         resourceType: "shop_application",
         resourceId: p.applicationId,
       });
+      return true;
     });
-    log.info({ applicationId: p.applicationId, decision: p.decision }, "application decided");
+    if (applied) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
+      log.info({ applicationId: p.applicationId, decision: p.decision }, "application decided");
+    }
   });
 }

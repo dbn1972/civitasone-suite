@@ -1,6 +1,7 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -101,10 +102,10 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, ["draft"], "submitted", msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.applicationSubmitted,
         eventType: EVENTS.applicationSubmitted,
@@ -118,7 +119,11 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceType: "shop_application",
         resourceId: p.id,
       });
+      return true;
     });
+    // GET /v1/shop/applications/:id (registrations/routes.ts) reads through a
+    // cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
@@ -131,10 +136,10 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, ["draft", "submitted"], "withdrawn", msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.applicationWithdrawn,
         eventType: EVENTS.applicationWithdrawn,
@@ -148,15 +153,17 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceType: "shop_application",
         resourceId: p.id,
       });
+      return true;
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 
   queue.subscribe(COMMANDS.recordFeePayment, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; transactionId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.feePaymentRecorded,
         eventType: EVENTS.feePaymentRecorded,
@@ -170,6 +177,8 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceType: "shop_application",
         resourceId: p.id,
       });
+      return true;
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 }

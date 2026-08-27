@@ -1,6 +1,7 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -126,12 +127,16 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       }
     }
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // The transaction reports back whether it actually committed the decision,
+    // so the trailing log can't claim success on a lost race (a throw from the
+    // permit-side CAS below already propagates out of db.transaction and skips
+    // the log naturally — this only covers updateDecision's own CAS failing).
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateDecision(
         tx, p.id, msg.tenantId, ["submitted", "under_review"], p.decision, msg.actorId, p.reason ?? null, newValidUntil,
       );
-      if (!ok) return;
+      if (!ok) return false;
 
       if (p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil) {
         const permitOk = await permitRepo.updateValidUntil(
@@ -180,8 +185,19 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         resourceType: "shop_renewal",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id, decision: p.decision }, "renewal decided");
+    if (applied) {
+      // GET /v1/shop/permits/:id (permits/routes.ts) reads through a cache that
+      // only permit-mutating write paths can invalidate (CLAUDE.md §6) — only
+      // the "renewal" (extends validUntil) and "surrender" (cancels) outcomes
+      // actually touch the permits table; amendment/duplicate/rejected don't.
+      const mutatedPermit =
+        p.decision === "approved" &&
+        (renewal.renewalType === "surrender" || (renewal.renewalType === "renewal" && newValidUntil));
+      if (mutatedPermit) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", renewal.permitId));
+      log.info({ id: p.id, decision: p.decision }, "renewal decided");
+    }
   });
 
   queue.subscribe(COMMANDS.recordRenewalFeePayment, async (msg) => {

@@ -11,9 +11,9 @@
 -- 23505 unique-violation and treats it as a benign no-op rather than an
 -- unhandled error).
 --
--- This is additive — it does not modify 0001_initial.sql (owned by the
--- separate municipal-batch2-db-infra migration PR) and does not conflict
--- with it.
+-- This is additive — it does not modify 0001_initial.sql (landed separately
+-- via the municipal-batch2-db-infra PR, #777, already merged) and does not
+-- conflict with it.
 --
 -- Rollback: DROP INDEX shop.shop_permits_application_id_key;
 SET lock_timeout = '5s';

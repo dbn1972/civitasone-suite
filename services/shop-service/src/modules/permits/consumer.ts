@@ -2,6 +2,7 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -44,8 +45,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // The transaction reports back whether it actually inserted the permit, so
+    // the "permit issued" log below can't fire on a silently-skipped duplicate
+    // (markProcessed no-op or a caught 23505) — a log claiming success when
+    // nothing was written is exactly the fake-success class this pass targets,
+    // just shifted from data into logs.
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       try {
         await repo.insertPermit(tx, {
           id: p.id,
@@ -68,7 +74,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
             { applicationId: p.applicationId, constraint: pgErr.constraint_name },
             "issuePermit: duplicate issuance blocked by a unique constraint, skipping",
           );
-          return;
+          return false;
         }
         throw err;
       }
@@ -93,8 +99,9 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceType: "shop_permit",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id, permitNumber }, "permit issued");
+    if (applied) log.info({ id: p.id, permitNumber }, "permit issued");
   });
 
   queue.subscribe(COMMANDS.suspendPermit, async (msg) => {
@@ -111,13 +118,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["active"], "suspended", {
         suspendedAt: new Date(),
         suspensionReason: p.reason,
       }, msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,
@@ -140,7 +147,11 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceType: "shop_permit",
         resourceId: p.permitId,
       });
+      return true;
     });
+    // GET /v1/shop/permits/:id (permits/routes.ts) reads through a cache that
+    // only permit-mutating write paths can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
   queue.subscribe(COMMANDS.cancelPermit, async (msg) => {
@@ -153,13 +164,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["active", "suspended"], "cancelled", {
         cancelledAt: new Date(),
         cancellationReason: p.reason,
       }, msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,
@@ -182,7 +193,9 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceType: "shop_permit",
         resourceId: p.permitId,
       });
+      return true;
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
   queue.subscribe(COMMANDS.restorePermit, async (msg) => {
@@ -195,13 +208,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["suspended"], "active", {
         suspendedAt: null,
         suspensionReason: null,
       }, msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await repo.insertAction(tx, {
         id: randomUUID(),
         tenantId: msg.tenantId,
@@ -224,7 +237,9 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceType: "shop_permit",
         resourceId: p.permitId,
       });
+      return true;
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
   queue.subscribe(COMMANDS.issueNotice, async (msg) => {
