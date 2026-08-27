@@ -5,6 +5,8 @@ import {
   Card,
   ConfirmDialog,
   EmptyState,
+  ErrorState,
+  RefreshErrorState,
   StatCard,
   StatGrid,
   StatusPill,
@@ -35,17 +37,27 @@ const monoStyle: React.CSSProperties = {
 
 export function HostPortal({ pending, pendingSource, expectedToday, expectedTodaySource }: Props) {
   const [queue, setQueue] = useState<VisitRequest[]>(pending);
+  const [queueError, setQueueError] = useState(pendingSource === "error");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<null | { kind: "approve" | "reject"; req: VisitRequest }>(null);
   const [confirmErr, setConfirmErr] = useState<string | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
 
-  async function refresh() {
+  /**
+   * Reload the pending queue. `surfaceErrorOnFailure` distinguishes the two
+   * call sites: a background resync after a successful approve/reject should
+   * keep showing the current queue on failure (existing behaviour), while an
+   * explicit retry from the error state itself should re-surface the error
+   * so Retry doesn't silently no-op.
+   */
+  async function refresh(surfaceErrorOnFailure = false) {
     try {
       const rows = await fetchVisitRequests("pending_approval");
       setQueue(rows);
+      setQueueError(false);
     } catch {
-      /* keep current queue on refresh failure */
+      if (surfaceErrorOnFailure) setQueueError(true);
+      /* otherwise keep current queue on refresh failure */
     }
   }
 
@@ -89,11 +101,18 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
 
       <Card
         title={`Awaiting approval (${queue.length})`}
-        link={<button type="button" className="btn ghost sm" onClick={() => void refresh()}>Refresh</button>}
+        link={<button type="button" className="btn ghost sm" onClick={() => void refresh(true)}>Refresh</button>}
         padding
       >
-        {pendingSource === "error" ? (
-          <EmptyState icon="🕓" title="Could not load the approval queue" message="Live data couldn't be reached. Try again shortly." />
+        {queueError ? (
+          <ErrorState
+            error={{
+              what: "Could not load the approval queue.",
+              next: "Live data couldn't be reached. Check your connection and try again.",
+              actions: ["retry", "help"],
+            }}
+            onRetry={() => void refresh(true)}
+          />
         ) : queue.length === 0 ? (
           <EmptyState icon="✅" title="Nothing awaiting approval" message="New visit requests raised for you will appear here." />
         ) : (
@@ -136,7 +155,13 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
 
       <Card title={`Expected today (${expectedToday.length})`} padding>
         {expectedTodaySource === "error" ? (
-          <EmptyState icon="📅" title="Could not load expected visitors" message="Live data couldn't be reached. Try again shortly." />
+          <RefreshErrorState
+            error={{
+              what: "We couldn't load today's expected visitors.",
+              next: "Check your connection and try again.",
+              actions: ["retry", "help"],
+            }}
+          />
         ) : expectedToday.length === 0 ? (
           <EmptyState icon="📅" title="No visitors expected today" message="Your approved visitors scheduled for today will appear here." />
         ) : (
