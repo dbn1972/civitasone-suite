@@ -9,7 +9,7 @@ export interface CreatePropertyInput {
   propertyCode: string;
   marketName: string;
   propertyType: string;
-  location?: { address?: string; ward?: string; zone?: string; lat?: number; lng?: number } | undefined;
+  location?: { address?: string | undefined; ward?: string | undefined; zone?: string | undefined; lat?: number | undefined; lng?: number | undefined } | undefined;
   area?: string | undefined;
   areaUnit?: string | undefined;
   floorNumber?: number | undefined;

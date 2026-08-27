@@ -63,7 +63,7 @@ export async function updateStatus(
       status,
       updatedBy,
       updatedAt: new Date(),
-      submittedAt: status === "submitted" ? new Date() : undefined,
+      ...(status === "submitted" ? { submittedAt: new Date() } : {}),
       version: sql`${roadcutApplications.version} + 1`,
     })
     .where(and(eq(roadcutApplications.id, id), eq(roadcutApplications.tenantId, tenantId)))

@@ -22,11 +22,12 @@ export async function writeAudit(
 ): Promise<void> {
   await enqueue(tx, {
     topic: "audit.event.record",
+    eventType: "audit.event.record",
     tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
     payload: {
       service: SERVICE,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
       outcome: "success",
       ...payload,
     },

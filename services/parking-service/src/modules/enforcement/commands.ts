@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 export type { Accepted };
 
 export interface IssueViolationInput {
-  location?: { lat?: number; lng?: number; address?: string; zone?: string } | undefined;
+  location?: { lat?: number | undefined; lng?: number | undefined; address?: string | undefined; zone?: string | undefined } | undefined;
   vehicleNumber: string;
   violationType: string;
   photo?: string | undefined;

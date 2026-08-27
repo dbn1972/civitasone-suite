@@ -16,7 +16,7 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerComplaintConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe(COMMANDS.complaintCreate, async (msg) => {
+  queue.subscribe(COMMANDS.CREATE_COMPLAINT, async (msg) => {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -28,7 +28,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
-        topic: EVENTS.complaintCreated, eventType: EVENTS.complaintCreated,
+        topic: EVENTS.COMPLAINT_CREATED, eventType: EVENTS.COMPLAINT_CREATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { complaintId: p.id, complaintNumber: p.complaintNumber, complaintType: p.complaintType },
       });
@@ -37,7 +37,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "complaint created");
   });
 
-  queue.subscribe(COMMANDS.complaintAssign, async (msg) => {
+  queue.subscribe(COMMANDS.ASSIGN_COMPLAINT, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -46,7 +46,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.complaintAssigned, eventType: EVENTS.complaintAssigned,
+        topic: EVENTS.COMPLAINT_ASSIGNED, eventType: EVENTS.COMPLAINT_ASSIGNED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { complaintId: p.id, assignedTo: p.assignedTo },
       });
@@ -55,7 +55,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "complaint assigned");
   });
 
-  queue.subscribe(COMMANDS.complaintResolve, async (msg) => {
+  queue.subscribe(COMMANDS.RESOLVE_COMPLAINT, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -64,7 +64,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.complaintResolved, eventType: EVENTS.complaintResolved,
+        topic: EVENTS.COMPLAINT_RESOLVED, eventType: EVENTS.COMPLAINT_RESOLVED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { complaintId: p.id },
       });
@@ -73,7 +73,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "complaint resolved");
   });
 
-  queue.subscribe(COMMANDS.complaintClose, async (msg) => {
+  queue.subscribe(COMMANDS.CLOSE_COMPLAINT, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -82,7 +82,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.complaintClosed, eventType: EVENTS.complaintClosed,
+        topic: EVENTS.COMPLAINT_CLOSED, eventType: EVENTS.COMPLAINT_CLOSED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { complaintId: p.id },
       });

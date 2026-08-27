@@ -8,7 +8,7 @@ export type { Accepted };
 export async function initiateDisbursement(
   ctx: RequestContext,
   requestId: string,
-  bankAccountDetails: { accountNumber: string; ifscCode: string; accountHolderName: string; bankName?: string },
+  bankAccountDetails: { accountNumber: string; ifscCode: string; accountHolderName: string; bankName?: string | undefined },
   disbursedAmountMinor: string,
 ): Promise<Accepted> {
   const id = randomUUID();
