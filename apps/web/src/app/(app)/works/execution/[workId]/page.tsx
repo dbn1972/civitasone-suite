@@ -80,7 +80,14 @@ function asWorkIssue(r: unknown): WorkIssue {
     description: asStr(o.description),
     raisedDate:  asNullableStr(o.raisedDate),
     status:      asStr(o.status, "open"),
-    priority:    asStr(o.priority, "medium"),
+    // Bug fix (works-deep-verify, LOW/L3): work_issues has no `priority`
+    // column (execution/schema.ts) and nothing ever sends one (issues/new
+    // form, createIssueSchema) — o.priority is always undefined from the
+    // real API, so this unconditionally fabricated "medium" for every
+    // issue, on every work, forever. The sibling Issues Register
+    // (execution/issues/page.tsx) already renders this honestly as "—";
+    // match that instead of inventing data.
+    priority:    asStr(o.priority, "—"),
   };
 }
 

@@ -88,6 +88,25 @@ vi.mock("../src/modules/approval/repo.js", async (importOriginal) => {
   return { ...orig, hasFinalizedTsForWork: vi.fn(async () => true) };
 });
 
+// Bug fix (works-deep-verify): GET /v1/works/boq/:workId now verifies the
+// work exists before listing (see boq/routes.ts) — previously ANY workId,
+// real or not, returned 200 with an empty array, so a bogus id never 404'd.
+// Mirrors this file's existing "00000000-0000-... = not found" /
+// "00000000-1111-... = exists" sentinel convention (see the proposal-by-id
+// and approvals/ts DAO-gate 404 tests, which already depend on a bogus id
+// resolving to nothing) rather than being unconditionally permissive — a
+// blanket "always found" default here would silently break those two.
+// tests/boq-workid-existence.test.ts covers the boq 404 rejection path this
+// gate exists for.
+vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/proposal/repo.js")>();
+  return {
+    ...orig,
+    getProposal: vi.fn(async (_t: string, id: string) =>
+      id.startsWith("00000000-0000-") ? null : { id, status: "dao_finalized" }),
+  };
+});
+
 // Bug #3 execution gate (execution/routes.ts POST /v1/works/execution/progress):
 // permissive default work scope with no target (so the target-cap check is
 // skipped) — a dedicated test overrides this for the rejection path.

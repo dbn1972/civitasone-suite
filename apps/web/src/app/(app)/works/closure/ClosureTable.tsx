@@ -4,10 +4,20 @@ import { useState } from "react";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
+// Bug fix (works-deep-verify, MEDIUM/L3): dropped the "Agreement" column.
+// work_closures has no agreement/contract reference, and neither does the
+// listClosures query (execution/repo.ts) — the only place an agreement
+// number exists in this service is awards.agreementNumber (tender/schema.ts),
+// which listClosures never joins. mapClosureRow (_data/loaders.ts) was
+// reading a field the API response never contains, so this column rendered
+// "—", sortable and all, on every single row, permanently. Bringing the
+// real value in would mean joining `awards` by workId — a work can have
+// more than one award (re-tender/revision), so picking the "right" one
+// needs a product decision (latest? finalized-only?) rather than a code fix;
+// removing the dead column is the honest move until that's decided.
 const columns = [
   { key: "workNumber", label: "Work Number", sortable: true },
   { key: "description", label: "Description", sortable: true },
-  { key: "agreement", label: "Agreement", sortable: true },
   { key: "statusDate", label: "Status Date", sortable: true },
   { key: "remarks", label: "Remarks", sortable: true },
 ];
