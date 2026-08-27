@@ -141,6 +141,26 @@ export function OpportunityViews() {
     );
   }
 
+  // Distinct from a load failure: pipelines loaded fine, there just are none
+  // yet (nothing auto-seeds one). Each view below would otherwise show its own
+  // "no opportunities on this pipeline" empty state, which reads as if a
+  // pipeline exists and is merely empty -- misleading when none exists at all.
+  if (pipelineSource === "api" && pipelines.length === 0) {
+    return (
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>Opportunity views</h3>
+        </div>
+        <EmptyState
+          icon="🗂️"
+          title="No pipeline configured"
+          message="Opportunities are tracked on a pipeline's stages. Create one to start using the board, list, calendar and funnel views."
+          action={<a href="/crm/pipelines" className="btn primary">Configure a pipeline</a>}
+        />
+      </div>
+    );
+  }
+
   const activeSource =
     view === "Board" ? kanbanSource : view === "List" ? listSource : view === "Calendar" ? calendarSource : funnelSource;
 

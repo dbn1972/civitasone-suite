@@ -3,6 +3,7 @@
 import type { CRMAccountSummary } from "@civitasone/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -26,22 +27,20 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
     setMessage("");
     setError("");
     try {
-      const res = await fetch("/api/proxy/v1/crm/accounts", {
+      const res = await browserFetch("v1/crm/accounts", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           industry: form.industry || undefined,
           website: form.website || undefined,
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not create the account.");
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const body = (await res.json().catch(() => ({}))) as { id?: string };
 
       if (form.parentId && body.id) {
-        const link = await fetch(`/api/proxy/v1/crm/accounts/${body.id}/parent`, {
+        const link = await browserFetch(`v1/crm/accounts/${body.id}/parent`, {
           method: "PATCH",
-          headers: { "content-type": "application/json" },
           body: JSON.stringify({ parentId: form.parentId }),
         });
         if (!link.ok) {

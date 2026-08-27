@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../../_components/ds";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = {
   dealId: string;
@@ -29,14 +30,19 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
    * `reason` field in its schema at all, so a reason sent there would be
    * silently dropped even though the confirm dialog asks for one and claims
    * it's "recorded in the audit trail").
+   *
+   * Reason min-length: the backend requires >=10 trimmed chars for any
+   * non-"won" outcome (REASON_REQUIRED, 400) — see close-routes.ts. The "Mark
+   * Lost" button below passes minReasonLength=10 to ConfirmDialog so the UI
+   * enforces the same floor instead of letting a 1-2 char reason round-trip
+   * to a server error.
    */
   async function closeDeal(outcome: "won" | "lost", reason?: string) {
-    const res = await fetch(`/api/proxy/v1/crm/deals/${dealId}/close`, {
+    const res = await browserFetch(`v1/crm/deals/${dealId}/close`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
       body: JSON.stringify({ outcome, reason: reason ?? "" }),
     });
-    if (!res.ok) throw new Error((await res.text()) || `Could not mark deal ${outcome}.`);
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res));
   }
 
   async function logActivity(e: React.FormEvent) {
@@ -45,9 +51,8 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
     setMessage("");
     setError("");
     try {
-      const res = await fetch("/api/proxy/v1/crm/activities", {
+      const res = await browserFetch("v1/crm/activities", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(contactId ? { contactId } : {}),
           dealId,
@@ -57,7 +62,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
           status: "completed",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setMessage("Activity logged.");
       setShowActivity(false);
       setActivity({ type: "call", subject: "", text: "" });
@@ -99,6 +104,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
         confirmLabel="Mark Lost"
         requireReason
         reasonLabel="Reason for loss"
+        minReasonLength={10}
         onConfirm={(reason) => closeDeal("lost", reason)}
         onSuccess={() => {
           setMessage("Deal marked lost.");

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DataTable } from "../../../../_components/ds";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ParsedContact = { name: string; email?: string; phone?: string; company?: string; leadStatus: string };
 
@@ -50,12 +51,11 @@ export default function ImportContactsPage() {
         leadStatus: c.leadStatus as "new",
       }));
       if (contacts.length === 0) throw new Error("No valid rows to import.");
-      const res = await fetch("/api/proxy/v1/crm/contacts/bulk/import", {
+      const res = await browserFetch("v1/crm/contacts/bulk/import", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ contacts }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setMessage(`Import accepted — ${contacts.length} contacts queued.`);
       setTimeout(() => router.push("/crm/contacts"), 800);
     } catch (e) {

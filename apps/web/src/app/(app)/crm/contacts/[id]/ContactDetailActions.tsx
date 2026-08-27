@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../../_components/ds";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = { contactId: string; name: string };
 
@@ -23,9 +24,8 @@ export function ContactDetailActions({ contactId, name }: Props) {
     setMessage("");
     setError("");
     try {
-      const res = await fetch("/api/proxy/v1/crm/activities", {
+      const res = await browserFetch("v1/crm/activities", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           contactId,
           type: activity.type,
@@ -34,7 +34,7 @@ export function ContactDetailActions({ contactId, name }: Props) {
           status: "completed",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setMessage("Activity logged.");
       setShowActivity(false);
       setActivity({ type: "call", subject: "", text: "" });
@@ -46,9 +46,20 @@ export function ContactDetailActions({ contactId, name }: Props) {
     }
   }
 
-  async function deleteContact() {
-    const res = await fetch(`/api/proxy/v1/crm/contacts/${contactId}`, { method: "DELETE" });
-    if (!res.ok) throw new Error((await res.text()) || "Could not delete the contact.");
+  /**
+   * `reason` is the maker-checker deletion note collected by ActionButton's
+   * ConfirmDialog. It must be forwarded on the request — the backend threads it
+   * through to the contactDeleted audit-trail record (see crm-service
+   * modules/contacts/{routes,commands,consumer}.ts) — otherwise the dialog's own
+   * "recorded in the audit trail" claim would be false: the user types a reason
+   * and it goes nowhere.
+   */
+  async function deleteContact(reason?: string) {
+    const res = await browserFetch(`v1/crm/contacts/${contactId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    });
+    if (!res.ok) throw new Error(await errorMessageFromResponse(res));
   }
 
   return (

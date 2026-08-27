@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 export function ContactToolbar() {
   const router = useRouter();
@@ -21,8 +22,8 @@ export function ContactToolbar() {
     setMessage("");
     setError("");
     try {
-      const res = await fetch("/api/proxy/v1/crm/contacts/export");
-      if (!res.ok) throw new Error(await res.text());
+      const res = await browserFetch("v1/crm/contacts/export");
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const body = await res.json() as { data: unknown[] };
       const blob = new Blob([JSON.stringify(body.data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
