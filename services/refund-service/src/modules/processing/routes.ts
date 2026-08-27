@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as reqRepo from "../requests/repo.js";
+import { getNextApprovalLevel } from "./domain.js";
 
 const ADMIN_ROLES = ["refund_admin", "refund_approver", "super_admin"];
 
@@ -29,20 +30,25 @@ const requestIdQuery = z.object({ requestId: z.string().uuid() });
 /**
  * FIN-2 / maker-checker: approve/reject/return must happen in strict level
  * order (level 1 "checker" before level 2 "authorizer"). `repo.getMaxApprovalLevel`
- * already existed to support this but was never called anywhere — nothing
- * stopped a caller from submitting a level-2 decision directly, which
- * `isFullyApproved()` in processing/consumer.ts would then treat as a
- * complete approval, fully approving a refund with zero level-1 review.
- * This enforces that an action at level N is only valid once level N-1 has
- * an approved decision on record (level 1 requires no predecessor).
+ * and `getNextApprovalLevel` both already existed to support this but neither
+ * was ever called anywhere — nothing stopped a caller from submitting a
+ * level-2 decision directly, which `isFullyApproved()` in
+ * processing/consumer.ts would then treat as a complete approval, fully
+ * approving a refund with zero level-1 review. This enforces that an action
+ * at level N is only valid once level N-1 has an approved decision on record
+ * (level 1 requires no predecessor), and correctly refuses any further
+ * action once the request is already fully approved.
  */
 async function assertNextApprovalLevel(requestId: string, tenantId: string, level: number): Promise<void> {
   const maxApprovedLevel = await repo.getMaxApprovalLevel(requestId, tenantId);
-  if (level !== maxApprovedLevel + 1) {
+  const expectedLevel = getNextApprovalLevel(maxApprovedLevel);
+  if (expectedLevel === null || level !== expectedLevel) {
     throw new HttpError(
       422,
       "APPROVAL_SEQUENCE_INVALID",
-      `Expected an approval action at level ${maxApprovedLevel + 1}, got level ${level}`,
+      expectedLevel === null
+        ? "Request is already fully approved; no further approval level is valid"
+        : `Expected an approval action at level ${expectedLevel}, got level ${level}`,
     );
   }
 }
