@@ -3,7 +3,10 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as appRepo from "../applications/repo.js";
+import * as inspectionsRepo from "../inspections/repo.js";
 import * as commands from "./commands.js";
+import { checkNocEligibility } from "./domain.js";
 
 const FIRE_ROLES = ["fire_user", "fire_admin", "super_admin"];
 const OFFICER_ROLES = ["fire_admin", "fire_officer", "super_admin"];
@@ -64,6 +67,19 @@ export async function nocRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = issueBody.parse(req.body);
+    // CRITICAL fix: previously issued unconditionally — see domain.ts's
+    // checkNocEligibility for the full reasoning. The consumer re-checks this
+    // atomically with the actual write.
+    const application = await appRepo.findById(ctx.tenantId, body.applicationId);
+    const inspections = application ? await inspectionsRepo.findByApplicationId(ctx.tenantId, body.applicationId) : [];
+    const eligibility = checkNocEligibility(application, inspections);
+    if (!eligibility.eligible) {
+      throw new HttpError(422, "NOT_ELIGIBLE_FOR_NOC", eligibility.reason);
+    }
+    const existingActive = await repo.findActiveByApplicationId(ctx.tenantId, body.applicationId);
+    if (existingActive) {
+      throw new HttpError(409, "NOC_ALREADY_ACTIVE", `Application already has an active NOC (${existingActive.nocNumber})`);
+    }
     return reply.code(202).send(await commands.issueNoc(ctx, body));
   });
 

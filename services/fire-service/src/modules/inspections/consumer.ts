@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { validateFindings } from "./domain.js";
 
 const log = pino({ name: "fire.inspections.consumer" });
 
@@ -47,11 +48,13 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
     const p = msg.payload as { inspectionId: string; recommendation: string; deficiencies?: unknown[] };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // fromStatuses=["scheduled"]: previously no status guard at all existed
+      // here beyond the route's own racy pre-check.
       const row = await repo.updateStatus(tx, msg.tenantId, p.inspectionId, "completed", {
         recommendation: p.recommendation,
         deficiencies: p.deficiencies ?? null,
         inspectedAt: new Date(),
-      }, msg.actorId);
+      }, ["scheduled"], msg.actorId);
       if (!row) return;
       await enqueue(tx, {
         topic: EVENTS.inspectionCompleted,
@@ -67,12 +70,29 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.recordFindings, async (msg) => {
     const p = msg.payload as { inspectionId: string; findings: unknown[] };
+    // CRITICAL fix: this handler previously set status="completed" directly —
+    // the SAME terminal status completeInspection sets — but with
+    // recommendation left NULL. Calling POST .../findings alone, without ever
+    // calling .../complete, flipped an inspection straight to "completed"
+    // with no recommendation at all, completely bypassing the intended
+    // recommend/approve gate (and, downstream, nocs' eligibility check in
+    // this same PR looks for a completed inspection WITH an "approve"
+    // recommendation — a findings-only "completion" could never satisfy that,
+    // silently blocking legitimate NOC issuance forever for that
+    // application). Findings are evidence gathered during the visit; only
+    // /complete (with an explicit recommendation) actually completes an
+    // inspection. This now updates findings without touching status, and
+    // requires the inspection is still "scheduled" (same precondition
+    // /complete has) via the same atomic guard.
+    if (!validateFindings(p.findings)) {
+      log.error({ inspectionId: p.inspectionId }, "invalid findings shape; refusing to record");
+      return;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.updateStatus(tx, msg.tenantId, p.inspectionId, "completed", {
+      const row = await repo.updateStatus(tx, msg.tenantId, p.inspectionId, "scheduled", {
         findings: p.findings,
-        inspectedAt: new Date(),
-      }, msg.actorId);
+      }, ["scheduled"], msg.actorId);
       if (!row) return;
       await enqueue(tx, {
         topic: EVENTS.findingsRecorded,
