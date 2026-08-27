@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
@@ -36,6 +37,9 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_request",
         resourceId: p.requestId,
       });
+      // CACHE-1: see requests/consumer.ts — every consumer that mutates a
+      // request's status must invalidate the same GET /:id read-cache entry.
+      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
     });
   });
 
@@ -82,6 +86,12 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
+      // CACHE-1: only isFullyApproved(level) actually changes the request's
+      // own status, but a level-1-only approval still changes visible state
+      // (a new row under GET /processing/approvals) — invalidating
+      // unconditionally is cheap and avoids having to reason about which
+      // partial-approval cases do or don't touch the cached request view.
+      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
     });
     log.info({ id: p.id, requestId: p.requestId, level: p.level }, "approval recorded");
   });
@@ -122,6 +132,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
+      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
     });
   });
 
@@ -161,6 +172,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
+      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
     });
   });
 }

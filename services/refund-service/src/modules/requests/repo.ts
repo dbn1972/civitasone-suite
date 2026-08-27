@@ -2,6 +2,18 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { refundRequests, type RefundRequestRow, type RefundRequestInsert } from "./schema.js";
 
+/**
+ * Cache key for the read-through GET /v1/refund/requests/:id cache (see
+ * requests/routes.ts). Centralized here so every consumer that mutates a
+ * request (this module's own, plus processing/ and reconciliation/, which
+ * both import this repo as `reqRepo`) invalidates the exact same key the
+ * route reads through — see the `cache.del(...)` calls added alongside each
+ * `updateStatus` call in the three consumer.ts files.
+ */
+export function cacheKey(tenantId: string, id: string): string {
+  return `refund:${tenantId}:request:${id}`;
+}
+
 export async function findById(id: string, tenantId: string): Promise<RefundRequestRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(refundRequests)

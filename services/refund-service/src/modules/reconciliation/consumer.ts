@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
@@ -83,6 +84,11 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceType: "refund_disbursement",
         resourceId: p.id,
       });
+      // CACHE-1: see requests/consumer.ts — this changes the request's own
+      // status (-> "processing"), so the cached GET /:id view must be
+      // invalidated. Not called on the duplicate-skip path above since
+      // nothing changed there.
+      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
       return true;
     });
     if (inserted) {
@@ -98,6 +104,8 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       const disb = await repo.findById(p.id, msg.tenantId);
       if (disb) {
         await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "refunded", msg.actorId);
+        // CACHE-1: see requests/consumer.ts.
+        await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, disb.requestId));
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementCompleted,
@@ -124,6 +132,8 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       const disb = await repo.findById(p.id, msg.tenantId);
       if (disb) {
         await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "failed", msg.actorId);
+        // CACHE-1: see requests/consumer.ts.
+        await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, disb.requestId));
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementFailed,

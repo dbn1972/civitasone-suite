@@ -79,8 +79,7 @@ export async function requestRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REFUND_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `refund:${ctx.tenantId}:request:${id}`;
-    const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
+    const row = await cache.getOrLoad(repo.cacheKey(ctx.tenantId, id), () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "REQUEST_NOT_FOUND", "Refund request not found");
     return reply.send({ data: row });
   });
