@@ -22,7 +22,7 @@ describe("AdvancesPage", () => {
     // only ever has a flat employee_id column -- the backend response never
     // nests an "employee" object -- so `a.employee?.name` was always
     // undefined and every row showed "--" for Employee, always.
-    const { mapAdvances } = await import("./page");
+    const { mapAdvances } = await import("./mapAdvances");
     fetchJsonMock.mockResolvedValue({
       data: mapAdvances([
         { id: "adv-1", employeeId: "emp-77", amountMinor: 500000, purpose: "Medical", recoveryMonths: 6, requestDate: "2026-07-01", status: "pending" },
@@ -37,7 +37,7 @@ describe("AdvancesPage", () => {
   });
 
   it("still prefers a resolved employee name when one is present", async () => {
-    const { mapAdvances } = await import("./page");
+    const { mapAdvances } = await import("./mapAdvances");
     fetchJsonMock.mockResolvedValue({
       data: mapAdvances([
         { id: "adv-2", employeeId: "emp-88", employee: { name: "Sunita Devi", employeeNo: "E-88" }, amountMinor: 300000, purpose: "Festival", recoveryMonths: 3, requestDate: "2026-07-01", status: "pending" },
