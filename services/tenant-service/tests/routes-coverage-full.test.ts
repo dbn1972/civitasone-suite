@@ -645,6 +645,13 @@ describe("PATCH /v1/tenant/:tenantId/quotas", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 // POST /v1/tenant/msme-onboard — MSME Self-Signup
 // ══════════════════════════════════════════════════════════════════════════════
+// NOTE (2026-08-27 deep-verification): the 5 "success" cases below asserted
+// 201 against a handler that has returned 202 (queue-first/async, per the
+// architectural lock in f3-p0-msme-quotas-cqrs.test.ts: "must match code(202),
+// must NOT match code(201)") since before this session touched the file --
+// confirmed by running this exact suite against unmodified origin/main, where
+// these 5 assertions already failed. Corrected to 202 to match actual/intended
+// behavior; left everything else (response shape, 400 cases) unchanged.
 describe("POST /v1/tenant/msme-onboard", () => {
   const validBody = {
     udyamNumber: "UDYAM-KA-01-0000001",
@@ -661,7 +668,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: validBody,
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const json = res.json();
     expect(json).toHaveProperty("tenantId");
     expect(json).toHaveProperty("domain");
@@ -682,7 +689,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
         state: "IN-MH",
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 201 manufacturing sector", async () => {
@@ -691,7 +698,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: { ...validBody, udyamNumber: "UDYAM-DL-03-0000003", sector: "manufacturing", category: "small" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 201 trading sector, medium category", async () => {
@@ -700,7 +707,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: { ...validBody, udyamNumber: "UDYAM-TN-04-0000004", sector: "trading", category: "medium" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 400 invalid udyam number format", async () => {
@@ -764,6 +771,26 @@ describe("POST /v1/tenant/msme-onboard", () => {
       payload: { ...validBody, gstin: "short" },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // Regression test for a real bug found in deep-verification (2026-08-27):
+  // this route is documented as public self-signup, but every test above
+  // supplies a super_admin Bearer token — none of them exercised the actual
+  // real-world caller (an anonymous business owner with no account/token
+  // yet), so a missing `config: { public: true }` on the route registration
+  // went undetected: the global auth plugin rejected every real self-signup
+  // attempt with 401 before the handler ever ran. Confirmed live via curl
+  // with no Authorization header before the fix (401 UNAUTHORIZED); this
+  // test locks in the fix so it can't silently regress again.
+  it("→ 201 with NO auth header (true unauthenticated self-signup)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/tenant/msme-onboard",
+      payload: { ...validBody, udyamNumber: "UDYAM-KA-01-0000099" },
+    });
+    expect(res.statusCode).toBe(202);
+    const json = res.json();
+    expect(json).toHaveProperty("tenantId");
+    expect(json).toHaveProperty("domain");
   });
 });
 

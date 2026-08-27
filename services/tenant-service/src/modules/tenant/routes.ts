@@ -135,7 +135,16 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
    * In production, this would validate the Udyam number against the MSME portal API.
    * For now, it accepts the self-declared classification.
    */
-  app.post("/v1/tenant/msme-onboard", async (req, reply) => {
+  // SEC/FUNC fix: this route is documented as public self-signup (see doc
+  // comment above) but was never marked public in Fastify's route options.
+  // The global auth plugin (packages/auth/src/plugin.ts) requires a Bearer
+  // token on every route that is not in PUBLIC_PATHS or does not carry
+  // `config.public === true` — so every real MSME self-signup request (which
+  // by definition has no token yet) was silently rejected with 401 before
+  // ever reaching this handler. The handler itself never reads req.ctx (it
+  // builds its own local ctx for the onboarding pipeline below), so marking
+  // this route public is safe and changes no authorization behavior.
+  app.post("/v1/tenant/msme-onboard", { config: { public: true } }, async (req, reply) => {
     const body = msmeOnboardBody.parse(req.body);
 
     // In production: validate udyamNumber against https://udyamregistration.gov.in/
