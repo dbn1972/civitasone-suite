@@ -12,6 +12,10 @@
  * no tid claim — a real, previously-seen condition on this platform (a Keycloak
  * account missing the tenant-mapper attribute, see the 2026-08-26 tenant-claim
  * incident on this same repo).
+ *
+ * See jwt-edge-integration.test.ts for an end-to-end confirmation against the real
+ * Fastify app and a real signed token (this file uses a mocked verifyJwt for
+ * focused unit coverage of jwtEdgeVerify's branch logic).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { FastifyRequest, FastifyReply } from "fastify";
