@@ -92,13 +92,26 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },
-  // Municipal Sec5 services — only 3 of 17 scaffolds pass typecheck/build as of
-  // 2026-08-27 (see ecosystem.config.js for the full list + Architecture Guard
-  // PR notes). The other 14 are deliberately NOT routed here; a route to a
-  // service that fails to build would not make it reachable, just wrong.
-  { name: "sewerage",     prefix: "/api/v1/sewerage",  upstream: upstream("sewerage", 3078) },
-  { name: "swm",          prefix: "/api/v1/swm",       upstream: upstream("swm", 3079) },
-  { name: "vendor",       prefix: "/api/v1/vendor",    upstream: upstream("vendor", 3074) },
+  // Municipal Sec5 services — see ecosystem.config.js for full history. All 17
+  // now typecheck/build clean (re-verified 2026-08-27 after main picked up
+  // #757/#761/#762 and others fixing the defects that blocked the other 14).
+  { name: "advertisement", prefix: "/api/v1/advertisement", upstream: upstream("advertisement", 3073) },
+  { name: "animal",        prefix: "/api/v1/animal",        upstream: upstream("animal", 3082) },
+  { name: "building",      prefix: "/api/v1/building",      upstream: upstream("building", 3071) },
+  { name: "crematorium",   prefix: "/api/v1/crematorium",   upstream: upstream("crematorium", 3083) },
+  { name: "drainage",      prefix: "/api/v1/drainage",      upstream: upstream("drainage", 3080) },
+  { name: "event",         prefix: "/api/v1/event",         upstream: upstream("event", 3076) },
+  { name: "fire",          prefix: "/api/v1/fire",          upstream: upstream("fire", 3072) },
+  { name: "market",        prefix: "/api/v1/market",        upstream: upstream("market", 3085) },
+  { name: "parking",       prefix: "/api/v1/parking",       upstream: upstream("parking", 3084) },
+  { name: "parks",         prefix: "/api/v1/parks",         upstream: upstream("parks", 3081) },
+  { name: "refund",        prefix: "/api/v1/refund",        upstream: upstream("refund", 3077) },
+  { name: "roadcut",       prefix: "/api/v1/roadcut",       upstream: upstream("roadcut", 3075) },
+  { name: "sewerage",      prefix: "/api/v1/sewerage",      upstream: upstream("sewerage", 3078) },
+  { name: "shop",          prefix: "/api/v1/shop",          upstream: upstream("shop", 3060) },
+  { name: "swm",           prefix: "/api/v1/swm",           upstream: upstream("swm", 3079) },
+  { name: "trade",         prefix: "/api/v1/trade",         upstream: upstream("trade", 3070) },
+  { name: "vendor",        prefix: "/api/v1/vendor",        upstream: upstream("vendor", 3074) },
 ];
 
 export function resolveRoute(pathname: string): { route: ServiceRoute; remainder: string } | null {
