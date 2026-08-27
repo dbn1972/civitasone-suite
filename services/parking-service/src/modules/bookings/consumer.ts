@@ -71,7 +71,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "active", msg.actorId, {
         entryTime: new Date(),
-        spaceNumber: p.spaceNumber,
+        ...(p.spaceNumber !== undefined ? { spaceNumber: p.spaceNumber } : {}),
       });
       if (!ok) return;
       await enqueue(tx, {
@@ -104,7 +104,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         exitTime,
         durationMinutes,
         amountMinor,
-        paymentRef: p.paymentRef,
+        ...(p.paymentRef !== undefined ? { paymentRef: p.paymentRef } : {}),
       });
       if (!ok) return;
       await enqueue(tx, {

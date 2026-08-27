@@ -60,7 +60,7 @@ export async function updateStatus(
       status,
       updatedBy,
       updatedAt: new Date(),
-      submittedAt: status === "submitted" ? new Date() : undefined,
+      ...(status === "submitted" ? { submittedAt: new Date() } : {}),
       version: sql`${tradeApplications.version} + 1`,
     })
     .where(and(eq(tradeApplications.id, id), eq(tradeApplications.tenantId, tenantId)))

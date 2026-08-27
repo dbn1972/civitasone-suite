@@ -10,7 +10,7 @@ export interface RecordOperationInput {
   operationType: string;
   performedAt: string;
   animalTagId?: string | undefined;
-  location?: { lat?: number; lng?: number; address?: string } | undefined;
+  location?: { lat?: number | undefined; lng?: number | undefined; address?: string | undefined } | undefined;
   notes?: string | undefined;
   beforePhoto?: string | undefined;
   afterPhoto?: string | undefined;

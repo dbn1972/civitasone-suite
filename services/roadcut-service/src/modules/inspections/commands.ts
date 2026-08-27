@@ -27,7 +27,7 @@ export async function completeInspection(
   id: string,
   status: string,
   findings: Record<string, unknown>,
-  photos?: Array<{ fileId: string; caption?: string }>,
+  photos?: Array<{ fileId: string; caption?: string | undefined }>,
   restorationQuality?: string,
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.completeInspection, id, {
