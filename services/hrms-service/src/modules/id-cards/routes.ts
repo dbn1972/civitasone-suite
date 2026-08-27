@@ -5,6 +5,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 /**
  * Digital ID Card Module — issue, view, verify, revoke.
@@ -70,6 +71,16 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/id-cards — issue a new ID card */
   app.post("/v1/hrms/id-cards", async (req, reply) => {
     const ctx = resolveContext(req);
+    // HR-A deep-verify finding: this handler had no requireRole call at all,
+    // unlike every other mutating action in this file (suspend/revoke/
+    // reactivate all gate on the same three roles below) -- despite the
+    // section header above documenting this as "HR Admin" only and the
+    // module's own doc comment describing issuance as HR-initiated. Any
+    // authenticated user of any role could issue a fully valid, QR-signed ID
+    // card (including cardType "employee") for anyone. Employee self-service
+    // viewing already exists separately at GET /v1/hrms/id-cards/me, so this
+    // was not needed for that flow.
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const body = issueCardSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -114,6 +125,30 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
         qrPayload, ctx.actorId, issuerName, now,
       ],
     );
+
+    // HR-A deep-verify finding: registerIdCardConsumers (../id-cards/consumer.ts,
+    // registered in worker.ts) subscribes to COMMANDS.idCardIssue/Suspend/
+    // Revoke/Reactivate specifically to record the `audit.event.record` entry
+    // for each action -- but nothing anywhere in the codebase ever published
+    // those commands (this route did the real INSERT/UPDATE directly via SQL
+    // and only ever published the unrelated "notification.send" topic below).
+    // The consumer was fully built and registered, just never triggered, so
+    // id-card issue/suspend/revoke/reactivate left no audit trail. Publishing
+    // here wires up the existing consumer without changing this route's own
+    // synchronous DB write or response.
+    await queue.publish(COMMANDS.idCardIssue, {
+      messageId: randomUUID(),
+      type: COMMANDS.idCardIssue,
+      schemaVersion: "1.0",
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      payload: {
+        id, tenantId: ctx.tenantId,
+        ...(body.employeeId ? { employeeId: body.employeeId } : {}),
+        holderName: body.holderName, cardType: body.cardType, validUntil: body.validUntil,
+      },
+    });
 
     // Notify holder if they're an employee
     if (body.employeeId) {
@@ -270,11 +305,24 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
-    await sqlClient.query(
+    const result = await sqlClient.query(
       `UPDATE hrms.id_cards SET status = 'suspended', revoked_reason = $1, updated_at = NOW()
        WHERE id = $2 AND tenant_id = $3 AND status = 'active'`,
       [reason ?? "suspended by admin", id, ctx.tenantId],
     );
+    // HR-A deep-verify finding: the UPDATE's WHERE clause silently matches
+    // zero rows for an unknown id or a card that is not currently 'active'
+    // (already suspended/revoked/expired) -- this used to still reply 200
+    // "suspended" either way, a false-success response.
+    if (result.rowCount === 0) {
+      throw new HttpError(404, "NOT_FOUND", "active id card not found");
+    }
+
+    await queue.publish(COMMANDS.idCardSuspend, {
+      messageId: randomUUID(), type: COMMANDS.idCardSuspend, schemaVersion: "1.0",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { id, tenantId: ctx.tenantId, reason: reason ?? "suspended by admin" },
+    });
 
     return reply.send({ id, status: "suspended" });
   });
@@ -286,11 +334,20 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
-    await sqlClient.query(
+    const result = await sqlClient.query(
       `UPDATE hrms.id_cards SET status = 'revoked', revoked_by = $1, revoked_reason = $2, revoked_at = NOW(), updated_at = NOW()
        WHERE id = $3 AND tenant_id = $4 AND status IN ('active', 'suspended')`,
       [ctx.actorId, reason ?? "revoked", id, ctx.tenantId],
     );
+    if (result.rowCount === 0) {
+      throw new HttpError(404, "NOT_FOUND", "active or suspended id card not found");
+    }
+
+    await queue.publish(COMMANDS.idCardRevoke, {
+      messageId: randomUUID(), type: COMMANDS.idCardRevoke, schemaVersion: "1.0",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { id, tenantId: ctx.tenantId, reason: reason ?? "revoked" },
+    });
 
     return reply.send({ id, status: "revoked" });
   });
@@ -301,11 +358,20 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = req.params as { id: string };
 
-    await sqlClient.query(
+    const result = await sqlClient.query(
       `UPDATE hrms.id_cards SET status = 'active', revoked_reason = NULL, updated_at = NOW()
        WHERE id = $1 AND tenant_id = $2 AND status = 'suspended'`,
       [id, ctx.tenantId],
     );
+    if (result.rowCount === 0) {
+      throw new HttpError(404, "NOT_FOUND", "suspended id card not found");
+    }
+
+    await queue.publish(COMMANDS.idCardReactivate, {
+      messageId: randomUUID(), type: COMMANDS.idCardReactivate, schemaVersion: "1.0",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { id, tenantId: ctx.tenantId },
+    });
 
     return reply.send({ id, status: "active" });
   });

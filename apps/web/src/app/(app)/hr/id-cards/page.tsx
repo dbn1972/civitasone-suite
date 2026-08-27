@@ -71,7 +71,13 @@ export default async function IdCardsPage() {
           pageSize={20}
           emptyIcon="🆔"
           emptyTitle="No ID cards issued"
-          emptyMessage="ID cards for employees and vendor staff appear here once issued. Use the card management portal to issue cards."
+          // HR-A deep-verify finding: this pointed users at a "card management
+          // portal" that does not exist anywhere in the app (repo-wide grep
+          // confirms zero matches beyond this string) -- this page is a
+          // read-only list (no issue/suspend/revoke UI at all, though the
+          // backend fully supports all of it). Removed the dead reference
+          // rather than invent a destination.
+          emptyMessage="ID cards for employees and vendor staff appear here once issued by HR administration."
         />
       </Card>
     </main>
