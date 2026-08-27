@@ -13,13 +13,18 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-// Invalidate the whole "contract" resource prefix, not just this one id, so
-// the cached list (contract:<tenant>:contract:list:<limit>) is busted too.
-// A single-key invalidate here left GET /contracts stale for up to the cache
-// TTL after every mutation (create/approve/activate/close/terminate/amend/...)
-// even though the row itself had already changed underneath.
-function inval(ctx: RequestContext, _id: string): Promise<void> {
-  return cache.invalidateResource(ctx.tenantId, "contract");
+// NOTE: this fires synchronously right after queue.publish(), i.e. BEFORE the
+// async consumer has actually written the mutation to Postgres. Busting the
+// list-cache prefix here would be pure overhead (an O(N) SCAN) with no
+// correctness benefit -- a reader who hits the list in that window still only
+// sees pre-mutation rows, since the write hasn't landed yet either way. The
+// list staleness this contract mutation might otherwise cause is fixed where
+// it actually matters: consumer.ts calls cache.invalidateResource() AFTER the
+// DB transaction commits. This stays a narrow, cheap single-key eviction so a
+// reader who already cached the old single-record view sees it drop a little
+// sooner, at O(1) cost.
+function inval(ctx: RequestContext, id: string): Promise<void> {
+  return cache.invalidate(cache.makeKey(ctx.tenantId, "contract", id));
 }
 
 /** Load + tenant-scope a contract or 404. */

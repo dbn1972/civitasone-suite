@@ -239,4 +239,37 @@ describe("contract lifecycle (integration)", () => {
     const rows = await runWithTenant(TENANT, () => listContracts(TENANT, 50));
     expect(rows.some((r) => r.id === id)).toBe(true);
   });
+
+  it("cache: an approved contract's new status is visible in the list (consumer-side invalidation)", async () => {
+    // Distinct from the create-path test above: this exercises a DIFFERENT
+    // call site (contractApprove's branch in consumer.ts) and primes the
+    // list cache with a snapshot that already contains the row, so only a
+    // correct invalidation (not just "cache was empty/cold") can make the
+    // second read reflect the new status.
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerContractConsumers(q);
+    await q.start();
+
+    const id = randomUUID();
+    await pub(q, COMMANDS.contractCreate, MAKER, {
+      id, tenantId: TENANT, contractNo: "LC-006",
+      vendorId: randomUUID(), title: "Cache regression — approve", valueMinor: 2000000,
+      currency: "INR", startDate: "2026-07-01", expiry: "2027-06-30",
+    }, id);
+    await settle();
+
+    // Prime the list cache with the DRAFT snapshot.
+    const before = await runWithTenant(TENANT, () => listContracts(TENANT, 50));
+    expect(before.find((r) => r.id === id)?.status).toBe("draft");
+
+    await pub(q, COMMANDS.contractApprove, CHECKER, { id, tenantId: TENANT });
+    await settle();
+    await q.stop();
+
+    // Before this fix, contractApprove's consumer branch only invalidated the
+    // by-id key, so this read would still return the stale DRAFT snapshot
+    // primed above.
+    const after = await runWithTenant(TENANT, () => listContracts(TENANT, 50));
+    expect(after.find((r) => r.id === id)?.status).toBe("approved");
+  });
 });
