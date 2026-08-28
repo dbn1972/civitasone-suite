@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
--- Migration: 0010_document_previous_version_id_index.sql
+-- Migration: 0010a_document_previous_version_id_index.sql
 -- Service:   meeting-service (port 3033, gateway /api/v1/meetings) — DB civitas_meeting
 --
 -- Purpose:
@@ -28,6 +28,13 @@
 -- Rollback (DESTRUCTIVE — requires tech-lead / DBA written approval per Migration
 --           Safety Rules; no automatic down-migration is provided):
 --   DROP INDEX IF EXISTS meeting.idx_docs_previous_version;
+--
+-- Renamed from 0010_document_previous_version_id_index.sql to 0010a_ — this branch
+-- was cut before migrations/0010_core_lifecycle_constraints.sql claimed the plain
+-- 0010 slot on main. The two files touch disjoint tables (meeting_documents here vs.
+-- meetings/participants/agenda_items/attendance_records there) with no ordering
+-- dependency, so only this file moves; 0010_core_lifecycle_constraints.sql is
+-- untouched.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 SET lock_timeout = '5s';
