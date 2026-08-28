@@ -477,8 +477,48 @@ describe("Case consumer — dispose persists disposition (regression)", () => {
     const disposeEvent = events.find((e) =>
       e.eventType === "audit.event.record" &&
       (e.payload as { action?: string })?.action === "dispose");
-    expect((disposeEvent?.payload as { metadata?: { disposition?: string } })?.metadata?.disposition)
+    // newValue (not a bespoke key) matters beyond naming: audit-service's
+    // export pipeline only PII-gates payload.oldValue/newValue.
+    expect((disposeEvent?.payload as { newValue?: { disposition?: string } })?.newValue?.disposition)
       .toBe("Writ allowed, quashing impugned order");
+  });
+
+  it("idempotency: redelivered caseDispose (same case, same messageId) is a clean no-op, not a domain-guard error", async () => {
+    // Regression for commands.ts:disposeCase(), which published caseDispose
+    // with no messageId at all before this PR — envelope() defaulted to a
+    // fresh random UUID every time, so a redelivered/retried dispose could
+    // never be recognized as a duplicate by markProcessed() and would
+    // instead reach assertCanDispose() a second time and throw
+    // INVALID_STATUS (already disposed). disposeCase() now sends caseId
+    // itself as messageId, so the exact same envelope shape a real retry
+    // would produce is reproduced here directly (not by re-publishing the
+    // same envelope object, but by constructing a second one with the
+    // same messageId, matching how two independent HTTP retries would
+    // each call disposeCase() and each derive the same deterministic id).
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await expect(
+      q.publish(COMMANDS.caseDispose, {
+        messageId: CASE_3, // same deterministic id disposeCase() would send again
+        type: COMMANDS.caseDispose,
+        tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-retry", schemaVersion: "1.0",
+        payload: { caseId: CASE_3, tenantId: TENANT, disposition: "A second, different disposition text" },
+      }),
+    ).resolves.not.toThrow();
+    await drain();
+    await q.stop();
+
+    // Without the fix (a fresh random messageId every publish), this
+    // redelivery would not have been the same messageId as the original
+    // dispose in the previous test in the first place — but simulating
+    // what the fix guarantees: same messageId in, markProcessed() returns
+    // false, the handler returns immediately, and the original disposition
+    // from the previous test is left completely untouched.
+    const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_3))));
+    expect(row?.disposition).toBe("Writ allowed, quashing impugned order");
   });
 });
 

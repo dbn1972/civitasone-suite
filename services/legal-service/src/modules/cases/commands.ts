@@ -19,6 +19,16 @@ export async function createCase(ctx: RequestContext, body: CreateCaseBody): Pro
 
 export async function disposeCase(ctx: RequestContext, caseId: string, body: DisposeCaseBody): Promise<Accepted> {
   await queue.publish(COMMANDS.caseDispose, {
+    // Unlike createCase above, this had no messageId at all -- envelope()
+    // defaults to a fresh random UUID per publish (bus.ts), so the
+    // consumer's markProcessed() dedup could never recognize a retried
+    // dispose as a duplicate: a client retry after a timeout would reach
+    // assertCanDispose() a second time and throw INVALID_STATUS (already
+    // disposed) instead of being idempotently absorbed as a no-op. A case
+    // can only ever be meaningfully disposed once (no "reopen" action
+    // exists in the domain model), so the case id itself is a safe,
+    // deterministic dedup key for this specific command.
+    messageId: caseId,
     type: COMMANDS.caseDispose,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, caseId, tenantId: ctx.tenantId },

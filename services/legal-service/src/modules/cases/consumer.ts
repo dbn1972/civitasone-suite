@@ -58,12 +58,13 @@ export function registerCaseConsumers(rawQueue: Queue): void {
         status: "disposed", disposition: p.disposition,
         updatedBy: msg.actorId, version: (legalCase.version ?? 1) + 1,
       });
-      // Was previously discarded here entirely: disposeCaseBody
-      // (validators.ts) requires and validates this 1-500 char string, it
-      // reached this handler, and then repo.updateCase() was called
-      // without it and the audit event carried no metadata either — the
-      // disposition text vanished the instant this command was processed,
-      // with no record of it anywhere. See migration 0023_case_disposition.
+      // disposition was previously discarded entirely here — see
+      // migration 0023_case_disposition.sql for the full story. newValue
+      // (not a bespoke "metadata" key) matches the convention
+      // rti/consumer.ts already uses for the same concept, which matters
+      // beyond naming consistency: audit-service's export pipeline
+      // (exports/consumer.ts) only PII-gates payload.oldValue/newValue
+      // behind an extra role check, not an arbitrary key name.
       await audit(tx, msg, "dispose", "case", p.caseId, { disposition: p.disposition });
     });
     // Disposing a case changes its status, which is a listCases() filter —
@@ -78,11 +79,11 @@ async function audit(
   action: string,
   resourceType: string,
   resourceId: string,
-  metadata?: Record<string, unknown>,
+  newValue?: Record<string, unknown>,
 ): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "legal", action, resourceType, resourceId, outcome: "success", ...(metadata ? { metadata } : {}) },
+    payload: { service: "legal", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }
