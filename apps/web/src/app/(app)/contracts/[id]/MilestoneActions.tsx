@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ActionButton } from "../../../_components/ds";
 
 export type ContractMilestone = {
   id: string;
@@ -14,18 +15,26 @@ type Props = { contractId: string; milestones: ContractMilestone[] };
 
 export function MilestoneActions({ contractId, milestones }: Props) {
   const router = useRouter();
+  // Shared per-milestone busy flag (not just each ActionButton's own internal
+  // busy state) so the *sibling* action for the same milestone is also
+  // disabled while one is in flight -- Complete and Mark late are mutually
+  // exclusive outcomes for the same row.
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState<string | undefined>();
 
   const actionable = milestones.filter(
     (m) => m.status !== "completed" && m.status !== "completed_late",
   );
 
-  async function act(milestoneId: string, kind: "complete" | "late") {
+  // Both outcomes are TERMINAL -- the consumer refuses to re-apply either
+  // command once a milestone is completed/completed_late (see
+  // contracts/consumer.ts), and "late" additionally computes a real SLA
+  // penalty that reduces what's payable to the vendor. Neither should fire
+  // from a single unconfirmed click. A thrown error here is caught by
+  // ActionButton's own useConfirmAction and shown inside the still-open
+  // confirm dialog, in context, rather than in a banner below the list.
+  async function act(milestoneId: string, kind: "complete" | "late", notes?: string) {
     setBusyId(milestoneId);
-    setError(undefined);
-    setMessage("");
     try {
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch(
@@ -35,7 +44,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             kind === "late"
-              ? { achievedDate: today, notes: "Marked late from contract detail" }
+              ? { achievedDate: today, notes: notes?.trim() || "Marked late from contract detail" }
               : { achievedDate: today },
           ),
         },
@@ -45,8 +54,6 @@ export function MilestoneActions({ contractId, milestones }: Props) {
       }
       setMessage(kind === "late" ? "Late milestone accepted (queued)." : "Milestone completion accepted (queued).");
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Milestone update failed");
     } finally {
       setBusyId(null);
     }
@@ -59,32 +66,32 @@ export function MilestoneActions({ contractId, milestones }: Props) {
       {actionable.map((m) => (
         <div key={m.id} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 13, flex: 1 }}>{m.title}</span>
-          <button
-            type="button"
+          <ActionButton
             className="btn ghost"
+            label="Complete"
             disabled={busyId === m.id}
-            onClick={() => void act(m.id, "complete")}
-          >
-            Complete
-          </button>
-          <button
-            type="button"
+            confirmTitle={`Mark "${m.title}" complete?`}
+            confirmDescription="Records this milestone as delivered on time. This cannot be undone."
+            confirmLabel="Yes, mark complete"
+            onConfirm={() => act(m.id, "complete")}
+          />
+          <ActionButton
             className="btn ghost"
+            label="Mark late"
             disabled={busyId === m.id}
-            onClick={() => void act(m.id, "late")}
-          >
-            Mark late
-          </button>
+            confirmTitle={`Mark "${m.title}" as delivered late?`}
+            confirmDescription="Applies the contract's SLA delay penalty and reduces the net payable amount. This cannot be undone."
+            confirmLabel="Yes, mark late"
+            danger
+            requireReason
+            reasonLabel="Reason for the delay (recorded on the milestone)"
+            onConfirm={(notes) => act(m.id, "late", notes)}
+          />
         </div>
       ))}
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>
-          {error}
         </p>
       ) : null}
     </div>

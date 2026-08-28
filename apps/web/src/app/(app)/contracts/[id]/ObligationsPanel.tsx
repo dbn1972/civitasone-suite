@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ActionButton } from "../../../_components/ds";
 
 export type ContractObligation = {
   id: string;
@@ -69,7 +70,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
     }
   }
 
-  async function advanceStatus(obligationId: string, currentStatus: string, nextStatus: string, version: number) {
+  async function advanceStatus(obligationId: string, nextStatus: string, version: number) {
     setBusyId(obligationId);
     setError(undefined);
     setMessage("");
@@ -84,8 +85,6 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       }
       setMessage(`Obligation status update to "${STATUS_LABEL[nextStatus] ?? nextStatus}" accepted (queued).`);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Update obligation failed");
     } finally {
       setBusyId(null);
     }
@@ -109,19 +108,23 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
                       type="button"
                       className="btn ghost"
                       disabled={busyId === o.id}
-                      onClick={() => void advanceStatus(o.id, o.status, "in_progress", o.version ?? 1)}
+                      onClick={() => void advanceStatus(o.id, "in_progress", o.version ?? 1)}
                     >
                       Start
                     </button>
-                  ) : null}
-                  <button
-                    type="button"
+                  ) : null}{" "}
+                  {/* Terminal transition (validateStatusTransition: completed -> [])
+                      -- once marked complete, this obligation can never be reopened
+                      through the app, so it goes behind a confirmation. */}
+                  <ActionButton
                     className="btn ghost"
+                    label="Mark complete"
                     disabled={busyId === o.id}
-                    onClick={() => void advanceStatus(o.id, o.status, "completed", o.version ?? 1)}
-                  >
-                    Mark complete
-                  </button>
+                    confirmTitle={`Mark "${o.title}" complete?`}
+                    confirmDescription="This obligation cannot be reopened afterward."
+                    confirmLabel="Yes, mark complete"
+                    onConfirm={() => advanceStatus(o.id, "completed", o.version ?? 1)}
+                  />
                 </>
               ) : null}
             </li>

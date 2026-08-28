@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ActionButton } from "../../../_components/ds";
 
 export type ContractBond = {
   id: string;
@@ -12,6 +13,58 @@ export type ContractBond = {
 };
 
 type Props = { contractId: string; bonds: ContractBond[]; canRegister: boolean };
+
+// held -> {released, claimed, forfeited} are all TERMINAL, one-way transitions
+// (see contract-service's assertBondTransition — none of the three has any
+// transition out of it). All three are also financially consequential: they
+// decide whether a vendor's performance security is returned, kept by the
+// government for cause, or kept outright. None of that should fire from a
+// single unconfirmed click, and "claim"/"forfeit" specifically allege vendor
+// non-performance, so those two require the officer to record why.
+const TRANSITIONS: Array<{
+  toStatus: "released" | "claimed" | "forfeited";
+  label: string;
+  confirmTitle: string;
+  confirmDescription: string;
+  // Distinct from `label`: once the dialog is open, the original trigger
+  // button is still on the page, so reusing the same text would leave two
+  // same-named buttons visible at once ("Release" the trigger, "Release" the
+  // dialog's confirm button).
+  confirmLabel: string;
+  danger: boolean;
+  requireReason: boolean;
+}> = [
+  {
+    toStatus: "released",
+    label: "Release",
+    confirmTitle: "Release this performance bond?",
+    confirmDescription:
+      "The bond is returned to the vendor. This cannot be undone or re-registered once released.",
+    confirmLabel: "Yes, release",
+    danger: false,
+    requireReason: false,
+  },
+  {
+    toStatus: "claimed",
+    label: "Claim",
+    confirmTitle: "Claim this performance bond?",
+    confirmDescription:
+      "This records the vendor as having failed to perform and invokes the bond. This cannot be undone — record why.",
+    confirmLabel: "Yes, claim",
+    danger: true,
+    requireReason: true,
+  },
+  {
+    toStatus: "forfeited",
+    label: "Forfeit",
+    confirmTitle: "Forfeit this performance bond?",
+    confirmDescription:
+      "This permanently forfeits the bond to the government for cause. This cannot be undone — record why.",
+    confirmLabel: "Yes, forfeit",
+    danger: true,
+    requireReason: true,
+  },
+];
 
 export function BondActions({ contractId, bonds, canRegister }: Props) {
   const router = useRouter();
@@ -61,28 +114,24 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
     }
   }
 
-  async function release(bondId: string) {
-    setBusy(true);
+  async function transition(bondId: string, toStatus: "released" | "claimed" | "forfeited", reason?: string) {
     setError(undefined);
-    try {
-      const res = await fetch(
-        `/api/proxy/v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toStatus: "released", notes: "Released from contract detail" }),
-        },
-      );
-      if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Transition failed");
-      }
-      setMessage("Bond release accepted (queued).");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Bond transition failed");
-    } finally {
-      setBusy(false);
+    const res = await fetch(
+      `/api/proxy/v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toStatus,
+          notes: reason?.trim() || `${toStatus[0]!.toUpperCase()}${toStatus.slice(1)} from contract detail`,
+        }),
+      },
+    );
+    if (res.status !== 202 && !res.ok) {
+      throw new Error((await res.text()) || "Transition failed");
     }
+    setMessage(`Bond ${toStatus} accepted (queued).`);
+    router.refresh();
   }
 
   return (
@@ -95,12 +144,26 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
             <li key={b.id} style={{ marginBottom: 8, fontSize: 13 }}>
               <strong>{b.referenceNo ?? b.id.slice(0, 8)}</strong> — {b.status}
               {b.status === "held" ? (
-                <>
-                  {" "}
-                  <button type="button" className="btn ghost" disabled={busy} onClick={() => void release(b.id)}>
-                    Release
-                  </button>
-                </>
+                <span style={{ display: "inline-flex", gap: 6, marginLeft: 8 }}>
+                  {TRANSITIONS.map((t) => (
+                    <ActionButton
+                      key={t.toStatus}
+                      // Leave className unset for claim/forfeit so ActionButton's
+                      // own default ("btn danger") applies -- Release keeps the
+                      // original neutral "btn ghost" look.
+                      {...(t.danger ? {} : { className: "btn ghost" })}
+                      label={t.label}
+                      disabled={busy}
+                      confirmTitle={t.confirmTitle}
+                      confirmDescription={t.confirmDescription}
+                      confirmLabel={t.confirmLabel}
+                      danger={t.danger}
+                      requireReason={t.requireReason}
+                      reasonLabel="Reason (recorded on the bond)"
+                      onConfirm={(reason) => transition(b.id, t.toStatus, reason)}
+                    />
+                  ))}
+                </span>
               ) : null}
             </li>
           ))}

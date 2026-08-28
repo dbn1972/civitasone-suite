@@ -58,4 +58,29 @@ describe("ObligationsPanel", () => {
     const body = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
     expect(body).toMatchObject({ status: "in_progress", version: 1 });
   });
+
+  it("marking complete is gated behind a confirmation (terminal, cannot be reopened)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(
+      <ObligationsPanel
+        contractId="c1"
+        obligations={[
+          { id: "ob-1", title: "Submit BG", status: "in_progress", version: 2, ownerId: "u1" },
+        ]}
+      />,
+    );
+    // "Start" must not be offered once past pending.
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark complete" }));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
+    await waitFor(() => expect(screen.getByText(/accepted \(queued\)/i)).toBeInTheDocument());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body).toMatchObject({ status: "completed", version: 2 });
+  });
 });
