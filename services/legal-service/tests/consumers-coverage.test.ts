@@ -19,6 +19,8 @@ import { registerReminderConsumers } from "../src/modules/reminders/consumer.js"
 import { registerCounselBriefConsumers } from "../src/modules/counsel/consumer.js";
 import * as counselQueries from "../src/modules/counsel/queries.js";
 import { legalCounselBriefs } from "../src/modules/counsel/schema.js";
+import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
+import * as caseQueries from "../src/modules/cases/queries.js";
 import { cache } from "../src/shared/infra.js";
 import { assertCanRespond, DomainError } from "../src/modules/notices/domain.js";
 import { DomainError as SettlementDomainError } from "../src/modules/settlements/domain.js";
@@ -59,6 +61,17 @@ async function wipe(): Promise<void> {
   // assertions below pass or fail for the wrong reason.
   await cache.invalidateResource(TENANT, "counsel_brief");
   await cache.invalidateResource(TENANT, "counsel_briefs");
+  // NOTE: invalidateResource does an unanchored prefix match, so the
+  // "counsel_brief" call above already deletes every "counsel_briefs:*" key
+  // too (it's a string-prefix of the plural) -- the second call is a
+  // harmless no-op today, not a mistake here specifically, but it is a real
+  // landmine in the shared cache package (packages/cache/src/index.ts) that
+  // has been flagged as its own follow-up rather than fixed in this PR.
+  // "case" has the identical prefix relationship with "cases" below, for
+  // the same reason: both calls are kept for clarity/symmetry with the
+  // pattern above even though the first already covers the second.
+  await cache.invalidateResource(TENANT, "case");
+  await cache.invalidateResource(TENANT, "cases");
 }
 
 beforeAll(async () => {
@@ -351,6 +364,72 @@ describe("Counsel-brief consumer — assign + list-cache invalidation (integrati
     const fixedRead = await counselQueries.getBrief("has-tenant-field-case", TENANT);
     expect(fixedRead).not.toBeNull();
     expect(fixedRead?.id).toBe("has-tenant-field-case");
+  });
+});
+
+// ── Case consumer — list-cache invalidation (integration) ──────────────────────
+// Same bug class as the counsel-brief regression above, found by inspection
+// once that one was diagnosed: cases/consumer.ts invalidated only the
+// singular "case" cache key, never the plural "cases" list-cache key that
+// queries.ts's listCases() reads through. Fixed alongside opinions, hearings
+// (hearings + court_orders list keys), filings, and documents in the same
+// PR — this test covers cases specifically as the representative case; the
+// others share the identical shape and were verified by typecheck + the
+// full existing legal-domain/legal test suites passing unchanged, plus a
+// live end-to-end check (see PR description).
+describe("Case consumer — list-cache invalidation (integration)", () => {
+  const CASE_2 = "22222222-bbbb-4000-8000-000000000c02";
+
+  it("regression: a list read cached before a second case exists is not left stale after the consumer commits", async () => {
+    const preRaceList = await runWithTenant(TENANT, () => caseQueries.listCases(TENANT));
+    expect(preRaceList.map((c) => c.id)).toContain(CASE_ID); // seeded in beforeAll
+    expect(preRaceList.map((c) => c.id)).not.toContain(CASE_2);
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(17), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-race", schemaVersion: "1.0",
+      payload: {
+        id: CASE_2, tenantId: TENANT, caseNo: "WP-2026-RACE",
+        title: "Race-condition regression check", court: "HC Delhi",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    // Without the fix, this reads the pre-race cached list straight back
+    // (missing CASE_2) — the row exists in Postgres but the stale
+    // list-cache entry hides it until the TTL expires.
+    const postRaceList = await runWithTenant(TENANT, () => caseQueries.listCases(TENANT));
+    expect(postRaceList.map((c) => c.id)).toContain(CASE_2);
+  });
+
+  it("idempotency: redelivered caseCreate is a no-op", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    // Re-publish with the same messageId as the previous test (MSG(17)),
+    // but a different payload id — markProcessed() must dedup on messageId
+    // and return before insertCase runs, so this new id must never appear.
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(17), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dup", schemaVersion: "1.0",
+      payload: {
+        id: "99999999-aaaa-4000-8000-000000000c03", tenantId: TENANT, caseNo: "WP-DUP",
+        title: "Should never be inserted", court: "HC Delhi",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.tenantId, TENANT))));
+    expect(rows.filter((r) => r.id === CASE_2)).toHaveLength(1);
+    expect(rows.some((r) => r.id === "99999999-aaaa-4000-8000-000000000c03")).toBe(false);
   });
 });
 

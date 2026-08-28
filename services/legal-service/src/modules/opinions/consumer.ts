@@ -1,6 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateItemAndLists } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -8,6 +8,14 @@ import { assertCanDraft, assertCanIssue } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+// Every handler below invalidates both the single-item "opinion" key and the
+// plural "opinions" list-cache key that queries.ts's listOpinions() reads
+// through — the list key used to be left stale after every write (the same
+// bug found and fixed for counsel-briefs in
+// fix/legal-wire-real-counsel-brief-endpoint, confirmed live there via
+// POST-then-immediate-GET). No case-scoped invalidation primitive exists for
+// this key shape, so this busts every cached list in the tenant rather than
+// leaving any of them wrong.
 export function registerOpinionConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.opinionSeek, async (msg) => {
     const p = msg.payload as {
@@ -23,7 +31,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "seek", "legal_opinion", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.id));
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.id }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionDraft, async (msg) => {
@@ -40,7 +48,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "draft", "legal_opinion", p.opinionId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId));
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionIssue, async (msg) => {
@@ -63,7 +71,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "issue", "legal_opinion", p.opinionId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId));
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionSubmitApproval, async (msg) => {
@@ -77,7 +85,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "submit_for_eoffice_approval", "legal_opinion", p.opinionId);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId));
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 }
 

@@ -20,6 +20,24 @@ class StaleWriteError extends Error {
   }
 }
 
+// Every handler below now invalidates the "rti" list-cache resource that
+// queries.ts's listApplications() reads through — the same stale-list-cache
+// bug found and fixed for counsel-briefs (fix/legal-wire-real-counsel-brief-
+// endpoint) and fleet-wide across cases/opinions/hearings/filings/documents
+// (fix/legal-stale-list-cache-fleet). Two prior mistakes fixed here at once:
+//   - rtiApplicationCreate invalidated the literal key "list:50" — the
+//     cache key is actually parameterised by the caller's requested limit
+//     (listQuerySchema), so any other limit's cached page was never
+//     invalidated by any code path in this module.
+//   - The other six handlers invalidated cache.makeKey(tenantId, "rti",
+//     <applicationId or "disclosures">) — keys that queries.ts never
+//     actually populates: getApplication() and listDisclosures() both read
+//     straight from Postgres with no cache.getOrLoad() wrapper, and the
+//     appeal-order handler's own key format (`appeal:${appealId}`) matched
+//     nothing either. These invalidations were dead code, not staleness
+//     bugs — but dead code that reads as if it were doing something is its
+//     own hazard, so replaced with the one invalidation that's actually
+//     load-bearing: busting every cached "rti:list:<limit>" page.
 export function registerRtiConsumers(queue: Queue): void {
   // ── receipt ────────────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.rtiApplicationCreate, async (msg) => {
@@ -42,7 +60,7 @@ export function registerRtiConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "receive", "rti_application", p.id, { applicationNo: p.applicationNo });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", "list:50"));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §6(3) transfer to another authority — clock restarts, cross-service event
@@ -73,7 +91,7 @@ export function registerRtiConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "transfer", "rti_application", p.applicationId, { toAuthority: p.toAuthority });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.applicationId));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §11 third-party consultation ─────────────────────────────────────────
@@ -97,7 +115,7 @@ export function registerRtiConsumers(queue: Queue): void {
       if (n !== 1) throw new StaleWriteError("rti_application", p.applicationId);
       await audit(tx, msg, "third_party_consult", "rti_application", p.applicationId, { thirdParty: p.thirdParty });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.applicationId));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §7(3) additional fee ─────────────────────────────────────────────────
@@ -114,7 +132,7 @@ export function registerRtiConsumers(queue: Queue): void {
       if (n !== 1) throw new StaleWriteError("rti_application", p.applicationId);
       await audit(tx, msg, "additional_fee", "rti_application", p.applicationId, { additionalFee: p.additionalFee });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.applicationId));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §7 disposal / response (with §8/§9 exemptions) ───────────────────────
@@ -152,7 +170,7 @@ export function registerRtiConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "respond", "rti_application", p.applicationId, { decision: p.decision });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.applicationId));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §19(1)/(3) file an appeal (tier-ordering enforced) ───────────────────
@@ -176,7 +194,7 @@ export function registerRtiConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "file_appeal", "rti_appeal", p.appealId, { tier: p.tier });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.applicationId));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §19 appeal ORDER — maker-checker (decider != filer) ──────────────────
@@ -199,7 +217,7 @@ export function registerRtiConsumers(queue: Queue): void {
       if (n !== 1) throw new StaleWriteError("rti_appeal", p.appealId);
       await audit(tx, msg, "appeal_order", "rti_appeal", p.appealId, { orderStatus: p.orderStatus });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", appealApp(p.appealId)));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 
   // ── §4 disclosure log ────────────────────────────────────────────────────
@@ -213,14 +231,10 @@ export function registerRtiConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "disclosure_log", "rti_disclosure", p.id, { category: p.category });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", "disclosures"));
+    await cache.invalidateResource(msg.tenantId, "rti");
   });
 }
 
-// cache-key helper (appeal cache is keyed loosely; invalidating a stable key is fine)
-function appealApp(appealId: string): string {
-  return `appeal:${appealId}`;
-}
 
 async function audit(
   tx: Parameters<typeof enqueue>[0],
