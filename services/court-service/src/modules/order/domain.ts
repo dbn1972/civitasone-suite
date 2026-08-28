@@ -1,6 +1,7 @@
 /**
  * order pure domain — id derivation and small order helpers (§23). No I/O.
  */
+import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 
 /**
@@ -10,14 +11,48 @@ import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
  */
 
 /** An order id is deterministic on (tenant + case + orderType + idempotencyKey)
- *  so re-submitting the SAME drafted order is idempotent end-to-end. The caller
- *  (commands.ts's recordOrder) derives idempotencyKey from a content hash of
- *  the order's meaningful fields -- NOT a random value -- specifically so a
- *  genuine retry of the SAME request reuses the SAME key and dedupes. */
+ *  so a redelivery of the SAME record intent is idempotent end-to-end.
+ *  idempotencyKey is normally hashOrderContent(...) below (a content hash of
+ *  the submitted fields), so a genuine client retry -- same case, same order
+ *  content -- always derives the SAME key and therefore the same orderId, and
+ *  dedupes via markProcessed/onConflictDoNothing; a caller with its own
+ *  stronger idempotency key (a client-supplied x-idempotency-key) may still
+ *  pass one directly instead. */
 export function deriveOrderId(
   tenantId: string, caseId: string, orderType: string, idempotencyKey: string,
 ): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:order:${caseId}:${orderType}:${idempotencyKey}`);
+}
+
+/**
+ * Content-derived idempotency key for a recorded order -- a SHA-256 hex digest
+ * over every field that distinguishes one order from another (hearingId,
+ * orderType, orderText, orderDate). An identical resubmission (a client
+ * double-click or a network-timeout retry) hashes to the SAME key and
+ * therefore the same orderId, so it dedupes instead of creating a second,
+ * distinct draft order row.
+ *
+ * The fields are combined via JSON.stringify (not a plain string join): each
+ * element is individually quoted/escaped, so a value can never shift across a
+ * field boundary and collide with a differently-split input.
+ *
+ * USED ONLY AS A FALLBACK (see recordOrder in commands.ts, which prefers a
+ * caller-supplied x-idempotency-key via idempotentId() when present) --
+ * DELIBERATE TRADEOFF, mirroring filing/domain.ts's identical hashFilingContent:
+ * this fallback makes the id purely CONTENT-based, with no random or time
+ * component, so two GENUINELY DISTINCT orders that happen to share the same
+ * hearingId/orderType/orderText/orderDate collide onto one id and the second
+ * is silently dropped. Judged the lesser risk versus silently duplicating a
+ * court order draft on every retry for a caller that manages no idempotency
+ * key of its own -- a caller that needs two content-identical orders to both
+ * persist should send a distinct x-idempotency-key per submission instead of
+ * relying on this fallback.
+ */
+export function hashOrderContent(
+  hearingId: string | undefined, orderType: string, orderText: string, orderDate: string | undefined,
+): string {
+  const content = JSON.stringify([hearingId ?? null, orderType, orderText, orderDate ?? null]);
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /** A "speaking order" gives reasons (illustrative helper). The authoritative

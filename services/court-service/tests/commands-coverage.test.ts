@@ -228,6 +228,14 @@ describe("order commands", () => {
     const different = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay VACATED" });
     expect(different.orderId).not.toBe(first.orderId);
   });
+
+  it("recordOrder rejects an empty orderText (failure path)", async () => {
+    const { recordOrder } = await import("../src/modules/order/commands.js");
+    await expect(
+      recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "" }),
+    ).rejects.toThrow();
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("cause-list commands", () => {
