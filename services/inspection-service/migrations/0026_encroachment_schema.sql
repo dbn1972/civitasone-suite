@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS encroachment.encroachment_complaints (
   reported_by               uuid NOT NULL,
   reported_at               timestamptz NOT NULL DEFAULT now(),
   location                  jsonb NOT NULL,
-  encroachment_type         varchar(40) NOT NULL,
+  encroachment_type         varchar(40) NOT NULL
+                            CHECK (encroachment_type IN ('unauthorized_construction', 'road_encroachment',
+                              'footpath_occupation', 'public_land_grab', 'hawker_zone_violation',
+                              'drainage_obstruction')),
   description               text NOT NULL,
   photos                    jsonb,
   land_parcel_ref           text,
@@ -131,6 +134,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_encroachment_hearings_tenant
   ON encroachment.encroachment_hearings (tenant_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_encroachment_hearings_complaint
   ON encroachment.encroachment_hearings (complaint_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_encroachment_hearings_notice
+  ON encroachment.encroachment_hearings (notice_id);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_encroachment_removals_tenant
   ON encroachment.encroachment_removals (tenant_id);

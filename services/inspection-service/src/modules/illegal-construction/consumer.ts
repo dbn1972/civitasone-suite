@@ -203,14 +203,16 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
   // — but no command anywhere in commands.ts ever produces either
   // intermediate state (no "issue notice" or "record hearing" action
   // exists in the built API surface, unlike encroachment's parallel
-  // notice/hearing sub-workflow, which does have those steps). This
-  // handler is therefore the one place that advances a case from
-  // violation_confirmed (or later) straight to the target decision state,
-  // same pragmatic choice as the two gaps already flagged in
-  // encroachment/consumer.ts. "fine" is the one actionType with no
-  // corresponding case state (a fine can be levied without changing the
-  // case's overall status) so it records the action without touching
-  // case.status.
+  // notice/hearing sub-workflow, which does have those steps). "violation_
+  // confirmed" is therefore the only state a real case is ever in when this
+  // handler runs, so that is the one state exempted from the strict
+  // transition check below (a first review round caught this exempting
+  // notice_issued/hearing_done instead — the two states nothing can ever
+  // reach — which made 3 of the 4 status-changing action types throw
+  // INVALID_TRANSITION on every real call). "fine" is the one actionType
+  // with no corresponding case state (a fine can be levied without
+  // changing the case's overall status) so it records the action without
+  // touching case.status or needing any transition check at all.
   queue.subscribe<IssueActionPayload & { tenantId: string }>(
     COMMANDS.illegalConstructionActionIssue,
     async (msg) => {
@@ -224,10 +226,42 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
 
         const targetState = ACTION_TYPE_TO_CASE_STATE[p.actionType];
-        if (targetState && !["notice_issued", "hearing_done"].includes(record.status)) {
+        if (targetState) {
+          if (p.actionType === "regularization_order") {
+            // canRegularize checks both the transition AND the
+            // violation-type eligibility rule (fsi_exceeded/no_permit/
+            // unauthorized_floor can never be regularized, regardless of
+            // state) — assertValidCaseTransition alone does not, and a
+            // second review round caught that this path let a
+            // regularization_order action regularize an ineligible case
+            // through a weaker check than illegalConstructionRegularize
+            // enforces for the identical state change.
+            if (!canRegularize(record.status as CaseState, record.violationType as ViolationType)) {
+              throw new NonRetryableError(
+                `Case ${p.caseId} is not eligible for regularization (status "${record.status}", violation type "${record.violationType}")`,
+              );
+            }
+          } else if (record.status !== "violation_confirmed") {
+            try {
+              assertValidCaseTransition(record.status as CaseState, targetState);
+            } catch (err) { toDomainError(err); }
+          }
+        }
+
+        let fineAmountMinor: bigint | null = null;
+        if (p.fineAmountMinor !== undefined) {
           try {
-            assertValidCaseTransition(record.status as CaseState, targetState);
-          } catch (err) { toDomainError(err); }
+            fineAmountMinor = BigInt(p.fineAmountMinor);
+          } catch {
+            // routes.ts validates fineAmountMinor as z.string().optional()
+            // only — no numeric-format check — so a value like "25000.50"
+            // or "1e5" reaches here and BigInt() throws a plain
+            // SyntaxError. Convert to NonRetryableError explicitly:
+            // otherwise this is redelivered up to maxReceiveCount before
+            // dead-lettering instead of failing fast, for an input that
+            // can never succeed no matter how many times it's retried.
+            throw new NonRetryableError(`fineAmountMinor is not a valid integer string: "${p.fineAmountMinor}"`);
+          }
         }
 
         const action = await insertAction(tx, {
@@ -238,7 +272,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
           issuedBy: msg.actorId,
           status: "issued",
           details: p.details ?? null,
-          fineAmountMinor: p.fineAmountMinor ? BigInt(p.fineAmountMinor) : null,
+          fineAmountMinor,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
         });
@@ -273,6 +307,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
     COMMANDS.illegalConstructionActionEnforce,
     async (msg) => {
       const p = msg.payload;
+      let caseId: string | undefined;
 
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -297,6 +332,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         if (action.actionType === "demolition_order") {
           const record = await findCaseById(msg.tenantId, action.caseId);
           if (record) {
+            caseId = record.id;
             try {
               assertValidCaseTransition(record.status as CaseState, "demolished");
               await updateCase(tx, action.caseId, msg.tenantId, {
@@ -323,11 +359,14 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await Promise.all([
-          cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_action", p.actionId)),
-        ]);
-      } catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      // caseId is only set on the demolition_order path, which is the only
+      // one that can have written a new case status above — a prior review
+      // round caught this only ever invalidating the action key, leaving a
+      // cached case read stale for up to the TTL after a real demolition.
+      const invalidations = [cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_action", p.actionId))];
+      if (caseId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", caseId)));
+      try { await Promise.all(invalidations); }
+      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
     },
   );
 

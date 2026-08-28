@@ -136,7 +136,7 @@ afterAll(async () => {
   await app.close();
 });
 
-describe("all 8 route modules are mounted by the production buildApp()", () => {
+describe("every route module registered in app.ts is mounted by the production buildApp()", () => {
   it.each(ENDPOINTS)("$module: $method $url is routed (not 404)", async ({ method, url }) => {
     const res = await app.inject({ method, url, headers: auth(), payload: {} });
     // A mounted route yields 202 (accepted), 400 (validation), or 403 (rbac) —
@@ -152,5 +152,25 @@ describe("all 8 route modules are mounted by the production buildApp()", () => {
       payload: {},
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  // ENDPOINTS above is a hand-synced literal with nothing that previously
+  // cross-checked it against app.ts's actual registrations — it could only
+  // ever catch a mounted-but-broken route, never a forgotten ENDPOINTS
+  // entry for a module that *is* registered (which is exactly how
+  // encroachment/illegal-construction went unnoticed even after this file
+  // already existed for the original eight). This closes that gap for the
+  // one thing both files agree on structurally: how many modules app.ts
+  // registers. Not a substitute for keeping ENDPOINTS itself in sync by
+  // hand, but a real tripwire against silently losing a registration —
+  // whoever adds module #19 will see this fail if they forget module #19's
+  // own row above, immediately, in this same test file.
+  it("ENDPOINTS has one row per module actually registered in app.ts", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    const appTsPath = fileURLToPath(new URL("../src/app.ts", import.meta.url));
+    const appTsSource = await readFile(appTsPath, "utf8");
+    const registrations = appTsSource.match(/await app\.register\(register\w+Routes\)/g) ?? [];
+    expect(ENDPOINTS.length).toBe(registrations.length);
   });
 });

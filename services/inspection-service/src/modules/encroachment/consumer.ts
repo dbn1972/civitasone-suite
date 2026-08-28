@@ -307,9 +307,13 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const complaint = await findComplaintById(msg.tenantId, p.complaintId);
+        // Independent lookups (no data dependency between them) — run
+        // concurrently rather than paying both round-trips sequentially.
+        const [complaint, notice] = await Promise.all([
+          findComplaintById(msg.tenantId, p.complaintId),
+          findNoticeById(msg.tenantId, p.noticeId),
+        ]);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
-        const notice = await findNoticeById(msg.tenantId, p.noticeId);
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "hearing_scheduled");
@@ -373,23 +377,57 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         const complaint = await findComplaintById(msg.tenantId, hearing.complaintId);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${hearing.complaintId}`);
         complaintId = complaint.id;
-        try {
-          assertValidComplaintTransition(complaint.status as ComplaintState, "hearing_done");
-        } catch (err) { toDomainError(err); }
+
+        let fineAmountMinor: bigint | null = null;
+        if (p.fineAmountMinor !== undefined) {
+          try {
+            fineAmountMinor = BigInt(p.fineAmountMinor);
+          } catch {
+            // routes.ts validates fineAmountMinor as z.string().optional()
+            // only, no numeric-format check, so a value like "500.50" or
+            // "1e5" reaches here and BigInt() throws a plain SyntaxError.
+            // Convert explicitly so this dead-letters immediately instead
+            // of burning retries on an input that can never succeed.
+            throw new NonRetryableError(`fineAmountMinor is not a valid integer string: "${p.fineAmountMinor}"`);
+          }
+        }
+
+        // decision "adjourned" is HEARING_STATES' own distinct terminal
+        // value for a hearing (as opposed to "completed"), and there is no
+        // COMPLAINT_TRANSITIONS edge from hearing_scheduled to anything
+        // adjournment-shaped — only to hearing_done. A prior review round
+        // caught this handler hardcoding hearing->"completed" and
+        // complaint->"hearing_done" regardless of decision, which silently
+        // discarded "adjourned" (a value the route's own zod schema
+        // explicitly allows) and left the recorded nextHearingDate with no
+        // hearing sub-workflow state it could ever lead into. On
+        // adjournment: the hearing itself is marked "adjourned" and the
+        // complaint is left at "hearing_scheduled" — scheduling the actual
+        // follow-up hearing (with a real venue/officer) is a separate
+        // encroachmentHearingSchedule call this handler does not attempt
+        // to make on the caller's behalf.
+        const adjourned = p.decision === "adjourned";
+        if (!adjourned) {
+          try {
+            assertValidComplaintTransition(complaint.status as ComplaintState, "hearing_done");
+          } catch (err) { toDomainError(err); }
+        }
 
         await updateHearing(tx, p.hearingId, msg.tenantId, {
           attendees: p.attendees ?? null,
           proceedings: p.proceedings,
           decision: p.decision,
-          fineAmountMinor: p.fineAmountMinor ? BigInt(p.fineAmountMinor) : null,
+          fineAmountMinor,
           nextHearingDate: p.nextHearingDate ?? null,
-          status: "completed",
+          status: adjourned ? "adjourned" : "completed",
           updatedBy: msg.actorId,
         }, hearing.version);
 
-        await updateComplaint(tx, hearing.complaintId, msg.tenantId, {
-          status: "hearing_done", updatedBy: msg.actorId,
-        }, complaint.version);
+        if (!adjourned) {
+          await updateComplaint(tx, hearing.complaintId, msg.tenantId, {
+            status: "hearing_done", updatedBy: msg.actorId,
+          }, complaint.version);
+        }
 
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
@@ -529,6 +567,19 @@ export function registerEncroachmentConsumers(queue: Queue): void {
 
         const complaint = await findComplaintById(msg.tenantId, removal.complaintId);
         if (complaint) {
+          // Every other complaint-mutating handler in this file validates
+          // the transition first; this one didn't. Currently latent (a
+          // complaint reaching here is always exactly "removal_ordered",
+          // the only state COMPLAINT_TRANSITIONS allows into "removed"),
+          // but REMOVAL_STATES already has an unused "stayed" state and
+          // COMPLAINT_STATES an unused "appealed" state — the moment either
+          // gets a second way to reach this handler, an unguarded write
+          // here would silently corrupt the complaint's state machine
+          // instead of rejecting the bad transition like every sibling
+          // handler already does.
+          try {
+            assertValidComplaintTransition(complaint.status as ComplaintState, "removed");
+          } catch (err) { toDomainError(err); }
           await updateComplaint(tx, removal.complaintId, msg.tenantId, {
             status: "removed", updatedBy: msg.actorId,
           }, complaint.version);
