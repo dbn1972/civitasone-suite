@@ -59,7 +59,17 @@ export function registerOpinionEOfficeDecisionConsumers(queue: Queue): void {
         await audit(tx, msg, "eoffice_returned", cb.refId, { fileNo: cb.fileNo });
       }
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "opinion", cb.refId));
+    // This is a second, independent write path into the opinions module
+    // (the eOffice approval/rejection callback) that only busted the
+    // singular per-item key, never the "opinions" list-cache resource that
+    // queries.ts's listOpinions() reads through — the identical bug fixed
+    // for the module's other write path in opinions/consumer.ts as part of
+    // fix/legal-stale-list-cache-fleet (caught by a second review pass on
+    // that same PR, which found this file has its own copy of the bug).
+    await Promise.all([
+      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", cb.refId)),
+      cache.invalidateResource(msg.tenantId, "opinions"),
+    ]);
   });
 }
 

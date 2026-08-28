@@ -61,6 +61,17 @@ async function wipe(): Promise<void> {
   // assertions below pass or fail for the wrong reason.
   await cache.invalidateResource(TENANT, "counsel_brief");
   await cache.invalidateResource(TENANT, "counsel_briefs");
+  // NOTE: invalidateResource does an unanchored prefix match, so the
+  // "counsel_brief" call above already deletes every "counsel_briefs:*" key
+  // too (it's a string-prefix of the plural) -- the second call is a
+  // harmless no-op today, not a mistake here specifically, but it is a real
+  // landmine in the shared cache package (packages/cache/src/index.ts) that
+  // has been flagged as its own follow-up rather than fixed in this PR.
+  // "case" has the identical prefix relationship with "cases" below, for
+  // the same reason: both calls are kept for clarity/symmetry with the
+  // pattern above even though the first already covers the second.
+  await cache.invalidateResource(TENANT, "case");
+  await cache.invalidateResource(TENANT, "cases");
 }
 
 beforeAll(async () => {
@@ -394,6 +405,31 @@ describe("Case consumer — list-cache invalidation (integration)", () => {
     // list-cache entry hides it until the TTL expires.
     const postRaceList = await runWithTenant(TENANT, () => caseQueries.listCases(TENANT));
     expect(postRaceList.map((c) => c.id)).toContain(CASE_2);
+  });
+
+  it("idempotency: redelivered caseCreate is a no-op", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    // Re-publish with the same messageId as the previous test (MSG(17)),
+    // but a different payload id — markProcessed() must dedup on messageId
+    // and return before insertCase runs, so this new id must never appear.
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(17), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dup", schemaVersion: "1.0",
+      payload: {
+        id: "99999999-aaaa-4000-8000-000000000c03", tenantId: TENANT, caseNo: "WP-DUP",
+        title: "Should never be inserted", court: "HC Delhi",
+      },
+    });
+    await drain();
+    await q.stop();
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.tenantId, TENANT))));
+    expect(rows.filter((r) => r.id === CASE_2)).toHaveLength(1);
+    expect(rows.some((r) => r.id === "99999999-aaaa-4000-8000-000000000c03")).toBe(false);
   });
 });
 

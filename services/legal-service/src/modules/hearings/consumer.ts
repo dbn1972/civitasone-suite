@@ -33,10 +33,16 @@ export function registerHearingConsumers(queue: Queue): void {
     // same stale-list-cache bug found and fixed for counsel-briefs
     // (fix/legal-wire-real-counsel-brief-endpoint). It's keyed only by
     // limit, not status/filters, so a single invalidateResource covers
-    // every cached limit variant for this tenant.
+    // every cached limit variant for this tenant. Also invalidate "cases":
+    // this handler updates the case's nextDate via caseRepo.updateCase
+    // above, which cases/queries.ts's listCases() returns — a second
+    // independent instance of the identical bug this whole PR is about,
+    // caught by review (a second real-review pass on this same PR flagged
+    // that this exact file has its own second copy of the bug it fixes).
     await Promise.all([
       cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
       cache.invalidateResource(msg.tenantId, "hearings"),
+      cache.invalidateResource(msg.tenantId, "cases"),
     ]);
   });
 
@@ -70,10 +76,13 @@ export function registerHearingConsumers(queue: Queue): void {
       await audit(tx, msg, "adjourn", "hearing", p.hearingId);
     });
     // Adjournment changes the hearing's status/date shown in
-    // listHearingSummaries() — same list-cache gap as hearingCreate above.
+    // listHearingSummaries(), and (via caseRepo.updateCase above) the
+    // case's nextDate shown in listCases() — same list-cache gaps as
+    // hearingCreate above.
     await Promise.all([
       cache.invalidate(cache.makeKey(msg.tenantId, "case", p.caseId)),
       cache.invalidateResource(msg.tenantId, "hearings"),
+      cache.invalidateResource(msg.tenantId, "cases"),
     ]);
   });
 
