@@ -4,7 +4,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { validateCnr } from "./domain.js";
 import { registerCaseBody, type RegisterCaseBody } from "./validators.js";
-import { HttpError } from "../../shared/context.js";
+import { httpError } from "../../shared/context.js";
 
 export type RegisterCaseResult = { accepted: true; caseId: string };
 
@@ -37,7 +37,7 @@ export async function registerCase(ctx: RequestContext, input: RegisterCaseBody)
   try {
     cnrNumber = validateCnr(body.cnrNumber);
   } catch (e) {
-    throw new HttpError(400, "INVALID_CNR", (e as Error).message);
+    throw httpError("INVALID_CNR", (e as Error).message);
   }
   const caseId = deterministicCaseId(ctx.tenantId, cnrNumber);
 

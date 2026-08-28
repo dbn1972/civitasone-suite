@@ -4,7 +4,7 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { deriveHearingId, assertTransition } from "./domain.js";
 import { getHearingById } from "./repo.js";
-import { HttpError } from "../../shared/context.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   scheduleHearingBody, type ScheduleHearingBody,
   adjournHearingBody, type AdjournHearingBody,
@@ -45,6 +45,9 @@ export async function scheduleHearing(
  * silently dead-letters -- confirmed live during the deep-verification pass
  * that produced this fix. The consumer's identical checks remain the
  * authoritative backstop for the race window between this read and the write.
+ * getHearingById is deliberately uncached (this module has no read-through
+ * cache anywhere else either), so a stale entry can't make this pre-check
+ * wrongly pass or wrongly reject.
  */
 export async function adjournHearing(
   ctx: RequestContext, hearingId: string, input: AdjournHearingBody,
@@ -52,20 +55,11 @@ export async function adjournHearing(
   const body = adjournHearingBody.parse(input);
 
   const current = await getHearingById(ctx.tenantId, hearingId);
-  if (!current) throw new HttpError(404, "HEARING_NOT_FOUND", `Hearing not found: ${hearingId}`);
-  if (current.status !== "adjourned") {
-    if (current.version !== body.expectedVersion) {
-      throw new HttpError(
-        409, "VERSION_CONFLICT",
-        `Expected version ${body.expectedVersion}, found ${current.version}`,
-      );
-    }
-    try {
-      assertTransition(current.status, "adjourned");
-    } catch (e) {
-      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
-    }
-  }
+  if (!current) throw httpError("HEARING_NOT_FOUND", `Hearing not found: ${hearingId}`);
+  assertVersionAndTransition(current, body.expectedVersion, "adjourned", assertTransition, {
+    versionConflict: "HEARING_VERSION_CONFLICT",
+    invalidTransition: "HEARING_INVALID_TRANSITION",
+  });
 
   const messageId = deterministicId(
     COURT_NAMESPACE,
@@ -95,20 +89,11 @@ export async function recordHearingOutcome(
   const body = recordHearingOutcomeBody.parse(input);
 
   const current = await getHearingById(ctx.tenantId, hearingId);
-  if (!current) throw new HttpError(404, "HEARING_NOT_FOUND", `Hearing not found: ${hearingId}`);
-  if (current.status !== body.outcome) {
-    if (current.version !== body.expectedVersion) {
-      throw new HttpError(
-        409, "VERSION_CONFLICT",
-        `Expected version ${body.expectedVersion}, found ${current.version}`,
-      );
-    }
-    try {
-      assertTransition(current.status, body.outcome);
-    } catch (e) {
-      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
-    }
-  }
+  if (!current) throw httpError("HEARING_NOT_FOUND", `Hearing not found: ${hearingId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.outcome, assertTransition, {
+    versionConflict: "HEARING_VERSION_CONFLICT",
+    invalidTransition: "HEARING_INVALID_TRANSITION",
+  });
 
   const messageId = deterministicId(
     COURT_NAMESPACE,

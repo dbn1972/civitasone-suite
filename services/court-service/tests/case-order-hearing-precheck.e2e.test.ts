@@ -105,8 +105,8 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
 
     // filed -> disposed directly is illegal (skips registered/admitted/pending/...).
     const illegal = await jpatch(`/v1/court/cases/${caseId}/status`, { toStatus: "disposed", expectedVersion: 1 }, MAKER);
-    expect(illegal.code).toBe(409);
-    expect(illegal.body.error.code).toBe("ILLEGAL_TRANSITION");
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("CASE_INVALID_TRANSITION");
 
     const untouched = await jget(`/v1/court/cases/${caseId}`, MAKER);
     expect(untouched.body.status).toBe("filed");
@@ -145,8 +145,8 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
 
     // held is TERMINAL for this row -- recording another outcome must be an immediate 409.
     const again = await jpatch(`/v1/court/hearings/${hearingId}/outcome`, { outcome: "cancelled", expectedVersion: 2 }, MAKER);
-    expect(again.code).toBe(409);
-    expect(again.body.error.code).toBe("ILLEGAL_TRANSITION");
+    expect(again.code).toBe(422);
+    expect(again.body.error.code).toBe("HEARING_INVALID_TRANSITION");
   });
 
   it("order-issuance: rejects a self-approval attempt immediately (403), not a fake 202 -- the maker-checker integrity crux", async () => {
@@ -176,9 +176,10 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     expect(orderRow.status).toBe("pending_approval");
     expect(orderRow.approvedBy ?? null).toBeNull();
 
-    // A recall attempt on a non-issued order is also an immediate 409.
+    // A recall attempt on a non-issued order is also an immediate rejection
+    // (422 ORDER_INVALID_TRANSITION -- issued->recalled is the only legal edge).
     const badRecall = await jpatch(`/v1/court/orders/${orderId}/recall`, { recallReason: "test", expectedVersion: 2 }, MAKER);
-    expect(badRecall.code).toBe(409);
+    expect(badRecall.code).toBe(422);
 
     // A DIFFERENT actor (the checker) can legitimately approve + issue.
     const realApprove = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 2 }, CHECKER);

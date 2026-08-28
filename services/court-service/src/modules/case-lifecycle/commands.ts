@@ -4,8 +4,8 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { updateCaseStatusBody, type UpdateCaseStatusBody } from "./validators.js";
 import { assertTransition } from "./domain.js";
-import { getCaseById } from "../case-registry/repo.js";
-import { HttpError } from "../../shared/context.js";
+import { getCaseForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 
 export type UpdateCaseStatusResult = { accepted: true; caseId: string };
 
@@ -22,29 +22,22 @@ export type UpdateCaseStatusResult = { accepted: true; caseId: string };
  * signal back to the caller -- confirmed live during the deep-verification
  * pass that produced this fix. The consumer's identical check remains the
  * authoritative backstop for the race window between this read and the
- * eventual write (e.g. a concurrent transition landing in between).
+ * eventual write (e.g. a concurrent transition landing in between). The read
+ * is via getCaseForPrecheck (this module's own repo, uncached) rather than
+ * case-registry's cached getCaseById, so a stale cache entry can't make this
+ * check wrongly pass or wrongly reject.
  */
 export async function updateCaseStatus(
   ctx: RequestContext, caseId: string, input: UpdateCaseStatusBody,
 ): Promise<UpdateCaseStatusResult> {
   const body = updateCaseStatusBody.parse(input);
 
-  const current = await getCaseById(ctx.tenantId, caseId);
-  if (!current) throw new HttpError(404, "CASE_NOT_FOUND", `Case not found: ${caseId}`);
-  if (current.status !== body.toStatus) {
-    // Mirrors the consumer's own order: version check, then transition legality.
-    if (current.version !== body.expectedVersion) {
-      throw new HttpError(
-        409, "VERSION_CONFLICT",
-        `Expected version ${body.expectedVersion}, found ${current.version}`,
-      );
-    }
-    try {
-      assertTransition(current.status, body.toStatus);
-    } catch (e) {
-      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
-    }
-  }
+  const current = await getCaseForPrecheck(ctx.tenantId, caseId);
+  if (!current) throw httpError("CASE_NOT_FOUND", `Case not found: ${caseId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.toStatus, assertTransition, {
+    versionConflict: "CASE_VERSION_CONFLICT",
+    invalidTransition: "CASE_INVALID_TRANSITION",
+  });
 
   const messageId = deterministicId(
     COURT_NAMESPACE,
