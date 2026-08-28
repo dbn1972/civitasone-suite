@@ -22,23 +22,10 @@ import { verifyJwt, type CivitasJwtPayload } from "@civitasone/auth";
 import { pino } from "pino";
 import { configValue } from "./runtime-config.js";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
+import { PUBLIC_PREFIXES } from "./public-prefixes.js";
 
 const log = pino({ name: "gateway-jwt-edge" });
 
-/**
- * Routes that skip JWT edge verification (login, refresh, public install, careers apply,
- * LM-002 public lead capture). Must stay in step with PUBLIC_PREFIXES in app.ts —
- * a path public there but not here would be 401'd by this hook instead.
- */
-const PUBLIC_PREFIXES = [
-  "/api/identity",
-  "/api/v1/install",
-  "/api/v1/careers",
-  "/api/v1/crm/public",
-  // Must stay in sync with PUBLIC_PREFIXES in app.ts — see the comment there
-  // for why (MSME self-signup, deep-verification, 2026-08-27).
-  "/api/v1/tenant/msme-onboard",
-];
 
 /**
  * Fastify preHandler — verifies the JWT signature at the gateway edge.

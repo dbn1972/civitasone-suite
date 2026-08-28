@@ -9,7 +9,7 @@ import { normalizeCnr } from "../case-registry/domain.js";
 import { EVENTS } from "../../topics.js";
 import {
   hashMobile, hashOtp, generateOtp, constantTimeEqualHex, cnrPrefix, toPublicDocket,
-  resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp,
+  resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp, resolveClientIp,
 } from "./domain.js";
 import { publishEstablishmentBody, requestOtpBody, lookupBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -44,7 +44,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Public directory listing (PUBLIC, no auth) ────────────────────────────────
-  app.get("/v1/public/establishments", { config: { public: true } }, async (_req, reply) => {
+  app.get("/v1/court/public/establishments", { config: { public: true } }, async (_req, reply) => {
     const rows = await repo.listActiveEstablishments();
     // Each court's shareable public case-status page link (publish this to citizens).
     const items = rows.map((e) => ({ ...e, publicUrl: publicCaseUrl(e.publicSlug) }));
@@ -52,7 +52,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Request an OTP for a public case-status lookup (PUBLIC) ────────────────────
-  app.post("/v1/public/case-status/otp", { config: { public: true } }, async (req, reply) => {
+  app.post("/v1/court/public/case-status/otp", { config: { public: true } }, async (req, reply) => {
     const body = requestOtpBody.parse(req.body);
 
     // Hash the mobile (PII → peppered hash) before it touches the DB. normalizeMobile
@@ -72,7 +72,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
     }
     // Per-IP limit: stops SMS-bombing arbitrary numbers from one source (the per-mobile
     // cap alone can't, since an attacker can submit unlimited DISTINCT numbers).
-    const ipHash = hashIp(req.ip);
+    const ipHash = hashIp(resolveClientIp(req));
     if ((await repo.countRecentByIpHash(ipHash, sinceIso)) >= OTP_IP_RATE_MAX) {
       throw new HttpError(429, "OTP_RATE_LIMITED", "Too many OTP requests; try again later");
     }
@@ -123,7 +123,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Public case-status lookup (PUBLIC) — gate is per-court configurable ─────
-  app.post("/v1/public/case-status", { config: { public: true } }, async (req, reply) => {
+  app.post("/v1/court/public/case-status", { config: { public: true } }, async (req, reply) => {
     const body = lookupBody.parse(req.body);
     if (!body.cnr) throw new HttpError(400, "VALIDATION_FAILED", "A cnr is required to look up a case");
     const normalizedCnr = normalizeCnr(body.cnr);

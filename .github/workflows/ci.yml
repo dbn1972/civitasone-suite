@@ -130,6 +130,19 @@ jobs:
       PGPORT: '5435'
       PGUSER: civitas
       PGPASSWORD: civitas_test
+      # Gates court-service's public-lookup.e2e.test.ts describe.skipIf -- every
+      # dependency it needs (real Postgres, memory queue, NODE_ENV=test for the
+      # devOtp escape hatch) is already provisioned above for other suites; this
+      # was simply never turned on, so the ONLY test file covering the anonymous
+      # OTP-request and case-status-lookup routes ran in exactly zero CI jobs.
+      # These 3 vars are namespaced to court-service and are no-ops for every
+      # other package's tests.
+      COURT_E2E: '1'
+      # Must equal the literal captchaToken public-lookup.e2e.test.ts sends
+      # ("test-captcha-ok") -- verifyCaptcha() does a strict === compare with
+      # no fallback default, so any other value here 401s that test.
+      COURT_CAPTCHA_DEV_TOKEN: test-captcha-ok
+      COURT_PII_KEY: ci-test-court-pii-key-32-chars-min
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

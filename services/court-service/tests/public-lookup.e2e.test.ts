@@ -78,7 +78,7 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
       await jpost("/v1/court/public-directory", { establishmentCode: e.code, courtName: e.slug, publicSlug: e.slug, accessMode: e.mode }, admTok(e.tenant));
     }
     // wait for directory rows + each tenant's access_mode config to land via the worker
-    await waitFor(async () => ((await jget("/v1/public/establishments")).body.items as any[]).filter((x) => [EST.otp.slug, EST.cap.slug, EST.open.slug].includes(x.publicSlug)).length === 3);
+    await waitFor(async () => ((await jget("/v1/court/public/establishments")).body.items as any[]).filter((x) => [EST.otp.slug, EST.cap.slug, EST.open.slug].includes(x.publicSlug)).length === 3);
     for (const e of [EST.cap, EST.open]) {
       await waitFor(async () => ((await jget(`/v1/court/config/public_lookup`, admTok(e.tenant))).body.items as any[])?.some((c) => c.configKey === "access_mode"));
     }
@@ -101,7 +101,7 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
   });
 
   it("public directory lists courts with a shareable publicUrl and NO tenant_id", async () => {
-    const r = await jget("/v1/public/establishments");
+    const r = await jget("/v1/court/public/establishments");
     expect(r.code).toBe(200);
     const item = (r.body.items as any[]).find((x) => x.publicSlug === EST.otp.slug);
     expect(item.publicUrl).toContain(`/case-status/${EST.otp.slug}`);
@@ -109,10 +109,10 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
   });
 
   it("OTP mode: request OTP → verify → returns docket with NO PII", async () => {
-    const otpRes = await jpost("/v1/public/case-status/otp", { mobile: mob() });
+    const otpRes = await jpost("/v1/court/public/case-status/otp", { mobile: mob() });
     expect(otpRes.code).toBe(200);
     const { challengeId, devOtp } = otpRes.body;
-    const look = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: devOtp });
+    const look = await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: devOtp });
     expect(look.code).toBe(200);
     expect(look.body.accessMode).toBe("otp");
     expect(look.body.case.cnrNumber).toBe(EST.otp.cnr);
@@ -121,41 +121,41 @@ describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captc
   });
 
   it("OTP mode: missing OTP → 400, wrong OTP locks out after 5 tries, single-use", async () => {
-    const miss = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr });
+    const miss = await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr });
     expect(miss.code).toBe(400); // OTP_REQUIRED
 
-    const { challengeId, devOtp } = (await jpost("/v1/public/case-status/otp", { mobile: mob() })).body;
+    const { challengeId, devOtp } = (await jpost("/v1/court/public/case-status/otp", { mobile: mob() })).body;
     for (let i = 0; i < 5; i++) {
-      const wrong = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: "000000" });
+      const wrong = await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: "000000" });
       expect(wrong.code).toBe(401);
     }
-    const locked = await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: devOtp });
+    const locked = await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr, challengeId, otp: devOtp });
     expect(locked.code).toBe(429); // OTP_LOCKED even with the right OTP now
 
     // single-use: a fresh challenge, use it once, then reuse → invalid
-    const c2 = (await jpost("/v1/public/case-status/otp", { mobile: mob() })).body;
-    expect((await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(200);
-    expect((await jpost("/v1/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(401);
+    const c2 = (await jpost("/v1/court/public/case-status/otp", { mobile: mob() })).body;
+    expect((await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(200);
+    expect((await jpost("/v1/court/public/case-status", { cnr: EST.otp.cnr, challengeId: c2.challengeId, otp: c2.devOtp })).code).toBe(401);
   });
 
   it("captcha mode: needs a captcha token, no OTP", async () => {
-    const noCaptcha = await jpost("/v1/public/case-status", { cnr: EST.cap.cnr });
+    const noCaptcha = await jpost("/v1/court/public/case-status", { cnr: EST.cap.cnr });
     expect(noCaptcha.code).toBe(401); // CAPTCHA_INVALID
-    const ok = await jpost("/v1/public/case-status", { cnr: EST.cap.cnr, captchaToken: "test-captcha-ok" });
+    const ok = await jpost("/v1/court/public/case-status", { cnr: EST.cap.cnr, captchaToken: "test-captcha-ok" });
     expect(ok.code).toBe(200);
     expect(ok.body.accessMode).toBe("captcha");
     expect(ok.body.case.cnrNumber).toBe(EST.cap.cnr);
   });
 
   it("open mode: no gate at all", async () => {
-    const r = await jpost("/v1/public/case-status", { cnr: EST.open.cnr });
+    const r = await jpost("/v1/court/public/case-status", { cnr: EST.open.cnr });
     expect(r.code).toBe(200);
     expect(r.body.accessMode).toBe("open");
     expect(r.body.case.cnrNumber).toBe(EST.open.cnr);
   });
 
   it("cross-tenant: an unknown CNR prefix resolves to no court (404)", async () => {
-    const r = await jpost("/v1/public/case-status", { cnr: "ZZZZ990000002026", captchaToken: "test-captcha-ok" });
+    const r = await jpost("/v1/court/public/case-status", { cnr: "ZZZZ990000002026", captchaToken: "test-captcha-ok" });
     expect(r.code).toBe(404); // COURT_NOT_FOUND — no directory entry
   });
 });

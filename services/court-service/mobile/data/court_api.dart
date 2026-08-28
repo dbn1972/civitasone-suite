@@ -13,9 +13,9 @@
 ///     GET  /v1/court/cases/pendency
 ///     GET  /v1/court/cases/overdue
 ///   Public (no auth):
-///     GET  /v1/public/establishments
-///     POST /v1/public/case-status/otp
-///     POST /v1/public/case-status
+///     GET  /v1/court/public/establishments
+///     POST /v1/court/public/case-status/otp
+///     POST /v1/court/public/case-status
 ///
 /// The public endpoints go through the same client; the interceptor simply adds
 /// a token when one is present, which the service ignores for `public: true`
@@ -95,28 +95,28 @@ class CourtApi {
 
   // ─── Public: directory + citizen case-status lookup ──────────────────────────
 
-  /// GET /v1/public/establishments — public court directory (no auth).
+  /// GET /v1/court/public/establishments — public court directory (no auth).
   Future<List<Establishment>> publicEstablishments() async {
     final res = await _client
-        .get<Map<String, dynamic>>('/v1/public/establishments');
+        .get<Map<String, dynamic>>('/v1/court/public/establishments');
     final items = (res.data?['items'] as List<dynamic>?) ?? const [];
     return items
         .map((e) => Establishment.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  /// POST /v1/public/case-status/otp — request an SMS OTP for a court that
+  /// POST /v1/court/public/case-status/otp — request an SMS OTP for a court that
   /// gates lookups with OTP. [mobile] is PII and is only transmitted, never
   /// stored client-side.
   Future<OtpChallenge> requestOtp({required String mobile}) async {
     final res = await _client.post<Map<String, dynamic>>(
-      '/v1/public/case-status/otp',
+      '/v1/court/public/case-status/otp',
       data: {'mobile': mobile},
     );
     return OtpChallenge.fromJson(res.data ?? const {});
   }
 
-  /// POST /v1/public/case-status — look up a case docket by CNR (no PII in the
+  /// POST /v1/court/public/case-status — look up a case docket by CNR (no PII in the
   /// response). Supply [challengeId] + [otp] for OTP-gated courts, or
   /// [captchaToken] for captcha-gated courts; open courts need neither. An
   /// optional [slug] disambiguates the court when the CNR prefix is ambiguous.
@@ -128,7 +128,7 @@ class CourtApi {
     String? captchaToken,
   }) async {
     final res = await _client.post<Map<String, dynamic>>(
-      '/v1/public/case-status',
+      '/v1/court/public/case-status',
       data: {
         'cnr': cnr,
         if (slug != null && slug.isNotEmpty) 'slug': slug,
