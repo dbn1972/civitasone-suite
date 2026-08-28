@@ -75,6 +75,8 @@ export interface ActionButtonProps {
   reasonLabel?: string;
   /** Forwarded to ConfirmDialog — see its doc comment. Defaults to 1 (non-empty). */
   minReasonLength?: number;
+  /** Forwarded to ConfirmDialog — see its doc comment. Unset by default (no cap). */
+  maxReasonLength?: number;
 }
 
 export function ActionButton({
@@ -91,6 +93,7 @@ export function ActionButton({
   requireReason = false,
   reasonLabel,
   minReasonLength,
+  maxReasonLength,
 }: ActionButtonProps) {
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm,
@@ -117,6 +120,7 @@ export function ActionButton({
         requireReason={requireReason}
         reasonLabel={reasonLabel}
         {...(minReasonLength !== undefined ? { minReasonLength } : {})}
+        {...(maxReasonLength !== undefined ? { maxReasonLength } : {})}
         busy={busy}
         errorMessage={error}
         onConfirm={confirm}

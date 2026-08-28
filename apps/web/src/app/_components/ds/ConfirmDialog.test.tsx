@@ -112,6 +112,26 @@ describe("ConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledWith("Approved by DDO");
   });
 
+  it("applies maxReasonLength as the textarea's native maxLength", () => {
+    render(<ConfirmDialog {...baseProps} requireReason maxReasonLength={10} />);
+    expect(screen.getByLabelText("Reason")).toHaveAttribute("maxlength", "10");
+  });
+
+  it("shows a character-count hint when maxReasonLength is set", () => {
+    render(<ConfirmDialog {...baseProps} requireReason maxReasonLength={10} />);
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "12345" } });
+    expect(screen.getByText(/5\/10 characters/)).toBeInTheDocument();
+  });
+
+  it("keeps confirm disabled if a reason somehow exceeds maxReasonLength", () => {
+    // Defensive check even though the native maxLength attribute normally
+    // prevents this via typing/paste in a real browser.
+    render(<ConfirmDialog {...baseProps} requireReason maxReasonLength={5} />);
+    const textarea = screen.getByLabelText("Reason");
+    fireEvent.change(textarea, { target: { value: "this is way too long" } });
+    expect(screen.getByText("Confirm")).toBeDisabled();
+  });
+
   it("displays error message in alert region", () => {
     render(<ConfirmDialog {...baseProps} errorMessage="Server error" />);
     expect(screen.getByRole("alert")).toHaveTextContent("Server error");
