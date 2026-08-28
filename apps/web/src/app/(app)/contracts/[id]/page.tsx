@@ -9,7 +9,7 @@ import { MilestoneActions } from "./MilestoneActions";
 import { BondActions } from "./BondActions";
 import { ObligationsPanel } from "./ObligationsPanel";
 
-function field(data: Record<string, unknown>, ...keys: string[]): string {
+export function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const v = data[key];
     if (typeof v === "string" && v.length > 0) return v;
@@ -18,27 +18,29 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
   return "—";
 }
 
-export default async function ContractDetailPage({ params }: { params: { id: string } }) {
-  const [{ data: contract, source }, milestonesRes, bondsRes, obligationsRes] = await Promise.all([
-    getContractById(params.id),
-    getContractMilestones(params.id),
-    getContractBonds(params.id),
-    getContractObligations(params.id),
-  ]);
+export type ContractDisplayFields = {
+  title: string;
+  contractNo: string;
+  parties: string;
+  contractType: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  statusLower: string;
+  statusCls: "good" | "bad" | "mut";
+  description: string;
+  valueDisplay: string;
+  dept: string;
+  amountMinor: number | string | undefined;
+};
 
-  if (!contract) {
-    return (
-      <main className="wrap">
-        <Link href="/contracts/list" className="back">← Back</Link>
-        <EmptyState
-          icon="🔍"
-          title="Contract not found"
-          message="This contract may have been removed or the ID is invalid."
-        />
-      </main>
-    );
-  }
-
+// Pure derivation of everything the page renders from the raw contract
+// record contract-service returns. Extracted (and exported) specifically so
+// this — the exact logic that had multiple field-name mismatches against the
+// real backend response (see fix/contract-frontend-field-mapping) — is
+// directly unit-testable against realistic API payloads without needing to
+// render the async server component itself.
+export function deriveContractDisplayFields(contract: Record<string, unknown>): ContractDisplayFields {
   const title = field(contract, "title", "name", "contractNo");
   const contractNo = field(contract, "contractNo", "contract_no", "number");
   // contract-service returns the vendor as a raw `vendorId` (uuid) with no
@@ -73,13 +75,48 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   // it's forwarded as-is and never used in arithmetic. valueMinor now really
   // is populated (a numeric string, per the live API response), so keep it as
   // a string rather than coercing through Number(), which would silently
-  // round any value above Number.MAX_SAFE_INTEGER paise.
+  // round any value above Number.MAX_SAFE_INTEGER paise. Same accepted shape
+  // as formatMoney's own integer-string check (a leading "+" is valid there
+  // too) -- Value and the eOffice note's amount must agree on what counts as
+  // a usable numeric string, or the two could silently disagree.
   const amountMinor: number | string | undefined =
     typeof rawValue === "number"
       ? rawValue
-      : typeof rawValue === "string" && /^-?\d+$/.test(rawValue.trim())
+      : typeof rawValue === "string" && /^[+-]?\d+$/.test(rawValue.trim())
         ? rawValue.trim()
         : undefined;
+
+  return {
+    title, contractNo, parties, contractType, startDate, endDate,
+    status, statusLower, statusCls, description, valueDisplay, dept, amountMinor,
+  };
+}
+
+export default async function ContractDetailPage({ params }: { params: { id: string } }) {
+  const [{ data: contract, source }, milestonesRes, bondsRes, obligationsRes] = await Promise.all([
+    getContractById(params.id),
+    getContractMilestones(params.id),
+    getContractBonds(params.id),
+    getContractObligations(params.id),
+  ]);
+
+  if (!contract) {
+    return (
+      <main className="wrap">
+        <Link href="/contracts/list" className="back">← Back</Link>
+        <EmptyState
+          icon="🔍"
+          title="Contract not found"
+          message="This contract may have been removed or the ID is invalid."
+        />
+      </main>
+    );
+  }
+
+  const {
+    title, contractNo, parties, contractType, startDate, endDate,
+    status, statusLower, statusCls, description, valueDisplay, dept, amountMinor,
+  } = deriveContractDisplayFields(contract);
 
   return (
     <main className="wrap" aria-labelledby="page-heading">
