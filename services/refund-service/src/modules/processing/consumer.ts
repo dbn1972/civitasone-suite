@@ -1,14 +1,14 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { db } from "../../shared/db.js";
+import { db, type ScopedTx } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateCacheSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
-import { isFullyApproved } from "./domain.js";
+import { isFullyApproved, getNextApprovalLevel } from "./domain.js";
 
 const log = pino({ name: "refund.processing.consumer" });
 
@@ -16,13 +16,53 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
 }
 
+/**
+ * SEQ-2 (TOCTOU): processing/routes.ts already checks this via
+ * assertNextApprovalLevel, but only as a SELECT at request time — the actual
+ * write happens later, asynchronously, in this consumer. Two approve/reject/
+ * return calls at the same level, submitted close enough together that both
+ * pass the route-level check before either command is consumed, would
+ * otherwise both be applied here with nothing to stop them (no re-check, no
+ * DB uniqueness on (request, level, "approved") until this same PR's
+ * migration 0002). This re-verifies the expected level inside the same
+ * transaction as the write, immediately before it, mirroring the
+ * findActiveByRequestTx pattern already used in reconciliation/consumer.ts
+ * for the double-disbursement guard. Message processing for a single topic
+ * is strictly sequential in this service (one worker instance, one poll
+ * loop per topic — see SqsQueue.pollTopic), so a check-then-write inside one
+ * transaction is race-free for the current deployment topology; a stale/
+ * duplicate action is logged and skipped rather than silently re-applied.
+ * Live-verified: two concurrent level-1 approve calls for the same request
+ * both return 202, but exactly one "approved" row is inserted and the
+ * other is logged as "stale approval-sequence action ignored".
+ */
+async function checkExpectedLevel(
+  requestId: string,
+  tenantId: string,
+  level: number,
+  tx: ScopedTx,
+): Promise<boolean> {
+  const maxApprovedLevel = await repo.getMaxApprovalLevelTx(tx, requestId, tenantId);
+  const expectedLevel = getNextApprovalLevel(maxApprovedLevel);
+  if (expectedLevel === null || level !== expectedLevel) {
+    log.warn(
+      { requestId, attemptedLevel: level, expectedLevel },
+      "stale approval-sequence action ignored: a concurrent action already changed the expected level",
+    );
+    return false;
+  }
+  return true;
+}
+
 export function registerProcessingConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
   queue.subscribe(COMMANDS.reviewRequest, async (msg) => {
     const p = msg.payload as { requestId: string; tenantId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // CACHE-2: no cache call inside the transaction — see
+    // shared/infra.ts's invalidateCacheSafely doc comment.
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "under_review", msg.actorId);
       await enqueue(tx, {
         topic: EVENTS.requestReviewed,
@@ -37,10 +77,11 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_request",
         resourceId: p.requestId,
       });
-      // CACHE-1: see requests/consumer.ts — every consumer that mutates a
-      // request's status must invalidate the same GET /:id read-cache entry.
-      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
+      return true;
     });
+    if (changed) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
+    }
   });
 
   queue.subscribe(COMMANDS.approveRequest, async (msg) => {
@@ -51,8 +92,10 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks?: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+
       await repo.insertApproval(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -86,14 +129,12 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
-      // CACHE-1: only isFullyApproved(level) actually changes the request's
-      // own status, but a level-1-only approval still changes visible state
-      // (a new row under GET /processing/approvals) — invalidating
-      // unconditionally is cheap and avoids having to reason about which
-      // partial-approval cases do or don't touch the cached request view.
-      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
+      return true;
     });
-    log.info({ id: p.id, requestId: p.requestId, level: p.level }, "approval recorded");
+    if (changed) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
+      log.info({ id: p.id, requestId: p.requestId, level: p.level }, "approval recorded");
+    }
   });
 
   queue.subscribe(COMMANDS.rejectRequest, async (msg) => {
@@ -104,8 +145,10 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+
       await repo.insertApproval(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -132,8 +175,11 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
-      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
+      return true;
     });
+    if (changed) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
+    }
   });
 
   queue.subscribe(COMMANDS.returnRequest, async (msg) => {
@@ -144,8 +190,10 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+
       await repo.insertApproval(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -158,6 +206,8 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      // SEQ-1: start the next review round clean — see repo.supersedeApprovals.
+      await repo.supersedeApprovals(tx, p.requestId, msg.tenantId, msg.actorId);
       await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "requested", msg.actorId);
       await enqueue(tx, {
         topic: EVENTS.requestReturned,
@@ -172,7 +222,10 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         resourceType: "refund_approval",
         resourceId: p.id,
       });
-      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
+      return true;
     });
+    if (changed) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
+    }
   });
 }

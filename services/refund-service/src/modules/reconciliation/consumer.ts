@@ -4,7 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateCacheSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
@@ -26,13 +26,12 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       bankAccountDetails: { accountNumber: string; ifscCode: string; accountHolderName: string; bankName?: string };
       disbursedAmountMinor: string;
     };
-    // NOTE: `inserted` tracks whether this invocation actually created the
-    // disbursement row, so the success log below (only useful when something
-    // really happened) doesn't fire on the already-processed or duplicate
-    // early-return paths — the pre-existing pattern in this file logged
-    // "disbursement initiated" unconditionally after the transaction even
-    // when markProcessed() short-circuited it, which the new duplicate-skip
-    // path below would otherwise have made actively misleading.
+    // `inserted` does double duty: gates the "disbursement initiated" success
+    // log (only true when something really happened — see the earlier
+    // "misleading log" fix below) AND, per CACHE-2, gates the cache
+    // invalidation call made AFTER this transaction resolves (no cache call
+    // inside the transaction at all any more — see shared/infra.ts's
+    // invalidateCacheSafely doc comment for why).
     const inserted = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
 
@@ -84,28 +83,31 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceType: "refund_disbursement",
         resourceId: p.id,
       });
-      // CACHE-1: see requests/consumer.ts — this changes the request's own
-      // status (-> "processing"), so the cached GET /:id view must be
-      // invalidated. Not called on the duplicate-skip path above since
-      // nothing changed there.
-      await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, p.requestId));
       return true;
     });
     if (inserted) {
+      // CACHE-1: this changes the request's own status (-> "processing"), so
+      // the cached GET /:id view must be invalidated. Not called on the
+      // duplicate-skip path above since nothing changed there.
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
       log.info({ id: p.id, requestId: p.requestId }, "disbursement initiated");
     }
   });
 
   queue.subscribe(COMMANDS.completeDisbursement, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; disbursementRef: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // CACHE-2: `requestId` is set from inside the transaction (it's only
+    // known once the disbursement row is looked up there), but the actual
+    // cache call happens after the transaction resolves — see
+    // shared/infra.ts's invalidateCacheSafely doc comment.
+    let requestId: string | null = null;
+    const processed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId);
       const disb = await repo.findById(p.id, msg.tenantId);
       if (disb) {
         await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "refunded", msg.actorId);
-        // CACHE-1: see requests/consumer.ts.
-        await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, disb.requestId));
+        requestId = disb.requestId;
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementCompleted,
@@ -120,20 +122,26 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceType: "refund_disbursement",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id }, "disbursement completed");
+    if (requestId) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, requestId), log);
+    }
+    if (processed) {
+      log.info({ id: p.id }, "disbursement completed");
+    }
   });
 
   queue.subscribe(COMMANDS.failDisbursement, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    let requestId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.markFailed(tx, p.id, msg.tenantId, p.reason, msg.actorId);
       const disb = await repo.findById(p.id, msg.tenantId);
       if (disb) {
         await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "failed", msg.actorId);
-        // CACHE-1: see requests/consumer.ts.
-        await cache.invalidateAfterCommit(tx, reqRepo.cacheKey(msg.tenantId, disb.requestId));
+        requestId = disb.requestId;
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementFailed,
@@ -149,13 +157,24 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (requestId) {
+      await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, requestId), log);
+    }
   });
 
   queue.subscribe(COMMANDS.reconcile, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.reconcile(tx, p.id, msg.tenantId, msg.actorId);
+    const reconciled = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      // FIN-5 / TOCTOU: repo.reconcile's WHERE clause now re-asserts
+      // reconciledAt IS NULL, so a second (concurrent or redelivered) call
+      // for an already-reconciled disbursement returns false here instead
+      // of silently overwriting reconciledAt/reconciledBy a second time.
+      const ok = await repo.reconcile(tx, p.id, msg.tenantId, msg.actorId);
+      if (!ok) {
+        log.warn({ id: p.id }, "duplicate reconcile ignored: disbursement was already reconciled");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.reconciled,
         eventType: EVENTS.reconciled,
@@ -169,7 +188,10 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         resourceType: "refund_disbursement",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id }, "disbursement reconciled");
+    if (reconciled) {
+      log.info({ id: p.id }, "disbursement reconciled");
+    }
   });
 }

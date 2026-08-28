@@ -4,7 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateCacheSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { generateRequestNumber } from "./domain.js";
@@ -82,10 +82,13 @@ export function registerRequestConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitRequest, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // CACHE-2: no cache call inside the transaction at all any more — see
+    // shared/infra.ts's invalidateCacheSafely doc comment for why. `changed`
+    // just records whether the write actually happened.
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.requestSubmitted,
         eventType: EVENTS.requestSubmitted,
@@ -99,25 +102,19 @@ export function registerRequestConsumers(rawQueue: Queue): void {
         resourceType: "refund_request",
         resourceId: p.id,
       });
-      // CACHE-1: @civitasone/cache's own contract is "the consumer invalidates
-      // here" (read-through on the route, invalidate-after-commit on the
-      // consumer) — nothing in this service did that at all, so GET
-      // /v1/refund/requests/:id could serve a stale status for up to
-      // CACHE_TTL (default 60s) after any mutation. `invalidateAfterCommit`
-      // is the package's documented call for exactly this (falls back to an
-      // immediate invalidate on this DB layer, which has no commit hooks yet
-      // — an accepted, self-healing-within-TTL trade-off per its own doc
-      // comment, not something introduced by this fix).
-      await cache.invalidateAfterCommit(tx, repo.cacheKey(msg.tenantId, p.id));
+      return true;
     });
+    if (changed) {
+      await invalidateCacheSafely(repo.cacheKey(msg.tenantId, p.id), log);
+    }
   });
 
   queue.subscribe(COMMANDS.withdrawRequest, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const changed = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
-      if (!ok) return;
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.requestWithdrawn,
         eventType: EVENTS.requestWithdrawn,
@@ -131,7 +128,10 @@ export function registerRequestConsumers(rawQueue: Queue): void {
         resourceType: "refund_request",
         resourceId: p.id,
       });
-      await cache.invalidateAfterCommit(tx, repo.cacheKey(msg.tenantId, p.id));
+      return true;
     });
+    if (changed) {
+      await invalidateCacheSafely(repo.cacheKey(msg.tenantId, p.id), log);
+    }
   });
 }

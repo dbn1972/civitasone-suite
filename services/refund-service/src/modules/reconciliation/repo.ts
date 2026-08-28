@@ -1,4 +1,4 @@
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, isNull } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { refundDisbursements, type DisbursementRow, type DisbursementInsert } from "./schema.js";
 
@@ -97,6 +97,20 @@ export async function markFailed(
   return result.length > 0;
 }
 
+/**
+ * FIN-5 / TOCTOU: reconciliation/routes.ts already checks `reconciledAt` is
+ * null before publishing, but that's a SELECT at request time, not an
+ * atomic precondition on the write itself. Two reconcile calls submitted
+ * close enough together that both pass the route-level check before either
+ * command is consumed would previously both have matched this UPDATE's
+ * `id`+`tenantId`-only WHERE clause and both "succeeded" — the exact
+ * silent-overwrite this function's route-level guard claims to prevent,
+ * just requiring concurrent requests instead of sequential ones. Re-asserting
+ * `reconciledAt IS NULL` in the WHERE clause makes the DB itself the source
+ * of truth: only the first UPDATE to actually reach Postgres can match, and
+ * the caller (reconciliation/consumer.ts) uses the returned boolean to skip
+ * the event-enqueue/audit-write on a no-op second call.
+ */
 export async function reconcile(
   tx: ScopedTx,
   id: string,
@@ -111,7 +125,11 @@ export async function reconcile(
       updatedAt: new Date(),
       version: sql`${refundDisbursements.version} + 1`,
     })
-    .where(and(eq(refundDisbursements.id, id), eq(refundDisbursements.tenantId, tenantId)))
+    .where(and(
+      eq(refundDisbursements.id, id),
+      eq(refundDisbursements.tenantId, tenantId),
+      isNull(refundDisbursements.reconciledAt),
+    ))
     .returning({ id: refundDisbursements.id });
   return result.length > 0;
 }
