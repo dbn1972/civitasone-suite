@@ -9,7 +9,7 @@ import { normalizeCnr } from "../case-registry/domain.js";
 import { EVENTS } from "../../topics.js";
 import {
   hashMobile, hashOtp, generateOtp, constantTimeEqualHex, cnrPrefix, toPublicDocket,
-  resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp,
+  resolveAccessMode, verifyCaptcha, publicCaseUrl, hashIp, resolveClientIp,
 } from "./domain.js";
 import { publishEstablishmentBody, requestOtpBody, lookupBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -72,7 +72,7 @@ export async function publicLookupRoutes(app: FastifyInstance): Promise<void> {
     }
     // Per-IP limit: stops SMS-bombing arbitrary numbers from one source (the per-mobile
     // cap alone can't, since an attacker can submit unlimited DISTINCT numbers).
-    const ipHash = hashIp(req.ip);
+    const ipHash = hashIp(resolveClientIp(req));
     if ((await repo.countRecentByIpHash(ipHash, sinceIso)) >= OTP_IP_RATE_MAX) {
       throw new HttpError(429, "OTP_RATE_LIMITED", "Too many OTP requests; try again later");
     }

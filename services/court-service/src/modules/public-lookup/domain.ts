@@ -13,6 +13,7 @@
  *     avoid timing side-channels.
  */
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import type { FastifyRequest } from "fastify";
 
 /**
  * Pepper mixed into the mobile hash so a leaked DB alone cannot be brute-forced back
@@ -209,4 +210,43 @@ export function publicCaseUrl(slug: string): string {
  *  IP is never stored. */
 export function hashIp(ip: string | undefined): string {
   return createHash("sha256").update(`${OTP_PEPPER}:ip:${ip ?? "unknown"}`).digest("hex");
+}
+
+/**
+ * The client IP for per-IP OTP rate limiting, trusting `x-forwarded-for` only as far
+ * as TRUSTED_PROXY_HOPS says to.
+ *
+ * court-service's Fastify instance is built WITHOUT `trustProxy` (see app.ts), so
+ * `req.ip` is always the immediate socket peer. Once this route is reachable through
+ * the gateway (which is the whole point of exposing it), every anonymous citizen's
+ * request arrives from the SAME peer -- the gateway process -- which would collapse
+ * hashIp(req.ip) into one shared bucket and let 20 total requests from anyone,
+ * anywhere, trip OTP_IP_RATE_MAX for every citizen nationwide (a self-inflicted DoS
+ * on the exact feature this is meant to protect). Mirrors
+ * crm-service/src/modules/leads/public-capture-rate-limit.ts's resolveClientIp
+ * (same threat model: LM-002 public lead capture, also gateway-fronted) --
+ * see that file's header comment for the full trust-chain reasoning. Reading the
+ * client-controlled list[0] instead of the trusted-proxy-appended last hop is
+ * exactly how a caller could mint unlimited fake "IPs" and walk past the limiter,
+ * so this is intentionally NOT a simpler "just take the first entry" parse.
+ *
+ *   TRUSTED_PROXY_HOPS = 0 (default)  ignore the header, use the socket peer.
+ *   TRUSTED_PROXY_HOPS = n            trust the last n entries as proxy-appended.
+ *
+ * A deployment behind the CivitasOne gateway sets TRUSTED_PROXY_HOPS=1.
+ */
+export function resolveClientIp(req: Pick<FastifyRequest, "ip" | "headers">): string {
+  const raw = Number(process.env.TRUSTED_PROXY_HOPS);
+  const hops = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+  if (hops === 0) return req.ip;
+
+  const header = req.headers["x-forwarded-for"];
+  const joined = Array.isArray(header) ? header.join(",") : header;
+  if (typeof joined !== "string" || joined.trim() === "") return req.ip;
+
+  const list = joined.split(",").map((v) => v.trim()).filter((v) => v !== "");
+  if (list.length === 0 || list.length < hops) return req.ip;
+
+  const index = list.length - hops;
+  return list[index] ?? req.ip;
 }

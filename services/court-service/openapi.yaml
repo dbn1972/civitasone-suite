@@ -1651,7 +1651,7 @@ paths:
                 accessMode: { type: string, enum: [otp, captcha, open] }
       responses:
         '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
-  /v1/public/establishments:
+  /v1/court/public/establishments:
     get:
       tags: [public-lookup]
       summary: Public directory listing
@@ -1668,7 +1668,7 @@ paths:
                   items: { type: array, items: { $ref: '#/components/schemas/Establishment' } }
                   count: { type: integer }
                   source: { type: string, enum: [public] }
-  /v1/public/case-status/otp:
+  /v1/court/public/case-status/otp:
     post:
       tags: [public-lookup]
       summary: Request an OTP for a public case-status lookup
@@ -1694,7 +1694,7 @@ paths:
                   expiresInSec: { type: integer }
                   devOtp: { type: string, description: "test-only" }
         '429': { $ref: '#/components/responses/ErrorResponse' }
-  /v1/public/case-status:
+  /v1/court/public/case-status:
     post:
       tags: [public-lookup]
       summary: Public case-status lookup (per-court configurable gate — otp|captcha|open)

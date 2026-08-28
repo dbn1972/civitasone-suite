@@ -190,6 +190,64 @@ describe("LM-002: public lead capture is reachable without a token", () => {
   });
 });
 
+describe("court public case-status lookup is reachable without a token", () => {
+  // Before /api/v1/court/public was allow-listed here: an anonymous POST to
+  // /api/v1/court/public/case-status/otp got a 404 (no gateway route matched
+  // /api/v1/public/... at all) or a 401 (matched /api/v1/court but rejected by
+  // this gateway's own bearer-token pre-check) -- either way, unreachable by the
+  // only kind of caller this route exists for: a citizen with no account.
+  it("does not 401 an anonymous POST to /api/v1/court/public/case-status/otp", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/court/public/case-status/otp",
+      payload: { mobile: "9876543210" },
+    });
+    expect(res.statusCode).not.toBe(401);
+  });
+
+  // The allow-list is the /public sub-tree only. Specifically checks the ONE
+  // adjacent route most likely to be swept in by a naive prefix match:
+  // /api/v1/court/public-directory is the ADMIN publish endpoint, one character
+  // away from "/api/v1/court/public" with no separating slash -- a
+  // `pathname.startsWith(prefix)` check (instead of `startsWith(prefix + "/")`)
+  // would leak it to anonymous callers.
+  it("still requires a token for authenticated court routes, including the adjacent public-directory admin route", async () => {
+    const app = await buildApp();
+    for (const url of [
+      "/api/v1/court/cases",
+      "/api/v1/court/public-directory",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(401);
+    }
+  });
+
+  it("forwards the observed client IP so the upstream can rate-limit per IP", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/court/public/case-status/otp",
+      payload: { mobile: "9876543210" },
+    });
+    // Without this the upstream sees only the gateway's address for every citizen,
+    // which collapses court-service's per-IP OTP rate limit into one shared bucket
+    // -- a self-inflicted DoS on the exact feature this allow-list exists to expose.
+    expect(lastUpstreamHeaders["x-forwarded-for"]).toBeDefined();
+  });
+
+  it("overwrites a client-supplied x-forwarded-for rather than trusting it", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/court/public/case-status/otp",
+      headers: { "x-forwarded-for": "1.2.3.4" },
+      payload: { mobile: "9876543210" },
+    });
+    expect(lastUpstreamHeaders["x-forwarded-for"]).not.toContain("1.2.3.4");
+  });
+});
+
 describe("MSME self-signup (deep-verification, 2026-08-27): public onboarding is reachable without a token", () => {
   it("does not 401 an anonymous POST to /api/v1/tenant/msme-onboard", async () => {
     // A small-business owner self-registering has no bearer token by definition --
