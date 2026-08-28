@@ -2,7 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveEvidenceId } from "./domain.js";
+import { deriveEvidenceId, submissionDisambiguator } from "./domain.js";
 import {
   submitEvidenceBody, type SubmitEvidenceBody,
   ruleEvidenceBody, type RuleEvidenceBody,
@@ -11,12 +11,14 @@ import {
 export type SubmitEvidenceResult = { accepted: true; evidenceId: string };
 export type RuleEvidenceResult = { accepted: true; evidenceId: string };
 
-/** Submit a piece of evidence/exhibit (§22). Idempotent per (case + exhibit/title). */
+/** Submit a piece of evidence/exhibit (§22). Idempotent per (case + exhibit content). */
 export async function submitEvidence(
   ctx: RequestContext, caseId: string, input: SubmitEvidenceBody,
 ): Promise<SubmitEvidenceResult> {
   const body = submitEvidenceBody.parse(input);
-  const evidenceId = deriveEvidenceId(ctx.tenantId, caseId, body.exhibitNumber ?? body.title, 0);
+  const evidenceId = deriveEvidenceId(
+    ctx.tenantId, caseId, body.exhibitNumber ?? body.title, submissionDisambiguator(body),
+  );
 
   await queue.publish(COMMANDS.submitEvidence, {
     messageId: evidenceId,

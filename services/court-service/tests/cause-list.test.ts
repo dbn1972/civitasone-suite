@@ -35,6 +35,11 @@ vi.mock("../src/modules/cause-list/repo.js", () => ({
     const code = (err as { code?: string } | null)?.code;
     return code === "23505" || code === "23P01";
   },
+  // real semantics: 23503 foreign-key violation (e.g. a nonexistent caseId)
+  isForeignKeyViolation: (err: unknown) => {
+    const code = (err as { code?: string } | null)?.code;
+    return code === "23503";
+  },
 }));
 
 vi.mock("../src/topics.js", () => ({
@@ -123,6 +128,18 @@ describe("cause-list consumer", () => {
     registerCauseListConsumers(register);
     await expect(deliver("court.causelist.list_case", listCaseMsg("l1")))
       .rejects.toThrow(/CAUSELIST_SLOT_CONFLICT/);
+  });
+
+  // Backstop for the rare TOCTOU race with the command layer's synchronous
+  // existence pre-check (commands.ts) — the common case is now an honest 404
+  // there, before this insert ever runs.
+  it("maps a nonexistent caseId (23503 FK violation) to CAUSELIST_CASE_NOT_FOUND", async () => {
+    currentList = { id: "l1", listDate: "2026-07-11", courtId: randomUUID() };
+    insertItemImpl = async () => { throw Object.assign(new Error("foreign_key_violation"), { code: "23503" }); };
+    const { register, deliver } = makeHarness();
+    registerCauseListConsumers(register);
+    await expect(deliver("court.causelist.list_case", listCaseMsg("l1")))
+      .rejects.toThrow(/CAUSELIST_CASE_NOT_FOUND/);
   });
 
   it("lists a case onto a cause-list and emits causeListItemAdded + audit", async () => {

@@ -3,9 +3,12 @@ import { z } from "zod";
 export const caseIdParam = z.object({ id: z.string().uuid() });
 export const evidenceIdParam = z.object({ id: z.string().uuid() });
 
-/** Submit a piece of evidence/exhibit on a case (§22). */
+/**
+ * Submit a piece of evidence/exhibit on a case (§22). The case is the `:id` path
+ * segment (see caseIdParam / evidenceRoutes) — deliberately not a body field, so
+ * there is exactly one, authoritative source for it.
+ */
 export const submitEvidenceBody = z.object({
-  caseId:        z.string().uuid(),
   filingId:      z.string().uuid().optional(),
   exhibitNumber: z.string().trim().max(32).optional(),
   title:         z.string().trim().min(1).max(500),

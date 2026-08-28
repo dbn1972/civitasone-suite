@@ -10,6 +10,8 @@
  * receipted amount — the service rejects a bare status flip with no proof of
  * payment, and separately verifies the receipted amount matches the fee
  * recorded on the copy (a mismatch is rejected, not silently accepted).
+ * Rejecting a copy REQUIRES a remarks reason — an adverse, irreversible
+ * decision on a citizen's application always carries a reason on record.
  */
 import { useCallback, useId, useRef, useState } from "react";
 import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
@@ -244,6 +246,7 @@ function CopyRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const paymentRefRef = useRef<HTMLInputElement>(null);
+  const remarksRef = useRef<HTMLInputElement>(null);
   const paymentRefId = useId();
   const receiptMinorId = useId();
   const deliveryModeId = useId();
@@ -254,6 +257,11 @@ function CopyRow({
     if (target === "fee_paid" && (!paymentRef.trim() || !receiptMinor.trim())) {
       setError("Enter both the payment reference and the receipted amount to record fee_paid.");
       paymentRefRef.current?.focus();
+      return;
+    }
+    if (target === "rejected" && !remarks.trim()) {
+      setError("Enter a reason for rejecting this certified copy.");
+      remarksRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -363,10 +371,12 @@ function CopyRow({
           )}
           <div style={{ display: "grid", gap: 4 }}>
             <label htmlFor={remarksId} style={{ fontSize: 12.5, fontWeight: 600 }}>
-              Remarks (optional)
+              Remarks {mode === "rejected" ? <span aria-hidden="true">*</span> : "(optional)"}
             </label>
             <input
               id={remarksId}
+              ref={remarksRef}
+              placeholder={mode === "rejected" ? "Reason for rejecting this application" : undefined}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               style={fieldStyle}

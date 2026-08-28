@@ -47,6 +47,13 @@ export function isTerminal(status: string): boolean {
  * re-submitting the SAME direction is idempotent end-to-end. `orderId` may be
  * absent (a direction not tied to a specific order); a stable empty marker keeps
  * the derivation total.
+ *
+ * `seq` is NOT a manually-incremented counter — the command layer (commands.ts)
+ * computes it as a hash of the direction's meaningful content (direction text,
+ * responsibleAuthority, dueDate, ...), so an identical resubmission (a genuine
+ * retry) collapses to the same id while a genuinely different direction — even on
+ * the same case/order — gets a distinct one. See directionContentSeq in
+ * compliance/commands.ts.
  */
 export function deriveDirectionId(
   tenantId: string, caseId: string, orderId: string | undefined, seq: number,

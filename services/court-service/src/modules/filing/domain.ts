@@ -8,14 +8,54 @@
  * config/wire value to an exact bigint, rejecting unsafe (already-lossy) JSON
  * numbers — see packages/schemas/src/money.ts.
  */
+import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { parseMinor } from "@civitasone/schemas";
 
 /** A filing id is deterministic on (tenant + case + type + idempotencyKey) so a
- *  redelivery of the SAME submit is idempotent end-to-end; a case may have many
- *  filings, so the caller supplies a fresh idempotencyKey per submit. */
+ *  redelivery of the SAME submit is idempotent end-to-end. idempotencyKey is
+ *  normally hashFilingContent(...) below (a content hash of the submitted
+ *  fields), so a genuine client retry - same case, same filing content - always
+ *  derives the SAME key and therefore the same filingId, and dedupes via
+ *  onConflictDoNothing; a caller with its own stronger idempotency key (e.g. a
+ *  client-supplied request id) may still pass one directly instead. */
 export function deriveFilingId(tenantId: string, caseId: string, filingType: string, idempotencyKey: string): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:filing:${caseId}:${filingType}:${idempotencyKey}`);
+}
+
+/**
+ * Content-derived idempotency key for a filing submission - a SHA-256 hex digest
+ * over every field that distinguishes one filing from another (the full
+ * submitFilingBody shape: filingType, filingFeeMinor, courtFeeMinor). An identical
+ * resubmission (a client double-click or a network-timeout retry) hashes to the
+ * SAME key and therefore the same filingId, so it dedupes instead of creating a
+ * second, fee-bearing row.
+ *
+ * The fields are combined via JSON.stringify (not a plain string join): each
+ * element is individually quoted/escaped, so a filingType value can never shift
+ * across a field boundary and collide with a differently-split input.
+ *
+ * USED ONLY AS A FALLBACK (see submitFiling in commands.ts, which prefers a
+ * caller-supplied x-idempotency-key via idempotentId() when present) — DELIBERATE
+ * TRADEOFF, see PR description for the full writeup: this fallback makes the id
+ * purely CONTENT-based, with no random or time component, so two GENUINELY
+ * DISTINCT filings that happen to share the same filingType and fee amounts
+ * collide onto one id and the second is silently dropped. This is not only the
+ * rare "resubmitting an identically-priced amended document on purpose" case —
+ * it is the NORMAL shape of any flat-fee filing type (a tenant's fee_schedule,
+ * resolveFees below, makes every filing of one type carry the identical
+ * authoritative fee), so two unrelated, ordinary filings of the same type on the
+ * same case are a realistic collision, not just a deliberate edge case. filing is
+ * a backend-only, admin-driven flow (confirmed zero frontend usage anywhere in
+ * apps/web), and silently double-charging a real money fee on every
+ * timeout-retry is judged the worse failure mode to close for a caller that
+ * manages no idempotency key of its own — a caller that needs two
+ * same-type-same-fee filings to both persist should send a distinct
+ * x-idempotency-key per submission instead of relying on this fallback.
+ */
+export function hashFilingContent(filingType: string, filingFeeMinor: bigint, courtFeeMinor: bigint): string {
+  const content = JSON.stringify([filingType, filingFeeMinor.toString(), courtFeeMinor.toString()]);
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /** Money-conservation guard: a fee (in PAISE) must be a non-negative bigint. */

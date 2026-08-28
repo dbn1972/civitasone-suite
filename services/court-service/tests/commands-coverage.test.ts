@@ -76,6 +76,31 @@ vi.mock("@civitasone/db", () => ({
   runWithTenant: async (_tid: string, fn: () => Promise<unknown>) => fn(),
 }));
 
+// certified-copy transitionCopy reads the copy's CURRENT row (synchronous
+// pre-check, before publishing) — default to a mid-lifecycle row that legally
+// advances to "issued" so the pre-existing coverage test below is unaffected;
+// individual tests override with mockResolvedValueOnce for their own scenario.
+vi.mock("../src/modules/certified-copy/repo.js", () => ({
+  getCopy: vi.fn(async () => ({ status: "prepared", version: 1, feeMinor: 500n })),
+}));
+
+// cause-list/commands.js now does synchronous pre-checks (case exists, no
+// already-listed edit, no slot conflict) before publishing — mock its repo
+// dependencies directly rather than the generic scopedRead({}) shape above,
+// which doesn't support a real Drizzle query chain.
+vi.mock("../src/modules/cause-list/repo.js", () => ({
+  // Truthy by default so the plain happy-path test below doesn't trip the
+  // CAUSELIST_NOT_FOUND check; tests that specifically need it undefined
+  // override with mockResolvedValueOnce.
+  getCauseList: vi.fn(async () => ({ id: "stub-causelist", listDate: "2026-01-01", courtId: "stub-court" })),
+  getItemById: vi.fn(async () => undefined),
+  findSlotConflict: vi.fn(async () => undefined),
+}));
+
+vi.mock("../src/modules/case-registry/repo.js", () => ({
+  getCaseById: vi.fn(async () => ({ id: "stub-case", tenantId: "stub-tenant" })),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
@@ -207,6 +232,61 @@ describe("cause-list commands", () => {
     const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "10:30", courtroom: "Court 1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("listCaseOnCauseList rejects a nonexistent case with 404 CASE_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const caseRegistryRepo = await import("../src/modules/case-registry/repo.js");
+    vi.mocked(caseRegistryRepo.getCaseById).mockResolvedValueOnce(null as never);
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: randomUUID(), itemNumber: 1, slot: "09:00", courtroom: "Court 2" }),
+    ).rejects.toMatchObject({ status: 404, code: "CASE_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList rejects a slot already booked by a different case with 409 CAUSELIST_SLOT_CONFLICT, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    const causeListId = randomUUID();
+    vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce({ id: causeListId, listDate: "2026-08-01", courtId: COURT_ID });
+    vi.mocked(causeListRepo.findSlotConflict).mockResolvedValueOnce({ id: randomUUID(), caseId: randomUUID() });
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+    ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_SLOT_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList rejects re-listing the same case with a different slot/courtroom with 409 CAUSELIST_ITEM_ALREADY_LISTED, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "09:00", courtroom: "Court 9", itemNumber: 1 });
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+    ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_ITEM_ALREADY_LISTED" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList allows an identical resubmission through as an idempotent no-op", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "10:30", courtroom: "Court 1", itemNumber: 2 });
+    const causeListId = randomUUID();
+    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("listCaseOnCauseList rejects a nonexistent cause-list with 404 CAUSELIST_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce(undefined);
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "09:00", courtroom: "Court 3" }),
+    ).rejects.toMatchObject({ status: 404, code: "CAUSELIST_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -422,7 +502,7 @@ describe("config-registry commands", () => {
 describe("certified-copy commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 
-  it("requestCopy validates + publishes", async () => {
+  it("requestCopy validates + publishes (a body-level caseId, if sent, is ignored — the URL caseId wins)", async () => {
     const { requestCopy } = await import("../src/modules/certified-copy/commands.js");
     const result = await requestCopy(ctx(), CASE_ID, { caseId: CASE_ID, orderId: ORDER_ID });
     expect(result.accepted).toBe(true);
@@ -432,6 +512,57 @@ describe("certified-copy commands", () => {
 
   it("transitionCopy validates + publishes", async () => {
     const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    const result = await transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // §30 honest-response guarantee (bug fix): the synchronous pre-check must
+  // reject BEFORE publishing — never a 202-then-silent-dead-letter.
+  it("transitionCopy throws 404 and does NOT publish when the copy does not exist", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 404, code: "COPY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 409 and does NOT publish on a stale expectedVersion", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "prepared", version: 5, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 409, code: "VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 422 and does NOT publish on an illegal transition (e.g. fee_paid on a rejected copy)", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "rejected", version: 2, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, {
+      target: "fee_paid", expectedVersion: 2, paymentRef: "CHALLAN-1", receiptMinor: 500,
+    })).rejects.toMatchObject({ status: 422, code: "INVALID_COPY_TRANSITION" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 422 and does NOT publish when receiptMinor does not match the recorded fee", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "requested", version: 1, feeMinor: 1500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, {
+      target: "fee_paid", expectedVersion: 1, paymentRef: "CHALLAN-1", receiptMinor: 1000,
+    })).rejects.toMatchObject({ status: 422, code: "RECEIPT_AMOUNT_MISMATCH" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy is an idempotent no-op-safe publish when already at the target status", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "issued", version: 5, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    // A stale expectedVersion is tolerated here (mirrors consumer.ts): once the
+    // copy is already at the target status, the transition is done either way.
     const result = await transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
