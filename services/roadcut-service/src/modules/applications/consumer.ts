@@ -86,7 +86,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId, "draft");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationSubmitted,
@@ -108,7 +108,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId, "draft");
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.applicationWithdrawn,
@@ -122,6 +122,73 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         action: "application.withdraw",
         resourceType: "roadcut_application",
         resourceId: p.id,
+      });
+    });
+  });
+
+  queue.subscribe(COMMANDS.startReview, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId, "submitted");
+      if (!ok) return;
+      await enqueue(tx, {
+        topic: EVENTS.applicationUnderReview,
+        eventType: EVENTS.applicationUnderReview,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { applicationId: p.id },
+      });
+      await writeAudit(tx, ctxOf(msg), {
+        action: "application.start_review",
+        resourceType: "roadcut_application",
+        resourceId: p.id,
+      });
+    });
+  });
+
+  queue.subscribe(COMMANDS.approveApplication, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "approved", msg.actorId, "under_review");
+      if (!ok) return;
+      await enqueue(tx, {
+        topic: EVENTS.applicationApproved,
+        eventType: EVENTS.applicationApproved,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { applicationId: p.id },
+      });
+      await writeAudit(tx, ctxOf(msg), {
+        action: "application.approve",
+        resourceType: "roadcut_application",
+        resourceId: p.id,
+      });
+    });
+  });
+
+  queue.subscribe(COMMANDS.rejectApplication, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "rejected", msg.actorId, "under_review");
+      if (!ok) return;
+      await enqueue(tx, {
+        topic: EVENTS.applicationRejected,
+        eventType: EVENTS.applicationRejected,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { applicationId: p.id, reason: p.reason },
+      });
+      await writeAudit(tx, ctxOf(msg), {
+        action: "application.reject",
+        resourceType: "roadcut_application",
+        resourceId: p.id,
+        details: { reason: p.reason },
       });
     });
   });

@@ -5,18 +5,25 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { canExtend, canComplete, canCancel } from "./domain.js";
+import * as applicationsRepo from "../applications/repo.js";
 
 const ROADCUT_ROLES = ["roadcut_user", "roadcut_admin", "super_admin"];
 const ADMIN_ROLES = ["roadcut_admin", "super_admin"];
 
+// workStartDate/workEndDate/extendedUntil are stored in `date` columns and
+// fed straight through to Postgres with no other validation — an
+// unparseable string would abort the consumer's insert/update permanently
+// (the same "accepted but never applied" poison-pill shape confirmed live
+// for applications' cuttingLength). Zod's .date() enforces real ISO
+// (YYYY-MM-DD) dates at the route boundary instead.
 const issueBody = z.object({
   applicationId: z.string().uuid(),
-  workStartDate: z.string(),
-  workEndDate: z.string(),
+  workStartDate: z.string().date(),
+  workEndDate: z.string().date(),
   conditions: z.record(z.unknown()).optional(),
 });
 
-const extendBody = z.object({ extendedUntil: z.string() });
+const extendBody = z.object({ extendedUntil: z.string().date() });
 const cancelBody = z.object({ reason: z.string().min(1) });
 
 const listQuery = z.object({
@@ -32,6 +39,35 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = issueBody.parse(req.body);
+
+    // A permit is a legal document issued against a specific, approved
+    // application. Previously nothing checked the application even existed
+    // (no FK in the schema either) — confirmed live: a permit could be
+    // issued against a random non-existent UUID, or against a "draft" /
+    // "rejected" application, identically to an "approved" one.
+    const application = await applicationsRepo.findById(body.applicationId, ctx.tenantId);
+    if (!application) {
+      throw new HttpError(404, "APPLICATION_NOT_FOUND", "Referenced application not found");
+    }
+    if (application.status !== "approved") {
+      throw new HttpError(
+        422,
+        "APPLICATION_NOT_APPROVED",
+        `Cannot issue a permit for application in status '${application.status}'; it must be 'approved'`,
+      );
+    }
+    if (application.feeMinor == null || application.depositMinor == null) {
+      throw new HttpError(422, "FEE_NOT_SET", "Application fee/deposit have not been calculated; cannot issue permit");
+    }
+    const existingPermit = await repo.findByApplication(body.applicationId, ctx.tenantId);
+    if (existingPermit) {
+      throw new HttpError(409, "PERMIT_ALREADY_EXISTS", "A permit has already been issued for this application");
+    }
+
+    if (new Date(body.workEndDate).getTime() <= new Date(body.workStartDate).getTime()) {
+      throw new HttpError(422, "INVALID_DATE_RANGE", "workEndDate must be after workStartDate");
+    }
+
     return reply.code(202).send(
       await commands.issuePermit(ctx, body.applicationId, body.workStartDate, body.workEndDate, body.conditions),
     );

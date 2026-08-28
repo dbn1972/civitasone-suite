@@ -6,6 +6,11 @@ export const roadcutPermits = roadcutSchema.table("roadcut_permits", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
   permitNumber: varchar("permit_number", { length: 64 }).notNull().unique(),
+  // One ACTIVE permit per application is enforced at the DB level via a
+  // partial unique index (migration 0002_permit_restoration_unique_constraints.sql,
+  // WHERE status != 'cancelled') rather than a plain column constraint here —
+  // a cancelled permit must not block a legitimate re-issuance for the same
+  // application, which a bare .unique() would incorrectly forbid.
   applicationId: uuid("application_id").notNull(),
   status: varchar("status", { length: 32 }).notNull().default("issued"),
   issuedAt: timestamp("issued_at", { withTimezone: true }),

@@ -5,6 +5,11 @@ export const roadcutSchema = pgSchema("roadcut");
 export const roadcutRestorations = roadcutSchema.table("roadcut_restorations", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
+  // One restoration per permit is enforced at the DB level via a unique
+  // index (migration 0002_permit_restoration_unique_constraints.sql) rather
+  // than a plain column constraint here, for consistency with permits'
+  // application_id (see that schema.ts) even though restoration has no
+  // cancellation concept yet to carve out.
   permitId: uuid("permit_id").notNull(),
   restorationStartDate: date("restoration_start_date"),
   restorationEndDate: date("restoration_end_date"),

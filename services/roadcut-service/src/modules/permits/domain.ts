@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 export const PERMIT_STATUSES = ["issued", "active", "extended", "completed", "cancelled"] as const;
 export type PermitStatus = (typeof PERMIT_STATUSES)[number];
 
@@ -18,6 +20,15 @@ export function generatePermitNumber(tenantShortCode: string, sequence: number):
   return `RCP/${tenantShortCode}/${year}/${String(sequence).padStart(6, "0")}`;
 }
 
+// Permit verification codes are the public-facing proof of authenticity for
+// a road-cut permit (e.g. scanned/typed in by a field inspector). They MUST
+// come from a CSPRNG with enough entropy to make guessing/enumeration
+// infeasible. Math.random() (the prior implementation) is not
+// cryptographically secure and must never back a security-relevant token —
+// V8's generator is a predictable, non-cryptographic PRNG.
+// 8 random bytes -> 16 hex chars -> 64 bits of entropy, well under the
+// varchar(64) column limit, using an unambiguous alphabet (0-9, a-f) for
+// manual transcription.
 export function generateVerificationCode(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return randomBytes(8).toString("hex").toUpperCase();
 }
