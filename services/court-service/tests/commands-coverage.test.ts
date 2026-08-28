@@ -214,6 +214,20 @@ describe("order commands", () => {
     expect(result.orderId).toBeDefined();
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("recordOrder derives the SAME orderId for an identical retry, a DIFFERENT one for different content", async () => {
+    // Regression guard: orderId used to be keyed on a fresh randomUUID() per
+    // call, so a genuine client retry (timeout, double-click) created a second,
+    // distinct draft order instead of being recognised as the same intent. Now
+    // keyed on a content hash, so an identical resubmission dedupes.
+    const { recordOrder } = await import("../src/modules/order/commands.js");
+    const first = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay granted" });
+    const retry = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay granted" });
+    expect(retry.orderId).toBe(first.orderId);
+
+    const different = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay VACATED" });
+    expect(different.orderId).not.toBe(first.orderId);
+  });
 });
 
 describe("cause-list commands", () => {

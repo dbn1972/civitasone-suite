@@ -11,7 +11,9 @@ import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 
 /** An order id is deterministic on (tenant + case + orderType + idempotencyKey)
  *  so re-submitting the SAME drafted order is idempotent end-to-end. The caller
- *  mints the idempotencyKey (a random UUID) per record intent. */
+ *  (commands.ts's recordOrder) derives idempotencyKey from a content hash of
+ *  the order's meaningful fields -- NOT a random value -- specifically so a
+ *  genuine retry of the SAME request reuses the SAME key and dedupes. */
 export function deriveOrderId(
   tenantId: string, caseId: string, orderType: string, idempotencyKey: string,
 ): string {
