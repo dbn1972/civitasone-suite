@@ -505,6 +505,17 @@ describe("party commands", () => {
     ).rejects.toMatchObject({ code: "PARTY_VERSION_CONFLICT" });
     expect(publishSpy).not.toHaveBeenCalled();
   });
+
+  it("updateAdvocate gives two DIFFERENT-content edits at the SAME expectedVersion DIFFERENT messageIds (else markProcessed dedup silently drops the second)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 1 }];
+    await updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. A", expectedVersion: 1 });
+    precheckRows = [{ version: 1 }];
+    await updateAdvocate(ctx(), PARTY_ID, { advocateBarId: "DL/9999/2020", expectedVersion: 1 });
+    const id1 = (publishSpy.mock.calls[0][1] as { messageId: string }).messageId;
+    const id2 = (publishSpy.mock.calls[1][1] as { messageId: string }).messageId;
+    expect(id1).not.toBe(id2);
+  });
 });
 
 describe("evidence commands", () => {
@@ -592,6 +603,25 @@ describe("config-registry commands", () => {
     const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("setConfig applies a version-guarded update against an EXISTING entry when expectedVersion matches (the actual successful-update path, not just create-or-reject)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("setConfig gives two DIFFERENT-content updates at the SAME expectedVersion DIFFERENT messageIds (else markProcessed dedup silently drops the second forever)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    precheckRows = [{ version: 1, active: true }];
+    await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "7", expectedVersion: 1 });
+    const id1 = (publishSpy.mock.calls[0][1] as { messageId: string }).messageId;
+    const id2 = (publishSpy.mock.calls[1][1] as { messageId: string }).messageId;
+    expect(id1).not.toBe(id2);
   });
 
   it("deactivateConfig validates + publishes", async () => {

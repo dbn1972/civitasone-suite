@@ -475,6 +475,31 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const stillFive = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
     expect(stillFive.value).toBe(5);
 
+    // Two SEQUENTIAL, correctly-versioned updates must BOTH actually apply --
+    // not just the first one. Before independent review caught it, setConfig's
+    // messageId was `configId` alone (identical on every call for this entry,
+    // regardless of content or expectedVersion), so markProcessed's dedup would
+    // have silently swallowed the SECOND update below even though its
+    // expectedVersion is 100% correct -- exactly the update-after-create path
+    // the original test suite never once exercised.
+    const firstUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "6", expectedVersion: 1,
+    }, MAKER);
+    expect(firstUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 6 && found?.version === 2;
+    })).toBe(true);
+
+    const secondUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "7", expectedVersion: 2,
+    }, MAKER);
+    expect(secondUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 7 && found?.version === 3;
+    })).toBe(true);
+
     // deactivateConfig on a random, nonexistent id -- immediate 404.
     const missingDeactivate = await jpatch(`/v1/court/config/${randomUUID()}/deactivate`, { expectedVersion: 1 }, MAKER);
     expect(missingDeactivate.code).toBe(404);
@@ -486,8 +511,9 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     expect(staleDeactivate.code).toBe(409);
     expect(staleDeactivate.body.error.code).toBe("CONFIG_VERSION_CONFLICT");
 
-    // The legal path still works end to end.
-    const legalDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 1 }, MAKER);
+    // The legal path still works end to end. expectedVersion is 3, not 1 --
+    // the two sequential updates above already bumped it twice.
+    const legalDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 3 }, MAKER);
     expect(legalDeactivate.code).toBe(202);
     expect(await waitFor(async () => {
       const list = await jget(`/v1/court/config/${namespace}`, MAKER);

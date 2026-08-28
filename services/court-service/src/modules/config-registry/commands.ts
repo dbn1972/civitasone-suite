@@ -14,15 +14,33 @@ export type SetConfigResult = { accepted: true; configId: string };
 export type DeactivateConfigResult = { accepted: true; configId: string };
 
 /**
- * Set (create or version-guarded update) a config entry (§47). The messageId/id
- * is deterministic per (tenant, namespace, key) so a redelivery of the SAME
- * (namespace, key) write is idempotent end-to-end.
+ * Set (create or version-guarded update) a config entry (§47). `id` is
+ * deterministic per (tenant, namespace, key) -- stable across every write to
+ * the same entry. `messageId` is a DIFFERENT, content-aware key (the written
+ * fields + expectedVersion): if it were just `id`, markProcessed's dedup
+ * (keyed purely on messageId, @civitasone/outbox) would silently drop EVERY
+ * update after the very first write to that entry, no matter how different
+ * its content or how correct its expectedVersion -- a byte-identical retry
+ * still dedupes correctly (same content -> same messageId), but a genuine
+ * value change gets its own messageId and is never swallowed.
  */
 export async function setConfig(
   ctx: RequestContext, input: SetConfigBody,
 ): Promise<SetConfigResult> {
   const body = setConfigBody.parse(input);
   const configId = deriveConfigId(ctx.tenantId, body.namespace, body.configKey);
+  const messageId = deterministicId(
+    COURT_NAMESPACE,
+    `${ctx.tenantId}:config-set:${configId}:${JSON.stringify({
+      value: body.value,
+      label: body.label ?? null,
+      description: body.description ?? null,
+      sortOrder: body.sortOrder ?? null,
+      effectiveFrom: body.effectiveFrom ?? null,
+      effectiveTo: body.effectiveTo ?? null,
+      expectedVersion: body.expectedVersion ?? null,
+    })}`,
+  );
 
   // Synchronous pre-check -- ONLY when the caller supplied an expectedVersion
   // AND an entry already exists, exactly mirroring the consumer's own
@@ -42,7 +60,7 @@ export async function setConfig(
   }
 
   await queue.publish(COMMANDS.setConfig, {
-    messageId: configId,
+    messageId,
     type: COMMANDS.setConfig,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
