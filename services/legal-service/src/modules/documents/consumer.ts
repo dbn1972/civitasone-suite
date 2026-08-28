@@ -163,7 +163,7 @@ export function registerDocumentConsumers(queue: Queue): void {
     // A delete removes an entry from listDocuments()'s cached folder listing
     // — without invalidating it, a just-deleted document would keep
     // appearing in that folder's list until the cache TTL expires.
-    await invalidateDocumentAndFolder(msg.tenantId, p.documentId, deletedDoc);
+    await invalidateDocumentAndFolder(msg.tenantId, p.documentId, deletedDoc, ["doc-versions"]);
   });
 
   queue.subscribe(COMMANDS.documentHoldApply, async (msg) => {

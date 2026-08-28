@@ -1,7 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateItemAndLists } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -66,10 +66,7 @@ export function registerOpinionEOfficeDecisionConsumers(queue: Queue): void {
     // for the module's other write path in opinions/consumer.ts as part of
     // fix/legal-stale-list-cache-fleet (caught by a second review pass on
     // that same PR, which found this file has its own copy of the bug).
-    await Promise.all([
-      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", cb.refId)),
-      cache.invalidateResource(msg.tenantId, "opinions"),
-    ]);
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: cb.refId }, ["opinions"]);
   });
 }
 

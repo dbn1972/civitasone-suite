@@ -1,6 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
+import { invalidateItemAndLists } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -31,10 +31,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "seek", "legal_opinion", p.id);
     });
-    await Promise.all([
-      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.id)),
-      cache.invalidateResource(msg.tenantId, "opinions"),
-    ]);
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.id }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionDraft, async (msg) => {
@@ -51,10 +48,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "draft", "legal_opinion", p.opinionId);
     });
-    await Promise.all([
-      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId)),
-      cache.invalidateResource(msg.tenantId, "opinions"),
-    ]);
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionIssue, async (msg) => {
@@ -77,10 +71,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "issue", "legal_opinion", p.opinionId);
     });
-    await Promise.all([
-      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId)),
-      cache.invalidateResource(msg.tenantId, "opinions"),
-    ]);
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 
   queue.subscribe(COMMANDS.opinionSubmitApproval, async (msg) => {
@@ -94,10 +85,7 @@ export function registerOpinionConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "submit_for_eoffice_approval", "legal_opinion", p.opinionId);
     });
-    await Promise.all([
-      cache.invalidate(cache.makeKey(msg.tenantId, "opinion", p.opinionId)),
-      cache.invalidateResource(msg.tenantId, "opinions"),
-    ]);
+    await invalidateItemAndLists(msg.tenantId, { resource: "opinion", id: p.opinionId }, ["opinions"]);
   });
 }
 
