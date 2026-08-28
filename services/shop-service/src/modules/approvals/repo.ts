@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { scrutinyRecords, type ScrutinyRecordRow, type ScrutinyRecordInsert } from "./schema.js";
 
@@ -26,10 +26,16 @@ export async function insertScrutiny(tx: ScopedTx, row: ScrutinyRecordInsert): P
   await tx.insert(scrutinyRecords).values(row);
 }
 
+/**
+ * fromStatuses: the set of scrutiny statuses this write is valid from. See
+ * permits/repo.ts's updatePermitStatus for the same atomic-CAS reasoning —
+ * this closes the race between the caller's pre-fetch and this UPDATE.
+ */
 export async function completeScrutiny(
   tx: ScopedTx,
   id: string,
   tenantId: string,
+  fromStatuses: string[],
   status: string,
   findings: Record<string, unknown>,
   deficiencyDetails: string | null,
@@ -44,7 +50,11 @@ export async function completeScrutiny(
       updatedBy,
       updatedAt: new Date(),
     })
-    .where(and(eq(scrutinyRecords.id, id), eq(scrutinyRecords.tenantId, tenantId)))
+    .where(and(
+      eq(scrutinyRecords.id, id),
+      eq(scrutinyRecords.tenantId, tenantId),
+      inArray(scrutinyRecords.status, fromStatuses),
+    ))
     .returning({ id: scrutinyRecords.id });
   return result.length > 0;
 }

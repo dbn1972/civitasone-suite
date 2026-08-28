@@ -6,7 +6,11 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 
 const SHOP_ROLES = ["shop_user", "shop_admin", "super_admin"];
-const ADMIN_ROLES = ["shop_admin", "super_admin"];
+// NOTE: this module only has applicant-initiated self-service actions
+// (create/list/get/submit/withdraw/fee-payment) — none of them are officer-only,
+// so there is no ADMIN_ROLES-gated route here. Officer/decision actions live in
+// the approvals, permits, and lifecycle modules, which each define and use their
+// own narrower OFFICER_ROLES.
 
 const createBody = z.object({
   establishmentName: z.string().min(1).max(256),

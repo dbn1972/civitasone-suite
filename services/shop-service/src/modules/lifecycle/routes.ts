@@ -4,7 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as permitRepo from "../permits/repo.js";
-import { canRequestRenewal } from "./domain.js";
+import { canRequestRenewal, canDecideRenewal } from "./domain.js";
 
 const SHOP_ROLES = ["shop_user", "shop_admin", "super_admin"];
 const OFFICER_ROLES = ["shop_admin", "shop_officer", "super_admin"];
@@ -87,7 +87,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = decideBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "RENEWAL_NOT_FOUND", "Renewal request not found");
-    if (existing.status !== "submitted" && existing.status !== "under_review") {
+    if (!canDecideRenewal(existing.status)) {
       throw new HttpError(422, "ALREADY_DECIDED", `Renewal already in status '${existing.status}'`);
     }
     const feeOwed = existing.feeAmountMinor ?? 0n;

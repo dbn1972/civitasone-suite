@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
   permits, permitActions,
@@ -61,10 +61,20 @@ export async function insertPermit(tx: ScopedTx, row: PermitInsert): Promise<voi
   await tx.insert(permits).values(row);
 }
 
+/**
+ * fromStatuses: the set of permitStatus values this write is valid from (the
+ * same set the caller's domain-layer check — e.g. canPerformAction — already
+ * validated against). Folding it into the WHERE clause makes the write an
+ * atomic compare-and-swap: if the row's status changed between the caller's
+ * pre-fetch and this UPDATE (a genuine concurrent write, not just a stale
+ * snapshot), the row simply won't match and 0 rows are affected, rather than
+ * blindly overwriting a state the caller never actually observed.
+ */
 export async function updatePermitStatus(
   tx: ScopedTx,
   id: string,
   tenantId: string,
+  fromStatuses: string[],
   status: string,
   fields: Partial<Pick<PermitRow, "suspendedAt" | "suspensionReason" | "cancelledAt" | "cancellationReason">>,
   updatedBy: string,
@@ -77,7 +87,11 @@ export async function updatePermitStatus(
       updatedAt: new Date(),
       version: sql`${permits.version} + 1`,
     })
-    .where(and(eq(permits.id, id), eq(permits.tenantId, tenantId)))
+    .where(and(
+      eq(permits.id, id),
+      eq(permits.tenantId, tenantId),
+      inArray(permits.permitStatus, fromStatuses),
+    ))
     .returning({ id: permits.id });
   return result.length > 0;
 }
@@ -94,10 +108,12 @@ export async function listActions(permitId: string, tenantId: string): Promise<P
   );
 }
 
+/** See updatePermitStatus's fromStatuses doc — same atomic-CAS reasoning. */
 export async function updateValidUntil(
   tx: ScopedTx,
   id: string,
   tenantId: string,
+  fromStatuses: string[],
   validUntil: Date,
   updatedBy: string,
 ): Promise<boolean> {
@@ -108,7 +124,11 @@ export async function updateValidUntil(
       updatedAt: new Date(),
       version: sql`${permits.version} + 1`,
     })
-    .where(and(eq(permits.id, id), eq(permits.tenantId, tenantId)))
+    .where(and(
+      eq(permits.id, id),
+      eq(permits.tenantId, tenantId),
+      inArray(permits.permitStatus, fromStatuses),
+    ))
     .returning({ id: permits.id });
   return result.length > 0;
 }
