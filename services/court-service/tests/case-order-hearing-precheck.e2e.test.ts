@@ -93,6 +93,7 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       await sql`delete from court.case_parties where tenant_id = ${TENANT}`;
       await sql`delete from court.hearings where tenant_id = ${TENANT}`;
       await sql`delete from court.orders where tenant_id = ${TENANT}`;
+      await sql`delete from court.appeals where tenant_id = ${TENANT}`;
       await sql`delete from court.case_state_transitions where tenant_id = ${TENANT}`;
       await sql`delete from court.cases where tenant_id = ${TENANT}`;
       await sql`delete from court.courts where tenant_id = ${TENANT}`;
@@ -205,5 +206,44 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const selfApproveAgain = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 3 }, MAKER);
     expect(selfApproveAgain.code).toBe(403);
     expect(selfApproveAgain.body.error.code).toBe("MAKER_CHECKER_VIOLATION");
+  });
+
+  it("appeal: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Appeal Case");
+
+    const filed = await jpost("/v1/court/appeals", {
+      originalCaseId: caseId, appealType: "appeal", grounds: "Error of law", filedDate: "2026-09-01",
+    }, MAKER);
+    expect(filed.code).toBe(202);
+    const appealId = filed.body.appealId as string;
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).code === 200)).toBe(true);
+
+    // Deciding a still-'filed' appeal skips the required 'registered' step --
+    // illegal, must be an immediate 422, not a 202 that silently dead-letters.
+    const illegalDecide = await jpatch(`/v1/court/appeals/${appealId}/decide`, {
+      decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 1,
+    }, MAKER);
+    expect(illegalDecide.code).toBe(422);
+    expect(illegalDecide.body.error.code).toBe("APPEAL_INVALID_TRANSITION");
+
+    const untouched = await jget(`/v1/court/appeals/${appealId}`, MAKER);
+    expect(untouched.body.status).toBe("filed");
+    expect(untouched.body.version).toBe(1);
+
+    // A stale expectedVersion on a legal target is a 409, the other branch.
+    const staleVersion = await jpatch(`/v1/court/appeals/${appealId}/register`, { expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("APPEAL_VERSION_CONFLICT");
+
+    // The legal path still works end to end: register, then decide.
+    const register = await jpatch(`/v1/court/appeals/${appealId}/register`, { expectedVersion: 1 }, MAKER);
+    expect(register.code).toBe(202);
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).body.status === "registered")).toBe(true);
+
+    const decide = await jpatch(`/v1/court/appeals/${appealId}/decide`, {
+      decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 2,
+    }, MAKER);
+    expect(decide.code).toBe(202);
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).body.status === "allowed")).toBe(true);
   });
 });
