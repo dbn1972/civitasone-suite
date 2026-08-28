@@ -106,8 +106,8 @@ export function registerParcelConsumers(
         expectedVersion: p.expectedVersion,
         set: {
           ...(p.areaSqm !== undefined ? { areaSqm: BigInt(p.areaSqm) } : {}),
-          ...(p.ownershipRef ? { ownershipRef: p.ownershipRef } : {}),
-          ...(p.remarks ? { remarks: p.remarks } : {}),
+          ...(p.ownershipRef !== undefined ? { ownershipRef: p.ownershipRef } : {}),
+          ...(p.remarks !== undefined ? { remarks: p.remarks } : {}),
           ...(p.active !== undefined ? { active: p.active } : {}),
           updatedBy: msg.actorId,
           updatedAt: new Date(),

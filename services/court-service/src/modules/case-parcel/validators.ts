@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUBJECT_TYPES } from "./domain.js";
 
 export const caseIdParam = z.object({ id: z.string().uuid() });
 export const parcelIdParam = z.object({ id: z.string().uuid() });
@@ -16,7 +17,7 @@ export const addParcelBody = z.object({
   tehsil:       z.string().trim().max(120).optional(),
   district:     z.string().trim().max(120).optional(),
   areaSqm:      z.coerce.number().int().min(0).optional(),
-  subjectType:  z.string().trim().max(32).optional(),
+  subjectType:  z.enum(SUBJECT_TYPES).optional(),
   ownershipRef: z.string().trim().max(120).optional(),
   remarks:      z.string().trim().max(2000).optional(),
 });
