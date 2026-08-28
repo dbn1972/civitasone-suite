@@ -1642,7 +1642,6 @@ export async function getContracts(): Promise<LoaderResult<ModuleRowSummary[]>> 
     mapResponse: mapContractsListRows,
   });
 }
-export const getRateContracts = moduleLoader("/api/v1/contract/rate-contracts", "contract.rate");
 
 export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
   return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/contract/contracts/${id}`, null, {
