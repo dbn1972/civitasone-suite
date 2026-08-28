@@ -47,7 +47,10 @@ vi.mock("@civitasone/db", () => ({
 // dependencies directly rather than the generic scopedRead({}) shape above,
 // which doesn't support a real Drizzle query chain.
 vi.mock("../src/modules/cause-list/repo.js", () => ({
-  getCauseList: vi.fn(async () => undefined),
+  // Truthy by default so the plain happy-path test below doesn't trip the
+  // CAUSELIST_NOT_FOUND check; tests that specifically need it undefined
+  // override with mockResolvedValueOnce.
+  getCauseList: vi.fn(async () => ({ id: "stub-causelist", listDate: "2026-01-01", courtId: "stub-court" })),
   getItemById: vi.fn(async () => undefined),
   findSlotConflict: vi.fn(async () => undefined),
 }));
@@ -218,6 +221,17 @@ describe("cause-list commands", () => {
     const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("listCaseOnCauseList rejects a nonexistent cause-list with 404 CAUSELIST_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce(undefined);
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "09:00", courtroom: "Court 3" }),
+    ).rejects.toMatchObject({ status: 404, code: "CAUSELIST_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 

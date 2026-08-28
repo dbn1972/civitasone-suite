@@ -1,4 +1,4 @@
-import { eq, and, asc, ne } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { causeLists, causeListItems } from "./schema.js";
 
@@ -67,16 +67,22 @@ export async function getItemById(
 }
 
 /**
- * Find an existing item — belonging to a DIFFERENT case — already occupying
- * (tenantId, listDate, slot, courtroom). Mirrors the scope of the DB's
- * `cause_list_items_no_double_booking` btree_gist EXCLUDE constraint (see
- * migrations/0001_court_core.sql), which is keyed the same way and remains the
- * authoritative backstop for the rare concurrent-race case this pre-check
- * can't see. Used by the command layer to turn a double-booking into an
- * honest 409 BEFORE publishing, instead of a 202 that silently dead-letters.
+ * Find an existing item already occupying (tenantId, listDate, slot,
+ * courtroom) — matches the scope of the DB's `cause_list_items_no_double_booking`
+ * btree_gist EXCLUDE constraint (see migrations/0001_court_core.sql) EXACTLY,
+ * including that it has NO case_id dimension: a physical courtroom+slot can
+ * only be booked once on a given date, full stop — even by the SAME case via
+ * a different cause-list. (An earlier version of this function excluded the
+ * submitting case, which was wrong: it let that exact scenario silently pass
+ * the pre-check and fail asynchronously instead, the same bug class this is
+ * meant to prevent.) Only call this once the command layer has confirmed no
+ * existing (causeListId, caseId) item already exists for this submission, so
+ * any row found here is a genuine new conflict, never the row about to be
+ * inserted. Remains the authoritative backstop for the rare concurrent-race
+ * case this pre-check can't see.
  */
 export async function findSlotConflict(
-  tenantId: string, listDate: string, slot: string, courtroom: string, excludeCaseId: string,
+  tenantId: string, listDate: string, slot: string, courtroom: string,
 ): Promise<{ id: string; caseId: string } | undefined> {
   const rows = await scopedRead<{ id: string; caseId: string }[]>((tx) => tx.select({
     id: causeListItems.id,
@@ -88,7 +94,6 @@ export async function findSlotConflict(
       eq(causeListItems.listDate, listDate),
       eq(causeListItems.slot, slot),
       eq(causeListItems.courtroom, courtroom),
-      ne(causeListItems.caseId, excludeCaseId),
     ))
     .limit(1));
   return rows[0];
