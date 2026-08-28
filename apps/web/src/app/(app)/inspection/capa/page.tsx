@@ -35,7 +35,12 @@ export default async function Page() {
                 <tr key={String(row.id)}>
                   <td>{String(row.id).slice(0, 8)}…</td>
                   <td>{String(row.status ?? "—")}</td>
-                  <td>{String(row.title ?? row.name ?? row.findingCode ?? row.entityId ?? "—")}</td>
+                  {/* corrective_actions.description is a mandatory, non-null column
+                      (capa/schema.ts) — it's the one field that actually describes
+                      what the CAPA is about. title/name/findingCode don't exist on
+                      this row shape, so without `description` first every CAPA's
+                      Summary cell rendered "—" unconditionally. */}
+                  <td>{String(row.description ?? row.title ?? row.name ?? row.findingCode ?? row.entityId ?? "—")}</td>
                   <td>
                     <CapaRowAction id={String(row.id)} status={String(row.status ?? "")} />
                   </td>

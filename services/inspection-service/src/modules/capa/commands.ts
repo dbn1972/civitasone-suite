@@ -30,6 +30,10 @@ export interface CapaUpdatePayload {
   version: number;
 }
 
+export interface CapaStartPayload {
+  capaId: string;
+}
+
 export interface CapaCompletePayload {
   capaId: string;
   evidenceOfClosure: unknown[];
@@ -75,6 +79,15 @@ export async function publishCapaUpdate(
 ): Promise<{ accepted: true; messageId: string }> {
   const msg = envelope(ctx, COMMANDS.capaUpdate, { ...payload, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.capaUpdate, msg);
+  return { accepted: true, messageId: msg.messageId };
+}
+
+export async function publishCapaStart(
+  payload: CapaStartPayload,
+  ctx: RequestContext,
+): Promise<{ accepted: true; messageId: string }> {
+  const msg = envelope(ctx, COMMANDS.capaStart, { ...payload, tenantId: ctx.tenantId });
+  await queue.publish(COMMANDS.capaStart, msg);
   return { accepted: true, messageId: msg.messageId };
 }
 

@@ -8,6 +8,7 @@
  * Endpoints:
  *   POST   /v1/inspection/capa                        — create CAPA
  *   PATCH  /v1/inspection/capa/:id                    — update (assign owner, set due date)
+ *   POST   /v1/inspection/capa/:id/start              — start work (open|overdue -> in_progress)
  *   POST   /v1/inspection/capa/:id/complete           — mark complete with closure evidence
  *   POST   /v1/inspection/capa/:id/verify             — verify effectiveness (maker-checker)
  *   POST   /v1/inspection/capa/:id/trigger-reinspection — trigger re-inspection
@@ -22,6 +23,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   publishCapaCreate,
   publishCapaUpdate,
+  publishCapaStart,
   publishCapaComplete,
   publishCapaVerify,
   publishCapaTriggerReinspection,
@@ -94,6 +96,19 @@ export async function registerCapaRoutes(app: FastifyInstance): Promise<void> {
 
     const body = updateCapaSchema.parse(req.body);
     const result = await publishCapaUpdate({ capaId: id, ...body }, ctx);
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── POST /v1/inspection/capa/:id/start ──
+  app.post("/v1/inspection/capa/:id/start", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+
+    const capa = await findCapaById(ctx.tenantId, id);
+    if (!capa) throw new HttpError(404, "NOT_FOUND", "CAPA not found");
+
+    const result = await publishCapaStart({ capaId: id }, ctx);
     return reply.code(202).send({ data: result });
   });
 

@@ -91,7 +91,21 @@ export async function findInspections(
 
 /**
  * Update inspection state within a transaction.
- * Uses optimistic locking via version column.
+ *
+ * Uses optimistic locking via the version column: the WHERE clause requires
+ * `version = expectedVersion`, so a concurrent transition that lands between
+ * the consumer's pre-read (findInspectionById) and this write cannot silently
+ * double-apply — it matches zero rows and this returns `null`, which the
+ * caller treats as a non-retryable "modified concurrently" rejection rather
+ * than as success. Returning `null` (rather than throwing) mirrors the
+ * assignment module's guarded-UPDATE convention (submitTourPlan/
+ * approveTourPlan in modules/assignment/repo.ts): it's a controlled signal
+ * for "the target row moved", distinct from a genuine thrown error (a lost
+ * DB connection, etc.), which should still propagate and be retried normally
+ * rather than being blanket-classified as non-retryable.
+ * (Previously this docstring claimed optimistic locking without the WHERE
+ * clause actually enforcing it — any two concurrent transitions for the same
+ * inspection would both succeed and silently overwrite one another.)
  */
 export async function updateInspectionState(
   tx: Tx,
@@ -99,8 +113,9 @@ export async function updateInspectionState(
   tenantId: string,
   newState: string,
   actorId: string,
+  expectedVersion: number,
   additionalFields?: Partial<Pick<InspectionRow, "startedAt" | "completedAt" | "finalizedAt" | "reviewerId" | "reportS3Key">>,
-): Promise<InspectionRow> {
+): Promise<InspectionRow | null> {
   const rows = await tx.update(inspections)
     .set({
       state: newState,
@@ -112,9 +127,11 @@ export async function updateInspectionState(
     .where(and(
       eq(inspections.id, id),
       eq(inspections.tenantId, tenantId),
+      eq(inspections.version, expectedVersion),
     ))
     .returning();
-  return rows[0]!;
+
+  return rows[0] ?? null;
 }
 
 // ── Inspection History ────────────────────────────────────────────────────────

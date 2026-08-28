@@ -15,7 +15,7 @@ describe("inspection loaders", () => {
     const { getInspections } = await import("./loaders");
     const res = await getInspections();
     expect(fetchJson).toHaveBeenCalledWith(
-      "/api/v1/inspection/inspections?limit=50",
+      "/api/v1/inspection/inspections?pageSize=50",
       [],
       expect.objectContaining({ telemetryKey: "inspection.list" }),
     );

@@ -85,15 +85,27 @@ export function registerExecutionConsumers(queue: Queue): void {
           additionalFields.completedAt = new Date();
         }
 
-        // 4. Update inspection state (Req 8.2)
+        // 4. Update inspection state (Req 8.2). Guarded by the row's own
+        // version (optimistic lock) so a transition racing against another
+        // concurrent write on the same inspection cannot silently overwrite
+        // it. A `null` return is the guarded-UPDATE's controlled signal for
+        // "the row moved" — treated as non-retryable below — and is distinct
+        // from a genuine thrown error (e.g. a DB connectivity blip), which
+        // propagates normally and is retried by the queue as usual.
         const updated = await updateInspectionState(
           tx,
           p.inspectionId,
           msg.tenantId,
           targetState,
           msg.actorId,
+          inspection.version,
           additionalFields as Record<string, Date>,
         );
+        if (!updated) {
+          throw new NonRetryableError(
+            `Inspection ${p.inspectionId} was modified concurrently (expected version ${inspection.version}) — refusing to apply a transition computed from stale state`,
+          );
+        }
 
         inspectionId = updated.id;
 
@@ -228,15 +240,24 @@ export function registerExecutionConsumers(queue: Queue): void {
           throw err;
         }
 
-        // 4. Assign reviewer and transition to under_review (Req 8.5)
+        // 4. Assign reviewer and transition to under_review (Req 8.5).
+        // Version-guarded (see updateInspectionState) against concurrent
+        // writes; `null` means the row moved and is non-retryable, a genuine
+        // thrown error still propagates and retries normally.
         const updated = await updateInspectionState(
           tx,
           p.inspectionId,
           msg.tenantId,
           "under_review",
           msg.actorId,
+          inspection.version,
           { reviewerId: p.reviewerId },
         );
+        if (!updated) {
+          throw new NonRetryableError(
+            `Inspection ${p.inspectionId} was modified concurrently (expected version ${inspection.version}) — refusing to submit for review from stale state`,
+          );
+        }
 
         inspectionId = updated.id;
 
@@ -341,15 +362,24 @@ export function registerExecutionConsumers(queue: Queue): void {
         const reportS3Key = `reports/${msg.tenantId}/${p.inspectionId}/${randomUUID()}.pdf`;
         const now = new Date();
 
-        // 5. Lock data and transition to finalized (Req 8.6)
+        // 5. Lock data and transition to finalized (Req 8.6).
+        // Version-guarded (see updateInspectionState) against concurrent
+        // writes; `null` means the row moved and is non-retryable, a genuine
+        // thrown error still propagates and retries normally.
         const updated = await updateInspectionState(
           tx,
           p.inspectionId,
           msg.tenantId,
           "finalized",
           msg.actorId,
+          inspection.version,
           { finalizedAt: now, reportS3Key },
         );
+        if (!updated) {
+          throw new NonRetryableError(
+            `Inspection ${p.inspectionId} was modified concurrently (expected version ${inspection.version}) — refusing to finalize from stale state`,
+          );
+        }
 
         inspectionId = updated.id;
 

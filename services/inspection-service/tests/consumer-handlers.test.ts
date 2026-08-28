@@ -472,6 +472,73 @@ describe("Execution consumers", () => {
     }));
   });
 
+  // Regression: updateInspectionState's docstring claimed "optimistic locking
+  // via version column" but the WHERE clause never actually checked version —
+  // any two concurrent transitions for the same inspection would both
+  // succeed and silently overwrite one another. The fix threads the
+  // freshly-read `inspection.version` through to updateInspectionState and
+  // wraps a version-conflict rejection as NonRetryableError. This test would
+  // fail against the pre-fix consumer.ts, which called updateInspectionState
+  // with no version argument at all (the version-conflict path could never
+  // be reached, let alone surfaced correctly).
+  it("threads the pre-read version into updateInspectionState and rejects a concurrent-modification conflict (null return) as NonRetryableError", async () => {
+    const { findInspectionById, updateInspectionState } = await import("../src/modules/execution/repo.js");
+    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "insp-1", state: "scheduled", version: 5, tenantId: TENANT_ID,
+    });
+    // null is the guarded-UPDATE's controlled "the row moved" signal (mirrors
+    // assignment/repo.ts submitTourPlan/approveTourPlan) — distinct from a
+    // thrown error, which must NOT be caught/reclassified (see next test).
+    (updateInspectionState as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+
+    const handler = handlers.get("inspection.inspection.transition");
+    await expect(
+      handler!(makeMsg("inspection.inspection.transition", {
+        inspectionId: "insp-1", targetState: "in_progress",
+      })),
+    ).rejects.toThrow(/modified concurrently/i);
+
+    expect(updateInspectionState).toHaveBeenCalledWith(
+      expect.anything(),
+      "insp-1",
+      TENANT_ID,
+      "in_progress",
+      USER_ID,
+      5, // the version read from findInspectionById, not hardcoded/omitted
+      expect.anything(),
+    );
+  });
+
+  // Companion regression: a genuine error (e.g. a lost DB connection) from
+  // updateInspectionState must propagate as-is, NOT get reclassified as
+  // NonRetryableError. An earlier version of this fix wrapped the call in a
+  // blanket try/catch that converted ANY thrown error into NonRetryableError
+  // — which would have made a transient failure permanently non-retryable
+  // instead of letting the queue's normal redelivery/retry handle it.
+  it("does NOT reclassify a genuine updateInspectionState error as NonRetryableError", async () => {
+    const { isNonRetryable } = await import("@civitasone/queue");
+    const { findInspectionById, updateInspectionState } = await import("../src/modules/execution/repo.js");
+    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID,
+    });
+    (updateInspectionState as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("connection terminated unexpectedly"),
+    );
+
+    const handler = handlers.get("inspection.inspection.transition");
+    let caught: unknown;
+    try {
+      await handler!(makeMsg("inspection.inspection.transition", {
+        inspectionId: "insp-1", targetState: "in_progress",
+      }));
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("connection terminated unexpectedly");
+    expect(isNonRetryable(caught)).toBe(false);
+  });
+
   it("handles inspectionSubmitReview", async () => {
     const { findInspectionById } = await import("../src/modules/execution/repo.js");
     (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

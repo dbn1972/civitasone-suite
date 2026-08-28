@@ -16,11 +16,48 @@ export function CapaRowAction({ id, status }: RowProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
 
-  const canComplete = status === "open" || status === "in_progress" || status === "overdue";
+  // CAPA_TRANSITIONS (services/inspection-service/.../capa/domain.ts) only
+  // allows open|overdue -> in_progress and in_progress|overdue -> completed —
+  // there is intentionally NO open -> completed edge (a CAPA must pass
+  // through in_progress first). Every offered button below corresponds to an
+  // actually-legal transition: showing "Complete" for status "open" (as this
+  // used to) always failed server-side with INVALID_TRANSITION, silently,
+  // because the 202 had already been returned before the async consumer ran.
+  const canStart = status === "open";
+  const canComplete = status === "in_progress" || status === "overdue";
   const canVerify = status === "completed";
 
-  if (!canComplete && !canVerify) {
+  if (!canStart && !canComplete && !canVerify) {
     return <span style={{ color: "var(--ink2)", fontSize: 12 }}>—</span>;
+  }
+
+  async function start() {
+    setBusy(true);
+    setError(undefined);
+    setMessage("");
+    try {
+      // No body on this request — deliberately no Content-Type header either.
+      // A `Content-Type: application/json` header with an empty body survives
+      // the /api/proxy catch-all verbatim (it forwards whatever content-type
+      // header the browser sent, regardless of whether there was a body) and
+      // reaches Fastify's default JSON parser, which rejects an empty body
+      // under that content-type with 400 FST_ERR_CTP_EMPTY_JSON_BODY —
+      // confirmed live against the real service, not just inferred. Sending
+      // no Content-Type here means no body is sent at all, which the route
+      // (no zod schema on req.body) accepts correctly.
+      const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/start`, {
+        method: "POST",
+      });
+      if (res.status !== 202 && !res.ok) {
+        throw new Error((await res.text()) || "Start failed");
+      }
+      setMessage("CAPA start accepted (queued).");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "CAPA start failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function complete() {
@@ -72,6 +109,11 @@ export function CapaRowAction({ id, status }: RowProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {canStart ? (
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => void start()}>
+            Start
+          </button>
+        ) : null}
         {canComplete ? (
           <button type="button" className="btn ghost" disabled={busy} onClick={() => void complete()}>
             Complete
