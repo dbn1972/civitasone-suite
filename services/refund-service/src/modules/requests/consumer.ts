@@ -90,7 +90,10 @@ export function registerRequestConsumers(rawQueue: Queue): void {
       // RACE-1: only a "requested" request can be submitted — see
       // requests/repo.ts's updateStatus doc comment.
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId, ["requested"]);
-      if (!ok) return false;
+      if (!ok) {
+        log.warn({ id: p.id }, "submit ignored: request is no longer in requested status");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.requestSubmitted,
         eventType: EVENTS.requestSubmitted,
@@ -132,7 +135,10 @@ export function registerRequestConsumers(rawQueue: Queue): void {
       // in this transaction and it's checked immediately, so nothing has
       // been committed yet if it fails.
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId, ["requested", "under_review"]);
-      if (!ok) return false;
+      if (!ok) {
+        log.warn({ id: p.id }, "withdraw ignored: request is no longer in requested/under_review status");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.requestWithdrawn,
         eventType: EVENTS.requestWithdrawn,
