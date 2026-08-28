@@ -1,4 +1,5 @@
 import type { RequestContext } from "@civitasone/types";
+import { createHash } from "node:crypto";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
@@ -35,13 +36,38 @@ export async function recordScrutiny(
   return { accepted: true, scrutinyId };
 }
 
-/** Raise a defect against a case (§13). Idempotent per (case + category): a defect
- *  is one-per-category so re-submitting the SAME category on a case is a no-op. */
+/**
+ * Content-derived disambiguator fed into deriveDefectId's `seq` slot — same shape as
+ * directionContentSeq in compliance/commands.ts: a SHA-256 hash of the defect's
+ * meaningful body fields, truncated to 52 bits (well inside Number.MAX_SAFE_INTEGER).
+ * A genuine RETRY of the identical defect (same category/description/severity/
+ * rectificationDeadline — e.g. after a client-side timeout) hashes to the same seq
+ * and so dedupes to the same defectId; a defect with DIFFERENT content — even in the
+ * SAME category on the same case — hashes differently and gets its own id instead of
+ * silently overwriting the first (previously this was hardcoded to `1`, so a second
+ * legitimate defect in the same category vanished — see Bug A).
+ */
+function defectContentSeq(body: RaiseDefectBody): number {
+  const digest = createHash("sha256")
+    .update(JSON.stringify({
+      category: body.category.trim().toLowerCase(),
+      description: body.description,
+      severity: body.severity ?? null,
+      rectificationDeadline: body.rectificationDeadline ?? null,
+    }))
+    .digest("hex");
+  return Number.parseInt(digest.slice(0, 13), 16);
+}
+
+/** Raise a defect against a case (§13). Idempotent per (case + category + content):
+ *  an identical resubmission (e.g. a client retry) dedupes to the same defect; a
+ *  defect with different content is a genuinely new one and gets its own id, even in
+ *  the same category. */
 export async function raiseDefect(
   ctx: RequestContext, caseId: string, input: RaiseDefectBody,
 ): Promise<RaiseDefectResult> {
   const body = raiseDefectBody.parse(input);
-  const defectId = deriveDefectId(ctx.tenantId, caseId, body.category, 1);
+  const defectId = deriveDefectId(ctx.tenantId, caseId, body.category, defectContentSeq(body));
   const scrutinyId = deriveScrutinyId(ctx.tenantId, caseId);
 
   await queue.publish(COMMANDS.raiseDefect, {
@@ -79,7 +105,6 @@ export async function resolveDefect(
 
   return { accepted: true, defectId };
 }
-
 
 /** Resolve a scrutiny (§13). messageId is idempotent per (scrutiny + expectedVersion). */
 export async function resolveScrutiny(

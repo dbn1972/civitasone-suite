@@ -4,17 +4,19 @@ export const caseIdParam = z.object({ id: z.string().uuid() });
 export const scrutinyIdParam = z.object({ id: z.string().uuid() });
 export const defectIdParam = z.object({ id: z.string().uuid() });
 
-/** Record the registry scrutiny of a filed case (§13). */
+/** Record the registry scrutiny of a filed case (§13). `caseId` comes from the URL
+ *  path (see routes.ts), not the body — a duplicate `caseId` body field was
+ *  previously accepted here but silently discarded in favor of the path value
+ *  (Bug B). */
 export const recordScrutinyBody = z.object({
-  caseId:  z.string().uuid(),
   status:  z.enum(["pending", "cleared", "defective"]).optional(),
   remarks: z.string().trim().max(2000).optional(),
 });
 export type RecordScrutinyBody = z.infer<typeof recordScrutinyBody>;
 
-/** Raise a defect against a scrutinized case (§13). */
+/** Raise a defect against a scrutinized case (§13). `caseId` comes from the URL path
+ *  (see routes.ts), not the body — same Bug B as recordScrutinyBody above. */
 export const raiseDefectBody = z.object({
-  caseId:                z.string().uuid(),
   category:              z.string().trim().min(1).max(48),
   description:           z.string().trim().min(1).max(2000),
   severity:              z.enum(["minor", "major", "critical"]).optional(),
