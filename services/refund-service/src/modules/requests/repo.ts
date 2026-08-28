@@ -14,12 +14,24 @@ export function cacheKey(tenantId: string, id: string): string {
 }
 
 export async function findById(id: string, tenantId: string): Promise<RefundRequestRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(refundRequests)
-      .where(and(eq(refundRequests.id, id), eq(refundRequests.tenantId, tenantId)))
-      .limit(1),
-  );
-  return rows[0] ?? null;
+  return scopedRead((tx) => findByIdQuery(tx, id, tenantId));
+}
+
+/** Same lookup, scoped to an existing transaction (see `findById`). Needed
+ * by processing/consumer.ts's assertActionable, which must read the
+ * request's CURRENT status from inside the same transaction that's about to
+ * act on it (while holding lockForStatusChange) -- the plain `findById`
+ * opens its own separate transaction/connection and would neither see
+ * this transaction's own uncommitted state nor share its tenant context. */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<RefundRequestRow | null> {
+  return findByIdQuery(tx, id, tenantId);
+}
+
+function findByIdQuery(tx: ScopedTx, id: string, tenantId: string) {
+  return tx.select().from(refundRequests)
+    .where(and(eq(refundRequests.id, id), eq(refundRequests.tenantId, tenantId)))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
 }
 
 export async function findByNumber(requestNumber: string, tenantId: string): Promise<RefundRequestRow | null> {

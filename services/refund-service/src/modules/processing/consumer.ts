@@ -21,21 +21,30 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
  * (refund.approval.approve / .reject / .return), and per SqsQueue.start()
  * (services/queue-service/src/bus.ts) each topic runs its own independent,
  * unsynchronized poll loop — there is no ordering guarantee between them.
- * checkExpectedLevel's own "one poll loop per topic, race-free" reasoning
- * only holds WITHIN a single topic (e.g. two approve calls): it does NOT
- * cover two of these three DIFFERENT actions landing on the same request at
- * the same level, because insertApproval is a plain INSERT with nothing to
- * compare-and-swap against. lockForStatusChange (shared/db.ts) closes this
- * regardless of which topic each action is on: whichever of approve/reject/
- * return acquires the lock for this requestId first runs its ENTIRE
- * check-then-write sequence to completion (commit or rollback) before any
- * of the other two can even begin theirs.
+ * lockForStatusChange (shared/db.ts) closes this regardless of which topic
+ * each action is on: whichever of approve/reject/return (and withdraw —
+ * see requests/consumer.ts, which acquires the identical lock) acquires the
+ * lock for this requestId first runs its ENTIRE check-then-write sequence
+ * to completion (commit or rollback) before any of the others can even
+ * begin theirs.
  *
- * withdrawRequest (requests/consumer.ts) also acquires this same lock, so
- * approve/reject/return are serialized against withdraw too, not just
- * against each other — see that file for why, and shared/db.ts's RaceLost
- * doc comment for the specific bug (approved-decision-silently-committed
- * despite a losing status guard) this pairing was live-reproduced to close.
+ * FIN-6 (deterministic, NOT a race): assertActionable below checks BOTH the
+ * approval-level sequence AND the request's current status, unconditionally,
+ * for all three actions alike. Before this fix, approveRequest only checked
+ * request status inside `if (isFullyApproved(level))` — true only at level 2
+ * in this 2-level scheme — so a level-1 approve had NO status check at all,
+ * not "vulnerable to a race", just flatly missing: submit -> approve(level
+ * 1) -> [ordinary, sequential, no timing needed] withdraw left a permanent
+ * "approved" decision on record for a request whose canonical status was
+ * "withdrawn". Conflating "is this the next expected level" (a question
+ * about refund_approvals, checkExpectedLevel's job) with "is the request
+ * still approvable at all" (a question about refund_requests.status) inside
+ * one level-gated branch is exactly what let this hide through three prior
+ * review rounds that each fixed a different bug in this same file. The fix
+ * makes status-actionability a single, unconditional, un-branched check
+ * every action performs identically, so there is no longer a code path
+ * that can skip it depending on which level or which of approve/reject/
+ * return is being handled.
  */
 async function checkExpectedLevel(
   requestId: string,
@@ -55,6 +64,31 @@ async function checkExpectedLevel(
   return true;
 }
 
+/**
+ * FIN-6: the single, unconditional precondition every approval-decision
+ * action (approve at ANY level, reject, return) must pass before it writes
+ * anything at all — see the doc comment above checkExpectedLevel for why
+ * this needs to be its own explicit, always-called check rather than
+ * something that happens to occur inside one particular branch.
+ */
+async function assertActionable(
+  requestId: string,
+  tenantId: string,
+  level: number,
+  tx: ScopedTx,
+): Promise<boolean> {
+  if (!(await checkExpectedLevel(requestId, tenantId, level, tx))) return false;
+  const request = await reqRepo.findByIdTx(tx, requestId, tenantId);
+  if (!request || request.status !== "under_review") {
+    log.warn(
+      { requestId, actualStatus: request?.status ?? "not found" },
+      "approval-decision action ignored: request is no longer under_review",
+    );
+    return false;
+  }
+  return true;
+}
+
 export function registerProcessingConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
@@ -62,9 +96,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     const p = msg.payload as { requestId: string; tenantId: string };
     // No RaceLost needed here: updateStatus is the only write in this
     // transaction, and it's the FIRST thing checked -- nothing has been
-    // committed yet if it fails, so a plain `return false` is safe (an
-    // empty/no-op transaction, aside from markProcessed's own row, which we
-    // WANT to keep so a redelivery of this exact message doesn't reprocess).
+    // committed yet if it fails, so a plain `return false` is safe.
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       // RACE-1: review is a no-op-ish re-affirmation, valid from either
@@ -101,15 +133,17 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks?: string;
     };
-    // RACE-3: insertApproval below happens BEFORE the isFullyApproved
-    // status guard, so a plain `return false` there would leave the just-
-    // inserted approval row committed even when the guard says the overall
-    // action lost its race — transactionOrRaceLost + throwing RaceLost
-    // instead makes the whole transaction roll back atomically.
+    // RACE-3: insertApproval below happens BEFORE the isFullyApproved status
+    // guard, so a plain `return false` there would leave the just-inserted
+    // approval row committed even when the guard says the overall action
+    // lost its race — transactionOrRaceLost + throwing RaceLost instead
+    // makes the whole transaction roll back atomically.
     const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       await lockForStatusChange(tx, p.requestId);
-      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+      // FIN-6: unconditional for every level, not just when isFullyApproved
+      // — see assertActionable's doc comment.
+      if (!(await assertActionable(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
         id: p.id,
@@ -124,8 +158,10 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         updatedBy: msg.actorId,
       });
       if (isFullyApproved(p.level)) {
-        // RACE-1: fully approving is only valid from under_review — must not
-        // overwrite a racing reject/withdraw that already moved it away.
+        // Kept as defense in depth even though assertActionable already
+        // confirmed the request was under_review moments ago while holding
+        // the lock, so this should always succeed in practice — correct by
+        // construction, not by an argument about what else could be running.
         const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "approved", msg.actorId, ["under_review"]);
         if (!ok) {
           log.warn(
@@ -174,7 +210,12 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       await lockForStatusChange(tx, p.requestId);
-      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+      // FIN-6: same unconditional check as approve/return — reject was
+      // already correctly unconditional on its OWN later updateStatus call,
+      // but uses the shared helper too now for uniformity (one guard shape
+      // for all three actions, not "two of them happen to be fine and one
+      // wasn't").
+      if (!(await assertActionable(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
         id: p.id,
@@ -189,7 +230,8 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         updatedBy: msg.actorId,
       });
       // RACE-1: reject is only valid from under_review — must not overwrite
-      // a racing approve that already fully approved it.
+      // a racing approve that already fully approved it. Defense in depth,
+      // same reasoning as approveRequest above.
       const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "rejected", msg.actorId, ["under_review"]);
       if (!ok) {
         log.warn(
@@ -235,7 +277,8 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       await lockForStatusChange(tx, p.requestId);
-      if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
+      // FIN-6: same unconditional check as approve/reject.
+      if (!(await assertActionable(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
         id: p.id,
@@ -251,7 +294,8 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       });
       // SEQ-1: start the next review round clean — see repo.supersedeApprovals.
       await repo.supersedeApprovals(tx, p.requestId, msg.tenantId, msg.actorId);
-      // RACE-1: return is only valid from under_review.
+      // RACE-1: return is only valid from under_review. Defense in depth,
+      // same reasoning as approveRequest above.
       const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "requested", msg.actorId, ["under_review"]);
       if (!ok) {
         log.warn(
