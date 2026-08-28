@@ -35,6 +35,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
   // confirm dialog, in context, rather than in a banner below the list.
   async function act(milestoneId: string, kind: "complete" | "late", notes?: string) {
     setBusyId(milestoneId);
+    setMessage("");
     try {
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch(
@@ -76,7 +77,10 @@ export function MilestoneActions({ contractId, milestones }: Props) {
             onConfirm={() => act(m.id, "complete")}
           />
           <ActionButton
-            className="btn ghost"
+            // Unlike Complete, leave className unset here so ActionButton's
+            // own default ("btn danger") applies -- this is the button that
+            // applies a real SLA penalty and should look visibly different
+            // from the harmless "Complete" button, not identical to it.
             label="Mark late"
             disabled={busyId === m.id}
             confirmTitle={`Mark "${m.title}" as delivered late?`}
@@ -85,6 +89,8 @@ export function MilestoneActions({ contractId, milestones }: Props) {
             danger
             requireReason
             reasonLabel="Reason for the delay (recorded on the milestone)"
+            // markMilestoneLateBody caps notes at 500 chars server-side.
+            maxReasonLength={500}
             onConfirm={(notes) => act(m.id, "late", notes)}
           />
         </div>

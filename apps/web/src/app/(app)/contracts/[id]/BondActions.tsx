@@ -69,6 +69,13 @@ const TRANSITIONS: Array<{
 export function BondActions({ contractId, bonds, canRegister }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Which bond currently has a transition in flight -- disables ALL THREE of
+  // that bond's action buttons (not just the one clicked) so a second click
+  // can't fire a contradictory transition (e.g. Forfeit right after Claim)
+  // before the first has actually landed and router.refresh() re-renders the
+  // bond's real status. Scoped per-bond, not global, so other bonds' buttons
+  // stay usable.
+  const [busyBondId, setBusyBondId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [issuer, setIssuer] = useState("SBI");
@@ -116,22 +123,27 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
 
   async function transition(bondId: string, toStatus: "released" | "claimed" | "forfeited", reason?: string) {
     setError(undefined);
-    const res = await fetch(
-      `/api/proxy/v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toStatus,
-          notes: reason?.trim() || `${toStatus[0]!.toUpperCase()}${toStatus.slice(1)} from contract detail`,
-        }),
-      },
-    );
-    if (res.status !== 202 && !res.ok) {
-      throw new Error((await res.text()) || "Transition failed");
+    setBusyBondId(bondId);
+    try {
+      const res = await fetch(
+        `/api/proxy/v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            toStatus,
+            notes: reason?.trim() || `${toStatus[0]!.toUpperCase()}${toStatus.slice(1)} from contract detail`,
+          }),
+        },
+      );
+      if (res.status !== 202 && !res.ok) {
+        throw new Error((await res.text()) || "Transition failed");
+      }
+      setMessage(`Bond ${toStatus} accepted (queued).`);
+      router.refresh();
+    } finally {
+      setBusyBondId(null);
     }
-    setMessage(`Bond ${toStatus} accepted (queued).`);
-    router.refresh();
   }
 
   return (
@@ -153,13 +165,15 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
                       // original neutral "btn ghost" look.
                       {...(t.danger ? {} : { className: "btn ghost" })}
                       label={t.label}
-                      disabled={busy}
+                      disabled={busyBondId === b.id}
                       confirmTitle={t.confirmTitle}
                       confirmDescription={t.confirmDescription}
                       confirmLabel={t.confirmLabel}
                       danger={t.danger}
                       requireReason={t.requireReason}
                       reasonLabel="Reason (recorded on the bond)"
+                      // transitionBondBody caps notes at 1000 chars server-side.
+                      maxReasonLength={1000}
                       onConfirm={(reason) => transition(b.id, t.toStatus, reason)}
                     />
                   ))}

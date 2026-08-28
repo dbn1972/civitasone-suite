@@ -89,6 +89,30 @@ describe("BondActions", () => {
     });
   });
 
+  it("disables Release/Forfeit for the same bond while Claim is in flight (regression: prevents a contradictory second transition)", async () => {
+    let resolveFetch!: (r: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }) as Promise<Response>,
+    );
+    render(<BondActions contractId="c1" canRegister={false} bonds={[HELD_BOND]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Claim" }));
+    fireEvent.change(screen.getByLabelText(/reason \(recorded on the bond\)/i), {
+      target: { value: "Non-performance confirmed on site visit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Yes, claim" }));
+
+    // The fetch for Claim is now in flight (unresolved) -- Release and
+    // Forfeit for this SAME bond must be disabled so a second click can't
+    // fire a contradictory transition before this one lands.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Release" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Forfeit" })).toBeDisabled();
+
+    resolveFetch(new Response(JSON.stringify({ status: "accepted" }), { status: 202 }));
+    await waitFor(() => expect(screen.getByText(/bond claimed accepted/i)).toBeInTheDocument());
+  });
+
   it("a released/claimed/forfeited bond offers no transition buttons", () => {
     render(
       <BondActions

@@ -38,6 +38,15 @@ export interface ConfirmDialogProps {
    * server error after round-tripping.
    */
   minReasonLength?: number;
+  /**
+   * Maximum reason length, enforced both as the textarea's native maxLength
+   * (blocks typing/paste past the limit in the browser) and defensively in
+   * the Confirm-disabled check. Unset by default (no cap) — set this when a
+   * specific backend route enforces a hard cap (e.g. contract-service's bond
+   * transition notes: 1000 chars; milestone notes: 500 chars) so a too-long
+   * reason is caught here instead of round-tripping to a raw server error.
+   */
+  maxReasonLength?: number;
   /** Disable the confirm button & show a busy state. */
   busy?: boolean;
   /** Error message shown via aria-live after a failed attempt. */
@@ -60,6 +69,7 @@ export function ConfirmDialog({
   requireReason = false,
   reasonLabel = "Reason",
   minReasonLength = 1,
+  maxReasonLength,
   busy = false,
   errorMessage,
   onConfirm,
@@ -123,7 +133,9 @@ export function ConfirmDialog({
 
   const trimmedLen = reason.trim().length;
   const reasonTooShort = requireReason && trimmedLen > 0 && trimmedLen < minReasonLength;
-  const confirmDisabled = busy || (requireReason && trimmedLen < minReasonLength);
+  const reasonTooLong = maxReasonLength !== undefined && trimmedLen > maxReasonLength;
+  const confirmDisabled =
+    busy || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
 
   return (
     <div
@@ -160,14 +172,23 @@ export function ConfirmDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               aria-required="true"
-              aria-describedby={minReasonLength > 1 ? reasonHintId : undefined}
+              {...(maxReasonLength !== undefined ? { maxLength: maxReasonLength } : {})}
+              aria-describedby={minReasonLength > 1 || maxReasonLength !== undefined ? reasonHintId : undefined}
             />
-            {minReasonLength > 1 && (
+            {(minReasonLength > 1 || maxReasonLength !== undefined) && (
               <p
                 id={reasonHintId}
-                style={{ fontSize: 12, color: reasonTooShort ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}
+                style={{
+                  fontSize: 12,
+                  color: reasonTooShort || reasonTooLong ? "#b42318" : "var(--muted)",
+                  margin: "4px 0 0",
+                }}
               >
-                At least {minReasonLength} characters required{reasonTooShort ? ` (${trimmedLen}/${minReasonLength})` : ""}.
+                {minReasonLength > 1
+                  ? `At least ${minReasonLength} characters required${reasonTooShort ? ` (${trimmedLen}/${minReasonLength})` : ""}.`
+                  : null}
+                {minReasonLength > 1 && maxReasonLength !== undefined ? " " : null}
+                {maxReasonLength !== undefined ? `${trimmedLen}/${maxReasonLength} characters.` : null}
               </p>
             )}
           </div>

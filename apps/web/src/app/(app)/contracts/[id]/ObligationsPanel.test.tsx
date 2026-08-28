@@ -59,6 +59,22 @@ describe("ObligationsPanel", () => {
     expect(body).toMatchObject({ status: "in_progress", version: 1 });
   });
 
+  it("shows an error banner when Start fails (regression: Start has no confirm dialog to catch it)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("version conflict", { status: 409 }),
+    );
+    render(
+      <ObligationsPanel
+        contractId="c1"
+        obligations={[
+          { id: "ob-1", title: "Submit BG", status: "pending", version: 1, ownerId: "u1" },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(screen.getByText(/version conflict|failed/i)).toBeInTheDocument());
+  });
+
   it("marking complete is gated behind a confirmation (terminal, cannot be reopened)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
