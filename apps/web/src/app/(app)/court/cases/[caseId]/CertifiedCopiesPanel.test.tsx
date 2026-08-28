@@ -114,6 +114,28 @@ describe("CertifiedCopiesPanel", () => {
     await waitFor(() => expect(screen.getByText(/RECEIPT_AMOUNT_MISMATCH/)).toBeInTheDocument());
   });
 
+  it("requires a reason before rejecting a certified copy", async () => {
+    render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy()]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rejected" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/Enter a reason/);
+    expect(transitionCertifiedCopyMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a certified copy once a reason is given", async () => {
+    transitionCertifiedCopyMock.mockResolvedValue(undefined);
+    render(<CertifiedCopiesPanel caseId="case-1" initialCopies={[makeCopy()]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.change(screen.getByLabelText(/Remarks/), { target: { value: "Missing supporting documents" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rejected" }));
+    await waitFor(() => expect(transitionCertifiedCopyMock).toHaveBeenCalledTimes(1));
+    expect(transitionCertifiedCopyMock).toHaveBeenCalledWith("copy-1", expect.objectContaining({
+      target: "rejected",
+      remarks: "Missing supporting documents",
+      expectedVersion: 1,
+    }));
+  });
+
   it("offers prepared → issued with an optional delivery mode", async () => {
     transitionCertifiedCopyMock.mockResolvedValue(undefined);
     render(

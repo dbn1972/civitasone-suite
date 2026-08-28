@@ -90,3 +90,72 @@ export function assertReceiptMatchesFee(feeMinor: bigint, receiptMinor: bigint):
     );
   }
 }
+
+/**
+ * Parse the payment-proof `receiptMinor` wire value (string | number) to a
+ * non-negative integer PAISE (BigInt). Pure — shared by the command layer's
+ * synchronous pre-check (commands.ts, so a bad receipt gets an immediate 4xx
+ * instead of a silent async dead-letter) and the consumer's own authoritative
+ * check (consumer.ts). Each call site wraps the plain `Error` this throws in
+ * whatever exception type fits its layer (HttpError vs NonRetryableError).
+ */
+export function parseReceiptMinor(value: string | number | undefined): bigint {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
+  throw new Error(
+    `INVALID_RECEIPT_AMOUNT: receiptMinor must be a non-negative integer paise amount, got ${JSON.stringify(value)}`,
+  );
+}
+
+/**
+ * The full set of checks a certified-copy transition must pass before it is
+ * applied (§30) — shared VERBATIM by the command layer's synchronous
+ * pre-check (commands.ts, so a caller gets an honest 4xx instead of a `202`
+ * that later silently dead-letters) and the consumer's own authoritative,
+ * transactional check (consumer.ts), so the two can never silently drift
+ * apart on a future edit to either one.
+ *
+ * Already being AT the target status is treated as a redelivery/idempotent-
+ * retry-safe no-op: this returns normally (no `receiptMinor`) WITHOUT running
+ * the version/transition/fee checks below — exactly like a transition that
+ * has already completed. Callers still decide for themselves whether to skip
+ * their own side effect (publish / write) in that case; the consumer in
+ * particular MUST still check this itself before writing, since running its
+ * write with a since-stale `expectedVersion` would otherwise raise a
+ * spurious version conflict for what should be a harmless no-op.
+ *
+ * Every other failure throws a plain `Error` with a stable `CODE:` message
+ * prefix (`VERSION_CONFLICT`, `INVALID_COPY_TRANSITION`,
+ * `INVALID_RECEIPT_AMOUNT`, or `RECEIPT_AMOUNT_MISMATCH`); each call site
+ * wraps it in whatever exception type fits its own layer (HttpError vs
+ * NonRetryableError).
+ *
+ * When `target === "fee_paid"` and every check passes, the parsed
+ * `receiptMinor` is returned so a caller that goes on to WRITE it (the
+ * consumer) does not have to parse it a second time.
+ */
+export function assertLegalCopyTransition(input: {
+  copyId: string;
+  currentStatus: string;
+  currentVersion: number;
+  currentFeeMinor: bigint;
+  target: CopyStatus;
+  expectedVersion: number;
+  receiptMinor?: string | number;
+}): { receiptMinor?: bigint } {
+  const { copyId, currentStatus, currentVersion, currentFeeMinor, target, expectedVersion, receiptMinor } = input;
+
+  if (currentStatus === target) return {}; // already done — redelivery/retry-safe no-op
+
+  if (currentVersion !== expectedVersion) {
+    throw new Error(
+      `VERSION_CONFLICT: certified copy ${copyId} expected v${expectedVersion}, found v${currentVersion}`,
+    );
+  }
+  assertTransition(currentStatus, target);
+
+  if (target !== "fee_paid") return {};
+  const parsedReceiptMinor = parseReceiptMinor(receiptMinor);
+  assertReceiptMatchesFee(currentFeeMinor, parsedReceiptMinor);
+  return { receiptMinor: parsedReceiptMinor };
+}

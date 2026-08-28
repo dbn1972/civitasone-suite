@@ -42,6 +42,14 @@ vi.mock("@civitasone/db", () => ({
   runWithTenant: async (_tid: string, fn: () => Promise<unknown>) => fn(),
 }));
 
+// certified-copy transitionCopy reads the copy's CURRENT row (synchronous
+// pre-check, before publishing) — default to a mid-lifecycle row that legally
+// advances to "issued" so the pre-existing coverage test below is unaffected;
+// individual tests override with mockResolvedValueOnce for their own scenario.
+vi.mock("../src/modules/certified-copy/repo.js", () => ({
+  getCopy: vi.fn(async () => ({ status: "prepared", version: 1, feeMinor: 500n })),
+}));
+
 // cause-list/commands.js now does synchronous pre-checks (case exists, no
 // already-listed edit, no slot conflict) before publishing — mock its repo
 // dependencies directly rather than the generic scopedRead({}) shape above,
@@ -439,7 +447,7 @@ describe("config-registry commands", () => {
 describe("certified-copy commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 
-  it("requestCopy validates + publishes", async () => {
+  it("requestCopy validates + publishes (a body-level caseId, if sent, is ignored — the URL caseId wins)", async () => {
     const { requestCopy } = await import("../src/modules/certified-copy/commands.js");
     const result = await requestCopy(ctx(), CASE_ID, { caseId: CASE_ID, orderId: ORDER_ID });
     expect(result.accepted).toBe(true);
@@ -449,6 +457,57 @@ describe("certified-copy commands", () => {
 
   it("transitionCopy validates + publishes", async () => {
     const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    const result = await transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // §30 honest-response guarantee (bug fix): the synchronous pre-check must
+  // reject BEFORE publishing — never a 202-then-silent-dead-letter.
+  it("transitionCopy throws 404 and does NOT publish when the copy does not exist", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 404, code: "COPY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 409 and does NOT publish on a stale expectedVersion", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "prepared", version: 5, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 409, code: "VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 422 and does NOT publish on an illegal transition (e.g. fee_paid on a rejected copy)", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "rejected", version: 2, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, {
+      target: "fee_paid", expectedVersion: 2, paymentRef: "CHALLAN-1", receiptMinor: 500,
+    })).rejects.toMatchObject({ status: 422, code: "INVALID_COPY_TRANSITION" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy throws 422 and does NOT publish when receiptMinor does not match the recorded fee", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "requested", version: 1, feeMinor: 1500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    await expect(transitionCopy(ctx(), COPY_ID, {
+      target: "fee_paid", expectedVersion: 1, paymentRef: "CHALLAN-1", receiptMinor: 1000,
+    })).rejects.toMatchObject({ status: 422, code: "RECEIPT_AMOUNT_MISMATCH" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("transitionCopy is an idempotent no-op-safe publish when already at the target status", async () => {
+    const { getCopy } = await import("../src/modules/certified-copy/repo.js");
+    (getCopy as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ status: "issued", version: 5, feeMinor: 500n });
+    const { transitionCopy } = await import("../src/modules/certified-copy/commands.js");
+    // A stale expectedVersion is tolerated here (mirrors consumer.ts): once the
+    // copy is already at the target status, the transition is done either way.
     const result = await transitionCopy(ctx(), COPY_ID, { target: "issued", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
