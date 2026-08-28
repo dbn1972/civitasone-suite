@@ -24,8 +24,13 @@ export function ContractsTable({ rows }: { rows: ContractRow[] }) {
             </Link>
           ),
         },
-        { key: "sublabel", label: "Party / Info" },
-        { key: "meta", label: "Type" },
+        // sublabel is the vendor id (contract-service has no joined vendor
+        // display name yet); meta is the contract number -- previously
+        // mislabeled "Type" even though contract-service has no concept of a
+        // contract type, because the generic row mapper's fallback chain
+        // happened to land on contractNo.
+        { key: "sublabel", label: "Vendor ID" },
+        { key: "meta", label: "Contract No." },
         {
           key: "status",
           label: "Status",

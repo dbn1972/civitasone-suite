@@ -69,7 +69,12 @@ export default async function ProcurementContractsPage() {
             columns={[
               { key: "label", label: "Contract" },
               { key: "sublabel", label: "Vendor / Counter-party" },
-              { key: "meta", label: "Type" },
+              // Was labeled "Type": getContracts() has never had a contract
+              // "type" field to offer (contract-service has no such column) --
+              // meta is, and always was, the contract number. See
+              // fix/contract-frontend-field-mapping for the same relabel on
+              // the /contracts/list ContractsTable, which shares this loader.
+              { key: "meta", label: "Contract No." },
               { key: "status", label: "Status", cellType: "status" },
             ]}
           />

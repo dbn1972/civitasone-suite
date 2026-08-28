@@ -1588,7 +1588,60 @@ export async function getBillingPlanById(id: string): Promise<LoaderResult<Recor
   });
 }
 
-export const getContracts = moduleLoader("/api/v1/contract/contracts", "contract.list");
+// Bespoke mapper (not the generic moduleLoader/mapModuleRows): contract-
+// service's row shape has neither a "vendor"/"party" display name (only a raw
+// vendorId uuid, with no joined vendor-name enrichment in the backend today)
+// nor any "type"/"category"/"code" field the generic mapModuleRows() fallback
+// chains expect. moduleLoader() here left "Party / Info" permanently blank
+// AND made the "Type" column silently display contractNo (mapModuleRows'
+// `meta` fallback chain matches contractNo before running out of options) --
+// mislabeling a reference number as a contract "type". This mapper is
+// explicit about what's actually available: title as the label, the raw
+// vendorId as sublabel (until/unless the backend adds a resolved vendor
+// name), and contractNo as meta (surfaced under a "Contract No." column
+// header, not "Type", in both ContractsTable and the procurement contracts
+// register, which share this same loader).
+//
+// Exported (not a private closure like mapModuleRows) so it's directly unit
+// testable without needing to mock fetchJson -- see loaders.contracts.test.ts.
+//
+// IMPORTANT: return the mapped array as-is, even when empty. A tenant with
+// zero contracts is a normal, successful state (GET /contracts replies
+// 200 { data: [], ... }), not a parse failure -- fetchJson treats a `null`
+// mapResponse return as source:"error" (invalid_payload), which would show
+// an error/couldn't-load state instead of the correct "no contracts yet"
+// empty state. Only return null when the payload itself couldn't be
+// understood as a row list at all (getArrayPayload returns null).
+export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: ModuleRowSummary[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const label = toText(row.title) ?? toText(row.contractNo);
+    if (!id || !label) continue;
+    const sublabel = toText(row.vendorId);
+    const status = toText(row.status);
+    const meta = toText(row.contractNo);
+    mapped.push({
+      id,
+      label,
+      ...(sublabel ? { sublabel } : {}),
+      ...(status ? { status } : {}),
+      ...(meta ? { meta } : {}),
+    });
+  }
+  return mapped;
+}
+
+export async function getContracts(): Promise<LoaderResult<ModuleRowSummary[]>> {
+  return fetchJson<unknown, ModuleRowSummary[]>("/api/v1/contract/contracts", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "contract.list",
+    mapResponse: mapContractsListRows,
+  });
+}
 export const getRateContracts = moduleLoader("/api/v1/contract/rate-contracts", "contract.rate");
 
 export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
