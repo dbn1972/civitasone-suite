@@ -105,7 +105,7 @@ export function assertValidCaseTransition(
   if (!allowed.includes(target)) {
     throw new DomainError(
       "INVALID_TRANSITION",
-      `Cannot transition case from  to . Allowed: [${allowed.join(", ")}]`,
+      `Cannot transition case from ${current} to ${target}. Allowed: [${allowed.join(", ")}]`,
     );
   }
 }

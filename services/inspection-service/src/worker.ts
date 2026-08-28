@@ -52,6 +52,12 @@ import { registerEnforcementConsumers } from "./modules/enforcement/consumer.js"
 import { registerLicenceConsumers } from "./modules/licence/consumer.js";
 import { registerSurveyConsumers } from "./modules/survey/consumer.js";
 import { registerTelemetryConsumers } from "./modules/telemetry/consumer.js";
+// encroachment/illegal-construction had commands.ts publishing to these
+// topics with nothing ever subscribed — every complaint/case submitted
+// through the (also newly-registered, see app.ts) routes was accepted and
+// silently discarded. See this PR for the full story.
+import { registerEncroachmentConsumers } from "./modules/encroachment/consumer.js";
+import { registerIllegalConstructionConsumers } from "./modules/illegal-construction/consumer.js";
 
 // Tenant-scoped queue: enters runWithTenant(msg.tenantId) before each handler so
 // wrapWithTenantGuc sets the app.tenant_id GUC and RLS-forced writes/reads succeed.
@@ -72,6 +78,8 @@ registerEnforcementConsumers(scopedQueue);
 registerLicenceConsumers(scopedQueue);
 registerSurveyConsumers(scopedQueue);
 registerTelemetryConsumers(scopedQueue);
+registerEncroachmentConsumers(scopedQueue);
+registerIllegalConstructionConsumers(scopedQueue);
 
 // ── DLQ handling ─────────────────────────────────────────────────────────────
 // No per-topic DLQ pollers here. Native SQS RedrivePolicy already dead-letters
